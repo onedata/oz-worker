@@ -372,13 +372,13 @@ create_group(Auth, SpaceId, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Joins a harvester on behalf of given group based on harvester_invite_space token.
+%% Joins a harvester on behalf of given space based on harvester_invite_space token.
 %% Has two variants:
 %% 1) Token is given explicitly
 %% 2) Token is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec join_harvester(Auth :: aai:auth(), SpaceId :: od_group:id(),
+-spec join_harvester(Auth :: aai:auth(), SpaceId :: od_space:id(),
     TokenOrData :: tokens:serialized() | tokens:token() | map()) ->
     {ok, od_harvester:id()} | errors:error().
 join_harvester(Auth, SpaceId, Data) when is_map(Data) ->

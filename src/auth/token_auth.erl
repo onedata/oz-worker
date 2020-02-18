@@ -91,7 +91,7 @@ authenticate_for_rest_interface(Req) when is_map(Req) ->
 -spec authenticate_for_rest_interface(cowboy_req:req(), tokens:token()) ->
     {true, aai:auth()} | errors:error().
 authenticate_for_rest_interface(Req, Token) ->
-    case {resolve_service_for_rest_interface(Req), resolve_consumer_for_rest_interface(Req) }of
+    case {resolve_service_for_rest_interface(Req), resolve_consumer_for_rest_interface(Req)} of
         {{error, _} = Error, _} ->
             Error;
         {_, {error, _} = Error} ->
@@ -110,33 +110,38 @@ authenticate_for_rest_interface(Req, Token) ->
 %%--------------------------------------------------------------------
 -spec verify_access_token(tokens:token(), aai:auth_ctx()) ->
     {ok, aai:auth()} | errors:error().
-verify_access_token(Token, AuthCtx) ->
-    case Token#token.type of
-        ?ACCESS_TOKEN ->
-            verify_token(Token, AuthCtx);
-        ?GUI_ACCESS_TOKEN(_) ->
-            verify_token(Token, AuthCtx);
-        ReceivedTokenType ->
-            ?ERROR_NOT_AN_ACCESS_TOKEN(ReceivedTokenType)
-    end.
+verify_access_token(#token{type = ?ACCESS_TOKEN} = Token, AuthCtx) ->
+    verify_token(Token, AuthCtx);
+verify_access_token(#token{type = ReceivedTokenType}, _AuthCtx) ->
+    ?ERROR_NOT_AN_ACCESS_TOKEN(ReceivedTokenType).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Verifies the identity carried by a token - verifies the token itself and
-%% returns the token's subject. Identity token is essentially an access token
-%% that can have the cv_scope = identity_token caveat (which nullifies the
-%% authorization carried by the token).
+%% Verifies the identity carried by an identity token - verifies the token
+%% itself and returns the token's subject.
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_identity_token(tokens:token(), aai:auth_ctx()) ->
     {ok, {aai:subject(), [caveats:caveat()]}} | errors:error().
 verify_identity_token(Token, AuthCtx) ->
-    case verify_access_token(Token, AuthCtx#auth_ctx{scope = identity_token}) of
-        {ok, #auth{subject = Subject, caveats = Caveats}} ->
-            {ok, {Subject, Caveats}};
-        {error, _} = Error ->
-            Error
+    TokenTypeCheck = case Token of
+        #token{type = ?IDENTITY_TOKEN} -> ok;
+        %% @todo VFS-6098 access tokens are still accepted as identity tokens
+        %% for backward compatibility with older providers
+        #token{type = ?ACCESS_TOKEN, subject = ?SUB(?ONEPROVIDER)} -> ok;
+        #token{type = Type} -> ?ERROR_NOT_AN_IDENTITY_TOKEN(Type)
+    end,
+    case TokenTypeCheck of
+        ok ->
+            case verify_token(Token, AuthCtx#auth_ctx{scope = identity_token}) of
+                {ok, #auth{subject = Subject, caveats = Caveats}} ->
+                    {ok, {Subject, Caveats}};
+                {error, _} = Err1 ->
+                    Err1
+            end;
+        {error, _} = Err2 ->
+            Err2
     end.
 
 
@@ -147,7 +152,7 @@ verify_identity_token(Token, AuthCtx) ->
 %% auth carried by that token (auth object).
 %% @end
 %%--------------------------------------------------------------------
--spec verify_invite_token(tokens:token(), any | tokens:invite_token_type(), aai:auth_ctx()) ->
+-spec verify_invite_token(tokens:token(), any | token_type:invite_type(), aai:auth_ctx()) ->
     {ok, aai:auth()} | errors:error().
 verify_invite_token(Token = #token{type = ReceivedType}, ExpectedType, AuthCtx) ->
     case tokens:is_invite_token(Token, ExpectedType) of
@@ -180,7 +185,10 @@ verify_service_token(SerializedServiceToken, AuthCtx) when is_binary(SerializedS
 verify_service_token(ServiceToken, AuthCtx) ->
     case verify_identity_token(ServiceToken, AuthCtx) of
         {ok, {?SUB(?ONEPROVIDER, OpServiceType, ProviderId), _}} ->
-            {ok, ?SERVICE(OpServiceType, ProviderId)};
+            case OpServiceType of
+                undefined -> {ok, ?SERVICE(?OP_WORKER, ProviderId)};
+                _ -> {ok, ?SERVICE(OpServiceType, ProviderId)}
+            end;
         {ok, _} ->
             ?ERROR_BAD_SERVICE_TOKEN(?ERROR_TOKEN_INVALID);
         {error, _} = Err2 ->
@@ -239,23 +247,20 @@ group_membership_checker(_, _) ->
 %%--------------------------------------------------------------------
 -spec validate_subject_and_service(tokens:type(), aai:subject(), aai:service_spec()) ->
     ok | errors:error().
-validate_subject_and_service(?GUI_ACCESS_TOKEN(SessId), ?SUB(user, UserId) = Subject, Service) ->
-    case {session:belongs_to_user(SessId, UserId), is_service_allowed(Subject, Service)} of
+validate_subject_and_service(?ACCESS_TOKEN(SessId), Subject, Service) ->
+    SessionValid = case {SessId, Subject} of
+        {undefined, _} -> true;
+        {_, ?SUB(user, UserId)} -> session:belongs_to_user(SessId, UserId);
+        {_, _} -> false
+    end,
+    case {SessionValid, is_service_allowed(Subject, Service)} of
         {true, true} -> ok;
         {false, _} -> ?ERROR_TOKEN_SESSION_INVALID;
         {_, false} -> ?ERROR_TOKEN_SERVICE_FORBIDDEN(Service)
     end;
-validate_subject_and_service(?GUI_ACCESS_TOKEN(_), _, _) ->
-    % Only user subject is allowed in gui access tokens
-    ?ERROR_TOKEN_SUBJECT_INVALID;
-validate_subject_and_service(?ACCESS_TOKEN, Subject, Service) ->
-    case is_service_allowed(Subject, Service) of
-        true -> ok;
-        false -> ?ERROR_TOKEN_SERVICE_FORBIDDEN(Service)
-    end;
-validate_subject_and_service(?INVITE_TOKEN(_, _), _, _) ->
-    % Invite tokens do not require additional checks as they do not support the
-    % service caveat.
+validate_subject_and_service(_, _, _) ->
+    % Identity and invite tokens do not require additional checks as they do not
+    % support the service caveat.
     ok.
 
 %%%===================================================================

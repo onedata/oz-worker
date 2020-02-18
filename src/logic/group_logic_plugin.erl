@@ -242,11 +242,11 @@ create(Req = #el_req{gri = GRI = #gri{id = ParentGroupId, aspect = child}}) ->
 
 create(#el_req{auth = Auth, gri = #gri{id = GroupId, aspect = invite_user_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    token_logic:create_legacy_invite_token(Auth, ?USER_JOIN_GROUP, GroupId);
+    token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?USER_JOIN_GROUP, GroupId));
 
 create(#el_req{auth = Auth, gri = #gri{id = GroupId, aspect = invite_group_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    token_logic:create_legacy_invite_token(Auth, ?GROUP_JOIN_GROUP, GroupId);
+    token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?GROUP_JOIN_GROUP, GroupId));
 
 create(#el_req{gri = #gri{id = GrId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:group_member()),

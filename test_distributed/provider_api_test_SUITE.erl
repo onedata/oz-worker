@@ -2477,11 +2477,14 @@ verify_provider_identity_test(Config) ->
         DeserializedToken, #cv_scope{scope = identity_token}
     ),
     %% @todo VFS-6098 deprecated, kept for backward compatibility
-    TokenDeprecatedCaveat = tokens:confine(
-        DeserializedToken, caveats:deserialize(<<"authorization = none">>)
-    ),
+    TokenDeprecatedCaveat = DeserializedToken#token{
+        macaroon = macaroon:add_first_party_caveat(
+            DeserializedToken#token.macaroon,
+            <<"authorization = none">>
+        )
+    },
     TokenNotExpired = tokens:confine(
-        TokenNoAuth, #cv_time{valid_until = Timestamp + 100}
+        TokenNoAuth, #cv_time{valid_until = Timestamp + 1000}
     ),
     TokenExpired = tokens:confine(
         TokenNoAuth, #cv_time{valid_until = Timestamp - 200}

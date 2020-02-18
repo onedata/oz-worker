@@ -38,7 +38,7 @@
 %% it must be done in the calling logic plugin module.
 %% @end
 %%--------------------------------------------------------------------
--spec consume(aai:auth(), tokens:token(), tokens:invite_token_type(), consume_fun()) ->
+-spec consume(aai:auth(), tokens:token(), token_type:invite_type(), consume_fun()) ->
     entity_logic:create_result() | errors:error().
 consume(ConsumerAuth, Token, ExpectedType, ConsumeFun) ->
     PeerIp = ConsumerAuth#auth.peer_ip,
@@ -49,8 +49,8 @@ consume(ConsumerAuth, Token, ExpectedType, ConsumeFun) ->
         {error, _} = Err1 -> throw(Err1)
     end,
 
-    #token{type = ?INVITE_TOKEN(InviteTokenType, _)} = Token,
-    is_valid_consumer(InviteTokenType, ConsumerSubject) orelse
+    #token{type = ?INVITE_TOKEN(InviteType, _)} = Token,
+    is_valid_consumer(InviteType, ConsumerSubject) orelse
         throw(?ERROR_INVITE_TOKEN_CONSUMER_INVALID(ConsumerSubject)),
 
     consume_internal(Token, ConsumeFun).
@@ -63,16 +63,16 @@ consume(ConsumerAuth, Token, ExpectedType, ConsumeFun) ->
 %% subject can set privileges (given that custom privileges were requested).
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_valid_invitation(aai:subject(), tokens:invite_token_type(), gri:entity_id(),
+-spec ensure_valid_invitation(aai:subject(), token_type:invite_type(), gri:entity_id(),
     token_metadata:privileges_profile()) -> true | no_return().
-ensure_valid_invitation(Subject, InviteTokenType, EntityId, default_privileges) ->
-    is_valid_target_id(InviteTokenType, EntityId) orelse
+ensure_valid_invitation(Subject, InviteType, EntityId, default_privileges) ->
+    is_valid_target_id(InviteType, EntityId) orelse
         throw(?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(EntityId)),
-    is_authorized_to_invite(Subject, InviteTokenType, EntityId) orelse
+    is_authorized_to_invite(Subject, InviteType, EntityId) orelse
         throw(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED);
-ensure_valid_invitation(Subject, InviteTokenType, EntityId, custom_privileges) ->
-    ensure_valid_invitation(Subject, InviteTokenType, EntityId, default_privileges),
-    is_authorized_to_set_privileges(Subject, InviteTokenType, EntityId) orelse
+ensure_valid_invitation(Subject, InviteType, EntityId, custom_privileges) ->
+    ensure_valid_invitation(Subject, InviteType, EntityId, default_privileges),
+    is_authorized_to_set_privileges(Subject, InviteType, EntityId) orelse
         throw(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED).
 
 %%%===================================================================
@@ -80,12 +80,13 @@ ensure_valid_invitation(Subject, InviteTokenType, EntityId, custom_privileges) -
 %%%===================================================================
 
 %% @private
--spec is_valid_consumer(tokens:invite_token_type(), aai:consumer_spec()) -> boolean().
+-spec is_valid_consumer(token_type:invite_type(), aai:consumer_spec()) -> boolean().
 is_valid_consumer(?USER_JOIN_GROUP, ?SUB(user, _)) -> true;
 is_valid_consumer(?GROUP_JOIN_GROUP, ?SUB(user, _)) -> true;
 is_valid_consumer(?USER_JOIN_SPACE, ?SUB(user, _)) -> true;
 is_valid_consumer(?GROUP_JOIN_SPACE, ?SUB(user, _)) -> true;
 is_valid_consumer(?SUPPORT_SPACE, ?SUB(?ONEPROVIDER, _)) -> true;
+is_valid_consumer(?HARVESTER_JOIN_SPACE, ?SUB(user, _)) -> true;
 % Anyone (including nobody) is allowed to register a Oneprovider
 is_valid_consumer(?REGISTER_ONEPROVIDER, _) -> true;
 is_valid_consumer(?USER_JOIN_CLUSTER, ?SUB(user, _)) -> true;
@@ -97,12 +98,13 @@ is_valid_consumer(_, _) -> false.
 
 
 %% @private
--spec is_valid_target_id(tokens:invite_token_type(), gri:entity_id()) -> boolean().
+-spec is_valid_target_id(token_type:invite_type(), gri:entity_id()) -> boolean().
 is_valid_target_id(?USER_JOIN_GROUP, GroupId) -> group_logic:exists(GroupId);
 is_valid_target_id(?GROUP_JOIN_GROUP, GroupId) -> group_logic:exists(GroupId);
 is_valid_target_id(?USER_JOIN_SPACE, SpaceId) -> space_logic:exists(SpaceId);
 is_valid_target_id(?GROUP_JOIN_SPACE, SpaceId) -> space_logic:exists(SpaceId);
 is_valid_target_id(?SUPPORT_SPACE, SpaceId) -> space_logic:exists(SpaceId);
+is_valid_target_id(?HARVESTER_JOIN_SPACE, SpaceId) -> space_logic:exists(SpaceId);
 is_valid_target_id(?REGISTER_ONEPROVIDER, AdminUserId) -> user_logic:exists(AdminUserId);
 is_valid_target_id(?USER_JOIN_CLUSTER, ClusterId) -> cluster_logic:exists(ClusterId);
 is_valid_target_id(?GROUP_JOIN_CLUSTER, ClusterId) -> cluster_logic:exists(ClusterId);
@@ -116,10 +118,10 @@ is_valid_target_id(_, _) -> false.
 -spec consume_internal(tokens:token(), consume_fun()) ->
     entity_logic:create_result() | errors:error().
 consume_internal(#token{persistence = {temporary, _}} = Token, ConsumeFun) ->
-    #token{subject = Subject, type = ?INVITE_TOKEN(InviteTokenType, EntityId)} = Token,
+    #token{subject = Subject, type = ?INVITE_TOKEN(InviteType, EntityId)} = Token,
     % Temporary tokens cannot carry any privileges
-    ensure_valid_invitation(Subject, InviteTokenType, EntityId, default_privileges),
-    ConsumeFun(EntityId, token_metadata:default_invite_privileges(InviteTokenType));
+    ensure_valid_invitation(Subject, InviteType, EntityId, default_privileges),
+    ConsumeFun(EntityId, token_metadata:default_invite_privileges(InviteType));
 
 consume_internal(#token{persistence = named} = Token, ConsumeFun) ->
     % Named tokens must be consumed in a critical section to avoid
@@ -136,15 +138,15 @@ consume_named_unsafe(Token, ConsumeFun) ->
     #token{
         id = TokenId,
         subject = Subject,
-        type = ?INVITE_TOKEN(InviteTokenType, EntityId)
+        type = ?INVITE_TOKEN(InviteType, EntityId)
     } = Token,
     {ok, #document{value = #od_token{metadata = Metadata}}} = od_token:get(TokenId),
 
     token_metadata:is_usage_limit_reached(Metadata) andalso
         throw(?ERROR_INVITE_TOKEN_USAGE_LIMIT_REACHED),
 
-    {Profile, Privileges} = token_metadata:inspect_carried_privileges(InviteTokenType, Metadata),
-    ensure_valid_invitation(Subject, InviteTokenType, EntityId, Profile),
+    {Profile, Privileges} = token_metadata:inspect_carried_privileges(InviteType, Metadata),
+    ensure_valid_invitation(Subject, InviteType, EntityId, Profile),
 
     % The ConsumeFun can throw, in which case the usage count will not be updated
     case ConsumeFun(EntityId, Privileges) of
@@ -161,23 +163,23 @@ consume_named_unsafe(Token, ConsumeFun) ->
 
 
 %% @private
--spec is_authorized_to_invite(aai:subject(), tokens:invite_token_type(), gri:entity_id()) ->
+-spec is_authorized_to_invite(aai:subject(), token_type:invite_type(), gri:entity_id()) ->
     boolean() | no_return().
-is_authorized_to_invite(Subject, InviteTokenType, EntityId) ->
-    has_privileges_to_invite(Subject, InviteTokenType, EntityId) orelse
-        has_admin_privileges_to_invite(Subject, InviteTokenType).
+is_authorized_to_invite(Subject, InviteType, EntityId) ->
+    has_privileges_to_invite(Subject, InviteType, EntityId) orelse
+        has_admin_privileges_to_invite(Subject, InviteType).
 
 
 %% @private
--spec is_authorized_to_set_privileges(aai:subject(), tokens:invite_token_type(), gri:entity_id()) ->
+-spec is_authorized_to_set_privileges(aai:subject(), token_type:invite_type(), gri:entity_id()) ->
     boolean() | no_return().
-is_authorized_to_set_privileges(Subject, InviteTokenType, EntityId) ->
-    has_privileges_to_set_privileges(Subject, InviteTokenType, EntityId) orelse
-        has_admin_privileges_to_set_privileges(Subject, InviteTokenType).
+is_authorized_to_set_privileges(Subject, InviteType, EntityId) ->
+    has_privileges_to_set_privileges(Subject, InviteType, EntityId) orelse
+        has_admin_privileges_to_set_privileges(Subject, InviteType).
 
 
 %% @private
--spec has_privileges_to_invite(aai:subject(), tokens:invite_token_type(), gri:entity_id()) ->
+-spec has_privileges_to_invite(aai:subject(), token_type:invite_type(), gri:entity_id()) ->
     boolean().
 has_privileges_to_invite(?SUB(user, UserId), ?USER_JOIN_GROUP, GroupId) ->
     group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_ADD_USER);
@@ -190,6 +192,8 @@ has_privileges_to_invite(?SUB(user, UserId), ?GROUP_JOIN_SPACE, SpaceId) ->
     space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_ADD_GROUP);
 has_privileges_to_invite(?SUB(user, UserId), ?SUPPORT_SPACE, SpaceId) ->
     space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_ADD_SUPPORT);
+has_privileges_to_invite(?SUB(user, UserId), ?HARVESTER_JOIN_SPACE, SpaceId) ->
+    space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_ADD_HARVESTER);
 
 has_privileges_to_invite(?SUB(user, UserId), ?REGISTER_ONEPROVIDER, UserId) ->
     % Issuing provider registration token for self.
@@ -218,7 +222,7 @@ has_privileges_to_invite(_, _, _) ->
 
 
 %% @private
--spec has_privileges_to_set_privileges(aai:subject(), tokens:invite_token_type(), gri:entity_id()) ->
+-spec has_privileges_to_set_privileges(aai:subject(), token_type:invite_type(), gri:entity_id()) ->
     boolean().
 has_privileges_to_set_privileges(?SUB(user, UserId), ?USER_JOIN_GROUP, GroupId) ->
     group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_SET_PRIVILEGES);
@@ -250,7 +254,7 @@ has_privileges_to_set_privileges(_, _, _) ->
 
 
 %% @private
--spec has_admin_privileges_to_invite(aai:subject(), tokens:invite_token_type()) -> boolean().
+-spec has_admin_privileges_to_invite(aai:subject(), token_type:invite_type()) -> boolean().
 has_admin_privileges_to_invite(?SUB(user, UserId), ?USER_JOIN_GROUP) ->
     user_logic:has_eff_oz_privilege(UserId, ?OZ_GROUPS_ADD_RELATIONSHIPS);
 has_admin_privileges_to_invite(?SUB(user, UserId), ?GROUP_JOIN_GROUP) ->
@@ -261,6 +265,8 @@ has_admin_privileges_to_invite(?SUB(user, UserId), ?USER_JOIN_SPACE) ->
 has_admin_privileges_to_invite(?SUB(user, UserId), ?GROUP_JOIN_SPACE) ->
     user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_ADD_RELATIONSHIPS);
 has_admin_privileges_to_invite(?SUB(user, UserId), ?SUPPORT_SPACE) ->
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_ADD_RELATIONSHIPS);
+has_admin_privileges_to_invite(?SUB(user, UserId), ?HARVESTER_JOIN_SPACE) ->
     user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_ADD_RELATIONSHIPS);
 
 has_admin_privileges_to_invite(?SUB(user, UserId), ?REGISTER_ONEPROVIDER) ->
@@ -283,7 +289,7 @@ has_admin_privileges_to_invite(_, _) ->
 
 
 %% @private
--spec has_admin_privileges_to_set_privileges(aai:subject(), tokens:invite_token_type()) -> boolean().
+-spec has_admin_privileges_to_set_privileges(aai:subject(), token_type:invite_type()) -> boolean().
 has_admin_privileges_to_set_privileges(?SUB(user, UserId), ?USER_JOIN_GROUP) ->
     user_logic:has_eff_oz_privilege(UserId, ?OZ_GROUPS_SET_PRIVILEGES);
 has_admin_privileges_to_set_privileges(?SUB(user, UserId), ?GROUP_JOIN_GROUP) ->

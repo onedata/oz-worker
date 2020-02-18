@@ -89,7 +89,7 @@ handle(<<"POST">>, Req) ->
 -spec generate_gui_token(session:id(), aai:service_spec()) -> binary() | no_return().
 generate_gui_token(SessionId, Service) ->
     {ok, UserId} = session:get_user_id(SessionId),
-    case token_logic:create_gui_access_token(?USER(UserId), UserId, SessionId, Service) of
+    case token_logic:create_access_token_for_gui(?USER(UserId), UserId, SessionId, Service) of
         {error, _} = Error ->
             throw(Error);
         {ok, {Token, Ttl}} ->

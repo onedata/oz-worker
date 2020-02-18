@@ -239,8 +239,9 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
                     od_harvester, HarvesterId,
                     od_space, SpaceId
                 ),
-                harvester_indices:update_stats(HarvesterId, all,
-                    fun(ExistingStats) -> harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, false) end);
+                harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
+                    harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, false)
+                end);
             _ ->
                 ok
         end,
@@ -258,15 +259,15 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
 
 create(#el_req{auth = Auth, gri = #gri{id = HarvesterId, aspect = invite_user_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    token_logic:create_legacy_invite_token(Auth, ?USER_JOIN_HARVESTER, HarvesterId);
+    token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?USER_JOIN_HARVESTER, HarvesterId));
 
 create(#el_req{auth = Auth, gri = #gri{id = HarvesterId, aspect = invite_group_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    token_logic:create_legacy_invite_token(Auth, ?GROUP_JOIN_HARVESTER, HarvesterId);
+    token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?GROUP_JOIN_HARVESTER, HarvesterId));
 
 create(#el_req{auth = Auth, gri = #gri{id = HarvesterId, aspect = invite_space_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    token_logic:create_legacy_invite_token(Auth, ?SPACE_JOIN_HARVESTER, HarvesterId);
+    token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?SPACE_JOIN_HARVESTER, HarvesterId));
 
 create(#el_req{gri = #gri{id = HarvesterId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:harvester_member()),

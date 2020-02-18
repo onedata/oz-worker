@@ -117,7 +117,7 @@ get_record_struct(1) ->
         {name, string},
         {version, integer},
         {subject, {custom, string, {aai, serialize_subject, deserialize_subject}}},
-        {type, {custom, string, {tokens, serialize_type, deserialize_type}}},
+        {type, {custom, string, {token_type, serialize, deserialize}}},
         {caveats, [{custom, string, {caveats, serialize, deserialize}}]},
         {secret, string},
         {metadata, {custom, json, {json_utils, encode, decode}}},

@@ -75,11 +75,11 @@ gui_tokens_are_bound_to_specific_service(Config) ->
     % Tokens can be created only for existing sessions
     ?assertEqual(
         ?ERROR_TOKEN_SESSION_INVALID,
-        create_gui_access_token(Config, UserId, <<"bad-session">>, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
+        create_access_token_for_gui(Config, UserId, <<"bad-session">>, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
     ),
 
     % All users are allowed to create tokens for oz-worker
-    {ok, {Token1, _}} = create_gui_access_token(Config, UserId, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
+    {ok, {Token1, _}} = create_access_token_for_gui(Config, UserId, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
     ?assertMatch(
         {true, ?EXP_AUTH(UserId, Session1)},
         verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
@@ -100,17 +100,17 @@ gui_tokens_are_bound_to_specific_service(Config) ->
 
     ?assertMatch(
         ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_AUD(<<"non-existent">>)),
-        create_gui_access_token(Config, UserId, Session2, ?OPW_AUD(<<"non-existent">>))
+        create_access_token_for_gui(Config, UserId, Session2, ?OPW_AUD(<<"non-existent">>))
     ),
     ?assertMatch(
         ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_AUD(ProviderId)),
-        create_gui_access_token(Config, UserId, Session2, ?OPW_AUD(ProviderId))
+        create_access_token_for_gui(Config, UserId, Session2, ?OPW_AUD(ProviderId))
     ),
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
     oz_test_utils:support_space_by_provider(Config, ProviderId, SpaceId),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {ok, {Token2, _}} = create_gui_access_token(Config, UserId, Session2, ?OPW_AUD(ProviderId)),
+    {ok, {Token2, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OPW_AUD(ProviderId)),
     ?assertMatch(
         {true, ?EXP_AUTH(UserId, Session2)},
         verify_token(Config, Token2, ?OPW_AUD(ProviderId))
@@ -127,20 +127,20 @@ gui_tokens_are_bound_to_specific_service(Config) ->
 
     ?assertMatch(
         ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OZP_AUD(OzClusterId)),
-        create_gui_access_token(Config, UserId, Session2, ?OZP_AUD(OzClusterId))
+        create_access_token_for_gui(Config, UserId, Session2, ?OZP_AUD(OzClusterId))
     ),
     ?assertMatch(
         ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPP_AUD(OpClusterId)),
-        create_gui_access_token(Config, UserId, Session1, ?OPP_AUD(OpClusterId))
+        create_access_token_for_gui(Config, UserId, Session1, ?OPP_AUD(OpClusterId))
     ),
     oz_test_utils:cluster_add_user(Config, OzClusterId, UserId),
-    {ok, {Token3, _}} = create_gui_access_token(Config, UserId, Session2, ?OZP_AUD(OzClusterId)),
+    {ok, {Token3, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OZP_AUD(OzClusterId)),
     ?assertMatch(
         ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPP_AUD(OpClusterId)),
-        create_gui_access_token(Config, UserId, Session1, ?OPP_AUD(OpClusterId))
+        create_access_token_for_gui(Config, UserId, Session1, ?OPP_AUD(OpClusterId))
     ),
     oz_test_utils:cluster_add_user(Config, OpClusterId, UserId),
-    {ok, {Token4, _}} = create_gui_access_token(Config, UserId, Session1, ?OPP_AUD(OpClusterId)),
+    {ok, {Token4, _}} = create_access_token_for_gui(Config, UserId, Session1, ?OPP_AUD(OpClusterId)),
 
     ?assertMatch(
         {true, ?EXP_AUTH(UserId, Session2)},
@@ -233,11 +233,29 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     ?assertMatch(?ERROR_NOT_FOUND, AcquireGuiToken(Cookie2, ?OP_WORKER_GUI, <<"bad-cluster">>)),
 
     % Make sure provider gui tokens are properly accepted in REST
+    {ok, ProviderIdentityToken} = oz_test_utils:call_oz(Config, token_logic, create_provider_temporary_token, [
+        ?ROOT, ProviderId, #{
+            <<"type">> => ?IDENTITY_TOKEN,
+            <<"caveats">> => [#cv_time{valid_until = oz_test_utils:cluster_time_seconds(Config) + 36000}]
+        }
+    ]),
+    {ok, SerializedProviderIdentityToken} = tokens:serialize(ProviderIdentityToken),
     {ok, _, _, UserData} = ?assertMatch({ok, 200, _, _}, http_client:get(
         ?URL(Config, [<<"/user">>]),
         #{
             ?HDR_X_AUTH_TOKEN => SerializedToken3,
-            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:build_oneprovider_access_token(?OP_WORKER, ProviderToken)
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, SerializedProviderIdentityToken)
+        },
+        <<"">>,
+        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
+    )),
+    %% @todo VFS-6098 check if access tokens are accepted as identity tokens
+    %% for backward compatibility
+    {ok, _, _, UserData} = ?assertMatch({ok, 200, _, UserData}, http_client:get(
+        ?URL(Config, [<<"/user">>]),
+        #{
+            ?HDR_X_AUTH_TOKEN => SerializedToken3,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, ProviderToken)
         },
         <<"">>,
         [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
@@ -252,10 +270,10 @@ gui_tokens_expire(Config) ->
     {ok, {Session2, _Cookie2}} = oz_test_utils:log_in(Config, UserId),
     ProviderId = create_provider_supporting_user(Config, UserId),
 
-    {ok, {Token1, Ttl1}} = create_gui_access_token(Config, UserId, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
+    {ok, {Token1, Ttl1}} = create_access_token_for_gui(Config, UserId, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
     ValidUntil1 = oz_test_utils:get_mocked_time(Config) + Ttl1,
     oz_test_utils:simulate_time_passing(Config, 10),
-    {ok, {Token2, Ttl2}} = create_gui_access_token(Config, UserId, Session2, ?OPW_AUD(ProviderId)),
+    {ok, {Token2, Ttl2}} = create_access_token_for_gui(Config, UserId, Session2, ?OPW_AUD(ProviderId)),
     ValidUntil2 = oz_test_utils:get_mocked_time(Config) + Ttl2,
 
     ?assertMatch(
@@ -298,10 +316,10 @@ gui_tokens_are_invalidated_upon_logout(Config) ->
     oz_test_utils:cluster_add_user(Config, ProviderId, UserId),
     oz_test_utils:cluster_add_user(Config, ?ONEZONE_CLUSTER_ID, UserId),
 
-    {ok, {Token1, _}} = create_gui_access_token(Config, UserId, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
-    {ok, {Token2, _}} = create_gui_access_token(Config, UserId, Session1, ?OZP_AUD(?ONEZONE_CLUSTER_ID)),
-    {ok, {Token3, _}} = create_gui_access_token(Config, UserId, Session1, ?OPW_AUD(ProviderId)),
-    {ok, {Token4, _}} = create_gui_access_token(Config, UserId, Session2, ?OPP_AUD(ProviderId)),
+    {ok, {Token1, _}} = create_access_token_for_gui(Config, UserId, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
+    {ok, {Token2, _}} = create_access_token_for_gui(Config, UserId, Session1, ?OZP_AUD(?ONEZONE_CLUSTER_ID)),
+    {ok, {Token3, _}} = create_access_token_for_gui(Config, UserId, Session1, ?OPW_AUD(ProviderId)),
+    {ok, {Token4, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OPP_AUD(ProviderId)),
 
     oz_test_utils:log_out(Config, Cookie1),
     ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
@@ -331,10 +349,10 @@ gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
     oz_test_utils:cluster_add_user(Config, ?ONEZONE_CLUSTER_ID, UserId),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {ok, {Token1, _}} = create_gui_access_token(Config, UserId, Session, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
-    {ok, {Token2, _}} = create_gui_access_token(Config, UserId, Session, ?OZP_AUD(?ONEZONE_CLUSTER_ID)),
-    {ok, {Token3, _}} = create_gui_access_token(Config, UserId, Session, ?OPW_AUD(ProviderId)),
-    {ok, {Token4, _}} = create_gui_access_token(Config, UserId, Session, ?OPP_AUD(ProviderId)),
+    {ok, {Token1, _}} = create_access_token_for_gui(Config, UserId, Session, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
+    {ok, {Token2, _}} = create_access_token_for_gui(Config, UserId, Session, ?OZP_AUD(?ONEZONE_CLUSTER_ID)),
+    {ok, {Token3, _}} = create_access_token_for_gui(Config, UserId, Session, ?OPW_AUD(ProviderId)),
+    {ok, {Token4, _}} = create_access_token_for_gui(Config, UserId, Session, ?OPP_AUD(ProviderId)),
 
     oz_test_utils:unsupport_space(Config, StorageId, SpaceId),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -384,10 +402,10 @@ gui_tokens_are_invalidated_upon_temporary_token_secret_change(Config) ->
     oz_test_utils:cluster_add_user(Config, ProviderId, UserId),
     oz_test_utils:cluster_add_user(Config, ?ONEZONE_CLUSTER_ID, UserId),
 
-    {ok, {Token1, _}} = create_gui_access_token(Config, UserId, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
-    {ok, {Token2, _}} = create_gui_access_token(Config, UserId, Session2, ?OZP_AUD(?ONEZONE_CLUSTER_ID)),
-    {ok, {Token3, _}} = create_gui_access_token(Config, UserId, Session2, ?OPW_AUD(ProviderId)),
-    {ok, {Token4, _}} = create_gui_access_token(Config, UserId, Session2, ?OPP_AUD(ProviderId)),
+    {ok, {Token1, _}} = create_access_token_for_gui(Config, UserId, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
+    {ok, {Token2, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OZP_AUD(?ONEZONE_CLUSTER_ID)),
+    {ok, {Token3, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OPW_AUD(ProviderId)),
+    {ok, {Token4, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OPP_AUD(ProviderId)),
 
     % Temporary token secret is shared per subject, so regenerating the secret of
     % AnotherUser should not affect the tested user
@@ -414,10 +432,10 @@ gui_tokens_are_invalidated_when_user_is_deleted(Config) ->
     oz_test_utils:cluster_add_user(Config, ProviderId, UserId),
     oz_test_utils:cluster_add_user(Config, ?ONEZONE_CLUSTER_ID, UserId),
 
-    {ok, {Token1, _}} = create_gui_access_token(Config, UserId, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
-    {ok, {Token2, _}} = create_gui_access_token(Config, UserId, Session1, ?OZP_AUD(?ONEZONE_CLUSTER_ID)),
-    {ok, {Token3, _}} = create_gui_access_token(Config, UserId, Session1, ?OPW_AUD(ProviderId)),
-    {ok, {Token4, _}} = create_gui_access_token(Config, UserId, Session2, ?OPP_AUD(ProviderId)),
+    {ok, {Token1, _}} = create_access_token_for_gui(Config, UserId, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
+    {ok, {Token2, _}} = create_access_token_for_gui(Config, UserId, Session1, ?OZP_AUD(?ONEZONE_CLUSTER_ID)),
+    {ok, {Token3, _}} = create_access_token_for_gui(Config, UserId, Session1, ?OPW_AUD(ProviderId)),
+    {ok, {Token4, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OPP_AUD(ProviderId)),
 
     oz_test_utils:delete_user(Config, UserId),
     ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
@@ -454,8 +472,8 @@ end_per_testcase(_, Config) ->
 %%% Helper functions
 %%%===================================================================
 
-create_gui_access_token(Config, UserId, SessionId, Service) ->
-    oz_test_utils:call_oz(Config, token_logic, create_gui_access_token, [
+create_access_token_for_gui(Config, UserId, SessionId, Service) ->
+    oz_test_utils:call_oz(Config, token_logic, create_access_token_for_gui, [
         ?USER(UserId), UserId, SessionId, Service
     ]).
 

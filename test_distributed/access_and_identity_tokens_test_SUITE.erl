@@ -70,7 +70,7 @@
 
 -record(request_context, {
     subject :: aai:subject(),
-    scope :: unlimited | identity_token,
+    token_type :: access_token | identity_token,
     current_timestamp :: time_utils:seconds(),
     interface :: undefined | cv_interface:interface(),
     ip :: undefined | ip_utils:ip(),
@@ -325,7 +325,7 @@ check_bad_token_scenarios(RequestSpec) ->
         make_request_with_random_context(RequestSpec, ?SUB(user, DummyUser), {token, InviteToken})
     ),
 
-    GuiAccessToken = ozt_tokens:create_gui_access_token(DummyUser, SessId, ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)),
+    GuiAccessToken = ozt_tokens:create_access_token_for_gui(DummyUser, SessId, ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)),
     Error = ?assertMatch(
         {error, _},
         make_request_with_random_context(RequestSpec, ?SUB(user, DummyUser), {token, GuiAccessToken})
@@ -513,7 +513,7 @@ check_service_token_caveats_handling(RequestSpec) ->
                             ?SERVICE(?OP_PANEL, PrId) -> ?SUB(?ONEPROVIDER, ?OP_PANEL, PrId)
                         end,
                         % Identity tokens cannot have service caveats and cannot allow data access caveats
-                        scope = identity_token,
+                        token_type = identity_token,
                         service = undefined,
                         service_token = undefined,
                         consumer = undefined,
@@ -564,7 +564,7 @@ check_consumer_token_caveats_handling(RequestSpec) ->
                     ConsumerRequestContext = RequestContext#request_context{
                         % Identity tokens cannot have service caveats and cannot allow data access caveats
                         subject = Consumer,
-                        scope = identity_token,
+                        token_type = identity_token,
                         service = undefined,
                         service_token = undefined,
                         consumer = undefined,
@@ -814,7 +814,9 @@ request_via_gs(RequestSpec, Endpoint, ClientAuth, AuthOverride) ->
     check_success(ozt_gs:connect_and_request(Endpoint, ClientAuth, Req)).
 
 request_via_op_gs_with_override(RequestSpec, RequestContext, ClientAuth) ->
-    OneproviderToken = get_service_token_for_request(RequestContext),
+    ?SERVICE(OpService, ProviderId) = RequestContext#request_context.service,
+    ProviderToken = ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, ProviderId)),
+    OpServiceToken = tokens:add_oneprovider_service_indication(OpService, ozt_tokens:ensure_serialized(ProviderToken)),
     AuthOverride = #auth_override{
         client_auth = ozt_gs:normalize_client_auth(ClientAuth),
         interface = RequestContext#request_context.interface,
@@ -825,7 +827,7 @@ request_via_op_gs_with_override(RequestSpec, RequestContext, ClientAuth) ->
         end,
         data_access_caveats_policy = RequestContext#request_context.data_access_caveats_policy
     },
-    request_via_gs(RequestSpec, oneprovider, {token, OneproviderToken}, AuthOverride).
+    request_via_gs(RequestSpec, oneprovider, {token, OpServiceToken}, AuthOverride).
 
 
 check_success(ok) -> ok;
@@ -853,11 +855,11 @@ create_service_token_if_applicable(Subject) ->
     create_service_token_if_applicable(Subject, []).
 
 create_service_token_if_applicable(?SERVICE(?OP_WORKER, PrId), Caveats) ->
-    ProviderToken = ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, PrId), ?ACCESS_TOKEN, Caveats),
-    tokens:build_oneprovider_access_token(?OP_WORKER, ozt_tokens:ensure_serialized(ProviderToken));
+    ProviderToken = ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, PrId), ?IDENTITY_TOKEN, Caveats),
+    tokens:add_oneprovider_service_indication(?OP_WORKER, ozt_tokens:ensure_serialized(ProviderToken));
 create_service_token_if_applicable(?SERVICE(?OP_PANEL, PrId), Caveats) ->
-    ProviderToken = ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, PrId), ?ACCESS_TOKEN, Caveats),
-    tokens:build_oneprovider_access_token(?OP_PANEL, ozt_tokens:ensure_serialized(ProviderToken));
+    ProviderToken = ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, PrId), ?IDENTITY_TOKEN, Caveats),
+    tokens:add_oneprovider_service_indication(?OP_PANEL, ozt_tokens:ensure_serialized(ProviderToken));
 create_service_token_if_applicable(_, _) ->
     undefined.
 
@@ -866,14 +868,14 @@ create_consumer_token_if_applicable(Subject) ->
     create_consumer_token_if_applicable(Subject, []).
 
 create_consumer_token_if_applicable(?SUB(user, UserId), Caveats) ->
-    UserToken = ozt_tokens:create(temporary, ?SUB(user, UserId), ?ACCESS_TOKEN, Caveats),
+    UserToken = ozt_tokens:create(temporary, ?SUB(user, UserId), ?IDENTITY_TOKEN, Caveats),
     ozt_tokens:ensure_serialized(UserToken);
 create_consumer_token_if_applicable(?SUB(?ONEPROVIDER, Subtype, PrId), Caveats) ->
-    ProviderToken = ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, PrId), ?ACCESS_TOKEN, Caveats),
+    ProviderToken = ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, PrId), ?IDENTITY_TOKEN, Caveats),
     Serialized = ozt_tokens:ensure_serialized(ProviderToken),
     case Subtype of
-        ?OP_WORKER -> tokens:build_oneprovider_access_token(?OP_WORKER, Serialized);
-        ?OP_PANEL -> tokens:build_oneprovider_access_token(?OP_PANEL, Serialized);
+        ?OP_WORKER -> tokens:add_oneprovider_service_indication(?OP_WORKER, Serialized);
+        ?OP_PANEL -> tokens:add_oneprovider_service_indication(?OP_PANEL, Serialized);
         undefined -> Serialized
     end;
 create_consumer_token_if_applicable(_, _) ->
@@ -932,7 +934,7 @@ randomize_request_context(Subject, Service, Consumer) ->
     end,
     #request_context{
         subject = Subject,
-        scope = unlimited,
+        token_type = access_token,
         current_timestamp = ozt:cluster_time_seconds(),
         interface = lists_utils:random_element([undefined | EligibleInterfaces]),
         ip = IP,
@@ -994,10 +996,6 @@ gen_correct_caveats(RequestSpec, RC) -> lists:flatten([
         undefined -> [];
         _ -> gen_correct_consumer_caveat(RC)
     end,
-    case RC#request_context.scope of
-        unlimited -> [];
-        _ -> #cv_scope{scope = identity_token}
-    end,
     case RC#request_context.interface of
         undefined ->
             [];
@@ -1010,9 +1008,9 @@ gen_correct_caveats(RequestSpec, RC) -> lists:flatten([
         Interface ->
             #cv_interface{interface = Interface}
     end,
-    case RC#request_context.scope of
-        unlimited -> gen_correct_api_caveat(RequestSpec);
-        _ -> [] % Service and consumer (identity) tokens cannot have API caveats
+    case RC#request_context.token_type of
+        access_token -> gen_correct_api_caveat(RequestSpec);
+        identity_token -> [] % Identity tokens cannot have API caveats
     end,
     gen_correct_data_access_caveats(RequestSpec, RC)
 ]).
@@ -1037,25 +1035,21 @@ gen_unverified_caveats(RequestSpec, RC) -> lists:flatten([
         _ ->
             gen_unverified_ip_based_caveats(RC)
     end,
-    case RC#request_context.scope of
-        unlimited -> #cv_scope{scope = identity_token};
-        _ -> []
-    end,
     #cv_interface{interface = lists_utils:random_element(case RC#request_context.interface of
         undefined ->
             cv_interface:valid_interfaces();
         oneclient ->
-            case {RC#request_context.scope, RequestSpec#request_spec.available_with_data_access_caveats} of
+            case {RC#request_context.token_type, RequestSpec#request_spec.available_with_data_access_caveats} of
                 % oneclient interface caveat causes API limitations, but only for access tokens
-                {unlimited, false} -> cv_interface:valid_interfaces();
+                {access_token, false} -> cv_interface:valid_interfaces();
                 _ -> cv_interface:valid_interfaces() -- [oneclient]
             end;
         Interface ->
             cv_interface:valid_interfaces() -- [Interface]
     end)},
-    case RC#request_context.scope of
-        unlimited -> gen_unverified_api_caveat(RequestSpec);
-        _ -> gen_correct_api_caveat(RequestSpec) % Identity tokens cannot have API caveats
+    case RC#request_context.token_type of
+        access_token -> gen_unverified_api_caveat(RequestSpec);
+        identity_token -> gen_correct_api_caveat(RequestSpec) % Identity tokens cannot have API caveats
     end,
     gen_unverified_data_access_caveats(RequestSpec, RC)
 ]).

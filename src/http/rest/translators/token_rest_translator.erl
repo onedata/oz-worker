@@ -48,7 +48,7 @@ create_response(#gri{aspect = examine}, _, value, TokenData) ->
         <<"id">> => TokenId,
         <<"persistence">> => Persistence,
         <<"subject">> => aai:subject_to_json(Subject),
-        <<"type">> => tokens:type_to_json(Type),
+        <<"type">> => token_type:to_json(Type),
         <<"caveats">> => [caveats:to_json(C) || C <- Caveats]
     });
 
@@ -152,7 +152,7 @@ named_token_reply(TokenData) ->
         <<"id">> => TokenId,
         <<"name">> => Name,
         <<"subject">> => aai:subject_to_json(Subject),
-        <<"type">> => tokens:type_to_json(Type),
+        <<"type">> => token_type:to_json(Type),
         <<"caveats">> => [caveats:to_json(C) || C <- Caveats],
         <<"metadata">> => Metadata,
         <<"revoked">> => Revoked,

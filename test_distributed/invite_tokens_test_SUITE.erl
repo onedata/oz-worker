@@ -52,7 +52,7 @@
 }).
 
 -record(testcase, {
-    token_type :: tokens:type(),
+    token_type :: token_type:type(),
 
     % What subjects are eligible to create an invite token of above type
     % (but authorization is still subject to privileges)
@@ -112,6 +112,7 @@
     user_join_space_token/1,
     group_join_space_token/1,
     support_space_token/1,
+    harvester_join_space_token/1,
     register_oneprovider_token/1,
     user_join_cluster_token/1,
     group_join_cluster_token/1,
@@ -126,6 +127,7 @@ all() -> ?ALL([
     user_join_space_token,
     group_join_space_token,
     support_space_token,
+    harvester_join_space_token,
     register_oneprovider_token,
     user_join_cluster_token,
     group_join_cluster_token,
@@ -409,7 +411,10 @@ support_space_token(_Config) ->
     SpaceId = ozt_users:create_space_for(SpaceCreatorUserId),
 
     ?assert(run_invite_token_tests(#testcase{
-        token_type = ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId),
+        token_type = ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId, #space_support_parameters{
+            data_write = lists_utils:random_element([global, none]),
+            metadata_replication = lists_utils:random_element([eager, lazy, none])
+        }),
 
         eligible_to_invite = [?SUB(user, SpaceCreatorUserId)],
         requires_privileges_to_invite = true,
@@ -460,6 +465,74 @@ support_space_token(_Config) ->
         expected_reuse_result_fun = fun(?SUB(?ONEPROVIDER, ProviderId)) ->
             StorageId = ProviderId,
             ?ERROR_RELATION_ALREADY_EXISTS(od_space, SpaceId, od_storage, StorageId)
+        end
+    })).
+
+
+harvester_join_space_token(_Config) ->
+    SpaceCreatorUserId = ozt_users:create(),
+    SpaceId = ozt_users:create_space_for(SpaceCreatorUserId),
+
+    ?assert(run_invite_token_tests(#testcase{
+        token_type = ?INVITE_TOKEN(?HARVESTER_JOIN_SPACE, SpaceId),
+
+        eligible_to_invite = [?SUB(user, SpaceCreatorUserId)],
+        requires_privileges_to_invite = true,
+        admin_privilege_to_invite = ?OZ_SPACES_ADD_RELATIONSHIPS,
+
+        supports_carried_privileges = false,
+        requires_privileges_to_set_privileges = false,
+        allowed_carried_privileges = undefined,
+        default_carried_privileges = undefined,
+        admin_privilege_to_set_privileges = undefined,
+
+        eligible_consumer_types = [{user, fun(?SUB(user, UserId)) ->
+            HarvesterId = ozt_users:create_harvester_for(UserId),
+            % Store the harvester in memory for use in different callbacks
+            simple_cache:put({user_harvester, UserId}, HarvesterId)
+        end}],
+        requires_privileges_to_consume = true,
+        admin_privilege_to_consume = ?OZ_HARVESTERS_ADD_RELATIONSHIPS,
+
+        modify_privileges_fun = fun(?SUB(user, UserId), Modification) ->
+            case Modification of
+                {_, to_invite} ->
+                    set_user_privs_in_space(SpaceId, UserId, Modification);
+                {_, to_set_privs} ->
+                    set_user_privs_in_space(SpaceId, UserId, Modification);
+                {_, to_consume} ->
+                    {ok, HarvesterId} = simple_cache:get({user_harvester, UserId}),
+                    set_user_privs_in_harvester(HarvesterId, UserId, Modification)
+            end
+        end,
+        check_privileges_fun = undefined,
+
+        prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, SubjectId)}, Token) ->
+            HarvesterId = case simple_cache:get({user_harvester, SubjectId}) of
+                {ok, HrId} ->
+                    % Covers users that were set up according to eligible_consumer_types
+                    HrId;
+                _ ->
+                    % Covers users with no harvester and other consumer types.
+                    % Other consumer than user does not make sense, but for the
+                    % sake of checking if bad consumer is properly handled, try
+                    % to use a freshly created harvester
+                    ozt_harvesters:create()
+            end,
+            Data = #{<<"token">> => ozt_tokens:ensure_serialized(Token)},
+            #consume_request{
+                logic_call_args = {harvester_logic, join_space, [Auth, HarvesterId, Data]},
+                rest_call_args = {[<<"/harvesters/">>, HarvesterId, <<"/spaces/join">>], Data},
+                graph_sync_args = {?GRI(od_space, undefined, join, private), ?AS_HARVESTER(HarvesterId), Data}
+            }
+        end,
+
+        delete_target_entity_fun = fun() ->
+            ozt_spaces:delete(SpaceId)
+        end,
+        expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
+            {ok, HarvesterId} = simple_cache:get({user_harvester, UserId}),
+            ?ERROR_RELATION_ALREADY_EXISTS(od_harvester, HarvesterId, od_space, SpaceId)
         end
     })).
 
@@ -885,30 +958,30 @@ run_invite_token_tests(Testcase) ->
 
 
 % Check if trying to consume a bad token returns proper errors
-check_bad_token_scenarios(Tc = #testcase{token_type = ?INVITE_TOKEN(InviteTokenType, TargetEntityId)}) ->
+check_bad_token_scenarios(Tc = #testcase{token_type = TokenType = ?INVITE_TOKEN(InviteType)}) ->
     DummyProvider = ozt_providers:create(),
     DummyUser = ozt_users:create(),
     SessId = ozt_http:simulate_login(DummyUser),
 
     AccessToken = ozt_tokens:create(named, ?SUB(?ONEPROVIDER, DummyProvider)),
-    GuiAccessToken = ozt_tokens:create_gui_access_token(DummyUser, SessId, ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)),
+    GuiAccessToken = ozt_tokens:create_access_token_for_gui(DummyUser, SessId, ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)),
     BadToken = <<"not-a-token-definitely-I've-seen-one-I-would-know">>,
     ForgedToken = tokens:construct(#token{
         onezone_domain = ozt:get_domain(),
         id = <<"123123123123">>,
         subject = ?SUB(user, <<"123">>),
-        type = ?INVITE_TOKEN(InviteTokenType, TargetEntityId),
+        type = TokenType,
         persistence = {temporary, 1}
     }, <<"secret">>, []),
 
     lists:foreach(fun(EligibleConsumerType) ->
         Consumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
         ?assertEqual(
-            ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(InviteTokenType, ?ACCESS_TOKEN)),
+            ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(InviteType, ?ACCESS_TOKEN)),
             consume_token(Tc, Consumer, AccessToken)
         ),
         ?assertEqual(
-            ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(InviteTokenType, ?GUI_ACCESS_TOKEN(SessId))),
+            ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(InviteType, ?ACCESS_TOKEN(SessId))),
             consume_token(Tc, Consumer, GuiAccessToken)
         ),
         ?assertEqual(
@@ -1413,14 +1486,14 @@ check_token_reuse(Tc = #testcase{token_type = TokenType}) ->
 
 
 % It should not be possible to create a token for an inexistent target entity id
-check_invalid_target_scenarios(Tc = #testcase{token_type = ?INVITE_TOKEN(InviteTokenType, _)}) ->
+check_invalid_target_scenarios(Tc = #testcase{token_type = ?INVITE_TOKEN(InviteType, _, Parameters)}) ->
     Admin = ozt_users:create_admin(),
     lists:foreach(fun(Persistence) ->
         lists:foreach(fun(EligibleSubject) ->
             EligibleAuth = #auth{subject = EligibleSubject},
             ensure_privileges_to_invite(Tc, EligibleSubject),
             lists:foreach(fun(Auth) ->
-                BadTokenType = ?INVITE_TOKEN(InviteTokenType, <<"1234">>),
+                BadTokenType = ?INVITE_TOKEN(InviteType, <<"1234">>, Parameters),
                 Error = ?assertMatch(
                     {error, _},
                     ozt_tokens:try_create(Auth, Persistence, EligibleSubject, #{<<"type">> => BadTokenType})
@@ -1586,7 +1659,9 @@ set_user_privs_in_group(GroupId, UserId, {GrantOrRevoke, to_set_privs}) ->
     set_user_privs(group_logic, GroupId, UserId, GrantOrRevoke, [?GROUP_SET_PRIVILEGES]).
 
 set_user_privs_in_space(SpaceId, UserId, {GrantOrRevoke, to_invite}) ->
-    set_user_privs(space_logic, SpaceId, UserId, GrantOrRevoke, [?SPACE_ADD_USER, ?SPACE_ADD_GROUP, ?SPACE_ADD_SUPPORT]);
+    set_user_privs(space_logic, SpaceId, UserId, GrantOrRevoke, [
+        ?SPACE_ADD_USER, ?SPACE_ADD_GROUP, ?SPACE_ADD_SUPPORT, ?SPACE_ADD_HARVESTER
+    ]);
 set_user_privs_in_space(SpaceId, UserId, {GrantOrRevoke, to_consume}) ->
     set_user_privs(space_logic, SpaceId, UserId, GrantOrRevoke, [?SPACE_ADD_HARVESTER]);
 set_user_privs_in_space(SpaceId, UserId, {GrantOrRevoke, to_set_privs}) ->
@@ -1601,6 +1676,8 @@ set_user_privs_in_harvester(HarvesterId, UserId, {GrantOrRevoke, to_invite}) ->
     set_user_privs(harvester_logic, HarvesterId, UserId, GrantOrRevoke, [
         ?HARVESTER_ADD_USER, ?HARVESTER_ADD_GROUP, ?HARVESTER_ADD_SPACE
     ]);
+set_user_privs_in_harvester(HarvesterId, UserId, {GrantOrRevoke, to_consume}) ->
+    set_user_privs(harvester_logic, HarvesterId, UserId, GrantOrRevoke, [?HARVESTER_ADD_SPACE]);
 set_user_privs_in_harvester(HarvesterId, UserId, {GrantOrRevoke, to_set_privs}) ->
     set_user_privs(harvester_logic, HarvesterId, UserId, GrantOrRevoke, [?HARVESTER_SET_PRIVILEGES]).
 
@@ -1704,7 +1781,7 @@ consume_by_graphsync_request(Auth, #consume_request{graph_sync_args = {GRI, Auth
     % binary entity type.
     SerializableAuthHint = case AuthHint of
         undefined -> undefined;
-        {HintType, undefined} -> undefined;
+        {_HintType, undefined} -> undefined;
         {HintType, EntityId} -> {HintType, EntityId}
     end,
     GsReq = #gs_req{

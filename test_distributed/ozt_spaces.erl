@@ -52,7 +52,9 @@ add_user(SpaceId, UserId, Privileges) ->
 
 -spec create_support_token(od_space:id(), od_user:id()) -> tokens:token().
 create_support_token(SpaceId, UserId) ->
-    ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId)).
+    ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId, #space_support_parameters{
+        data_write = global, metadata_replication = eager
+    })).
 
 
 -spec create_share(od_space:id(), od_share:name()) -> od_share:id().

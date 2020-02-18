@@ -259,18 +259,18 @@ gui_token_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, UserId),
 
-    {ok, {GuiToken1, Ttl}} = oz_test_utils:call_oz(Config, token_logic, create_gui_access_token, [
+    {ok, {GuiToken1, Ttl}} = oz_test_utils:call_oz(Config, token_logic, create_access_token_for_gui, [
         ?USER(UserId), UserId, SessionId, ?SERVICE(?OP_WORKER, Provider1)
     ]),
     {ok, SerializedGuiToken1} = tokens:serialize(GuiToken1),
 
-    {ok, {GuiToken2, Ttl}} = oz_test_utils:call_oz(Config, token_logic, create_gui_access_token, [
+    {ok, {GuiToken2, Ttl}} = oz_test_utils:call_oz(Config, token_logic, create_access_token_for_gui, [
         ?USER(UserId), UserId, SessionId, ?SERVICE(?OP_PANEL, Provider1)
     ]),
     {ok, SerializedGuiToken2} = tokens:serialize(GuiToken2),
 
-    Provider1AudToken = tokens:build_oneprovider_access_token(?OP_WORKER, Provider1Token),
-    Provider2AudToken = tokens:build_oneprovider_access_token(?OP_PANEL, Provider2Token),
+    Provider1AudToken = tokens:add_oneprovider_service_indication(?OP_WORKER, Provider1Token),
+    Provider2AudToken = tokens:add_oneprovider_service_indication(?OP_PANEL, Provider2Token),
 
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{

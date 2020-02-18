@@ -58,7 +58,7 @@
 -type type_validator() :: any | atom | list_of_atoms | binary
 | list_of_binaries | integer | integer_or_infinity | float | json
 | token | invite_token | token_type | caveats
-| service | consumer | boolean | ipv4_address | list_of_ipv4_addresses.
+| boolean | ipv4_address | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
 fun((term()) -> boolean()) |
@@ -68,7 +68,7 @@ fun((term()) -> boolean()) |
 {exists, fun((entity_id()) -> boolean())} |
 {not_exists, fun((entity_id()) -> boolean())} |
 {relation_exists, atom(), binary(), atom(), binary(), fun((entity_id()) -> boolean())} |
-tokens:invite_token_type() | % Compatible only with 'invite_token' type validator
+token_type:invite_type() | % Compatible only with 'invite_token' type validator
 subdomain | domain |
 email | name |
 full_name | username | password.
@@ -834,14 +834,14 @@ check_type(invite_token, Key, Token) ->
         false -> throw(?ERROR_BAD_VALUE_TOKEN(Key, ?ERROR_BAD_TOKEN))
     end;
 check_type(token_type, Key, TokenType) ->
-    case tokens:sanitize_type(TokenType) of
+    case token_type:sanitize(TokenType) of
         {true, Sanitized} -> Sanitized;
         false -> throw(?ERROR_BAD_VALUE_TOKEN_TYPE(Key))
     end;
-check_type(invite_token_type, Key, InviteTokenType) ->
-    case tokens:sanitize_invite_token_type(InviteTokenType) of
+check_type(invite_type, Key, InviteType) ->
+    case token_type:sanitize_invite_type(InviteType) of
         {true, Sanitized} -> Sanitized;
-        false -> throw(?ERROR_BAD_VALUE_INVITE_TOKEN_TYPE(Key))
+        false -> throw(?ERROR_BAD_VALUE_INVITE_TYPE(Key))
     end;
 check_type(caveats, Key, Caveats) ->
     try
@@ -860,22 +860,6 @@ check_type(caveats, Key, Caveats) ->
         end, Caveats)
     catch
         throw:{error, _} = Error -> throw(Error);
-        _:_ -> throw(?ERROR_BAD_DATA(Key))
-    end;
-check_type(service, _Key, Service = ?SERVICE(_, _)) ->
-    Service;
-check_type(service, Key, SerializedService) ->
-    try
-        aai:deserialize_service(SerializedService)
-    catch
-        _:_ -> throw(?ERROR_BAD_DATA(Key))
-    end;
-check_type(consumer, _Key, Consumer = ?SUB(_, _)) ->
-    Consumer;
-check_type(consumer, Key, SerializedConsumer) ->
-    try
-        aai:deserialize_subject(SerializedConsumer)
-    catch
         _:_ -> throw(?ERROR_BAD_DATA(Key))
     end;
 check_type(ipv4_address, _Key, undefined) ->
