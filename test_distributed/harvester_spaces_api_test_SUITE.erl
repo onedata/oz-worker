@@ -32,6 +32,7 @@
     init_per_suite/1, end_per_suite/1
 ]).
 -export([
+    join_space_test/1,
     add_space_test/1,
     create_space_invite_token_test/1,
     remove_space_test/1,
@@ -44,6 +45,7 @@
 
 all() ->
     ?ALL([
+        join_space_test,
         add_space_test,
         create_space_invite_token_test,
         remove_space_test,
@@ -58,6 +60,139 @@ all() ->
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
+
+join_space_test(Config) ->
+    % create harvester with 2 users:
+    %   U2 gets the HARVESTER_ADD_SPACE privilege
+    %   U1 gets all remaining privileges
+    {H1, U1, U2} = api_test_scenarios:create_basic_harvester_env(
+        Config, ?HARVESTER_ADD_SPACE
+    ),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    EnvSetUpFun = fun() ->
+        {ok, Creator} = oz_test_utils:create_user(Config),
+        {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(Creator)),
+        {ok, Token} = oz_test_utils:call_oz(Config, token_logic, create_user_named_token, [
+            ?USER(Creator), Creator, #{
+                <<"name">> => ?UNIQUE_STRING,
+                <<"type">> => ?INVITE_TOKEN(?HARVESTER_JOIN_SPACE, SpaceId),
+                <<"usageLimit">> => 1
+            }
+        ]),
+        {ok, Serialized} = tokens:serialize(Token),
+        #{
+            spaceId => SpaceId,
+            token => Serialized,
+            tokenNonce => Token#token.id
+        }
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId, tokenNonce := TokenId} = _Env, _) ->
+        {ok, Spaces} = oz_test_utils:harvester_get_spaces(Config, H1),
+        case ShouldSucceed of
+            true ->
+                ?assertEqual(lists:member(SpaceId, Spaces), ShouldSucceed),
+                oz_test_utils:assert_invite_token_usage_limit_reached(Config, true, TokenId);
+            false -> ok
+        end
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {admin, [?OZ_HARVESTERS_ADD_RELATIONSHIPS]},
+                {user, U2}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {user, U1}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = [<<"/harvesters/">>, H1, <<"/spaces/join">>],
+            expected_code = ?HTTP_201_CREATED,
+            expected_headers = ?OK_ENV(fun(#{spaceId := SpaceId} = _Env, _) ->
+                fun(#{<<"Location">> := Location} = _Headers) ->
+                    ExpLocation = ?URL(Config,
+                        [<<"/harvesters/">>, H1, <<"/spaces/">>, SpaceId]
+                    ),
+                    ?assertMatch(ExpLocation, Location),
+                    true
+                end
+            end)
+        },
+        logic_spec = #logic_spec{
+            module = harvester_logic,
+            function = join_space,
+            args = [auth, H1, data],
+            expected_result = ?OK_ENV(fun(#{spaceId := SpaceId} = _Env, _) ->
+                ?OK_BINARY(SpaceId)
+            end)
+        },
+        % TODO gs
+        data_spec = #data_spec{
+            required = [<<"token">>],
+            correct_values = #{
+                <<"token">> => [fun(#{token := Token} = _Env) ->
+                    Token
+                end]
+            },
+            bad_values = [
+                {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
+                {<<"token">>, <<"123qwe">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+    )),
+
+    % Check that token is not consumed upon failed operation
+    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1)),
+    {ok, Token2} = oz_test_utils:call_oz(Config, token_logic, create_user_named_token, [
+        ?USER(U1), U1, #{
+            <<"name">> => ?UNIQUE_STRING,
+            <<"type">> => ?INVITE_TOKEN(?HARVESTER_JOIN_SPACE, Space),
+            <<"usageLimit">> => 1
+        }
+    ]),
+    {ok, Serialized2} = tokens:serialize(Token2),
+    oz_test_utils:harvester_add_space(Config, H1, Space),
+
+    ApiTestSpec1 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {admin, [?OZ_HARVESTERS_ADD_RELATIONSHIPS]},
+                {user, U2}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = [<<"/harvesters/">>, H1, <<"/spaces/join">>],
+            expected_code = ?HTTP_409_CONFLICT
+        },
+        logic_spec = #logic_spec{
+            module = harvester_logic,
+            function = join_space,
+            args = [auth, H1, data],
+            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_harvester, H1, od_space, Space))
+        },
+        % TODO gs
+        data_spec = #data_spec{
+            required = [<<"token">>],
+            correct_values = #{<<"token">> => [Serialized2]}
+        }
+    },
+    VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
+        oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token2#token.id)
+    end,
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1
+    )).
 
 
 add_space_test(Config) ->

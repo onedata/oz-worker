@@ -350,7 +350,7 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = harvesters}
     }},
-    %% Join harvester by space
+    %% Join space to a harvester
     %% This operation requires one of the following privileges:
     %% - space_add_harvester
     %% - oz_harvesters_add_relationships

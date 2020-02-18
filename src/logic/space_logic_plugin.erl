@@ -173,7 +173,8 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
     Token = maps:get(<<"token">>, Req#el_req.data),
     ExpType = case Req#el_req.auth_hint of
         ?AS_USER(_) -> ?USER_JOIN_SPACE;
-        ?AS_GROUP(_) -> ?GROUP_JOIN_SPACE
+        ?AS_GROUP(_) -> ?GROUP_JOIN_SPACE;
+        ?AS_HARVESTER(_) -> ?HARVESTER_JOIN_SPACE
     end,
 
     invite_tokens:consume(Auth, Token, ExpType, fun(SpaceId, Privileges) ->
@@ -189,30 +190,41 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
                     od_group, GroupId,
                     od_space, SpaceId,
                     Privileges
-                )
+                );
+            ?AS_HARVESTER(HarvesterId) ->
+                entity_graph:add_relation(
+                    od_harvester, HarvesterId,
+                    od_space, SpaceId
+                ),
+                harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
+                    harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, false)
+                end)
         end,
         NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance,
-            scope = case lists:member(?SPACE_VIEW, Privileges) of
+            % Privileges are defined only for USER_JOIN_SPACE and GROUP_JOIN_SPACE
+            scope = case is_list(Privileges) andalso lists:member(?SPACE_VIEW, Privileges) of
                 true -> private;
                 false -> protected
             end
         },
-        {true, {Space, Rev}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
-        {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
+        {true, {Space, Rev}} = fetch_entity(#gri{id = SpaceId}),
+        {ok, SpaceData} = get(#el_req{gri = NewGRI}, Space),
         {ok, resource, {NewGRI, {SpaceData, Rev}}}
     end);
 
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    token_logic:create_legacy_invite_token(Auth, ?USER_JOIN_SPACE, SpaceId);
+    token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?USER_JOIN_SPACE, SpaceId));
 
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_group_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    token_logic:create_legacy_invite_token(Auth, ?GROUP_JOIN_SPACE, SpaceId);
+    token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?GROUP_JOIN_SPACE, SpaceId));
 
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = space_support_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    token_logic:create_legacy_invite_token(Auth, ?SUPPORT_SPACE, SpaceId);
+    token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId, #space_support_parameters{
+        data_write = global, metadata_replication = eager
+    }));
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:space_member()),
@@ -437,7 +449,7 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
 
         lists:foreach(fun(StorageId) ->
             case storage_logic_plugin:fetch_entity(#gri{id = StorageId}) of
-                {true, { #od_storage{provider = ProviderId}, _Rev}} ->
+                {true, {#od_storage{provider = ProviderId}, _Rev}} ->
                     entity_graph:remove_relation(
                         od_space, SpaceId,
                         od_storage, StorageId
@@ -542,6 +554,8 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
             true;
         {?USER(UserId), ?AS_GROUP(GroupId)} ->
             group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_ADD_SPACE);
+        {?USER(UserId), ?AS_HARVESTER(HarvesterId)} ->
+            harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_ADD_SPACE);
         _ ->
             false
     end;
@@ -709,7 +723,8 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = space_
 required_admin_privileges(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
     case Req#el_req.auth_hint of
         ?AS_USER(_) -> [?OZ_USERS_ADD_RELATIONSHIPS];
-        ?AS_GROUP(_) -> [?OZ_GROUPS_ADD_RELATIONSHIPS]
+        ?AS_GROUP(_) -> [?OZ_GROUPS_ADD_RELATIONSHIPS];
+        ?AS_HARVESTER(_) -> [?OZ_HARVESTERS_ADD_RELATIONSHIPS]
     end;
 
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {user, _}}, data = #{<<"privileges">> := _}}) ->
@@ -812,7 +827,8 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
         required => #{
             <<"token">> => {invite_token, case Req#el_req.auth_hint of
                 ?AS_USER(_) -> ?USER_JOIN_SPACE;
-                ?AS_GROUP(_) -> ?GROUP_JOIN_SPACE
+                ?AS_GROUP(_) -> ?GROUP_JOIN_SPACE;
+                ?AS_HARVESTER(_) -> ?HARVESTER_JOIN_SPACE
             end}
         }
     };

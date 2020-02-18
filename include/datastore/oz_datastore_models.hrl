@@ -419,7 +419,7 @@
     name :: od_token:name(),
     version = ?CURRENT_TOKEN_VERSION :: tokens:version(),
     subject :: aai:subject(),
-    type :: tokens:type(),
+    type :: token_type:type(),
     caveats = [] :: [caveats:caveat()],
     secret :: tokens:secret(),
     metadata = #{} :: token_metadata:metadata(),

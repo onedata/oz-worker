@@ -63,7 +63,6 @@ all() ->
 %%% Test functions
 %%%===================================================================
 
-
 join_harvester_test(Config) ->
     % create space with 2 users:
     %   U2 gets the SPACE_ADD_HARVESTER privilege

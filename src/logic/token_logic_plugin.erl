@@ -149,7 +149,7 @@ create(#el_req{gri = #gri{id = undefined, aspect = examine}, data = Data}) ->
 create(#el_req{gri = #gri{id = undefined, aspect = confine}, data = Data}) ->
     Token = #token{type = Type, subject = Subject} = maps:get(<<"token">>, Data),
     Caveats = maps:get(<<"caveats">>, Data),
-    validate_subject_and_service_caveats(Type, Subject, Caveats),
+    validate_subject_and_service(Type, Subject, Caveats),
     {ok, value, tokens:confine(Token, Caveats)};
 
 create(#el_req{gri = #gri{id = undefined, aspect = verify_access_token}, data = Data}) ->
@@ -180,7 +180,7 @@ create(#el_req{gri = #gri{id = undefined, aspect = verify_identity_token}, data 
 
 create(#el_req{gri = #gri{id = undefined, aspect = verify_invite_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
-    ExpType = maps:get(<<"expectedInviteTokenType">>, Data, any),
+    ExpType = maps:get(<<"expectedInviteType">>, Data, any),
     AuthCtx = build_auth_ctx(Data),
     case token_auth:verify_invite_token(Token, ExpType, AuthCtx) of
         {ok, #auth{subject = Subject, caveats = Caveats}} ->
@@ -198,8 +198,24 @@ create(#el_req{gri = #gri{id = undefined, aspect = verify_invite_token}, data = 
 build_auth_ctx(Data) ->
     PeerIp = utils:null_to_undefined(maps:get(<<"peerIp">>, Data, undefined)),
     Interface = utils:null_to_undefined(maps:get(<<"interface">>, Data, undefined)),
-    Service = utils:null_to_undefined(maps:get(<<"service">>, Data, undefined)),
-    Consumer = utils:null_to_undefined(maps:get(<<"consumer">>, Data, undefined)),
+    Service = case utils:null_to_undefined(maps:get(<<"serviceToken">>, Data, undefined)) of
+        undefined ->
+            undefined;
+        ServiceToken ->
+            case token_auth:verify_service_token(ServiceToken, #auth_ctx{ip = PeerIp, interface = Interface}) of
+                {ok, Srv} -> Srv;
+                {error, _} = Error1 -> throw(Error1)
+            end
+    end,
+    Consumer = case utils:null_to_undefined(maps:get(<<"consumerToken">>, Data, undefined)) of
+        undefined ->
+            undefined;
+        ConsumerToken ->
+            case token_auth:verify_consumer_token(ConsumerToken, #auth_ctx{ip = PeerIp, interface = Interface}) of
+                {ok, Csm} -> Csm;
+                {error, _} = Error2 -> throw(Error2)
+            end
+    end,
     DataAccessCaveatsPolicy = case maps:get(<<"allowDataAccessCaveats">>, Data, false) of
         true -> allow_data_access_caveats;
         false -> disallow_data_access_caveats
@@ -439,17 +455,16 @@ validate(#el_req{operation = create, gri = #gri{aspect = confine}}) ->
 validate(#el_req{operation = create, gri = #gri{aspect = verify_access_token}}) ->
     validate_verify_operation(#{
         <<"interface">> => {atom, cv_interface:valid_interfaces()},
-        <<"service">> => {service, any},
+        <<"serviceToken">> => {token, any},
         <<"allowDataAccessCaveats">> => {boolean, any}
     });
 validate(#el_req{operation = create, gri = #gri{aspect = verify_identity_token}}) ->
     validate_verify_operation(#{
-        <<"interface">> => {atom, cv_interface:valid_interfaces()},
-        <<"allowDataAccessCaveats">> => {boolean, any}
+        <<"interface">> => {atom, cv_interface:valid_interfaces()}
     });
 validate(#el_req{operation = create, gri = #gri{aspect = verify_invite_token}}) ->
     validate_verify_operation(#{
-        <<"expectedInviteTokenType">> => {invite_token_type, any}
+        <<"expectedInviteType">> => {invite_type, any}
     });
 
 validate(#el_req{operation = create, gri = #gri{aspect = {user_named_token, UserId}}, data = Data}) ->
@@ -482,7 +497,7 @@ validate_verify_operation(OptionalParams) -> #{
     },
     optional => OptionalParams#{
         <<"peerIp">> => {ipv4_address, any},
-        <<"consumer">> => {consumer, any}
+        <<"consumerToken">> => {token, any}
     }
 }.
 
@@ -522,9 +537,9 @@ validate_create_operation(temporary, Subject, Data) -> #{
 -spec optional_invite_token_params(entity_logic:data()) ->
     #{Key :: binary() => {entity_logic:type_validator(), entity_logic:value_validator()}}.
 optional_invite_token_params(#{<<"type">> := JSON} = Data) when is_map(JSON) ->
-    optional_invite_token_params(Data#{<<"type">> := tokens:json_to_type(JSON)});
-optional_invite_token_params(#{<<"type">> := ?INVITE_TOKEN(InviteTokenType, _)}) ->
-    token_metadata:optional_invite_token_parameters(InviteTokenType);
+    optional_invite_token_params(Data#{<<"type">> := token_type:from_json(JSON)});
+optional_invite_token_params(#{<<"type">> := ?INVITE_TOKEN(InviteType, _)}) ->
+    token_metadata:optional_invite_token_parameters(InviteType);
 optional_invite_token_params(_) ->
     #{}.
 
@@ -536,16 +551,17 @@ validate_type(?SUB(user), _, ?ACCESS_TOKEN, _Data) ->
 validate_type(?SUB(?ONEPROVIDER), _, ?ACCESS_TOKEN, _Data) ->
     true;
 
-% Only users can issue gui access tokens
-validate_type(?SUB(user), temporary, ?GUI_ACCESS_TOKEN(_), _Data) ->
+validate_type(?SUB(user), _, ?IDENTITY_TOKEN, _Data) ->
+    true;
+validate_type(?SUB(?ONEPROVIDER), _, ?IDENTITY_TOKEN, _Data) ->
     true;
 
-validate_type(Subject, Persistence, ?INVITE_TOKEN(InviteTokenType, EntityId), Data) ->
+validate_type(Subject, Persistence, ?INVITE_TOKEN(InviteType, EntityId), Data) ->
     PrivilegesProfile = case Persistence of
         temporary -> default_privileges;
-        named -> token_metadata:inspect_requested_privileges(InviteTokenType, Data)
+        named -> token_metadata:inspect_requested_privileges(InviteType, Data)
     end,
-    invite_tokens:ensure_valid_invitation(Subject, InviteTokenType, EntityId, PrivilegesProfile);
+    invite_tokens:ensure_valid_invitation(Subject, InviteType, EntityId, PrivilegesProfile);
 
 validate_type(_, _, _, _) ->
     false.
@@ -563,7 +579,7 @@ create_named_token(Subject, Data) ->
     end,
     Type = maps:get(<<"type">>, Data, ?ACCESS_TOKEN),
     Caveats = maps:get(<<"caveats">>, Data, []),
-    validate_subject_and_service_caveats(Type, Subject, Caveats),
+    validate_subject_and_service(Type, Subject, Caveats),
 
     CustomMetadata = maps:get(<<"customMetadata">>, Data, #{}),
     Secret = tokens:generate_secret(),
@@ -589,7 +605,7 @@ create_named_token(Subject, Data) ->
 create_temporary_token(Subject, Data) ->
     Type = maps:get(<<"type">>, Data, ?ACCESS_TOKEN),
     Caveats = maps:get(<<"caveats">>, Data, []),
-    validate_subject_and_service_caveats(Type, Subject, Caveats),
+    validate_subject_and_service(Type, Subject, Caveats),
 
     MaxTTL = ?MAX_TEMPORARY_TOKEN_TTL,
     IsTtlAllowed = case infer_ttl(Caveats) of
@@ -611,17 +627,21 @@ create_temporary_token(Subject, Data) ->
 
 
 %% @private
--spec validate_subject_and_service_caveats(tokens:type(), aai:subject(), [caveats:caveat()]) ->
+-spec validate_subject_and_service(tokens:type(), aai:subject(), [caveats:caveat()]) ->
     ok | no_return().
-validate_subject_and_service_caveats(Type, Subject, Caveats) ->
-    lists:foreach(fun(#cv_service{whitelist = Whitelist}) ->
-        lists:foreach(fun(Service) ->
-            case token_auth:validate_subject_and_service(Type, Subject, Service) of
-                ok -> ok;
-                {error, _} = Error -> throw(Error)
-            end
-        end, Whitelist)
-    end, caveats:filter([cv_service], Caveats)).
+validate_subject_and_service(Type, Subject, Caveats) ->
+    ServicesToCheck = case caveats:filter([cv_service], Caveats) of
+        [] ->
+            [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)];
+        ServiceCaveats ->
+            lists:flatten([Whitelist || #cv_service{whitelist = Whitelist} <- ServiceCaveats])
+    end,
+    lists:foreach(fun(Service) ->
+        case token_auth:validate_subject_and_service(Type, Subject, Service) of
+            ok -> ok;
+            {error, _} = Error -> throw(Error)
+        end
+    end, ServicesToCheck).
 
 
 %% @private
@@ -653,7 +673,6 @@ to_token_data(TokenId, NamedToken) ->
     }.
 
 
-%% @private
 -spec infer_ttl([caveats:caveat()]) -> undefined | time_utils:seconds().
 infer_ttl(Caveats) ->
     ValidUntil = lists:foldl(fun

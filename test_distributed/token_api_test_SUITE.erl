@@ -34,13 +34,14 @@
 -export([
     examine/1,
     confine/1,
-    verify_access_or_identity_token/1,
+    verify_access_token/1,
+    verify_identity_token/1,
     verify_invite_token/1,
     create_user_named_token/1,
     create_provider_named_token/1,
     create_user_temporary_token/1,
     create_provider_temporary_token/1,
-    create_gui_access_token/1,
+    create_access_token_for_gui/1,
     list/1,
     list_user_named_tokens/1,
     list_provider_named_tokens/1,
@@ -62,13 +63,14 @@ all() ->
     ?ALL([
         examine,
         confine,
-        verify_access_or_identity_token,
+        verify_access_token,
+        verify_identity_token,
         verify_invite_token,
         create_user_named_token,
         create_provider_named_token,
         create_user_temporary_token,
         create_provider_temporary_token,
-        create_gui_access_token,
+        create_access_token_for_gui,
         list,
         list_user_named_tokens,
         list_provider_named_tokens,
@@ -212,15 +214,20 @@ end_per_testcase(_, _Config) ->
 -type env_set_up_fun_generator() :: fun((token_or_tokens()) -> undefined | api_test_utils:env_setup_fun()).
 -type verify_end_fun_generator() :: fun((token_or_tokens()) -> undefined | api_test_utils:verify_fun()).
 
--define(TYPES_TO_JSON(Types), [tokens:type_to_json(T) || T <- Types]).
+-define(TYPES_TO_JSON(Types), [token_type:to_json(T) || T <- Types]).
 -define(CAVEATS_TO_JSON(Caveats), [caveats:to_json(C) || C <- Caveats]).
+
+-define(SPACE_SUPPORT_PARAMS, #space_support_parameters{
+    data_write = lists_utils:random_element([global, none]),
+    metadata_replication = lists_utils:random_element([eager, lazy, none])
+}).
 
 -define(INVITE_TOKEN_TYPE_EXAMPLES(GroupId, SpaceId, AdminUserId, ClusterId, HarvesterId), [
     ?INVITE_TOKEN(?USER_JOIN_GROUP, GroupId),
     ?INVITE_TOKEN(?GROUP_JOIN_GROUP, GroupId),
     ?INVITE_TOKEN(?USER_JOIN_SPACE, SpaceId),
     ?INVITE_TOKEN(?GROUP_JOIN_SPACE, SpaceId),
-    ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId),
+    ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId, ?SPACE_SUPPORT_PARAMS),
     ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, AdminUserId),
     ?INVITE_TOKEN(?USER_JOIN_CLUSTER, ClusterId),
     ?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, ClusterId),
@@ -300,23 +307,23 @@ end_per_testcase(_, _Config) ->
     {<<"type">>, <<>>, ?ERROR_BAD_VALUE_TOKEN_TYPE(<<"type">>)},
     {<<"type">>, 123123, ?ERROR_BAD_VALUE_TOKEN_TYPE(<<"type">>)},
     {<<"type">>, <<"dsfdsfasdf">>, ?ERROR_BAD_VALUE_TOKEN_TYPE(<<"type">>)},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?USER_JOIN_GROUP, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?GROUP_JOIN_GROUP, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?USER_JOIN_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?GROUP_JOIN_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?SUPPORT_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?REGISTER_ONEPROVIDER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?USER_JOIN_CLUSTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?USER_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?GROUP_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?SPACE_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)}
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_GROUP, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_GROUP, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?SUPPORT_SPACE, <<"123">>, ?SPACE_SUPPORT_PARAMS)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?REGISTER_ONEPROVIDER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_CLUSTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?SPACE_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)}
 ]).
 
 -define(BAD_TYPE_VALUES_FOR_PROVIDER(GroupId, SpaceId, AdminUserId, ClusterId, HarvesterId),
     lists:map(
         fun(Type) ->
-            {<<"type">>, tokens:type_to_json(Type), ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED}
+            {<<"type">>, token_type:to_json(Type), ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED}
         end,
         ?INVITE_TOKEN_TYPE_EXAMPLES(GroupId, SpaceId, AdminUserId, ClusterId, HarvesterId) --
         ?PROVIDER_ALLOWED_INVITE_TOKEN_TYPES(ClusterId)
@@ -380,13 +387,13 @@ new_token_verify_fun(Subject, Persistence, Service) ->
 
         Fun(Token = #token{id = TokenId}) ->
             case Token#token.type of
-                ?INVITE_TOKEN(_, _) ->
-                    ok;
-                _ ->
-                    % ACCESS_TOKEN, GUI_ACCESS_TOKEN
+                ?ACCESS_TOKEN ->
                     ?assertMatch({true, #auth{subject = Subject}}, ozt_tokens:authenticate(Token, #auth_ctx{
                         service = Service, data_access_caveats_policy = allow_data_access_caveats
-                    }))
+                    }));
+                _ ->
+                    % IDENTITY_TOKEN, INVITE_TOKEN
+                    ok
             end,
             case Persistence of
                 named ->
@@ -505,13 +512,13 @@ create_some_tokens(BasicEnv) ->
 
     % Create some temporary tokens, which should not be listed
     create_user_temporary_token(UserAlpha, ?ACCESS_TOKEN),
-    create_user_temporary_token(UserAlpha, ?GUI_ACCESS_TOKEN(SessionAlpha)),
+    create_user_temporary_token(UserAlpha, ?ACCESS_TOKEN(SessionAlpha)),
     create_user_temporary_token(UserAlpha, ?INVITE_TOKEN(?USER_JOIN_SPACE, SpaceAlpha)),
     create_user_temporary_token(UserAlpha, ?INVITE_TOKEN(?GROUP_JOIN_SPACE, SpaceAlpha)),
     create_user_temporary_token(UserAlpha, ?INVITE_TOKEN(?GROUP_JOIN_SPACE, SpaceAlpha)),
 
     create_user_temporary_token(UserBeta, ?ACCESS_TOKEN),
-    create_user_temporary_token(UserBeta, ?GUI_ACCESS_TOKEN(SessionBeta)),
+    create_user_temporary_token(UserBeta, ?ACCESS_TOKEN(SessionBeta)),
     create_user_temporary_token(UserBeta, ?INVITE_TOKEN(?USER_JOIN_GROUP, GroupBeta)),
     create_user_temporary_token(UserBeta, ?INVITE_TOKEN(?USER_JOIN_GROUP, GroupBeta)),
     create_user_temporary_token(UserBeta, ?INVITE_TOKEN(?USER_JOIN_GROUP, GroupBeta)),
@@ -807,7 +814,7 @@ examine_base(AllClients, Token, ExpResult) ->
             expected_code = ?HTTP_200_OK,
             expected_body = ExpResult#{
                 <<"subject">> => aai:subject_to_json(maps:get(<<"subject">>, ExpResult)),
-                <<"type">> => tokens:type_to_json(maps:get(<<"type">>, ExpResult)),
+                <<"type">> => token_type:to_json(maps:get(<<"type">>, ExpResult)),
                 <<"caveats">> => [caveats:to_json(C) || C <- maps:get(<<"caveats">>, ExpResult)]
             }
         },
@@ -918,14 +925,14 @@ confine_base(AllClients, Token, InitialCaveats, CaveatsToAdd) ->
 %    undefined - the parameter is not known (e.g. unknown interface),
 %                will fail against a specific interface caveat
 %    <value>   - specific parameter value
--record(verify_ctx, {
+-record(access_token_ctx, {
     peer_ip = any :: any | undefined | ip_utils:ip(),
     interface = any :: any | undefined | cv_interface:interface(),
     service = any :: any | undefined | aai:service_spec(),
     consumer = any :: any | undefined | aai:consumer_spec(),
     allow_data_access_caveats = any :: any | undefined | boolean()
 }).
-verify_access_or_identity_token(_Config) ->
+verify_access_token(_Config) ->
     User = ozt_users:create(),
     ProviderAdmin = ozt_users:create(),
     SessionId = ozt_http:simulate_login(ProviderAdmin),
@@ -946,12 +953,12 @@ verify_access_or_identity_token(_Config) ->
     TokenAlpha = create_user_temporary_token(User, ?ACCESS_TOKEN, [
         #cv_time{valid_until = ozt:cluster_time_seconds() + 3600}
     ]),
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenAlpha, #verify_ctx{},
+    verify_access_token_base(
+        AllClients, TokenAlpha, #access_token_ctx{},
         true, {?SUB(user, User), 3600}
     ),
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenAlpha, #verify_ctx{interface = undefined},
+    verify_access_token_base(
+        AllClients, TokenAlpha, #access_token_ctx{interface = undefined},
         true, {?SUB(user, User), 3600}
     ),
 
@@ -960,33 +967,29 @@ verify_access_or_identity_token(_Config) ->
             #cv_time{valid_until = ozt:cluster_time_seconds() + 2700}
         ]
     ),
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenBeta, #verify_ctx{interface = rest},
+    verify_access_token_base(
+        AllClients, TokenBeta, #access_token_ctx{interface = rest},
         true, {?SUB(?ONEPROVIDER, Provider), 2700}
     ),
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenBeta, #verify_ctx{interface = graphsync},
+    verify_access_token_base(
+        AllClients, TokenBeta, #access_token_ctx{interface = graphsync},
         true, {?SUB(?ONEPROVIDER, Provider), 2700}
     ),
 
-    TokenGamma = create_user_temporary_token(ProviderAdmin, ?GUI_ACCESS_TOKEN(SessionId), [
+    TokenGamma = create_user_temporary_token(ProviderAdmin, ?ACCESS_TOKEN(SessionId), [
         #cv_time{valid_until = ozt:cluster_time_seconds() + 1800},
         #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]}
     ]),
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenGamma, #verify_ctx{consumer = ?SUB(?ONEPROVIDER, Provider)},
+    verify_access_token_base(
+        AllClients, TokenGamma, #access_token_ctx{consumer = ?SUB(?ONEPROVIDER, Provider)},
         true, {?SUB(user, ProviderAdmin), 1800}
     ),
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenGamma, #verify_ctx{consumer = ?SUB(?ONEPROVIDER, Provider), allow_data_access_caveats = false},
+    verify_access_token_base(
+        AllClients, TokenGamma, #access_token_ctx{consumer = ?SUB(?ONEPROVIDER, Provider), allow_data_access_caveats = false},
         true, {?SUB(user, ProviderAdmin), 1800}
     ),
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenGamma, #verify_ctx{},
-        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]})
-    ),
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenGamma, #verify_ctx{},
+    verify_access_token_base(
+        AllClients, TokenGamma, #access_token_ctx{},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]})
     ),
 
@@ -995,14 +998,14 @@ verify_access_or_identity_token(_Config) ->
             #cv_time{valid_until = ozt:cluster_time_seconds() - 1}
         ]
     ),
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenDelta, #verify_ctx{interface = oneclient, allow_data_access_caveats = true},
+    verify_access_token_base(
+        AllClients, TokenDelta, #access_token_ctx{interface = oneclient, allow_data_access_caveats = true},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
             #cv_time{valid_until = ozt:cluster_time_seconds() - 1}
         )
     ),
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenDelta, #verify_ctx{interface = rest},
+    verify_access_token_base(
+        AllClients, TokenDelta, #access_token_ctx{interface = rest},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
             #cv_time{valid_until = ozt:cluster_time_seconds() - 1}
         )
@@ -1012,127 +1015,141 @@ verify_access_or_identity_token(_Config) ->
         #cv_interface{interface = rest},
         #cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID), ?SERVICE(?OP_WORKER, Provider)]}
     ]),
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenZeta, #verify_ctx{interface = undefined},
+    verify_access_token_base(
+        AllClients, TokenZeta, #access_token_ctx{interface = undefined},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_interface{interface = rest})
     ),
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenZeta, #verify_ctx{interface = undefined},
+    verify_access_token_base(
+        AllClients, TokenZeta, #access_token_ctx{interface = graphsync},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_interface{interface = rest})
     ),
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenZeta, #verify_ctx{interface = graphsync},
+    verify_access_token_base(
+        AllClients, TokenZeta, #access_token_ctx{interface = oneclient},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
             #cv_interface{interface = rest}
         )
     ),
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenZeta, #verify_ctx{interface = oneclient},
-        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
-            #cv_interface{interface = rest}
-        )
-    ),
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenZeta, #verify_ctx{interface = rest, service = ?SERVICE(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)},
+    verify_access_token_base(
+        AllClients, TokenZeta, #access_token_ctx{interface = rest, service = ?SERVICE(?OP_PANEL, Provider)},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
             #cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID), ?SERVICE(?OP_WORKER, Provider)]}
         )
     ),
-    % Service caveat is not allowed in identity tokens
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenZeta, #verify_ctx{interface = rest, service = ?SERVICE(?OP_WORKER, Provider)},
-        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
-            #cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID), ?SERVICE(?OP_WORKER, Provider)]}
-        )
-    ),
-    % Service defaults to ?OZ_WORKER if undefined
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenZeta, #verify_ctx{interface = rest, service = undefined},
+    verify_access_token_base(
+        AllClients, TokenZeta, #access_token_ctx{interface = rest, service = ?SERVICE(?OP_WORKER, Provider)},
         true, {?SUB(user, User), ?DEFAULT_TEMP_CAVEAT_TTL}
     ),
-    % Service caveat is not allowed in identity tokens
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenZeta, #verify_ctx{interface = rest, service = ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)},
+    % Service defaults to ?OZ_WORKER if undefined
+    verify_access_token_base(
+        AllClients, TokenZeta, #access_token_ctx{interface = rest, service = undefined},
+        true, {?SUB(user, User), ?DEFAULT_TEMP_CAVEAT_TTL}
+    ),
+
+    #named_token_data{token = TokenKappa} = create_user_named_token(
+        User, ?ACCESS_TOKEN, [
+            #cv_service{whitelist = [?SERVICE(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)]}
+        ]
+    ),
+    % It is not possible to create a token for OZ_PANEL and hence verify it
+    % using the API
+    verify_access_token_base(
+        AllClients, TokenKappa, #access_token_ctx{},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
-            #cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID), ?SERVICE(?OP_WORKER, Provider)]}
+            #cv_service{whitelist = [?SERVICE(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)]}
         )
+    ),
+    % However, the token is verifiable using internal logic (which is RPC called from onepanel)
+    ?assertMatch(
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [?SERVICE(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)]}),
+        ozt:rpc(token_auth, verify_access_token, [TokenKappa, #auth_ctx{}])
+    ),
+    ?assertMatch(
+        {ok, ?USER(User)},
+        ozt:rpc(token_auth, verify_access_token, [TokenKappa, #auth_ctx{service = ?SERVICE(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)}])
     ),
 
     TokenSigma = create_user_temporary_token(ProviderAdmin, ?INVITE_TOKEN(?USER_JOIN_CLUSTER, Provider)),
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenSigma, #verify_ctx{},
+    verify_access_token_base(
+        AllClients, TokenSigma, #access_token_ctx{},
         false, ?ERROR_NOT_AN_ACCESS_TOKEN(?INVITE_TOKEN(?USER_JOIN_CLUSTER, Provider))
     ),
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenSigma, #verify_ctx{peer_ip = undefined},
-        false, ?ERROR_NOT_AN_ACCESS_TOKEN(?INVITE_TOKEN(?USER_JOIN_CLUSTER, Provider))
+
+    TokenEpsilon = create_provider_temporary_token(Provider, ?IDENTITY_TOKEN),
+    verify_access_token_base(
+        AllClients, TokenEpsilon, #access_token_ctx{},
+        false, ?ERROR_NOT_AN_ACCESS_TOKEN(?IDENTITY_TOKEN)
     ),
 
     TokenTheta = create_provider_temporary_token(Provider, ?ACCESS_TOKEN, [
         #cv_ip{whitelist = [{{134, 93, 0, 0}, 16}]}
     ]),
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenTheta, #verify_ctx{peer_ip = undefined},
+    verify_access_token_base(
+        AllClients, TokenTheta, #access_token_ctx{peer_ip = undefined},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_ip{whitelist = [{{134, 93, 0, 0}, 16}]})
     ),
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenTheta, #verify_ctx{peer_ip = <<"133.93.1.182">>},
+    verify_access_token_base(
+        AllClients, TokenTheta, #access_token_ctx{peer_ip = <<"133.93.1.182">>},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_ip{whitelist = [{{134, 93, 0, 0}, 16}]})
     ),
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenTheta, #verify_ctx{peer_ip = <<"134.93.7.18">>},
+    verify_access_token_base(
+        AllClients, TokenTheta, #access_token_ctx{peer_ip = <<"134.93.7.18">>},
         true, {?SUB(?ONEPROVIDER, Provider), ?DEFAULT_TEMP_CAVEAT_TTL}
     ),
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenTheta, #verify_ctx{peer_ip = <<"134.93.1.182">>},
+    verify_access_token_base(
+        AllClients, TokenTheta, #access_token_ctx{peer_ip = <<"134.93.1.206">>},
         true, {?SUB(?ONEPROVIDER, Provider), ?DEFAULT_TEMP_CAVEAT_TTL}
     ),
 
-    #named_token_data{token = TokenTau} = create_user_named_token(
-        User, ?ACCESS_TOKEN, [
-            #cv_data_readonly{}
-        ]
-    ),
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenTau, #verify_ctx{allow_data_access_caveats = false},
+    #named_token_data{token = TokenTau} = create_user_named_token(User, ?ACCESS_TOKEN, [
+        #cv_data_readonly{}
+    ]),
+    verify_access_token_base(
+        AllClients, TokenTau, #access_token_ctx{allow_data_access_caveats = false},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_data_readonly{})
     ),
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenTau, #verify_ctx{allow_data_access_caveats = false},
-        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_data_readonly{})
-    ),
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenTau, #verify_ctx{allow_data_access_caveats = true},
+    verify_access_token_base(
+        AllClients, TokenTau, #access_token_ctx{allow_data_access_caveats = true},
         true, {?SUB(user, User), undefined}
-    ),
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenTau, #verify_ctx{allow_data_access_caveats = true},
-        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_data_readonly{})
-    ),
-
-    #named_token_data{token = TokenOmega} = create_provider_named_token(
-        Provider, ?ACCESS_TOKEN, [
-            #cv_scope{scope = identity_token}
-        ]
-    ),
-    verify_access_or_identity_token_base(
-        access, AllClients, TokenOmega, #verify_ctx{},
-        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_scope{scope = identity_token})
-    ),
-    verify_access_or_identity_token_base(
-        identity, AllClients, TokenOmega, #verify_ctx{},
-        true, {?SUB(?ONEPROVIDER, Provider), undefined}
     ).
 
 
-verify_access_or_identity_token_base(AccessOrIdentity, AllClients, Token, VerifyData, ShouldSucceed, ExpResult) ->
-    #verify_ctx{
+verify_access_token_base(AllClients, Token, AccessTokenCtx, ShouldSucceed, ExpResult) ->
+    #access_token_ctx{
         peer_ip = PeerIp,
         interface = Interface,
         service = Service,
         consumer = Consumer,
         allow_data_access_caveats = AllowDataAccessCaveats
-    } = VerifyData,
+    } = AccessTokenCtx,
+
+    ConsumerToken = case Consumer of
+        any ->
+            User = ozt_users:create(),
+            ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, ?SUB(user, User), ?IDENTITY_TOKEN));
+        undefined ->
+            undefined;
+        _ ->
+            ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, Consumer, ?IDENTITY_TOKEN))
+    end,
+
+    ServiceToken = case Service of
+        any ->
+            case Token#token.subject of
+                ?SUB(user, UserId) ->
+                    ProvId = ozt_providers:create_as_support_for_user(UserId),
+                    ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, ProvId), ?IDENTITY_TOKEN));
+                ?SUB(?ONEPROVIDER) ->
+                    undefined
+            end;
+        ?SERVICE(OpService, ProvId) when OpService == ?OP_WORKER orelse OpService == ?OP_PANEL ->
+            tokens:add_oneprovider_service_indication(
+                OpService,
+                ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, ProvId), ?IDENTITY_TOKEN))
+            );
+        _ ->
+            undefined
+    end,
+
     ?assert(api_test_utils:run_tests(ozt:get_test_config(), #api_test_spec{
         client_spec = #client_spec{
             correct = AllClients,
@@ -1141,10 +1158,7 @@ verify_access_or_identity_token_base(AccessOrIdentity, AllClients, Token, Verify
         },
         logic_spec = #logic_spec{
             module = token_logic,
-            function = case AccessOrIdentity of
-                access -> verify_access_token;
-                identity -> verify_identity_token
-            end,
+            function = verify_access_token,
             args = [auth, data],
             expected_result = case ShouldSucceed of
                 true ->
@@ -1160,10 +1174,7 @@ verify_access_or_identity_token_base(AccessOrIdentity, AllClients, Token, Verify
         },
         rest_spec = #rest_spec{
             method = post,
-            path = case AccessOrIdentity of
-                access -> <<"/tokens/verify_access_token">>;
-                identity -> <<"/tokens/verify_identity_token">>
-            end,
+            path = <<"/tokens/verify_access_token">>,
             expected_code = case ShouldSucceed of
                 true -> ?HTTP_200_OK;
                 false -> errors:to_http_code(ExpResult)
@@ -1196,16 +1207,13 @@ verify_access_or_identity_token_base(AccessOrIdentity, AllClients, Token, Verify
                     undefined -> [];
                     _ -> [<<"interface">>]
                 end,
-                case {AccessOrIdentity, Service} of
-                    {identity, _} -> [];
-                    {access, any} -> [];
-                    {access, undefined} -> [];
-                    {access, _} -> [<<"service">>]
-                end,
-                case Consumer of
-                    any -> [];
+                case ServiceToken of
                     undefined -> [];
-                    _ -> [<<"consumer">>]
+                    _ -> [<<"serviceToken">>]
+                end,
+                case ConsumerToken of
+                    undefined -> [];
+                    _ -> [<<"consumerToken">>]
                 end,
                 case AllowDataAccessCaveats of
                     any -> [];
@@ -1224,15 +1232,13 @@ verify_access_or_identity_token_base(AccessOrIdentity, AllClients, Token, Verify
                     undefined -> [];
                     _ -> []
                 end,
-                case {AccessOrIdentity, Service} of
-                    {identity, _} -> [];
-                    {access, any} -> [<<"service">>];
-                    {access, undefined} -> [];
-                    {access, _} -> []
+                case {Service, ServiceToken} of
+                    {any, undefined} -> [];
+                    {any, _} -> [<<"serviceToken">>];
+                    _ -> []
                 end,
                 case Consumer of
-                    any -> [<<"consumer">>];
-                    undefined -> [];
+                    any -> [<<"consumerToken">>];
                     _ -> []
                 end,
                 case AllowDataAccessCaveats of
@@ -1253,16 +1259,13 @@ verify_access_or_identity_token_base(AccessOrIdentity, AllClients, Token, Verify
                     undefined -> [];
                     _ -> [Interface]
                 end,
-                <<"service">> => case {AccessOrIdentity, Service} of
-                    {identity, _} -> [];
-                    {access, any} -> [aai:serialize_service(?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID))];
-                    {access, undefined} -> [];
-                    {access, _} -> [aai:serialize_service(Service)]
-                end,
-                <<"consumer">> => case Consumer of
-                    any -> [aai:serialize_subject(?SUB(?ONEPROVIDER, <<"prov-id">>))];
+                <<"serviceToken">> => case ServiceToken of
                     undefined -> [];
-                    _ -> [aai:serialize_subject(Consumer)]
+                    _ -> [ServiceToken]
+                end,
+                <<"consumerToken">> => case ConsumerToken of
+                    undefined -> [];
+                    _ -> [ConsumerToken]
                 end,
                 <<"allowDataAccessCaveats">> => case AllowDataAccessCaveats of
                     any -> [true, false];
@@ -1280,18 +1283,298 @@ verify_access_or_identity_token_base(AccessOrIdentity, AllClients, Token, Verify
                 {<<"interface">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_ATOM(<<"interface">>)},
                 {<<"interface">>, <<"graphSync">>,
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"interface">>, cv_interface:valid_interfaces())},
-                case AccessOrIdentity of
-                    identity -> [];
-                    access -> [
-                        {<<"service">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_DATA(<<"service">>)},
-                        {<<"service">>, <<"graphSync">>, ?ERROR_BAD_DATA(<<"service">>)}
-                    ]
-                end,
-                {<<"consumer">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_DATA(<<"consumer">>)},
-                {<<"consumer">>, <<"graphSync">>, ?ERROR_BAD_DATA(<<"consumer">>)},
+                {<<"serviceToken">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_TOKEN(<<"serviceToken">>, ?ERROR_BAD_TOKEN)},
+                {<<"serviceToken">>, <<"graphSync">>, ?ERROR_BAD_VALUE_TOKEN(<<"serviceToken">>, ?ERROR_BAD_TOKEN)},
+                {<<"consumerToken">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_TOKEN(<<"consumerToken">>, ?ERROR_BAD_TOKEN)},
+                {<<"consumerToken">>, <<"graphSync">>, ?ERROR_BAD_VALUE_TOKEN(<<"consumerToken">>, ?ERROR_BAD_TOKEN)},
                 {<<"allowDataAccessCaveats">>, <<"1234">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"allowDataAccessCaveats">>)},
                 {<<"allowDataAccessCaveats">>, 1234, ?ERROR_BAD_VALUE_BOOLEAN(<<"allowDataAccessCaveats">>)},
                 {<<"allowDataAccessCaveats">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_BOOLEAN(<<"allowDataAccessCaveats">>)}
+            ])
+        }
+    })).
+
+
+% Context used for token verification with IP with all context's parameters
+%    any       - any value should be accepted for the parameter
+%    undefined - the parameter is not known (e.g. unknown interface),
+%                will fail against a specific interface caveat
+%    <value>   - specific parameter value
+-record(identity_token_ctx, {
+    peer_ip = any :: any | undefined | ip_utils:ip(),
+    interface = any :: any | undefined | cv_interface:interface(),
+    consumer = any :: any | undefined | aai:consumer_spec()
+}).
+verify_identity_token(_Config) ->
+    User = ozt_users:create(),
+    ProviderAdmin = ozt_users:create(),
+    SessionId = ozt_http:simulate_login(ProviderAdmin),
+    Provider = ozt_providers:create_for_admin_user(ProviderAdmin),
+    Space = ozt_users:create_space_for(User),
+    ozt_providers:support_space(Provider, Space),
+    ozt_clusters:add_user(?ONEZONE_CLUSTER_ID, User),
+    ozt:reconcile_entity_graph(),
+
+    AllClients = [
+        nobody,
+        root,
+        {user, User},
+        {provider, Provider},
+        {user, ProviderAdmin}
+    ],
+
+    TokenAlpha = create_user_temporary_token(User, ?IDENTITY_TOKEN, [
+        #cv_time{valid_until = ozt:cluster_time_seconds() + 3600}
+    ]),
+    verify_identity_token_base(
+        AllClients, TokenAlpha, #identity_token_ctx{},
+        true, {?SUB(user, User), 3600}
+    ),
+    verify_identity_token_base(
+        AllClients, TokenAlpha, #identity_token_ctx{interface = undefined},
+        true, {?SUB(user, User), 3600}
+    ),
+
+    #named_token_data{token = TokenBeta} = create_provider_named_token(
+        Provider, ?IDENTITY_TOKEN, [
+            #cv_time{valid_until = ozt:cluster_time_seconds() + 2700}
+        ]
+    ),
+    verify_identity_token_base(
+        AllClients, TokenBeta, #identity_token_ctx{interface = rest},
+        true, {?SUB(?ONEPROVIDER, Provider), 2700}
+    ),
+    verify_identity_token_base(
+        AllClients, TokenBeta, #identity_token_ctx{interface = graphsync},
+        true, {?SUB(?ONEPROVIDER, Provider), 2700}
+    ),
+
+    TokenGamma = create_user_temporary_token(ProviderAdmin, ?IDENTITY_TOKEN, [
+        #cv_time{valid_until = ozt:cluster_time_seconds() + 1800},
+        #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]}
+    ]),
+    verify_identity_token_base(
+        AllClients, TokenGamma, #identity_token_ctx{consumer = ?SUB(?ONEPROVIDER, Provider)},
+        true, {?SUB(user, ProviderAdmin), 1800}
+    ),
+    verify_identity_token_base(
+        AllClients, TokenGamma, #identity_token_ctx{},
+        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]})
+    ),
+
+    #named_token_data{token = TokenDelta} = create_user_named_token(
+        User, ?IDENTITY_TOKEN, [
+            #cv_time{valid_until = ozt:cluster_time_seconds() - 1}
+        ]
+    ),
+    verify_identity_token_base(
+        AllClients, TokenDelta, #identity_token_ctx{interface = rest},
+        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+            #cv_time{valid_until = ozt:cluster_time_seconds() - 1}
+        )
+    ),
+
+    TokenZeta = create_user_temporary_token(User, ?IDENTITY_TOKEN, [
+        #cv_interface{interface = rest}
+    ]),
+    verify_identity_token_base(
+        AllClients, TokenZeta, #identity_token_ctx{interface = undefined},
+        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_interface{interface = rest})
+    ),
+    verify_identity_token_base(
+        AllClients, TokenZeta, #identity_token_ctx{interface = graphsync},
+        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_interface{interface = rest})
+    ),
+    verify_identity_token_base(
+        AllClients, TokenZeta, #identity_token_ctx{interface = oneclient},
+        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_interface{interface = rest})
+    ),
+    verify_identity_token_base(
+        AllClients, TokenZeta, #identity_token_ctx{interface = rest},
+        true, {?SUB(user, User), ?DEFAULT_TEMP_CAVEAT_TTL}
+    ),
+
+    TokenSigma = create_user_temporary_token(ProviderAdmin, ?INVITE_TOKEN(?USER_JOIN_CLUSTER, Provider)),
+    verify_identity_token_base(
+        AllClients, TokenSigma, #identity_token_ctx{},
+        false, ?ERROR_NOT_AN_IDENTITY_TOKEN(?INVITE_TOKEN(?USER_JOIN_CLUSTER, Provider))
+    ),
+
+    TokenTheta = create_provider_temporary_token(Provider, ?IDENTITY_TOKEN, [
+        #cv_ip{whitelist = [{{134, 93, 0, 0}, 16}]}
+    ]),
+    verify_identity_token_base(
+        AllClients, TokenTheta, #identity_token_ctx{peer_ip = undefined},
+        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_ip{whitelist = [{{134, 93, 0, 0}, 16}]})
+    ),
+    verify_identity_token_base(
+        AllClients, TokenTheta, #identity_token_ctx{peer_ip = <<"133.93.1.182">>},
+        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_ip{whitelist = [{{134, 93, 0, 0}, 16}]})
+    ),
+    verify_identity_token_base(
+        AllClients, TokenTheta, #identity_token_ctx{peer_ip = <<"134.93.7.18">>},
+        true, {?SUB(?ONEPROVIDER, Provider), ?DEFAULT_TEMP_CAVEAT_TTL}
+    ),
+    verify_identity_token_base(
+        AllClients, TokenTheta, #identity_token_ctx{peer_ip = <<"134.93.1.182">>},
+        true, {?SUB(?ONEPROVIDER, Provider), ?DEFAULT_TEMP_CAVEAT_TTL}
+    ),
+
+    %% @todo VFS-6098 access tokens should be accepted as identity tokens for
+    % backward compatibility with old providers, but not for users
+    TokenRho = create_provider_temporary_token(Provider, ?ACCESS_TOKEN, []),
+    verify_identity_token_base(
+        AllClients, TokenRho, #identity_token_ctx{},
+        true, {?SUB(?ONEPROVIDER, Provider), ?DEFAULT_TEMP_CAVEAT_TTL}
+    ),
+
+    #named_token_data{token = TokenOmega} = create_provider_named_token(Provider, ?ACCESS_TOKEN, [
+        #cv_scope{scope = identity_token}
+    ]),
+    verify_identity_token_base(
+        AllClients, TokenOmega, #identity_token_ctx{},
+        true, {?SUB(?ONEPROVIDER, Provider), undefined}
+    ),
+
+    #named_token_data{token = TokenPi} = create_user_named_token(User, ?ACCESS_TOKEN, [
+        #cv_scope{scope = identity_token}
+    ]),
+    verify_identity_token_base(
+        AllClients, TokenPi, #identity_token_ctx{},
+        false, ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN)
+    ),
+
+    TokenKappa = create_user_temporary_token(ProviderAdmin, ?ACCESS_TOKEN(SessionId)),
+    verify_identity_token_base(
+        AllClients, TokenKappa, #identity_token_ctx{},
+        false, ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN(SessionId))
+    ).
+
+
+verify_identity_token_base(AllClients, Token, IdentityTokenCtx, ShouldSucceed, ExpResult) ->
+    #identity_token_ctx{
+        peer_ip = PeerIp,
+        interface = Interface,
+        consumer = Consumer
+    } = IdentityTokenCtx,
+
+    ConsumerToken = case Consumer of
+        any ->
+            User = ozt_users:create(),
+            ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, ?SUB(user, User), ?IDENTITY_TOKEN));
+        undefined ->
+            undefined;
+        _ ->
+            ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, Consumer, ?IDENTITY_TOKEN))
+    end,
+
+    ?assert(api_test_utils:run_tests(ozt:get_test_config(), #api_test_spec{
+        client_spec = #client_spec{
+            correct = AllClients,
+            unauthorized = [],
+            forbidden = []
+        },
+        logic_spec = #logic_spec{
+            module = token_logic,
+            function = verify_identity_token,
+            args = [auth, data],
+            expected_result = case ShouldSucceed of
+                true ->
+                    ?OK_TERM(fun(#{<<"subject">> := Subject, <<"ttl">> := TTL}) ->
+                        {ExpSubject, ExpTTL} = ExpResult,
+                        ?assertEqual(Subject, ExpSubject),
+                        ?assertEqual(TTL, ExpTTL),
+                        true
+                    end);
+                false ->
+                    ?ERROR_REASON(ExpResult)
+            end
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = <<"/tokens/verify_identity_token">>,
+            expected_code = case ShouldSucceed of
+                true -> ?HTTP_200_OK;
+                false -> errors:to_http_code(ExpResult)
+            end,
+            expected_body = case ShouldSucceed of
+                true ->
+                    fun(#{<<"subject">> := Subject, <<"ttl">> := TTL}) ->
+                        {ExpSubject, ExpTTL} = ExpResult,
+                        ?assertEqual(Subject, aai:subject_to_json(ExpSubject)),
+                        ?assertEqual(TTL, utils:undefined_to_null(ExpTTL)),
+                        true
+                    end;
+                false ->
+                    undefined
+            end
+        },
+        data_spec = #data_spec{
+            % Peer IP, interface, service, consumer and allowDataAccessCaveats
+            % flag can be required to verify a token, but generally they are
+            % optional in the API.
+            required = lists:flatten([
+                <<"token">>,
+                case PeerIp of
+                    any -> [];
+                    undefined -> [];
+                    _ -> [<<"peerIp">>]
+                end,
+                case Interface of
+                    any -> [];
+                    undefined -> [];
+                    _ -> [<<"interface">>]
+                end,
+                case ConsumerToken of
+                    undefined -> [];
+                    _ -> [<<"consumerToken">>]
+                end
+            ]),
+            optional = lists:flatten([
+                case PeerIp of
+                    any -> [<<"peerIp">>];
+                    undefined -> [];
+                    _ -> []
+                end,
+                case Interface of
+                    any -> [<<"interface">>];
+                    undefined -> [];
+                    _ -> []
+                end,
+                case Consumer of
+                    any -> [<<"consumerToken">>];
+                    _ -> []
+                end
+            ]),
+            correct_values = #{
+                <<"token">> => [ozt_tokens:ensure_serialized(Token)],
+                <<"peerIp">> => case PeerIp of
+                    any -> [<<"1.2.3.4">>, <<"5.6.7.8">>];
+                    undefined -> [];
+                    _ -> [utils:undefined_to_null(PeerIp)]
+                end,
+                <<"interface">> => case Interface of
+                    any -> cv_interface:valid_interfaces();
+                    undefined -> [];
+                    _ -> [Interface]
+                end,
+                <<"consumerToken">> => case ConsumerToken of
+                    undefined -> [];
+                    _ -> [ConsumerToken]
+                end
+            },
+            bad_values = lists:flatten([
+                {<<"token">>, <<"1234">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
+                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
+                {<<"token">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
+                {<<"peerIp">>, <<"1234.6.78.19">>, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
+                {<<"peerIp">>, 1234, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
+                {<<"peerIp">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
+                {<<"interface">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_ATOM(<<"interface">>)},
+                {<<"interface">>, <<"graphSync">>,
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"interface">>, cv_interface:valid_interfaces())},
+                {<<"consumerToken">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_TOKEN(<<"consumerToken">>, ?ERROR_BAD_TOKEN)},
+                {<<"consumerToken">>, <<"graphSync">>, ?ERROR_BAD_VALUE_TOKEN(<<"consumerToken">>, ?ERROR_BAD_TOKEN)}
             ])
         }
     })).
@@ -1345,7 +1628,7 @@ verify_invite_token(_Config) ->
         true, {?SUB(?ONEPROVIDER, Provider), 2700}
     ),
 
-    TokenGamma = create_user_temporary_token(User, ?INVITE_TOKEN(?SUPPORT_SPACE, Space), [
+    TokenGamma = create_user_temporary_token(User, ?INVITE_TOKEN(?SUPPORT_SPACE, Space, ?SPACE_SUPPORT_PARAMS), [
         #cv_time{valid_until = ozt:cluster_time_seconds() + 1200},
         #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]}
     ]),
@@ -1388,10 +1671,10 @@ verify_invite_token(_Config) ->
         true, {?SUB(user, User), ?DEFAULT_TEMP_CAVEAT_TTL}
     ),
 
-    TokenSigma = create_user_temporary_token(ProviderAdmin, ?GUI_ACCESS_TOKEN(SessionId)),
+    TokenSigma = create_user_temporary_token(ProviderAdmin, ?ACCESS_TOKEN(SessionId)),
     verify_invite_token_base(
         AllClients, TokenSigma, undefined, any, any,
-        false, ?ERROR_NOT_AN_INVITE_TOKEN(any, ?GUI_ACCESS_TOKEN(SessionId))
+        false, ?ERROR_NOT_AN_INVITE_TOKEN(any, ?ACCESS_TOKEN(SessionId))
     ),
 
     TokenTheta = create_user_temporary_token(User, ?ACCESS_TOKEN),
@@ -1412,6 +1695,16 @@ verify_invite_token(_Config) ->
 
 
 verify_invite_token_base(AllClients, Token, PeerIp, Consumer, ExpType, ShouldSucceed, ExpResult) ->
+    ConsumerToken = case Consumer of
+        any ->
+            User = ozt_users:create(),
+            ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, ?SUB(user, User), ?IDENTITY_TOKEN));
+        undefined ->
+            undefined;
+        _ ->
+            ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, Consumer, ?IDENTITY_TOKEN))
+    end,
+
     ?assert(api_test_utils:run_tests(ozt:get_test_config(), #api_test_spec{
         client_spec = #client_spec{
             correct = AllClients,
@@ -1458,16 +1751,15 @@ verify_invite_token_base(AllClients, Token, PeerIp, Consumer, ExpType, ShouldSuc
             required = lists:flatten([
                 <<"token">>,
                 % Do not include expected type in the request in case of 'any'
-                case ExpType of any -> []; _ -> <<"expectedInviteTokenType">> end,
+                case ExpType of any -> []; _ -> <<"expectedInviteType">> end,
                 case PeerIp of
                     any -> [];
                     undefined -> [];
                     _ -> [<<"peerIp">>]
                 end,
-                case Consumer of
-                    any -> [];
+                case ConsumerToken of
                     undefined -> [];
-                    _ -> [<<"consumer">>]
+                    _ -> [<<"consumerToken">>]
                 end
             ]),
             optional = lists:flatten([
@@ -1477,8 +1769,7 @@ verify_invite_token_base(AllClients, Token, PeerIp, Consumer, ExpType, ShouldSuc
                     _ -> []
                 end,
                 case Consumer of
-                    any -> [<<"consumer">>];
-                    undefined -> [];
+                    any -> [<<"consumerToken">>];
                     _ -> []
                 end
             ]),
@@ -1489,14 +1780,13 @@ verify_invite_token_base(AllClients, Token, PeerIp, Consumer, ExpType, ShouldSuc
                     undefined -> [];
                     _ -> [utils:undefined_to_null(PeerIp)]
                 end,
-                <<"consumer">> => case Consumer of
-                    any -> [aai:serialize_subject(?SUB(user, <<"user-id">>))];
+                <<"consumerToken">> => case ConsumerToken of
                     undefined -> [];
-                    _ -> [aai:serialize_subject(Consumer)]
+                    _ -> [ConsumerToken]
                 end,
-                <<"expectedInviteTokenType">> => case ExpType of
+                <<"expectedInviteType">> => case ExpType of
                     any -> [];
-                    _ -> [tokens:invite_token_type_to_str(ExpType)]
+                    _ -> [token_type:invite_type_to_str(ExpType)]
                 end
             },
             bad_values = [
@@ -1506,14 +1796,14 @@ verify_invite_token_base(AllClients, Token, PeerIp, Consumer, ExpType, ShouldSuc
                 {<<"peerIp">>, <<"1234.6.78.19">>, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
                 {<<"peerIp">>, 1234, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
                 {<<"peerIp">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
-                {<<"consumer">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_DATA(<<"consumer">>)},
-                {<<"consumer">>, <<"graphSync">>, ?ERROR_BAD_DATA(<<"consumer">>)},
-                {<<"expectedInviteTokenType">>, <<"userJoinUser">>,
-                    ?ERROR_BAD_VALUE_INVITE_TOKEN_TYPE(<<"expectedInviteTokenType">>)},
-                {<<"expectedInviteTokenType">>, 1234,
-                    ?ERROR_BAD_VALUE_INVITE_TOKEN_TYPE(<<"expectedInviteTokenType">>)},
-                {<<"expectedInviteTokenType">>, #{<<"a">> => <<"b">>},
-                    ?ERROR_BAD_VALUE_INVITE_TOKEN_TYPE(<<"expectedInviteTokenType">>)}
+                {<<"consumerToken">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_TOKEN(<<"consumerToken">>, ?ERROR_BAD_TOKEN)},
+                {<<"consumerToken">>, <<"graphSync">>, ?ERROR_BAD_VALUE_TOKEN(<<"consumerToken">>, ?ERROR_BAD_TOKEN)},
+                {<<"expectedInviteType">>, <<"userJoinUser">>,
+                    ?ERROR_BAD_VALUE_INVITE_TYPE(<<"expectedInviteType">>)},
+                {<<"expectedInviteType">>, 1234,
+                    ?ERROR_BAD_VALUE_INVITE_TYPE(<<"expectedInviteType">>)},
+                {<<"expectedInviteType">>, #{<<"a">> => <<"b">>},
+                    ?ERROR_BAD_VALUE_INVITE_TYPE(<<"expectedInviteType">>)}
             ]
         }
     })).
@@ -1715,7 +2005,7 @@ create_user_temporary_token(_Config) ->
             correct_values = #{
                 <<"type">> => ?TYPES_TO_JSON([
                     ?ACCESS_TOKEN,
-                    ?GUI_ACCESS_TOKEN(SessionId) |
+                    ?ACCESS_TOKEN(SessionId) |
                     ?INVITE_TOKEN_TYPE_EXAMPLES(Group, Space, User, Cluster, Harvester)
                 ]),
                 <<"caveats">> => ?CAVEATS_EXAMPLES_FOR_TEMPORARY_TOKENS(Now, MaxTtl)
@@ -1799,7 +2089,7 @@ create_provider_temporary_token(_Config) ->
                 ?BAD_TYPE_VALUES_FOR_PROVIDER(Group, Space, User, Cluster, Harvester),
                 ?BAD_CAVEATS_VALUES,
                 [
-                    {<<"type">>, tokens:type_to_json(?GUI_ACCESS_TOKEN(SessionId)), ?ERROR_BAD_VALUE_TOKEN_TYPE(<<"type">>)},
+                    {<<"type">>, token_type:to_json(?ACCESS_TOKEN(SessionId)), ?ERROR_TOKEN_SESSION_INVALID},
                     {<<"caveats">>, [], ?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTtl)},
                     {<<"caveats">>, ?CAVEATS_TO_JSON([
                         #cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)]},
@@ -1822,7 +2112,7 @@ create_provider_temporary_token(_Config) ->
     })).
 
 
-create_gui_access_token(_Config) ->
+create_access_token_for_gui(_Config) ->
     ProviderAdmin = ozt_users:create(),
     AnotherUser = ozt_users:create(),
     SessionId = ozt_http:simulate_login(ProviderAdmin),
@@ -1875,7 +2165,7 @@ create_gui_access_token(_Config) ->
             },
             logic_spec = #logic_spec{
                 module = token_logic,
-                function = create_gui_access_token,
+                function = create_access_token_for_gui,
                 args = [auth, ProviderAdmin, SessionId, Service],
                 expected_result = ExpResult
             }
@@ -2271,7 +2561,7 @@ verify_named_token_data(API, Result, TokenToCheck) when API == logic orelse API 
         end,
         <<"type">> => case API of
             logic -> Type;
-            rest -> tokens:type_to_json(Type)
+            rest -> token_type:to_json(Type)
         end,
         <<"caveats">> => case API of
             logic -> Caveats;
@@ -2286,7 +2576,7 @@ verify_named_token_data(API, Result, TokenToCheck) when API == logic orelse API 
     Metadata = maps:get(<<"metadata">>, Result),
     Now = ozt:cluster_time_seconds(),
     case Type of
-        ?INVITE_TOKEN(_, _) ->
+        ?INVITE_TOKEN ->
             ?assertMatch(#{
                 <<"creationTime">> := Now,
                 <<"custom">> := #{},
@@ -2641,7 +2931,7 @@ revoke_all_user_temporary_tokens(BasicEnv, UserIdBinding) ->
     EnvSetUpFun = fun() ->
         Space = ozt_users:create_space_for(UserId),
         T1 = create_user_temporary_token(UserId, ?ACCESS_TOKEN),
-        T2 = create_user_temporary_token(UserId, ?GUI_ACCESS_TOKEN(SessionId)),
+        T2 = create_user_temporary_token(UserId, ?ACCESS_TOKEN(SessionId)),
         T3 = create_user_temporary_token(UserId, ?INVITE_TOKEN(?USER_JOIN_SPACE, Space)),
         #{userTokens => [T1, T2, T3]}
     end,

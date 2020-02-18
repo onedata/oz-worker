@@ -35,6 +35,8 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#g
             [<<"user">>, <<"spaces">>, SpaceId];
         ?AS_GROUP(GroupId) ->
             [<<"groups">>, GroupId, <<"spaces">>, SpaceId];
+        ?AS_HARVESTER(HarvesterId) ->
+            [<<"harvesters">>, HarvesterId, <<"spaces">>, SpaceId];
         _ ->
             [<<"spaces">>, SpaceId]
     end,

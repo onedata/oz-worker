@@ -69,6 +69,7 @@
     get_eff_group_membership_intermediaries/3,
 
     get_spaces/2, get_space/3,
+    join_space/3,
 
     get_eff_providers/2, get_eff_provider/3,
 
@@ -949,6 +950,29 @@ get_space(Auth, HarvesterId, SpaceId) ->
         gri = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_HARVESTER(HarvesterId)
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Joins a space on behalf of given harvester based on harvester_invite_space token.
+%% Has two variants:
+%% 1) Token is given explicitly
+%% 2) Token is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec join_space(Auth :: aai:auth(), HarvesterId :: od_group:id(),
+    TokenOrData :: tokens:serialized() | tokens:token() | map()) ->
+    {ok, od_space:id()} | errors:error().
+join_space(Auth, HarvesterId, Data) when is_map(Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_space, id = undefined, aspect = join},
+        auth_hint = ?AS_HARVESTER(HarvesterId),
+        data = Data
+    }));
+join_space(Auth, HarvesterId, Token) ->
+    join_space(Auth, HarvesterId, #{<<"token">> => Token}).
 
 %%--------------------------------------------------------------------
 %% @doc

@@ -25,7 +25,6 @@
 
 -type id() :: binary().
 -type record() :: #gs_server_state{}.
--type doc() :: datastore_doc:doc(record()).
 
 -export_type([id/0, record/0]).
 

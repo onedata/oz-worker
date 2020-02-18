@@ -77,14 +77,16 @@
 -spec build(tokens:type(), custom_metadata(), entity_logic:data()) -> metadata().
 build(?ACCESS_TOKEN, CustomMetadata, _Data) ->
     basic_metadata(CustomMetadata);
-build(?INVITE_TOKEN(InviteTokenType, _), CustomMetadata, Data) ->
-    Privileges = case are_invite_privileges_applicable(InviteTokenType) of
+build(?IDENTITY_TOKEN, CustomMetadata, _Data) ->
+    basic_metadata(CustomMetadata);
+build(?INVITE_TOKEN(InviteType, _), CustomMetadata, Data) ->
+    Privileges = case are_invite_privileges_applicable(InviteType) of
         false ->
             undefined;
         true ->
             case maps:find(?PRIVILEGES_KEY, Data) of
                 {ok, Privs} -> privileges:from_list(Privs);
-                error -> default_invite_privileges(InviteTokenType)
+                error -> default_invite_privileges(InviteType)
             end
     end,
 
@@ -118,10 +120,10 @@ update_custom_metadata(Metadata, CustomMetadata) ->
 %% the privileges requested to be included in an invite token.
 %% @end
 %%--------------------------------------------------------------------
--spec inspect_requested_privileges(tokens:invite_token_type(), entity_logic:data()) ->
+-spec inspect_requested_privileges(token_type:invite_type(), entity_logic:data()) ->
     privileges_profile().
-inspect_requested_privileges(InviteTokenType, Data) ->
-    case {are_invite_privileges_applicable(InviteTokenType), Data} of
+inspect_requested_privileges(InviteType, Data) ->
+    case {are_invite_privileges_applicable(InviteType), Data} of
         {false, _} -> default_privileges;
         {true, #{?PRIVILEGES_KEY := _}} -> custom_privileges;
         {true, _} -> default_privileges
@@ -134,11 +136,11 @@ inspect_requested_privileges(InviteTokenType, Data) ->
 %% returns the resolved privileges along with their profile.
 %% @end
 %%--------------------------------------------------------------------
--spec inspect_carried_privileges(tokens:invite_token_type(), metadata()) ->
+-spec inspect_carried_privileges(token_type:invite_type(), metadata()) ->
     {privileges_profile(), invite_privileges()}.
-inspect_carried_privileges(InviteTokenType, Metadata) ->
+inspect_carried_privileges(InviteType, Metadata) ->
     CarriedPrivs = deserialize_privileges(maps:get(?PRIVILEGES_KEY, Metadata, null)),
-    DefaultPrivs = default_invite_privileges(InviteTokenType),
+    DefaultPrivs = default_invite_privileges(InviteType),
     % Privileges are already sorted; carried privileges were sorted during
     % metadata construction, and default privileges are sorted as the privileges
     % module operates on ordsets.
@@ -172,19 +174,19 @@ increment_usage_count(Metadata) ->
 %% Returns the possible optional parameters when creating a named invite token of given type.
 %% @end
 %%--------------------------------------------------------------------
--spec optional_invite_token_parameters(tokens:invite_token_type()) ->
+-spec optional_invite_token_parameters(token_type:invite_type()) ->
     #{Key :: binary() => {entity_logic:type_validator(), entity_logic:value_validator()}}.
-optional_invite_token_parameters(InviteTokenType) ->
+optional_invite_token_parameters(InviteType) ->
     maps:merge(
         #{?USAGE_LIMIT_KEY => {integer_or_infinity, {not_lower_than, 1}}},
-        case allowed_invite_privileges(InviteTokenType) of
+        case allowed_invite_privileges(InviteType) of
             undefined -> #{};
             Privileges -> #{?PRIVILEGES_KEY => {list_of_atoms, Privileges}}
         end
     ).
 
 
--spec default_invite_privileges(tokens:invite_token_type()) -> invite_privileges().
+-spec default_invite_privileges(token_type:invite_type()) -> invite_privileges().
 default_invite_privileges(?USER_JOIN_GROUP) -> privileges:group_member();
 default_invite_privileges(?GROUP_JOIN_GROUP) -> privileges:group_member();
 default_invite_privileges(?USER_JOIN_SPACE) -> privileges:space_member();
@@ -200,7 +202,7 @@ default_invite_privileges(_) -> undefined.
 %%%===================================================================
 
 %% @private
--spec allowed_invite_privileges(tokens:invite_token_type()) -> invite_privileges().
+-spec allowed_invite_privileges(token_type:invite_type()) -> invite_privileges().
 allowed_invite_privileges(?USER_JOIN_GROUP) -> privileges:group_privileges();
 allowed_invite_privileges(?GROUP_JOIN_GROUP) -> privileges:group_privileges();
 allowed_invite_privileges(?USER_JOIN_SPACE) -> privileges:space_privileges();
@@ -213,7 +215,7 @@ allowed_invite_privileges(_) -> undefined.
 
 
 %% @private
--spec are_invite_privileges_applicable(tokens:invite_token_type()) -> boolean().
+-spec are_invite_privileges_applicable(token_type:invite_type()) -> boolean().
 are_invite_privileges_applicable(?USER_JOIN_GROUP) -> true;
 are_invite_privileges_applicable(?GROUP_JOIN_GROUP) -> true;
 are_invite_privileges_applicable(?USER_JOIN_SPACE) -> true;

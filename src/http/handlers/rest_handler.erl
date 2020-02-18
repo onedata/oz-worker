@@ -27,7 +27,7 @@
 -type bound_auth_hint() :: undefined | {
     throughUser | throughGroup | throughSpace | throughProvider |
     throughHandleService | throughHandle | throughHarvester | throughCluster |
-    asUser | asGroup | asSpace,
+    asUser | asGroup | asSpace | asHarvester,
     binding()
 }.
 

@@ -17,7 +17,7 @@
 -include("ozt.hrl").
 
 %% API
--export([create/1]).
+-export([create/0, create/1]).
 -export([add_space/2]).
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([delete/1]).
@@ -25,6 +25,11 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
+
+-spec create() -> od_harvester:id().
+create() ->
+    create(<<"harvester-", (?UNIQUE_STRING)/binary>>).
+
 
 -spec create(od_harvester:name()) -> od_harvester:id().
 create(Name) ->

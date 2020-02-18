@@ -19,7 +19,7 @@
 %% API
 -export([create/1, create/2, create/3, create/4]).
 -export([try_create/3, try_create/4]).
--export([create_gui_access_token/3]).
+-export([create_access_token_for_gui/3]).
 -export([authenticate/1, authenticate/2]).
 -export([verify_service_token/2, verify_consumer_token/2]).
 -export([verify/1]).
@@ -41,7 +41,7 @@ create(Subject) ->
 create(Persistence, Subject) ->
     create(Persistence, Subject, ?ACCESS_TOKEN).
 
--spec create(named | temporary, aai:subject(), tokens:type() | entity_logic:data()) ->
+-spec create(named | temporary, aai:subject(), token_type:type() | entity_logic:data()) ->
     tokens:token().
 create(Persistence, Subject, Data) when is_map(Data) ->
     {ok, Token} = ?assertMatch({ok, _}, try_create(Persistence, Subject, Data)),
@@ -49,7 +49,7 @@ create(Persistence, Subject, Data) when is_map(Data) ->
 create(Persistence, Subject, Type) ->
     create(Persistence, Subject, Type, []).
 
--spec create(named | temporary, aai:subject(), tokens:type(), [caveats:caveat()]) ->
+-spec create(named | temporary, aai:subject(), token_type:type(), [caveats:caveat()]) ->
     tokens:token().
 create(Persistence, Subject, Type, Caveats) ->
     create(Persistence, Subject, #{<<"type">> => Type, <<"caveats">> => Caveats}).
@@ -84,9 +84,9 @@ try_create(Auth, temporary, ?SUB(?ONEPROVIDER, ProviderId), Data) ->
     }]).
 
 
--spec create_gui_access_token(od_user:id(), session:id(), aai:service_spec()) -> tokens:token().
-create_gui_access_token(UserId, SessionId, Service) ->
-    {ok, {GuiAccessToken, _}} = ?assertMatch({ok, _}, ozt:rpc(token_logic, create_gui_access_token, [
+-spec create_access_token_for_gui(od_user:id(), session:id(), aai:service_spec()) -> tokens:token().
+create_access_token_for_gui(UserId, SessionId, Service) ->
+    {ok, {GuiAccessToken, _}} = ?assertMatch({ok, _}, ozt:rpc(token_logic, create_access_token_for_gui, [
         ?USER(UserId), UserId, SessionId, Service
     ])),
     GuiAccessToken.
@@ -118,9 +118,9 @@ verify_consumer_token(Token, AuthCtx) ->
 -spec verify(tokens:token()) -> {ok, entity_logic:data()} | errors:error().
 verify(Token = #token{type = ?ACCESS_TOKEN}) ->
     ozt:rpc(token_logic, verify_access_token, [?NOBODY, #{<<"token">> => Token}]);
-verify(Token = #token{type = ?GUI_ACCESS_TOKEN(_)}) ->
-    ozt:rpc(token_logic, verify_access_token, [?NOBODY, #{<<"token">> => Token}]);
-verify(Token = #token{type = ?INVITE_TOKEN(_, _)}) ->
+verify(Token = #token{type = ?IDENTITY_TOKEN}) ->
+    ozt:rpc(token_logic, verify_identity_token, [?NOBODY, #{<<"token">> => Token}]);
+verify(Token = #token{type = ?INVITE_TOKEN}) ->
     ozt:rpc(token_logic, verify_invite_token, [?NOBODY, #{<<"token">> => Token}]).
 
 
