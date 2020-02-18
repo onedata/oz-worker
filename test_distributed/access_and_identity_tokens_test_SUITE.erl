@@ -9,7 +9,7 @@
 %%% Empty test SUITE to be implemented in the future major version.
 %%% @end
 %%%-------------------------------------------------------------------
--module(access_tokens_test_SUITE).
+-module(access_and_identity_tokens_test_SUITE).
 -author("Lukasz Opiola").
 
 -include("registered_names.hrl").
