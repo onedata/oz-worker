@@ -14,7 +14,7 @@
 %%% are randomly generated and tested if they return the expected results.
 %%% @end
 %%%-------------------------------------------------------------------
--module(access_tokens_test_SUITE).
+-module(access_and_identity_tokens_test_SUITE).
 -author("Lukasz Opiola").
 
 -include("ozt.hrl").
