@@ -11,7 +11,6 @@
 
 {application, oz_worker, [
     {description, "Onezone worker node."},
-    % @todo bumped to denote compatibility-breaking changes, adjust when releasing
     {vsn, "20.02.0-beta1"},
     {registered, [oz_worker_sup]},
     {applications, [
