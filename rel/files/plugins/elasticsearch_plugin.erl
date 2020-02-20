@@ -31,7 +31,7 @@
 -behaviour(harvester_plugin_behaviour).
 
 -define(ENTRY_PATH(Path), <<"/_doc/", Path/binary>>).
--define(REQUEST_TIMEOUT, 15000).
+-define(REQUEST_TIMEOUT, oz_worker:get_env(elasticsearch_plugin_request_timeout, timer:minutes(2))).
 
 -define(REQUEST_RETURN_OK(Response),
     case Response of
@@ -108,7 +108,7 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
     FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
     {ok, utils:pmap(fun(IndexId) ->
         case do_request(post, Endpoint, IndexId, ?ENTRY_PATH(<<"_bulk">>), PreparedBatch,
-            #{<<"content-type">> => <<"application/x-ndjson">>}, [{recv_timeout, ?REQUEST_TIMEOUT}], [{200,300}]) of
+            #{<<"content-type">> => <<"application/x-ndjson">>}, [{200,300}]) of
             {ok,_,_,Body} ->
                 Res = json_utils:decode(Body),
                 case maps:get(<<"errors">>, Res) of
@@ -185,12 +185,11 @@ do_request(Method, Endpoint, IndexId, Path, Data) ->
     do_request(Method, Endpoint, IndexId, Path, Data, undefined).
 
 
-
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% @equiv do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, 
-%%          #{<<"content-type">> => <<"application/json">>}, [], ExpectedCodes).
+%%          #{<<"content-type">> => <<"application/json">>}, ExpectedCodes).
 %% @end
 %%--------------------------------------------------------------------
 -spec do_request(http_client:method(), od_harvester:endpoint(),
@@ -198,7 +197,7 @@ do_request(Method, Endpoint, IndexId, Path, Data) ->
     ExpectedCodes :: [integer() | {integer(), integer()}] | undefined) -> http_client:response().
 do_request(Method, Endpoint, IndexId, Path, Data, ExpectedCodes) ->
     do_request(Method, Endpoint, IndexId, Path, Data,
-        #{<<"content-type">> => <<"application/json">>}, [], ExpectedCodes).
+        #{<<"content-type">> => <<"application/json">>}, ExpectedCodes).
 
 
 %%--------------------------------------------------------------------
@@ -210,24 +209,24 @@ do_request(Method, Endpoint, IndexId, Path, Data, ExpectedCodes) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec do_request(http_client:method(), od_harvester:endpoint(), od_harvester:index_id(),
-    Path :: binary(), Data :: binary(), http_client:headers(), http_client:opts(),
+    Path :: binary(), Data :: binary(), http_client:headers(),
     ExpectedCodes :: [integer() | {integer(), integer()}] | undefined) -> http_client:response().
-do_request(Method, Endpoint, IndexId, Path, Data, Headers, Opts, ExpectedCodes) ->
+do_request(Method, Endpoint, IndexId, Path, Data, Headers, ExpectedCodes) ->
     Url = <<Endpoint/binary, "/", IndexId/binary, Path/binary>>,
-    case http_client:request(Method, Url, Headers, Data, Opts) of
+    case http_client:request(Method, Url, Headers, Data, [{recv_timeout, ?REQUEST_TIMEOUT}]) of
         {ok, Code, RespHeaders, Body} = Response when is_list(ExpectedCodes) ->
             case is_code_expected(Code, ExpectedCodes) of
                 true -> 
                     Response;
                 _ ->
-                    ?debug("~p ~p returned unexpected response ~p:~n ~p~n~p",
+                    ?debug("Elasticsearch plugin: ~p ~p returned unexpected response ~p:~n ~p~n~p",
                         [Method, Url, Code, RespHeaders, json_utils:decode(Body)]),
                     ?ERROR_BAD_DATA(<<"payload">>)
             end;
         {ok,_,_,_} = Response ->
             Response;
         {error, _} = Error ->
-            ?error("~p ~p was unsuccessful due to ~w",
+            ?error("Elasticsearch plugin: ~p ~p was unsuccessful due to ~w",
                 [Method, Url, Error]),
             ?ERROR_TEMPORARY_FAILURE
     end.
