@@ -34,7 +34,8 @@
 -export([set_up_support_for_user/2]).
 -export([get_root_token/1]).
 -export([create_storage/3, ensure_storage/2]).
--export([support_space/2, support_space/4, support_space_using_token/4]).
+-export([support_space/2, support_space/4]).
+-export([support_space_using_token/3, support_space_using_token/4]).
 -export([delete/1]).
 
 %%%===================================================================
@@ -125,6 +126,11 @@ support_space(ProviderId, StorageId, SpaceId, Size) ->
     support_space_using_token(ProviderId, StorageId, Token, Size),
     ozt_users:delete(TmpUser).
 
+
+-spec support_space_using_token(od_provider:id(), od_storage:id(), tokens:token()) ->
+    ok.
+support_space_using_token(ProviderId, StorageId, Token) ->
+    support_space_using_token(ProviderId, StorageId, Token, ozt_spaces:minimum_support_size()).
 
 -spec support_space_using_token(od_provider:id(), od_storage:id(), tokens:token(), od_space:support_size()) ->
     ok.

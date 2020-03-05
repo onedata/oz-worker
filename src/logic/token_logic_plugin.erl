@@ -573,13 +573,13 @@ validate_type(_, _, _, _) ->
 create_named_token(Subject, Data) ->
     TokenName = maps:get(<<"name">>, Data),
     TokenId = datastore_key:new(),
+    Type = maps:get(<<"type">>, Data, ?ACCESS_TOKEN),
+    Caveats = maps:get(<<"caveats">>, Data, []),
+    validate_subject_and_service(Type, Subject, Caveats),
     case token_names:register(Subject, TokenName, TokenId) of
         ok -> ok;
         ?ERROR_ALREADY_EXISTS -> throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"name">>))
     end,
-    Type = maps:get(<<"type">>, Data, ?ACCESS_TOKEN),
-    Caveats = maps:get(<<"caveats">>, Data, []),
-    validate_subject_and_service(Type, Subject, Caveats),
 
     CustomMetadata = maps:get(<<"customMetadata">>, Data, #{}),
     Secret = tokens:generate_secret(),

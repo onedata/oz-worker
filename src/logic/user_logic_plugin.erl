@@ -229,7 +229,7 @@ create(#el_req{gri = #gri{aspect = {idp_access_token, IdP}}}) ->
     end;
 
 create(#el_req{auth = Auth, gri = #gri{id = UserId, aspect = provider_registration_token}}) ->
-    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 20.02.*
     token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, UserId)).
 
 

@@ -171,6 +171,7 @@ after_init([]) ->
 upgrade_cluster(1) ->
     token_logic:migrate_deprecated_tokens(),
     storage_logic:migrate_legacy_supports(),
+    space_logic:initialize_space_support_info(),
     {ok, 2}.
 
 

@@ -13,6 +13,7 @@
 -module(invite_tokens_test_SUITE).
 -author("Lukasz Opiola").
 
+-include("ozt.hrl").
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
 -include("entity_logic.hrl").
@@ -48,7 +49,10 @@
 -record(consume_request, {
     logic_call_args :: {Module :: atom(), Function :: atom(), Args :: [term()]},
     rest_call_args :: not_available | {ozt_http:urn_tokens(), entity_logic:data()},
-    graph_sync_args :: {gri:gri(), gs_protocol:auth_hint(), entity_logic:data()}
+    graph_sync_args :: {gri:gri(), gs_protocol:auth_hint(), entity_logic:data()},
+    % If specified, the function will be run after successful consumption and
+    % should return if the system state is as expected.
+    validate_result_fun = undefined :: undefined | fun(() -> boolean())
 }).
 
 -record(testcase, {
@@ -409,12 +413,13 @@ group_join_space_token(_Config) ->
 support_space_token(_Config) ->
     SpaceCreatorUserId = ozt_users:create(),
     SpaceId = ozt_users:create_space_for(SpaceCreatorUserId),
+    TokenDataWrite = lists_utils:random_element([global, none]),
+    TokenMetaReplication = lists_utils:random_element([eager, lazy, none]),
 
     ?assert(run_invite_token_tests(#testcase{
-        token_type = ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId, #space_support_parameters{
-            data_write = lists_utils:random_element([global, none]),
-            metadata_replication = lists_utils:random_element([eager, lazy, none])
-        }),
+        token_type = ?INVITE_TOKEN(
+            ?SUPPORT_SPACE, SpaceId, space_support:build_parameters(TokenDataWrite, TokenMetaReplication)
+        ),
 
         eligible_to_invite = [?SUB(user, SpaceCreatorUserId)],
         requires_privileges_to_invite = true,
@@ -445,6 +450,42 @@ support_space_token(_Config) ->
                     % use a storage of another, unrelated provider
                     ozt_providers:create()
             end,
+
+            % Randomize if the space is already supported by the provider, in such
+            % case applying support parameters should work in different way.
+            % However, this might be called after the target space is deleted during
+            % tests - in such case do not set up an existing support.
+            case {ozt_spaces:exists(SpaceId), rand:uniform(2)} of
+                {false, _} ->
+                    ok;
+                {_, 1} ->
+                    ok;
+                {true, 2} ->
+                    OtherStorage = datastore_key:new(),
+                    ozt_providers:ensure_storage(ProviderId, OtherStorage),
+                    OzAdmin = ozt_users:create_admin(),
+                    ozt_providers:support_space_using_token(ProviderId, OtherStorage, ozt_spaces:create_support_token(
+                        SpaceId, OzAdmin, space_support:build_parameters(
+                            lists_utils:random_element([global, none] -- [TokenDataWrite]),
+                            lists_utils:random_element([eager, lazy, none] -- [TokenMetaReplication])
+                        )
+                    ))
+            end,
+
+            % Regardless of randomly added support in this run, the space might
+            % already be supported as prepare_consume_request function is called
+            % multiple times during a test
+            IsAlreadySupported = case ozt_spaces:exists(SpaceId) of
+                false ->
+                    false;
+                true ->
+                    #od_space{support_parameters = CurrentParamsPerProvider} = ozt_spaces:get(SpaceId),
+                    case space_support:lookup_parameters_for_provider(CurrentParamsPerProvider, ProviderId) of
+                        {ok, Params} -> {true, Params};
+                        error -> false
+                    end
+            end,
+
             % Use a storage with the same id as provider for easier test code
             StorageId = ProviderId,
             ozt_providers:ensure_storage(ProviderId, StorageId),
@@ -455,7 +496,19 @@ support_space_token(_Config) ->
             #consume_request{
                 logic_call_args = {storage_logic, support_space, [Auth, StorageId, Data]},
                 rest_call_args = not_available,
-                graph_sync_args = {?GRI(od_storage, StorageId, support, private), undefined, Data}
+                graph_sync_args = {?GRI(od_storage, StorageId, support, private), undefined, Data},
+                validate_result_fun = fun() ->
+                    #od_space{support_parameters = SupportParameters} = ozt_spaces:get(SpaceId),
+                    % If the space was already supported, support parameters should be inherited
+                    % regardless of the parameters in the token. Otherwise, token parameters
+                    % are taken.
+                    ExpParameters = case IsAlreadySupported of
+                        false -> space_support:build_parameters(TokenDataWrite, TokenMetaReplication);
+                        {true, PreviousParameters} -> PreviousParameters
+                    end,
+                    ?assertEqual(ExpParameters, maps:get(ProviderId, SupportParameters)),
+                    true
+                end
             }
         end,
 
@@ -1748,7 +1801,13 @@ consume_token(Tc, Consumer, Token) ->
     PrepareConsumeRequest = Tc#testcase.prepare_consume_request,
     Auth = #auth{subject = Consumer, peer_ip = ?PEER_IP},
     ConsumeRequest = PrepareConsumeRequest(Auth, Token),
-    consume_token(Auth, ConsumeRequest).
+    Result = consume_token(Auth, ConsumeRequest),
+    case {Result, ConsumeRequest#consume_request.validate_result_fun} of
+        {{error, _}, _} -> ok;
+        {_, undefined} -> ok;
+        {{ok, _}, ValidateFun} -> ?assert(try ValidateFun() catch _:_ -> false end)
+    end,
+    Result.
 
 
 consume_token(Auth, ConsumeRequest) ->

@@ -40,7 +40,7 @@
     add_user/3, add_user/4,
     add_group/3, add_group/4,
     create_group/3, create_group/4,
-    
+
     join_harvester/3,
     harvest_metadata/3, harvest_metadata/6,
 
@@ -65,6 +65,9 @@
     update_user_privileges/5, update_user_privileges/4,
     update_group_privileges/5, update_group_privileges/4,
 
+    update_support_parameters/4,
+    update_dbsync_state/4,
+
     remove_storage/3,
     remove_provider/3,
     remove_harvester/3,
@@ -82,6 +85,7 @@
     has_harvester/2,
     is_supported_by_storage/2
 ]).
+-export([initialize_space_support_info/0]).
 
 %%%===================================================================
 %%% API
@@ -824,6 +828,30 @@ update_group_privileges(Auth, SpaceId, GroupId, Data) ->
     }).
 
 
+-spec update_support_parameters(aai:auth(), od_space:id(), od_provider:id(), entity_logic:data()) ->
+    ok | errors:error().
+update_support_parameters(Auth, SpaceId, ProviderId, Data) ->
+    entity_logic:handle(#el_req{
+        operation = update,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = {support_parameters, ProviderId}},
+        data = Data
+    }).
+
+
+-spec update_dbsync_state(aai:auth(), od_space:id(), od_provider:id(),
+    entity_logic:data() | space_support:seq_per_provider()) -> ok | errors:error().
+update_dbsync_state(Auth, SpaceId, ProviderId, Data = #{<<"seqPerProvider">> := _}) ->
+    entity_logic:handle(#el_req{
+        operation = update,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = {dbsync_state, ProviderId}},
+        data = Data
+    });
+update_dbsync_state(Auth, SpaceId, ProviderId, SeqPerProvider) ->
+    update_dbsync_state(Auth, SpaceId, ProviderId, #{<<"seqPerProvider">> => SeqPerProvider}).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Leaves specified storage (ceases support for given space).
@@ -1002,3 +1030,46 @@ is_supported_by_storage(SpaceId, StorageId) when is_binary(SpaceId) ->
     entity_graph:has_relation(direct, top_down, od_storage, StorageId, od_space, SpaceId);
 is_supported_by_storage(Space, StorageId) ->
     entity_graph:has_relation(direct, top_down, od_storage, StorageId, Space).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Initializes new fields related to space support in all space documents with
+%% default values.
+%% Dedicated for upgrading Onezone from 19.02.* to 20.02.*.
+%% @end
+%%--------------------------------------------------------------------
+-spec initialize_space_support_info() -> ok.
+initialize_space_support_info() ->
+    entity_graph:ensure_up_to_date(),
+    ?info("Initializing space support info..."),
+    {ok, Spaces} = od_space:list(),
+    lists:foreach(fun(#document{key = SpaceId, value = #od_space{name = Name} = SpaceRecord}) ->
+        EffProviders = maps:keys(SpaceRecord#od_space.eff_providers),
+        {ok, _} = od_space:update(SpaceId, fun(Space) ->
+            {ok, Space#od_space{
+                support_parameters = to_map_with_same_values(
+                    EffProviders, space_support:build_parameters(global, eager)
+                ),
+                dbsync_state = to_map_with_same_values(
+                    EffProviders, {time_utils:cluster_time_seconds(), to_map_with_same_values(EffProviders, 0)}
+                ),
+                support_state = to_map_with_same_values(
+                    EffProviders, active
+                )
+            }}
+        end),
+        ?info("  * space '~ts' (~ts) ok, ~B providers", [Name, SpaceId, length(EffProviders)])
+    end, Spaces),
+    ?notice("Successfully initialized space support info").
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%% @doc
+-spec to_map_with_same_values([Key], Value) -> #{Key => Value} when Key :: binary(), Value :: term().
+to_map_with_same_values(Keys, Value) ->
+    maps:from_list(lists:map(fun(Key) ->
+        {Key, Value}
+    end, Keys)).

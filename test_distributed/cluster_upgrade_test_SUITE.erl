@@ -22,11 +22,14 @@
 
 %% API
 -export([
-    all/0, init_per_suite/1, end_per_suite/1
+    all/0,
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     upgrade_from_19_02_x_tokens/1,
-    upgrade_from_19_02_x_storages/1
+    upgrade_from_19_02_x_storages/1,
+    upgrade_from_19_02_x_space_support_info/1
 ]).
 
 %%%===================================================================
@@ -35,7 +38,8 @@
 
 all() -> ?ALL([
     upgrade_from_19_02_x_tokens,
-    upgrade_from_19_02_x_storages
+    upgrade_from_19_02_x_storages,
+    upgrade_from_19_02_x_space_support_info
 ]).
 
 
@@ -46,9 +50,16 @@ all() -> ?ALL([
 init_per_suite(Config) ->
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
-end_per_suite(_Config) ->
+init_per_testcase(_, Config) ->
+    oz_test_utils:mock_time(Config),
+    Config.
+
+end_per_testcase(_, Config) ->
+    oz_test_utils:unmock_time(Config),
     ok.
 
+end_per_suite(_Config) ->
+    ok.
 
 %%%===================================================================
 %%% Tests
@@ -176,8 +187,8 @@ upgrade_from_19_02_x_tokens(Config) ->
 
 
 upgrade_from_19_02_x_storages(Config) ->
-    {P1, SpacesMap1} = create_provider_with_n_legacy_spaces(Config, 8),
-    {P2, SpacesMap2} = create_provider_with_n_legacy_spaces(Config, 32),
+    {P1, SpacesMap1} = create_legacy_provider_with_n_spaces(Config, 8),
+    {P2, SpacesMap2} = create_legacy_provider_with_n_spaces(Config, 32),
 
     ?assertEqual({ok, 2}, oz_test_utils:call_oz(Config, node_manager_plugin, upgrade_cluster, [1])),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -233,6 +244,85 @@ upgrade_from_19_02_x_storages(Config) ->
             Config, entity_graph, get_intermediaries, [bottom_up, od_space, SpaceId, P2Doc#document.value]))
     end, SpacesMap2).
 
+
+upgrade_from_19_02_x_space_support_info(Config) ->
+    {ok, SpaceAlpha} = oz_test_utils:create_space(Config, ?ROOT),
+    {ok, SpaceBeta} = oz_test_utils:create_space(Config, ?ROOT),
+    {ok, SpaceGamma} = oz_test_utils:create_space(Config, ?ROOT),
+    {ok, SpaceDelta} = oz_test_utils:create_space(Config, ?ROOT),
+    {ok, SpaceOmega} = oz_test_utils:create_space(Config, ?ROOT),
+
+    {P1, _} = create_legacy_provider_with_spaces(Config, [SpaceAlpha, SpaceBeta, SpaceGamma]),
+    {P2, _} = create_legacy_provider_with_spaces(Config, [SpaceAlpha, SpaceGamma, SpaceDelta]),
+    {P3, _} = create_legacy_provider_with_spaces(Config, [SpaceGamma, SpaceDelta, SpaceOmega]),
+
+    ?assertEqual({ok, 2}, oz_test_utils:call_oz(Config, node_manager_plugin, upgrade_cluster, [1])),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    Timestamp = oz_test_utils:cluster_time_seconds(Config),
+    DefaultParameters = space_support:build_parameters(global, eager),
+
+    {ok, AlphaRecord} = oz_test_utils:get_space(Config, SpaceAlpha),
+    {ok, BetaRecord} = oz_test_utils:get_space(Config, SpaceBeta),
+    {ok, GammaRecord} = oz_test_utils:get_space(Config, SpaceGamma),
+    {ok, DeltaRecord} = oz_test_utils:get_space(Config, SpaceDelta),
+    {ok, OmegaRecord} = oz_test_utils:get_space(Config, SpaceOmega),
+
+    ?assertEqual(AlphaRecord#od_space.support_parameters, #{
+        P1 => DefaultParameters, P2 => DefaultParameters
+    }),
+    ?assertEqual(BetaRecord#od_space.support_parameters, #{
+        P1 => DefaultParameters
+    }),
+    ?assertEqual(GammaRecord#od_space.support_parameters, #{
+        P1 => DefaultParameters, P2 => DefaultParameters, P3 => DefaultParameters
+    }),
+    ?assertEqual(DeltaRecord#od_space.support_parameters, #{
+        P2 => DefaultParameters, P3 => DefaultParameters
+    }),
+    ?assertEqual(OmegaRecord#od_space.support_parameters, #{
+        P3 => DefaultParameters
+    }),
+
+    ?assertEqual(AlphaRecord#od_space.dbsync_state, #{
+        P1 => {Timestamp, #{P1 => 0, P2 => 0}},
+        P2 => {Timestamp, #{P1 => 0, P2 => 0}}
+    }),
+    ?assertEqual(BetaRecord#od_space.dbsync_state, #{
+        P1 => {Timestamp, #{P1 => 0}}
+    }),
+    ?assertEqual(GammaRecord#od_space.dbsync_state, #{
+        P1 => {Timestamp, #{P1 => 0, P2 => 0, P3 => 0}},
+        P2 => {Timestamp, #{P1 => 0, P2 => 0, P3 => 0}},
+        P3 => {Timestamp, #{P1 => 0, P2 => 0, P3 => 0}}
+    }),
+    ?assertEqual(DeltaRecord#od_space.dbsync_state, #{
+        P2 => {Timestamp, #{P2 => 0, P3 => 0}},
+        P3 => {Timestamp, #{P2 => 0, P3 => 0}}
+    }),
+    ?assertEqual(OmegaRecord#od_space.dbsync_state, #{
+        P3 => {Timestamp, #{P3 => 0}}
+    }),
+
+    ?assertEqual(AlphaRecord#od_space.support_state, #{
+        P1 => active, P2 => active
+    }),
+    ?assertEqual(BetaRecord#od_space.support_state, #{
+        P1 => active
+    }),
+    ?assertEqual(GammaRecord#od_space.support_state, #{
+        P1 => active, P2 => active, P3 => active
+    }),
+    ?assertEqual(DeltaRecord#od_space.support_state, #{
+        P2 => active, P3 => active
+    }),
+    ?assertEqual(OmegaRecord#od_space.support_state, #{
+        P3 => active
+    }).
+
+%%%===================================================================
+%%% Helper functions
+%%%===================================================================
 
 create_n_legacy_client_tokens(Config, UserId, Count) ->
     lists:map(fun(_) ->
@@ -293,23 +383,22 @@ create_legacy_provider(Config) ->
     {ProviderId, RootTokenId, Secret, SerializedRootToken}.
 
 
-create_provider_with_n_legacy_spaces(Config, SpacesNum) ->
-    ProviderId = datastore_key:new(),
+create_legacy_provider_with_n_spaces(Config, SpacesNum) ->
+    SpaceIds = lists:map(fun(_) ->
+        {ok, SpaceId} = oz_test_utils:create_space(Config, ?ROOT),
+        SpaceId
+    end, lists:seq(1, SpacesNum)),
+    create_legacy_provider_with_spaces(Config, SpaceIds).
 
-    Spaces = lists:foldl(fun(SupportSize, Acc) ->
-        {ok, S} = oz_test_utils:create_space(Config, ?ROOT),
-        Acc#{S => SupportSize}
-    end, #{}, lists:seq(1, SpacesNum)),
 
-    ProviderRecord = #od_provider{
-        name = ?UNIQUE_STRING,
-        subdomain_delegation = false,
-        domain = <<(?UNIQUE_STRING)/binary, ".example.com">>,
-        admin_email = <<(?UNIQUE_STRING)/binary, "@example.com">>,
-        legacy_spaces = Spaces
-    },
-    {ok, _} = oz_test_utils:call_oz(Config, od_provider, create, [
-        #document{key = ProviderId, value = ProviderRecord}
-    ]),
+create_legacy_provider_with_spaces(Config, SpaceIds) ->
+    {ProviderId, _, _, _} = create_legacy_provider(Config),
+    Spaces = lists:foldl(fun(SpaceId, Acc) ->
+        Acc#{SpaceId => oz_test_utils:minimum_support_size(Config)}
+    end, #{}, SpaceIds),
+    {ok, _} = oz_test_utils:call_oz(Config, od_provider, update, [ProviderId, fun(Provider) ->
+        {ok, Provider#od_provider{legacy_spaces = Spaces}}
+    end]),
     {ProviderId, Spaces}.
+
 

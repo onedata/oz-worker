@@ -91,9 +91,20 @@ get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
     rest_translator:ok_body_reply(Privileges);
 
 get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
-    #{<<"name">> := Name, <<"providers">> := Providers} = SpaceData,
+    #{
+        <<"name">> := Name,
+        <<"providers">> := Providers,
+        <<"supportParameters">> := Parameters,
+        <<"dbsyncState">> := SyncState,
+        <<"supportState">> := SupportState
+    } = SpaceData,
     rest_translator:ok_body_reply(#{
-        <<"spaceId">> => SpaceId, <<"name">> => Name, <<"providers">> => Providers
+        <<"spaceId">> => SpaceId,
+        <<"name">> => Name,
+        <<"providers">> => Providers,
+        <<"supportParameters">> => space_support:parameters_per_provider_to_json(Parameters),
+        <<"dbsyncState">> => space_support:dbsync_state_per_provider_to_json(SyncState),
+        <<"supportState">> => space_support:support_state_per_provider_to_json(SupportState)
     });
 
 get_response(#gri{aspect = users}, Users) ->
@@ -133,5 +144,8 @@ get_response(#gri{aspect = eff_providers}, Providers) ->
     rest_translator:ok_body_reply(#{<<"providers">> => Providers});
 
 get_response(#gri{aspect = harvesters}, Harvesters) ->
-    rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters}).
+    rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters});
+
+get_response(#gri{aspect = support_state}, SupportState) ->
+    rest_translator:ok_body_reply(SupportState).
 

@@ -105,14 +105,15 @@ storages() -> pr(storages).
 %%--------------------------------------------------------------------
 %% @doc
 %% Prints requested collection to the console in form of a table,
-%% or error details and help in case of an error.
+%% or error details and help in case of an error. Returns ok if the collection
+%% was correctly printed or error otherwise.
 %% @end
 %%--------------------------------------------------------------------
--spec pr(collection()) -> ok.
+-spec pr(collection()) -> ok | error.
 pr(Collection) ->
     pr(Collection, default).
 
--spec pr(collection(), sort_by() | sort_order()) -> ok.
+-spec pr(collection(), sort_by() | sort_order()) -> ok | error.
 pr(Collection, asc) ->
     pr(Collection, default, asc);
 pr(Collection, desc) ->
@@ -120,9 +121,11 @@ pr(Collection, desc) ->
 pr(Collection, SortBy) ->
     pr(Collection, SortBy, asc).
 
--spec pr(collection(), sort_by(), sort_order()) -> ok.
+-spec pr(collection(), sort_by(), sort_order()) -> ok | error.
 pr(Collection, SortBy, SortOrder) ->
-    io:format("~ts", [format(Collection, SortBy, SortOrder)]).
+    {OkOrError, Formatted} = parse_and_format_collection(Collection, SortBy, SortOrder),
+    io:format("~ts", [Formatted]),
+    OkOrError.
 
 
 %%--------------------------------------------------------------------
@@ -145,21 +148,8 @@ format(Collection, SortBy) ->
 
 -spec format(collection(), sort_by(), sort_order()) -> string().
 format(Collection, SortBy, SortOrder) ->
-    try
-        parse_and_format_collection(Collection, SortBy, SortOrder)
-    catch Type:Reason ->
-        str_utils:format(
-            "~ts crashed with ~w:~w~n"
-            "Stacktrace: ~ts~n"
-            "~n"
-            "~ts",
-            [
-                ?MODULE, Type, Reason,
-                lager:pr_stacktrace(erlang:get_stacktrace()),
-                format_help()
-            ]
-        )
-    end.
+    {_OkOrError, Formatted} = parse_and_format_collection(Collection, SortBy, SortOrder),
+    Formatted.
 
 
 %%--------------------------------------------------------------------
@@ -266,14 +256,28 @@ format_help() ->
 
 
 %% @private
--spec parse_and_format_collection(collection(), sort_by(), sort_order()) -> string().
+-spec parse_and_format_collection(collection(), sort_by(), sort_order()) -> {ok | error, string()}.
 parse_and_format_collection(Collection, SortBy, SortOrder) ->
-    Tokens = [string:trim(S) || S <- string:split(atom_to_list(Collection), "@", all)],
-    ParsedCollection = case Tokens of
-        [Res] -> list_to_atom(Res);
-        [Res, Id] -> {list_to_atom(Res), list_to_binary(Id)}
-    end,
-    format_collection(ParsedCollection, SortBy, SortOrder).
+    try
+        Tokens = [string:trim(S) || S <- string:split(atom_to_list(Collection), "@", all)],
+        ParsedCollection = case Tokens of
+            [Res] -> list_to_atom(Res);
+            [Res, Id] -> {list_to_atom(Res), list_to_binary(Id)}
+        end,
+        {ok, format_collection(ParsedCollection, SortBy, SortOrder)}
+    catch Type:Reason ->
+        {error, str_utils:format(
+            "~ts crashed with ~w:~w~n"
+            "Stacktrace: ~ts~n"
+            "~n"
+            "~ts",
+            [
+                ?MODULE, Type, Reason,
+                lager:pr_stacktrace(erlang:get_stacktrace()),
+                format_help()
+            ]
+        )}
+    end.
 
 
 %% @private
@@ -365,11 +369,48 @@ format_collection({space_shares, SpaceId}, SortBy, SortOrder) ->
     format_table(shares, Shares, SortBy, SortOrder);
 
 format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
-    {ok, #document{value = #od_space{eff_providers = EffProviders}}} = od_space:get(SpaceId),
+    {ok, #document{value = #od_space{
+        eff_providers = EffProviders,
+        support_parameters = ParametersPerProvider,
+        dbsync_state = DBSyncStatePerProvider,
+        support_state = SupportStatePerProvider
+    }}} = od_space:get(SpaceId),
     format_table(providers, maps:keys(EffProviders), SortBy, SortOrder, [id, last_activity, version, name, domain], [
         {support, byte_size, 11, fun(Doc) ->
             {Support, _} = maps:get(SpaceId, Doc#document.value#od_provider.eff_spaces),
             Support
+        end},
+        {dwrite_mrepl, text, 12, fun(#document{key = ProvId}) ->
+            {ok, Parameters} = space_support:lookup_parameters_for_provider(ParametersPerProvider, ProvId),
+            str_utils:format("~s,~s", [
+                space_support:get_data_write(Parameters),
+                space_support:get_metadata_replication(Parameters)
+            ])
+        end},
+        {support_state, text, 13, fun(#document{key = ProvId}) ->
+            {ok, SupportState} = space_support:lookup_support_state_for_provider(SupportStatePerProvider, ProvId),
+            SupportState
+        end},
+        {dbsync_state, text, 41, fun(#document{key = ProvId}) ->
+            {ok, {LastUpdate, _}} = space_support:lookup_dbsync_state_for_provider(DBSyncStatePerProvider, ProvId),
+            {KnownSeqs, AllSeqs} = lists:foldl(fun(OtherProvider, {AccKnown, AccAll}) ->
+                {Known, Latest} = try
+                    space_support:inspect_dbsync_state_between(DBSyncStatePerProvider, ProvId, OtherProvider)
+                catch _:_ ->
+                    {0, 0}
+                end,
+                {AccKnown + Known, AccAll + Latest}
+            end, {0, 0}, maps:keys(EffProviders)),
+            KnownPerCent = case AllSeqs of
+                0 -> 100;
+                _ -> KnownSeqs * 100 div AllSeqs
+            end,
+            TodayDate = format_date(time_utils:cluster_time_seconds()),
+            LastUpdateStr = case format_date(LastUpdate) of
+                TodayDate -> format_time(LastUpdate, hour_min_sec);
+                OtherDate -> OtherDate
+            end,
+            str_utils:format("~B/~B (~B%) @ ~s", [KnownSeqs, AllSeqs, KnownPerCent, LastUpdateStr])
         end}
     ]);
 
@@ -812,16 +853,14 @@ format_value({boolean, TrueStr, FalseStr}, Value) ->
         true -> TrueStr;
         false -> FalseStr
     end;
-format_value(creation_date, Value) ->
-    {{Year, Month, Day}, _} = time_utils:epoch_to_datetime(Value),
-    str_utils:format("~4..0B-~2..0B-~2..0B", [Year, Month, Day]);
+format_value(creation_date, Timestamp) ->
+    format_date(Timestamp);
 format_value(last_activity, now) ->
     str_utils:format("~ts", [<<"✓ online"/utf8>>]);
 format_value(last_activity, 0) ->
     str_utils:format("~ts", [<<"✕ unknown"/utf8>>]);
-format_value(last_activity, Value) ->
-    {{Year, Month, Day}, {Hour, Minute, _}} = time_utils:epoch_to_datetime(Value),
-    str_utils:format("~4..0B-~2..0B-~2..0B ~2..0B:~2..0B", [Year, Month, Day, Hour, Minute]);
+format_value(last_activity, Timestamp) ->
+    str_utils:format("~s ~s", [format_date(Timestamp), format_time(Timestamp, hour_min)]);
 format_value(byte_size, Value) ->
     str_utils:format_byte_size(Value);
 format_value(direct_and_eff, {Direct, Effective}) ->
@@ -839,6 +878,23 @@ format_value(admin_privileges, []) ->
     "-";
 format_value(admin_privileges, Privileges) ->
     str_utils:format("~B / ~B", [length(Privileges), length(privileges:oz_privileges())]).
+
+
+%% @private
+-spec format_date(time_utils:seconds()) -> string().
+format_date(Timestamp) ->
+    {{Year, Month, Day}, _} = time_utils:epoch_to_datetime(Timestamp),
+    str_utils:format("~4..0B-~2..0B-~2..0B", [Year, Month, Day]).
+
+
+%% @private
+-spec format_time(time_utils:seconds(), hour_min | hour_min_sec) -> string().
+format_time(Timestamp, hour_min) ->
+    {_, {Hour, Minute, _}} = time_utils:epoch_to_datetime(Timestamp),
+    str_utils:format("~2..0B:~2..0B", [Hour, Minute]);
+format_time(Timestamp, hour_min_sec) ->
+    {_, {Hour, Minute, Second}} = time_utils:epoch_to_datetime(Timestamp),
+    str_utils:format("~2..0B:~2..0B:~2..0B", [Hour, Minute, Second]).
 
 
 %% @private

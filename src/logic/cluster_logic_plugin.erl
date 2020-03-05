@@ -136,7 +136,7 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
         ?AS_GROUP(_) -> ?GROUP_JOIN_CLUSTER
     end,
 
-    invite_tokens:consume(Auth, Token, ExpType, fun(ClusterId, Privileges) ->
+    invite_tokens:consume(Auth, Token, ExpType, fun(ClusterId, _, Privileges) ->
         case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
                 entity_graph:add_relation(
@@ -163,11 +163,11 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
     end);
 
 create(#el_req{auth = Auth, gri = #gri{id = ClusterId, aspect = invite_user_token}}) ->
-    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 20.02.*
     token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?USER_JOIN_CLUSTER, ClusterId));
 
 create(#el_req{auth = Auth, gri = #gri{id = ClusterId, aspect = invite_group_token}}) ->
-    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 20.02.*
     token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, ClusterId));
 
 create(#el_req{gri = #gri{id = ClusterId, aspect = {user, UserId}}, data = Data}) ->

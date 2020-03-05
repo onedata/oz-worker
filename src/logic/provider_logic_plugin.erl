@@ -364,7 +364,7 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     ok;
 
 %% @TODO VFS-5856 deprecated, included for backward compatibility
-%% Used by providers, that do not keep storages in onezone
+%% Used by providers that do not keep storages in onezone
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
     storage_logic:revoke_support(?PROVIDER(ProviderId), ProviderId, SpaceId);
 
@@ -815,7 +815,7 @@ create_provider(Auth, Data, ProviderId, GRI) ->
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
     AdminEmail = maps:get(<<"adminEmail">>, Data),
 
-    invite_tokens:consume(Auth, Token, ?REGISTER_ONEPROVIDER, fun(CreatorUserId, _) ->
+    invite_tokens:consume(Auth, Token, ?REGISTER_ONEPROVIDER, fun(CreatorUserId, _, _) ->
         {ok, RootToken} = token_logic:create_provider_named_token(?ROOT, ProviderId, #{
             <<"name">> => ?PROVIDER_ROOT_TOKEN_NAME,
             <<"type">> => ?ACCESS_TOKEN
