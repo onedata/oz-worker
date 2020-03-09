@@ -148,6 +148,7 @@ create(#el_req{auth = Auth, gri = #gri{id = StorageId, aspect = support}, data =
                     error -> TokenParameters
                 end,
                 DBSyncState = case space_support:lookup_dbsync_state_for_provider(DBSyncStatePerProvider, ProviderId) of
+                    %% @TODO VFS-6189 Implement mechanisms for space unsupport concerning dbsync and synchronizing changes
                     % Provider can already have some entries from previous support or support
                     % via another storage.
                     {ok, State} ->
@@ -283,6 +284,8 @@ delete(#el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
                 ok;
             [] ->
                 % The space is no longer supported by the provider
+                %% @TODO VFS-6189 Implement mechanisms for space unsupport concerning dbsync and synchronizing changes
+                %% @TODO VFS-6189 decide if archival dbsync state should be deleted or retained
                 {ok, _} = od_space:update(SpaceId, fun(Space) ->
                     #od_space{
                         support_parameters = ParametersPerProvider,

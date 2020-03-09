@@ -144,8 +144,5 @@ get_response(#gri{aspect = eff_providers}, Providers) ->
     rest_translator:ok_body_reply(#{<<"providers">> => Providers});
 
 get_response(#gri{aspect = harvesters}, Harvesters) ->
-    rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters});
-
-get_response(#gri{aspect = support_state}, SupportState) ->
-    rest_translator:ok_body_reply(SupportState).
+    rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters}).
 
