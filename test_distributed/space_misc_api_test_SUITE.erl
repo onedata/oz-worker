@@ -1086,6 +1086,11 @@ update_support_parameters_test(Config, SpaceAdmin, Space, Provider, ForbiddenCli
             unauthorized = [nobody],
             forbidden = ForbiddenClients
         },
+        rest_spec = #rest_spec{
+            method = patch,
+            path = [<<"/spaces/">>, Space, <<"/providers/">>, Provider, <<"/support_parameters">>],
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
         logic_spec = #logic_spec{
             module = space_logic,
             function = update_support_parameters,

@@ -348,7 +348,7 @@ routes() -> [
     {<<"/spaces/:id/providers/:pid/support_parameters">>, #rest_req{
         method = 'PATCH',
         produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = support_parameters}
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {support_parameters, ?BINDING(pid)}}
     }},
     %% List space harvesters
     %% This operation requires one of the following privileges:
