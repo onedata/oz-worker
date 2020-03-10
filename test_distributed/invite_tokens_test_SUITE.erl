@@ -1688,12 +1688,14 @@ set_user_privs_in_harvester(HarvesterId, UserId, {GrantOrRevoke, to_set_privs}) 
 % equivalent from the point of view of authorization to invite .
 set_user_privs(LogicModule, EntityId, UserId, grant, Privileges) ->
     ozt:rpc(LogicModule, add_user, [?ROOT, EntityId, UserId]),
-    ozt:rpc(LogicModule, update_user_privileges, [?ROOT, EntityId, UserId, Privileges, []]);
+    ozt:rpc(LogicModule, update_user_privileges, [?ROOT, EntityId, UserId, Privileges, []]),
+    ozt:reconcile_entity_graph();
 set_user_privs(LogicModule, EntityId, UserId, revoke, Privileges) ->
     case rand:uniform(2) of
         1 -> ozt:rpc(LogicModule, remove_user, [?ROOT, EntityId, UserId]);
         2 -> ozt:rpc(LogicModule, update_user_privileges, [?ROOT, EntityId, UserId, [], Privileges])
-    end.
+    end,
+    ozt:reconcile_entity_graph().
 
 
 assert_creation_succeeds(Auth, Subject, Data) ->
