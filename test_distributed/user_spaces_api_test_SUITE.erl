@@ -355,7 +355,7 @@ get_space_test(Config) ->
             method = get,
             path = [<<"/user/spaces/">>, S1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpDetails#{<<"spaceId">> => S1}
+            expected_body = {contains, ExpDetails#{<<"spaceId">> => S1}}
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -747,7 +747,7 @@ get_eff_space_test(Config) ->
                     method = get,
                     path = [<<"/user/effective_spaces/">>, SpaceId],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = SpaceDetails#{<<"spaceId">> => SpaceId}
+                    expected_body = {contains, SpaceDetails#{<<"spaceId">> => SpaceId}}
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),

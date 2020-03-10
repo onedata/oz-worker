@@ -286,7 +286,7 @@ supports_space(Storage, SpaceId) ->
 %% that keeps knowledge of storages as long as it is in previous version.
 %% Provider removes this virtual storage record during its upgrade procedure.
 %%
-%% Dedicated for upgrading Onezone from 19.02.* to 19.09.*.
+%% Dedicated for upgrading Onezone from 19.02.* to 20.02.*.
 %% @end
 %%--------------------------------------------------------------------
 -spec migrate_legacy_supports() -> ok.

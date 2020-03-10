@@ -450,11 +450,11 @@ get_space_test(Config) ->
             method = get,
             path = [<<"/harvesters/">>, H1, <<"/spaces/">>, S1],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
+            expected_body = {contains, #{
                 <<"spaceId">> => S1,
                 <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{}
-            }
+            }}
         },
         logic_spec = #logic_spec{
             module = harvester_logic,

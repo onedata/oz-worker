@@ -231,6 +231,10 @@
     % track changes in spaces and propagate them bottom-up.
     eff_harvesters = #{} :: entity_graph:eff_relations(od_provider:id()),
 
+    support_parameters = #{} :: space_support:parameters_per_provider(),
+    dbsync_state = #{} :: space_support:dbsync_state_per_provider(),
+    support_state = #{} :: space_support:support_state_per_provider(),
+
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),
 

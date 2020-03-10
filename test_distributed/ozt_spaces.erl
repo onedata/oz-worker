@@ -18,8 +18,9 @@
 
 %% API
 -export([create/0, create/1]).
+-export([get/1, exists/1]).
 -export([add_user/2, add_user/3]).
--export([create_support_token/2]).
+-export([create_support_token/2, create_support_token/3]).
 -export([create_share/2]).
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([delete/1]).
@@ -40,6 +41,17 @@ create(Name) ->
     SpaceId.
 
 
+-spec get(od_space:id()) -> od_space:record().
+get(SpaceId) ->
+    {ok, Space} = ?assertMatch({ok, _}, ozt:rpc(space_logic, get, [?ROOT, SpaceId])),
+    Space.
+
+
+-spec exists(od_space:id()) -> od_space:record().
+exists(SpaceId) ->
+    ozt:rpc(space_logic, exists, [SpaceId]).
+
+
 -spec add_user(od_space:id(), od_user:id()) -> ok.
 add_user(SpaceId, UserId) ->
     add_user(SpaceId, UserId, privileges:space_member()).
@@ -52,9 +64,11 @@ add_user(SpaceId, UserId, Privileges) ->
 
 -spec create_support_token(od_space:id(), od_user:id()) -> tokens:token().
 create_support_token(SpaceId, UserId) ->
-    ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId, #space_support_parameters{
-        data_write = global, metadata_replication = eager
-    })).
+    create_support_token(SpaceId, UserId, space_support:build_parameters(global, eager)).
+
+-spec create_support_token(od_space:id(), od_user:id(), space_support:parameters()) -> tokens:token().
+create_support_token(SpaceId, UserId, SupportParameters) ->
+    ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId, SupportParameters)).
 
 
 -spec create_share(od_space:id(), od_share:name()) -> od_share:id().

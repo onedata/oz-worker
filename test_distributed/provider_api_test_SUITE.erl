@@ -1522,7 +1522,7 @@ get_eff_space_test(Config) ->
                     method = get,
                     path = [<<"/providers/">>, P1, <<"/spaces/">>, SpaceId],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = SpaceDetails#{<<"spaceId">> => SpaceId}
+                    expected_body = {contains, SpaceDetails#{<<"spaceId">> => SpaceId}}
                 },
                 logic_spec = #logic_spec{
                     operation = get,
@@ -1569,7 +1569,7 @@ get_own_space_test(Config) ->
                     method = get,
                     path = [<<"/provider/spaces/">>, SpaceId],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = SpaceDetails#{<<"spaceId">> => SpaceId}
+                    expected_body = {contains, SpaceDetails#{<<"spaceId">> => SpaceId}}
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
