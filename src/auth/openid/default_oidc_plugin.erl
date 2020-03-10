@@ -220,8 +220,20 @@ acquire_access_token(IdP, Parameters) ->
     {RespHeaders, RespBinary} = openid_protocol:request_idp(
         Method, 200, AccessTokenEndpoint, Headers3, Parameters3
     ),
+    % find out the content type - the response headers letter case might vary
+    % depending on the remote server
+    CasefoldedContentTypeHeader = string:casefold(?HDR_CONTENT_TYPE),
+    ContentType = maps:fold(fun
+        (Header, Value, undefined) ->
+            case string:casefold(Header) of
+                CasefoldedContentTypeHeader -> Value;
+                _ -> undefined
+            end;
+        (_, _, Acc) ->
+            Acc
+    end, undefined, RespHeaders),
 
-    case maps:get(?HDR_CONTENT_TYPE, RespHeaders, maps:get(?HDR_CONTENT_TYPE, RespHeaders, undefined)) of
+    case ContentType of
         <<"application/json", _/binary>> ->
             Response = json_utils:decode(RespBinary),
             AccessToken = maps:get(<<"access_token">>, Response, undefined),
