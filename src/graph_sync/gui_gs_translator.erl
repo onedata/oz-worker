@@ -66,8 +66,9 @@ translate_value(_, #gri{aspect = TokenType}, Token) when
     TokenType == space_support_token;
     TokenType == provider_registration_token ->
 
-    {ok, Serialized} = tokens:serialize(Token),
-    Serialized;
+    serialize_token(Token);
+translate_value(_, #gri{aspect = {user_temporary_token, _}}, Token) ->
+    serialize_token(Token);
 translate_value(_, #gri{type = od_harvester, aspect = {query, _}}, Response) ->
     Response;
 
@@ -522,9 +523,8 @@ translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name
 translate_provider(#gri{type = od_provider, aspect = instance, scope = private}, {_Provider, RootToken}) ->
     % This covers provider creation via Graph Sync, in contrast to the get
     % request that does not return the root token
-    {ok, Serialized} = tokens:serialize(RootToken),
     #{
-        <<"providerRootToken">> => Serialized
+        <<"providerRootToken">> => serialize_token(RootToken)
     };
 translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Provider) ->
     #od_provider{
@@ -638,7 +638,7 @@ translate_token(#gri{aspect = instance}, TokenData) ->
         <<"caveats">> => [caveats:to_json(C) || C <- Caveats],
         <<"metadata">> => Metadata,
         <<"revoked">> => Revoked,
-        <<"token">> => element(2, {ok, _} = tokens:serialize(Token))
+        <<"token">> => serialize_token(Token)
     }.
 
 
@@ -1038,3 +1038,10 @@ translate_creator(?SUB(Type, Id)) -> #{
     <<"creatorType">> => atom_to_binary(Type, utf8),
     <<"creatorId">> => utils:undefined_to_null(Id)
 }.
+
+
+%% @private
+-spec serialize_token(tokens:token()) -> tokens:serialized().
+serialize_token(Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    Serialized.
