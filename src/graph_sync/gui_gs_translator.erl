@@ -46,7 +46,8 @@ handshake_attributes(_Client) ->
         <<"zoneDomain">> => oz_worker:get_domain(),
         <<"serviceVersion">> => oz_worker:get_release_version(),
         <<"serviceBuildVersion">> => oz_worker:get_build_version(),
-        <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle)
+        <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle),
+        <<"maxTemporaryTokenTtl">> => oz_worker:get_env(max_temporary_token_ttl, 604800) % 1 week
     }.
 
 
