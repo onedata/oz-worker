@@ -610,7 +610,7 @@ create_temporary_token(Subject, Data) ->
     MaxTTL = ?MAX_TEMPORARY_TOKEN_TTL,
     IsTtlAllowed = case infer_ttl(Caveats) of
         undefined -> false;
-        TTL -> TTL < MaxTTL
+        TTL -> TTL =< MaxTTL
     end,
     IsTtlAllowed orelse throw(?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTTL)),
 
