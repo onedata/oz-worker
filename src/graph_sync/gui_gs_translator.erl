@@ -520,6 +520,8 @@ translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name
 %% @private
 -spec translate_provider(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_provider(#gri{type = od_provider, aspect = current_time}, TimeMillis) ->
+    #{<<"timeMillis">> => TimeMillis};
 translate_provider(#gri{type = od_provider, aspect = instance, scope = private}, {_Provider, RootToken}) ->
     % This covers provider creation via Graph Sync, in contrast to the get
     % request that does not return the root token
