@@ -25,6 +25,7 @@
     get/2,
     get_protected_data/2,
     get_public_data/2,
+    get_name/2,
     get_worker_release_version/2,
     list/1,
     list_privileges/0
@@ -176,6 +177,14 @@ get_public_data(Auth, ClusterId) ->
         auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = instance, scope = public}
     }).
+
+
+-spec get_name(aai:auth(), od_cluster:id()) ->
+    {ok, binary()} | {error, term()}.
+get_name(_Auth, ?ONEZONE_CLUSTER_ID) ->
+    <<"Onezone">>;
+get_name(Auth, ClusterId) ->
+    provider_logic:get_name(Auth, ClusterId).
 
 
 %%--------------------------------------------------------------------
