@@ -80,40 +80,45 @@ translate_value(_, #gri{type = od_token, aspect = examine}, Response) ->
         <<"type">> := Type,
         <<"caveats">> := Caveats
     } = Response,
-    InviteTargetNameData = case Type of
-        ?INVITE_TOKEN(?USER_JOIN_GROUP, GroupId) ->
-            #{<<"groupName">> => lookup_name(group_logic, GroupId)};
-        ?INVITE_TOKEN(?GROUP_JOIN_GROUP, GroupId) ->
-            #{<<"groupName">> => lookup_name(group_logic, GroupId)};
-        ?INVITE_TOKEN(?USER_JOIN_SPACE, SpaceId) ->
-            #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
-        ?INVITE_TOKEN(?GROUP_JOIN_SPACE, SpaceId) ->
-            #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
-        ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId) ->
-            #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
-        ?INVITE_TOKEN(?HARVESTER_JOIN_SPACE, SpaceId) ->
-            #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
-        ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, UserId) ->
-            #{<<"userName">> => lookup_name(user_logic, get_full_name, UserId)};
-        ?INVITE_TOKEN(?USER_JOIN_CLUSTER, ClusterId) ->
-            #{<<"clusterName">> => lookup_name(cluster_logic, ClusterId)};
-        ?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, ClusterId) ->
-            #{<<"clusterName">> => lookup_name(cluster_logic, ClusterId)};
-        ?INVITE_TOKEN(?USER_JOIN_HARVESTER, HarvesterId) ->
-            #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
-        ?INVITE_TOKEN(?GROUP_JOIN_HARVESTER, HarvesterId) ->
-            #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
-        ?INVITE_TOKEN(?SPACE_JOIN_HARVESTER, HarvesterId) ->
-            #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
+    TokenTypeJson = case Type of
+        ?INVITE_TOKEN(InviteType, EntityId) ->
+            InviteTargetNameData = case {InviteType, EntityId} of
+                {?USER_JOIN_GROUP, GroupId} ->
+                    #{<<"groupName">> => lookup_name(group_logic, GroupId)};
+                {?GROUP_JOIN_GROUP, GroupId} ->
+                    #{<<"groupName">> => lookup_name(group_logic, GroupId)};
+                {?USER_JOIN_SPACE, SpaceId} ->
+                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                {?GROUP_JOIN_SPACE, SpaceId} ->
+                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                {?SUPPORT_SPACE, SpaceId} ->
+                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                {?HARVESTER_JOIN_SPACE, SpaceId} ->
+                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                {?REGISTER_ONEPROVIDER, UserId} ->
+                    #{<<"userName">> => lookup_name(user_logic, get_full_name, UserId)};
+                {?USER_JOIN_CLUSTER, ClusterId} ->
+                    #{<<"clusterName">> => lookup_name(cluster_logic, ClusterId)};
+                {?GROUP_JOIN_CLUSTER, ClusterId} ->
+                    #{<<"clusterName">> => lookup_name(cluster_logic, ClusterId)};
+                {?USER_JOIN_HARVESTER, HarvesterId} ->
+                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
+                {?GROUP_JOIN_HARVESTER, HarvesterId} ->
+                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
+                {?SPACE_JOIN_HARVESTER, HarvesterId} ->
+                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)}
+            end,
+            #{<<"inviteToken">> := Json} = token_type:to_json(Type),
+            #{<<"inviteToken">> => maps:merge(Json, InviteTargetNameData)};
         _ ->
-            #{}
+            token_type:to_json(Type)
     end,
     #{
         <<"onezoneDomain">> => OnezoneDomain,
         <<"id">> => Id,
         <<"persistence">> => Persistence,
         <<"subject">> => aai:subject_to_json(Subject),
-        <<"type">> => maps:merge(token_type:to_json(Type), InviteTargetNameData),
+        <<"type">> => TokenTypeJson,
         <<"caveats">> => [caveats:to_json(C) || C <- Caveats]
     };
 
