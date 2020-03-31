@@ -213,7 +213,10 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
 
         storages = Storages,
         shares = Shares,
-        harvesters = Harvesters
+        harvesters = Harvesters,
+
+        support_parameters = Parameters,
+        support_state = SupportState
     } = Space,
     #{
         <<"name">> => Name,
@@ -227,11 +230,24 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"storages">> => Storages,
         <<"shares">> => Shares,
-        <<"harvesters">> => Harvesters
+        <<"harvesters">> => Harvesters,
+
+        <<"supportParameters">> => space_support:parameters_per_provider_to_json(Parameters),
+        <<"supportState">> => space_support:support_state_per_provider_to_json(SupportState)
     };
 translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected}, SpaceData) ->
-    #{<<"name">> := Name, <<"providers">> := Providers} = SpaceData,
-    #{<<"name">> => Name, <<"providers">> => Providers};
+    #{
+        <<"name">> := Name,
+        <<"providers">> := Providers,
+        <<"supportParameters">> := Parameters,
+        <<"supportState">> := SupportState
+    } = SpaceData,
+    #{
+        <<"name">> => Name,
+        <<"providers">> => Providers,
+        <<"supportParameters">> => space_support:parameters_per_provider_to_json(Parameters),
+        <<"supportState">> => space_support:support_state_per_provider_to_json(SupportState)
+    };
 
 translate_resource(_, #gri{type = od_share, aspect = instance, scope = private}, Share) ->
     #od_share{

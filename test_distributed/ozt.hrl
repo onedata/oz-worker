@@ -15,6 +15,7 @@
 -include("api_test_utils.hrl").
 -include("entity_logic.hrl").
 -include("graph_sync/oz_graph_sync.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/privileges.hrl").

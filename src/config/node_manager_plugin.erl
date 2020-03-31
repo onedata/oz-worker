@@ -21,7 +21,8 @@
 -export([installed_cluster_generation/0]).
 -export([oldest_known_cluster_generation/0]).
 -export([app_name/0, cm_nodes/0, db_nodes/0]).
--export([listeners/0, modules_with_args/0]).
+-export([listeners/0]).
+-export([upgrade_essential_workers/0, custom_workers/0]).
 -export([before_init/1, after_init/1]).
 -export([upgrade_cluster/1]).
 -export([handle_call/3, handle_cast/2]).
@@ -104,11 +105,19 @@ listeners() -> [
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Overrides {@link node_manager_plugin_default:modules_with_args/0}.
+%% List of workers modules with configs that should be started before upgrade.
 %% @end
 %%--------------------------------------------------------------------
--spec modules_with_args() -> Models :: [{atom(), [any()]}].
-modules_with_args() ->
+-spec upgrade_essential_workers() -> [{module(), [any()]}].
+upgrade_essential_workers() -> [].
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:custom_workers/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec custom_workers() -> Models :: [{atom(), [any()]}].
+custom_workers() ->
     [{gs_worker, [
         {supervisor_flags, gs_worker:supervisor_flags()}
     ]}].
@@ -171,6 +180,7 @@ after_init([]) ->
 upgrade_cluster(1) ->
     token_logic:migrate_deprecated_tokens(),
     storage_logic:migrate_legacy_supports(),
+    space_logic:initialize_space_support_info(),
     {ok, 2}.
 
 

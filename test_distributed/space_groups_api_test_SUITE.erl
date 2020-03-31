@@ -542,6 +542,7 @@ get_group_privileges_test(Config) ->
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     oz_test_utils:support_space_by_provider(Config, P1, S1),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = privileges:space_privileges(),
     InitialPrivs = privileges:space_member(),

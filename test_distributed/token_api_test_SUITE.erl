@@ -217,10 +217,9 @@ end_per_testcase(_, _Config) ->
 -define(TYPES_TO_JSON(Types), [token_type:to_json(T) || T <- Types]).
 -define(CAVEATS_TO_JSON(Caveats), [caveats:to_json(C) || C <- Caveats]).
 
--define(SPACE_SUPPORT_PARAMS, #space_support_parameters{
-    data_write = lists_utils:random_element([global, none]),
-    metadata_replication = lists_utils:random_element([eager, lazy, none])
-}).
+-define(SPACE_SUPPORT_PARAMS, space_support:build_parameters(
+    lists_utils:random_element([global, none]), lists_utils:random_element([eager, lazy, none])
+)).
 
 -define(INVITE_TOKEN_TYPE_EXAMPLES(GroupId, SpaceId, AdminUserId, ClusterId, HarvesterId), [
     ?INVITE_TOKEN(?USER_JOIN_GROUP, GroupId),

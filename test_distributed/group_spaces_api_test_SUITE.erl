@@ -131,7 +131,7 @@ get_space_details_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/spaces/">>, S1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpDetails#{<<"spaceId">> => S1}
+            expected_body = {contains, ExpDetails#{<<"spaceId">> => S1}}
         },
         logic_spec = #logic_spec{
             module = group_logic,
@@ -498,7 +498,7 @@ get_eff_space_details_test(Config) ->
                         <<"/groups/">>, G1, <<"/effective_spaces/">>, SpaceId
                     ],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = SpaceDetails#{<<"spaceId">> => SpaceId}
+                    expected_body = {contains, SpaceDetails#{<<"spaceId">> => SpaceId}}
                 },
                 logic_spec = #logic_spec{
                     module = group_logic,

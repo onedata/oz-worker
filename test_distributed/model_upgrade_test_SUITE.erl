@@ -1624,6 +1624,10 @@ get_record(od_space, 7) -> #od_space{
     eff_providers = #{},
     eff_harvesters = #{},
 
+    support_parameters = #{},
+    dbsync_state = #{},
+    support_state = #{},
+
     creation_time = ?DUMMY_TIMESTAMP,
     creator = ?SUB(nobody),
 

@@ -30,7 +30,7 @@ export ONEDATA_GIT_URL
 
 BUILD_VERSION := $(subst $(shell git describe --tags --abbrev=0)-,,$(shell git describe --tags --long))
 
-.PHONY: test deps upgrade generate package
+.PHONY: test deps upgrade generate package artifact
 
 all: test_rel
 
@@ -146,3 +146,12 @@ package: check_distribution package/$(PKG_ID).tar.gz
 
 pkgclean:
 	rm -rf package
+
+##
+## Creating bamboo artifact
+##
+
+artifact:
+	cd ..; find oz_worker | grep -v '.git$$' | grep -v '/.git/' > tar.lst; \
+	find oz_worker | grep oz_worker/.git >> tar.lst; \
+	tar -czf oz_worker.tar.gz --no-recursion -T tar.lst 

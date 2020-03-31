@@ -18,7 +18,9 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--type consume_fun() :: fun((gri:entity_id(), token_metadata:invite_privileges()) -> entity_logic:create_result()).
+-type consume_fun() :: fun((gri:entity_id(), token_type:invite_parameters(), token_metadata:invite_privileges()) ->
+    entity_logic:create_result()
+).
 
 -export([consume/4]).
 -export([ensure_valid_invitation/4]).
@@ -118,10 +120,10 @@ is_valid_target_id(_, _) -> false.
 -spec consume_internal(tokens:token(), consume_fun()) ->
     entity_logic:create_result() | errors:error().
 consume_internal(#token{persistence = {temporary, _}} = Token, ConsumeFun) ->
-    #token{subject = Subject, type = ?INVITE_TOKEN(InviteType, EntityId)} = Token,
+    #token{subject = Subject, type = ?INVITE_TOKEN(InviteType, EntityId, Parameters)} = Token,
     % Temporary tokens cannot carry any privileges
     ensure_valid_invitation(Subject, InviteType, EntityId, default_privileges),
-    ConsumeFun(EntityId, token_metadata:default_invite_privileges(InviteType));
+    ConsumeFun(EntityId, Parameters, token_metadata:default_invite_privileges(InviteType));
 
 consume_internal(#token{persistence = named} = Token, ConsumeFun) ->
     % Named tokens must be consumed in a critical section to avoid
@@ -138,7 +140,7 @@ consume_named_unsafe(Token, ConsumeFun) ->
     #token{
         id = TokenId,
         subject = Subject,
-        type = ?INVITE_TOKEN(InviteType, EntityId)
+        type = ?INVITE_TOKEN(InviteType, EntityId, Parameters)
     } = Token,
     {ok, #document{value = #od_token{metadata = Metadata}}} = od_token:get(TokenId),
 
@@ -149,7 +151,7 @@ consume_named_unsafe(Token, ConsumeFun) ->
     ensure_valid_invitation(Subject, InviteType, EntityId, Profile),
 
     % The ConsumeFun can throw, in which case the usage count will not be updated
-    case ConsumeFun(EntityId, Privileges) of
+    case ConsumeFun(EntityId, Parameters, Privileges) of
         {error, _} = Error ->
             Error;
         Result ->

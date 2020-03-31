@@ -101,6 +101,8 @@ operation_supported(get, storages, private) -> true;
 operation_supported(update, instance, private) -> true;
 operation_supported(update, {user_privileges, _}, private) -> true;
 operation_supported(update, {group_privileges, _}, private) -> true;
+operation_supported(update, {support_parameters, _}, private) -> true;
+operation_supported(update, {dbsync_state, _}, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {user, _}, private) -> true;
@@ -177,7 +179,7 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
         ?AS_HARVESTER(_) -> ?HARVESTER_JOIN_SPACE
     end,
 
-    invite_tokens:consume(Auth, Token, ExpType, fun(SpaceId, Privileges) ->
+    invite_tokens:consume(Auth, Token, ExpType, fun(SpaceId, _, Privileges) ->
         case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
                 entity_graph:add_relation(
@@ -213,18 +215,18 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
     end);
 
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
-    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 20.02.*
     token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?USER_JOIN_SPACE, SpaceId));
 
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_group_token}}) ->
-    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 20.02.*
     token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?GROUP_JOIN_SPACE, SpaceId));
 
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = space_support_token}}) ->
-    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId, #space_support_parameters{
-        data_write = global, metadata_replication = eager
-    }));
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 20.02.*
+    token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(
+        ?SUPPORT_SPACE, SpaceId, space_support:build_parameters(global, eager)
+    ));
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:space_member()),
@@ -311,12 +313,17 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Space) ->
     {ok, Space};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{
-        name = Name, creation_time = CreationTime,
-        shares = Shares, creator = Creator
+        name = Name, support_parameters = SupportParameters,
+        dbsync_state = DBSyncState, support_state = SupportState,
+        creation_time = CreationTime, creator = Creator,
+        shares = Shares
     } = Space,
     {ok, #{
         <<"name">> => Name,
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
+        <<"supportParameters">> => SupportParameters,
+        <<"dbsyncState">> => DBSyncState,
+        <<"supportState">> => SupportState,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator,
         <<"sharesCount">> => length(Shares)
@@ -386,7 +393,32 @@ update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {group_privileges, GroupI
         od_group, GroupId,
         od_space, SpaceId,
         {PrivsToGrant, PrivsToRevoke}
-    ).
+    );
+
+update(#el_req{gri = #gri{id = SpaceId, aspect = {support_parameters, ProviderId}}, data = Data}) ->
+    {ok, _} = od_space:update(SpaceId, fun(Space = #od_space{support_parameters = ParametersPerProvider}) ->
+        {ok, PreviousForProvider} = space_support:lookup_parameters_for_provider(ParametersPerProvider, ProviderId),
+        {ok, Space#od_space{support_parameters = space_support:update_parameters_for_provider(
+            ParametersPerProvider, ProviderId, space_support:build_parameters(
+                maps:get(<<"dataWrite">>, Data, space_support:get_data_write(PreviousForProvider)),
+                maps:get(<<"metadataReplication">>, Data, space_support:get_metadata_replication(PreviousForProvider))
+            )
+        )}}
+    end),
+    ok;
+
+update(#el_req{gri = #gri{id = SpaceId, aspect = {dbsync_state, ProviderId}}, data = Data}) ->
+    SeqPerProvider = maps:get(<<"seqPerProvider">>, Data),
+    {ok, _} = od_space:update(SpaceId, fun(Space) ->
+        #od_space{dbsync_state = DBSyncStatePerProvider, eff_providers = Providers} = Space,
+        DBSyncState = space_support:build_dbsync_state(
+            time_utils:cluster_time_seconds(), SeqPerProvider, maps:keys(Providers)
+        ),
+        {ok, Space#od_space{dbsync_state = space_support:update_dbsync_state_for_provider(
+            DBSyncStatePerProvider, ProviderId, DBSyncState
+        )}}
+    end),
+    ok.
 
 
 %%--------------------------------------------------------------------
@@ -525,6 +557,12 @@ exists(#el_req{gri = #gri{aspect = {provider, ProviderId}}}, Space) ->
 
 exists(#el_req{gri = #gri{aspect = {harvester, HarvesterId}}}, Space) ->
     entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, Space);
+
+exists(#el_req{gri = #gri{aspect = {support_parameters, ProviderId}}}, Space) ->
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Space);
+
+exists(#el_req{gri = #gri{aspect = {dbsync_state, ProviderId}}}, Space) ->
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Space);
 
 % All other aspects exist if space record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_space{}) ->
@@ -678,6 +716,12 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = {user_privileges
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {group_privileges, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_SET_PRIVILEGES);
+
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = {support_parameters, _}}}, Space) ->
+    auth_by_privilege(Req, Space, ?SPACE_UPDATE);
+
+authorize(Req = #el_req{auth = ?PROVIDER(PrId), operation = update, gri = #gri{aspect = {dbsync_state, PrId}}}, Space) ->
+    auth_by_support(Req, Space);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_DELETE);
@@ -901,7 +945,33 @@ validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}})
     };
 
 validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}}) ->
-    validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}}).
+    validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}});
+
+validate(#el_req{operation = update, gri = #gri{aspect = {support_parameters, _}}}) ->
+    #{
+        at_least_one => #{
+            <<"dataWrite">> => {atom, [global, none]},
+            <<"metadataReplication">> => {atom, [eager, lazy, none]}
+        }
+    };
+
+validate(#el_req{operation = update, gri = #gri{aspect = {dbsync_state, _}}}) ->
+    #{
+        required => #{
+            <<"seqPerProvider">> => {json, fun(Json) ->
+                try
+                    maps:map(fun(ProviderId, Seq) ->
+                        true = is_binary(ProviderId),
+                        true = is_integer(Seq),
+                        true = (Seq >= 0)
+                    end, Json),
+                    true
+                catch _:_ ->
+                    false
+                end
+            end}
+        }
+    }.
 
 %%%===================================================================
 %%% Internal functions
