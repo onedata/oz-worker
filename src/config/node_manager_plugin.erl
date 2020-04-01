@@ -260,7 +260,7 @@ is_dedicated_node(Identifier) ->
 %%--------------------------------------------------------------------
 -spec dedicated_node(Identifier :: atom()) -> node().
 dedicated_node(Identifier) ->
-    consistent_hashing:get_node(Identifier).
+    consistent_hashing:get_assigned_node(Identifier).
 
 
 %%--------------------------------------------------------------------
