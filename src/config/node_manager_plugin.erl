@@ -23,7 +23,7 @@
 -export([app_name/0, cm_nodes/0, db_nodes/0]).
 -export([listeners/0]).
 -export([upgrade_essential_workers/0, custom_workers/0]).
--export([before_init/1, after_init/1]).
+-export([before_init/1, on_cluster_ready/0]).
 -export([upgrade_cluster/1]).
 -export([handle_call/3, handle_cast/2]).
 
@@ -142,12 +142,12 @@ before_init([]) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Overrides {@link node_manager_plugin_default:after_init/1}.
+%% Overrides {@link node_manager_plugin_default:on_cluster_ready/1}.
 %% This callback is executed on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec after_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
-after_init([]) ->
+-spec on_cluster_ready() -> Result :: ok | {error, Reason :: term()}.
+on_cluster_ready() ->
     try
         % Logic run on every node of the cluster
         onezone_plugins:init(),
