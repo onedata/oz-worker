@@ -53,7 +53,7 @@ verify_handshake_auth({macaroon, Macaroon, DischargeMacaroons}) ->
         {error, _} ->
             case auth_logic:authorize_by_macaroons(Macaroon, DischargeMacaroons) of
                 {true, Auth} -> {ok, Auth};
-                {error, _} -> ?ERROR_UNAUTHORIZED
+                {error, _} = Error -> Error
             end
     end.
 
