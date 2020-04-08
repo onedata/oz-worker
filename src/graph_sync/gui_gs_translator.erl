@@ -46,7 +46,8 @@ handshake_attributes(_Client) ->
         <<"zoneDomain">> => oz_worker:get_domain(),
         <<"serviceVersion">> => oz_worker:get_release_version(),
         <<"serviceBuildVersion">> => oz_worker:get_build_version(),
-        <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle)
+        <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle),
+        <<"maxTemporaryTokenTtl">> => oz_worker:get_env(max_temporary_token_ttl, 604800) % 1 week
     }.
 
 
@@ -65,10 +66,61 @@ translate_value(_, #gri{aspect = TokenType}, Token) when
     TokenType == space_support_token;
     TokenType == provider_registration_token ->
 
-    {ok, Serialized} = tokens:serialize(Token),
-    Serialized;
+    serialize_token(Token);
+translate_value(_, #gri{aspect = {user_temporary_token, _}}, Token) ->
+    serialize_token(Token);
 translate_value(_, #gri{type = od_harvester, aspect = {query, _}}, Response) ->
     Response;
+translate_value(_, #gri{type = od_token, aspect = examine}, Response) ->
+    #{
+        <<"onezoneDomain">> := OnezoneDomain,
+        <<"id">> := Id,
+        <<"persistence">> := Persistence,
+        <<"subject">> := Subject,
+        <<"type">> := Type,
+        <<"caveats">> := Caveats
+    } = Response,
+    TokenTypeJson = case Type of
+        ?INVITE_TOKEN(InviteType, EntityId) ->
+            InviteTargetNameData = case {InviteType, EntityId} of
+                {?USER_JOIN_GROUP, GroupId} ->
+                    #{<<"groupName">> => lookup_name(group_logic, GroupId)};
+                {?GROUP_JOIN_GROUP, GroupId} ->
+                    #{<<"groupName">> => lookup_name(group_logic, GroupId)};
+                {?USER_JOIN_SPACE, SpaceId} ->
+                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                {?GROUP_JOIN_SPACE, SpaceId} ->
+                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                {?SUPPORT_SPACE, SpaceId} ->
+                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                {?HARVESTER_JOIN_SPACE, SpaceId} ->
+                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                {?REGISTER_ONEPROVIDER, UserId} ->
+                    #{<<"userName">> => lookup_name(user_logic, get_full_name, UserId)};
+                {?USER_JOIN_CLUSTER, ClusterId} ->
+                    #{<<"clusterName">> => lookup_name(cluster_logic, ClusterId)};
+                {?GROUP_JOIN_CLUSTER, ClusterId} ->
+                    #{<<"clusterName">> => lookup_name(cluster_logic, ClusterId)};
+                {?USER_JOIN_HARVESTER, HarvesterId} ->
+                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
+                {?GROUP_JOIN_HARVESTER, HarvesterId} ->
+                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
+                {?SPACE_JOIN_HARVESTER, HarvesterId} ->
+                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)}
+            end,
+            #{<<"inviteToken">> := Json} = token_type:to_json(Type),
+            #{<<"inviteToken">> => maps:merge(Json, InviteTargetNameData)};
+        _ ->
+            token_type:to_json(Type)
+    end,
+    #{
+        <<"onezoneDomain">> => OnezoneDomain,
+        <<"id">> => Id,
+        <<"persistence">> => Persistence,
+        <<"subject">> => aai:subject_to_json(Subject),
+        <<"type">> => TokenTypeJson,
+        <<"caveats">> => [caveats:to_json(C) || C <- Caveats]
+    };
 
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n
@@ -518,12 +570,13 @@ translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name
 %% @private
 -spec translate_provider(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_provider(#gri{type = od_provider, aspect = current_time}, TimeMillis) ->
+    #{<<"timeMillis">> => TimeMillis};
 translate_provider(#gri{type = od_provider, aspect = instance, scope = private}, {_Provider, RootToken}) ->
     % This covers provider creation via Graph Sync, in contrast to the get
     % request that does not return the root token
-    {ok, Serialized} = tokens:serialize(RootToken),
     #{
-        <<"providerRootToken">> => Serialized
+        <<"providerRootToken">> => serialize_token(RootToken)
     };
 translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Provider) ->
     #od_provider{
@@ -637,7 +690,7 @@ translate_token(#gri{aspect = instance}, TokenData) ->
         <<"caveats">> => [caveats:to_json(C) || C <- Caveats],
         <<"metadata">> => Metadata,
         <<"revoked">> => Revoked,
-        <<"token">> => element(2, {ok, _} = tokens:serialize(Token))
+        <<"token">> => serialize_token(Token)
     }.
 
 
@@ -1037,3 +1090,24 @@ translate_creator(?SUB(Type, Id)) -> #{
     <<"creatorType">> => atom_to_binary(Type, utf8),
     <<"creatorId">> => utils:undefined_to_null(Id)
 }.
+
+
+%% @private
+-spec serialize_token(tokens:token()) -> tokens:serialized().
+serialize_token(Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    Serialized.
+
+
+%% @private
+-spec lookup_name(module(), gri:entity_id()) -> binary() | null.
+lookup_name(LogicModule, EntityId) ->
+    lookup_name(LogicModule, get_name, EntityId).
+
+%% @private
+-spec lookup_name(module(), Function :: atom(), gri:entity_id()) -> binary() | null.
+lookup_name(LogicModule, Function, EntityId) ->
+    case LogicModule:Function(?ROOT, EntityId) of
+        {ok, Name} -> Name;
+        _ -> null
+    end.
