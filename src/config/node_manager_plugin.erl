@@ -21,8 +21,9 @@
 -export([installed_cluster_generation/0]).
 -export([oldest_known_cluster_generation/0]).
 -export([app_name/0, cm_nodes/0, db_nodes/0]).
--export([listeners/0, modules_with_args/0]).
--export([before_init/1, after_init/1]).
+-export([listeners/0]).
+-export([upgrade_essential_workers/0, custom_workers/0]).
+-export([before_init/1, on_cluster_ready/0]).
 -export([upgrade_cluster/1]).
 -export([handle_call/3, handle_cast/2]).
 
@@ -104,11 +105,19 @@ listeners() -> [
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Overrides {@link node_manager_plugin_default:modules_with_args/0}.
+%% List of workers modules with configs that should be started before upgrade.
 %% @end
 %%--------------------------------------------------------------------
--spec modules_with_args() -> Models :: [{atom(), [any()]}].
-modules_with_args() ->
+-spec upgrade_essential_workers() -> [{module(), [any()]}].
+upgrade_essential_workers() -> [].
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:custom_workers/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec custom_workers() -> Models :: [{atom(), [any()]}].
+custom_workers() ->
     [{gs_worker, [
         {supervisor_flags, gs_worker:supervisor_flags()}
     ]}].
@@ -133,12 +142,12 @@ before_init([]) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Overrides {@link node_manager_plugin_default:after_init/1}.
+%% Overrides {@link node_manager_plugin_default:on_cluster_ready/1}.
 %% This callback is executed on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec after_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
-after_init([]) ->
+-spec on_cluster_ready() -> Result :: ok | {error, Reason :: term()}.
+on_cluster_ready() ->
     try
         % Logic run on every node of the cluster
         onezone_plugins:init(),
@@ -251,7 +260,7 @@ is_dedicated_node(Identifier) ->
 %%--------------------------------------------------------------------
 -spec dedicated_node(Identifier :: atom()) -> node().
 dedicated_node(Identifier) ->
-    consistent_hashing:get_node(Identifier).
+    consistent_hashing:get_assigned_node(Identifier).
 
 
 %%--------------------------------------------------------------------
