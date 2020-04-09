@@ -91,10 +91,7 @@ is_online(ProviderId) ->
 %%--------------------------------------------------------------------
 -spec close_all(od_provider:id()) -> ok.
 close_all(ProviderId) ->
-    Connections = get_all(ProviderId),
-    lists:foreach(fun(Connection) ->
-        gs_server:terminate_connection(Connection)
-    end, Connections).
+    lists:foreach(fun gs_server:terminate_connection/1, get_all(ProviderId)).
 
 %%%===================================================================
 %%% Internal functions
@@ -114,7 +111,8 @@ update(ProviderId, ConnectionsDiff) ->
     },
     case datastore_model:update(?CTX, ProviderId, Diff, Default) of
         {ok, #document{value = #provider_connections{connections = Connections}}} ->
-            {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
+            % Update can fail, e.g. when the provider has been deregistered.
+            od_provider:update(ProviderId, fun(Provider) ->
                 {ok, Provider#od_provider{last_activity = time_utils:cluster_time_seconds()}}
             end),
             {ok, length(Connections)};
