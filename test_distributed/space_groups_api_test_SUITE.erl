@@ -714,6 +714,8 @@ get_eff_group_test(Config) ->
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     oz_test_utils:support_space(Config, P1, S1),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
             GroupDetailsBinary = GroupDetails#{
