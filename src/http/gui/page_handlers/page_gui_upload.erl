@@ -105,7 +105,7 @@ validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
     harvester_logic:exists(HarvesterId) orelse throw(?ERROR_NOT_FOUND),
     case token_auth:authenticate_for_rest_interface(Req) of
         {true, ?USER(UserId) = Auth} ->
-            ensure_unlimited_api_authorization(Auth),
+            ensure_authorized_to_upload_gui(Auth, ?HARVESTER_GUI, HarvesterId),
             case harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_UPDATE)
                 orelse user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_UPDATE) of
                 true ->
@@ -139,7 +139,7 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
 
     case token_auth:authenticate_for_rest_interface(Req) of
         {true, ?PROVIDER(ClusterId) = Auth} ->
-            ensure_unlimited_api_authorization(Auth),
+            ensure_authorized_to_upload_gui(Auth, GuiType, ClusterId),
             ReleaseVersion;
         {true, _} ->
             throw(?ERROR_FORBIDDEN);
@@ -153,14 +153,29 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Ensures that presented auth does not include any API limitations. This check
-%% is an exception compared to other page handlers, which either are public or
-%% depend on cookie session (in those cases such check is not needed).
+%% Ensures that presented auth allows to upload certain GUI. This is required as
+%% the GUI upload logic does not pass through entity_logic. The upload
+%% operations do not have any specific GRI aspect, hence general instance update
+%% operation is checked.
+%% This check is an exception compared to other page handlers, which either are
+%% public or depend on cookie session (in those cases such check is not needed).
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_unlimited_api_authorization(aai:auth()) -> ok | no_return().
-ensure_unlimited_api_authorization(Auth) ->
-    case api_auth:ensure_unlimited(Auth) of
+-spec ensure_authorized_to_upload_gui(aai:auth(), onedata:gui(), gui_static:gui_id()) ->
+    ok | no_return().
+ensure_authorized_to_upload_gui(Auth, ?OP_WORKER_GUI, ProviderId) ->
+    ensure_authorized_regarding_api_caveats(Auth, update, ?GRI(od_cluster, ProviderId, instance, private));
+ensure_authorized_to_upload_gui(Auth, ?ONEPANEL_GUI, ProviderId) ->
+    ensure_authorized_regarding_api_caveats(Auth, update, ?GRI(od_cluster, ProviderId, instance, private));
+ensure_authorized_to_upload_gui(Auth, ?HARVESTER_GUI, HarvesterId) ->
+    ensure_authorized_regarding_api_caveats(Auth, update, ?GRI(od_harvester, HarvesterId, instance, private)).
+
+
+%% @private
+-spec ensure_authorized_regarding_api_caveats(aai:auth(), entity_logic:operation(), gri:gri()) ->
+    ok | no_return().
+ensure_authorized_regarding_api_caveats(Auth, Operation, GRI) ->
+    case api_auth:check_authorization(Auth, ?OZ_WORKER, Operation, GRI) of
         ok -> ok;
         {error, _} = Error -> throw(Error)
     end.
