@@ -182,7 +182,7 @@ get_user_as_provider(_Config) ->
         eligible_subjects = [?SUB(?ONEPROVIDER, ProviderId)],
         operation = get,
         gri = ?GRI(od_user, UserId, instance, protected),
-        services_allowed_to_call_this_api = [?OZ_WORKER, ?OZ_PANEL, ?OP_WORKER, ?OP_PANEL],
+        services_allowed_to_call_this_api = [?OZ_WORKER, ?OP_WORKER, ?OP_PANEL],
         available_with_data_access_caveats = true,
         logic_call_args = {provider_logic, get_eff_user, [auth, ProviderId, UserId]},
         rest_call_args = {get, [<<"/providers/">>, ProviderId, <<"/effective_users/">>, UserId], #{}},
