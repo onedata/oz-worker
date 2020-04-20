@@ -276,7 +276,6 @@ broadcast_dns_config() ->
     try
         DnsConfig = dns_config:build_config(),
 
-        {ok, Nodes} = node_manager:get_cluster_nodes(),
         lists:map(fun(Node) ->
             case Node == node() of
                 true -> ok = dns_config:insert_config(DnsConfig);
@@ -284,7 +283,7 @@ broadcast_dns_config() ->
                     {update_dns_config, DnsConfig},
                     timer:seconds(30))
             end
-        end, Nodes),
+        end, consistent_hashing:get_all_nodes()),
         ok
     catch
         Type:Message ->
