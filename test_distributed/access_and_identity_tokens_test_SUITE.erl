@@ -60,6 +60,10 @@
     eligible_subjects :: [aai:subject()],
     operation :: entity_logic:operation(),
     gri :: gri:gri(),
+    % Service caveats implicitly limit the allowed API - this list contains the list
+    % of all services that are allowed to perform such operation in case service
+    % caveat is present.
+    services_allowed_to_call_this_api :: [aai:service()],
     % Specifies if such operation is available if the auth token contains a data_access_caveat
     available_with_data_access_caveats :: boolean(),
     % Args should typically start with 'auth' atom, which is substituted for client's auth
@@ -149,6 +153,7 @@ create_user(_Config) ->
         eligible_subjects = [?SUB(user, AdminUserId)],
         operation = create,
         gri = ?GRI(od_user, undefined, instance, private),
+        services_allowed_to_call_this_api = [?OZ_WORKER],
         available_with_data_access_caveats = false,
         logic_call_args = {user_logic, create, [auth]},
         rest_call_args = {post, <<"/users">>, #{}},
@@ -162,6 +167,7 @@ get_user(_Config) ->
         eligible_subjects = [?SUB(user, UserId)],
         operation = get,
         gri = ?GRI(od_user, UserId, instance, protected),
+        services_allowed_to_call_this_api = [?OZ_WORKER, ?OZ_PANEL, ?OP_WORKER, ?OP_PANEL],
         available_with_data_access_caveats = true,
         logic_call_args = {user_logic, get_protected_data, [auth, UserId]},
         rest_call_args = {get, [<<"/users/">>, UserId], #{}},
@@ -176,6 +182,7 @@ get_user_as_provider(_Config) ->
         eligible_subjects = [?SUB(?ONEPROVIDER, ProviderId)],
         operation = get,
         gri = ?GRI(od_user, UserId, instance, protected),
+        services_allowed_to_call_this_api = [?OZ_WORKER, ?OP_WORKER, ?OP_PANEL],
         available_with_data_access_caveats = true,
         logic_call_args = {provider_logic, get_eff_user, [auth, ProviderId, UserId]},
         rest_call_args = {get, [<<"/providers/">>, ProviderId, <<"/effective_users/">>, UserId], #{}},
@@ -190,6 +197,7 @@ get_group(_Config) ->
         eligible_subjects = [?SUB(user, UserId)],
         operation = get,
         gri = ?GRI(od_group, GroupId, instance, protected),
+        services_allowed_to_call_this_api = [?OZ_WORKER, ?OP_WORKER],
         available_with_data_access_caveats = false,
         logic_call_args = {group_logic, get_protected_data, [auth, GroupId]},
         rest_call_args = {get, [<<"/groups/">>, GroupId], #{}},
@@ -207,6 +215,7 @@ get_group_as_provider(_Config) ->
         eligible_subjects = [?SUB(?ONEPROVIDER, ProviderId)],
         operation = get,
         gri = ?GRI(od_group, GroupId, instance, protected),
+        services_allowed_to_call_this_api = [?OZ_WORKER, ?OP_WORKER],
         available_with_data_access_caveats = false,
         logic_call_args = {provider_logic, get_eff_group, [auth, ProviderId, GroupId]},
         rest_call_args = {get, [<<"/providers/">>, ProviderId, <<"/effective_groups/">>, GroupId], #{}},
@@ -223,6 +232,7 @@ get_space(_Config) ->
         eligible_subjects = [?SUB(user, UserId)],
         operation = get,
         gri = ?GRI(od_space, SpaceId, instance, protected),
+        services_allowed_to_call_this_api = [?OZ_WORKER, ?OP_WORKER],
         available_with_data_access_caveats = true,
         logic_call_args = {space_logic, get_protected_data, [auth, SpaceId]},
         rest_call_args = {get, [<<"/spaces/">>, SpaceId], #{}},
@@ -237,6 +247,7 @@ get_space_as_provider(_Config) ->
         eligible_subjects = [?SUB(?ONEPROVIDER, ProviderId)],
         operation = get,
         gri = ?GRI(od_space, SpaceId, instance, protected),
+        services_allowed_to_call_this_api = [?OZ_WORKER, ?OP_WORKER],
         available_with_data_access_caveats = true,
         logic_call_args = {provider_logic, get_eff_space, [auth, ProviderId, SpaceId]},
         rest_call_args = {get, [<<"/providers/">>, ProviderId, <<"/spaces/">>, SpaceId], #{}},
@@ -255,6 +266,7 @@ update_user_privileges_in_cluster(_Config) ->
         eligible_subjects = [?SUB(user, ClusterAdmin), ?SUB(?ONEPROVIDER, ProviderId)],
         operation = update,
         gri = ?GRI(od_cluster, ClusterId, {user_privileges, ClusterMember}, private),
+        services_allowed_to_call_this_api = [?OZ_WORKER],
         available_with_data_access_caveats = false,
         logic_call_args = {cluster_logic, update_user_privileges, [auth, ClusterId, ClusterMember, Data]},
         rest_call_args = {patch, [<<"/clusters/">>, ClusterId, <<"/users/">>, ClusterMember, <<"/privileges">>], Data},
@@ -269,6 +281,7 @@ delete_user_admin_privileges(_Config) ->
         eligible_subjects = [?SUB(user, AdminUser)],
         operation = delete,
         gri = ?GRI(od_user, TargetUser, oz_privileges, private),
+        services_allowed_to_call_this_api = [?OZ_WORKER],
         available_with_data_access_caveats = false,
         logic_call_args = {user_logic, delete_oz_privileges, [auth, TargetUser]},
         rest_call_args = {delete, [<<"/users/">>, TargetUser, <<"/privileges">>], #{}},
@@ -988,9 +1001,9 @@ gen_correct_caveats(RequestSpec, RC) -> lists:flatten([
         undefined -> [];
         _ -> gen_correct_ip_based_caveats(RC)
     end,
-    case RC#request_context.service of
+    case gen_correct_service_caveat(RequestSpec, RC) of
         undefined -> [];
-        _ -> gen_correct_service_caveat(RC)
+        ServiceCaveat -> ServiceCaveat
     end,
     case RC#request_context.consumer of
         undefined -> [];
@@ -1018,7 +1031,7 @@ gen_correct_caveats(RequestSpec, RC) -> lists:flatten([
 
 gen_unverified_caveats(RequestSpec, RC) -> lists:flatten([
     #cv_time{valid_until = RC#request_context.current_timestamp - 1},
-    case gen_unverified_service_caveat(RC) of
+    case gen_unverified_service_caveat(RequestSpec, RC) of
         undefined -> [];
         ServiceCaveat -> ServiceCaveat
     end,
@@ -1055,16 +1068,24 @@ gen_unverified_caveats(RequestSpec, RC) -> lists:flatten([
 ]).
 
 
-gen_correct_service_caveat(Rc) ->
-    CorrectServices = gen_correct_services(Rc),
-    UnverifiedServices = gen_unverified_services(Rc),
-    #cv_service{whitelist = lists_utils:shuffle(lists:flatten([
-        lists_utils:random_sublist(CorrectServices, 1, all),
-        lists_utils:random_sublist(UnverifiedServices)
-    ]))}.
+gen_correct_service_caveat(_RequestSpec, #request_context{service = undefined}) ->
+    undefined;
+gen_correct_service_caveat(RequestSpec, Rc = #request_context{service = ?SERVICE(Type, _Id)}) ->
+    case lists:member(Type, RequestSpec#request_spec.services_allowed_to_call_this_api) of
+        false ->
+            % Adding a service caveat would cause implicit API limitations to block the operation
+            undefined;
+        true ->
+            CorrectServices = gen_correct_services(Rc),
+            UnverifiedServices = gen_unverified_services(RequestSpec, Rc),
+            #cv_service{whitelist = lists_utils:shuffle(lists:flatten([
+                lists_utils:random_sublist(CorrectServices, 1, all),
+                lists_utils:random_sublist(UnverifiedServices)
+            ]))}
+    end.
 
-gen_unverified_service_caveat(Rc) ->
-    case gen_unverified_services(Rc) of
+gen_unverified_service_caveat(RequestSpec, Rc) ->
+    case gen_unverified_services(RequestSpec, Rc) of
         [] ->
             undefined;
         UnverifiedServices ->
@@ -1078,11 +1099,22 @@ gen_correct_services(#request_context{service = ?SERVICE(Type, Id)}) ->
         ?SERVICE(Type, <<"*">>)
     ].
 
-gen_unverified_services(#request_context{subject = Subject, service = RequestService}) ->
+gen_unverified_services(RequestSpec, #request_context{subject = Subject, service = RequestService}) ->
     EligibleTypes = eligible_service_types(Subject),
     UnverifiedTypes = case RequestService of
-        undefined -> EligibleTypes -- [?OZ_WORKER]; % If not specified, service defaults to OZ_WORKER
-        ?SERVICE(Type, _) -> EligibleTypes -- [Type]
+        undefined ->
+            % If not specified, service defaults to OZ_WORKER
+            EligibleTypes -- [?OZ_WORKER];
+        ?SERVICE(Type, _) ->
+            case lists:member(Type, RequestSpec#request_spec.services_allowed_to_call_this_api) of
+                true ->
+                    % Any non-matching service should cause verification error
+                    EligibleTypes -- [Type];
+                false ->
+                    % Even a matching service should cause verification error, as
+                    % the operation should be blocked by implicit API caveats
+                    EligibleTypes
+            end
     end,
     lists:map(fun(ServiceType) ->
         Service = set_up_service(Subject, ServiceType),
