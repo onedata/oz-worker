@@ -288,8 +288,7 @@ testmaster_save_everywhere(Config, Key, Value) ->
 
 
 onezone_save_everywhere(Key, Value) ->
-    {ok, Nodes} = node_manager:get_cluster_nodes(),
-    rpc:multicall(Nodes, simple_cache, put, [Key, Value]),
+    rpc:multicall(consistent_hashing:get_all_nodes(), simple_cache, put, [Key, Value]),
     ok.
 
 

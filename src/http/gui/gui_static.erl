@@ -64,7 +64,7 @@
 -define(CUSTOM_STATIC_ROOT, oz_worker:get_env(gui_custom_static_root)).
 -define(LEGACY_CUSTOM_STATIC_ROOT, oz_worker:get_env(legacy_gui_custom_static_root)).
 
--define(CLUSTER_NODES, element(2, {ok, _} = node_manager:get_cluster_nodes())).
+-define(CLUSTER_NODES, consistent_hashing:get_all_nodes()).
 
 -define(CRITICAL_SECTION(LockId, Fun), critical_section:run({gui_static, LockId}, Fun)).
 
