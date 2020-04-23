@@ -4,6 +4,17 @@
 CHANGELOG
 ---------
 
+### 19.02.2
+
+* VFS-6210 Move plugins to the data dir (/var/lib/oz_worker/) rather than etc dir as they should not be persisted between upgrades
+* VFS-6129 Increased timeout in elasticsearch plugin
+* VFS-6019 Add better status tracking of user and provider connections, display it in db_browser
+* VFS-6060 Fixed public access to gui plugin config in harvester
+* VFS-6019 Add db_browser module for viewing Onezone database contents via console
+* VFS-6035 Add VM option that forbids terminating the node with Ctrl + C
+* VFS-6011 Update DNS SOA serial on each config generation
+
+
 ### 19.02.1
 
 * VFS-6019 Add db_browser.sh script for viewing Onezone database contents (admin tool)
