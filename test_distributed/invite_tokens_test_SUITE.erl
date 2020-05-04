@@ -451,41 +451,6 @@ support_space_token(_Config) ->
                     ozt_providers:create()
             end,
 
-            % Randomize if the space is already supported by the provider, in such
-            % case applying support parameters should work in different way.
-            % However, this might be called after the target space is deleted during
-            % tests - in such case do not set up an existing support.
-            case {ozt_spaces:exists(SpaceId), rand:uniform(2)} of
-                {false, _} ->
-                    ok;
-                {_, 1} ->
-                    ok;
-                {true, 2} ->
-                    OtherStorage = datastore_key:new(),
-                    ozt_providers:ensure_storage(ProviderId, OtherStorage),
-                    OzAdmin = ozt_users:create_admin(),
-                    ozt_providers:support_space_using_token(ProviderId, OtherStorage, ozt_spaces:create_support_token(
-                        SpaceId, OzAdmin, space_support:build_parameters(
-                            lists_utils:random_element([global, none] -- [TokenDataWrite]),
-                            lists_utils:random_element([eager, lazy, none] -- [TokenMetaReplication])
-                        )
-                    ))
-            end,
-
-            % Regardless of randomly added support in this run, the space might
-            % already be supported as prepare_consume_request function is called
-            % multiple times during a test
-            IsAlreadySupported = case ozt_spaces:exists(SpaceId) of
-                false ->
-                    false;
-                true ->
-                    #od_space{support_parameters = CurrentParamsPerProvider} = ozt_spaces:get(SpaceId),
-                    case space_support:lookup_parameters_for_provider(CurrentParamsPerProvider, ProviderId) of
-                        {ok, Params} -> {true, Params};
-                        error -> false
-                    end
-            end,
-
             % Use a storage with the same id as provider for easier test code
             StorageId = ProviderId,
             ozt_providers:ensure_storage(ProviderId, StorageId),
@@ -496,19 +461,7 @@ support_space_token(_Config) ->
             #consume_request{
                 logic_call_args = {storage_logic, support_space, [Auth, StorageId, Data]},
                 rest_call_args = not_available,
-                graph_sync_args = {?GRI(od_storage, StorageId, support, private), undefined, Data},
-                validate_result_fun = fun() ->
-                    #od_space{support_parameters = SupportParameters} = ozt_spaces:get(SpaceId),
-                    % If the space was already supported, support parameters should be inherited
-                    % regardless of the parameters in the token. Otherwise, token parameters
-                    % are taken.
-                    ExpParameters = case IsAlreadySupported of
-                        false -> space_support:build_parameters(TokenDataWrite, TokenMetaReplication);
-                        {true, PreviousParameters} -> PreviousParameters
-                    end,
-                    ?assertEqual(ExpParameters, maps:get(ProviderId, SupportParameters)),
-                    true
-                end
+                graph_sync_args = {?GRI(od_storage, StorageId, support, private), undefined, Data}
             }
         end,
 

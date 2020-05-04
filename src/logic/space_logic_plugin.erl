@@ -101,8 +101,6 @@ operation_supported(get, storages, private) -> true;
 operation_supported(update, instance, private) -> true;
 operation_supported(update, {user_privileges, _}, private) -> true;
 operation_supported(update, {group_privileges, _}, private) -> true;
-operation_supported(update, {support_parameters, _}, private) -> true;
-operation_supported(update, {dbsync_state, _}, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {user, _}, private) -> true;
@@ -313,17 +311,13 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Space) ->
     {ok, Space};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{
-        name = Name, support_parameters = SupportParameters,
-        dbsync_state = DBSyncState, support_state = SupportState,
+        name = Name,
         creation_time = CreationTime, creator = Creator,
         shares = Shares
     } = Space,
     {ok, #{
         <<"name">> => Name,
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
-        <<"supportParameters">> => SupportParameters,
-        <<"dbsyncState">> => DBSyncState,
-        <<"supportState">> => SupportState,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator,
         <<"sharesCount">> => length(Shares)
@@ -393,32 +387,7 @@ update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {group_privileges, GroupI
         od_group, GroupId,
         od_space, SpaceId,
         {PrivsToGrant, PrivsToRevoke}
-    );
-
-update(#el_req{gri = #gri{id = SpaceId, aspect = {support_parameters, ProviderId}}, data = Data}) ->
-    {ok, _} = od_space:update(SpaceId, fun(Space = #od_space{support_parameters = ParametersPerProvider}) ->
-        {ok, PreviousForProvider} = space_support:lookup_parameters_for_provider(ParametersPerProvider, ProviderId),
-        {ok, Space#od_space{support_parameters = space_support:update_parameters_for_provider(
-            ParametersPerProvider, ProviderId, space_support:build_parameters(
-                maps:get(<<"dataWrite">>, Data, space_support:get_data_write(PreviousForProvider)),
-                maps:get(<<"metadataReplication">>, Data, space_support:get_metadata_replication(PreviousForProvider))
-            )
-        )}}
-    end),
-    ok;
-
-update(#el_req{gri = #gri{id = SpaceId, aspect = {dbsync_state, ProviderId}}, data = Data}) ->
-    SeqPerProvider = maps:get(<<"seqPerProvider">>, Data),
-    {ok, _} = od_space:update(SpaceId, fun(Space) ->
-        #od_space{dbsync_state = DBSyncStatePerProvider, eff_providers = Providers} = Space,
-        DBSyncState = space_support:build_dbsync_state(
-            time_utils:cluster_time_seconds(), SeqPerProvider, maps:keys(Providers)
-        ),
-        {ok, Space#od_space{dbsync_state = space_support:update_dbsync_state_for_provider(
-            DBSyncStatePerProvider, ProviderId, DBSyncState
-        )}}
-    end),
-    ok.
+    ).
 
 
 %%--------------------------------------------------------------------
@@ -557,12 +526,6 @@ exists(#el_req{gri = #gri{aspect = {provider, ProviderId}}}, Space) ->
 
 exists(#el_req{gri = #gri{aspect = {harvester, HarvesterId}}}, Space) ->
     entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, Space);
-
-exists(#el_req{gri = #gri{aspect = {support_parameters, ProviderId}}}, Space) ->
-    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Space);
-
-exists(#el_req{gri = #gri{aspect = {dbsync_state, ProviderId}}}, Space) ->
-    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Space);
 
 % All other aspects exist if space record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_space{}) ->
@@ -716,12 +679,6 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = {user_privileges
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {group_privileges, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_SET_PRIVILEGES);
-
-authorize(Req = #el_req{operation = update, gri = #gri{aspect = {support_parameters, _}}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_UPDATE);
-
-authorize(Req = #el_req{auth = ?PROVIDER(PrId), operation = update, gri = #gri{aspect = {dbsync_state, PrId}}}, Space) ->
-    auth_by_support(Req, Space);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_DELETE);
@@ -945,33 +902,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}})
     };
 
 validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}}) ->
-    validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}});
-
-validate(#el_req{operation = update, gri = #gri{aspect = {support_parameters, _}}}) ->
-    #{
-        at_least_one => #{
-            <<"dataWrite">> => {atom, [global, none]},
-            <<"metadataReplication">> => {atom, [eager, lazy, none]}
-        }
-    };
-
-validate(#el_req{operation = update, gri = #gri{aspect = {dbsync_state, _}}}) ->
-    #{
-        required => #{
-            <<"seqPerProvider">> => {json, fun(Json) ->
-                try
-                    maps:map(fun(ProviderId, Seq) ->
-                        true = is_binary(ProviderId),
-                        true = is_integer(Seq),
-                        true = (Seq >= 0)
-                    end, Json),
-                    true
-                catch _:_ ->
-                    false
-                end
-            end}
-        }
-    }.
+    validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}}).
 
 %%%===================================================================
 %%% Internal functions
