@@ -28,8 +28,7 @@
 ]).
 -export([
     upgrade_from_19_02_x_tokens/1,
-    upgrade_from_19_02_x_storages/1,
-    upgrade_from_19_02_x_space_support_info/1
+    upgrade_from_19_02_x_storages/1
 ]).
 
 %%%===================================================================
@@ -38,8 +37,7 @@
 
 all() -> ?ALL([
     upgrade_from_19_02_x_tokens,
-    upgrade_from_19_02_x_storages,
-    upgrade_from_19_02_x_space_support_info
+    upgrade_from_19_02_x_storages
 ]).
 
 
@@ -243,82 +241,6 @@ upgrade_from_19_02_x_storages(Config) ->
         ?assertEqual([{od_storage, P2}], oz_test_utils:call_oz(
             Config, entity_graph, get_intermediaries, [bottom_up, od_space, SpaceId, P2Doc#document.value]))
     end, SpacesMap2).
-
-
-upgrade_from_19_02_x_space_support_info(Config) ->
-    {ok, SpaceAlpha} = oz_test_utils:create_space(Config, ?ROOT),
-    {ok, SpaceBeta} = oz_test_utils:create_space(Config, ?ROOT),
-    {ok, SpaceGamma} = oz_test_utils:create_space(Config, ?ROOT),
-    {ok, SpaceDelta} = oz_test_utils:create_space(Config, ?ROOT),
-    {ok, SpaceOmega} = oz_test_utils:create_space(Config, ?ROOT),
-
-    {P1, _} = create_legacy_provider_with_spaces(Config, [SpaceAlpha, SpaceBeta, SpaceGamma]),
-    {P2, _} = create_legacy_provider_with_spaces(Config, [SpaceAlpha, SpaceGamma, SpaceDelta]),
-    {P3, _} = create_legacy_provider_with_spaces(Config, [SpaceGamma, SpaceDelta, SpaceOmega]),
-
-    ?assertEqual({ok, 2}, oz_test_utils:call_oz(Config, node_manager_plugin, upgrade_cluster, [1])),
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-
-    Timestamp = oz_test_utils:cluster_time_seconds(Config),
-    DefaultParameters = space_support:build_parameters(global, eager),
-
-    {ok, AlphaRecord} = oz_test_utils:get_space(Config, SpaceAlpha),
-    {ok, BetaRecord} = oz_test_utils:get_space(Config, SpaceBeta),
-    {ok, GammaRecord} = oz_test_utils:get_space(Config, SpaceGamma),
-    {ok, DeltaRecord} = oz_test_utils:get_space(Config, SpaceDelta),
-    {ok, OmegaRecord} = oz_test_utils:get_space(Config, SpaceOmega),
-
-    ?assertEqual(AlphaRecord#od_space.support_parameters, #{
-        P1 => DefaultParameters, P2 => DefaultParameters
-    }),
-    ?assertEqual(BetaRecord#od_space.support_parameters, #{
-        P1 => DefaultParameters
-    }),
-    ?assertEqual(GammaRecord#od_space.support_parameters, #{
-        P1 => DefaultParameters, P2 => DefaultParameters, P3 => DefaultParameters
-    }),
-    ?assertEqual(DeltaRecord#od_space.support_parameters, #{
-        P2 => DefaultParameters, P3 => DefaultParameters
-    }),
-    ?assertEqual(OmegaRecord#od_space.support_parameters, #{
-        P3 => DefaultParameters
-    }),
-
-    ?assertEqual(AlphaRecord#od_space.dbsync_state, #{
-        P1 => {Timestamp, #{P1 => 0, P2 => 0}},
-        P2 => {Timestamp, #{P1 => 0, P2 => 0}}
-    }),
-    ?assertEqual(BetaRecord#od_space.dbsync_state, #{
-        P1 => {Timestamp, #{P1 => 0}}
-    }),
-    ?assertEqual(GammaRecord#od_space.dbsync_state, #{
-        P1 => {Timestamp, #{P1 => 0, P2 => 0, P3 => 0}},
-        P2 => {Timestamp, #{P1 => 0, P2 => 0, P3 => 0}},
-        P3 => {Timestamp, #{P1 => 0, P2 => 0, P3 => 0}}
-    }),
-    ?assertEqual(DeltaRecord#od_space.dbsync_state, #{
-        P2 => {Timestamp, #{P2 => 0, P3 => 0}},
-        P3 => {Timestamp, #{P2 => 0, P3 => 0}}
-    }),
-    ?assertEqual(OmegaRecord#od_space.dbsync_state, #{
-        P3 => {Timestamp, #{P3 => 0}}
-    }),
-
-    ?assertEqual(AlphaRecord#od_space.support_state, #{
-        P1 => active, P2 => active
-    }),
-    ?assertEqual(BetaRecord#od_space.support_state, #{
-        P1 => active
-    }),
-    ?assertEqual(GammaRecord#od_space.support_state, #{
-        P1 => active, P2 => active, P3 => active
-    }),
-    ?assertEqual(DeltaRecord#od_space.support_state, #{
-        P2 => active, P3 => active
-    }),
-    ?assertEqual(OmegaRecord#od_space.support_state, #{
-        P3 => active
-    }).
 
 %%%===================================================================
 %%% Helper functions

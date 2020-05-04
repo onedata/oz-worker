@@ -239,9 +239,6 @@ get_record_struct(7) ->
     % creator field - nested #subject{} record and encoding changed
     % * removed field - providers
     % * new field - storages
-    % * new field - support_parameters
-    % * new field - dbsync_state
-    % * new field - support_state
     {record, [
         {name, string},
 
@@ -255,13 +252,6 @@ get_record_struct(7) ->
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
         {eff_providers, #{string => {integer, [{atom, string}]}}}, % Modified field
         {eff_harvesters, #{string => [{atom, string}]}},
-
-        {support_parameters, #{string => {record, [
-            {data_write, atom},
-            {metadata_replication, atom}
-        ]}}},  % New field
-        {dbsync_state, #{string => {integer, #{string => integer}}}},  % New field
-        {support_state, #{string => atom}},  % New field
 
         {creation_time, integer},
         % nested #subject{} record was extended and is now encoded as string
@@ -565,11 +555,6 @@ upgrade_record(6, Space) ->
         %% Eff providers are recalculated during cluster upgrade procedure
         eff_providers = #{},
         eff_harvesters = EffHarvesters,
-
-        %% Support related info is recalculated during cluster upgrade procedure
-        support_parameters = #{},
-        dbsync_state = #{},
-        support_state = #{},
 
         creation_time = CreationTime,
         creator = upgrade_common:upgrade_subject_record(Creator),

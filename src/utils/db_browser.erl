@@ -370,47 +370,12 @@ format_collection({space_shares, SpaceId}, SortBy, SortOrder) ->
 
 format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_space{
-        eff_providers = EffProviders,
-        support_parameters = ParametersPerProvider,
-        dbsync_state = DBSyncStatePerProvider,
-        support_state = SupportStatePerProvider
+        eff_providers = EffProviders
     }}} = od_space:get(SpaceId),
     format_table(providers, maps:keys(EffProviders), SortBy, SortOrder, [id, last_activity, version, name, domain], [
         {support, byte_size, 11, fun(Doc) ->
             {Support, _} = maps:get(SpaceId, Doc#document.value#od_provider.eff_spaces),
             Support
-        end},
-        {dwrite_mrepl, text, 12, fun(#document{key = ProvId}) ->
-            {ok, Parameters} = space_support:lookup_parameters_for_provider(ParametersPerProvider, ProvId),
-            str_utils:format("~s,~s", [
-                space_support:get_data_write(Parameters),
-                space_support:get_metadata_replication(Parameters)
-            ])
-        end},
-        {support_state, text, 13, fun(#document{key = ProvId}) ->
-            {ok, SupportState} = space_support:lookup_support_state_for_provider(SupportStatePerProvider, ProvId),
-            SupportState
-        end},
-        {dbsync_state, text, 41, fun(#document{key = ProvId}) ->
-            {ok, {LastUpdate, _}} = space_support:lookup_dbsync_state_for_provider(DBSyncStatePerProvider, ProvId),
-            {KnownSeqs, AllSeqs} = lists:foldl(fun(OtherProvider, {AccKnown, AccAll}) ->
-                {Known, Latest} = try
-                    space_support:inspect_dbsync_state_between(DBSyncStatePerProvider, ProvId, OtherProvider)
-                catch _:_ ->
-                    {0, 0}
-                end,
-                {AccKnown + Known, AccAll + Latest}
-            end, {0, 0}, maps:keys(EffProviders)),
-            KnownPerCent = case AllSeqs of
-                0 -> 100;
-                _ -> KnownSeqs * 100 div AllSeqs
-            end,
-            TodayDate = format_date(time_utils:cluster_time_seconds()),
-            LastUpdateStr = case format_date(LastUpdate) of
-                TodayDate -> format_time(LastUpdate, hour_min_sec);
-                OtherDate -> OtherDate
-            end,
-            str_utils:format("~B/~B (~B%) @ ~s", [KnownSeqs, AllSeqs, KnownPerCent, LastUpdateStr])
         end}
     ]);
 
@@ -888,13 +853,10 @@ format_date(Timestamp) ->
 
 
 %% @private
--spec format_time(time_utils:seconds(), hour_min | hour_min_sec) -> string().
+-spec format_time(time_utils:seconds(), hour_min) -> string().
 format_time(Timestamp, hour_min) ->
     {_, {Hour, Minute, _}} = time_utils:epoch_to_datetime(Timestamp),
-    str_utils:format("~2..0B:~2..0B", [Hour, Minute]);
-format_time(Timestamp, hour_min_sec) ->
-    {_, {Hour, Minute, Second}} = time_utils:epoch_to_datetime(Timestamp),
-    str_utils:format("~2..0B:~2..0B:~2..0B", [Hour, Minute, Second]).
+    str_utils:format("~2..0B:~2..0B", [Hour, Minute]).
 
 
 %% @private

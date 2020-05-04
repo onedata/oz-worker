@@ -93,18 +93,12 @@ get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
 get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
     #{
         <<"name">> := Name,
-        <<"providers">> := Providers,
-        <<"supportParameters">> := Parameters,
-        <<"dbsyncState">> := SyncState,
-        <<"supportState">> := SupportState
+        <<"providers">> := Providers
     } = SpaceData,
     rest_translator:ok_body_reply(#{
         <<"spaceId">> => SpaceId,
         <<"name">> => Name,
-        <<"providers">> => Providers,
-        <<"supportParameters">> => space_support:parameters_per_provider_to_json(Parameters),
-        <<"dbsyncState">> => space_support:dbsync_state_per_provider_to_json(SyncState),
-        <<"supportState">> => space_support:support_state_per_provider_to_json(SupportState)
+        <<"providers">> => Providers
     });
 
 get_response(#gri{aspect = users}, Users) ->
