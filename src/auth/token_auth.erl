@@ -124,25 +124,27 @@ verify_access_token(#token{type = ReceivedTokenType}, _AuthCtx) ->
 %%--------------------------------------------------------------------
 -spec verify_identity_token(tokens:token(), aai:auth_ctx()) ->
     {ok, {aai:subject(), [caveats:caveat()]}} | errors:error().
-verify_identity_token(Token, AuthCtx) ->
-    TokenTypeCheck = case Token of
-        #token{type = ?IDENTITY_TOKEN} -> ok;
-        %% @todo VFS-6098 access tokens are still accepted as identity tokens
-        %% for backward compatibility with older providers
-        #token{type = ?ACCESS_TOKEN, subject = ?SUB(?ONEPROVIDER)} -> ok;
-        #token{type = Type} -> ?ERROR_NOT_AN_IDENTITY_TOKEN(Type)
-    end,
-    case TokenTypeCheck of
-        ok ->
-            case verify_token(Token, AuthCtx#auth_ctx{scope = identity_token}) of
-                {ok, #auth{subject = Subject, caveats = Caveats}} ->
-                    {ok, {Subject, Caveats}};
-                {error, _} = Err1 ->
-                    Err1
-            end;
-        {error, _} = Err2 ->
-            Err2
-    end.
+verify_identity_token(#token{version = 1, type = ?ACCESS_TOKEN} = Token, AuthCtx) ->
+    %% @todo VFS-6098 legacy provider access tokens are still accepted as
+    %% identity tokens for backward compatibility with older providers
+    case verify_token(Token, AuthCtx#auth_ctx{scope = identity_token}) of
+        {ok, #auth{subject = ?SUB(?ONEPROVIDER, _) = Subject, caveats = Caveats}} ->
+            {ok, {Subject, Caveats}};
+        {ok, _} ->
+            % user access tokens are never accepted as identity tokens
+            ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN);
+        {error, _} = Error ->
+            Error
+    end;
+verify_identity_token(#token{type = ?IDENTITY_TOKEN} = Token, AuthCtx) ->
+    case verify_token(Token, AuthCtx#auth_ctx{scope = identity_token}) of
+        {ok, #auth{subject = Subject, caveats = Caveats}} ->
+            {ok, {Subject, Caveats}};
+        {error, _} = Error ->
+            Error
+    end;
+verify_identity_token(#token{type = ReceivedTokenType}, _AuthCtx) ->
+    ?ERROR_NOT_AN_IDENTITY_TOKEN(ReceivedTokenType).
 
 
 %%--------------------------------------------------------------------
