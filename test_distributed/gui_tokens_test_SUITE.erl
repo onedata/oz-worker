@@ -168,48 +168,48 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
         oz_test_utils:request_gui_token(Config, Cookie, GuiType, ClusterId)
     end,
 
-    {ok, UserId} = oz_test_utils:create_user(Config),
-    {ok, {Session, Cookie}} = oz_test_utils:log_in(Config, UserId),
+    {ok, User1} = oz_test_utils:create_user(Config),
+    {ok, {SessionU1, CookieU1}} = oz_test_utils:log_in(Config, User1),
 
-    {ok, SerializedToken1} = ?assertMatch({ok, _}, AcquireGuiToken(Cookie, ?OZ_WORKER_GUI, ?ONEZONE_CLUSTER_ID)),
-    {ok, Token1} = tokens:deserialize(SerializedToken1),
+    {ok, OzwTokenU1Serialized} = ?assertMatch({ok, _}, AcquireGuiToken(CookieU1, ?OZ_WORKER_GUI, ?ONEZONE_CLUSTER_ID)),
+    {ok, OzwTokenU1} = tokens:deserialize(OzwTokenU1Serialized),
     ?assertMatch(
-        {true, ?EXP_AUTH(UserId, Session)},
-        verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
+        {true, ?EXP_AUTH(User1, SessionU1)},
+        verify_token(Config, OzwTokenU1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
     ),
 
     % The user will belong to the cluster as the provider admin
-    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config, UserId, ?UNIQUE_STRING),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, User1, ?UNIQUE_STRING),
 
     % The user is a member of provider cluster, but is not supported by the provider,
     % so he can't generate a token for the provider GUI.
-    ?assertMatch({ok, _}, AcquireGuiToken(Cookie, ?ONEPANEL_GUI, ProviderId)),
+    {ok, OppTokenU1Serialized} = ?assertMatch({ok, _}, AcquireGuiToken(CookieU1, ?ONEPANEL_GUI, ProviderId)),
     ?assertMatch(
         ?ERROR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_WORKER, ProviderId)),
-        AcquireGuiToken(Cookie, ?OP_WORKER_GUI, ProviderId)
+        AcquireGuiToken(CookieU1, ?OP_WORKER_GUI, ProviderId)
     ),
 
-    {ok, Space1} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
+    {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User1), ?UNIQUE_STRING),
     oz_test_utils:support_space_by_provider(Config, ProviderId, Space1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     % Now it should be possible for the user to generate a token
-    {ok, SerializedToken2} = ?assertMatch({ok, _}, AcquireGuiToken(Cookie, ?OP_WORKER_GUI, ProviderId)),
-    {ok, Token2} = tokens:deserialize(SerializedToken2),
+    {ok, OpwTokenU1Serialized} = ?assertMatch({ok, _}, AcquireGuiToken(CookieU1, ?OP_WORKER_GUI, ProviderId)),
+    {ok, OpwTokenU1} = tokens:deserialize(OpwTokenU1Serialized),
 
     ?assertMatch(
-        {true, ?EXP_AUTH(UserId, Session)},
-        verify_token(Config, Token2, ?OPW_AUD(ProviderId))
+        {true, ?EXP_AUTH(User1, SessionU1)},
+        verify_token(Config, OpwTokenU1, ?OPW_AUD(ProviderId))
     ),
-    ?assertUnverifiedService(?OPW_AUD(ProviderId), verify_token(Config, Token2, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
-    ?assertUnverifiedService(?OZW_AUD(?ONEZONE_CLUSTER_ID), verify_token(Config, Token1, ?OPW_AUD(ProviderId))),
+    ?assertUnverifiedService(?OPW_AUD(ProviderId), verify_token(Config, OpwTokenU1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
+    ?assertUnverifiedService(?OZW_AUD(?ONEZONE_CLUSTER_ID), verify_token(Config, OzwTokenU1, ?OPW_AUD(ProviderId))),
 
     % A user not belonging to the provider/cluster cannot generate GUI tokens for it
     {ok, User2} = oz_test_utils:create_user(Config),
-    {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, User2),
+    {ok, {SessionU2, CookieU2}} = oz_test_utils:log_in(Config, User2),
     ?assertMatch(
         ?ERROR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_WORKER, ProviderId)),
-        AcquireGuiToken(Cookie2, ?OP_WORKER_GUI, ProviderId)
+        AcquireGuiToken(CookieU2, ?OP_WORKER_GUI, ProviderId)
     ),
 
     % After becoming an effective member of the provider, he can
@@ -217,20 +217,20 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     oz_test_utils:support_space_by_provider(Config, ProviderId, Space2),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {ok, SerializedToken3} = ?assertMatch({ok, _}, AcquireGuiToken(Cookie2, ?OP_WORKER_GUI, ProviderId)),
+    {ok, OpwTokenU2Serialized} = ?assertMatch({ok, _}, AcquireGuiToken(CookieU2, ?OP_WORKER_GUI, ProviderId)),
     % ... but not for the Onepanel GUI
     ?assertMatch(
         ?ERROR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_PANEL, ProviderId)),
-        AcquireGuiToken(Cookie2, ?ONEPANEL_GUI, ProviderId)
+        AcquireGuiToken(CookieU2, ?ONEPANEL_GUI, ProviderId)
     ),
-    {ok, Token3} = tokens:deserialize(SerializedToken3),
+    {ok, OpwTokenU2} = tokens:deserialize(OpwTokenU2Serialized),
     ?assertMatch(
-        {true, ?EXP_AUTH(User2, Session2)},
-        verify_token(Config, Token3, ?OPW_AUD(ProviderId))
+        {true, ?EXP_AUTH(User2, SessionU2)},
+        verify_token(Config, OpwTokenU2, ?OPW_AUD(ProviderId))
     ),
 
     % Tokens can be generated only for existing clusters
-    ?assertMatch(?ERROR_NOT_FOUND, AcquireGuiToken(Cookie2, ?OP_WORKER_GUI, <<"bad-cluster">>)),
+    ?assertMatch(?ERROR_NOT_FOUND, AcquireGuiToken(CookieU2, ?OP_WORKER_GUI, <<"bad-cluster">>)),
 
     % Make sure provider gui tokens are properly accepted in REST
     {ok, ProviderIdentityToken} = oz_test_utils:call_oz(Config, token_logic, create_provider_temporary_token, [
@@ -243,7 +243,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     {ok, _, _, UserData} = ?assertMatch({ok, 200, _, _}, http_client:get(
         ?URL(Config, [<<"/user">>]),
         #{
-            ?HDR_X_AUTH_TOKEN => SerializedToken3,
+            ?HDR_X_AUTH_TOKEN => OpwTokenU1Serialized,
             ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, SerializedProviderIdentityToken)
         },
         <<"">>,
@@ -257,14 +257,23 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     {ok, _, _, UserData} = ?assertMatch({ok, 200, _, UserData}, http_client:get(
         ?URL(Config, [<<"/user">>]),
         #{
-            ?HDR_X_AUTH_TOKEN => SerializedToken3,
+            ?HDR_X_AUTH_TOKEN => OpwTokenU1Serialized,
             ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, SerializedLegacyAuthNone)
         },
         <<"">>,
         [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
     )),
-    ?assertMatch(#{<<"userId">> := User2}, json_utils:decode(UserData)),
-    ok.
+    ?assertMatch(#{<<"userId">> := User1}, json_utils:decode(UserData)),
+
+    ?assertMatch({ok, 200, _, UserData}, http_client:get(
+        ?URL(Config, [<<"/user">>]),
+        #{
+            ?HDR_X_AUTH_TOKEN => OppTokenU1Serialized,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_PANEL, SerializedLegacyAuthNone)
+        },
+        <<"">>,
+        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
+    )).
 
 
 gui_tokens_expire(Config) ->
