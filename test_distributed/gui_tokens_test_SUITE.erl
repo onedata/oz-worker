@@ -249,13 +249,16 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
         <<"">>,
         [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
     )),
-    %% @todo VFS-6098 check if access tokens are accepted as identity tokens
-    %% for backward compatibility
+    %% @todo VFS-6098 legacy provider access tokens should be accepted as
+    %% identity tokens for backward compatibility with old providers
+    LegacyProviderToken = oz_test_utils:create_legacy_access_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
+    LegacyProviderTokenAuthNone = oz_test_utils:confine_token_with_legacy_auth_none_caveat(LegacyProviderToken),
+    {ok, SerializedLegacyAuthNone} = tokens:serialize(LegacyProviderTokenAuthNone),
     {ok, _, _, UserData} = ?assertMatch({ok, 200, _, UserData}, http_client:get(
         ?URL(Config, [<<"/user">>]),
         #{
             ?HDR_X_AUTH_TOKEN => SerializedToken3,
-            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, ProviderToken)
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, SerializedLegacyAuthNone)
         },
         <<"">>,
         [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]

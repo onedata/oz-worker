@@ -1419,20 +1419,35 @@ verify_identity_token(_Config) ->
         true, {?SUB(?ONEPROVIDER, Provider), ?DEFAULT_TEMP_CAVEAT_TTL}
     ),
 
-    %% @todo VFS-6098 access tokens should be accepted as identity tokens for
-    % backward compatibility with old providers, but not for users
-    TokenRho = create_provider_temporary_token(Provider, ?ACCESS_TOKEN, []),
+    %% @todo VFS-6098 legacy provider access tokens should be accepted as
+    %% identity tokens for backward compatibility with old providers, but not for users
+    TokenRho = ozt_tokens:create_legacy_access_token(?SUB(?ONEPROVIDER, Provider)),
     verify_identity_token_base(
         AllClients, TokenRho, #identity_token_ctx{},
-        true, {?SUB(?ONEPROVIDER, Provider), ?DEFAULT_TEMP_CAVEAT_TTL}
+        true, {?SUB(?ONEPROVIDER, Provider), undefined}
     ),
 
+    TokenRhoAuthNone = ozt_tokens:confine_with_legacy_auth_none_caveat(TokenRho),
+    verify_identity_token_base(
+        AllClients, TokenRhoAuthNone, #identity_token_ctx{},
+        true, {?SUB(?ONEPROVIDER, Provider), undefined}
+    ),
+
+    % modern access tokens should not be accepted, even with the cv_scope caveat
+    % (previously authorization_none caveat)
     #named_token_data{token = TokenOmega} = create_provider_named_token(Provider, ?ACCESS_TOKEN, [
         #cv_scope{scope = identity_token}
     ]),
     verify_identity_token_base(
         AllClients, TokenOmega, #identity_token_ctx{},
-        true, {?SUB(?ONEPROVIDER, Provider), undefined}
+        false, ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN)
+    ),
+
+    % user access tokens should never be accepted, regardless if legacy or modern
+    TokenXi = ozt_tokens:create_legacy_access_token(?SUB(user, User)),
+    verify_identity_token_base(
+        AllClients, TokenXi, #identity_token_ctx{},
+        false, ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN)
     ),
 
     #named_token_data{token = TokenPi} = create_user_named_token(User, ?ACCESS_TOKEN, [
