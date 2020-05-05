@@ -179,6 +179,18 @@ verify_invite_token(Token = #token{type = ReceivedType}, ExpectedType, AuthCtx) 
     {ok, aai:service_spec()} | errors:error().
 verify_service_token(SerializedServiceToken, AuthCtx) when is_binary(SerializedServiceToken) ->
     case tokens:deserialize(SerializedServiceToken) of
+        {ok, #token{version = 1} = ServiceToken} ->
+            %% @todo VFS-6098 legacy onepanel sends its access token as service
+            %% token with service indication, but since version 1 tokens do not
+            %% carry inscribed subject, it is ignored during deserialization -
+            %% detect such situation and adjust the resolved service.
+            {IndicatedService, _} = tokens:check_for_oneprovider_service_indication(SerializedServiceToken),
+            case {verify_service_token(ServiceToken, AuthCtx), IndicatedService} of
+                {{ok, ?SERVICE(?OP_WORKER, ProviderId)}, ?OP_PANEL} ->
+                    {ok, ?SERVICE(?OP_PANEL, ProviderId)};
+                {OtherResult, _} ->
+                    OtherResult
+            end;
         {ok, ServiceToken} ->
             verify_service_token(ServiceToken, AuthCtx);
         {error, _} = Error ->
