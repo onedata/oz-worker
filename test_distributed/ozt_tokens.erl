@@ -20,6 +20,8 @@
 -export([create/1, create/2, create/3, create/4]).
 -export([try_create/3, try_create/4]).
 -export([create_access_token_for_gui/3]).
+-export([create_legacy_access_token/1]).
+-export([confine_with_legacy_auth_none_caveat/1]).
 -export([authenticate/1, authenticate/2]).
 -export([verify_service_token/2, verify_consumer_token/2]).
 -export([verify/1]).
@@ -90,6 +92,16 @@ create_access_token_for_gui(UserId, SessionId, Service) ->
         ?USER(UserId), UserId, SessionId, Service
     ])),
     GuiAccessToken.
+
+
+-spec create_legacy_access_token(od_user:id()) -> tokens:token().
+create_legacy_access_token(Subject) ->
+    oz_test_utils:create_legacy_access_token(ozt:get_test_config(), Subject).
+
+
+-spec confine_with_legacy_auth_none_caveat(tokens:token()) -> tokens:token().
+confine_with_legacy_auth_none_caveat(Token) ->
+    oz_test_utils:confine_token_with_legacy_auth_none_caveat(Token).
 
 
 -spec authenticate(tokens:token() | tokens:serialized()) ->

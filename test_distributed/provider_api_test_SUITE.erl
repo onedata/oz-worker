@@ -145,17 +145,6 @@ create_test(Config) ->
         end,
         ExpClusterId = ProviderId,
 
-        % Logic returns the token in deserialized format, and REST in serialized
-        SerializedToken = case is_binary(ProviderToken) of
-            true ->
-                ProviderToken;
-            false ->
-                {ok, Serialized} = tokens:serialize(ProviderToken),
-                Serialized
-        end,
-        ?assertEqual(ok, oz_test_utils:call_oz(Config, provider_logic, verify_provider_identity, [
-            ?ROOT, ProviderId, SerializedToken
-        ])),
         {ok, Provider} = oz_test_utils:get_provider(Config, ProviderId),
         ?assertEqual(ExpName, Provider#od_provider.name),
         ?assertEqual(ExpDomain, Provider#od_provider.domain),
@@ -2469,30 +2458,34 @@ verify_provider_identity_test(Config) ->
         Config, ?PROVIDER_NAME2
     ),
 
-    {ok, DeserializedToken} = tokens:deserialize(P1Token),
-    Timestamp = oz_test_utils:call_oz(
-        Config, time_utils, cluster_time_seconds, []
+    {ok, IdentityToken} = oz_test_utils:call_oz(Config, token_logic, create_provider_named_token, [
+        ?PROVIDER(P1), P1, #{<<"name">> => datastore_key:new(), <<"type">> => ?IDENTITY_TOKEN}
+    ]),
+    Timestamp = oz_test_utils:cluster_time_seconds(Config),
+    IdentityTokenNotExpired = tokens:confine(
+        IdentityToken, #cv_time{valid_until = Timestamp + 1000}
     ),
-    TokenNoAuth = tokens:confine(
+    IdentityTokenExpired = tokens:confine(
+        IdentityToken, #cv_time{valid_until = Timestamp - 200}
+    ),
+    %% @todo VFS-6098 legacy provider access tokens should be accepted as
+    %% identity tokens for backward compatibility with old providers
+    LegacyToken = oz_test_utils:create_legacy_access_token(Config, ?SUB(?ONEPROVIDER, P1)),
+    LegacyTokenNoAuth = oz_test_utils:confine_token_with_legacy_auth_none_caveat(
+        LegacyToken
+    ),
+    % Modern access tokens should not be accepted
+    {ok, DeserializedToken} = tokens:deserialize(P1Token),
+    AccessTokenNoAuth = tokens:confine(
         DeserializedToken, #cv_scope{scope = identity_token}
     ),
-    %% @todo VFS-6098 deprecated, kept for backward compatibility
-    TokenDeprecatedCaveat = DeserializedToken#token{
-        macaroon = macaroon:add_first_party_caveat(
-            DeserializedToken#token.macaroon,
-            <<"authorization = none">>
-        )
-    },
-    TokenNotExpired = tokens:confine(
-        TokenNoAuth, #cv_time{valid_until = Timestamp + 1000}
-    ),
-    TokenExpired = tokens:confine(
-        TokenNoAuth, #cv_time{valid_until = Timestamp - 200}
-    ),
-    {ok, TokenNoAuthBin} = tokens:serialize(TokenNoAuth),
-    {ok, TokenDeprecatedCaveatBin} = tokens:serialize(TokenDeprecatedCaveat),
-    {ok, TokenNotExpiredBin} = tokens:serialize(TokenNotExpired),
-    {ok, TokenExpiredBin} = tokens:serialize(TokenExpired),
+
+    {ok, IdentityTokenBin} = tokens:serialize(IdentityToken),
+    {ok, IdentityTokenNotExpiredBin} = tokens:serialize(IdentityTokenNotExpired),
+    {ok, IdentityTokenExpiredBin} = tokens:serialize(IdentityTokenExpired),
+    {ok, LegacyTokenBin} = tokens:serialize(LegacyToken),
+    {ok, LegacyTokenNoAuthBin} = tokens:serialize(LegacyTokenNoAuth),
+    {ok, AccessTokenNoAuthBin} = tokens:serialize(AccessTokenNoAuth),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -2520,7 +2513,7 @@ verify_provider_identity_test(Config) ->
             ],
             correct_values = #{
                 <<"providerId">> => [P1],
-                <<"token">> => [TokenNoAuthBin, TokenDeprecatedCaveatBin, TokenNotExpiredBin]
+                <<"token">> => [IdentityTokenBin, IdentityTokenNotExpiredBin, LegacyTokenBin, LegacyTokenNoAuthBin]
             },
             bad_values = [
                 {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
@@ -2530,9 +2523,9 @@ verify_provider_identity_test(Config) ->
 
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
                 {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                {<<"token">>, TokenExpiredBin, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
-                    #cv_time{valid_until = Timestamp - 200}
-                )}
+                {<<"token">>, P1Token, ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN)},
+                {<<"token">>, AccessTokenNoAuthBin, ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN)},
+                {<<"token">>, IdentityTokenExpiredBin, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = Timestamp - 200})}
             ]
         }
     },
@@ -2546,7 +2539,7 @@ verify_provider_identity_test(Config) ->
             ],
             correct_values = #{
                 <<"providerId">> => [P1],
-                <<"macaroon">> => [TokenNoAuthBin, TokenNotExpiredBin]
+                <<"macaroon">> => [IdentityTokenBin, IdentityTokenNotExpiredBin, LegacyTokenBin, LegacyTokenNoAuthBin]
             },
             bad_values = [
                 {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
@@ -2556,9 +2549,9 @@ verify_provider_identity_test(Config) ->
 
                 {<<"macaroon">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"macaroon">>)},
                 {<<"macaroon">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"macaroon">>, ?ERROR_BAD_TOKEN)},
-                {<<"macaroon">>, TokenExpiredBin, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
-                    #cv_time{valid_until = Timestamp - 200}
-                )}
+                {<<"macaroon">>, P1Token, ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN)},
+                {<<"macaroon">>, AccessTokenNoAuthBin, ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN)},
+                {<<"macaroon">>, IdentityTokenExpiredBin, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = Timestamp - 200})}
             ]
         }
     },
