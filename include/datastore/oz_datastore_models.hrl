@@ -231,9 +231,8 @@
     % track changes in spaces and propagate them bottom-up.
     eff_harvesters = #{} :: entity_graph:eff_relations(od_provider:id()),
 
-    support_parameters = #{} :: space_support:parameters_per_provider(),
-    dbsync_state = #{} :: space_support:dbsync_state_per_provider(),
-    support_state = #{} :: space_support:support_state_per_provider(),
+    support_parameters_per_provider = #{} :: support_parameters:per_provider(),
+    support_stage_per_provider = #{} :: support_stage:per_provider(),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),
@@ -486,6 +485,13 @@
 %% Stores information about active user connections per session id
 -record(user_connections, {
     connections_per_session = #{} :: #{session:id() => gs_server:conn_ref()}
+}).
+
+%% Record that stores space statistics.
+-record(space_stats, {
+    % stores the list of currently supporting providers, along with archival ones
+    all_providers = [] :: [od_provider:id()],
+    sync_progress_per_provider = #{} :: provider_sync_progress:per_provider()
 }).
 
 %% Record that stores a shared token secret for temporary tokens of given

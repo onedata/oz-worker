@@ -14,6 +14,7 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/space_support/support_stage.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([
@@ -62,11 +63,13 @@
 
     get_storages/2,
 
+    get_stats/2,
+
     update_user_privileges/5, update_user_privileges/4,
     update_group_privileges/5, update_group_privileges/4,
 
     update_support_parameters/4,
-    update_dbsync_state/4,
+    update_provider_sync_progress/4,
 
     remove_storage/3,
     remove_provider/3,
@@ -85,7 +88,7 @@
     has_harvester/2,
     is_supported_by_storage/2
 ]).
--export([initialize_space_support_info/0]).
+-export([initialize_support_info/0]).
 
 %%%===================================================================
 %%% API
@@ -762,6 +765,16 @@ get_storages(Auth, SpaceId) ->
     }).
 
 
+-spec get_stats(aai:auth(), od_space:id()) ->
+    {ok, space_stats:record()} | errors:error().
+get_stats(Auth, SpaceId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = space_stats, id = SpaceId, aspect = instance}
+    }).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified user of given space.
@@ -839,17 +852,17 @@ update_support_parameters(Auth, SpaceId, ProviderId, Data) ->
     }).
 
 
--spec update_dbsync_state(aai:auth(), od_space:id(), od_provider:id(),
-    entity_logic:data() | space_support:seq_per_provider()) -> ok | errors:error().
-update_dbsync_state(Auth, SpaceId, ProviderId, Data = #{<<"seqPerProvider">> := _}) ->
+-spec update_provider_sync_progress(aai:auth(), od_space:id(), od_provider:id(),
+    entity_logic:data() | provider_sync_progress:stats()) -> ok | errors:error().
+update_provider_sync_progress(Auth, SpaceId, ProviderId, Data = #{<<"providerSyncProgress">> := _}) ->
     entity_logic:handle(#el_req{
         operation = update,
         auth = Auth,
-        gri = #gri{type = od_space, id = SpaceId, aspect = {dbsync_state, ProviderId}},
+        gri = #gri{type = space_stats, id = SpaceId, aspect = {provider_sync_progress, ProviderId}},
         data = Data
     });
-update_dbsync_state(Auth, SpaceId, ProviderId, SeqPerProvider) ->
-    update_dbsync_state(Auth, SpaceId, ProviderId, #{<<"seqPerProvider">> => SeqPerProvider}).
+update_provider_sync_progress(Auth, SpaceId, ProviderId, ProviderSyncProgress) ->
+    update_provider_sync_progress(Auth, SpaceId, ProviderId, #{<<"providerSyncProgress">> => ProviderSyncProgress}).
 
 
 %%--------------------------------------------------------------------
@@ -1036,40 +1049,32 @@ is_supported_by_storage(Space, StorageId) ->
 %% @doc
 %% Initializes new fields related to space support in all space documents with
 %% default values.
-%% Dedicated for upgrading Onezone from 19.02.* to 20.02.*.
+%% Dedicated for upgrading Onezone from 20.02.0-beta3 to 20.02.*.
 %% @end
 %%--------------------------------------------------------------------
--spec initialize_space_support_info() -> ok.
-initialize_space_support_info() ->
+-spec initialize_support_info() -> ok.
+initialize_support_info() ->
     entity_graph:ensure_up_to_date(),
     ?info("Initializing space support info..."),
     {ok, Spaces} = od_space:list(),
+    DefaultSupportParameters = support_parameters:build(global, eager),
     lists:foreach(fun(#document{key = SpaceId, value = #od_space{name = Name} = SpaceRecord}) ->
         EffProviders = maps:keys(SpaceRecord#od_space.eff_providers),
         {ok, _} = od_space:update(SpaceId, fun(Space) ->
-            {ok, Space#od_space{
-                support_parameters = to_map_with_same_values(
-                    EffProviders, space_support:build_parameters(global, eager)
-                ),
-                dbsync_state = to_map_with_same_values(
-                    EffProviders, {time_utils:cluster_time_seconds(), to_map_with_same_values(EffProviders, 0)}
-                ),
-                support_state = to_map_with_same_values(
-                    EffProviders, active
-                )
-            }}
+            {ok, lists:foldl(fun(ProviderId, SpaceAcc) ->
+                SpaceAcc#od_space{
+                    support_parameters_per_provider = support_parameters:update_for_provider(
+                        SpaceAcc#od_space.support_parameters_per_provider, ProviderId, DefaultSupportParameters
+                    ),
+                    support_stage_per_provider = support_stage:insert_legacy_support_entry(
+                        SpaceAcc#od_space.support_stage_per_provider, ProviderId
+                    )
+                }
+            end, Space, EffProviders)}
         end),
+        % allow failures in case this procedure is run more than once
+        catch space_stats:init_for_space(SpaceId),
+        space_stats:coalesce_providers(SpaceId, EffProviders),
         ?info("  * space '~ts' (~ts) ok, ~B providers", [Name, SpaceId, length(EffProviders)])
     end, Spaces),
     ?notice("Successfully initialized space support info").
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-%% @doc
--spec to_map_with_same_values([Key], Value) -> #{Key => Value} when Key :: binary(), Value :: term().
-to_map_with_same_values(Keys, Value) ->
-    maps:from_list(lists:map(fun(Key) ->
-        {Key, Value}
-    end, Keys)).

@@ -139,7 +139,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    7.
+    8.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -239,9 +239,6 @@ get_record_struct(7) ->
     % creator field - nested #subject{} record and encoding changed
     % * removed field - providers
     % * new field - storages
-    % * new field - support_parameters
-    % * new field - dbsync_state
-    % * new field - support_state
     {record, [
         {name, string},
 
@@ -256,13 +253,6 @@ get_record_struct(7) ->
         {eff_providers, #{string => {integer, [{atom, string}]}}}, % Modified field
         {eff_harvesters, #{string => [{atom, string}]}},
 
-        {support_parameters, #{string => {record, [
-            {data_write, atom},
-            {metadata_replication, atom}
-        ]}}},  % New field
-        {dbsync_state, #{string => {integer, #{string => integer}}}},  % New field
-        {support_state, #{string => atom}},  % New field
-
         {creation_time, integer},
         % nested #subject{} record was extended and is now encoded as string
         % rather than record tuple
@@ -270,7 +260,38 @@ get_record_struct(7) ->
 
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(8) ->
+    % * new field - support_parameters_per_provider
+    % * new field - support_stage_per_provider
+    {record, [
+        {name, string},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {storages, #{string => integer}},
+        {shares, [string]},
+        {harvesters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => {integer, [{atom, string}]}}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {support_parameters_per_provider, {custom, json, {
+            support_parameters, per_provider_to_json, per_provider_from_json
+        }}}, % New field
+        {support_stage_per_provider, {custom, json, {
+            support_stage, per_provider_to_json, per_provider_from_json
+        }}}, % New field
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
     ]}.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -551,29 +572,71 @@ upgrade_record(6, Space) ->
         end, Field)
     end,
 
-    {7, #od_space{
+    {7, {od_space,
+        Name,
+
+        TranslateField(Users),
+        TranslateField(Groups),
+        Shares,
+        Harvesters,
+        #{},
+
+        EffUsers,
+        EffGroups,
+        %% Eff providers are recalculated during cluster upgrade procedure
+        #{},
+        EffHarvesters,
+
+        CreationTime,
+        upgrade_common:upgrade_subject_record(Creator),
+
+        true,
+        true
+    }};
+upgrade_record(7, Space) ->
+    {
+        od_space,
+        Name,
+
+        Users,
+        Groups,
+        Shares,
+        Harvesters,
+        Storages,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Space,
+
+    {8, #od_space{
         name = Name,
 
-        users = TranslateField(Users),
-        groups = TranslateField(Groups),
+        users = Users,
+        groups = Groups,
         shares = Shares,
         harvesters = Harvesters,
-        storages = #{},
+        storages = Storages,
 
         eff_users = EffUsers,
         eff_groups = EffGroups,
-        %% Eff providers are recalculated during cluster upgrade procedure
-        eff_providers = #{},
+        eff_providers = EffProviders,
         eff_harvesters = EffHarvesters,
 
-        %% Support related info is recalculated during cluster upgrade procedure
-        support_parameters = #{},
-        dbsync_state = #{},
-        support_state = #{},
+        %% Support related info is initialized during cluster upgrade procedure
+        support_parameters_per_provider = #{},
+        support_stage_per_provider = #{},
 
         creation_time = CreationTime,
-        creator = upgrade_common:upgrade_subject_record(Creator),
+        creator = Creator,
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        top_down_dirty = TopDownDirty,
+        bottom_up_dirty = BottomUpDirty
     }}.

@@ -217,7 +217,7 @@ end_per_testcase(_, _Config) ->
 -define(TYPES_TO_JSON(Types), [token_type:to_json(T) || T <- Types]).
 -define(CAVEATS_TO_JSON(Caveats), [caveats:to_json(C) || C <- Caveats]).
 
--define(SPACE_SUPPORT_PARAMS, space_support:build_parameters(
+-define(SPACE_SUPPORT_PARAMS, support_parameters:build(
     lists_utils:random_element([global, none]), lists_utils:random_element([eager, lazy, none])
 )).
 

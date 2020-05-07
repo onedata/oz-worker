@@ -15,6 +15,7 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/space_support/support_stage.hrl").
 
 % Denotes certain collection, e.g. 'users' or {'space_groups', <<"space_id">>}
 -type collection() :: atom() | {atom(), binary()}.
@@ -371,31 +372,35 @@ format_collection({space_shares, SpaceId}, SortBy, SortOrder) ->
 format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_space{
         eff_providers = EffProviders,
-        support_parameters = ParametersPerProvider,
-        dbsync_state = DBSyncStatePerProvider,
-        support_state = SupportStatePerProvider
+        support_parameters_per_provider = ParametersPerProvider,
+        support_stage_per_provider = SupportStagePerProvider
     }}} = od_space:get(SpaceId),
+    {ok, #document{value = #space_stats{
+        sync_progress_per_provider = SyncProgressPerProvider
+    }}} = space_stats:get(?ROOT, SpaceId),
     format_table(providers, maps:keys(EffProviders), SortBy, SortOrder, [id, last_activity, version, name, domain], [
         {support, byte_size, 11, fun(Doc) ->
             {Support, _} = maps:get(SpaceId, Doc#document.value#od_provider.eff_spaces),
             Support
         end},
         {dwrite_mrepl, text, 12, fun(#document{key = ProvId}) ->
-            {ok, Parameters} = space_support:lookup_parameters_for_provider(ParametersPerProvider, ProvId),
+            {ok, Parameters} = support_parameters:lookup_by_provider(ParametersPerProvider, ProvId),
             str_utils:format("~s,~s", [
-                space_support:get_data_write(Parameters),
-                space_support:get_metadata_replication(Parameters)
+                support_parameters:get_data_write(Parameters),
+                support_parameters:get_metadata_replication(Parameters)
             ])
         end},
-        {support_state, text, 13, fun(#document{key = ProvId}) ->
-            {ok, SupportState} = space_support:lookup_support_state_for_provider(SupportStatePerProvider, ProvId),
-            SupportState
+        {support_stage, text, 13, fun(#document{key = ProvId}) ->
+            {ok, #support_stage_details{
+                provider_stage = SupportStage
+            }} = support_stage:lookup_details_by_provider(SupportStagePerProvider, ProvId),
+            SupportStage
         end},
-        {dbsync_state, text, 41, fun(#document{key = ProvId}) ->
-            {ok, {LastUpdate, _}} = space_support:lookup_dbsync_state_for_provider(DBSyncStatePerProvider, ProvId),
+        {sync_progress, text, 41, fun(#document{key = ProvId}) ->
+            {ok, {LastUpdate, _}} = provider_sync_progress:lookup_by_provider(SyncProgressPerProvider, ProvId),
             {KnownSeqs, AllSeqs} = lists:foldl(fun(OtherProvider, {AccKnown, AccAll}) ->
                 {Known, Latest} = try
-                    space_support:inspect_dbsync_state_between(DBSyncStatePerProvider, ProvId, OtherProvider)
+                    provider_sync_progress:inspect_progress_between(SyncProgressPerProvider, ProvId, OtherProvider)
                 catch _:_ ->
                     {0, 0}
                 end,

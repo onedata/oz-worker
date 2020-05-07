@@ -90,7 +90,7 @@
     get_harvesters/2, get_eff_harvesters/2,
     get_harvester/3, get_eff_harvester/3,
 
-    get_clusters/1, get_clusters/2, get_eff_clusters/2,
+    get_eff_clusters/1, get_clusters/2, get_eff_clusters/2,
     get_cluster/3, get_eff_cluster/3,
 
     leave_group/3,
@@ -1131,17 +1131,6 @@ get_eff_handle(Auth, UserId, HandleId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves the list of clusters of the authenticated user.
-%% @end
-%%--------------------------------------------------------------------
--spec get_clusters(Auth :: aai:auth()) ->
-    {ok, [od_cluster:id()]} | errors:error().
-get_clusters(#auth{subject = ?SUB(user, UserId)} = Auth) ->
-    get_clusters(Auth, UserId).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Retrieves the list of clusters of given user.
 %% @end
 %%--------------------------------------------------------------------
@@ -1153,6 +1142,17 @@ get_clusters(Auth, UserId) ->
         auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = clusters}
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective clusters of the authenticated user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_clusters(Auth :: aai:auth()) ->
+    {ok, [od_cluster:id()]} | errors:error().
+get_eff_clusters(#auth{subject = ?SUB(user, UserId)} = Auth) ->
+    get_eff_clusters(Auth, UserId).
 
 
 %%--------------------------------------------------------------------

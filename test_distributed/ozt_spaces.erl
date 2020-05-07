@@ -64,9 +64,9 @@ add_user(SpaceId, UserId, Privileges) ->
 
 -spec create_support_token(od_space:id(), od_user:id()) -> tokens:token().
 create_support_token(SpaceId, UserId) ->
-    create_support_token(SpaceId, UserId, space_support:build_parameters(global, eager)).
+    create_support_token(SpaceId, UserId, support_parameters:build(global, eager)).
 
--spec create_support_token(od_space:id(), od_user:id(), space_support:parameters()) -> tokens:token().
+-spec create_support_token(od_space:id(), od_user:id(), support_parameters:parameters()) -> tokens:token().
 create_support_token(SpaceId, UserId, SupportParameters) ->
     ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId, SupportParameters)).
 

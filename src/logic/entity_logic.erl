@@ -35,10 +35,10 @@
 | od_cluster:id() | od_storage:id().
 -type entity_type() :: od_user | od_group | od_space | od_share | od_provider
 | od_handle_service | od_handle | od_harvester | od_cluster | od_storage
-| oz_privileges | temporary_token_secret.
+| oz_privileges | space_stats | temporary_token_secret.
 -type entity() :: undefined | #od_user{} | #od_group{} | #od_space{} |
 #od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}
-| #od_harvester{} | #od_cluster{} | #od_storage{} | #temporary_token_secret{}.
+| #od_harvester{} | #od_cluster{} | #od_storage{} | #space_stats{} | #temporary_token_secret{}.
 -type revision() :: gs_protocol:revision().
 -type versioned_entity() :: gs_protocol:versioned_entity().
 -type aspect() :: gs_protocol:aspect().
@@ -49,10 +49,10 @@
 -type gri() :: gri:gri().
 -type auth_hint() :: gs_protocol:auth_hint().
 
--type create_result() :: gs_protocol:graph_create_result().
+-type create_result() :: gs_protocol:graph_create_result() | fun((entity()) -> gs_protocol:graph_create_result()).
 -type get_result() :: gs_protocol:graph_get_result() | {ok, term()} | {ok, gri(), term()}.
--type delete_result() :: gs_protocol:graph_delete_result().
--type update_result() :: gs_protocol:graph_update_result().
+-type delete_result() :: gs_protocol:graph_delete_result() | fun((entity()) -> gs_protocol:graph_delete_result()).
+-type update_result() :: gs_protocol:graph_update_result() | fun((entity()) -> gs_protocol:graph_update_result()).
 -type result() :: create_result() | get_result() | update_result() | delete_result().
 
 -type type_validator() :: any | atom | list_of_atoms | binary
@@ -1102,10 +1102,8 @@ call_plugin(required_admin_privileges, #state{plugin = Plugin, req = ElReq}) ->
     Plugin:required_admin_privileges(ElReq);
 call_plugin(get, #state{plugin = Plugin, req = ElReq, versioned_entity = {Entity, _}}) ->
     Plugin:get(ElReq, Entity);
-call_plugin(update, #state{plugin = Plugin, req = ElReq}) ->
-    Plugin:update(ElReq);
 call_plugin(Operation, #state{plugin = Plugin, req = ElReq, versioned_entity = {Entity, _}}) ->
-    % covers create, delete, validate
+    % covers create, update, delete, validate
     case Plugin:Operation(ElReq) of
         Fun when is_function(Fun, 1) ->
             Fun(Entity);

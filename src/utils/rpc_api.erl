@@ -25,7 +25,7 @@
     add_user_to_group/3, list_users/1, user_exists/1, username_exists/1,
     get_user_details/1, get_user_details/2, migrate_onepanel_user_to_onezone/4,
     cluster_get_eff_user_privileges/3, get_protected_cluster_data/2,
-    get_clusters_by_user_auth/1, cluster_logic_get_users/2,
+    get_eff_clusters_by_user_auth/1, cluster_logic_get_users/2,
     cluster_logic_get_eff_users/2, cluster_logic_get_groups/2,
     cluster_logic_get_eff_groups/2, cluster_logic_create_invite_token_for_admin/2,
     reconcile_dns_config/0, dns_config_get_ns_hosts/0,
@@ -168,10 +168,10 @@ get_protected_cluster_data(Auth, ClusterId) ->
     cluster_logic:get_protected_data(Auth, ClusterId).
 
 
--spec get_clusters_by_user_auth(aai:auth()) ->
+-spec get_eff_clusters_by_user_auth(aai:auth()) ->
     {ok, [od_cluster:id()]} | {error, term()}.
-get_clusters_by_user_auth(Auth) ->
-    user_logic:get_clusters(Auth).
+get_eff_clusters_by_user_auth(Auth) ->
+    user_logic:get_eff_clusters(Auth).
 
 
 -spec cluster_logic_get_users(aai:auth(), od_cluster:id()) ->
