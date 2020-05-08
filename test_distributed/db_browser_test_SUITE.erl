@@ -279,11 +279,14 @@ set_up_provider_sync_progress(Environment = #environment{spaces = Spaces}) ->
     lists:foreach(fun(Space) ->
         EffProviders = maps:keys((ozt_spaces:get(Space))#od_space.eff_providers),
         lists:foreach(fun(Provider) ->
-            ozt:rpc(space_logic, update_provider_sync_progress, [?ROOT, Space, Provider, maps:from_list(
+            ?assertEqual(ok, ozt:rpc(space_logic, update_provider_sync_progress, [?ROOT, Space, Provider, maps:from_list(
                 lists:map(fun(OtherProvider) ->
-                    {OtherProvider, {rand:uniform(10000), ozt:cluster_time_seconds() - rand:uniform(50000)}}
+                    {OtherProvider, #{
+                        <<"seq">> => rand:uniform(10000),
+                        <<"timestamp">> => ozt:cluster_time_seconds() - rand:uniform(50000)
+                    }}
                 end, EffProviders)
-            )]),
+            )])),
             simulate_random_delay()
         end, EffProviders)
     end, Spaces),

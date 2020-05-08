@@ -64,6 +64,7 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(_, _Config) ->
     ozt_mocks:unmock_time(),
+    ozt:delete_all_entities(),
     ok.
 
 %%%===================================================================
@@ -259,6 +260,7 @@ upgrade_from_20_02_0_beta3_space_support_info(_Config) ->
     {P2, _} = create_legacy_provider_with_spaces([SpaceAlpha, SpaceGamma, SpaceDelta]),
     {P3, _} = create_legacy_provider_with_spaces([SpaceGamma, SpaceDelta, SpaceOmega]),
 
+    ?assertEqual({ok, 2}, ozt:rpc(node_manager_plugin, upgrade_cluster, [1])),
     ?assertEqual({ok, 3}, ozt:rpc(node_manager_plugin, upgrade_cluster, [2])),
     ozt:reconcile_entity_graph(),
 
@@ -349,7 +351,7 @@ upgrade_from_19_02_space_lifecycle_with_providers_of_different_versions(_Config)
     % at this point, all providers are in legacy versions
 
     % support SpaceBeta using the legacy support procedure
-    support_by_legacy_provider(P2, SpaceBeta),
+    ozt_providers:support_space_with_legacy_storage(P2, SpaceBeta),
     ?assertEqual(GetSupportStagePerProvider(SpaceBeta), #{
         P1 => ?LEGACY_SUPPORT_STAGE_DETAILS,
         P2 => ?LEGACY_SUPPORT_STAGE_DETAILS
@@ -360,7 +362,7 @@ upgrade_from_19_02_space_lifecycle_with_providers_of_different_versions(_Config)
     upgrade_legacy_support(P2, P2Storage, SpaceBeta),
     ?assertEqual(GetSupportStagePerProvider(SpaceBeta), #{
         P1 => ?LEGACY_SUPPORT_STAGE_DETAILS,
-        P2 => #support_stage_details{provider_stage = active, per_storage = #{P3 => active}}
+        P2 => #support_stage_details{provider_stage = active, per_storage = #{P2Storage => active}}
     }),
 
     % simulate P3 being upgraded to the newest version
@@ -368,19 +370,19 @@ upgrade_from_19_02_space_lifecycle_with_providers_of_different_versions(_Config)
     upgrade_legacy_support(P3, P3Storage, SpaceAlpha),
     ?assertEqual(GetSupportStagePerProvider(SpaceAlpha), #{
         P1 => ?LEGACY_SUPPORT_STAGE_DETAILS,
-        P3 => #support_stage_details{provider_stage = active, per_storage = #{P3 => active}}
+        P3 => #support_stage_details{provider_stage = active, per_storage = #{P3Storage => active}}
     }),
     ?assertEqual(sync_progress_per_provider(SpaceAlpha), #{
-        P1 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}},
-        P3 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}}
+        P1 => #{P1 => {1, 0}, P3 => {1, 0}},
+        P3 => #{P1 => {1, 0}, P3 => {1, 0}}
     }),
 
     % support the SpaceBeta with P3 using the modern procedure
     ozt_providers:support_space(P3, P3Storage, SpaceBeta),
     ?assertEqual(GetSupportStagePerProvider(SpaceBeta), #{
         P1 => ?LEGACY_SUPPORT_STAGE_DETAILS,
-        P2 => #support_stage_details{provider_stage = active, per_storage = #{P3 => active}},
-        P3 => #support_stage_details{provider_stage = active, per_storage = #{P3 => active}}
+        P2 => #support_stage_details{provider_stage = active, per_storage = #{P2Storage => active}},
+        P3 => #support_stage_details{provider_stage = active, per_storage = #{P3Storage => active}}
     }),
     ?assertEqual(sync_progress_per_provider(SpaceBeta), #{
         P1 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}},
@@ -473,21 +475,9 @@ create_legacy_provider_with_spaces(SpaceIds) ->
     {ProviderId, Spaces}.
 
 
-support_by_legacy_provider(ProviderId, SpaceId) ->
-    % Create a temporary user for inviting a provider, as invite tokens cannot
-    % be created as root.
-    TmpUser = ozt_users:create(),
-    ozt_spaces:add_user(SpaceId, TmpUser, [?SPACE_ADD_SUPPORT]),
-    Token = ozt_spaces:create_support_token(SpaceId, TmpUser),
-    % virtual storage is for legacy provider is equal to its id
-    StorageId = ProviderId,
-    ozt_providers:support_space_using_token(ProviderId, StorageId, Token),
-    ozt_users:delete(TmpUser).
-
-
 upgrade_legacy_support(ProviderId, StorageId, SpaceId) ->
     Token = ozt_providers:get_root_token(ProviderId),
-    ?assertMatch(ok, ozt_gs:connect_and_request(oneprovider, {token, Token}, #gs_req_graph{
+    ?assertMatch({ok, _}, ozt_gs:connect_and_request(oneprovider, {token, Token}, #gs_req_graph{
         gri = ?GRI(od_storage, StorageId, {upgrade_legacy_support, SpaceId}),
         operation = create,
         data = #{}

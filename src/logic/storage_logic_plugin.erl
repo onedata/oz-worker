@@ -237,16 +237,24 @@ delete(#el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
                         support_parameters_per_provider = ParametersPerProvider,
                         support_stage_per_provider = SupportStagePerProvider
                     } = Space,
-                    % @todo VFS-6311 implement proper support stage management
-                    Remodelling = support_stage:init_unsupport(SupportStagePerProvider, ProviderId, StorageId),
-                    PurgingStorages = support_stage:complete_unsupport_resize(Remodelling, ProviderId, StorageId),
-                    PurgingDatabase = support_stage:complete_unsupport_purge(PurgingStorages, ProviderId, StorageId),
-                    Retired = support_stage:finalize_unsupport(PurgingDatabase, ProviderId, StorageId),
+
+                    NewSupportStagePerProvider = case StorageId =:= ProviderId of
+                        true ->
+                            support_stage:mark_legacy_support_revocation(SupportStagePerProvider, ProviderId);
+                        false ->
+                            % @todo VFS-6311 implement proper support stage management
+                            {ok, Remodelling} = support_stage:init_unsupport(SupportStagePerProvider, ProviderId, StorageId),
+                            {ok, PurgingStorages} = support_stage:complete_unsupport_resize(Remodelling, ProviderId, StorageId),
+                            {ok, PurgingDatabase} = support_stage:complete_unsupport_purge(PurgingStorages, ProviderId, StorageId),
+                            {ok, Retired} = support_stage:finalize_unsupport(PurgingDatabase, ProviderId, StorageId),
+                            Retired
+                    end,
+
                     {ok, Space#od_space{
                         support_parameters_per_provider = support_parameters:remove_for_provider(
                             ParametersPerProvider, ProviderId
                         ),
-                        support_stage_per_provider = Retired
+                        support_stage_per_provider = NewSupportStagePerProvider
                     }}
                 end)
         end,
@@ -435,7 +443,7 @@ support_space(ProviderId, SpaceId, StorageId, SupportSize, ProposedParameters) -
     EffectiveProviders = lists:usort(lists:map(fun(StId) ->
         {ok, #document{value = #od_storage{provider = PrId}}} = od_storage:get(StId),
         PrId
-    end, Storages)),
+    end, maps:keys(Storages))),
     space_stats:coalesce_providers(SpaceId, EffectiveProviders),
 
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},

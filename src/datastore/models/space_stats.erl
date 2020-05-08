@@ -35,6 +35,7 @@
 
 %% datastore_model callbacks
 -export([get_record_struct/1]).
+-export([encode_sync_progress_per_provider/1, decode_sync_progress_per_provider/1]).
 
 %% entity_logic_plugin_behaviour
 -export([entity_logic_plugin/0]).
@@ -97,9 +98,20 @@ get_record_struct(1) ->
     {record, [
         {all_providers, [string]},
         {sync_progress_per_provider, {custom, json, {
-            provider_sync_progress, per_provider_to_json, per_provider_from_json
+            ?MODULE, encode_sync_progress_per_provider, decode_sync_progress_per_provider
         }}}
     ]}.
+
+
+%% @private
+-spec encode_sync_progress_per_provider(provider_sync_progress:per_provider()) -> binary().
+encode_sync_progress_per_provider(Value) ->
+    json_utils:encode(provider_sync_progress:per_provider_to_json(Value)).
+
+%% @private
+-spec decode_sync_progress_per_provider(binary()) -> provider_sync_progress:per_provider().
+decode_sync_progress_per_provider(Value) ->
+    provider_sync_progress:per_provider_from_json(json_utils:decode(Value)).
 
 %%%===================================================================
 %%% entity logic plugin behaviour
@@ -125,7 +137,7 @@ is_subscribable(_, _) -> false.
 
 -spec fetch_entity(gri:gri()) ->
     {true, entity_logic:versioned_entity()} | false | errors:error().
-fetch_entity(#gri{id = SpaceId, aspect = instance, scope = private}) ->
+fetch_entity(#gri{id = SpaceId}) ->
     case datastore_model:get(?CTX, SpaceId) of
         {ok, #document{value = SpaceStats, revs = [DbRev | _]}} ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
@@ -146,7 +158,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, SpaceStats) ->
     {ok, SpaceStats}.
 
 
--spec update(entity_logic:req()) -> errors:error().
+-spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = SpaceId, aspect = {provider_sync_progress, ProviderId}}, data = Data}) ->
     % @TODO VFS-6329 allow only for non-deleted providers and spaces
     ProviderSyncProgress = provider_sync_progress:from_json(maps:get(<<"providerSyncProgress">>, Data)),
@@ -188,7 +200,7 @@ required_admin_privileges(_) ->
     forbidden.
 
 
--spec validate(entity_logic:req()) -> errors:error().
+-spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
 validate(#el_req{operation = update, gri = #gri{aspect = {provider_sync_progress, _}}}) ->
     #{
         required => #{

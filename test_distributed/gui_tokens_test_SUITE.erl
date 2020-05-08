@@ -217,7 +217,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     {ok, OzwTokenU1} = tokens:deserialize(OzwTokenU1Serialized),
     ?assertMatch(
         {true, ?EXP_AUTH(User1, SessionU1)},
-        verify_token(Config, OZW_SRV, ?OZW_SRV(?ONEZONE_CLUSTER_ID))
+        verify_token(Config, OzwTokenU1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))
     ),
 
     % The user will belong to the cluster as the provider admin
@@ -241,10 +241,10 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
 
     ?assertMatch(
         {true, ?EXP_AUTH(User1, SessionU1)},
-        verify_token(Config, OpwTokenU1, ?OPW_AUD(ProviderId))
+        verify_token(Config, OpwTokenU1, ?OPW_SRV(ProviderId))
     ),
-    ?assertUnverifiedService(?OPW_AUD(ProviderId), verify_token(Config, OpwTokenU1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
-    ?assertUnverifiedService(?OZW_AUD(?ONEZONE_CLUSTER_ID), verify_token(Config, OzwTokenU1, ?OPW_AUD(ProviderId))),
+    ?assertUnverifiedService(?OPW_SRV(ProviderId), verify_token(Config, OpwTokenU1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertUnverifiedService(?OZW_SRV(?ONEZONE_CLUSTER_ID), verify_token(Config, OzwTokenU1, ?OPW_SRV(ProviderId))),
 
     % A user not belonging to the provider/cluster cannot generate GUI tokens for it
     {ok, User2} = oz_test_utils:create_user(Config),
@@ -268,7 +268,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     {ok, OpwTokenU2} = tokens:deserialize(OpwTokenU2Serialized),
     ?assertMatch(
         {true, ?EXP_AUTH(User2, SessionU2)},
-        verify_token(Config, OpwTokenU2, ?OPW_AUD(ProviderId))
+        verify_token(Config, OpwTokenU2, ?OPW_SRV(ProviderId))
     ),
 
     % Tokens can be generated only for existing clusters

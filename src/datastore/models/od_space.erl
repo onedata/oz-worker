@@ -22,6 +22,8 @@
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
+-export([encode_support_parameters_per_provider/1, decode_support_parameters_per_provider/1]).
+-export([encode_support_stage_per_provider/1, decode_support_stage_per_provider/1]).
 
 -type id() :: binary().
 -type record() :: #od_space{}.
@@ -279,10 +281,10 @@ get_record_struct(8) ->
         {eff_harvesters, #{string => [{atom, string}]}},
 
         {support_parameters_per_provider, {custom, json, {
-            support_parameters, per_provider_to_json, per_provider_from_json
+            ?MODULE, encode_support_parameters_per_provider, decode_support_parameters_per_provider
         }}}, % New field
         {support_stage_per_provider, {custom, json, {
-            support_stage, per_provider_to_json, per_provider_from_json
+            ?MODULE, encode_support_stage_per_provider, decode_support_stage_per_provider
         }}}, % New field
 
         {creation_time, integer},
@@ -291,6 +293,28 @@ get_record_struct(8) ->
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
     ]}.
+
+
+%% @private
+-spec encode_support_parameters_per_provider(support_parameters:per_provider()) -> binary().
+encode_support_parameters_per_provider(Value) ->
+    json_utils:encode(support_parameters:per_provider_to_json(Value)).
+
+%% @private
+-spec decode_support_parameters_per_provider(binary()) -> support_parameters:per_provider().
+decode_support_parameters_per_provider(Value) ->
+    support_parameters:per_provider_from_json(json_utils:decode(Value)).
+
+
+%% @private
+-spec encode_support_stage_per_provider(support_stage:per_provider()) -> binary().
+encode_support_stage_per_provider(Value) ->
+    json_utils:encode(support_stage:per_provider_to_json(Value)).
+
+%% @private
+-spec decode_support_stage_per_provider(binary()) -> support_stage:per_provider().
+decode_support_stage_per_provider(Value) ->
+    support_stage:per_provider_from_json(json_utils:decode(Value)).
 
 
 %%--------------------------------------------------------------------
@@ -577,14 +601,13 @@ upgrade_record(6, Space) ->
 
         TranslateField(Users),
         TranslateField(Groups),
+        #{}, % Storages
         Shares,
         Harvesters,
-        #{},
 
         EffUsers,
         EffGroups,
-        %% Eff providers are recalculated during cluster upgrade procedure
-        #{},
+        #{}, % Eff providers - recalculated during cluster upgrade procedure
         EffHarvesters,
 
         CreationTime,
@@ -600,9 +623,9 @@ upgrade_record(7, Space) ->
 
         Users,
         Groups,
+        Storages,
         Shares,
         Harvesters,
-        Storages,
 
         EffUsers,
         EffGroups,
@@ -621,9 +644,9 @@ upgrade_record(7, Space) ->
 
         users = Users,
         groups = Groups,
+        storages = Storages,
         shares = Shares,
         harvesters = Harvesters,
-        storages = Storages,
 
         eff_users = EffUsers,
         eff_groups = EffGroups,

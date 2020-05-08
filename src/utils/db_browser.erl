@@ -268,7 +268,7 @@ parse_and_format_collection(Collection, SortBy, SortOrder) ->
         {ok, format_collection(ParsedCollection, SortBy, SortOrder)}
     catch Type:Reason ->
         {error, str_utils:format(
-            "~ts crashed with ~w:~w~n"
+            "~ts crashed with ~w:~p~n"
             "Stacktrace: ~ts~n"
             "~n"
             "~ts",
@@ -375,9 +375,9 @@ format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
         support_parameters_per_provider = ParametersPerProvider,
         support_stage_per_provider = SupportStagePerProvider
     }}} = od_space:get(SpaceId),
-    {ok, #document{value = #space_stats{
+    {ok, #space_stats{
         sync_progress_per_provider = SyncProgressPerProvider
-    }}} = space_stats:get(?ROOT, SpaceId),
+    }} = space_logic:get_stats(?ROOT, SpaceId),
     format_table(providers, maps:keys(EffProviders), SortBy, SortOrder, [id, last_activity, version, name, domain], [
         {support, byte_size, 11, fun(Doc) ->
             {Support, _} = maps:get(SpaceId, Doc#document.value#od_provider.eff_spaces),
@@ -397,7 +397,6 @@ format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
             SupportStage
         end},
         {sync_progress, text, 41, fun(#document{key = ProvId}) ->
-            {ok, {LastUpdate, _}} = provider_sync_progress:lookup_by_provider(SyncProgressPerProvider, ProvId),
             {KnownSeqs, AllSeqs} = lists:foldl(fun(OtherProvider, {AccKnown, AccAll}) ->
                 {Known, Latest} = try
                     provider_sync_progress:inspect_progress_between(SyncProgressPerProvider, ProvId, OtherProvider)
@@ -410,6 +409,9 @@ format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
                 0 -> 100;
                 _ -> KnownSeqs * 100 div AllSeqs
             end,
+
+            {ok, ProviderSyncProgress} = provider_sync_progress:lookup_by_provider(SyncProgressPerProvider, ProvId),
+            {_, LastUpdate} = maps:get(ProvId, ProviderSyncProgress),
             TodayDate = format_date(time_utils:cluster_time_seconds()),
             LastUpdateStr = case format_date(LastUpdate) of
                 TodayDate -> format_time(LastUpdate, hour_min_sec);

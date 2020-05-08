@@ -256,7 +256,7 @@ get_test(Config) ->
     ExpSupportStagePerProviderJson = #{
         P1 => #{
             <<"providerStage">> => <<"active">>,
-            <<"perStorage">>#{
+            <<"perStorage">> => #{
                 St1 => <<"active">>
             }
         }
@@ -1165,7 +1165,7 @@ update_provider_sync_progress_test(Config, Space, SubjectProvider, SubjectProvid
             % seq=1 and timestamp=0.
             case rand:uniform(3) of
                 1 -> Acc;
-                _ -> Acc#{Provider => {rand:uniform(1000), Now - rand:uniform(50000)}}
+                _ -> Acc#{Provider => #{<<"seq">> => rand:uniform(1000), <<"timestamp">> => Now - rand:uniform(50000)}}
             end
         end, #{}, SupportingProviders)
     end,
@@ -1180,9 +1180,9 @@ update_provider_sync_progress_test(Config, Space, SubjectProvider, SubjectProvid
             false ->
                 ?assertEqual(SyncProgressPerProvider, PreviousSyncProgressPerProvider);
             true ->
-                ProviderSyncProgressArg = maps:get(<<"providerSyncProgress">>, Data),
+                ProviderSyncProgressDecoded = provider_sync_progress:from_json(maps:get(<<"providerSyncProgress">>, Data)),
                 ExpProviderSyncProgress = lists:foldl(fun(Provider, Acc) ->
-                    Acc#{Provider => maps:get(Provider, ProviderSyncProgressArg, {1, 0})}
+                    Acc#{Provider => maps:get(Provider, ProviderSyncProgressDecoded, {1, 0})}
                 end, #{}, SupportingProviders),
                 ?assertEqual(SyncProgressPerProvider, PreviousSyncProgressPerProvider#{
                     SubjectProvider => ExpProviderSyncProgress
@@ -1207,7 +1207,7 @@ update_provider_sync_progress_test(Config, Space, SubjectProvider, SubjectProvid
         },
         gs_spec = #gs_spec{
             operation = update,
-            gri = #gri{type = od_space, id = Space, aspect = {provider_sync_progress, SubjectProvider}},
+            gri = #gri{type = space_stats, id = Space, aspect = {provider_sync_progress, SubjectProvider}},
             expected_result = ?OK_RES
         },
         data_spec = #data_spec{
