@@ -190,8 +190,8 @@ create(#el_req{auth = Auth, gri = #gri{aspect = verify_provider_identity}, data 
         error -> maps:get(<<"token">>, Data)
     end,
     AuthCtx = #auth_ctx{ip = Auth#auth.peer_ip, consumer = Auth#auth.subject, scope = identity_token},
-    case token_auth:verify_access_token(Token, AuthCtx) of
-        {ok, ?PROVIDER(ProviderId)} -> ok;
+    case token_auth:verify_identity_token(Token, AuthCtx) of
+        {ok, {?SUB(?ONEPROVIDER, ProviderId), _}} -> ok;
         {ok, _} -> ?ERROR_TOKEN_INVALID;
         Error -> Error
     end.

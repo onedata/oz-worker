@@ -18,10 +18,11 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("ctool/include/space_support/support_stage.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -51,7 +52,7 @@
     get_eff_provider_test/1,
 
     update_support_parameters_test/1,
-    update_dbsync_state_test/1
+    update_provider_sync_progress_test/1
 ]).
 
 all() ->
@@ -75,7 +76,7 @@ all() ->
         get_eff_provider_test,
 
         update_support_parameters_test,
-        update_dbsync_state_test
+        update_provider_sync_progress_test
     ]).
 
 
@@ -239,23 +240,27 @@ get_test(Config) ->
 
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
-    ExpSupportParameters = #{
-        P1 => space_support:build_parameters(global, eager)
+    ExpSupportParametersPerProvider = #{
+        P1 => support_parameters:build(global, eager)
     },
-    ExpSupportParametersJson = #{
+    ExpSupportParametersPerProviderJson = #{
         P1 => #{<<"dataWrite">> => <<"global">>, <<"metadataReplication">> => <<"eager">>}
     },
-    ExpDBSyncState = #{
-        P1 => {oz_test_utils:cluster_time_seconds(Config), #{P1 => 0}}
-    },
-    ExpDBSyncStateJson = #{
+    ExpSupportStagePerProvider = #{
+        P1 => #support_stage_details{
+            provider_stage = active,
+            per_storage = #{
+                St1 => active
+            }
+        }},
+    ExpSupportStagePerProviderJson = #{
         P1 => #{
-            <<"lastUpdate">> => oz_test_utils:cluster_time_seconds(Config),
-            <<"seqPerProvider">> => #{P1 => 0}
+            <<"providerStage">> => <<"active">>,
+            <<"perStorage">> => #{
+                St1 => <<"active">>
+            }
         }
     },
-    ExpSupportState = #{P1 => active},
-    ExpSupportStateJson = #{P1 => <<"active">>},
 
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
@@ -283,9 +288,8 @@ get_test(Config) ->
                     harvesters = [],
                     eff_users = EffUsers, eff_groups = #{},
                     eff_providers = EffProviders,
-                    support_parameters = SupportParameters,
-                    dbsync_state = DBSyncState,
-                    support_state = SupportState,
+                    support_parameters_per_provider = SupportParameters,
+                    support_stage_per_provider = SupportStage,
                     top_down_dirty = false, bottom_up_dirty = false
                 }) ->
                     ?assertEqual(?SPACE_NAME1, Name),
@@ -299,9 +303,8 @@ get_test(Config) ->
                     }),
                     ?assertEqual(Storages, #{St1 => SupportSize}),
                     ?assertEqual(EffProviders, #{P1 => {SupportSize, [{od_storage, St1}]}}),
-                    ?assertEqual(SupportParameters, ExpSupportParameters),
-                    ?assertEqual(DBSyncState, ExpDBSyncState),
-                    ?assertEqual(SupportState, ExpSupportState)
+                    ?assertEqual(SupportParameters, ExpSupportParametersPerProvider),
+                    ?assertEqual(SupportStage, ExpSupportStagePerProvider)
                 end
             )
         },
@@ -323,8 +326,8 @@ get_test(Config) ->
                     U2 => [<<"space_view">>]
                 },
                 <<"effectiveGroups">> => #{},
-                <<"supportParameters">> => ExpSupportParametersJson,
-                <<"supportState">> => ExpSupportStateJson,
+                <<"supportParametersPerProvider">> => ExpSupportParametersPerProviderJson,
+                <<"supportStagePerProvider">> => ExpSupportStagePerProviderJson,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(S1, Id)
@@ -357,9 +360,8 @@ get_test(Config) ->
                 <<"spaceId">> => S1,
                 <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{P1 => SupportSize},
-                <<"supportParameters">> => ExpSupportParametersJson,
-                <<"dbsyncState">> => ExpDBSyncStateJson,
-                <<"supportState">> => ExpSupportStateJson
+                <<"supportParametersPerProvider">> => ExpSupportParametersPerProviderJson,
+                <<"supportStagePerProvider">> => ExpSupportStagePerProviderJson
             }
         },
         logic_spec = #logic_spec{
@@ -369,9 +371,8 @@ get_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{P1 => SupportSize},
-                <<"supportParameters">> => ExpSupportParameters,
-                <<"dbsyncState">> => ExpDBSyncState,
-                <<"supportState">> => ExpSupportState
+                <<"supportParametersPerProvider">> => ExpSupportParametersPerProvider,
+                <<"supportStagePerProvider">> => ExpSupportStagePerProvider
             })
         },
         gs_spec = #gs_spec{
@@ -382,8 +383,8 @@ get_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{P1 => SupportSize},
-                <<"supportParameters">> => ExpSupportParametersJson,
-                <<"supportState">> => ExpSupportStateJson,
+                <<"supportParametersPerProvider">> => ExpSupportParametersPerProviderJson,
+                <<"supportStagePerProvider">> => ExpSupportStagePerProviderJson,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(S1, Id)
@@ -1050,25 +1051,25 @@ update_support_parameters_test(Config) ->
 
 update_support_parameters_test(Config, SpaceAdmin, Space, Provider, ForbiddenClients) ->
     EnvSetUpFun = fun() ->
-        {ok, #od_space{support_parameters = SupportParameters}} = oz_test_utils:get_space(Config, Space),
+        {ok, #od_space{support_parameters_per_provider = SupportParameters}} = oz_test_utils:get_space(Config, Space),
         #{previous => SupportParameters}
     end,
 
     VerifyEndFun = fun(ShouldSucceed, #{previous := PreviousSupportParameters}, Data) ->
-        {ok, #od_space{support_parameters = SupportParameters}} = oz_test_utils:get_space(Config, Space),
+        {ok, #od_space{support_parameters_per_provider = SupportParameters}} = oz_test_utils:get_space(Config, Space),
         case ShouldSucceed of
             false ->
                 ?assertEqual(SupportParameters, PreviousSupportParameters);
             true ->
                 PreviousForProvider = maps:get(Provider, PreviousSupportParameters),
-                ExpParametersForProvider = space_support:build_parameters(
+                ExpParametersForProvider = support_parameters:build(
                     case maps:find(<<"dataWrite">>, Data) of
                         {ok, DW} -> binary_to_atom(DW, utf8);
-                        error -> space_support:get_data_write(PreviousForProvider)
+                        error -> support_parameters:get_data_write(PreviousForProvider)
                     end,
                     case maps:find(<<"metadataReplication">>, Data) of
                         {ok, MR} -> binary_to_atom(MR, utf8);
-                        error -> space_support:get_metadata_replication(PreviousForProvider)
+                        error -> support_parameters:get_metadata_replication(PreviousForProvider)
                     end
                 ),
                 ?assertEqual(SupportParameters, PreviousSupportParameters#{
@@ -1125,7 +1126,7 @@ update_support_parameters_test(Config, SpaceAdmin, Space, Provider, ForbiddenCli
     )).
 
 
-update_dbsync_state_test(Config) ->
+update_provider_sync_progress_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
@@ -1147,47 +1148,45 @@ update_dbsync_state_test(Config) ->
         {provider, P3, P3Token},
         {provider, NonSupporter, NonSupporterToken}
     ],
-    update_dbsync_state_test(Config, Space, P1, P1Token, AllClients),
-    update_dbsync_state_test(Config, Space, P2, P2Token, AllClients),
-    update_dbsync_state_test(Config, Space, P3, P3Token, AllClients).
+    update_provider_sync_progress_test(Config, Space, P1, P1Token, AllClients),
+    update_provider_sync_progress_test(Config, Space, P2, P2Token, AllClients),
+    update_provider_sync_progress_test(Config, Space, P3, P3Token, AllClients).
 
 
-update_dbsync_state_test(Config, Space, SubjectProvider, SubjectProviderToken, AllClients) ->
+update_provider_sync_progress_test(Config, Space, SubjectProvider, SubjectProviderToken, AllClients) ->
     {ok, SpaceRecord} = oz_test_utils:get_space(Config, Space),
     SupportingProviders = maps:keys(SpaceRecord#od_space.eff_providers),
-    RandomizeSeqPerProvider = fun() ->
+    Now = oz_test_utils:cluster_time_seconds(Config),
+    RandomizeSyncProgressPerProvider = fun() ->
         lists:foldl(fun(Provider, Acc) ->
             % Due to delays in GraphSync, providers might not know all the other
             % providers for a while after a new support - simulate by randomly
-            % dropping them out of the sequence map. They should default to seq 0.
+            % dropping them out of the sequence map. They should default to
+            % seq=1 and timestamp=0.
             case rand:uniform(3) of
                 1 -> Acc;
-                _ -> Acc#{Provider => rand:uniform(1000)}
+                _ -> Acc#{Provider => #{<<"seq">> => rand:uniform(1000), <<"timestamp">> => Now - rand:uniform(50000)}}
             end
         end, #{}, SupportingProviders)
     end,
 
     EnvSetUpFun = fun() ->
-        {ok, #od_space{dbsync_state = DBSyncState}} = oz_test_utils:get_space(Config, Space),
-        oz_test_utils:simulate_time_passing(Config, rand:uniform(10000)),
-        #{previous => DBSyncState}
+        #{previous => get_sync_progress_per_provider(Config, Space)}
     end,
 
-    VerifyEndFun = fun(ShouldSucceed, #{previous := PreviousDBSyncState}, Data) ->
-        {ok, #od_space{dbsync_state = DBSyncState}} = oz_test_utils:get_space(Config, Space),
+    VerifyEndFun = fun(ShouldSucceed, #{previous := PreviousSyncProgressPerProvider}, Data) ->
+        SyncProgressPerProvider = get_sync_progress_per_provider(Config, Space),
         case ShouldSucceed of
             false ->
-                ?assertEqual(DBSyncState, PreviousDBSyncState);
+                ?assertEqual(SyncProgressPerProvider, PreviousSyncProgressPerProvider);
             true ->
-                SentSeqPerProvider = maps:get(<<"seqPerProvider">>, Data),
-                CurrentTime = oz_test_utils:cluster_time_seconds(Config),
-                ExpSeqPerProvider = lists:foldl(fun(Provider, Acc) ->
-                    Acc#{Provider => maps:get(Provider, SentSeqPerProvider, 0)}
+                ProviderSyncProgressDecoded = provider_sync_progress:from_json(maps:get(<<"providerSyncProgress">>, Data)),
+                ExpProviderSyncProgress = lists:foldl(fun(Provider, Acc) ->
+                    Acc#{Provider => maps:get(Provider, ProviderSyncProgressDecoded, {1, 0})}
                 end, #{}, SupportingProviders),
-                ExpDBSyncState = PreviousDBSyncState#{
-                    SubjectProvider => {CurrentTime, ExpSeqPerProvider}
-                },
-                ?assertEqual(DBSyncState, ExpDBSyncState)
+                ?assertEqual(SyncProgressPerProvider, PreviousSyncProgressPerProvider#{
+                    SubjectProvider => ExpProviderSyncProgress
+                })
         end
     end,
 
@@ -1202,28 +1201,38 @@ update_dbsync_state_test(Config, Space, SubjectProvider, SubjectProviderToken, A
         },
         logic_spec = #logic_spec{
             module = space_logic,
-            function = update_dbsync_state,
+            function = update_provider_sync_progress,
             args = [auth, Space, SubjectProvider, data],
             expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
-            gri = #gri{type = od_space, id = Space, aspect = {dbsync_state, SubjectProvider}},
+            gri = #gri{type = space_stats, id = Space, aspect = {provider_sync_progress, SubjectProvider}},
             expected_result = ?OK_RES
         },
         data_spec = #data_spec{
-            required = [<<"seqPerProvider">>],
-            correct_values = #{<<"seqPerProvider">> => [RandomizeSeqPerProvider]},
+            required = [<<"providerSyncProgress">>],
+            correct_values = #{<<"providerSyncProgress">> => [RandomizeSyncProgressPerProvider]},
             bad_values = [
-                {<<"seqPerProvider">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"seqPerProvider">>)},
-                {<<"seqPerProvider">>, 1234, ?ERROR_BAD_VALUE_JSON(<<"seqPerProvider">>)},
-                {<<"seqPerProvider">>, #{<<"providerid">> => [123, <<"value">>]}, ?ERROR_BAD_DATA(<<"seqPerProvider">>)}
+                {<<"providerSyncProgress">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"providerSyncProgress">>)},
+                {<<"providerSyncProgress">>, 1234, ?ERROR_BAD_VALUE_JSON(<<"providerSyncProgress">>)},
+                {<<"providerSyncProgress">>, #{<<"providerid">> => [123, <<"value">>]}, ?ERROR_BAD_DATA(<<"providerSyncProgress">>)}
             ]
         }
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )).
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+get_sync_progress_per_provider(Config, SpaceId) ->
+    {ok, #space_stats{sync_progress_per_provider = PerProvider}} = oz_test_utils:call_oz(
+        Config, space_logic, get_stats, [?ROOT, SpaceId]
+    ),
+    PerProvider.
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -1235,11 +1244,9 @@ init_per_suite(Config) ->
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 init_per_testcase(_, Config) ->
-    oz_test_utils:mock_time(Config),
     Config.
 
-end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_time(Config),
+end_per_testcase(_, _Config) ->
     ok.
 
 end_per_suite(_Config) ->

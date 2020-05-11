@@ -418,7 +418,7 @@ support_space_token(_Config) ->
 
     ?assert(run_invite_token_tests(#testcase{
         token_type = ?INVITE_TOKEN(
-            ?SUPPORT_SPACE, SpaceId, space_support:build_parameters(TokenDataWrite, TokenMetaReplication)
+            ?SUPPORT_SPACE, SpaceId, support_parameters:build(TokenDataWrite, TokenMetaReplication)
         ),
 
         eligible_to_invite = [?SUB(user, SpaceCreatorUserId)],
@@ -465,7 +465,7 @@ support_space_token(_Config) ->
                     ozt_providers:ensure_storage(ProviderId, OtherStorage),
                     OzAdmin = ozt_users:create_admin(),
                     ozt_providers:support_space_using_token(ProviderId, OtherStorage, ozt_spaces:create_support_token(
-                        SpaceId, OzAdmin, space_support:build_parameters(
+                        SpaceId, OzAdmin, support_parameters:build(
                             lists_utils:random_element([global, none] -- [TokenDataWrite]),
                             lists_utils:random_element([eager, lazy, none] -- [TokenMetaReplication])
                         )
@@ -479,8 +479,8 @@ support_space_token(_Config) ->
                 false ->
                     false;
                 true ->
-                    #od_space{support_parameters = CurrentParamsPerProvider} = ozt_spaces:get(SpaceId),
-                    case space_support:lookup_parameters_for_provider(CurrentParamsPerProvider, ProviderId) of
+                    #od_space{support_parameters_per_provider = CurrentParamsPerProvider} = ozt_spaces:get(SpaceId),
+                    case support_parameters:lookup_by_provider(CurrentParamsPerProvider, ProviderId) of
                         {ok, Params} -> {true, Params};
                         error -> false
                     end
@@ -498,12 +498,12 @@ support_space_token(_Config) ->
                 rest_call_args = not_available,
                 graph_sync_args = {?GRI(od_storage, StorageId, support, private), undefined, Data},
                 validate_result_fun = fun() ->
-                    #od_space{support_parameters = SupportParameters} = ozt_spaces:get(SpaceId),
+                    #od_space{support_parameters_per_provider = SupportParameters} = ozt_spaces:get(SpaceId),
                     % If the space was already supported, support parameters should be inherited
                     % regardless of the parameters in the token. Otherwise, token parameters
                     % are taken.
                     ExpParameters = case IsAlreadySupported of
-                        false -> space_support:build_parameters(TokenDataWrite, TokenMetaReplication);
+                        false -> support_parameters:build(TokenDataWrite, TokenMetaReplication);
                         {true, PreviousParameters} -> PreviousParameters
                     end,
                     ?assertEqual(ExpParameters, maps:get(ProviderId, SupportParameters)),

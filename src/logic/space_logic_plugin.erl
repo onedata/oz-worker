@@ -102,7 +102,6 @@ operation_supported(update, instance, private) -> true;
 operation_supported(update, {user_privileges, _}, private) -> true;
 operation_supported(update, {group_privileges, _}, private) -> true;
 operation_supported(update, {support_parameters, _}, private) -> true;
-operation_supported(update, {dbsync_state, _}, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {user, _}, private) -> true;
@@ -168,6 +167,9 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         _ ->
             ok
     end,
+
+    space_stats:init_for_space(SpaceId),
+
     {true, {Space, Rev}} = fetch_entity(#gri{aspect = instance, id = SpaceId}),
     {ok, resource, {GRI#gri{id = SpaceId}, {Space, Rev}}};
 
@@ -225,7 +227,7 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_group_token
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = space_support_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 20.02.*
     token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(
-        ?SUPPORT_SPACE, SpaceId, space_support:build_parameters(global, eager)
+        ?SUPPORT_SPACE, SpaceId, support_parameters:build(global, eager)
     ));
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}, data = Data}) ->
@@ -313,17 +315,17 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Space) ->
     {ok, Space};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{
-        name = Name, support_parameters = SupportParameters,
-        dbsync_state = DBSyncState, support_state = SupportState,
-        creation_time = CreationTime, creator = Creator,
-        shares = Shares
+        name = Name,
+        shares = Shares,
+        support_parameters_per_provider = SupportParametersPerProvider,
+        support_stage_per_provider = SupportStagePerProvider,
+        creation_time = CreationTime, creator = Creator
     } = Space,
     {ok, #{
         <<"name">> => Name,
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
-        <<"supportParameters">> => SupportParameters,
-        <<"dbsyncState">> => DBSyncState,
-        <<"supportState">> => SupportState,
+        <<"supportParametersPerProvider">> => SupportParametersPerProvider,
+        <<"supportStagePerProvider">> => SupportStagePerProvider,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator,
         <<"sharesCount">> => length(Shares)
@@ -396,26 +398,13 @@ update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {group_privileges, GroupI
     );
 
 update(#el_req{gri = #gri{id = SpaceId, aspect = {support_parameters, ProviderId}}, data = Data}) ->
-    {ok, _} = od_space:update(SpaceId, fun(Space = #od_space{support_parameters = ParametersPerProvider}) ->
-        {ok, PreviousForProvider} = space_support:lookup_parameters_for_provider(ParametersPerProvider, ProviderId),
-        {ok, Space#od_space{support_parameters = space_support:update_parameters_for_provider(
-            ParametersPerProvider, ProviderId, space_support:build_parameters(
-                maps:get(<<"dataWrite">>, Data, space_support:get_data_write(PreviousForProvider)),
-                maps:get(<<"metadataReplication">>, Data, space_support:get_metadata_replication(PreviousForProvider))
+    {ok, _} = od_space:update(SpaceId, fun(Space = #od_space{support_parameters_per_provider = ParametersPerProvider}) ->
+        {ok, PreviousForProvider} = support_parameters:lookup_by_provider(ParametersPerProvider, ProviderId),
+        {ok, Space#od_space{support_parameters_per_provider = support_parameters:update_for_provider(
+            ParametersPerProvider, ProviderId, support_parameters:build(
+                maps:get(<<"dataWrite">>, Data, support_parameters:get_data_write(PreviousForProvider)),
+                maps:get(<<"metadataReplication">>, Data, support_parameters:get_metadata_replication(PreviousForProvider))
             )
-        )}}
-    end),
-    ok;
-
-update(#el_req{gri = #gri{id = SpaceId, aspect = {dbsync_state, ProviderId}}, data = Data}) ->
-    SeqPerProvider = maps:get(<<"seqPerProvider">>, Data),
-    {ok, _} = od_space:update(SpaceId, fun(Space) ->
-        #od_space{dbsync_state = DBSyncStatePerProvider, eff_providers = Providers} = Space,
-        DBSyncState = space_support:build_dbsync_state(
-            time_utils:cluster_time_seconds(), SeqPerProvider, maps:keys(Providers)
-        ),
-        {ok, Space#od_space{dbsync_state = space_support:update_dbsync_state_for_provider(
-            DBSyncStatePerProvider, ProviderId, DBSyncState
         )}}
     end),
     ok.
@@ -435,7 +424,8 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
                     harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, true)
                 end)
         end, Harvesters),
-        entity_graph:delete_with_relations(od_space, SpaceId)
+        entity_graph:delete_with_relations(od_space, SpaceId),
+        space_stats:clear_for_space(SpaceId)
     end;
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}}) ->
@@ -559,9 +549,6 @@ exists(#el_req{gri = #gri{aspect = {harvester, HarvesterId}}}, Space) ->
     entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, Space);
 
 exists(#el_req{gri = #gri{aspect = {support_parameters, ProviderId}}}, Space) ->
-    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Space);
-
-exists(#el_req{gri = #gri{aspect = {dbsync_state, ProviderId}}}, Space) ->
     entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Space);
 
 % All other aspects exist if space record exists.
@@ -719,9 +706,6 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = {group_privilege
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {support_parameters, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_UPDATE);
-
-authorize(Req = #el_req{auth = ?PROVIDER(PrId), operation = update, gri = #gri{aspect = {dbsync_state, PrId}}}, Space) ->
-    auth_by_support(Req, Space);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_DELETE);
@@ -952,24 +936,6 @@ validate(#el_req{operation = update, gri = #gri{aspect = {support_parameters, _}
         at_least_one => #{
             <<"dataWrite">> => {atom, [global, none]},
             <<"metadataReplication">> => {atom, [eager, lazy, none]}
-        }
-    };
-
-validate(#el_req{operation = update, gri = #gri{aspect = {dbsync_state, _}}}) ->
-    #{
-        required => #{
-            <<"seqPerProvider">> => {json, fun(Json) ->
-                try
-                    maps:map(fun(ProviderId, Seq) ->
-                        true = is_binary(ProviderId),
-                        true = is_integer(Seq),
-                        true = (Seq >= 0)
-                    end, Json),
-                    true
-                catch _:_ ->
-                    false
-                end
-            end}
         }
     }.
 

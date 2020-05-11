@@ -73,6 +73,14 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = instance}
     }},
+    %% Get space stats
+    %% This operation requires one of the following privileges:
+    %% - oz_spaces_view
+    {<<"/spaces/:id/stats">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = stats, scope = private}
+    }},
     %% List space users
     %% This operation requires one of the following privileges:
     %% - space_view

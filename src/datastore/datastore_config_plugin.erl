@@ -46,6 +46,7 @@ get_models() -> [
     gui_message,
     provider_connections,
     user_connections,
+    space_stats,
     temporary_token_secret,
 
     %% @TODO VFS-5554 Deprecated models

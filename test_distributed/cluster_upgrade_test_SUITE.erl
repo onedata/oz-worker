@@ -15,6 +15,8 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include("api_test_utils.hrl").
+-include_lib("ctool/include/space_support/support_stage.hrl").
+-include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
@@ -29,7 +31,8 @@
 -export([
     upgrade_from_19_02_x_tokens/1,
     upgrade_from_19_02_x_storages/1,
-    upgrade_from_19_02_x_space_support_info/1
+    upgrade_from_20_02_0_beta3_space_support_info/1,
+    upgrade_from_19_02_space_lifecycle_with_providers_of_different_versions/1
 ]).
 
 %%%===================================================================
@@ -39,7 +42,8 @@
 all() -> ?ALL([
     upgrade_from_19_02_x_tokens,
     upgrade_from_19_02_x_storages,
-    upgrade_from_19_02_x_space_support_info
+    upgrade_from_20_02_0_beta3_space_support_info,
+    upgrade_from_19_02_space_lifecycle_with_providers_of_different_versions
 ]).
 
 
@@ -48,66 +52,58 @@ all() -> ?ALL([
 %%%===================================================================
 
 init_per_suite(Config) ->
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
-init_per_testcase(_, Config) ->
-    oz_test_utils:mock_time(Config),
-    Config.
-
-end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_time(Config),
-    ok.
+    ssl:start(),
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
+    ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_time(),
+    ozt:delete_all_entities(),
     ok.
 
 %%%===================================================================
 %%% Tests
 %%%===================================================================
 
-upgrade_from_19_02_x_tokens(Config) ->
-    {ok, User1} = oz_test_utils:create_user(Config),
-    {ok, User2} = oz_test_utils:create_user(Config),
-    {ok, User3} = oz_test_utils:create_user(Config),
-    {ok, User4} = oz_test_utils:create_user(Config),
-    {ok, User5} = oz_test_utils:create_user(Config),
+upgrade_from_19_02_x_tokens(_Config) ->
+    User1 = ozt_users:create(),
+    User2 = ozt_users:create(),
+    User3 = ozt_users:create(),
+    User4 = ozt_users:create(),
+    User5 = ozt_users:create(),
 
-    User1Tokens = create_n_legacy_client_tokens(Config, User1, 0),
-    User2Tokens = create_n_legacy_client_tokens(Config, User2, 2),
-    User3Tokens = create_n_legacy_client_tokens(Config, User3, 7),
-    User4Tokens = create_n_legacy_client_tokens(Config, User4, 1),
-    User5Tokens = create_n_legacy_client_tokens(Config, User5, 13),
+    User1Tokens = create_n_legacy_client_tokens(User1, 0),
+    User2Tokens = create_n_legacy_client_tokens(User2, 2),
+    User3Tokens = create_n_legacy_client_tokens(User3, 7),
+    User4Tokens = create_n_legacy_client_tokens(User4, 1),
+    User5Tokens = create_n_legacy_client_tokens(User5, 13),
 
-    {P1, _, _, _} = PToken1 = create_legacy_provider(Config),
-    {P2, _, _, _} = PToken2 = create_legacy_provider(Config),
-    {P3, _, _, _} = PToken3 = create_legacy_provider(Config),
-    {P4, _, _, _} = PToken4 = create_legacy_provider(Config),
+    {P1, _, _, _} = PToken1 = create_legacy_provider(),
+    {P2, _, _, _} = PToken2 = create_legacy_provider(),
+    {P3, _, _, _} = PToken3 = create_legacy_provider(),
+    {P4, _, _, _} = PToken4 = create_legacy_provider(),
 
     % Force trigger a cluster upgrade
-    ?assertEqual({ok, 2}, oz_test_utils:call_oz(Config, node_manager_plugin, upgrade_cluster, [1])),
+    ?assertEqual({ok, 2}, ozt:rpc(node_manager_plugin, upgrade_cluster, [1])),
 
-    {ok, AllTokens} = oz_test_utils:call_oz(Config, token_logic, list, [?ROOT]),
-    ?assertEqual(27, length(AllTokens)),
+    ?assertEqual(27, length(list_all_tokens())),
 
-    ?assertEqual(0, length(element(2, {ok, _} = oz_test_utils:call_oz(
-        Config, token_logic, list_user_named_tokens, [?ROOT, User1])))
-    ),
-    ?assertEqual(2, length(element(2, {ok, _} = oz_test_utils:call_oz(
-        Config, token_logic, list_user_named_tokens, [?ROOT, User2])))
-    ),
-    ?assertEqual(7, length(element(2, {ok, _} = oz_test_utils:call_oz(
-        Config, token_logic, list_user_named_tokens, [?ROOT, User3])))
-    ),
-    ?assertEqual(1, length(element(2, {ok, _} = oz_test_utils:call_oz(
-        Config, token_logic, list_user_named_tokens, [?ROOT, User4])))
-    ),
-    ?assertEqual(13, length(element(2, {ok, _} = oz_test_utils:call_oz(
-        Config, token_logic, list_user_named_tokens, [?ROOT, User5])))
-    ),
-    {ok, [_]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P1]),
-    {ok, [_]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P2]),
-    {ok, [_]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P3]),
-    {ok, [_]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P4]),
+    ?assertEqual(0, length(list_user_named_tokens(User1))),
+    ?assertEqual(2, length(list_user_named_tokens(User2))),
+    ?assertEqual(7, length(list_user_named_tokens(User3))),
+    ?assertEqual(1, length(list_user_named_tokens(User4))),
+    ?assertEqual(13, length(list_user_named_tokens(User5))),
+
+    ?assertMatch([_], list_provider_named_tokens(P1)),
+    ?assertMatch([_], list_provider_named_tokens(P2)),
+    ?assertMatch([_], list_provider_named_tokens(P3)),
+    ?assertMatch([_], list_provider_named_tokens(P4)),
 
     % Check all user tokens
     lists:foreach(fun({UserId, TokenId, Secret, LegacyTokenSerialized}) ->
@@ -122,7 +118,7 @@ upgrade_from_19_02_x_tokens(Config) ->
             secret = Secret,
             metadata = #{<<"creationTime">> := _},
             revoked = false
-        }}}, oz_test_utils:call_oz(Config, od_token, get, [TokenId])),
+        }}}, ozt:rpc(od_token, get, [TokenId])),
 
         % Subject is not supported in tokens version 1 when deserializing a
         % token (defaults to nobody), but it is filled in when a named token is retrieved.
@@ -137,15 +133,15 @@ upgrade_from_19_02_x_tokens(Config) ->
             <<"revoked">> := false,
             % Legacy tokens do not include subject (defaults to nobody)
             <<"token">> := LegacyTokenWithSubject
-        }}, oz_test_utils:call_oz(Config, token_logic, get_named_token, [?USER(UserId), TokenId])),
+        }}, ozt:rpc(token_logic, get_named_token, [?USER(UserId), TokenId])),
 
         % Make sure the migrated token has exactly the same serialized form as the original one
-        Token = oz_test_utils:call_oz(Config, od_token, named_token_to_token, [TokenId, NamedToken]),
+        Token = ozt:rpc(od_token, named_token_to_token, [TokenId, NamedToken]),
         ?assertEqual({ok, LegacyTokenSerialized}, tokens:serialize(Token)),
         % The legacy onedata_auth record should have been removed
-        ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, onedata_auth, get, [TokenId])),
+        ?assertEqual({error, not_found}, ozt:rpc(onedata_auth, get, [TokenId])),
         % The migrated token should still work
-        ?assertMatch({true, ?USER(UserId)}, oz_test_utils:authenticate_by_token(Config, LegacyToken))
+        ?assertMatch({true, ?USER(UserId)}, ozt_tokens:authenticate(LegacyToken))
     end, User1Tokens ++ User2Tokens ++ User3Tokens ++ User4Tokens ++ User5Tokens),
 
     % Check all provider tokens
@@ -161,7 +157,7 @@ upgrade_from_19_02_x_tokens(Config) ->
             secret = Secret,
             metadata = #{<<"creationTime">> := _},
             revoked = false
-        }}}, oz_test_utils:call_oz(Config, od_token, get, [TokenId])),
+        }}}, ozt:rpc(od_token, get, [TokenId])),
 
         % Subject is not supported in tokens version 1 when deserializing a
         % token (defaults to nobody), but it is filled in when a named token is retrieved.
@@ -175,190 +171,270 @@ upgrade_from_19_02_x_tokens(Config) ->
             <<"metadata">> := #{<<"creationTime">> := _},
             <<"revoked">> := false,
             <<"token">> := LegacyRootTokenWithSubject
-        }}, oz_test_utils:call_oz(Config, token_logic, get_named_token, [?PROVIDER(ProviderId), TokenId])),
+        }}, ozt:rpc(token_logic, get_named_token, [?PROVIDER(ProviderId), TokenId])),
         % Make sure the migrated token has exactly the same serialized form as the original one
-        Token = oz_test_utils:call_oz(Config, od_token, named_token_to_token, [TokenId, NamedToken]),
+        Token = ozt:rpc(od_token, named_token_to_token, [TokenId, NamedToken]),
         ?assertEqual({ok, LegacyRootTokenSerialized}, tokens:serialize(Token)),
         % The legacy macaroon_auth record should have been removed
-        ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, macaroon_auth, get, [TokenId])),
+        ?assertEqual({error, not_found}, ozt:rpc(macaroon_auth, get, [TokenId])),
         % The migrated token should still work
-        ?assertMatch({true, ?PROVIDER(ProviderId)}, oz_test_utils:authenticate_by_token(Config, LegacyRootToken))
+        ?assertMatch({true, ?PROVIDER(ProviderId)}, ozt_tokens:authenticate(LegacyRootToken))
     end, [PToken1, PToken2, PToken3, PToken4]).
 
 
-upgrade_from_19_02_x_storages(Config) ->
-    {P1, SpacesMap1} = create_legacy_provider_with_n_spaces(Config, 8),
-    {P2, SpacesMap2} = create_legacy_provider_with_n_spaces(Config, 32),
+upgrade_from_19_02_x_storages(_Config) ->
+    {P1, SpacesMap1} = create_legacy_provider_with_n_spaces(8),
+    {P2, SpacesMap2} = create_legacy_provider_with_n_spaces(32),
 
-    ?assertEqual({ok, 2}, oz_test_utils:call_oz(Config, node_manager_plugin, upgrade_cluster, [1])),
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    ?assertEqual({ok, 2}, ozt:rpc(node_manager_plugin, upgrade_cluster, [1])),
+    ozt:reconcile_entity_graph(),
 
-    {ok, P1Doc} = oz_test_utils:call_oz(Config, od_provider, get, [P1]),
-    {ok, P2Doc} = oz_test_utils:call_oz(Config, od_provider, get, [P2]),
+    {ok, P1Doc} = ozt:rpc(od_provider, get, [P1]),
+    {ok, P2Doc} = ozt:rpc(od_provider, get, [P2]),
 
     % Check that there are no legacy spaces left
-    ?assertEqual({ok, #{}}, oz_test_utils:call_oz(Config, provider_logic, get_legacy_spaces, [P1Doc])),
-    ?assertEqual({ok, #{}}, oz_test_utils:call_oz(Config, provider_logic, get_legacy_spaces, [P2Doc])),
+    ?assertEqual({ok, #{}}, ozt:rpc(provider_logic, get_legacy_spaces, [P1Doc])),
+    ?assertEqual({ok, #{}}, ozt:rpc(provider_logic, get_legacy_spaces, [P2Doc])),
 
     % Check that virtual storage has been created
-    ?assertEqual(true, oz_test_utils:call_oz(Config, provider_logic, has_storage, [P1, P1])),
-    ?assertEqual(true, oz_test_utils:call_oz(Config, provider_logic, has_storage, [P2, P2])),
+    ?assertEqual(true, ozt:rpc(provider_logic, has_storage, [P1, P1])),
+    ?assertEqual(true, ozt:rpc(provider_logic, has_storage, [P2, P2])),
 
     % Check spaces are supported by correct storage
     lists:foreach(fun(SpaceId) ->
-        ?assertEqual(true, oz_test_utils:call_oz(Config, space_logic, is_supported_by_storage, [SpaceId, P1])),
-        ?assertEqual(true, oz_test_utils:call_oz(Config, space_logic, is_supported_by_provider, [SpaceId, P1])),
-        ?assertEqual(true, oz_test_utils:call_oz(Config, storage_logic, supports_space, [P1, SpaceId])),
-        ?assertEqual(true, oz_test_utils:call_oz(Config, provider_logic, supports_space, [P1, SpaceId])),
+        ?assertEqual(true, ozt:rpc(space_logic, is_supported_by_storage, [SpaceId, P1])),
+        ?assertEqual(true, ozt:rpc(space_logic, is_supported_by_provider, [SpaceId, P1])),
+        ?assertEqual(true, ozt:rpc(storage_logic, supports_space, [P1, SpaceId])),
+        ?assertEqual(true, ozt:rpc(provider_logic, supports_space, [P1, SpaceId])),
 
-        ?assertEqual(false, oz_test_utils:call_oz(Config, space_logic, is_supported_by_storage, [SpaceId, P2])),
-        ?assertEqual(false, oz_test_utils:call_oz(Config, space_logic, is_supported_by_provider, [SpaceId, P2])),
-        ?assertEqual(false, oz_test_utils:call_oz(Config, storage_logic, supports_space, [P2, SpaceId])),
-        ?assertEqual(false, oz_test_utils:call_oz(Config, provider_logic, supports_space, [P2, SpaceId]))
+        ?assertEqual(false, ozt:rpc(space_logic, is_supported_by_storage, [SpaceId, P2])),
+        ?assertEqual(false, ozt:rpc(space_logic, is_supported_by_provider, [SpaceId, P2])),
+        ?assertEqual(false, ozt:rpc(storage_logic, supports_space, [P2, SpaceId])),
+        ?assertEqual(false, ozt:rpc(provider_logic, supports_space, [P2, SpaceId]))
     end, maps:keys(SpacesMap1)),
 
     lists:foreach(fun(SpaceId) ->
-        ?assertEqual(true, oz_test_utils:call_oz(Config, space_logic, is_supported_by_storage, [SpaceId, P2])),
-        ?assertEqual(true, oz_test_utils:call_oz(Config, space_logic, is_supported_by_provider, [SpaceId, P2])),
-        ?assertEqual(true, oz_test_utils:call_oz(Config, storage_logic, supports_space, [P2, SpaceId])),
-        ?assertEqual(true, oz_test_utils:call_oz(Config, provider_logic, supports_space, [P2, SpaceId])),
+        ?assertEqual(true, ozt:rpc(space_logic, is_supported_by_storage, [SpaceId, P2])),
+        ?assertEqual(true, ozt:rpc(space_logic, is_supported_by_provider, [SpaceId, P2])),
+        ?assertEqual(true, ozt:rpc(storage_logic, supports_space, [P2, SpaceId])),
+        ?assertEqual(true, ozt:rpc(provider_logic, supports_space, [P2, SpaceId])),
 
-        ?assertEqual(false, oz_test_utils:call_oz(Config, space_logic, is_supported_by_storage, [SpaceId, P1])),
-        ?assertEqual(false, oz_test_utils:call_oz(Config, space_logic, is_supported_by_provider, [SpaceId, P1])),
-        ?assertEqual(false, oz_test_utils:call_oz(Config, storage_logic, supports_space, [P1, SpaceId])),
-        ?assertEqual(false, oz_test_utils:call_oz(Config, provider_logic, supports_space, [P1, SpaceId]))
+        ?assertEqual(false, ozt:rpc(space_logic, is_supported_by_storage, [SpaceId, P1])),
+        ?assertEqual(false, ozt:rpc(space_logic, is_supported_by_provider, [SpaceId, P1])),
+        ?assertEqual(false, ozt:rpc(storage_logic, supports_space, [P1, SpaceId])),
+        ?assertEqual(false, ozt:rpc(provider_logic, supports_space, [P1, SpaceId]))
     end, maps:keys(SpacesMap2)),
 
-    ?assertEqual(SpacesMap1, oz_test_utils:call_oz(
-        Config, entity_graph, get_relations_with_attrs, [effective, bottom_up, od_space, P1Doc#document.value])),
-    ?assertEqual(SpacesMap2, oz_test_utils:call_oz(
-        Config, entity_graph, get_relations_with_attrs, [effective, bottom_up, od_space, P2Doc#document.value])),
+    ?assertEqual(
+        SpacesMap1,
+        ozt:rpc(entity_graph, get_relations_with_attrs, [effective, bottom_up, od_space, P1Doc#document.value])
+    ),
+    ?assertEqual(
+        SpacesMap2,
+        ozt:rpc(entity_graph, get_relations_with_attrs, [effective, bottom_up, od_space, P2Doc#document.value])
+    ),
 
     maps:map(fun(SpaceId, _SupportSize) ->
-        ?assertEqual([{od_storage, P1}], oz_test_utils:call_oz(
-            Config, entity_graph, get_intermediaries, [bottom_up, od_space, SpaceId, P1Doc#document.value]))
+        ?assertEqual(
+            [{od_storage, P1}],
+            ozt:rpc(entity_graph, get_intermediaries, [bottom_up, od_space, SpaceId, P1Doc#document.value])
+        )
     end, SpacesMap1),
 
     maps:map(fun(SpaceId, _SupportSize) ->
-        ?assertEqual([{od_storage, P2}], oz_test_utils:call_oz(
-            Config, entity_graph, get_intermediaries, [bottom_up, od_space, SpaceId, P2Doc#document.value]))
+        ?assertEqual(
+            [{od_storage, P2}],
+            ozt:rpc(entity_graph, get_intermediaries, [bottom_up, od_space, SpaceId, P2Doc#document.value])
+        )
     end, SpacesMap2).
 
 
-upgrade_from_19_02_x_space_support_info(Config) ->
-    {ok, SpaceAlpha} = oz_test_utils:create_space(Config, ?ROOT),
-    {ok, SpaceBeta} = oz_test_utils:create_space(Config, ?ROOT),
-    {ok, SpaceGamma} = oz_test_utils:create_space(Config, ?ROOT),
-    {ok, SpaceDelta} = oz_test_utils:create_space(Config, ?ROOT),
-    {ok, SpaceOmega} = oz_test_utils:create_space(Config, ?ROOT),
+upgrade_from_20_02_0_beta3_space_support_info(_Config) ->
+    SpaceAlpha = ozt_spaces:create(),
+    SpaceBeta = ozt_spaces:create(),
+    SpaceGamma = ozt_spaces:create(),
+    SpaceDelta = ozt_spaces:create(),
+    SpaceOmega = ozt_spaces:create(),
 
-    {P1, _} = create_legacy_provider_with_spaces(Config, [SpaceAlpha, SpaceBeta, SpaceGamma]),
-    {P2, _} = create_legacy_provider_with_spaces(Config, [SpaceAlpha, SpaceGamma, SpaceDelta]),
-    {P3, _} = create_legacy_provider_with_spaces(Config, [SpaceGamma, SpaceDelta, SpaceOmega]),
+    {P1, _} = create_legacy_provider_with_spaces([SpaceAlpha, SpaceBeta, SpaceGamma]),
+    {P2, _} = create_legacy_provider_with_spaces([SpaceAlpha, SpaceGamma, SpaceDelta]),
+    {P3, _} = create_legacy_provider_with_spaces([SpaceGamma, SpaceDelta, SpaceOmega]),
 
-    ?assertEqual({ok, 2}, oz_test_utils:call_oz(Config, node_manager_plugin, upgrade_cluster, [1])),
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    ?assertEqual({ok, 2}, ozt:rpc(node_manager_plugin, upgrade_cluster, [1])),
+    ?assertEqual({ok, 3}, ozt:rpc(node_manager_plugin, upgrade_cluster, [2])),
+    ozt:reconcile_entity_graph(),
 
-    Timestamp = oz_test_utils:cluster_time_seconds(Config),
-    DefaultParameters = space_support:build_parameters(global, eager),
+    DefaultParameters = support_parameters:build(global, eager),
 
-    {ok, AlphaRecord} = oz_test_utils:get_space(Config, SpaceAlpha),
-    {ok, BetaRecord} = oz_test_utils:get_space(Config, SpaceBeta),
-    {ok, GammaRecord} = oz_test_utils:get_space(Config, SpaceGamma),
-    {ok, DeltaRecord} = oz_test_utils:get_space(Config, SpaceDelta),
-    {ok, OmegaRecord} = oz_test_utils:get_space(Config, SpaceOmega),
+    AlphaRecord = ozt_spaces:get(SpaceAlpha),
+    BetaRecord = ozt_spaces:get(SpaceBeta),
+    GammaRecord = ozt_spaces:get(SpaceGamma),
+    DeltaRecord = ozt_spaces:get(SpaceDelta),
+    OmegaRecord = ozt_spaces:get(SpaceOmega),
 
-    ?assertEqual(AlphaRecord#od_space.support_parameters, #{
+    ?assertEqual(AlphaRecord#od_space.support_parameters_per_provider, #{
         P1 => DefaultParameters, P2 => DefaultParameters
     }),
-    ?assertEqual(BetaRecord#od_space.support_parameters, #{
+    ?assertEqual(BetaRecord#od_space.support_parameters_per_provider, #{
         P1 => DefaultParameters
     }),
-    ?assertEqual(GammaRecord#od_space.support_parameters, #{
+    ?assertEqual(GammaRecord#od_space.support_parameters_per_provider, #{
         P1 => DefaultParameters, P2 => DefaultParameters, P3 => DefaultParameters
     }),
-    ?assertEqual(DeltaRecord#od_space.support_parameters, #{
+    ?assertEqual(DeltaRecord#od_space.support_parameters_per_provider, #{
         P2 => DefaultParameters, P3 => DefaultParameters
     }),
-    ?assertEqual(OmegaRecord#od_space.support_parameters, #{
+    ?assertEqual(OmegaRecord#od_space.support_parameters_per_provider, #{
         P3 => DefaultParameters
     }),
 
-    ?assertEqual(AlphaRecord#od_space.dbsync_state, #{
-        P1 => {Timestamp, #{P1 => 0, P2 => 0}},
-        P2 => {Timestamp, #{P1 => 0, P2 => 0}}
+    ?assertEqual(AlphaRecord#od_space.support_stage_per_provider, #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS, P2 => ?LEGACY_SUPPORT_STAGE_DETAILS
     }),
-    ?assertEqual(BetaRecord#od_space.dbsync_state, #{
-        P1 => {Timestamp, #{P1 => 0}}
+    ?assertEqual(BetaRecord#od_space.support_stage_per_provider, #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS
     }),
-    ?assertEqual(GammaRecord#od_space.dbsync_state, #{
-        P1 => {Timestamp, #{P1 => 0, P2 => 0, P3 => 0}},
-        P2 => {Timestamp, #{P1 => 0, P2 => 0, P3 => 0}},
-        P3 => {Timestamp, #{P1 => 0, P2 => 0, P3 => 0}}
+    ?assertEqual(GammaRecord#od_space.support_stage_per_provider, #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS, P2 => ?LEGACY_SUPPORT_STAGE_DETAILS, P3 => ?LEGACY_SUPPORT_STAGE_DETAILS
     }),
-    ?assertEqual(DeltaRecord#od_space.dbsync_state, #{
-        P2 => {Timestamp, #{P2 => 0, P3 => 0}},
-        P3 => {Timestamp, #{P2 => 0, P3 => 0}}
+    ?assertEqual(DeltaRecord#od_space.support_stage_per_provider, #{
+        P2 => ?LEGACY_SUPPORT_STAGE_DETAILS, P3 => ?LEGACY_SUPPORT_STAGE_DETAILS
     }),
-    ?assertEqual(OmegaRecord#od_space.dbsync_state, #{
-        P3 => {Timestamp, #{P3 => 0}}
+    ?assertEqual(OmegaRecord#od_space.support_stage_per_provider, #{
+        P3 => ?LEGACY_SUPPORT_STAGE_DETAILS
     }),
 
-    ?assertEqual(AlphaRecord#od_space.support_state, #{
-        P1 => active, P2 => active
+    ?assertEqual(sync_progress_per_provider(SpaceAlpha), #{
+        P1 => #{P1 => {1, 0}, P2 => {1, 0}},
+        P2 => #{P1 => {1, 0}, P2 => {1, 0}}
     }),
-    ?assertEqual(BetaRecord#od_space.support_state, #{
-        P1 => active
+    ?assertEqual(sync_progress_per_provider(SpaceBeta), #{
+        P1 => #{P1 => {1, 0}}
     }),
-    ?assertEqual(GammaRecord#od_space.support_state, #{
-        P1 => active, P2 => active, P3 => active
+    ?assertEqual(sync_progress_per_provider(SpaceGamma), #{
+        P1 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}},
+        P2 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}},
+        P3 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}}
     }),
-    ?assertEqual(DeltaRecord#od_space.support_state, #{
-        P2 => active, P3 => active
+    ?assertEqual(sync_progress_per_provider(SpaceDelta), #{
+        P2 => #{P2 => {1, 0}, P3 => {1, 0}},
+        P3 => #{P2 => {1, 0}, P3 => {1, 0}}
     }),
-    ?assertEqual(OmegaRecord#od_space.support_state, #{
-        P3 => active
+    ?assertEqual(sync_progress_per_provider(SpaceOmega), #{
+        P3 => #{P3 => {1, 0}}
     }).
+
+
+upgrade_from_19_02_space_lifecycle_with_providers_of_different_versions(_Config) ->
+    SpaceAlpha = ozt_spaces:create(),
+    SpaceBeta = ozt_spaces:create(),
+    {P1, _} = create_legacy_provider_with_spaces([SpaceAlpha, SpaceBeta]),
+    {P2, _} = create_legacy_provider_with_spaces([]),
+    {P3, _} = create_legacy_provider_with_spaces([SpaceAlpha]),
+
+    ?assertEqual({ok, 2}, ozt:rpc(node_manager_plugin, upgrade_cluster, [1])),
+    ?assertEqual({ok, 3}, ozt:rpc(node_manager_plugin, upgrade_cluster, [2])),
+
+    GetSupportStagePerProvider = fun(SpaceId) ->
+        Space = ozt_spaces:get(SpaceId),
+        Space#od_space.support_stage_per_provider
+    end,
+
+    ?assertEqual(GetSupportStagePerProvider(SpaceAlpha), #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS,
+        P3 => ?LEGACY_SUPPORT_STAGE_DETAILS
+    }),
+    ?assertEqual(GetSupportStagePerProvider(SpaceBeta), #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS
+    }),
+
+    % at this point, all providers are in legacy versions
+
+    % support SpaceBeta using the legacy support procedure
+    ozt_providers:support_space_with_legacy_storage(P2, SpaceBeta),
+    ?assertEqual(GetSupportStagePerProvider(SpaceBeta), #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS,
+        P2 => ?LEGACY_SUPPORT_STAGE_DETAILS
+    }),
+
+    % simulate P2 being upgraded to the newest version
+    P2Storage = ozt_providers:create_storage(P2),
+    upgrade_legacy_support(P2, P2Storage, SpaceBeta),
+    ?assertEqual(GetSupportStagePerProvider(SpaceBeta), #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS,
+        P2 => #support_stage_details{provider_stage = active, per_storage = #{P2Storage => active}}
+    }),
+
+    % simulate P3 being upgraded to the newest version
+    P3Storage = ozt_providers:create_storage(P3),
+    upgrade_legacy_support(P3, P3Storage, SpaceAlpha),
+    ?assertEqual(GetSupportStagePerProvider(SpaceAlpha), #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS,
+        P3 => #support_stage_details{provider_stage = active, per_storage = #{P3Storage => active}}
+    }),
+    ?assertEqual(sync_progress_per_provider(SpaceAlpha), #{
+        P1 => #{P1 => {1, 0}, P3 => {1, 0}},
+        P3 => #{P1 => {1, 0}, P3 => {1, 0}}
+    }),
+
+    % support the SpaceBeta with P3 using the modern procedure
+    ozt_providers:support_space(P3, P3Storage, SpaceBeta),
+    ?assertEqual(GetSupportStagePerProvider(SpaceBeta), #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS,
+        P2 => #support_stage_details{provider_stage = active, per_storage = #{P2Storage => active}},
+        P3 => #support_stage_details{provider_stage = active, per_storage = #{P3Storage => active}}
+    }),
+    ?assertEqual(sync_progress_per_provider(SpaceBeta), #{
+        P1 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}},
+        P2 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}},
+        P3 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}}
+    }).
+
+%% @todo VFS-6311 implement the following tests when space lifecycle integration is complete
+%%  * space is unsupported by a legacy provider
+%%  * space is re-supported by a legacy provider (before or after upgrade)
+%%  * support size is modified by a legacy provider
+%% Consider moving the tests to a new SUITE (space_lifecycle?)
 
 %%%===================================================================
 %%% Helper functions
 %%%===================================================================
 
-create_n_legacy_client_tokens(Config, UserId, Count) ->
+create_n_legacy_client_tokens(UserId, Count) ->
     lists:map(fun(_) ->
         Secret = tokens:generate_secret(),
-        {ok, Doc} = oz_test_utils:call_oz(Config, onedata_auth, save, [#document{
+        {ok, Doc} = ozt:rpc(onedata_auth, save, [#document{
             value = #onedata_auth{secret = Secret, user_id = UserId}
         }]),
         TokenId = Doc#document.key,
-        ExpirationTime = oz_test_utils:cluster_time_seconds(Config) + 31536000, % 1 year
-        Macaroon = macaroon:create(oz_test_utils:oz_domain(Config), Secret, TokenId),
+        ExpirationTime = ozt:cluster_time_seconds() + 31536000, % 1 year
+        Macaroon = macaroon:create(ozt:get_domain(), Secret, TokenId),
         Confined = macaroon:add_first_party_caveat(Macaroon, ["time < ", integer_to_binary(ExpirationTime)]),
         Token = #token{
             version = 1,
-            onezone_domain = oz_test_utils:oz_domain(Config),
+            onezone_domain = ozt:get_domain(),
             id = TokenId,
             persistence = named,
             type = ?ACCESS_TOKEN,
             macaroon = Confined
         },
         {ok, Serialized} = tokens:serialize(Token),
-        oz_test_utils:call_oz(Config, od_user, update, [UserId, fun(User = #od_user{client_tokens = ClientTokens}) ->
+        ozt:rpc(od_user, update, [UserId, fun(User = #od_user{client_tokens = ClientTokens}) ->
             {ok, User#od_user{client_tokens = [Serialized | ClientTokens]}}
         end]),
         {UserId, TokenId, Secret, Serialized}
     end, lists:seq(1, Count)).
 
 
-create_legacy_provider(Config) ->
+create_legacy_provider() ->
     ProviderId = datastore_key:new(),
     Secret = tokens:generate_secret(),
-    {ok, RootTokenId} = oz_test_utils:call_oz(Config, macaroon_auth, create, [
+    {ok, RootTokenId} = ozt:rpc(macaroon_auth, create, [
         Secret, ?PROVIDER(ProviderId)
     ]),
     Prototype = #token{
         version = 1,
-        onezone_domain = oz_test_utils:oz_domain(Config),
+        onezone_domain = ozt:get_domain(),
         id = RootTokenId,
         persistence = named,
         type = ?ACCESS_TOKEN
@@ -373,32 +449,58 @@ create_legacy_provider(Config) ->
         subdomain = undefined,
         admin_email = <<(?UNIQUE_STRING)/binary, "@example.com">>
     },
-    {ok, _} = oz_test_utils:call_oz(Config, od_provider, create, [
+    {ok, _} = ozt:rpc(od_provider, create, [
         #document{key = ProviderId, value = ProviderRecord}
     ]),
-    oz_test_utils:call_oz(Config, cluster_logic, create_oneprovider_cluster, [
+    ozt:rpc(cluster_logic, create_oneprovider_cluster, [
         undefined, ProviderId
     ]),
     {ok, SerializedRootToken} = tokens:serialize(RootToken),
     {ProviderId, RootTokenId, Secret, SerializedRootToken}.
 
 
-create_legacy_provider_with_n_spaces(Config, SpacesNum) ->
-    SpaceIds = lists:map(fun(_) ->
-        {ok, SpaceId} = oz_test_utils:create_space(Config, ?ROOT),
-        SpaceId
-    end, lists:seq(1, SpacesNum)),
-    create_legacy_provider_with_spaces(Config, SpaceIds).
+create_legacy_provider_with_n_spaces(SpacesNum) ->
+    SpaceIds = lists:map(fun(_) -> ozt_spaces:create() end, lists:seq(1, SpacesNum)),
+    create_legacy_provider_with_spaces(SpaceIds).
 
 
-create_legacy_provider_with_spaces(Config, SpaceIds) ->
-    {ProviderId, _, _, _} = create_legacy_provider(Config),
+create_legacy_provider_with_spaces(SpaceIds) ->
+    {ProviderId, _, _, _} = create_legacy_provider(),
     Spaces = lists:foldl(fun(SpaceId, Acc) ->
-        Acc#{SpaceId => oz_test_utils:minimum_support_size(Config)}
+        Acc#{SpaceId => ozt_spaces:minimum_support_size()}
     end, #{}, SpaceIds),
-    {ok, _} = oz_test_utils:call_oz(Config, od_provider, update, [ProviderId, fun(Provider) ->
+    {ok, _} = ozt:rpc(od_provider, update, [ProviderId, fun(Provider) ->
         {ok, Provider#od_provider{legacy_spaces = Spaces}}
     end]),
     {ProviderId, Spaces}.
 
 
+upgrade_legacy_support(ProviderId, StorageId, SpaceId) ->
+    Token = ozt_providers:get_root_token(ProviderId),
+    ?assertMatch({ok, _}, ozt_gs:connect_and_request(oneprovider, {token, Token}, #gs_req_graph{
+        gri = ?GRI(od_storage, StorageId, {upgrade_legacy_support, SpaceId}),
+        operation = create,
+        data = #{}
+    })).
+
+
+sync_progress_per_provider(SpaceId) ->
+    {ok, #space_stats{
+        sync_progress_per_provider = SyncProgressPerProvider
+    }} = ozt:rpc(space_logic, get_stats, [?ROOT, SpaceId]),
+    SyncProgressPerProvider.
+
+
+list_all_tokens() ->
+    {ok, Tokens} = ozt:rpc(token_logic, list, [?ROOT]),
+    Tokens.
+
+
+list_user_named_tokens(UserId) ->
+    {ok, Tokens} = ozt:rpc(token_logic, list_user_named_tokens, [?ROOT, UserId]),
+    Tokens.
+
+
+list_provider_named_tokens(ProviderId) ->
+    {ok, Tokens} = ozt:rpc(token_logic, list_provider_named_tokens, [?ROOT, ProviderId]),
+    Tokens.

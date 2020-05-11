@@ -129,76 +129,27 @@ create(#el_req{auth = Auth, gri = #gri{id = StorageId, aspect = support}, data =
         Token = maps:get(<<"token">>, Data),
 
         invite_tokens:consume(Auth, Token, ?SUPPORT_SPACE, fun(SpaceId, TokenParameters, _) ->
-            entity_graph:add_relation(
-                od_space, SpaceId,
-                od_storage, StorageId,
-                SupportSize
-            ),
-
-            {ok, _} = od_space:update(SpaceId, fun(Space) ->
-                #od_space{
-                    dbsync_state = DBSyncStatePerProvider,
-                    support_parameters = ParametersPerProvider,
-                    support_state = SupportStatePerProvider
-                } = Space,
-                SpaceSupportParameters = case space_support:lookup_parameters_for_provider(ParametersPerProvider, ProviderId) of
-                    % If the space is already supported by the provider, the parameters are inherited
-                    % from previous supports (and token parameters are ignored in such case)
-                    {ok, Parameters} -> Parameters;
-                    error -> TokenParameters
-                end,
-                DBSyncState = case space_support:lookup_dbsync_state_for_provider(DBSyncStatePerProvider, ProviderId) of
-                    %% @TODO VFS-6189 Implement mechanisms for space unsupport concerning dbsync and synchronizing changes
-                    % Provider can already have some entries from previous support or support
-                    % via another storage.
-                    {ok, State} ->
-                        State;
-                    error ->
-                        space_support:build_dbsync_state(
-                            time_utils:cluster_time_seconds(), #{},
-                            % Eff providers might not yet be computed
-                            lists_utils:union(maps:keys(Space#od_space.eff_providers), [ProviderId])
-                        )
-                end,
-                {ok, Space#od_space{
-                    support_parameters = space_support:update_parameters_for_provider(
-                        ParametersPerProvider, ProviderId, SpaceSupportParameters
-                    ),
-                    dbsync_state = space_support:update_dbsync_state_for_provider(
-                        DBSyncStatePerProvider, ProviderId, DBSyncState
-                    ),
-                    % @todo VFS-6163 implement proper support state management
-                    support_state = space_support:update_support_state_for_provider(
-                        SupportStatePerProvider, ProviderId, active
-                    )
-                }}
-            end),
-            NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
-            {true, {Space, Rev}} = space_logic_plugin:fetch_entity(NewGRI),
-
-            lists:foreach(fun(HarvesterId) ->
-                harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
-                    harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, false)
-                end)
-            end, Space#od_space.harvesters),
-
-            {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
-            {ok, resource, {NewGRI, {SpaceData, Rev}}}
+            support_space(ProviderId, SpaceId, StorageId, SupportSize, TokenParameters)
         end)
     end;
 
-% This endpoint is dedicated to providers upgrading from version 19.02.* to 20.02.*.
+% This endpoint is dedicated for providers upgrading from version 19.02.* to 20.02.*.
 create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_legacy_support, SpaceId}}}) ->
     fun(#od_storage{provider = ProviderId}) ->
+        ?info("Processing request to upgrade legacy support of space '~s' by provider '~s'...", [SpaceId, ProviderId]),
         {true, {VirtualStorage, _}} = fetch_entity(#gri{id = ProviderId}),
         SupportSize = entity_graph:get_relation_attrs(direct, bottom_up, od_space, SpaceId, VirtualStorage),
         try
-            entity_graph:add_relation(od_space, SpaceId, od_storage, StorageId, SupportSize)
+            support_space(ProviderId, SpaceId, StorageId, SupportSize, support_parameters:build(global, eager))
         catch
             _:(?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _)) -> ok
         end,
-        ok = entity_graph:remove_relation(od_space, SpaceId, od_storage, ProviderId),
-        ?notice("Successfully upgraded support of space '~s' by provider '~s'", [SpaceId, ProviderId])
+        try
+            entity_graph:remove_relation(od_space, SpaceId, od_storage, ProviderId)
+        catch
+            _:(?ERROR_RELATION_DOES_NOT_EXIST(_, _, _, _)) -> ok
+        end,
+        ?notice("Successfully upgraded legacy support of space '~s' by provider '~s'", [SpaceId, ProviderId])
     end.
 
 
@@ -284,21 +235,30 @@ delete(#el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
                 ok;
             [] ->
                 % The space is no longer supported by the provider
-                %% @TODO VFS-6189 Implement mechanisms for space unsupport concerning dbsync and synchronizing changes
-                %% @TODO VFS-6189 decide if archival dbsync state should be deleted or retained
+                %% @TODO VFS-6329 decide if archival sync progress should be deleted or retained
                 {ok, _} = od_space:update(SpaceId, fun(Space) ->
                     #od_space{
-                        support_parameters = ParametersPerProvider,
-                        support_state = SupportStatePerProvider
+                        support_parameters_per_provider = ParametersPerProvider,
+                        support_stage_per_provider = SupportStagePerProvider
                     } = Space,
+
+                    NewSupportStagePerProvider = case StorageId =:= ProviderId of
+                        true ->
+                            support_stage:mark_legacy_support_revocation(SupportStagePerProvider, ProviderId);
+                        false ->
+                            % @todo VFS-6311 implement proper support stage management
+                            {ok, Remodelling} = support_stage:init_unsupport(SupportStagePerProvider, ProviderId, StorageId),
+                            {ok, PurgingStorages} = support_stage:complete_unsupport_resize(Remodelling, ProviderId, StorageId),
+                            {ok, PurgingDatabase} = support_stage:complete_unsupport_purge(PurgingStorages, ProviderId, StorageId),
+                            {ok, Retired} = support_stage:finalize_unsupport(PurgingDatabase, ProviderId, StorageId),
+                            Retired
+                    end,
+
                     {ok, Space#od_space{
-                        support_parameters = space_support:remove_parameters_for_provider(
+                        support_parameters_per_provider = support_parameters:remove_for_provider(
                             ParametersPerProvider, ProviderId
                         ),
-                        % @todo VFS-6163 implement proper support state management
-                        support_state = space_support:update_support_state_for_provider(
-                            SupportStatePerProvider, ProviderId, retired
-                        )
+                        support_stage_per_provider = NewSupportStagePerProvider
                     }}
                 end)
         end,
@@ -437,3 +397,67 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
         <<"size">> => {integer, {not_lower_than, ?MINIMUM_SUPPORT_SIZE}}
     }
 }.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%% @private
+-spec support_space(od_provider:id(), od_space:id(), od_storage:id(),
+    od_space:support_size(), support_parameters:parameters()) -> entity_logic:create_result().
+support_space(ProviderId, SpaceId, StorageId, SupportSize, ProposedParameters) ->
+    entity_graph:add_relation(
+        od_space, SpaceId,
+        od_storage, StorageId,
+        SupportSize
+    ),
+
+    {ok, #document{value = #od_space{storages = Storages}}} = od_space:update(SpaceId, fun(Space) ->
+        #od_space{
+            support_parameters_per_provider = ParametersPerProvider,
+            support_stage_per_provider = SupportStagePerProvider
+        } = Space,
+        SpaceSupportParameters = case support_parameters:lookup_by_provider(ParametersPerProvider, ProviderId) of
+            % If the space is already supported by the provider, the parameters are inherited
+            % from previous supports (and token parameters are ignored in such case)
+            {ok, Existing} -> Existing;
+            error -> ProposedParameters
+        end,
+        % perform support stage transitions, but only if this is not a legacy support
+        % (for legacy providers, a virtual storage with id equal to provider id is used)
+        NewSupportStagePerProvider = case StorageId =:= ProviderId of
+            true ->
+                support_stage:insert_legacy_support_entry(SupportStagePerProvider, ProviderId);
+            false ->
+                % @todo VFS-6311 implement proper support stage management
+                {ok, SupportInitialized} = support_stage:init_support(SupportStagePerProvider, ProviderId, StorageId),
+                {ok, SupportFinalized} = support_stage:finalize_support(SupportInitialized, ProviderId, StorageId),
+                SupportFinalized
+        end,
+        {ok, Space#od_space{
+            support_parameters_per_provider = support_parameters:update_for_provider(
+                ParametersPerProvider, ProviderId, SpaceSupportParameters
+            ),
+            support_stage_per_provider = NewSupportStagePerProvider
+        }}
+    end),
+
+    % Calculate all supporting providers - effective providers might not
+    % be calculated yet, so a slower but deterministic approach is used.
+    EffectiveProviders = lists:usort(lists:map(fun(StId) ->
+        {ok, #document{value = #od_storage{provider = PrId}}} = od_storage:get(StId),
+        PrId
+    end, maps:keys(Storages))),
+    space_stats:coalesce_providers(SpaceId, EffectiveProviders),
+
+    NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
+    {true, {Space, Rev}} = space_logic_plugin:fetch_entity(NewGRI),
+
+    lists:foreach(fun(HarvesterId) ->
+        harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
+            harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, false)
+        end)
+    end, Space#od_space.harvesters),
+
+    {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
+    {ok, resource, {NewGRI, {SpaceData, Rev}}}.

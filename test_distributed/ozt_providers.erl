@@ -33,9 +33,10 @@
 -export([create_as_support_for_space/1]).
 -export([set_up_support_for_user/2]).
 -export([get_root_token/1]).
--export([create_storage/3, ensure_storage/2]).
--export([support_space/2, support_space/4]).
+-export([create_storage/1, create_storage/3, ensure_storage/2]).
+-export([support_space/2, support_space/3, support_space/4]).
 -export([support_space_using_token/3, support_space_using_token/4]).
+-export([support_space_with_legacy_storage/2]).
 -export([delete/1]).
 
 %%%===================================================================
@@ -93,7 +94,12 @@ get_root_token(ProviderId) ->
     Token.
 
 
--spec create_storage(od_provider:id(), od_storage:name(), od_storage:qos_parameters()) -> ok.
+-spec create_storage(od_provider:id()) -> od_storage:id().
+create_storage(ProviderId) ->
+    create_storage(ProviderId, <<"of-provider-", ProviderId/binary>>, #{}).
+
+
+-spec create_storage(od_provider:id(), od_storage:name(), od_storage:qos_parameters()) -> od_storage:id().
 create_storage(ProviderId, Name, QosParameters) ->
     {ok, StorageId} = ?assertMatch({ok, _}, ozt:rpc(storage_logic, create, [
         ?PROVIDER(ProviderId), datastore_key:new(), #{<<"name">> => Name, <<"qos_parameters">> => QosParameters}
@@ -110,10 +116,13 @@ ensure_storage(ProviderId, StorageId) ->
 
 -spec support_space(od_provider:id(), od_space:id()) -> ok.
 support_space(ProviderId, SpaceId) ->
-    StorageId = ProviderId, % Use a storage with the same id as provider for easier test code
+    StorageId = datastore_key:new_from_digest([ProviderId]),
     ensure_storage(ProviderId, StorageId),
-    support_space(ProviderId, StorageId, SpaceId, ozt_spaces:minimum_support_size()).
+    support_space(ProviderId, StorageId, SpaceId).
 
+-spec support_space(od_provider:id(), od_space:id(), od_storage:id()) -> ok.
+support_space(ProviderId, StorageId, SpaceId) ->
+    support_space(ProviderId, StorageId, SpaceId, ozt_spaces:minimum_support_size()).
 
 -spec support_space(od_provider:id(), od_storage:id(), od_space:id(), od_space:support_size()) ->
     ok.
@@ -139,6 +148,14 @@ support_space_using_token(ProviderId, StorageId, Token, Size) ->
         ?PROVIDER(ProviderId), StorageId, Token, Size
     ])),
     ok.
+
+
+-spec support_space_with_legacy_storage(od_provider:id(), od_space:id()) -> ok.
+support_space_with_legacy_storage(ProviderId, SpaceId) ->
+    % legacy storage is a virtual storage with the same id as the provider
+    StorageId = ProviderId,
+    ensure_storage(ProviderId, StorageId),
+    support_space(ProviderId, StorageId, SpaceId).
 
 
 -spec delete(od_provider:id()) -> ok.

@@ -204,6 +204,8 @@ change_to_entity_type_and_id(Key, #od_harvester{}) ->
     {od_harvester, Key};
 change_to_entity_type_and_id(Key, #od_token{}) ->
     {od_token, Key};
+change_to_entity_type_and_id(Key, #space_stats{}) ->
+    {space_stats, Key};
 change_to_entity_type_and_id(Key, #temporary_token_secret{}) ->
     ?SUB(_, SubjectId) = temporary_token_secret:key_to_subject(Key),
     {temporary_token_secret, SubjectId};

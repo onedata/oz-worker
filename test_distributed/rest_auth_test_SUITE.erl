@@ -248,10 +248,10 @@ external_access_token_test(Config) ->
 
 gui_token_test(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config, #{<<"fullName">> => <<"U1">>}),
-    {ok, {Provider1, Provider1Token}} = oz_test_utils:create_provider(
+    {ok, {Provider1, _}} = oz_test_utils:create_provider(
         Config, UserId, ?UNIQUE_STRING
     ),
-    {ok, {_Provider2, Provider2Token}} = oz_test_utils:create_provider(
+    {ok, {Provider2, _}} = oz_test_utils:create_provider(
         Config, UserId, ?UNIQUE_STRING
     ),
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
@@ -269,8 +269,14 @@ gui_token_test(Config) ->
     ]),
     {ok, SerializedGuiToken2} = tokens:serialize(GuiToken2),
 
-    Provider1AudToken = tokens:add_oneprovider_service_indication(?OP_WORKER, Provider1Token),
-    Provider2AudToken = tokens:add_oneprovider_service_indication(?OP_PANEL, Provider2Token),
+    {ok, Provider1IdentityToken} = oz_test_utils:call_oz(Config, token_logic, create_provider_named_token, [
+        ?PROVIDER(Provider1), Provider1, #{<<"name">> => datastore_key:new(), <<"type">> => ?IDENTITY_TOKEN}
+    ]),
+    {ok, Provider2IdentityToken} = oz_test_utils:call_oz(Config, token_logic, create_provider_named_token, [
+        ?PROVIDER(Provider2), Provider2, #{<<"name">> => datastore_key:new(), <<"type">> => ?IDENTITY_TOKEN}
+    ]),
+    Provider1ServiceToken = tokens:add_oneprovider_service_indication(?OP_WORKER, ozt_tokens:ensure_serialized(Provider1IdentityToken)),
+    Provider2ServiceToken = tokens:add_oneprovider_service_indication(?OP_PANEL, ozt_tokens:ensure_serialized(Provider2IdentityToken)),
 
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{
@@ -278,7 +284,7 @@ gui_token_test(Config) ->
             path => <<"/user">>,
             headers => #{
                 ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
-                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1AudToken
+                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
             }
         },
         expect => #{
@@ -293,7 +299,7 @@ gui_token_test(Config) ->
             path => <<"/user">>,
             headers => #{
                 ?HDR_AUTHORIZATION => <<"Bearer ", SerializedGuiToken2/binary>>,
-                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider2AudToken
+                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider2ServiceToken
             }
         },
         expect => #{
@@ -336,7 +342,7 @@ gui_token_test(Config) ->
             path => <<"/user">>,
             headers => #{
                 ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
-                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1AudToken
+                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
             }
         },
         expect => #{

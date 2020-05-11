@@ -14,6 +14,7 @@
 -author("Lukasz Opiola").
 
 -include("http/rest.hrl").
+-include("datastore/oz_datastore_models.hrl").
 
 -export([create_response/4, get_response/2]).
 
@@ -84,6 +85,13 @@ create_response(#gri{id = SpaceId, aspect = harvester}, _, resource, {#gri{id = 
 %% @end
 %%--------------------------------------------------------------------
 -spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
+get_response(#gri{type = space_stats, aspect = instance}, SpaceStats) ->
+    rest_translator:ok_body_reply(#{
+        <<"syncProgressPerProvider">> => provider_sync_progress:to_json(
+            SpaceStats#space_stats.sync_progress_per_provider
+        )
+    });
+
 get_response(#gri{id = undefined, aspect = list}, Spaces) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
 
@@ -94,17 +102,15 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
     #{
         <<"name">> := Name,
         <<"providers">> := Providers,
-        <<"supportParameters">> := Parameters,
-        <<"dbsyncState">> := SyncState,
-        <<"supportState">> := SupportState
+        <<"supportParametersPerProvider">> := SupportParametersPerProvider,
+        <<"supportStagePerProvider">> := SupportStagePerProvider
     } = SpaceData,
     rest_translator:ok_body_reply(#{
         <<"spaceId">> => SpaceId,
         <<"name">> => Name,
         <<"providers">> => Providers,
-        <<"supportParameters">> => space_support:parameters_per_provider_to_json(Parameters),
-        <<"dbsyncState">> => space_support:dbsync_state_per_provider_to_json(SyncState),
-        <<"supportState">> => space_support:support_state_per_provider_to_json(SupportState)
+        <<"supportParametersPerProvider">> => support_parameters:per_provider_to_json(SupportParametersPerProvider),
+        <<"supportStagePerProvider">> => support_stage:per_provider_to_json(SupportStagePerProvider)
     });
 
 get_response(#gri{aspect = users}, Users) ->

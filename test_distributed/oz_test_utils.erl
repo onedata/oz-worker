@@ -261,7 +261,12 @@
 ]).
 -export([
     assert_invite_token_usage_limit_reached/3,
-    authenticate_by_token/2, authenticate_by_token/3
+    authenticate_by_token/2, authenticate_by_token/3,
+    acquire_temporary_token/2,
+    create_legacy_access_token/2,
+    confine_token_with_legacy_auth_none_caveat/1,
+    request_gui_token/2,
+    request_gui_token/4
 ]).
 -export([
     delete_all_entities/1,
@@ -296,10 +301,7 @@
 -export([
     log_in/2, log_out/2,
     graph_sync_url/2,
-    get_gs_supported_proto_versions/1,
-    acquire_temporary_token/2,
-    request_gui_token/2,
-    request_gui_token/4
+    get_gs_supported_proto_versions/1
 ]).
 
 %%%===================================================================
@@ -2927,6 +2929,88 @@ authenticate_by_token(Config, Token, AuthCtx) ->
     call_oz(Config, token_auth, authenticate, [Token, AuthCtx]).
 
 
+-spec acquire_temporary_token(Config :: term(), aai:subject()) -> tokens:serialized().
+acquire_temporary_token(Config, Subject = ?SUB(SubType, SubId)) ->
+    {ok, Cached} = simple_cache:get({temp_token, Subject}, fun() ->
+        Data = #{<<"caveats">> => [#cv_time{valid_until = cluster_time_seconds(Config) + 36000}]},
+        Fun = case SubType of
+            user -> create_user_temporary_token;
+            ?ONEPROVIDER -> create_provider_temporary_token
+        end,
+        {ok, Token} = call_oz(Config, token_logic, Fun, [?ROOT, SubId, Data]),
+        {ok, Serialized} = tokens:serialize(Token),
+        {true, Serialized}
+    end),
+    Cached.
+
+
+-spec create_legacy_access_token(Config :: term(), aai:subject()) -> tokens:token().
+create_legacy_access_token(Config, Subject) ->
+    TokenId = datastore_key:new(),
+    Secret = tokens:generate_secret(),
+    NamedToken = #od_token{
+        name = datastore_key:new(),
+        version = 1,
+        subject = Subject,
+        type = ?ACCESS_TOKEN,
+        caveats = [],
+        metadata = #{},
+        secret = Secret
+    },
+    call_oz(Config, od_token, create, [#document{key = TokenId, value = NamedToken}]),
+    call_oz(Config, od_token, named_token_to_token, [TokenId, NamedToken]).
+
+
+-spec confine_token_with_legacy_auth_none_caveat(tokens:token()) -> tokens:token().
+confine_token_with_legacy_auth_none_caveat(Token) ->
+    Token#token{
+        macaroon = macaroon:add_first_party_caveat(
+            Token#token.macaroon,
+            <<"authorization = none">>
+        )
+    }.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Acquires a Onezone gui token issued for the session denoted by given cookie.
+%% @end
+%%--------------------------------------------------------------------
+-spec request_gui_token(Config :: term(), Cookie :: binary()) ->
+    {ok, Token :: binary()} | {error, term()}.
+request_gui_token(Config, Cookie) ->
+    request_gui_token(Config, Cookie, ?OZ_WORKER_GUI, ?ONEZONE_CLUSTER_ID).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Acquires a gui token issued for the session denoted by given cookie,
+%% for use by given service (defined via cluster type and id).
+%% @end
+%%--------------------------------------------------------------------
+-spec request_gui_token(Config :: term(), Cookie :: binary(), onedata:gui(), od_cluster:id()) ->
+    {ok, Token :: binary()} | {error, term()}.
+request_gui_token(Config, Cookie, GuiType, ClusterId) ->
+    GuiPrefix = onedata:gui_prefix(GuiType),
+    Result = http_client:post(
+        oz_url(Config, str_utils:format_bin("/~s/~s/gui-preauthorize", [GuiPrefix, ClusterId])),
+        #{
+            ?HDR_CONTENT_TYPE => <<"application/json">>,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
+        },
+        <<"">>,
+        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
+    ),
+    case Result of
+        {ok, 200, _, Response} ->
+            #{<<"token">> := Token} = json_utils:decode(Response),
+            {ok, Token};
+        {ok, _, _, Response} ->
+            #{<<"error">> := Error} = json_utils:decode(Response),
+            errors:from_json(Error)
+    end.
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Deletes all entities from onezone
@@ -3577,58 +3661,3 @@ get_gs_supported_proto_versions(Config) ->
     ?assertMatch([_ | _], call_oz(
         Config, gs_protocol, supported_versions, [])
     ).
-
-
--spec acquire_temporary_token(Config :: term(), aai:subject()) -> tokens:serialized().
-acquire_temporary_token(Config, Subject = ?SUB(SubType, SubId)) ->
-    {ok, Cached} = simple_cache:get({temp_token, Subject}, fun() ->
-        Data = #{<<"caveats">> => [#cv_time{valid_until = cluster_time_seconds(Config) + 36000}]},
-        Fun = case SubType of
-            user -> create_user_temporary_token;
-            ?ONEPROVIDER -> create_provider_temporary_token
-        end,
-        {ok, Token} = call_oz(Config, token_logic, Fun, [?ROOT, SubId, Data]),
-        {ok, Serialized} = tokens:serialize(Token),
-        {true, Serialized}
-    end),
-    Cached.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Acquires a Onezone gui token issued for the session denoted by given cookie.
-%% @end
-%%--------------------------------------------------------------------
--spec request_gui_token(Config :: term(), Cookie :: binary()) ->
-    {ok, Token :: binary()} | {error, term()}.
-request_gui_token(Config, Cookie) ->
-    request_gui_token(Config, Cookie, ?OZ_WORKER_GUI, ?ONEZONE_CLUSTER_ID).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Acquires a gui token issued for the session denoted by given cookie,
-%% for use by given service (defined via cluster type and id).
-%% @end
-%%--------------------------------------------------------------------
--spec request_gui_token(Config :: term(), Cookie :: binary(), onedata:gui(), od_cluster:id()) ->
-    {ok, Token :: binary()} | {error, term()}.
-request_gui_token(Config, Cookie, GuiType, ClusterId) ->
-    GuiPrefix = onedata:gui_prefix(GuiType),
-    Result = http_client:post(
-        oz_url(Config, str_utils:format_bin("/~s/~s/gui-preauthorize", [GuiPrefix, ClusterId])),
-        #{
-            ?HDR_CONTENT_TYPE => <<"application/json">>,
-            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
-        },
-        <<"">>,
-        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
-    ),
-    case Result of
-        {ok, 200, _, Response} ->
-            #{<<"token">> := Token} = json_utils:decode(Response),
-            {ok, Token};
-        {ok, _, _, Response} ->
-            #{<<"error">> := Error} = json_utils:decode(Response),
-            errors:from_json(Error)
-    end.

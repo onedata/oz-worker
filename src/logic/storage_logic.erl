@@ -301,7 +301,7 @@ migrate_legacy_supports() ->
                 create(?PROVIDER(ProviderId), ProviderId, ?STORAGE_DEFAULT_NAME)
         end,
         {ok, Spaces} = provider_logic:get_legacy_spaces(Provider),
-        ?info("  Migrating space supports for provider: ~p", [ProviderId]),
+        ?info("  * Migrating space supports for provider: ~s", [ProviderId]),
         maps:map(fun(SpaceId, SupportSize) ->
             try
                 entity_graph:add_relation(od_space, SpaceId, od_storage, ProviderId, SupportSize)
@@ -310,6 +310,6 @@ migrate_legacy_supports() ->
             end,
             {ok, _} = provider_logic:remove_legacy_space(ProviderId, SpaceId)
         end, Spaces),
-        ?notice(" Successfully migrated space supports for provider: ~p", [ProviderId])
+        ?notice("    Successfully migrated space supports for provider: ~s", [ProviderId])
     end, Providers),
     ?notice("Successfully migrated legacy supports").
