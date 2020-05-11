@@ -1780,87 +1780,80 @@ legacy_update_support_size_test(Config) ->
 
 
 legacy_revoke_support_test(Config) ->
-        oz_test_utils:delete_all_entities(Config),
-        {ok, Cluster1Member} = oz_test_utils:create_user(Config),
-        {ok, {P1, P1Token}} = oz_test_utils:create_provider(
-            Config, Cluster1Member, ?PROVIDER_NAME1
-        ),
-        {ok, {P2, P2Token}} = oz_test_utils:create_provider(
-            Config, ?PROVIDER_NAME2
-        ),
-        {ok, U1} = oz_test_utils:create_user(Config),
-    try
+    oz_test_utils:delete_all_entities(Config),
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
+        Config, Cluster1Member, ?PROVIDER_NAME1
+    ),
+    {ok, {P2, P2Token}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+    {ok, U1} = oz_test_utils:create_user(Config),
 
-        EnvSetUpFun = fun() ->
-            {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-            {ok, S1} = oz_test_utils:support_space_by_legacy_storage(Config, P1, S1),
-            {ok, S1} = oz_test_utils:support_space_by_legacy_storage(Config, P2, S1),
-            oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-            % run the same procedures as during Onezone upgrade
-            ?assertEqual(ok, oz_test_utils:call_oz(Config, storage_logic, migrate_legacy_supports, [])),
-            ?assertEqual(ok, oz_test_utils:call_oz(Config, space_logic, initialize_support_info, [])),
-            #{spaceId => S1}
-        end,
-        DeleteEntityFun = fun(#{spaceId := SpaceId} = _Env) ->
-            oz_test_utils:unsupport_space(Config, P1, SpaceId),
-            oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
-        end,
-        VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _Data) ->
-            oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-            {ok, #od_space{
-                eff_providers = Providers
-            }} = oz_test_utils:get_space(Config, SpaceId),
-            ?assertEqual(not ShouldSucceed, maps:is_key(P1, Providers))
-        end,
+    EnvSetUpFun = fun() ->
+        {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+        {ok, S1} = oz_test_utils:support_space_by_legacy_storage(Config, P1, S1),
+        {ok, S1} = oz_test_utils:support_space_by_legacy_storage(Config, P2, S1),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+        % run the same procedures as during Onezone upgrade
+        ?assertEqual(ok, oz_test_utils:call_oz(Config, storage_logic, migrate_legacy_supports, [])),
+        ?assertEqual(ok, oz_test_utils:call_oz(Config, space_logic, initialize_support_info, [])),
+        #{spaceId => S1}
+    end,
+    DeleteEntityFun = fun(#{spaceId := SpaceId} = _Env) ->
+        oz_test_utils:unsupport_space(Config, P1, SpaceId),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _Data) ->
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+        {ok, #od_space{
+            eff_providers = Providers
+        }} = oz_test_utils:get_space(Config, SpaceId),
+        ?assertEqual(not ShouldSucceed, maps:is_key(P1, Providers))
+    end,
 
-        % Check only REST first, and only one correct client at once as a space
-        % can only be unsupported once.
-        ApiTestSpec = #api_test_spec{
-            client_spec = #client_spec{
-                % This is an endpoint dedicated for the provider that presents
-                % its authorization, no need to check other providers
-                correct = [{provider, P1, P1Token}]
-            },
-            rest_spec = #rest_spec{
-                method = delete,
-                path = [<<"/provider/spaces/">>, spaceId],
-                expected_code = ?HTTP_204_NO_CONTENT
-            }
+    % Check only REST first, and only one correct client at once as a space
+    % can only be unsupported once.
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            % This is an endpoint dedicated for the provider that presents
+            % its authorization, no need to check other providers
+            correct = [{provider, P1, P1Token}]
         },
-        ?assert(api_test_scenarios:run_scenario(delete_entity,
-            [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
-        )),
+        rest_spec = #rest_spec{
+            method = delete,
+            path = [<<"/provider/spaces/">>, spaceId],
+            expected_code = ?HTTP_204_NO_CONTENT
+        }
+    },
+    ?assert(api_test_scenarios:run_scenario(delete_entity,
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
+    )),
 
-        % Check logic endpoint (here provider id must be provided)
-        % Check all correct clients one by one
-        ApiTestSpec2 = #api_test_spec{
-            client_spec = #client_spec{
-                correct = [
-                    root,
-                    {provider, P1, P1Token}
-                ],
-                unauthorized = [nobody],
-                forbidden = [
-                    {user, U1},
-                    {provider, P2, P2Token}
-                ]
-            },
-            logic_spec = #logic_spec{
-                module = provider_logic,
-                function = revoke_support,
-                args = [auth, P1, spaceId],
-                expected_result = ?OK_RES
-            }
+    % Check logic endpoint (here provider id must be provided)
+    % Check all correct clients one by one
+    ApiTestSpec2 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {provider, P1, P1Token}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {provider, P2, P2Token}
+            ]
         },
-        ?assert(api_test_scenarios:run_scenario(delete_entity,
-            [Config, ApiTestSpec2, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
-        ))
-    catch _:_ ->
-        ct:print("U1: ~p", [U1]),
-        ct:print("P1: ~p", [P1]),
-        ct:print("P2: ~p", [P2]),
-        timer:sleep(1231231231)
-    end.
+        logic_spec = #logic_spec{
+            module = provider_logic,
+            function = revoke_support,
+            args = [auth, P1, spaceId],
+            expected_result = ?OK_RES
+        }
+    },
+    ?assert(api_test_scenarios:run_scenario(delete_entity,
+        [Config, ApiTestSpec2, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
+    )).
 
 
 check_my_ip_test(Config) ->

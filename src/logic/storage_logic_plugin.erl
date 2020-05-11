@@ -144,7 +144,11 @@ create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_legacy_support, Spac
         catch
             _:(?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _)) -> ok
         end,
-        catch entity_graph:remove_relation(od_space, SpaceId, od_storage, ProviderId),
+        try
+            entity_graph:remove_relation(od_space, SpaceId, od_storage, ProviderId)
+        catch
+            _:(?ERROR_RELATION_DOES_NOT_EXIST(_, _, _, _)) -> ok
+        end,
         ?notice("Successfully upgraded legacy support of space '~s' by provider '~s'", [SpaceId, ProviderId])
     end.
 

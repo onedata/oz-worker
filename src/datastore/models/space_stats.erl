@@ -8,6 +8,9 @@
 %%% @doc
 %%% API for records that store space statistics per SpaceId.
 %%%
+%%% Stats are retained for all providers that ever supported the space for
+%%% archival purposes.
+%%%
 %%% Apart from above, this module implements entity logic plugin behaviour and
 %%% handles entity logic operations corresponding to space_stats - fetching
 %%% and subscribing for changes.
@@ -50,14 +53,16 @@
 
 -spec init_for_space(od_space:id()) -> ok.
 init_for_space(SpaceId) ->
-    {ok, _} = datastore_model:create(?CTX, #document{key = SpaceId, value = #space_stats{}}),
-    ok.
+    case datastore_model:create(?CTX, #document{key = SpaceId, value = #space_stats{}}) of
+        {ok, _} -> ok;
+        {error, already_exists} -> ok
+    end.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% If required, creates the space stats document and populates it with empty
-%% entries for all supporting providers.
+%% Populates the space stats document with empty entries for all supporting
+%% providers where required. Assumes that the space_stats doc already exists.
 %% @end
 %%--------------------------------------------------------------------
 -spec coalesce_providers(od_space:id(), [od_provider:id()]) ->
@@ -68,6 +73,8 @@ coalesce_providers(SpaceId, SupportingProviders) ->
             all_providers = PreviousProviders,
             sync_progress_per_provider = SyncProgressPerProvider
         } = SpaceStats,
+        % stats are retained for all providers that ever supported the space for
+        % archival purposes
         AllProviders = lists:usort(PreviousProviders ++ SupportingProviders),
         {ok, SpaceStats#space_stats{
             all_providers = AllProviders,
@@ -194,7 +201,7 @@ authorize(#el_req{auth = ?PROVIDER(PrId), operation = update, gri = #gri{id = Sp
 
 
 -spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
-required_admin_privileges(#el_req{gri = #gri{aspect = instance, scope = private}}) ->
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = private}}) ->
     [?OZ_SPACES_VIEW];
 required_admin_privileges(_) ->
     forbidden.

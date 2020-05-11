@@ -1072,8 +1072,7 @@ initialize_support_info() ->
                 }
             end, Space, EffProviders)}
         end),
-        % allow failures in case this procedure is run more than once
-        catch space_stats:init_for_space(SpaceId),
+        space_stats:init_for_space(SpaceId),
         space_stats:coalesce_providers(SpaceId, EffProviders),
         ?info("  * space '~ts' (~ts) ok, ~B providers", [Name, SpaceId, length(EffProviders)])
     end, Spaces),
