@@ -24,7 +24,7 @@
 
 %% API
 -export([verify_handshake_auth/2]).
--export([client_connected/2, client_disconnected/2]).
+-export([client_connected/2, client_heartbeat/2, client_disconnected/2]).
 -export([verify_auth_override/2]).
 -export([is_authorized/5]).
 -export([handle_rpc/4]).
@@ -80,6 +80,17 @@ client_connected(?PROVIDER(ProvId), ConnectionRef) ->
 client_connected(?USER(UserId, SessionId), ConnectionRef) when is_binary(SessionId) ->
     user_connections:add(UserId, SessionId, ConnectionRef);
 client_connected(_, _) ->
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link gs_logic_plugin_behaviour} callback client_heartbeat/2.
+%% @end
+%%--------------------------------------------------------------------
+-spec client_heartbeat(aai:auth(), gs_server:conn_ref()) ->
+    ok.
+client_heartbeat(Client, ConnectionRef) ->
     ok.
 
 
