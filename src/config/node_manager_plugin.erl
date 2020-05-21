@@ -21,10 +21,12 @@
 -export([installed_cluster_generation/0]).
 -export([oldest_known_cluster_generation/0]).
 -export([app_name/0, cm_nodes/0, db_nodes/0]).
--export([listeners/0]).
--export([upgrade_essential_workers/0, custom_workers/0]).
--export([before_init/1, on_cluster_ready/0]).
+-export([before_init/0]).
+-export([upgrade_essential_workers/0]).
 -export([upgrade_cluster/1]).
+-export([custom_workers/0]).
+-export([on_db_and_workers_ready/0]).
+-export([listeners/0]).
 -export([handle_call/3, handle_cast/2]).
 
 -export([reconcile_dns_config/0]).
@@ -94,42 +96,12 @@ db_nodes() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Overrides {@link node_manager_plugin_default:listeners/0}.
-%% @end
-%%--------------------------------------------------------------------
--spec listeners() -> Listeners :: [atom()].
-listeners() -> [
-    http_listener,
-    https_listener
-].
-
-%%--------------------------------------------------------------------
-%% @doc
-%% List of workers modules with configs that should be started before upgrade.
-%% @end
-%%--------------------------------------------------------------------
--spec upgrade_essential_workers() -> [{module(), [any()]}].
-upgrade_essential_workers() -> [].
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Overrides {@link node_manager_plugin_default:custom_workers/0}.
-%% @end
-%%--------------------------------------------------------------------
--spec custom_workers() -> Models :: [{atom(), [any()]}].
-custom_workers() ->
-    [{gs_worker, [
-        {supervisor_flags, gs_worker:supervisor_flags()}
-    ]}].
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Overrides {@link node_manager_plugin_default:before_init/1}.
+%% Overrides {@link node_manager_plugin_default:before_init/0}.
 %% This callback is executed on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec before_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
-before_init([]) ->
+-spec before_init() -> Result :: ok | {error, Reason :: term()}.
+before_init() ->
     try
         oz_worker_sup:start_link(),
         ok
@@ -142,32 +114,11 @@ before_init([]) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Overrides {@link node_manager_plugin_default:on_cluster_ready/1}.
-%% This callback is executed on all cluster nodes.
+%% List of workers modules with configs that should be started before upgrade.
 %% @end
 %%--------------------------------------------------------------------
--spec on_cluster_ready() -> Result :: ok | {error, Reason :: term()}.
-on_cluster_ready() ->
-    try
-        % Logic run on every node of the cluster
-        onezone_plugins:init(),
-
-        % Logic that should be run on a single node
-        case is_dedicated_node(cluster_setup) of
-            false ->
-                ok;
-            true ->
-                cluster_logic:set_up_oz_worker_service(),
-                entity_graph:init_state(),
-                broadcast_dns_config(),
-                group_logic:ensure_predefined_groups()
-        end
-    catch
-        _:Error ->
-            ?error_stacktrace("Error in node_manager_plugin:after_init: ~p", [Error]),
-            {error, cannot_start_node_manager_plugin}
-    end.
-
+-spec upgrade_essential_workers() -> [{module(), [any()]}].
+upgrade_essential_workers() -> [].
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -185,6 +136,55 @@ upgrade_cluster(2) ->
     space_logic:initialize_support_info(),
     {ok, 3}.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:custom_workers/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec custom_workers() -> Models :: [{atom(), [any()]}].
+custom_workers() ->
+    [{gs_worker, [
+        {supervisor_flags, gs_worker:supervisor_flags()}
+    ]}].
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:on_db_and_workers_ready/0}.
+%% This callback is executed on all cluster nodes.
+%% @end
+%%--------------------------------------------------------------------
+-spec on_db_and_workers_ready() -> ok | {error, Reason :: term()}.
+on_db_and_workers_ready() ->
+    try
+        % Logic that should be run on every node of the cluster
+        onezone_plugins:init(),
+
+        % Logic that should be run on a single node
+        case is_dedicated_node(cluster_setup) of
+            false ->
+                ok;
+            true ->
+                cluster_logic:set_up_oz_worker_service(),
+                entity_graph:init_state(),
+                broadcast_dns_config(),
+                group_logic:ensure_predefined_groups()
+        end
+    catch
+        _:Error ->
+            ?error_stacktrace("Error in node_manager_plugin:on_db_and_workers_ready: ~p", [Error]),
+            {error, cannot_start_node_manager_plugin}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:listeners/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec listeners() -> Listeners :: [atom()].
+listeners() -> [
+    http_listener,
+    https_listener
+].
 
 %%--------------------------------------------------------------------
 %% @private
