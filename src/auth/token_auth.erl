@@ -124,15 +124,15 @@ verify_access_token(#token{type = ReceivedTokenType}, _AuthCtx) ->
 %%--------------------------------------------------------------------
 -spec verify_identity_token(tokens:token(), aai:auth_ctx()) ->
     {ok, {aai:subject(), [caveats:caveat()]}} | errors:error().
-verify_identity_token(#token{version = 1, type = ?ACCESS_TOKEN} = Token, AuthCtx) ->
-    %% @todo VFS-6098 legacy provider access tokens are still accepted as
-    %% identity tokens for backward compatibility with older providers
+verify_identity_token(#token{type = ?ACCESS_TOKEN = Type} = Token, AuthCtx) ->
+    %% @todo VFS-6098 access tokens are still accepted as identity tokens
+    %% for backward compatibility with legacy providers
     case verify_token(Token, AuthCtx#auth_ctx{scope = identity_token}) of
         {ok, #auth{subject = ?SUB(?ONEPROVIDER, _) = Subject, caveats = Caveats}} ->
             {ok, {Subject, Caveats}};
         {ok, _} ->
             % user access tokens are never accepted as identity tokens
-            ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN);
+            ?ERROR_NOT_AN_IDENTITY_TOKEN(Type);
         {error, _} = Error ->
             Error
     end;
@@ -179,7 +179,7 @@ verify_invite_token(Token = #token{type = ReceivedType}, ExpectedType, AuthCtx) 
     {ok, aai:service_spec()} | errors:error().
 verify_service_token(SerializedServiceToken, AuthCtx) when is_binary(SerializedServiceToken) ->
     case tokens:deserialize(SerializedServiceToken) of
-        {ok, #token{version = 1} = ServiceToken} ->
+        {ok, ServiceToken} ->
             %% @todo VFS-6098 legacy onepanel sends its access token as service
             %% token with service indication, but since version 1 tokens do not
             %% carry inscribed subject, it is ignored during deserialization -
@@ -191,8 +191,6 @@ verify_service_token(SerializedServiceToken, AuthCtx) when is_binary(SerializedS
                 {OtherResult, _} ->
                     OtherResult
             end;
-        {ok, ServiceToken} ->
-            verify_service_token(ServiceToken, AuthCtx);
         {error, _} = Error ->
             ?ERROR_BAD_SERVICE_TOKEN(Error)
     end;
