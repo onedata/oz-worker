@@ -4,6 +4,10 @@
 CHANGELOG
 ---------
 
+### 19.02.3
+
+* Releasing new version 19.02.3
+
 ### 19.02.2
 
 * VFS-6210 Move plugins to the data dir (/var/lib/oz_worker/) rather than etc dir as they should not be persisted between upgrades
