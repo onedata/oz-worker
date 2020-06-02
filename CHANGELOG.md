@@ -58,6 +58,18 @@ CHANGELOG
 * VFS-6043 Add space support related concepts: parameters, dbsync state and provider's support state * Add corresponding API * Ensure backward compatibility and upgradeability
 * VFS-6129 Increased timeout in elasticsearch plugin
 
+### 19.02.3
+
+* Releasing new version 19.02.3
+
+### 19.02.2
+
+* VFS-6210 Move plugins to the data dir (/var/lib/oz_worker/) rather than etc dir as they should not be persisted between upgrades
+* VFS-6129 Increased timeout in elasticsearch plugin
+* VFS-6019 Add better status tracking of user and provider connections, display it in db_browser
+* VFS-6060 Fixed public access to gui plugin config in harvester
+* VFS-6035 Add VM option that forbids terminating the node with Ctrl + C
+* VFS-6011 Update DNS SOA serial on each config generation
 
 ### 19.02.1
 
