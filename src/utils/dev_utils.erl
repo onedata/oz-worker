@@ -233,7 +233,7 @@ destroy_test_entities(Users, Groups, Spaces) ->
 %%--------------------------------------------------------------------
 -spec create_user_with_uuid(User :: #od_user{}, UserId :: binary()) -> {ok, UserId :: binary()}.
 create_user_with_uuid(User, UserId) ->
-    {ok, _} = od_user:save(#document{key = UserId, value = User}),
+    {ok, _} = od_user:create(#document{key = UserId, value = User}),
     {ok, UserId}.
 
 
@@ -245,7 +245,7 @@ create_user_with_uuid(User, UserId) ->
 -spec create_group_with_uuid(UserId :: binary(), Name :: binary(), UUId :: binary()) ->
     {ok, GroupId :: binary()}.
 create_group_with_uuid(UserId, Name, GroupId) ->
-    {ok, _} = od_group:save(
+    {ok, _} = od_group:create(
         #document{key = GroupId, value = #od_group{name = Name}}
     ),
     {ok, UserId} = group_logic:add_user(
@@ -262,7 +262,7 @@ create_group_with_uuid(UserId, Name, GroupId) ->
 -spec create_space_with_uuid({od_user | od_group, Id :: binary()}, Name :: binary(), UUId :: binary()) ->
     {ok, SpaceId :: binary()} | no_return().
 create_space_with_uuid({MemberType, MemberId}, Name, UUId) ->
-    {ok, _} = od_space:save(
+    {ok, _} = od_space:create(
         #document{key = UUId, value = #od_space{name = Name}}
     ),
     AddFun = case MemberType of

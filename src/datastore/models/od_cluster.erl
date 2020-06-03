@@ -18,7 +18,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([ensure_onezone_cluster/0]).
@@ -44,7 +44,7 @@
 
 -define(CTX, #{
     model => ?MODULE,
-    fold_enabled => true,
+    secure_fold_enabled => true,
     sync_enabled => true,
     memory_copies => all
 }).
@@ -61,15 +61,6 @@
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Saves cluster.
-%% @end
-%%--------------------------------------------------------------------
--spec save(doc()) -> {ok, doc()} | {error, term()}.
-save(Doc) ->
-    datastore_model:save(?CTX, Doc).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -159,14 +150,19 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec ensure_onezone_cluster() -> ok.
 ensure_onezone_cluster() ->
-    {ok, _} = datastore_model:update(?CTX, ?ONEZONE_CLUSTER_ID,
-        fun(Cluster) -> {ok, Cluster} end,
-        #document{key = ?ONEZONE_CLUSTER_ID, value = #od_cluster{
-            type = ?ONEZONE,
-            creator = ?SUB(root)
-        }}
-    ),
-    ok.
+    % Avoid race conditions
+    critical_section:run({generate_cluster, ?ONEZONE_CLUSTER_ID}, fun() ->
+        case datastore_model:get(?CTX, ?ONEZONE_CLUSTER_ID) of
+            {error, not_found} ->
+                {ok, _} = create(#document{key = ?ONEZONE_CLUSTER_ID, value = #od_cluster{
+                    type = ?ONEZONE,
+                    creator = ?SUB(root)
+                }}),
+                ok;
+            {ok, _} ->
+                ok
+        end
+    end).
 
 
 %%--------------------------------------------------------------------

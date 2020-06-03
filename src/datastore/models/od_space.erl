@@ -16,7 +16,7 @@
 -include_lib("ctool/include/privileges.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -35,7 +35,7 @@
 
 -define(CTX, #{
     model => ?MODULE,
-    fold_enabled => true,
+    secure_fold_enabled => true,
     sync_enabled => true,
     memory_copies => all
 }).
@@ -52,15 +52,6 @@
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Save space.
-%% @end
-%%--------------------------------------------------------------------
--spec save(doc()) -> {ok, doc()} | {error, term()}.
-save(Doc) ->
-    datastore_model:save(?CTX, Doc).
 
 %%--------------------------------------------------------------------
 %% @doc

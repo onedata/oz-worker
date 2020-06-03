@@ -138,7 +138,7 @@ generate_cluster_for_a_legacy_provider_test(Config) ->
     LegacyProviderDoc1 = #document{key = Provider1, value = #od_provider{
         name = <<"dummy1">>
     }},
-    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, save, [LegacyProviderDoc1])),
+    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, create, [LegacyProviderDoc1])),
     ?assertMatch({ok, true}, oz_test_utils:call_oz(Config, od_cluster, exists, [Cluster1])),
 
     Provider2 = datastore_key:new(),
@@ -147,7 +147,7 @@ generate_cluster_for_a_legacy_provider_test(Config) ->
     LegacyProviderDoc2 = #document{key = Provider2, value = #od_provider{
         name = <<"dummy2">>
     }},
-    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, save, [LegacyProviderDoc2])),
+    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, create, [LegacyProviderDoc2])),
     ?assertMatch({ok, #document{
         key = Provider2, value = #od_cluster{}}
     }, oz_test_utils:call_oz(Config, od_cluster, get, [Cluster2])).
