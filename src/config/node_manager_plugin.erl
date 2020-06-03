@@ -39,7 +39,7 @@
 % This can be used to e.g. move models between services.
 % Oldest known generation is the lowest one that can be directly upgraded to newest.
 % Human readable version is included to for logging purposes.
--define(INSTALLED_CLUSTER_GENERATION, 3).
+-define(INSTALLED_CLUSTER_GENERATION, 2).
 -define(OLDEST_KNOWN_CLUSTER_GENERATION, {1, <<"19.02.*">>}).
 
 %%%===================================================================
@@ -131,10 +131,7 @@ upgrade_essential_workers() -> [].
 upgrade_cluster(1) ->
     token_logic:migrate_deprecated_tokens(),
     storage_logic:migrate_legacy_supports(),
-    {ok, 2};
-upgrade_cluster(2) ->
-    space_logic:initialize_support_info(),
-    {ok, 3}.
+    {ok, 2}.
 
 %%--------------------------------------------------------------------
 %% @doc

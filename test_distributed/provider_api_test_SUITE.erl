@@ -1797,7 +1797,6 @@ legacy_revoke_support_test(Config) ->
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
         % run the same procedures as during Onezone upgrade
         ?assertEqual(ok, oz_test_utils:call_oz(Config, storage_logic, migrate_legacy_supports, [])),
-        ?assertEqual(ok, oz_test_utils:call_oz(Config, space_logic, initialize_support_info, [])),
         #{spaceId => S1}
     end,
     DeleteEntityFun = fun(#{spaceId := SpaceId} = _Env) ->

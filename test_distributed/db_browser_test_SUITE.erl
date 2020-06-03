@@ -120,7 +120,6 @@ set_up_environment() ->
         fun set_up_spaces_and_shares/1,
         fun set_up_providers_and_clusters/1,
         fun set_up_storages/1,
-        fun set_up_provider_sync_progress/1,
         fun set_up_handle_services_and_handles/1,
         fun set_up_harvesters/1
     ]).
@@ -272,25 +271,6 @@ set_up_storages(Environment = #environment{providers = Providers, spaces = Space
             Storages
         end, Providers)
     }.
-
-
-set_up_provider_sync_progress(Environment = #environment{spaces = Spaces}) ->
-    ozt:reconcile_entity_graph(),
-    lists:foreach(fun(Space) ->
-        EffProviders = maps:keys((ozt_spaces:get(Space))#od_space.eff_providers),
-        lists:foreach(fun(Provider) ->
-            ?assertEqual(ok, ozt:rpc(space_logic, update_provider_sync_progress, [?ROOT, Space, Provider, maps:from_list(
-                lists:map(fun(OtherProvider) ->
-                    {OtherProvider, #{
-                        <<"seq">> => rand:uniform(10000),
-                        <<"timestamp">> => ozt:cluster_time_seconds() - rand:uniform(50000)
-                    }}
-                end, EffProviders)
-            )])),
-            simulate_random_delay()
-        end, EffProviders)
-    end, Spaces),
-    Environment.
 
 
 set_up_handle_services_and_handles(Environment = #environment{users = Users, groups = Groups, shares = Shares}) ->

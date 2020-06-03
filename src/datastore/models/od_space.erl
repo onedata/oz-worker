@@ -22,8 +22,6 @@
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
--export([encode_support_parameters_per_provider/1, decode_support_parameters_per_provider/1]).
--export([encode_support_stage_per_provider/1, decode_support_stage_per_provider/1]).
 
 -type id() :: binary().
 -type record() :: #od_space{}.
@@ -141,7 +139,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    8.
+    7.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -262,59 +260,7 @@ get_record_struct(7) ->
 
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
-    ]};
-get_record_struct(8) ->
-    % * new field - support_parameters_per_provider
-    % * new field - support_stage_per_provider
-    {record, [
-        {name, string},
-
-        {users, #{string => [atom]}},
-        {groups, #{string => [atom]}},
-        {storages, #{string => integer}},
-        {shares, [string]},
-        {harvesters, [string]},
-
-        {eff_users, #{string => {[atom], [{atom, string}]}}},
-        {eff_groups, #{string => {[atom], [{atom, string}]}}},
-        {eff_providers, #{string => {integer, [{atom, string}]}}},
-        {eff_harvesters, #{string => [{atom, string}]}},
-
-        {support_parameters_per_provider, {custom, json, {
-            ?MODULE, encode_support_parameters_per_provider, decode_support_parameters_per_provider
-        }}}, % New field
-        {support_stage_per_provider, {custom, json, {
-            ?MODULE, encode_support_stage_per_provider, decode_support_stage_per_provider
-        }}}, % New field
-
-        {creation_time, integer},
-        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
-
-        {top_down_dirty, boolean},
-        {bottom_up_dirty, boolean}
     ]}.
-
-
-%% @private
--spec encode_support_parameters_per_provider(support_parameters:per_provider()) -> binary().
-encode_support_parameters_per_provider(Value) ->
-    json_utils:encode(support_parameters:per_provider_to_json(Value)).
-
-%% @private
--spec decode_support_parameters_per_provider(binary()) -> support_parameters:per_provider().
-decode_support_parameters_per_provider(Value) ->
-    support_parameters:per_provider_from_json(json_utils:decode(Value)).
-
-
-%% @private
--spec encode_support_stage_per_provider(support_stage:per_provider()) -> binary().
-encode_support_stage_per_provider(Value) ->
-    json_utils:encode(support_stage:per_provider_to_json(Value)).
-
-%% @private
--spec decode_support_stage_per_provider(binary()) -> support_stage:per_provider().
-decode_support_stage_per_provider(Value) ->
-    support_stage:per_provider_from_json(json_utils:decode(Value)).
 
 
 %%--------------------------------------------------------------------
@@ -596,70 +542,24 @@ upgrade_record(6, Space) ->
         end, Field)
     end,
 
-    {7, {od_space,
-        Name,
-
-        TranslateField(Users),
-        TranslateField(Groups),
-        #{}, % Storages
-        Shares,
-        Harvesters,
-
-        EffUsers,
-        EffGroups,
-        #{}, % Eff providers - recalculated during cluster upgrade procedure
-        EffHarvesters,
-
-        CreationTime,
-        upgrade_common:upgrade_subject_record(Creator),
-
-        true,
-        true
-    }};
-upgrade_record(7, Space) ->
-    {
-        od_space,
-        Name,
-
-        Users,
-        Groups,
-        Storages,
-        Shares,
-        Harvesters,
-
-        EffUsers,
-        EffGroups,
-        EffProviders,
-        EffHarvesters,
-
-        CreationTime,
-        Creator,
-
-        TopDownDirty,
-        BottomUpDirty
-    } = Space,
-
-    {8, #od_space{
+    {7, #od_space{
         name = Name,
 
-        users = Users,
-        groups = Groups,
-        storages = Storages,
+        users = TranslateField(Users),
+        groups = TranslateField(Groups),
         shares = Shares,
         harvesters = Harvesters,
+        storages = #{},
 
         eff_users = EffUsers,
         eff_groups = EffGroups,
-        eff_providers = EffProviders,
+        %% Eff providers are recalculated during cluster upgrade procedure
+        eff_providers = #{},
         eff_harvesters = EffHarvesters,
 
-        %% Support related info is initialized during cluster upgrade procedure
-        support_parameters_per_provider = #{},
-        support_stage_per_provider = #{},
-
         creation_time = CreationTime,
-        creator = Creator,
+        creator = upgrade_common:upgrade_subject_record(Creator),
 
-        top_down_dirty = TopDownDirty,
-        bottom_up_dirty = BottomUpDirty
+        top_down_dirty = true,
+        bottom_up_dirty = true
     }}.
