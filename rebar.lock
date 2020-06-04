@@ -35,7 +35,7 @@
   2},
  {<<"ctool">>,
   {git,"ssh://git@git.onedata.org:7999/vfs/ctool.git",
-       {ref,"1b69e21d5ae847f1e4a51af683c4995cea6326e5"}},
+       {ref,"ec20493ae0158d64e78bb98be6acb8a3a34ec8bb"}},
   0},
  {<<"dns">>,
   {git,"git://github.com/aetrion/dns_erlang.git",
@@ -172,7 +172,8 @@
  {<<"worker_pool">>,
   {git,"https://github.com/inaka/worker_pool",
        {ref,"ae5aa2e5819f7cce3aa3fbc50d39743de3515cdc"}},
-  1}]}.
+  1},
+ {<<"yamerl">>,{pkg,<<"yamerl">>,<<"0.7.0">>},1}]}.
 [
 {pkg_hash,[
  {<<"bear">>, <<"16264309AE5D005D03718A5C82641FCC259C9E8F09ADEB6FD79CA4271168656F">>},
@@ -184,5 +185,6 @@
  {<<"mimerl">>, <<"993F9B0E084083405ED8252B99460C4F0563E41729AB42D9074FD5E52439BE88">>},
  {<<"observer_cli">>, <<"54013653C72E75FF3B4B487342DFE56715C9749FF9C31A7DE8F84D18A09E1C3C">>},
  {<<"ssl_verify_fun">>, <<"28A4D65B7F59893BC2C7DE786DEC1E1555BD742D336043FE644AE956C3497FBE">>},
- {<<"stacktrace_compat">>, <<"8AD31C32C9A0EADB1EB298F04DC8B0C8D79BCC6233A638B02791FFCA4F331275">>}]}
+ {<<"stacktrace_compat">>, <<"8AD31C32C9A0EADB1EB298F04DC8B0C8D79BCC6233A638B02791FFCA4F331275">>},
+ {<<"yamerl">>, <<"E51DBA652DCE74C20A88294130B48051EBBBB0BE7D76F22DE064F0F3CCF0AAF5">>}]}
 ].

@@ -102,11 +102,13 @@ is_subscribable(_, _) -> false.
 create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PROVIDER(ProviderId) = Auth, data = Data}) ->
     Name = maps:get(<<"name">>, Data),
     QosParameters = maps:get(<<"qos_parameters">>, Data, #{}),
+    ImportedStorage = maps:get(<<"imported_storage">>, Data, false),
     StorageDoc = #document{
         key = ProposedId,
         value = #od_storage{
             name = Name,
             qos_parameters = QosParameters,
+            imported_storage = ImportedStorage,
             creator = Auth#auth.subject,
             provider = ProviderId
         }
@@ -190,13 +192,19 @@ update(#el_req{gri = #gri{id = StorageId, aspect = instance}, data = Data}) ->
     {ok, _} = od_storage:update(StorageId, fun(Storage) ->
         #od_storage{
             name = Name,
-            qos_parameters = QosParameters
+            qos_parameters = QosParameters,
+            imported_storage = ImportedStorage
         } = Storage,
 
         NewName = maps:get(<<"name">>, Data, Name),
         NewQosParameters = maps:get(<<"qos_parameters">>, Data, QosParameters),
+        NewImportedStorage = maps:get(<<"imported_storage">>, Data, ImportedStorage),
 
-        {ok, Storage#od_storage{name = NewName, qos_parameters = NewQosParameters}}
+        {ok, Storage#od_storage{
+            name = NewName, 
+            qos_parameters = NewQosParameters, 
+            imported_storage = NewImportedStorage
+        }}
     end),
     ok;
 
@@ -332,7 +340,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"name">> => {binary, name}
     },
     optional => #{
-        <<"qos_parameters">> => {json, qos_parameters}
+        <<"qos_parameters">> => {json, qos_parameters},
+        <<"imported_storage">> => {boolean, any}
     }
 };
 
@@ -349,7 +358,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = {upgrade_legacy_support
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"qos_parameters">> => {json, qos_parameters}
+        <<"qos_parameters">> => {json, qos_parameters},
+        <<"imported_storage">> => {boolean, any}
     }
 };
 
@@ -367,6 +377,21 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
 -spec support_space(od_provider:id(), od_space:id(), od_storage:id(),
     od_space:support_size()) -> entity_logic:create_result().
 support_space(ProviderId, SpaceId, StorageId, SupportSize) ->
+    % critical section to avoid simultaneous supports by 2 providers with imported storage
+    critical_section:run({space_support, SpaceId}, fun() -> 
+        support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) 
+    end).
+
+
+%% @private
+-spec support_space_insecure(od_provider:id(), od_space:id(), od_storage:id(),
+    od_space:support_size()) -> entity_logic:create_result().
+support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) ->
+    case is_imported_storage(StorageId) of
+        true -> check_if_supported_by_imported_storage(SpaceId);
+        false -> ok
+    end,
+    
     entity_graph:add_relation(
         od_space, SpaceId,
         od_storage, StorageId,
@@ -384,3 +409,24 @@ support_space(ProviderId, SpaceId, StorageId, SupportSize) ->
 
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
     {ok, resource, {NewGRI, {SpaceData, Rev}}}.
+
+
+%% @private
+-spec check_if_supported_by_imported_storage(od_space:id()) -> ok | no_return().
+check_if_supported_by_imported_storage(SpaceId) ->
+    {ok, #document{value = #od_space{storages = Storages}}} = od_space:get(SpaceId),
+    lists:foreach(fun (StorageId) ->
+        is_imported_storage(StorageId)
+            andalso throw(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(SpaceId, StorageId))
+    end, maps:keys(Storages)).
+
+
+%% @private
+-spec is_imported_storage(od_storage:id()) -> boolean() | no_return().
+is_imported_storage(StorageId) ->
+    case od_storage:get(StorageId) of
+        {ok, #document{value = #od_storage{imported_storage = ImportedStorage}}} -> ImportedStorage;
+        {error, Error} -> 
+            ?error_stacktrace("Unexpected error when trying to get storage ~p details: ~p", [StorageId, Error]),
+            throw(?ERROR_UNEXPECTED_ERROR(Error))
+    end.

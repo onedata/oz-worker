@@ -391,6 +391,7 @@
 -record(od_storage, {
     name = <<>> :: od_storage:name(),
     qos_parameters = #{} :: od_storage:qos_parameters(),
+    imported_storage = false :: boolean(),
 
     % Direct relations to other entities
     provider :: od_provider:id(),

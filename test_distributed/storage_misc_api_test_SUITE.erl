@@ -113,15 +113,17 @@ create_test(Config) ->
         },
         data_spec = #data_spec{
             required = [<<"name">>],
-            optional = [<<"qos_parameters">>],
+            optional = [<<"qos_parameters">>, <<"imported_storage">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
-                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}]
+                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
+                <<"imported_storage">> => [true, false]
             },
             bad_values = [
                 {<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)},
                 {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS}
+                {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"imported_storage">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported_storage">>)}
             ] ++ ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
         }
     },
@@ -256,11 +258,14 @@ update_test(Config) ->
     end,
     VerifyEndFun = fun(ShouldSucceed, #{storageId := StorageId} = _Env, Data) ->
         {ok, Storage} = oz_test_utils:get_storage(Config, StorageId),
-        ExpoQosParams = case ShouldSucceed of
+        case ShouldSucceed of
             false -> #{};
-            true -> maps:get(<<"qos_parameters">>, Data)
-        end,
-        ?assertEqual(ExpoQosParams, Storage#od_storage.qos_parameters)
+            true -> 
+                ExpQosParams = maps:get(<<"qos_parameters">>, Data, #{}),
+                ExpImportedStorage = maps:get(<<"imported_storage">>, Data, false),
+                ?assertEqual(ExpImportedStorage, Storage#od_storage.imported_storage),
+                ?assertEqual(ExpQosParams, Storage#od_storage.qos_parameters)
+        end
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -287,14 +292,16 @@ update_test(Config) ->
             expected_result = ?OK
         },
         data_spec = #data_spec{
-            at_least_one = [<<"qos_parameters">>],
+            at_least_one = [<<"qos_parameters">>, <<"imported_storage">>],
             correct_values = #{
-                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}]
+                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
+                <<"imported_storage">> => [true, false]
             },
             bad_values = [
                 {<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)},
                 {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS}
+                {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"imported_storage">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported_storage">>)}
             ]
         }
     },
@@ -353,7 +360,7 @@ support_space_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
     {ok, {P2, P2Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME2),
-    {ok, Storage} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+    {ok, Storage} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, BadInviteToken} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
     {ok, BadInviteTokenSerialized} = tokens:serialize(BadInviteToken),
@@ -467,8 +474,42 @@ support_space_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
-
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+    
+    % check that adding next support with imported storage fails
+    {ok, Storage2} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
+    {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(P1), Storage, S1),
+    
+    ApiTestSpec3 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P2, P2Token}]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            module = storage_logic,
+            function = support_space,
+            args = [auth, Storage2, data],
+            expected_result = ?ERROR_REASON(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(S1, Storage))
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_storage, id = Storage2, aspect = support},
+            expected_result = ?ERROR_REASON(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(S1, Storage))
+        },
+        data_spec = #data_spec{
+            required = [<<"token">>, <<"size">>],
+            correct_values = #{
+                <<"token">> => [fun() ->
+                    {ok, SpInvProvToken} = oz_test_utils:create_space_support_token(
+                        Config, ?USER(U1), S1
+                    ),
+                    element(2, {ok, _} = tokens:serialize(SpInvProvToken))
+                end],
+                <<"size">> => [MinSupportSize]
+            }
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
 
 update_support_size_test(Config) ->
     MinSupportSize = oz_test_utils:minimum_support_size(Config),

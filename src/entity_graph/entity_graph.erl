@@ -653,7 +653,7 @@ has_relation(RelationType, Direction, SubjectEntityType, SubjectEntityId, Entity
 %% @end
 %%--------------------------------------------------------------------
 -spec get_relation_attrs(relation_type(), direction(), SubjectEntityType :: entity_type(),
-    SubjectEntityId :: entity_id(), entity()) -> privileges().
+    SubjectEntityId :: entity_id(), entity()) -> privileges() | od_space:support_size().
 get_relation_attrs(RelationType, Direction, SubjectEntityType, SubjectEntityId, Entity) ->
     Relations = get_relations_with_attrs(RelationType, Direction, SubjectEntityType, Entity),
     maps:get(SubjectEntityId, Relations, []).

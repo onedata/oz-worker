@@ -255,6 +255,7 @@
 -export([
     create_storage/3,
     create_storage/4,
+    create_imported_storage/3,
     get_storage/2,
     update_storage/3,
     delete_storage/2
@@ -2841,6 +2842,19 @@ create_storage(Config, Client, Name) ->
 create_storage(Config, Client, Id, Name) ->
     ?assertMatch({ok, _}, call_oz(
         Config, storage_logic, create, [Client, Id, Name]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates an imported storage in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_imported_storage(Config :: term(), Client :: aai:auth(),
+    od_storage:name()) -> {ok, od_storage:id()}.
+create_imported_storage(Config, Client, Name) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, storage_logic, create, [Client, #{<<"name">> => Name, <<"imported_storage">> => true}]
     )).
 
 

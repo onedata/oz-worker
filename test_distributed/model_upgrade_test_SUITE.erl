@@ -37,6 +37,7 @@
     handle_upgrade_test/1,
     harvester_upgrade_test/1,
     cluster_upgrade_test/1,
+    storage_upgrade_test/1,
     dns_state_upgrade_test/1,
     macaroon_auth_upgrade_test/1,
     generate_cluster_for_a_legacy_provider_test/1
@@ -56,6 +57,7 @@ all() -> ?ALL([
     handle_upgrade_test,
     harvester_upgrade_test,
     cluster_upgrade_test,
+    storage_upgrade_test,
     dns_state_upgrade_test,
     macaroon_auth_upgrade_test,
     generate_cluster_for_a_legacy_provider_test
@@ -121,6 +123,10 @@ harvester_upgrade_test(Config) ->
 
 cluster_upgrade_test(Config) ->
     test_record_upgrade(Config, od_cluster).
+
+
+storage_upgrade_test(Config) ->
+    test_record_upgrade(Config, od_storage).
 
 
 dns_state_upgrade_test(Config) ->
@@ -2488,6 +2494,48 @@ get_record(od_cluster, 3) -> #od_cluster{
     bottom_up_dirty = false
 };
 
+get_record(od_storage, 1) -> {od_storage,
+    <<"storage_name">>,
+    #{<<"key">> => <<"value">>},
+    
+    <<"p1">>,
+    #{<<"s1">> => 8, <<"s2">> => 10},
+    
+    #{},
+    #{},
+    #{},
+    
+    #{},
+    #{},
+    
+    
+    ?DUMMY_TIMESTAMP,
+    ?SUB(user, <<"userId123">>),
+    
+    true,
+    true
+};
+get_record(od_storage, 2) -> #od_storage{
+    name = <<"storage_name">>,
+    qos_parameters = #{<<"key">> => <<"value">>},
+    imported_storage = false,
+
+    provider = <<"p1">>,
+    spaces = #{<<"s1">> => 8, <<"s2">> => 10},
+
+    eff_users = #{},
+    eff_groups = #{},
+    eff_harvesters = #{},
+
+    eff_providers = #{},
+    eff_spaces = #{},
+
+    creation_time = ?DUMMY_TIMESTAMP,
+    creator = ?SUB(user, <<"userId123">>),
+
+    top_down_dirty = true,
+    bottom_up_dirty = true
+};
 
 get_record(dns_state, 1) -> {dns_state,
     #{<<"sub">> => <<"p1">>},

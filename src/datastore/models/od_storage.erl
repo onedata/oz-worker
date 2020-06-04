@@ -21,7 +21,7 @@
 -export([entity_logic_plugin/0]).
 
 %% datastore_model callbacks
--export([get_record_version/0, get_record_struct/1]).
+-export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
 
 -type id() :: binary().
 -type record() :: #od_storage{}.
@@ -179,7 +179,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    1.
+    2.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -209,5 +209,78 @@ get_record_struct(1) ->
 
         {bottom_up_dirty, boolean},
         {top_down_dirty, boolean}
+    ]};
+get_record_struct(2) ->
+    {record, [
+        {name, string},
+        {qos_parameters, #{string => string}},
+        {imported_storage, boolean},
+        
+        {provider, string},
+        {spaces, #{string => integer}},
+        
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => {integer, [{atom, string}]}}},
+        
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+        
+        {bottom_up_dirty, boolean},
+        {top_down_dirty, boolean}
     ]}.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades model's record from provided version to the next one.
+%% @end
+%%--------------------------------------------------------------------
+-spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
+    {datastore_model:record_version(), datastore_model:record()}.
+upgrade_record(1, Storage) ->
+    {
+        od_storage,
+        Name,
+        QosParameters,
+        
+        Provider,
+        Spaces,
+        
+        EffUsers,
+        EffGroups,
+        EffHarvesters,
+    
+        EffProviders,
+        EffSpaces,
+    
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Storage,
+    {2, #od_storage{
+        name = Name,
+        qos_parameters = QosParameters,
+        imported_storage = false, % will be modified during cluster upgrade procedure
+       
+        provider = Provider,
+        spaces = Spaces,
+        
+        eff_users = EffUsers,
+        eff_groups = EffGroups,
+        eff_harvesters = EffHarvesters,
+        
+        eff_providers = EffProviders,
+        eff_spaces = EffSpaces,
+        
+        creation_time = CreationTime,
+        creator = Creator,
+        
+        top_down_dirty = TopDownDirty,
+        bottom_up_dirty = BottomUpDirty
+    }}.
