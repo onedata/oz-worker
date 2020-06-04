@@ -150,19 +150,14 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec ensure_onezone_cluster() -> ok.
 ensure_onezone_cluster() ->
-    % Avoid race conditions
-    critical_section:run({generate_cluster, ?ONEZONE_CLUSTER_ID}, fun() ->
-        case datastore_model:get(?CTX, ?ONEZONE_CLUSTER_ID) of
-            {error, not_found} ->
-                {ok, _} = create(#document{key = ?ONEZONE_CLUSTER_ID, value = #od_cluster{
-                    type = ?ONEZONE,
-                    creator = ?SUB(root)
-                }}),
-                ok;
-            {ok, _} ->
-                ok
-        end
-    end).
+    NewClusterDoc = #document{key = ?ONEZONE_CLUSTER_ID, value = #od_cluster{
+        type = ?ONEZONE,
+        creator = ?SUB(root)
+    }},
+    case create(NewClusterDoc) of
+        {ok, _} -> ok;
+        {error, already_exists} -> ok
+    end.
 
 
 %%--------------------------------------------------------------------
