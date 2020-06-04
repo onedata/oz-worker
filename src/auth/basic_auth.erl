@@ -160,20 +160,24 @@ migrate_onepanel_user_to_onezone(OnepanelUserId, OnepanelUsername, PasswordHash,
             ok
     end,
 
-    UpdateFun = fun(User) ->
-        {ok, User#od_user{
-            username = OnepanelUsername,
-            basic_auth_enabled = true,
-            password_hash = PasswordHash
-        }}
-    end,
     DefaultDoc = #document{key = UserId, value = #od_user{
         full_name = user_logic:normalize_full_name(OnepanelUsername),
         username = OnepanelUsername,
         basic_auth_enabled = true,
         password_hash = PasswordHash
     }},
-    {ok, _} = od_user:update(UserId, UpdateFun, DefaultDoc),
+    case od_user:create(DefaultDoc) of
+        {error, already_exists} ->
+            {ok, _} = od_user:update(UserId, fun(User) ->
+                {ok, User#od_user{
+                    username = OnepanelUsername,
+                    basic_auth_enabled = true,
+                    password_hash = PasswordHash
+                }}
+            end);
+        {ok, #document{key = UserId}} ->
+            ok
+    end,
 
     Groups = onepanel_role_to_groups(Role),
     add_user_to_groups(UserId, Groups),

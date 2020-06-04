@@ -101,7 +101,6 @@ operation_supported(get, storages, private) -> true;
 operation_supported(update, instance, private) -> true;
 operation_supported(update, {user_privileges, _}, private) -> true;
 operation_supported(update, {group_privileges, _}, private) -> true;
-operation_supported(update, {support_parameters, _}, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {user, _}, private) -> true;
@@ -167,8 +166,6 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         _ ->
             ok
     end,
-
-    space_stats:init_for_space(SpaceId),
 
     {true, {Space, Rev}} = fetch_entity(#gri{aspect = instance, id = SpaceId}),
     {ok, resource, {GRI#gri{id = SpaceId}, {Space, Rev}}};
@@ -317,15 +314,11 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{
         name = Name,
         shares = Shares,
-        support_parameters_per_provider = SupportParametersPerProvider,
-        support_stage_per_provider = SupportStagePerProvider,
         creation_time = CreationTime, creator = Creator
     } = Space,
     {ok, #{
         <<"name">> => Name,
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
-        <<"supportParametersPerProvider">> => SupportParametersPerProvider,
-        <<"supportStagePerProvider">> => SupportStagePerProvider,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator,
         <<"sharesCount">> => length(Shares)
@@ -395,19 +388,7 @@ update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {group_privileges, GroupI
         od_group, GroupId,
         od_space, SpaceId,
         {PrivsToGrant, PrivsToRevoke}
-    );
-
-update(#el_req{gri = #gri{id = SpaceId, aspect = {support_parameters, ProviderId}}, data = Data}) ->
-    {ok, _} = od_space:update(SpaceId, fun(Space = #od_space{support_parameters_per_provider = ParametersPerProvider}) ->
-        {ok, PreviousForProvider} = support_parameters:lookup_by_provider(ParametersPerProvider, ProviderId),
-        {ok, Space#od_space{support_parameters_per_provider = support_parameters:update_for_provider(
-            ParametersPerProvider, ProviderId, support_parameters:build(
-                maps:get(<<"dataWrite">>, Data, support_parameters:get_data_write(PreviousForProvider)),
-                maps:get(<<"metadataReplication">>, Data, support_parameters:get_metadata_replication(PreviousForProvider))
-            )
-        )}}
-    end),
-    ok.
+    ).
 
 
 %%--------------------------------------------------------------------
@@ -424,8 +405,7 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
                     harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, true)
                 end)
         end, Harvesters),
-        entity_graph:delete_with_relations(od_space, SpaceId),
-        space_stats:clear_for_space(SpaceId)
+        entity_graph:delete_with_relations(od_space, SpaceId)
     end;
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}}) ->
@@ -547,9 +527,6 @@ exists(#el_req{gri = #gri{aspect = {provider, ProviderId}}}, Space) ->
 
 exists(#el_req{gri = #gri{aspect = {harvester, HarvesterId}}}, Space) ->
     entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, Space);
-
-exists(#el_req{gri = #gri{aspect = {support_parameters, ProviderId}}}, Space) ->
-    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Space);
 
 % All other aspects exist if space record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_space{}) ->
@@ -703,9 +680,6 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = {user_privileges
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {group_privileges, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_SET_PRIVILEGES);
-
-authorize(Req = #el_req{operation = update, gri = #gri{aspect = {support_parameters, _}}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_DELETE);
@@ -929,15 +903,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}})
     };
 
 validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}}) ->
-    validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}});
-
-validate(#el_req{operation = update, gri = #gri{aspect = {support_parameters, _}}}) ->
-    #{
-        at_least_one => #{
-            <<"dataWrite">> => {atom, [global, none]},
-            <<"metadataReplication">> => {atom, [eager, lazy, none]}
-        }
-    }.
+    validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}}).
 
 %%%===================================================================
 %%% Internal functions

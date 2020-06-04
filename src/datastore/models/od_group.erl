@@ -16,7 +16,7 @@
 -include_lib("ctool/include/privileges.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, update/3, force_delete/1]).
+-export([create/1, get/1, exists/1, update/2, force_delete/1]).
 -export([list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
@@ -36,7 +36,7 @@
 
 -define(CTX, #{
     model => ?MODULE,
-    fold_enabled => true,
+    secure_fold_enabled => true,
     sync_enabled => true,
     memory_copies => all
 }).
@@ -53,15 +53,6 @@
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Saves group.
-%% @end
-%%--------------------------------------------------------------------
--spec save(doc()) -> {ok, doc()} | {error, term()}.
-save(Doc) ->
-    datastore_model:save(?CTX, Doc).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -89,15 +80,6 @@ exists(GroupId) ->
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(GroupId, Diff) ->
     datastore_model:update(?CTX, GroupId, Diff).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates group by ID or creates default one.
-%% @end
-%%--------------------------------------------------------------------
--spec update(id(), diff(), record()) -> {ok, doc()} | {error, term()}.
-update(GroupId, Diff, Default) ->
-    datastore_model:update(?CTX, GroupId, Diff, Default).
 
 %%--------------------------------------------------------------------
 %% @doc

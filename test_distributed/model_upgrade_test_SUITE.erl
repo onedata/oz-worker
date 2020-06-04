@@ -138,7 +138,7 @@ generate_cluster_for_a_legacy_provider_test(Config) ->
     LegacyProviderDoc1 = #document{key = Provider1, value = #od_provider{
         name = <<"dummy1">>
     }},
-    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, save, [LegacyProviderDoc1])),
+    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, create, [LegacyProviderDoc1])),
     ?assertMatch({ok, true}, oz_test_utils:call_oz(Config, od_cluster, exists, [Cluster1])),
 
     Provider2 = datastore_key:new(),
@@ -147,7 +147,7 @@ generate_cluster_for_a_legacy_provider_test(Config) ->
     LegacyProviderDoc2 = #document{key = Provider2, value = #od_provider{
         name = <<"dummy2">>
     }},
-    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, save, [LegacyProviderDoc2])),
+    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, create, [LegacyProviderDoc2])),
     ?assertMatch({ok, #document{
         key = Provider2, value = #od_cluster{}}
     }, oz_test_utils:call_oz(Config, od_cluster, get, [Cluster2])).
@@ -1589,48 +1589,7 @@ get_record(od_space, 6) -> {od_space,
     true,
     true
 };
-get_record(od_space, 7) -> {od_space,
-    <<"name">>,
-    #{
-        <<"user1">> => privileges:from_list([
-            ?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_CHANGES_STREAM, ?SPACE_VIEW_PRIVILEGES,
-            ?SPACE_REMOVE_GROUP, ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
-            ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
-        ]),
-        <<"user2">> => privileges:from_list([
-            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
-            ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
-            ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
-        ])
-    },
-    #{
-        <<"group1">> => privileges:from_list([
-            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
-            ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
-            ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
-        ]),
-        <<"group2">> => privileges:from_list([
-            ?SPACE_REMOVE_SUPPORT, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
-            ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
-            ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
-        ])
-    },
-    #{}, % storages
-    [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
-    [], % harvesters
-
-    #{}, % effective_users
-    #{}, % effective_groups
-    #{}, % effective_providers
-    #{}, % effective_harvesters
-
-    ?DUMMY_TIMESTAMP,
-    ?SUB(nobody),
-
-    true,
-    true
-};
-get_record(od_space, 8) -> #od_space{
+get_record(od_space, 7) -> #od_space{
     name = <<"name">>,
     users = #{
         <<"user1">> => privileges:from_list([
@@ -1664,10 +1623,6 @@ get_record(od_space, 8) -> #od_space{
     eff_groups = #{},
     eff_providers = #{},
     eff_harvesters = #{},
-
-    %% Support related info is initialized during cluster upgrade procedure
-    support_parameters_per_provider = #{},
-    support_stage_per_provider = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,
     creator = ?SUB(nobody),
