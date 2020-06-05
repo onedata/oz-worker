@@ -38,7 +38,7 @@ handle(<<"POST">>, Req) ->
     Result = try
         case basic_auth:authenticate(Req) of
             {true, ?USER(UserId)} ->
-                {ok, FullName} = user_logic:get_full_name(?ROOT, UserId),
+                {ok, FullName} = od_user:get_full_name(UserId),
                 ?info("User '~ts' has logged in (~s)", [FullName, UserId]),
                 {ok, gui_session:log_in(UserId, Req)};
             false ->

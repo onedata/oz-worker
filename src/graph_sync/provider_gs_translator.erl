@@ -295,7 +295,7 @@ translate_resource(_, #gri{type = od_provider, aspect = instance, scope = privat
     #{
         <<"providerRootToken">> => Serialized
     };
-translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope = private}, Provider) ->
+translate_resource(_, #gri{type = od_provider, id = ProviderId, aspect = instance, scope = private}, Provider) ->
     #od_provider{
         name = Name,
         subdomain_delegation = SubdomainDelegation,
@@ -316,7 +316,7 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
 
-        <<"online">> => provider_connections:is_online(Id),
+        <<"online">> => provider_connections:is_online(ProviderId, Provider),
 
         <<"storages">> => entity_graph:get_relations(direct, bottom_up, od_storage, Provider),
         %% @TODO VFS-5554 Deprecated, included for backward compatibility
@@ -330,7 +330,8 @@ translate_resource(_, #gri{type = od_provider, aspect = instance, scope = protec
     #{
         <<"name">> := Name, <<"domain">> := Domain,
         <<"latitude">> := Latitude, <<"longitude">> := Longitude,
-        <<"online">> := Online
+        <<"connectionStatus">> := #{<<"online">> := Online}
+
     } = ProviderData,
     #{
         <<"name">> => Name, <<"domain">> => Domain,

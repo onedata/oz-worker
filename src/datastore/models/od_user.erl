@@ -17,7 +17,7 @@
 -include_lib("ctool/include/errors.hrl").
 
 %% API
--export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, get_full_name/1, exists/1, update/2, force_delete/1, list/0]).
 -export([get_by_username/1, get_by_linked_account/1]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
@@ -56,41 +56,35 @@
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates user.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns user by ID.
-%% @end
-%%--------------------------------------------------------------------
+
+
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(UserId) ->
     datastore_model:get(?CTX, UserId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks whether user given by ID exists.
-%% @end
-%%--------------------------------------------------------------------
+
+-spec get_full_name(id()) -> {ok, full_name()} | errors:error().
+get_full_name(UserId) ->
+    case datastore_model:get(?CTX, UserId) of
+        {ok, #document{value = #od_user{full_name = FullName}}} -> {ok, FullName};
+        {error, _} = Error -> Error
+    end.
+
+
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(UserId) ->
     datastore_model:exists(?CTX, UserId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates user by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(UserId, Diff) ->
     datastore_model:update(?CTX, UserId, Diff).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -106,14 +100,11 @@ force_delete(UserId) ->
     [session:delete(S, ?SESSION_CLEANUP_GRACE_PERIOD, false) || S <- Sessions],
     datastore_model:delete(?CTX, UserId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all users.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -155,6 +146,7 @@ get_by_linked_account(#linked_account{idp = IdP, subject_id = SubjId}) ->
         {ok, Doc} -> {ok, Doc}
     end.
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns readable string representing the user with given id.
@@ -163,6 +155,7 @@ get_by_linked_account(#linked_account{idp = IdP, subject_id = SubjId}) ->
 -spec to_string(UserId :: id()) -> binary().
 to_string(UserId) ->
     <<"user:", UserId/binary>>.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -173,15 +166,12 @@ to_string(UserId) ->
 entity_logic_plugin() ->
     user_logic_plugin.
 
+
 -spec get_ctx() -> datastore:ctx().
 get_ctx() ->
     ?CTX.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Adds a new session for given user.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec add_session(id(), session:id()) -> ok | {error, term()}.
 add_session(UserId, SessionId) ->
     Result = update(UserId, fun(User = #od_user{active_sessions = ActiveSessions}) ->
@@ -192,11 +182,7 @@ add_session(UserId, SessionId) ->
         {error, _} = Error -> Error
     end.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Removes a session of given user.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec remove_session(id(), session:id()) -> ok | {error, term()}.
 remove_session(UserId, SessionId) ->
     Result = update(UserId, fun(User = #od_user{active_sessions = ActiveSessions}) ->
@@ -207,11 +193,7 @@ remove_session(UserId, SessionId) ->
         {error, _} = Error -> Error
     end.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns all sessions of given user.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec get_all_sessions(id()) -> {ok, [session:id()]} | {error, term()}.
 get_all_sessions(UserId) ->
     case ?MODULE:get(UserId) of

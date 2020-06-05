@@ -18,7 +18,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, get_name/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([ensure_onezone_cluster/0]).
@@ -53,20 +53,12 @@
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates cluster.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns cluster by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(ClusterId) ->
     case datastore_model:get(?CTX, ClusterId) of
@@ -78,11 +70,14 @@ get(ClusterId) ->
             OtherResult
     end.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks whether cluster given by ID exists.
-%% @end
-%%--------------------------------------------------------------------
+
+-spec get_name(id()) -> {ok, binary()} | {error, term()}.
+get_name(?ONEZONE_CLUSTER_ID) ->
+    {ok, <<"Onezone">>};
+get_name(ClusterId) ->
+    od_provider:get_name(ClusterId).
+
+
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(ClusterId) ->
     case datastore_model:exists(?CTX, ClusterId) of
@@ -94,14 +89,11 @@ exists(ClusterId) ->
             OtherResult
     end.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates cluster by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(ClusterId, Diff) ->
     datastore_model:update(?CTX, ClusterId, Diff).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -116,6 +108,7 @@ update(ClusterId, Diff) ->
 force_delete(ClusterId) ->
     datastore_model:delete(?CTX, ClusterId).
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns list of all clusters.
@@ -124,6 +117,7 @@ force_delete(ClusterId) ->
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -134,6 +128,7 @@ list() ->
 to_string(ClusterId) ->
     <<"cluster:", ClusterId/binary>>.
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns the entity logic plugin module that handles model logic.
@@ -142,6 +137,7 @@ to_string(ClusterId) ->
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     cluster_logic_plugin.
+
 
 %%--------------------------------------------------------------------
 %% @doc

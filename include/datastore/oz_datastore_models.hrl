@@ -5,7 +5,7 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc Models definitions. Extends datastore models.
+%%% @doc DB models definitions. Extends datastore models.
 %%% @end
 %%%-------------------------------------------------------------------
 
@@ -27,10 +27,9 @@
 end).
 
 %%%===================================================================
-%%% DB records definitions
+%%% Helper records used as fields in bigger models.
 %%%===================================================================
 
-%% This record must be defined here as od_user depends on it.
 %% This record defines user's account info received from a SAML / OpenID provider.
 -record(linked_account, {
     idp :: atom(),
@@ -47,8 +46,6 @@ end).
     refresh_token = undefined :: undefined | binary()
 }).
 
-
-%% This record must be defined here as od_harvester depends on it.
 -record(harvester_index, {
     name :: binary(),
     schema = undefined :: od_harvester:schema() | undefined,
@@ -69,7 +66,6 @@ end).
 }).
 
 
-%% This record must be defined here as od_harvester depends on it.
 -record(index_stats, {
     % sequence harvested in this index
     current_seq = 0 :: integer(),
@@ -311,7 +307,7 @@ end).
     eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
-    last_activity = 0 :: time_utils:seconds(),
+    connection_status = provider_connection_status:default() :: provider_connection_status:record(),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()

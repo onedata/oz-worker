@@ -16,7 +16,7 @@
 -include_lib("ctool/include/privileges.hrl").
 
 %% API
--export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, get_name/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([all_metadata_types/0, all_file_details/0]).
@@ -80,41 +80,35 @@
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates harvester.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns harvester by ID.
-%% @end
-%%--------------------------------------------------------------------
+
+
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(HarvesterId) ->
     datastore_model:get(?CTX, HarvesterId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks whether harvester given by ID exists.
-%% @end
-%%--------------------------------------------------------------------
+
+-spec get_name(id()) -> {ok, name()} | {error, term()}.
+get_name(HarvesterId) ->
+    case datastore_model:get(?CTX, HarvesterId) of
+        {ok, #document{value = #od_harvester{name = Name}}} -> {ok, Name};
+        {error, _} = Error -> Error
+    end.
+
+
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(HarvesterId) ->
     datastore_model:exists(?CTX, HarvesterId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates harvester by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(HarvesterId, Diff) ->
     datastore_model:update(?CTX, HarvesterId, Diff).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -128,14 +122,11 @@ update(HarvesterId, Diff) ->
 force_delete(HarvesterId) ->
     datastore_model:delete(?CTX, HarvesterId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all providers.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -145,6 +136,7 @@ list() ->
 -spec to_string(HarvesterId :: id()) -> binary().
 to_string(HarvesterId) ->
     <<"harvester:", HarvesterId/binary>>.
+
 
 %%--------------------------------------------------------------------
 %% @doc

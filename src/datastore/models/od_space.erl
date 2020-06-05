@@ -16,7 +16,7 @@
 -include_lib("ctool/include/privileges.hrl").
 
 %% API
--export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, get_name/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -46,41 +46,35 @@
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates space.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns space by ID.
-%% @end
-%%--------------------------------------------------------------------
+
+
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(SpaceId) ->
     datastore_model:get(?CTX, SpaceId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks whether space given by ID exists.
-%% @end
-%%--------------------------------------------------------------------
+
+-spec get_name(id()) -> {ok, name()} | {error, term()}.
+get_name(SpaceId) ->
+    case datastore_model:get(?CTX, SpaceId) of
+        {ok, #document{value = #od_space{name = Name}}} -> {ok, Name};
+        {error, _} = Error -> Error
+    end.
+
+
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(SpaceId) ->
     datastore_model:exists(?CTX, SpaceId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates space by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(SpaceId, Diff) ->
     datastore_model:update(?CTX, SpaceId, Diff).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -94,14 +88,11 @@ update(SpaceId, Diff) ->
 force_delete(SpaceId) ->
     datastore_model:delete(?CTX, SpaceId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all providers.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -111,6 +102,7 @@ list() ->
 -spec to_string(SpaceId :: id()) -> binary().
 to_string(SpaceId) ->
     <<"space:", SpaceId/binary>>.
+
 
 %%--------------------------------------------------------------------
 %% @doc

@@ -475,43 +475,37 @@ migrate_provider_root_token(ProviderId, RootTokenId) ->
 %% @private
 -spec gen_invite_token_name(token_type:invite_type(), gri:entity_id()) -> binary().
 gen_invite_token_name(?USER_JOIN_GROUP, GroupId) ->
-    {ok, Name} = group_logic:get_name(?ROOT, GroupId),
+    {ok, Name} = od_group:get_name(GroupId),
     format_invite_token_name(<<"user invite to group">>, Name);
 gen_invite_token_name(?GROUP_JOIN_GROUP, GroupId) ->
-    {ok, Name} = group_logic:get_name(?ROOT, GroupId),
+    {ok, Name} = od_group:get_name(GroupId),
     format_invite_token_name(<<"group invite to group">>, Name);
 gen_invite_token_name(?USER_JOIN_SPACE, SpaceId) ->
-    {ok, Name} = space_logic:get_name(?ROOT, SpaceId),
+    {ok, Name} = od_space:get_name(SpaceId),
     format_invite_token_name(<<"user invite to space">>, Name);
 gen_invite_token_name(?GROUP_JOIN_SPACE, SpaceId) ->
-    {ok, Name} = space_logic:get_name(?ROOT, SpaceId),
+    {ok, Name} = od_space:get_name(SpaceId),
     format_invite_token_name(<<"group invite to space">>, Name);
 gen_invite_token_name(?SUPPORT_SPACE, SpaceId) ->
-    {ok, Name} = space_logic:get_name(?ROOT, SpaceId),
+    {ok, Name} = od_space:get_name(SpaceId),
     format_invite_token_name(<<"support request for space">>, Name);
 gen_invite_token_name(?REGISTER_ONEPROVIDER, AdminUserId) ->
-    {ok, Name} = user_logic:get_full_name(?ROOT, AdminUserId),
+    {ok, Name} = od_user:get_full_name(AdminUserId),
     format_invite_token_name(<<"Oneprovider rgstr. token for">>, Name);
 gen_invite_token_name(?USER_JOIN_CLUSTER, ClusterId) ->
-    Name = case ClusterId of
-        ?ONEZONE_CLUSTER_ID -> <<"Onezone">>;
-        _ -> element(2, {ok, _} = provider_logic:get_name(?ROOT, ClusterId))
-    end,
+    {ok, Name} = od_cluster:get_name(ClusterId),
     format_invite_token_name(<<"user invite to cluster">>, Name);
 gen_invite_token_name(?GROUP_JOIN_CLUSTER, ClusterId) ->
-    Name = case ClusterId of
-        ?ONEZONE_CLUSTER_ID -> <<"Onezone">>;
-        _ -> element(2, {ok, _} = provider_logic:get_name(?ROOT, ClusterId))
-    end,
+    {ok, Name} = od_cluster:get_name(ClusterId),
     format_invite_token_name(<<"group invite to cluster">>, Name);
 gen_invite_token_name(?USER_JOIN_HARVESTER, HarvesterId) ->
-    {ok, Name} = harvester_logic:get_name(?ROOT, HarvesterId),
+    {ok, Name} = od_harvester:get_name(HarvesterId),
     format_invite_token_name(<<"user invite to harvester">>, Name);
 gen_invite_token_name(?GROUP_JOIN_HARVESTER, HarvesterId) ->
-    {ok, Name} = harvester_logic:get_name(?ROOT, HarvesterId),
+    {ok, Name} = od_harvester:get_name(HarvesterId),
     format_invite_token_name(<<"group invite to harvester">>, Name);
 gen_invite_token_name(?SPACE_JOIN_HARVESTER, HarvesterId) ->
-    {ok, Name} = harvester_logic:get_name(?ROOT, HarvesterId),
+    {ok, Name} = od_harvester:get_name(HarvesterId),
     format_invite_token_name(<<"space invite to harvester">>, Name).
 
 

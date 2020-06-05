@@ -153,12 +153,12 @@ set_up_users(Environment) ->
                     ok;
                 _ ->
                     simulate_random_delay(),
-                    ozt:rpc(user_connections, add, [User, <<"sess-id">>, self()]),
+                    ozt:rpc(user_connections, report_connected, [User, <<"sess-id">>, self()]),
                     case rand:uniform(4) of
                         1 ->
                             ok;
                         _ ->
-                            ozt:rpc(user_connections, remove, [User, <<"sess-id">>, self()])
+                            ozt:rpc(user_connections, report_disconnected, [User, <<"sess-id">>, self()])
                     end
             end,
             case rand:uniform(5) of
@@ -235,12 +235,12 @@ set_up_providers_and_clusters(Environment = #environment{users = Users, groups =
                 ok;
             _ ->
                 simulate_random_delay(),
-                ozt:rpc(provider_connections, add, [Provider, self()]),
+                ozt:rpc(provider_connections, report_connected, [Provider, self()]),
                 case rand:uniform(4) of
                     1 ->
                         ok;
                     _ ->
-                        ozt:rpc(provider_connections, remove, [Provider, self()])
+                        ozt:rpc(provider_connections, report_disconnected, [Provider, self()])
                 end
         end,
         Provider

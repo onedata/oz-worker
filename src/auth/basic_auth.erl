@@ -223,7 +223,7 @@ add_user_to_groups(UserId, GroupIds) ->
     lists:foreach(fun(GroupId) ->
         case group_logic:add_user(?ROOT, GroupId, UserId) of
             {ok, UserId} ->
-                {ok, GroupName} = group_logic:get_name(?ROOT, GroupId),
+                {ok, GroupName} = od_group:get_name(GroupId),
                 ?info("Added user '~s' to group '~ts'", [UserId, GroupName]);
             ?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _) ->
                 ok

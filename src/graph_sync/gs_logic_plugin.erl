@@ -59,26 +59,11 @@ verify_handshake_auth({token, Token}, PeerIp) ->
 %% {@link gs_logic_plugin_behaviour} callback client_connected/2.
 %% @end
 %%--------------------------------------------------------------------
--spec client_connected(aai:auth(), gs_server:conn_ref()) ->
-    ok.
+-spec client_connected(aai:auth(), gs_server:conn_ref()) -> ok.
 client_connected(?PROVIDER(ProvId), ConnectionRef) ->
-    {ok, #document{value = ProvRecord, revs = [DbRev | _]}} = od_provider:get(ProvId),
-    case provider_connections:add(ProvId, ConnectionRef) of
-        {ok, 1} ->
-            ?info("Provider '~ts' has connected (~s)", [ProvRecord#od_provider.name, ProvId]);
-        _ ->
-            ok
-    end,
-    % Generate a dummy update which will cause a push to GUI clients so that
-    % they can learn the provider is now online.
-    {Revision, _Hash} = datastore_rev:parse(DbRev),
-    gs_server:updated(
-        od_provider,
-        ProvId,
-        {ProvRecord, Revision}
-    );
+    provider_connections:report_connected(ProvId, ConnectionRef);
 client_connected(?USER(UserId, SessionId), ConnectionRef) when is_binary(SessionId) ->
-    user_connections:add(UserId, SessionId, ConnectionRef);
+    user_connections:report_connected(UserId, SessionId, ConnectionRef);
 client_connected(_, _) ->
     ok.
 
@@ -88,9 +73,10 @@ client_connected(_, _) ->
 %% {@link gs_logic_plugin_behaviour} callback client_heartbeat/2.
 %% @end
 %%--------------------------------------------------------------------
--spec client_heartbeat(aai:auth(), gs_server:conn_ref()) ->
-    ok.
-client_heartbeat(Client, ConnectionRef) ->
+-spec client_heartbeat(aai:auth(), gs_server:conn_ref()) -> ok.
+client_heartbeat(?PROVIDER(ProvId) = Client, _ConnectionRef) ->
+    provider_connections:report_heartbeat(ProvId);
+client_heartbeat(_, _) ->
     ok.
 
 
@@ -99,38 +85,11 @@ client_heartbeat(Client, ConnectionRef) ->
 %% {@link gs_logic_plugin_behaviour} callback client_disconnected/2.
 %% @end
 %%--------------------------------------------------------------------
--spec client_disconnected(aai:auth(), gs_server:conn_ref()) ->
-    ok.
+-spec client_disconnected(aai:auth(), gs_server:conn_ref()) -> ok.
 client_disconnected(?PROVIDER(ProvId), ConnectionRef) ->
-    ProviderName = case od_provider:get(ProvId) of
-        {ok, #document{value = ProvRecord, revs = [DbRev | _]}} ->
-            % Generate a dummy update which will cause a push to GUI clients so that
-            % they can learn the provider is now offline.
-            {Revision, _Hash} = datastore_rev:parse(DbRev),
-            gs_server:updated(
-                od_provider,
-                ProvId,
-                {ProvRecord, Revision}
-            ),
-            ProvRecord#od_provider.name;
-        _ ->
-            % Provider could have been deleted in the meantime, in such case do
-            % not retrieve its name.
-            undefined
-    end,
-    case provider_connections:remove(ProvId, ConnectionRef) of
-        {ok, 0} ->
-            case ProviderName of
-                undefined ->
-                    ?info("Provider '~s' went offline", [ProvId]);
-                _ ->
-                    ?info("Provider '~ts' went offline (~s)", [ProviderName, ProvId])
-            end;
-        _ ->
-            ok
-    end;
+    provider_connections:report_disconnected(ProvId, ConnectionRef);
 client_disconnected(?USER(UserId, SessionId), ConnectionRef) when is_binary(SessionId) ->
-    user_connections:remove(UserId, SessionId, ConnectionRef);
+    user_connections:report_disconnected(UserId, SessionId, ConnectionRef);
 client_disconnected(_, _) ->
     ok.
 

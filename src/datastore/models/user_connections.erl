@@ -17,8 +17,8 @@
 
 %% API
 -export([
-    add/3,
-    remove/3,
+    report_connected/3,
+    report_disconnected/3,
     get_all/2,
     get_last_activity/1,
     close_all/2
@@ -26,6 +26,9 @@
 
 %% datastore_model callbacks
 -export([init/0]).
+
+-type connections_per_session() :: #{session:id() => [gs_server:conn_ref()]}.
+-export_type([connections_per_session/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -36,8 +39,8 @@
 %%% API
 %%%===================================================================
 
--spec add(od_user:id(), session:id(), gs_server:conn_ref()) -> ok | {error, term()}.
-add(UserId, SessionId, ConnectionRef) ->
+-spec report_connected(od_user:id(), session:id(), gs_server:conn_ref()) -> ok | {error, term()}.
+report_connected(UserId, SessionId, ConnectionRef) ->
     update(UserId, fun(ConnectionsPerSession) ->
         Connections = maps:get(SessionId, ConnectionsPerSession, []),
         ConnectionsPerSession#{
@@ -46,8 +49,8 @@ add(UserId, SessionId, ConnectionRef) ->
     end).
 
 
--spec remove(od_user:id(), session:id(), gs_server:conn_ref()) -> ok | {error, term()}.
-remove(UserId, SessionId, ConnectionRef) ->
+-spec report_disconnected(od_user:id(), session:id(), gs_server:conn_ref()) -> ok | {error, term()}.
+report_disconnected(UserId, SessionId, ConnectionRef) ->
     update(UserId, fun(ConnectionsPerSession) ->
         Connections = maps:get(SessionId, ConnectionsPerSession, []),
         case lists:delete(ConnectionRef, Connections) of
@@ -81,7 +84,6 @@ get_last_activity(UserId) ->
             end
     end.
 
-
 %%--------------------------------------------------------------------
 %% @doc
 %% Closes all connections of given user within a specific session. Closing the
@@ -91,19 +93,25 @@ get_last_activity(UserId) ->
 %%--------------------------------------------------------------------
 -spec close_all(od_user:id(), session:id()) -> ok.
 close_all(UserId, SessionId) ->
-    Connections = get_all(UserId, SessionId),
-    lists:foreach(fun(Connection) ->
-        gs_server:terminate_connection(Connection)
-    end, Connections).
+    lists:foreach(fun gs_server:terminate_connection/1, get_all(UserId, SessionId)).
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
 %% @private
--spec update(od_user:id(), fun((#{session:id() => gs_server:conn_ref()}) -> #{session:id() => gs_server:conn_ref()})) ->
+-spec update(od_user:id(), fun((connections_per_session()) -> connections_per_session())) ->
     ok | {error, term()}.
 update(UserId, ConnectionsDiff) ->
+    critical_section:run({user_connections, UserId}, fun() ->
+        update_unsafe(UserId, ConnectionsDiff)
+    end).
+
+
+%% @private
+-spec update_unsafe(od_user:id(), fun((connections_per_session()) -> connections_per_session())) ->
+    ok | {error, term()}.
+update_unsafe(UserId, ConnectionsDiff) ->
     Diff = fun(Record = #user_connections{connections_per_session = ConnectionsPerSession}) ->
         {ok, Record#user_connections{
             connections_per_session = ConnectionsDiff(ConnectionsPerSession)

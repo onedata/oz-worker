@@ -70,8 +70,6 @@
     join_harvester/3,
     join_cluster/3,
 
-    get_full_name/2,
-
     get_groups/2, get_eff_groups/2,
     get_group/3, get_eff_group/3,
 
@@ -816,15 +814,6 @@ join_cluster(Auth, UserId, Data) when is_map(Data) ->
     }));
 join_cluster(Auth, UserId, Token) ->
     join_cluster(Auth, UserId, #{<<"token">> => Token}).
-
-
--spec get_full_name(aai:auth(), od_user:id()) ->
-    {ok, od_user:full_name()} | errors:error().
-get_full_name(Auth, UserId) ->
-    case get(Auth, UserId) of
-        {ok, #od_user{full_name = FullName}} -> {ok, FullName};
-        {error, _} = Error -> Error
-    end.
 
 
 %%--------------------------------------------------------------------

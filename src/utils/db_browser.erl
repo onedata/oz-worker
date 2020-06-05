@@ -38,7 +38,7 @@
 | creation_date | last_activity | byte_size | direct_and_eff
 | {privileges, privileges:privileges(any())} | admin_privileges.
 % Value of a field, corresponds to the data_type()
--type value() :: binary() | integer() | {integer(), integer()}.
+-type value() :: binary() | integer() | {integer(), integer()} | now.
 % Width in chars
 -type width() :: pos_integer().
 % Function used to retrieve the value for a field
@@ -699,7 +699,7 @@ field_specs(shares) -> [
 ];
 field_specs(providers) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
-    {last_activity, last_activity, 16, fun(Doc) -> provider_connections:get_last_activity(Doc#document.key) end},
+    {last_activity, last_activity, 16, fun(Doc) -> provider_connections:get_last_activity(Doc) end},
     {version, text, 14, fun(Doc) ->
         {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, Doc#document.key),
         Version
@@ -719,7 +719,7 @@ field_specs(clusters) -> [
     {type, text, 11, fun(Doc) -> Doc#document.value#od_cluster.type end},
     {name, text, 28, fun(Doc) -> case Doc#document.value#od_cluster.type of
         ?ONEZONE -> <<"@ ", (?TO_BIN(oz_worker:get_name()))/binary>>;
-        ?ONEPROVIDER -> element(2, {ok, _} = provider_logic:get_name(?ROOT, Doc#document.key))
+        ?ONEPROVIDER -> element(2, {ok, _} = od_provider:get_name(Doc#document.key))
     end end},
     {users, direct_and_eff, 9, fun(#document{value = Cluster}) ->
         {maps:size(Cluster#od_cluster.users), maps:size(Cluster#od_cluster.eff_users)}

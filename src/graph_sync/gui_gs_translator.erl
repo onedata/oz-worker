@@ -90,29 +90,29 @@ translate_value(_, #gri{type = od_token, aspect = examine}, Response) ->
         ?INVITE_TOKEN(InviteType, EntityId) ->
             InviteTargetNameData = case {InviteType, EntityId} of
                 {?USER_JOIN_GROUP, GroupId} ->
-                    #{<<"groupName">> => lookup_name(group_logic, GroupId)};
+                    #{<<"groupName">> => lookup_name(od_group, GroupId)};
                 {?GROUP_JOIN_GROUP, GroupId} ->
-                    #{<<"groupName">> => lookup_name(group_logic, GroupId)};
+                    #{<<"groupName">> => lookup_name(od_group, GroupId)};
                 {?USER_JOIN_SPACE, SpaceId} ->
-                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                    #{<<"spaceName">> => lookup_name(od_space, SpaceId)};
                 {?GROUP_JOIN_SPACE, SpaceId} ->
-                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                    #{<<"spaceName">> => lookup_name(od_space, SpaceId)};
                 {?SUPPORT_SPACE, SpaceId} ->
-                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                    #{<<"spaceName">> => lookup_name(od_space, SpaceId)};
                 {?HARVESTER_JOIN_SPACE, SpaceId} ->
-                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                    #{<<"spaceName">> => lookup_name(od_space, SpaceId)};
                 {?REGISTER_ONEPROVIDER, UserId} ->
-                    #{<<"userName">> => lookup_name(user_logic, get_full_name, UserId)};
+                    #{<<"userName">> => lookup_name(od_user, get_full_name, UserId)};
                 {?USER_JOIN_CLUSTER, ClusterId} ->
-                    #{<<"clusterName">> => lookup_name(cluster_logic, ClusterId)};
+                    #{<<"clusterName">> => lookup_name(od_cluster, ClusterId)};
                 {?GROUP_JOIN_CLUSTER, ClusterId} ->
-                    #{<<"clusterName">> => lookup_name(cluster_logic, ClusterId)};
+                    #{<<"clusterName">> => lookup_name(od_cluster, ClusterId)};
                 {?USER_JOIN_HARVESTER, HarvesterId} ->
-                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
+                    #{<<"harvesterName">> => lookup_name(od_harvester, HarvesterId)};
                 {?GROUP_JOIN_HARVESTER, HarvesterId} ->
-                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
+                    #{<<"harvesterName">> => lookup_name(od_harvester, HarvesterId)};
                 {?SPACE_JOIN_HARVESTER, HarvesterId} ->
-                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)}
+                    #{<<"harvesterName">> => lookup_name(od_harvester, HarvesterId)}
             end,
             #{<<"inviteToken">> := Json} = token_type:to_json(Type),
             #{<<"inviteToken">> => maps:merge(Json, InviteTargetNameData)};
@@ -605,6 +605,7 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Prov
         creation_time = CreationTime
     } = Provider,
 
+    {Online, _} = provider_connections:inspect_status(Id, Provider),
     ClusterId = Id,
     fun(?USER(UserId)) -> #{
         <<"scope">> => <<"private">>,
@@ -615,7 +616,7 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Prov
         <<"cluster">> => gri:serialize(#gri{
             type = od_cluster, id = ClusterId, aspect = instance, scope = auto
         }),
-        <<"online">> => provider_connections:is_online(Id),
+        <<"online">> => Online,
         <<"spaceList">> => gri:serialize(GRI#gri{aspect = {user_spaces, UserId}, scope = private}),
         <<"info">> => #{
             <<"creationTime">> => CreationTime
@@ -626,7 +627,7 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = protected}, Pr
     #{
         <<"name">> := Name, <<"domain">> := Domain,
         <<"latitude">> := Latitude, <<"longitude">> := Longitude,
-        <<"online">> := Online,
+        <<"connectionStatus">> := #{<<"online">> := Online},
         <<"creationTime">> := CreationTime
     } = Provider,
 
@@ -1129,13 +1130,13 @@ serialize_token(Token) ->
 
 %% @private
 -spec lookup_name(module(), gri:entity_id()) -> binary() | null.
-lookup_name(LogicModule, EntityId) ->
-    lookup_name(LogicModule, get_name, EntityId).
+lookup_name(EntityModule, EntityId) ->
+    lookup_name(EntityModule, get_name, EntityId).
 
 %% @private
 -spec lookup_name(module(), Function :: atom(), gri:entity_id()) -> binary() | null.
-lookup_name(LogicModule, Function, EntityId) ->
-    case LogicModule:Function(?ROOT, EntityId) of
+lookup_name(EntityModule, Function, EntityId) ->
+    case EntityModule:Function(EntityId) of
         {ok, Name} -> Name;
         _ -> null
     end.

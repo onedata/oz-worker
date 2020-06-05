@@ -16,7 +16,7 @@
 -include_lib("ctool/include/privileges.hrl").
 
 %% API
--export([create/1, get/1, exists/1, update/2, force_delete/1]).
+-export([create/1, get/1, get_name/1, exists/1, update/2, force_delete/1]).
 -export([list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
@@ -45,41 +45,34 @@
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates group.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns group by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(GroupId) ->
     datastore_model:get(?CTX, GroupId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks whether group given by ID exists.
-%% @end
-%%--------------------------------------------------------------------
+
+-spec get_name(id()) -> {ok, name()} | {error, term()}.
+get_name(GroupId) ->
+    case datastore_model:get(?CTX, GroupId) of
+        {ok, #document{value = #od_group{name = Name}}} -> {ok, Name};
+        {error, _} = Error -> Error
+    end.
+
+
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(GroupId) ->
     datastore_model:exists(?CTX, GroupId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates group by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(GroupId, Diff) ->
     datastore_model:update(?CTX, GroupId, Diff).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -93,14 +86,11 @@ update(GroupId, Diff) ->
 force_delete(GroupId) ->
     datastore_model:delete(?CTX, GroupId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all groups.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -110,6 +100,7 @@ list() ->
 -spec to_string(GroupId :: id()) -> binary().
 to_string(GroupId) ->
     <<"group:", GroupId/binary>>.
+
 
 %%--------------------------------------------------------------------
 %% @doc

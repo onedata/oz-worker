@@ -16,7 +16,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, get_name/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([get_ctx/0]).
@@ -28,10 +28,10 @@
 -type record() :: #od_provider{}.
 -type doc() :: datastore_doc:doc(record()).
 -type diff() :: datastore_doc:diff(record()).
--export_type([id/0, record/0]).
+-export_type([id/0, record/0, doc/0]).
 
 -type name() :: binary().
--export_type([doc/0, name/0]).
+-export_type([name/0]).
 
 -define(CTX, #{
     model => od_provider,
@@ -44,41 +44,34 @@
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates provider.
-%% @end
-%%--------------------------------------------------------------------
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns provider by ID.
-%% @end
-%%--------------------------------------------------------------------
+
+
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(ProviderId) ->
     datastore_model:get(?CTX, ProviderId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks whether provider given by ID exists.
-%% @end
-%%--------------------------------------------------------------------
+
+-spec get_name(id()) -> {ok, name()} | {error, term()}.
+get_name(ProviderId) ->
+    case datastore_model:get(?CTX, ProviderId) of
+        {ok, #document{value = #od_provider{name = Name}}} -> {ok, Name};
+        {error, _} = Error -> Error
+    end.
+
+
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(ProviderId) ->
     datastore_model:exists(?CTX, ProviderId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates provider by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(ProviderId, Diff) ->
     datastore_model:update(?CTX, ProviderId, Diff).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -92,14 +85,11 @@ update(ProviderId, Diff) ->
 force_delete(ProviderId) ->
     datastore_model:delete(?CTX, ProviderId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all providers.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -110,6 +100,7 @@ list() ->
 to_string(ProviderId) ->
     <<"provider:", ProviderId/binary>>.
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns the entity logic plugin module that handles model logic.
@@ -118,6 +109,7 @@ to_string(ProviderId) ->
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     provider_logic_plugin.
+
 
 -spec get_ctx() -> datastore:ctx().
 get_ctx() ->
@@ -134,7 +126,7 @@ get_ctx() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    7.
+    8.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -268,6 +260,33 @@ get_record_struct(7) ->
 
         {creation_time, integer},
         {last_activity, integer},
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(8) ->
+    % * reworked field - last_activity -> connection_status
+    {record, [
+        {name, string},
+        {admin_email, string},
+        {root_token, string},
+
+        {subdomain_delegation, boolean},
+        {domain, string},
+        {subdomain, string},
+
+        {latitude, float},
+        {longitude, float},
+
+        {legacy_spaces, #{string => integer}},
+        {storages, [string]},
+
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => {integer, [{atom, string}]}}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {connection_status, {custom, json, {provider_connection_status, encode, decode}}},  % Reworked field
 
         {bottom_up_dirty, boolean}
     ]}.
@@ -495,7 +514,55 @@ upgrade_record(6, Provider) ->
         _BottomUpDirty
     } = Provider,
     %% Eff relations are recalculated during cluster upgrade procedure
-    {7, #od_provider{
+    {7, {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+        [],
+
+        #{},
+        #{},
+        #{},
+        #{},
+
+        CreationTime,
+        LastActivity,
+
+        true
+    }};
+upgrade_record(7, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+        Latitude,
+        Longitude,
+
+        LegacySpaces,
+        Storages,
+
+        EffUsers,
+        EffGroups,
+        EffHarvesters,
+        EffSpaces,
+
+        CreationTime,
+        LastActivity,
+
+        BottomUpDirty
+    } = Provider,
+    {8, #od_provider{
         name = Name,
         admin_email = AdminEmail,
         root_token = RootMacaroon,
@@ -506,16 +573,16 @@ upgrade_record(6, Provider) ->
         latitude = Latitude,
         longitude = Longitude,
 
-        legacy_spaces = Spaces,
-        storages = [],
+        legacy_spaces = LegacySpaces,
+        storages = Storages,
 
-        eff_users = #{},
-        eff_groups = #{},
-        eff_harvesters = #{},
-        eff_spaces = #{},
+        eff_users = EffUsers,
+        eff_groups = EffGroups,
+        eff_harvesters = EffHarvesters,
+        eff_spaces = EffSpaces,
 
         creation_time = CreationTime,
-        last_activity = LastActivity,
+        connection_status = provider_connection_status:new_by_last_activity(LastActivity),
 
-        bottom_up_dirty = true
+        bottom_up_dirty = BottomUpDirty
     }}.

@@ -26,7 +26,6 @@
     get/2,
     get_protected_data/2,
     get_shared_data/2,
-    get_name/2,
     list/1,
     list_privileges/0,
     get_oz_privileges/2, get_eff_oz_privileges/2
@@ -215,15 +214,6 @@ get_shared_data(Auth, GroupId) ->
         auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared}
     }).
-
-
--spec get_name(aai:auth(), od_group:id()) ->
-    {ok, od_group:name()} | {error, term()}.
-get_name(Auth, GroupId) ->
-    case get(Auth, GroupId) of
-        {ok, #od_group{name = Name}} -> {ok, Name};
-        {error, _} = Error -> Error
-    end.
 
 
 %%--------------------------------------------------------------------
