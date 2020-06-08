@@ -2518,7 +2518,7 @@ get_record(od_storage, 1) -> {od_storage,
 get_record(od_storage, 2) -> #od_storage{
     name = <<"storage_name">>,
     qos_parameters = #{<<"key">> => <<"value">>},
-    imported_storage = false,
+    imported = false,
 
     provider = <<"p1">>,
     spaces = #{<<"s1">> => 8, <<"s2">> => 10},

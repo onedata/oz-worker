@@ -383,23 +383,27 @@ translate_resource(_, #gri{type = od_storage, aspect = instance, scope = private
         provider = Provider,
         spaces = Spaces,
         qos_parameters = QosParams,
-        imported_storage = ImportedStorage
+        imported = ImportedStorage
     } = Storage,
     #{
         <<"name">> => Name,
         <<"provider">> => Provider,
         <<"spaces">> => maps:keys(Spaces),
+        <<"qosParameters">> => QosParams,
+        %% @TODO VFS-5856 deprecated, included for compatibility with 20.02.0-beta3
         <<"qos_parameters">> => QosParams,
-        <<"imported_storage">> => ImportedStorage
+        <<"imported">> => ImportedStorage
     };
 
 translate_resource(_, #gri{type = od_storage, aspect = instance, scope = shared}, StorageDetails) ->
     #{
         <<"provider">> := Provider,
-        <<"qos_parameters">> := QosParams
+        <<"qosParameters">> := QosParams
     } = StorageDetails,
     #{
         <<"provider">> => Provider,
+        <<"qosParameters">> => QosParams,
+        %% @TODO VFS-5856 deprecated, included for compatibility with 20.02.0-beta3
         <<"qos_parameters">> => QosParams
     };
 

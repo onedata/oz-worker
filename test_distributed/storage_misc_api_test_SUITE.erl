@@ -71,11 +71,12 @@ create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
 
-    VerifyFun = fun(StorageId, ExpectedQosParams) ->
+    VerifyFun = fun(StorageId, ExpectedQosParams, ExpectedImported) ->
         {ok, Storage} = oz_test_utils:get_storage(Config, StorageId),
         ?assertEqual(?CORRECT_NAME, Storage#od_storage.name),
         ?assertEqual(P1, Storage#od_storage.provider),
         ?assertEqual(ExpectedQosParams, Storage#od_storage.qos_parameters),
+        ?assertEqual(ExpectedImported, Storage#od_storage.imported),
         true
     end,
 
@@ -94,36 +95,51 @@ create_test(Config) ->
             function = create,
             args = [auth, data],
             expected_result = ?OK_ENV(fun(_, DataSet) ->
-                ExpectedQosParams = maps:get(<<"qos_parameters">>, DataSet, #{}),
-                ?OK_TERM(fun(StorageId) -> VerifyFun(StorageId, ExpectedQosParams) end)
+                ExpectedQosParams =
+                    case maps:get(<<"qosParameters">>, DataSet, undefined) of
+                        undefined -> maps:get(<<"qos_parameters">>, DataSet, #{});
+                        Parameters -> Parameters
+                    end,
+                ExpectedImported = maps:get(<<"imported">>, DataSet, false),
+
+                ?OK_TERM(fun(StorageId) -> VerifyFun(StorageId, ExpectedQosParams, ExpectedImported) end)
             end)
         },
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_storage, aspect = instance},
             expected_result = ?OK_ENV(fun(_, DataSet) ->
-                ExpectedQosParams = maps:get(<<"qos_parameters">>, DataSet, #{}),
+                ExpectedQosParams =
+                    case maps:get(<<"qosParameters">>, DataSet, undefined) of
+                        undefined -> maps:get(<<"qos_parameters">>, DataSet, #{});
+                        Parameters -> Parameters
+                    end,
+                ExpectedImported = maps:get(<<"imported">>, DataSet, false),
                 ?OK_MAP_CONTAINS(#{
                 <<"provider">> => P1,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = StorageId} = gri:deserialize(EncodedGri),
-                    VerifyFun(StorageId, ExpectedQosParams)
+                    VerifyFun(StorageId, ExpectedQosParams, ExpectedImported)
                 end})
             end)
         },
         data_spec = #data_spec{
             required = [<<"name">>],
-            optional = [<<"qos_parameters">>, <<"imported_storage">>],
+            optional = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
-                <<"imported_storage">> => [true, false]
+                <<"qosParameters">> => [#{<<"key">> => <<"value">>}],
+                <<"imported">> => [true, false]
             },
             bad_values = [
                 {<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)},
                 {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"imported_storage">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported_storage">>)}
+                {<<"qosParameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qosParameters">>)},
+                {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"qosParameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)}
             ] ++ ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
         }
     },
@@ -147,7 +163,7 @@ get_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ExpectedQosParameters = #{<<"key">> => <<"value">>},
-    oz_test_utils:update_storage(Config, St1, #{<<"qos_parameters">> => ExpectedQosParameters}),
+    oz_test_utils:update_storage(Config, St1, #{<<"qosParameters">> => ExpectedQosParameters}),
 
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
@@ -197,6 +213,7 @@ get_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?STORAGE_NAME1,
                 <<"provider">> => P1,
+                <<"qosParameters">> => ExpectedQosParameters,
                 <<"qos_parameters">> => ExpectedQosParameters,
                 <<"spaces">> => [S],
                 <<"gri">> => fun(EncodedGri) ->
@@ -227,7 +244,7 @@ get_test(Config) ->
             function = get_shared_data,
             args = [auth, St1, S],
             expected_result = ?OK_MAP_CONTAINS(#{
-                <<"qos_parameters">> => ExpectedQosParameters
+                <<"qosParameters">> => ExpectedQosParameters
             })
         },
         gs_spec = #gs_spec{
@@ -236,6 +253,7 @@ get_test(Config) ->
             auth_hint = ?THROUGH_SPACE(S),
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"provider">> => P1,
+                <<"qosParameters">> => ExpectedQosParameters,
                 <<"qos_parameters">> => ExpectedQosParameters,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
@@ -260,10 +278,14 @@ update_test(Config) ->
         {ok, Storage} = oz_test_utils:get_storage(Config, StorageId),
         case ShouldSucceed of
             false -> #{};
-            true -> 
-                ExpQosParams = maps:get(<<"qos_parameters">>, Data, #{}),
-                ExpImportedStorage = maps:get(<<"imported_storage">>, Data, false),
-                ?assertEqual(ExpImportedStorage, Storage#od_storage.imported_storage),
+            true ->
+                ExpQosParams =
+                    case maps:get(<<"qosParameters">>, Data, undefined) of
+                        undefined -> maps:get(<<"qos_parameters">>, Data, #{});
+                        Parameters -> Parameters
+                    end,
+                ExpImportedStorage = maps:get(<<"imported">>, Data, false),
+                ?assertEqual(ExpImportedStorage, Storage#od_storage.imported),
                 ?assertEqual(ExpQosParams, Storage#od_storage.qos_parameters)
         end
     end,
@@ -292,16 +314,20 @@ update_test(Config) ->
             expected_result = ?OK
         },
         data_spec = #data_spec{
-            at_least_one = [<<"qos_parameters">>, <<"imported_storage">>],
+            at_least_one = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>],
             correct_values = #{
                 <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
-                <<"imported_storage">> => [true, false]
+                <<"qosParameters">> => [#{<<"key">> => <<"value">>}],
+                <<"imported">> => [true, false]
             },
             bad_values = [
                 {<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)},
                 {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"imported_storage">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported_storage">>)}
+                {<<"qosParameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qosParameters">>)},
+                {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"qosParameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)}
             ]
         }
     },

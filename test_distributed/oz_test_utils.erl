@@ -2854,7 +2854,7 @@ create_storage(Config, Client, Id, Name) ->
     od_storage:name()) -> {ok, od_storage:id()}.
 create_imported_storage(Config, Client, Name) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, storage_logic, create, [Client, #{<<"name">> => Name, <<"imported_storage">> => true}]
+        Config, storage_logic, create, [Client, #{<<"name">> => Name, <<"imported">> => true}]
     )).
 
 

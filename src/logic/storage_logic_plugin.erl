@@ -101,14 +101,14 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PROVIDER(ProviderId) = Auth, data = Data}) ->
     Name = maps:get(<<"name">>, Data),
-    QosParameters = maps:get(<<"qos_parameters">>, Data, #{}),
-    ImportedStorage = maps:get(<<"imported_storage">>, Data, false),
+    QosParameters = get_qos_parameters(Data, #{}),
+    ImportedStorage = maps:get(<<"imported">>, Data, false),
     StorageDoc = #document{
         key = ProposedId,
         value = #od_storage{
             name = Name,
             qos_parameters = QosParameters,
-            imported_storage = ImportedStorage,
+            imported = ImportedStorage,
             creator = Auth#auth.subject,
             provider = ProviderId
         }
@@ -173,7 +173,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Storage) ->
     } = Storage,
     {ok, #{
         <<"provider">> => Provider,
-        <<"qos_parameters">> => QosParameters,
+        <<"qosParameters">> => QosParameters,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
     }};
@@ -193,17 +193,17 @@ update(#el_req{gri = #gri{id = StorageId, aspect = instance}, data = Data}) ->
         #od_storage{
             name = Name,
             qos_parameters = QosParameters,
-            imported_storage = ImportedStorage
+            imported = ImportedStorage
         } = Storage,
 
         NewName = maps:get(<<"name">>, Data, Name),
-        NewQosParameters = maps:get(<<"qos_parameters">>, Data, QosParameters),
-        NewImportedStorage = maps:get(<<"imported_storage">>, Data, ImportedStorage),
+        NewQosParameters = get_qos_parameters(Data, QosParameters),
+        NewImportedStorage = maps:get(<<"imported">>, Data, ImportedStorage),
 
         {ok, Storage#od_storage{
             name = NewName, 
             qos_parameters = NewQosParameters, 
-            imported_storage = NewImportedStorage
+            imported = NewImportedStorage
         }}
     end),
     ok;
@@ -341,7 +341,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     },
     optional => #{
         <<"qos_parameters">> => {json, qos_parameters},
-        <<"imported_storage">> => {boolean, any}
+        <<"qosParameters">> => {json, qos_parameters},
+        <<"imported">> => {boolean, any}
     }
 };
 
@@ -359,7 +360,8 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
         <<"qos_parameters">> => {json, qos_parameters},
-        <<"imported_storage">> => {boolean, any}
+        <<"qosParameters">> => {json, qos_parameters},
+        <<"imported">> => {boolean, any}
     }
 };
 
@@ -424,9 +426,16 @@ check_if_supported_by_imported_storage(SpaceId) ->
 %% @private
 -spec is_imported_storage(od_storage:id()) -> boolean() | no_return().
 is_imported_storage(StorageId) ->
-    case od_storage:get(StorageId) of
-        {ok, #document{value = #od_storage{imported_storage = ImportedStorage}}} -> ImportedStorage;
-        {error, Error} -> 
-            ?error_stacktrace("Unexpected error when trying to get storage ~p details: ~p", [StorageId, Error]),
-            throw(?ERROR_UNEXPECTED_ERROR(Error))
+    {ok, #document{value = #od_storage{imported = ImportedStorage}}} = od_storage:get(StorageId), 
+    ImportedStorage.
+
+
+%% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
+%% @private
+-spec get_qos_parameters(entity_logic:data(), od_storage:qos_parameters()) -> 
+    od_storage:qos_parameters().
+get_qos_parameters(Data, Default) ->
+    case maps:get(<<"qosParameters">>, Data, undefined) of
+        undefined -> maps:get(<<"qos_parameters">>, Data, Default);
+        Parameters -> Parameters
     end.

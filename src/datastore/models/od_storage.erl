@@ -211,10 +211,11 @@ get_record_struct(1) ->
         {top_down_dirty, boolean}
     ]};
 get_record_struct(2) ->
+    % * new field - imported
     {record, [
         {name, string},
         {qos_parameters, #{string => string}},
-        {imported_storage, boolean},
+        {imported, boolean},
         
         {provider, string},
         {spaces, #{string => integer}},
@@ -266,7 +267,7 @@ upgrade_record(1, Storage) ->
     {2, #od_storage{
         name = Name,
         qos_parameters = QosParameters,
-        imported_storage = false, % will be modified during cluster upgrade procedure
+        imported = false, % will be set by provider during its cluster upgrade procedure
        
         provider = Provider,
         spaces = Spaces,
