@@ -15,7 +15,7 @@
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
--export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, get_handle/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -42,41 +42,34 @@
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates share.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns share by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(ShareId) ->
     datastore_model:get(?CTX, ShareId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks whether share given by ID exists.
-%% @end
-%%--------------------------------------------------------------------
+
+-spec get_handle(id()) -> {ok, undefined | od_handle:id()} | {error, term()}.
+get_handle(ShareId) ->
+    case datastore_model:get(?CTX, ShareId) of
+        {ok, #document{value = #od_share{handle = Handle}}} -> {ok, Handle};
+        {error, _} = Error -> Error
+    end.
+
+
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(ShareId) ->
     datastore_model:exists(?CTX, ShareId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates share by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(ShareId, Diff) ->
     datastore_model:update(?CTX, ShareId, Diff).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -90,14 +83,11 @@ update(ShareId, Diff) ->
 force_delete(ShareId) ->
     datastore_model:delete(?CTX, ShareId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all shares.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -107,6 +97,7 @@ list() ->
 -spec to_string(ShareId :: id()) -> binary().
 to_string(ShareId) ->
     <<"share:", ShareId/binary>>.
+
 
 %%--------------------------------------------------------------------
 %% @doc
