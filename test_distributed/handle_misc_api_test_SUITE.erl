@@ -167,11 +167,23 @@ create_test(Config) ->
     oz_test_utils:space_set_user_privileges(Config, S1, U2,
         privileges:space_privileges(), []
     ),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+
+    {ok, ShareIdThatAlreadyHasAHandle} = oz_test_utils:create_share(
+        Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+    ),
+    {ok, _} = oz_test_utils:create_handle(
+        Config, ?ROOT, ?HANDLE(DoiHService, ShareIdThatAlreadyHasAHandle)
     ),
 
-    VerifyFun = fun(HandleId, HService) ->
+    EnvSetUpFun = fun() ->
+        ShareId = datastore_key:new(),
+        {ok, ShareId} = oz_test_utils:create_share(
+            Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        ),
+        #{shareId => ShareId}
+    end,
+
+    VerifyResult = fun(#{shareId := ShareId}, HandleId, HService) ->
         {ok, Handle} = oz_test_utils:get_handle(Config, HandleId),
         ?assertEqual(<<"Share">>, Handle#od_handle.resource_type),
         ?assertEqual(ShareId, Handle#od_handle.resource_id),
@@ -196,12 +208,12 @@ create_test(Config) ->
             method = post,
             path = <<"/handles">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = ?OK_ENV(fun(_Env, Data) ->
+            expected_headers = ?OK_ENV(fun(Env, Data) ->
                 HService = maps:get(<<"handleServiceId">>, Data),
                 fun(#{<<"Location">> := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/handles/">>]),
                     [HandleId] = binary:split(Location, [BaseURL], [global, trim_all]),
-                    VerifyFun(HandleId, HService)
+                    VerifyResult(Env, HandleId, HService)
                 end
             end)
         },
@@ -209,9 +221,9 @@ create_test(Config) ->
             module = handle_logic,
             function = create,
             args = [auth, data],
-            expected_result = ?OK_ENV(fun(_Env, Data) ->
+            expected_result = ?OK_ENV(fun(Env, Data) ->
                 HService = maps:get(<<"handleServiceId">>, Data),
-                ?OK_TERM(fun(Result) -> VerifyFun(Result, HService) end)
+                ?OK_TERM(fun(Result) -> VerifyResult(Env, Result, HService) end)
             end)
         },
         % TODO gs
@@ -223,7 +235,7 @@ create_test(Config) ->
             correct_values = #{
                 <<"handleServiceId">> => [DoiHService, PidHService],
                 <<"resourceType">> => [<<"Share">>],
-                <<"resourceId">> => [ShareId],
+                <<"resourceId">> => [fun(#{shareId := ShareId} = _Env) -> ShareId end],
                 <<"metadata">> => [?DC_METADATA]
             },
             bad_values = [
@@ -238,6 +250,8 @@ create_test(Config) ->
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
                 {<<"resourceId">>, <<"">>,
                     ?ERROR_BAD_VALUE_EMPTY(<<"resourceId">>)},
+                {<<"resourceId">>, ShareIdThatAlreadyHasAHandle,
+                    ?ERROR_ALREADY_EXISTS},
                 {<<"resourceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceId">>)},
                 {<<"metadata">>, 1234,
@@ -245,7 +259,7 @@ create_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, undefined)).
 
 
 get_test(Config) ->
@@ -394,13 +408,13 @@ update_test(Config) ->
         Config, ?ROOT, ?DOI_SERVICE
     ),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    ShareId = ?UNIQUE_STRING,
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
-    ),
 
     AllPrivs = privileges:handle_privileges(),
     EnvSetUpFun = fun() ->
+        {ok, ShareId} = oz_test_utils:create_share(
+            Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        ),
+
         {ok, HandleId} = oz_test_utils:create_handle(
             Config, ?ROOT, ?HANDLE(HService, ShareId)
         ),
@@ -475,13 +489,12 @@ delete_test(Config) ->
         Config, ?ROOT, ?DOI_SERVICE
     ),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    ShareId = ?UNIQUE_STRING,
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
-    ),
 
     AllHandlePrivs = privileges:handle_privileges(),
     EnvSetUpFun = fun() ->
+        {ok, ShareId} = oz_test_utils:create_share(
+            Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        ),
         {ok, HandleId} = oz_test_utils:create_handle(
             Config, ?ROOT, ?HANDLE(HService, ShareId)
         ),
