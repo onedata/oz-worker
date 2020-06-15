@@ -32,6 +32,7 @@
     gui_tokens_are_bound_to_specific_service/1,
     gui_tokens_have_limited_api_power/1,
     gui_tokens_can_be_created_via_endpoint/1,
+    gui_tokens_are_accepted_from_legacy_providers/1,
     gui_tokens_expire/1,
     gui_tokens_are_invalidated_upon_logout/1,
     gui_tokens_are_invalidated_when_member_leaves_a_service/1,
@@ -44,6 +45,7 @@ all() ->
         gui_tokens_are_bound_to_specific_service,
         gui_tokens_have_limited_api_power,
         gui_tokens_can_be_created_via_endpoint,
+        gui_tokens_are_accepted_from_legacy_providers,
         gui_tokens_expire,
         gui_tokens_are_invalidated_upon_logout,
         gui_tokens_are_invalidated_when_member_leaves_a_service,
@@ -225,7 +227,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
 
     % The user is a member of provider cluster, but is not supported by the provider,
     % so he can't generate a token for the provider GUI.
-    {ok, OppTokenU1Serialized} = ?assertMatch({ok, _}, AcquireGuiToken(CookieU1, ?ONEPANEL_GUI, ProviderId)),
+    ?assertMatch({ok, _}, AcquireGuiToken(CookieU1, ?ONEPANEL_GUI, ProviderId)),
     ?assertMatch(
         ?ERROR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_WORKER, ProviderId)),
         AcquireGuiToken(CookieU1, ?OP_WORKER_GUI, ProviderId)
@@ -291,27 +293,67 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
         <<"">>,
         [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
     )),
-    %% @todo VFS-6098 legacy provider access tokens should be accepted as
-    %% identity tokens for backward compatibility with old providers
+    ?assertMatch(#{<<"userId">> := User1}, json_utils:decode(UserData)).
+
+
+gui_tokens_are_accepted_from_legacy_providers(Config) ->
+    {ok, UserId} = oz_test_utils:create_user(Config),
+    {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, UserId),
+    % The user will belong to the cluster as the provider admin
+    {ok, {ProviderId, ProviderRootToken}} = oz_test_utils:create_provider(Config, UserId, ?UNIQUE_STRING),
+    {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, SpaceId),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {ok, {OpwToken, _}} = create_access_token_for_gui(Config, UserId, SessionId, ?OPW_SRV(ProviderId)),
+    {ok, {OppToken, _}} = create_access_token_for_gui(Config, UserId, SessionId, ?OPP_SRV(ProviderId)),
+    {ok, OpwTokenSerialized} = tokens:serialize(OpwToken),
+    {ok, OppTokenSerialized} = tokens:serialize(OppToken),
+
+    %% @todo VFS-6098 for backward compatibility - legacy provider access tokens should be
+    %% accepted as identity tokens for backward compatibility with old providers
     LegacyProviderToken = oz_test_utils:create_legacy_access_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
     LegacyProviderTokenAuthNone = oz_test_utils:confine_token_with_legacy_auth_none_caveat(LegacyProviderToken),
     {ok, SerializedLegacyAuthNone} = tokens:serialize(LegacyProviderTokenAuthNone),
     {ok, _, _, UserData} = ?assertMatch({ok, 200, _, UserData}, http_client:get(
         ?URL(Config, [<<"/user">>]),
         #{
-            ?HDR_X_AUTH_TOKEN => OpwTokenU1Serialized,
+            ?HDR_X_AUTH_TOKEN => OpwTokenSerialized,
             ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, SerializedLegacyAuthNone)
         },
         <<"">>,
         [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
     )),
-    ?assertMatch(#{<<"userId">> := User1}, json_utils:decode(UserData)),
+    ?assertMatch(#{<<"userId">> := UserId}, json_utils:decode(UserData)),
 
     ?assertMatch({ok, 200, _, UserData}, http_client:get(
         ?URL(Config, [<<"/user">>]),
         #{
-            ?HDR_X_AUTH_TOKEN => OppTokenU1Serialized,
+            ?HDR_X_AUTH_TOKEN => OppTokenSerialized,
             ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_PANEL, SerializedLegacyAuthNone)
+        },
+        <<"">>,
+        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
+    )),
+
+    %% @todo VFS-6098 for backward compatibility - when a legacy provider is
+    %% registered in a modern zone, it gets a modern token but uses it in legacy
+    %% way (presenting the access token as its identity proof) - this should
+    %% also be supported
+    ?assertMatch({ok, 200, _, UserData}, http_client:get(
+        ?URL(Config, [<<"/user">>]),
+        #{
+            ?HDR_X_AUTH_TOKEN => OpwTokenSerialized,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, ProviderRootToken)
+        },
+        <<"">>,
+        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
+    )),
+    ?assertMatch({ok, 200, _, UserData}, http_client:get(
+        ?URL(Config, [<<"/user">>]),
+        #{
+            ?HDR_X_AUTH_TOKEN => OppTokenSerialized,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_PANEL, ProviderRootToken)
         },
         <<"">>,
         [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
