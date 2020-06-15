@@ -81,6 +81,11 @@ translate(?ERROR_UNAUTHORIZED) ->
 translate(?ERROR_FORBIDDEN) ->
     ?HTTP_403_FORBIDDEN;
 
+translate(?ERROR_ALREADY_EXISTS) ->
+    {?HTTP_409_CONFLICT,
+        <<"The resource already exists">>
+    };
+
 % Errors connected with macaroons
 translate(?ERROR_BAD_MACAROON) ->
     {?HTTP_401_UNAUTHORIZED,
