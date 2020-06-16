@@ -112,52 +112,56 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     HandleServiceId = maps:get(<<"handleServiceId">>, Req#el_req.data),
-    ResourceType = maps:get(<<"resourceType">>, Req#el_req.data),
-    ResourceId = maps:get(<<"resourceId">>, Req#el_req.data),
+    ResourceType = <<"Share">> = maps:get(<<"resourceType">>, Req#el_req.data),
+    ResourceId = ShareId = maps:get(<<"resourceId">>, Req#el_req.data),
     Metadata = maps:get(<<"metadata">>, Req#el_req.data),
-    {ok, PublicHandle} = handle_proxy:register_handle(
-        HandleServiceId, ResourceType, ResourceId, Metadata
-    ),
-    Handle = #document{value = #od_handle{
-        handle_service = HandleServiceId,
-        resource_type = ResourceType,
-        resource_id = ResourceId,
-        public_handle = PublicHandle,
-        metadata = Metadata,
-        creator = Auth#auth.subject
-    }},
-    {ok, #document{key = HandleId}} = od_handle:create(Handle),
-    entity_graph:add_relation(
-        od_handle, HandleId,
-        od_handle_service, HandleServiceId
-    ),
-    case Req#el_req.auth_hint of
-        ?AS_USER(UserId) ->
-            entity_graph:add_relation(
-                od_user, UserId,
-                od_handle, HandleId,
-                privileges:handle_admin()
-            );
-        ?AS_GROUP(GroupId) ->
-            entity_graph:add_relation(
-                od_group, GroupId,
-                od_handle, HandleId,
-                privileges:handle_admin()
-            );
-        _ ->
-            ok
-    end,
-    case ResourceType of
-        <<"Share">> ->
-            entity_graph:add_relation(
-                od_handle, HandleId,
-                od_share, ResourceId
-            );
-        _ ->
-            ok
-    end,
-    {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
-    {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}};
+
+    % ensure no race conditions when creating a handle for a share (only one may be created)
+    critical_section:run({create_handle, ResourceId}, fun() ->
+        case od_share:get_handle(ResourceId) of
+            {ok, undefined} -> ok;
+            {ok, _HandleId} -> throw(?ERROR_ALREADY_EXISTS)
+        end,
+
+        {ok, PublicHandle} = handle_proxy:register_handle(
+            HandleServiceId, ResourceType, ResourceId, Metadata
+        ),
+        Handle = #document{value = #od_handle{
+            handle_service = HandleServiceId,
+            resource_type = ResourceType,
+            resource_id = ResourceId,
+            public_handle = PublicHandle,
+            metadata = Metadata,
+            creator = Auth#auth.subject
+        }},
+        {ok, #document{key = HandleId}} = od_handle:create(Handle),
+        entity_graph:add_relation(
+            od_handle, HandleId,
+            od_handle_service, HandleServiceId
+        ),
+        case Req#el_req.auth_hint of
+            ?AS_USER(UserId) ->
+                entity_graph:add_relation(
+                    od_user, UserId,
+                    od_handle, HandleId,
+                    privileges:handle_admin()
+                );
+            ?AS_GROUP(GroupId) ->
+                entity_graph:add_relation(
+                    od_group, GroupId,
+                    od_handle, HandleId,
+                    privileges:handle_admin()
+                );
+            _ ->
+                ok
+        end,
+        entity_graph:add_relation(
+            od_handle, HandleId,
+            od_share, ShareId
+        ),
+        {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
+        {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}
+    end);
 
 create(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:handle_member()),
@@ -470,7 +474,7 @@ authorize(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
-required_admin_privileges(Req=#el_req{operation = create, gri = #gri{aspect = instance}}) ->
+required_admin_privileges(Req = #el_req{operation = create, gri = #gri{aspect = instance}}) ->
     case Req#el_req.auth_hint of
         ?AS_USER(_) -> [?OZ_HANDLES_CREATE, ?OZ_USERS_ADD_RELATIONSHIPS];
         ?AS_GROUP(_) -> [?OZ_HANDLES_CREATE, ?OZ_GROUPS_ADD_RELATIONSHIPS];
