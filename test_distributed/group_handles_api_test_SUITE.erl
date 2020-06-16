@@ -126,9 +126,6 @@ create_handle_test(Config) ->
     % U2 doesn't have the ?GROUP_CREATE_HANDLE privilege
     {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
     {ok, S1} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_NAME1, ?SHARE_ID_1, ?ROOT_FILE_ID, S1
-    ),
 
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
@@ -136,10 +133,25 @@ create_handle_test(Config) ->
     {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    AllHandlePrivs = privileges:handle_privileges(),
+    {ok, ShareIdThatAlreadyHasAHandle} = oz_test_utils:create_share(
+        Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+    ),
+    {ok, _} = oz_test_utils:create_handle(
+        Config, ?ROOT, ?HANDLE(HService, ShareIdThatAlreadyHasAHandle)
+    ),
 
+    AllHandlePrivs = privileges:handle_privileges(),
     ExpResourceType = <<"Share">>,
-    VerifyFun = fun(HandleId) ->
+
+    EnvSetUpFun = fun() ->
+        ShareId = datastore_key:new(),
+        {ok, ShareId} = oz_test_utils:create_share(
+            Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        ),
+        #{shareId => ShareId}
+    end,
+
+    VerifyResult = fun(#{shareId := ShareId}, HandleId) ->
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
         {ok, Handle} = oz_test_utils:get_handle(Config, HandleId),
         ?assertEqual(ExpResourceType, Handle#od_handle.resource_type),
@@ -171,32 +183,38 @@ create_handle_test(Config) ->
             method = post,
             path = [<<"/groups/">>, G1, <<"/handles">>],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                BaseURL = ?URL(Config, [<<"/groups/">>, G1, <<"/handles/">>]),
-                [HandleId] = binary:split(Location, [BaseURL], [global, trim_all]),
-                VerifyFun(HandleId)
-            end
+            expected_headers = ?OK_ENV(fun(Env, _Data) ->
+                fun(#{<<"Location">> := Location} = _Headers) ->
+                    BaseURL = ?URL(Config, [<<"/groups/">>, G1, <<"/handles/">>]),
+                    [HandleId] = binary:split(Location, [BaseURL], [global, trim_all]),
+                    VerifyResult(Env, HandleId)
+                end
+            end)
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = create_handle,
             args = [auth, G1, data],
-            expected_result = ?OK_TERM(VerifyFun)
+            expected_result = ?OK_ENV(fun(Env, _Data) ->
+                ?OK_TERM(fun(HandleId) -> VerifyResult(Env, HandleId) end)
+            end)
         },
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_handle, aspect = instance},
             auth_hint = ?AS_GROUP(G1),
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"metadata">> => ?DC_METADATA,
-                <<"handleServiceId">> => HService,
-                <<"resourceType">> => ExpResourceType,
-                <<"resourceId">> => ShareId,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = HandleId} = gri:deserialize(EncodedGri),
-                    VerifyFun(HandleId)
-                end
-            })
+            expected_result = ?OK_ENV(fun(#{shareId := ShareId} = Env, _Data) ->
+                ?OK_MAP_CONTAINS(#{
+                    <<"metadata">> => ?DC_METADATA,
+                    <<"handleServiceId">> => HService,
+                    <<"resourceType">> => ExpResourceType,
+                    <<"resourceId">> => ShareId,
+                    <<"gri">> => fun(EncodedGri) ->
+                        #gri{id = HandleId} = gri:deserialize(EncodedGri),
+                        VerifyResult(Env, HandleId)
+                    end
+                })
+            end)
         },
         data_spec = DataSpec = #data_spec{
             required = [
@@ -208,7 +226,7 @@ create_handle_test(Config) ->
             correct_values = #{
                 <<"handleServiceId">> => [HService],
                 <<"resourceType">> => [<<"Share">>],
-                <<"resourceId">> => [ShareId],
+                <<"resourceId">> => [fun(#{shareId := ShareId} = _Env) -> ShareId end],
                 <<"metadata">> => [?DC_METADATA]
             },
             bad_values = [
@@ -221,12 +239,13 @@ create_handle_test(Config) ->
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
                 {<<"resourceId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"resourceId">>, 1234, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
+                {<<"resourceId">>, ShareIdThatAlreadyHasAHandle, ?ERROR_ALREADY_EXISTS},
                 {<<"metadata">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, undefined)),
 
     % Root bypass authorize so malformed data result in errors
     % in validation step not authorize
@@ -259,7 +278,7 @@ create_handle_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec, EnvSetUpFun, undefined, undefined)).
 
 
 get_handle_details_test(Config) ->
@@ -326,11 +345,11 @@ leave_handle_test(Config) ->
         Config, ?ROOT, ?DOI_SERVICE
     ),
     {ok, S1} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
-    ),
 
     EnvSetUpFun = fun() ->
+        {ok, ShareId} = oz_test_utils:create_share(
+            Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        ),
         {ok, HandleId} = oz_test_utils:create_handle(
             Config, ?ROOT, ?HANDLE(HService, ShareId)
         ),

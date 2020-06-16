@@ -2471,8 +2471,8 @@ verify_provider_identity_test(Config) ->
     IdentityTokenExpired = tokens:confine(
         IdentityToken, #cv_time{valid_until = Timestamp - 200}
     ),
-    %% @todo VFS-6098 legacy provider access tokens should be accepted as
-    %% identity tokens for backward compatibility with old providers
+    %% @todo VFS-6098 for backward compatibility - legacy provider access tokens should be
+    %% accepted as identity tokens for backward compatibility with old providers
     LegacyToken = oz_test_utils:create_legacy_access_token(Config, ?SUB(?ONEPROVIDER, P1)),
     LegacyTokenNoAuth = oz_test_utils:confine_token_with_legacy_auth_none_caveat(
         LegacyToken
@@ -2489,6 +2489,18 @@ verify_provider_identity_test(Config) ->
     {ok, LegacyTokenBin} = tokens:serialize(LegacyToken),
     {ok, LegacyTokenNoAuthBin} = tokens:serialize(LegacyTokenNoAuth),
     {ok, AccessTokenNoAuthBin} = tokens:serialize(AccessTokenNoAuth),
+
+    CorrectTokens = [
+        IdentityTokenBin, IdentityTokenNotExpiredBin,
+        %% @todo VFS-6098 for backward compatibility - legacy provider access tokens should be
+        %% accepted as identity tokens for backward compatibility with old providers
+        LegacyTokenBin, LegacyTokenNoAuthBin,
+        %% @todo VFS-6098 for backward compatibility - when a legacy provider is
+        %% registered in a modern zone, it gets a modern token but uses it in legacy
+        %% way (presenting the access token as its identity proof) - this should
+        %% also be supported
+        P1Token, AccessTokenNoAuthBin
+    ],
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -2516,7 +2528,7 @@ verify_provider_identity_test(Config) ->
             ],
             correct_values = #{
                 <<"providerId">> => [P1],
-                <<"token">> => [IdentityTokenBin, IdentityTokenNotExpiredBin, LegacyTokenBin, LegacyTokenNoAuthBin]
+                <<"token">> => CorrectTokens
             },
             bad_values = [
                 {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
@@ -2526,8 +2538,6 @@ verify_provider_identity_test(Config) ->
 
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
                 {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                {<<"token">>, P1Token, ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN)},
-                {<<"token">>, AccessTokenNoAuthBin, ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN)},
                 {<<"token">>, IdentityTokenExpiredBin, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = Timestamp - 200})}
             ]
         }
@@ -2542,7 +2552,7 @@ verify_provider_identity_test(Config) ->
             ],
             correct_values = #{
                 <<"providerId">> => [P1],
-                <<"macaroon">> => [IdentityTokenBin, IdentityTokenNotExpiredBin, LegacyTokenBin, LegacyTokenNoAuthBin]
+                <<"macaroon">> => CorrectTokens
             },
             bad_values = [
                 {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
@@ -2552,8 +2562,6 @@ verify_provider_identity_test(Config) ->
 
                 {<<"macaroon">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"macaroon">>)},
                 {<<"macaroon">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"macaroon">>, ?ERROR_BAD_TOKEN)},
-                {<<"macaroon">>, P1Token, ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN)},
-                {<<"macaroon">>, AccessTokenNoAuthBin, ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN)},
                 {<<"macaroon">>, IdentityTokenExpiredBin, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = Timestamp - 200})}
             ]
         }
