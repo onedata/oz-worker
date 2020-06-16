@@ -142,6 +142,8 @@ query_index(Endpoint, IndexId, Data) ->
         <<"path">> := Path
     } = Data,
     Body = maps:get(<<"body">>, Data, <<>>),
+    is_path_allowed(Method, Path) orelse 
+        throw(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"path">>, allowed_paths(Method))),
     case do_request(Method, Endpoint, IndexId, ?ENTRY_PATH(Path), Body) of
         {ok, Code, Headers, ResponseBody} ->
             {ok, #{
@@ -364,7 +366,22 @@ get_entry_response_error(EntryResponse) ->
 
 
 %% @private
+-spec is_path_allowed(http_client:method(), binary()) -> boolean().
+is_path_allowed(Method, Path) ->
+    AllowedPaths = allowed_paths(Method),
+    lists:any(fun(AllowedPathRe) ->
+        match == re:run(Path, AllowedPathRe, [{capture, none}])
+    end, AllowedPaths).
+
+
+%% @private
 -spec is_es_error_ignored(Error :: binary()) -> boolean().
 is_es_error_ignored(<<"mapper_parsing_exception">>) -> true;
 is_es_error_ignored(<<"strict_dynamic_mapping_exception">>) -> true;
 is_es_error_ignored(_) -> false.
+
+
+%% @private
+-spec allowed_paths(http_client:method()) -> [binary()].
+allowed_paths(post) -> [<<"^_search.*$">>];
+allowed_paths(get) -> [<<"^_mapping$">>, <<"^_search.*$">>].
