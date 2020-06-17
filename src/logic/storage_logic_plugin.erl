@@ -102,7 +102,9 @@ is_subscribable(_, _) -> false.
 create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PROVIDER(ProviderId) = Auth, data = Data}) ->
     Name = maps:get(<<"name">>, Data),
     QosParameters = get_qos_parameters(Data, #{}),
-    ImportedStorage = maps:get(<<"imported">>, Data, false),
+    % Only legacy providers do not send imported value 
+    % set it to `unknown` so provider could change it during its upgrade procedure
+    ImportedStorage = maps:get(<<"imported">>, Data, unknown),
     StorageDoc = #document{
         key = ProposedId,
         value = #od_storage{
@@ -179,7 +181,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Storage) ->
     }};
 
 get(#el_req{gri = #gri{aspect = spaces}}, Storage) ->
-    {ok, entity_graph:get_relations(direct, bottom_up, od_space, Storage)}.
+    {ok, get_spaces(Storage)}.
 
 
 %%--------------------------------------------------------------------
@@ -189,24 +191,39 @@ get(#el_req{gri = #gri{aspect = spaces}}, Storage) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = StorageId, aspect = instance}, data = Data}) ->
-    {ok, _} = od_storage:update(StorageId, fun(Storage) ->
-        #od_storage{
-            name = Name,
-            qos_parameters = QosParameters,
-            imported = ImportedStorage
-        } = Storage,
+    % critical section to avoid race condition with space support
+    lock_on_storage(StorageId, fun() ->
+        SupportsAnySpace = supports_any_space(StorageId),
+        Res = od_storage:update(StorageId, fun(Storage) ->
+            #od_storage{
+                name = Name,
+                qos_parameters = QosParameters,
+                imported = ImportedStorage
+            } = Storage,
 
-        NewName = maps:get(<<"name">>, Data, Name),
-        NewQosParameters = get_qos_parameters(Data, QosParameters),
-        NewImportedStorage = maps:get(<<"imported">>, Data, ImportedStorage),
-
-        {ok, Storage#od_storage{
-            name = NewName, 
-            qos_parameters = NewQosParameters, 
-            imported = NewImportedStorage
-        }}
-    end),
-    ok;
+            NewName = maps:get(<<"name">>, Data, Name),
+            NewQosParameters = get_qos_parameters(Data, QosParameters),
+            NewImportedStorage = maps:get(<<"imported">>, Data, ImportedStorage),
+            % Modification of imported value should be blocked if storage supports any space
+            % unless it was previously `unknown` meaning that storage was created by legacy provider.
+            ShouldBlock = (ImportedStorage /= unknown) and
+                (ImportedStorage /= NewImportedStorage) and SupportsAnySpace,
+    
+            case ShouldBlock of
+                true -> ?ERROR_STORAGE_IN_USE;
+                false ->
+                    {ok, Storage#od_storage{
+                        name = NewName,
+                        qos_parameters = NewQosParameters,
+                        imported = NewImportedStorage
+                    }}
+            end
+        end),
+        case Res of
+            {ok, _} -> ok;
+            Error -> Error
+        end
+    end);
 
 update(Req = #el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
     NewSupportSize = maps:get(<<"size">>, Req#el_req.data),
@@ -379,9 +396,12 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
 -spec support_space(od_provider:id(), od_space:id(), od_storage:id(),
     od_space:support_size()) -> entity_logic:create_result().
 support_space(ProviderId, SpaceId, StorageId, SupportSize) ->
-    % critical section to avoid simultaneous supports by 2 providers with imported storage
-    critical_section:run({space_support, SpaceId}, fun() -> 
-        support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) 
+    % critical section to avoid race condition with storage modification
+    lock_on_storage(StorageId, fun() ->
+        % critical section to avoid simultaneous supports by 2 providers with imported storage
+        lock_on_space_support(SpaceId, fun() -> 
+            support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) 
+        end)
     end).
 
 
@@ -389,9 +409,13 @@ support_space(ProviderId, SpaceId, StorageId, SupportSize) ->
 -spec support_space_insecure(od_provider:id(), od_space:id(), od_storage:id(),
     od_space:support_size()) -> entity_logic:create_result().
 support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) ->
-    case is_imported_storage(StorageId) of
-        true -> check_if_supported_by_imported_storage(SpaceId);
-        false -> ok
+    {true, {Storage, _}} = fetch_entity(#gri{id = StorageId}),
+    
+    case is_imported_storage(Storage) of
+        true -> 
+            supports_any_space(Storage) andalso throw(?ERROR_STORAGE_IN_USE),
+            check_if_space_supported_by_imported_storage(SpaceId);
+        _ -> ok
     end,
     
     entity_graph:add_relation(
@@ -414,25 +438,58 @@ support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) ->
 
 
 %% @private
--spec check_if_supported_by_imported_storage(od_space:id()) -> ok | no_return().
-check_if_supported_by_imported_storage(SpaceId) ->
-    {ok, #document{value = #od_space{storages = Storages}}} = od_space:get(SpaceId),
+-spec check_if_space_supported_by_imported_storage(od_space:id()) -> ok | no_return().
+check_if_space_supported_by_imported_storage(SpaceId) ->
+    {true, {#od_space{storages = StorageIds}, _}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
     lists:foreach(fun (StorageId) ->
         is_imported_storage(StorageId)
             andalso throw(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(SpaceId, StorageId))
-    end, maps:keys(Storages)).
+    end, maps:keys(StorageIds)).
 
 
 %% @private
 -spec is_imported_storage(od_storage:id()) -> boolean() | no_return().
+is_imported_storage(#od_storage{imported = ImportedStorage}) ->
+    ImportedStorage == true;
 is_imported_storage(StorageId) ->
-    {ok, #document{value = #od_storage{imported = ImportedStorage}}} = od_storage:get(StorageId), 
-    ImportedStorage.
+    {true, {Storage, _}} = fetch_entity(#gri{id = StorageId}),
+    is_imported_storage(Storage).
+
+
+%% @private
+-spec lock_on_storage(od_storage:id(), fun(() -> Term)) -> Term.
+lock_on_storage(StorageId, Fun) ->
+    critical_section:run({storage_lock, StorageId}, Fun).
+
+
+%% @private
+-spec lock_on_space_support(od_space:id(), fun(() -> Term)) -> Term.
+lock_on_space_support(SpaceId, Fun) ->
+    critical_section:run({space_support, SpaceId}, Fun).
+
+
+%% @private
+-spec get_spaces(od_storage:record()) -> [od_space:id()].
+get_spaces(#od_storage{} = Storage) ->
+    entity_graph:get_relations(direct, bottom_up, od_space, Storage);
+get_spaces(StorageId) when is_binary(StorageId) ->
+    {true, {Storage, _}} = fetch_entity(#gri{id = StorageId}),
+    get_spaces(Storage).
+
+
+%% @private
+-spec supports_any_space(od_storage:record()) -> boolean().
+supports_any_space(Storage) ->
+    case get_spaces(Storage) of
+        [] -> false;
+        {error, _} = Error -> Error;
+        _ -> true
+    end.
 
 
 %% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
 %% @private
--spec get_qos_parameters(entity_logic:data(), od_storage:qos_parameters()) -> 
+-spec get_qos_parameters(entity_logic:data(), od_storage:qos_parameters()) ->
     od_storage:qos_parameters().
 get_qos_parameters(Data, Default) ->
     case maps:get(<<"qosParameters">>, Data, undefined) of

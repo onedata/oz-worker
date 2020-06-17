@@ -66,7 +66,7 @@ create(Auth, NameOrData) ->
 -spec create(aai:auth(), Id :: od_storage:id(), NameOrData :: binary() | map()) ->
     {ok, od_storage:id()} | errors:error().
 create(Auth, Id, Name) when is_binary(Name) ->
-    create(Auth, Id, #{<<"name">> => Name});
+    create(Auth, Id, #{<<"name">> => Name, <<"imported">> => false});
 create(Auth, Id, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,

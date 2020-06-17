@@ -215,7 +215,7 @@ get_record_struct(2) ->
     {record, [
         {name, string},
         {qos_parameters, #{string => string}},
-        {imported, boolean},
+        {imported, atom},
         
         {provider, string},
         {spaces, #{string => integer}},
@@ -267,7 +267,7 @@ upgrade_record(1, Storage) ->
     {2, #od_storage{
         name = Name,
         qos_parameters = QosParameters,
-        imported = false, % will be set by provider during its cluster upgrade procedure
+        imported = unknown, % will be set by provider during its cluster upgrade procedure
        
         provider = Provider,
         spaces = Spaces,

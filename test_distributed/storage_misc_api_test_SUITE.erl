@@ -42,7 +42,10 @@
 
     list_spaces_test/1,
 
-    upgrade_legacy_support_test/1
+    upgrade_legacy_support_test/1,
+    
+    support_with_imported_storage_test/1,
+    modify_imported_storage_test/1
 ]).
 
 all() ->
@@ -58,7 +61,10 @@ all() ->
 
         list_spaces_test,
 
-        upgrade_legacy_support_test
+        upgrade_legacy_support_test,
+    
+        support_with_imported_storage_test,
+        modify_imported_storage_test
     ]).
 
 
@@ -100,7 +106,7 @@ create_test(Config) ->
                         undefined -> maps:get(<<"qos_parameters">>, DataSet, #{});
                         Parameters -> Parameters
                     end,
-                ExpectedImported = maps:get(<<"imported">>, DataSet, false),
+                ExpectedImported = maps:get(<<"imported">>, DataSet, unknown),
 
                 ?OK_TERM(fun(StorageId) -> VerifyFun(StorageId, ExpectedQosParams, ExpectedImported) end)
             end)
@@ -114,7 +120,7 @@ create_test(Config) ->
                         undefined -> maps:get(<<"qos_parameters">>, DataSet, #{});
                         Parameters -> Parameters
                     end,
-                ExpectedImported = maps:get(<<"imported">>, DataSet, false),
+                ExpectedImported = maps:get(<<"imported">>, DataSet, unknown),
                 ?OK_MAP_CONTAINS(#{
                 <<"provider">> => P1,
                 <<"gri">> => fun(EncodedGri) ->
@@ -386,7 +392,7 @@ support_space_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
     {ok, {P2, P2Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME2),
-    {ok, Storage} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+    {ok, Storage} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, BadInviteToken} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
     {ok, BadInviteTokenSerialized} = tokens:serialize(BadInviteToken),
@@ -500,42 +506,8 @@ support_space_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-    
-    % check that adding next support with imported storage fails
-    {ok, Storage2} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
-    {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(P1), Storage, S1),
-    
-    ApiTestSpec3 = ApiTestSpec#api_test_spec{
-        client_spec = #client_spec{
-            correct = [{provider, P2, P2Token}]
-        },
-        rest_spec = undefined,
-        logic_spec = #logic_spec{
-            module = storage_logic,
-            function = support_space,
-            args = [auth, Storage2, data],
-            expected_result = ?ERROR_REASON(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(S1, Storage))
-        },
-        gs_spec = #gs_spec{
-            operation = create,
-            gri = #gri{type = od_storage, id = Storage2, aspect = support},
-            expected_result = ?ERROR_REASON(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(S1, Storage))
-        },
-        data_spec = #data_spec{
-            required = [<<"token">>, <<"size">>],
-            correct_values = #{
-                <<"token">> => [fun() ->
-                    {ok, SpInvProvToken} = oz_test_utils:create_space_support_token(
-                        Config, ?USER(U1), S1
-                    ),
-                    element(2, {ok, _} = tokens:serialize(SpInvProvToken))
-                end],
-                <<"size">> => [MinSupportSize]
-            }
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+
 
 update_support_size_test(Config) ->
     MinSupportSize = oz_test_utils:minimum_support_size(Config),
@@ -778,6 +750,198 @@ upgrade_legacy_support_test(Config) ->
     ?assertEqual(false, oz_test_utils:call_oz(Config, storage_logic, supports_space, [P1, S])),
     ?assertEqual(true, oz_test_utils:call_oz(Config, storage_logic, supports_space, [St1, S])).
 
+
+support_with_imported_storage_test(Config) ->
+    MinSupportSize = oz_test_utils:minimum_support_size(Config),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
+    {ok, {P2, P2Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME2),
+    {ok, ImportedStorageP1} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    
+    CreateTokenFun = fun(SpaceId) ->
+        {ok, SpInvProvToken} = oz_test_utils:create_space_support_token(
+            Config, ?USER(U1), SpaceId
+        ),
+        element(2, {ok, _} = tokens:serialize(SpInvProvToken))
+    end,
+    
+    % check that adding next support with imported storage fails
+    {ok, ImportedStorageP2} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
+    {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(P1), ImportedStorageP1, S1),
+    
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P2, P2Token}]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            module = storage_logic,
+            function = support_space,
+            args = [auth, ImportedStorageP2, data],
+            expected_result = ?ERROR_REASON(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(S1, ImportedStorageP1))
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_storage, id = ImportedStorageP2, aspect = support},
+            expected_result = ?ERROR_REASON(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(S1, ImportedStorageP1))
+        },
+        data_spec = #data_spec{
+            required = [<<"token">>, <<"size">>],
+            correct_values = #{
+                <<"token">> => [CreateTokenFun(S1)],
+                <<"size">> => [MinSupportSize]
+            }
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    
+    % adding second support with imported storage also should fail
+    ApiTestSpec1 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P1, P1Token}]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            module = storage_logic,
+            function = support_space,
+            args = [auth, ImportedStorageP1, data],
+            expected_result = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_storage, id = ImportedStorageP1, aspect = support},
+            expected_result = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
+        },
+        data_spec = #data_spec{
+            required = [<<"token">>, <<"size">>],
+            correct_values = #{
+                <<"token">> => [CreateTokenFun(S2)],
+                <<"size">> => [MinSupportSize]
+            }
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec1)).
+
+modify_imported_storage_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
+    {ok, ImportedStorage} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+    {ok, Storage} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    
+    % check that modifying imported storage value is prohibited when storage supports a space
+    {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(P1), ImportedStorage, S1),
+    {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(P1), Storage, S1),
+    
+    ApiTestSpecFun = fun(St, IsImported) ->
+        #api_test_spec{
+            client_spec = #client_spec{
+                correct = [{provider, P1, P1Token}]
+            },
+            rest_spec = undefined,
+            logic_spec = #logic_spec{
+                module = storage_logic,
+                function = update,
+                args = [auth, St, data],
+                expected_result = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
+            },
+            gs_spec = #gs_spec{
+                operation = update,
+                gri = #gri{type = od_storage, id = St, aspect = instance},
+                expected_result = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
+            },
+            data_spec = #data_spec{
+                at_least_one = [<<"imported">>],
+                correct_values = #{
+                    <<"imported">> => [not IsImported]
+                }
+            }
+        }
+    end,
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecFun(ImportedStorage, true))),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecFun(Storage, false))),
+
+    % check that modifying other values is allowed when storage supports a space
+    % also check that not changing imported value will not generate error
+    ApiTestSpec1Fun = fun(St, IsImported) -> 
+        #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {provider, P1, P1Token}
+                ]
+            },
+            logic_spec = #logic_spec{
+                module = storage_logic,
+                function = update,
+                args = [auth, St, data],
+                expected_result = ?OK
+            },
+            gs_spec = #gs_spec{
+                operation = update,
+                gri = #gri{type = od_storage, id = St, aspect = instance},
+                expected_result = ?OK
+            },
+            data_spec = #data_spec{
+                at_least_one = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>],
+                correct_values = #{
+                    <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
+                    <<"qosParameters">> => [#{<<"key">> => <<"value">>}],
+                    <<"imported">> => [IsImported]
+                }
+            }
+        }
+    end, 
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec1Fun(ImportedStorage, true))),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec1Fun(Storage, false))),
+    
+    % check that imported value can be changed, if previously was set to unknown
+    EnvSetUpFun = fun() ->
+        oz_test_utils:call_oz(Config, od_storage, update, 
+            [Storage, fun(Storage) -> {ok, Storage#od_storage{imported = unknown}} end]),
+        #{}        
+    end,
+    VerifyEndFun = fun(ShouldSucceed, _Env, Data) ->
+        {ok, St} = oz_test_utils:get_storage(Config, Storage),
+        ExpImported = case ShouldSucceed of
+            true -> maps:get(<<"imported">>, Data);
+            false -> unknown
+        end,
+        ?assertEqual(ExpImported, St#od_storage.imported)
+    end,
+    ApiTestSpec2 =
+        #api_test_spec{
+            client_spec = #client_spec{
+                correct = [{provider, P1, P1Token}]
+            },
+            rest_spec = undefined,
+            logic_spec = #logic_spec{
+                module = storage_logic,
+                function = update,
+                args = [auth, Storage, data],
+                expected_result = ?OK
+            },
+            gs_spec = #gs_spec{
+                operation = update,
+                gri = #gri{type = od_storage, id = Storage, aspect = instance},
+                expected_result = ?OK
+            },
+            data_spec = #data_spec{
+                at_least_one = [<<"imported">>],
+                correct_values = #{
+                    <<"imported">> => [true, false]
+                }
+            }
+        },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
+    )).
 
 %%%===================================================================
 %%% Setup/teardown functions
