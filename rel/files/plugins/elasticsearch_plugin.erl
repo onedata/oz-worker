@@ -144,7 +144,7 @@ query_index(Endpoint, IndexId, Data) ->
     Body = maps:get(<<"body">>, Data, <<>>),
     is_path_allowed(Method, Path) orelse 
         throw(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"path">>, allowed_paths(Method))),
-    case do_request(Method, Endpoint, IndexId, ?ENTRY_PATH(Path), Body) of
+    case do_request(Method, Endpoint, IndexId, <<"/", Path/binary>>, Body) of
         {ok, Code, Headers, ResponseBody} ->
             {ok, #{
                 <<"code">> => Code,
