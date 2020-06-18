@@ -454,7 +454,7 @@ ensure_storage_not_supporting_any_space(Storage) ->
 
 
 %% @private
--spec is_imported_storage(od_storage:id()) -> boolean() | no_return().
+-spec is_imported_storage(od_storage:id() | od_storage:record()) -> boolean() | no_return().
 is_imported_storage(#od_storage{imported = ImportedStorage}) ->
     ImportedStorage == true;
 is_imported_storage(StorageId) ->
@@ -475,7 +475,7 @@ lock_on_space_support(SpaceId, Fun) ->
 
 
 %% @private
--spec get_spaces(od_storage:record()) -> [od_space:id()].
+-spec get_spaces(od_storage:record() | od_storage:id()) -> [od_space:id()].
 get_spaces(#od_storage{} = Storage) ->
     entity_graph:get_relations(direct, bottom_up, od_space, Storage);
 get_spaces(StorageId) when is_binary(StorageId) ->
@@ -484,7 +484,7 @@ get_spaces(StorageId) when is_binary(StorageId) ->
 
 
 %% @private
--spec supports_any_space(od_storage:record()) -> boolean().
+-spec supports_any_space(od_storage:record() | od_storage:id()) -> boolean().
 supports_any_space(Storage) ->
     case get_spaces(Storage) of
         [] -> false;
