@@ -458,7 +458,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"scope">> => <<"protected">>,
         <<"directMembership">> => space_logic:has_direct_user(SpaceId, UserId),
         <<"supportSizes">> => SupportSizes,
-        <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = providers}),
+        <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_providers}),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime,
             <<"sharesCount">> => SharesCount
