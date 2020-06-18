@@ -139,6 +139,7 @@ create_test(Config) ->
                 <<"imported">> => [true, false]
             },
             bad_values = [
+                %% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
                 {<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)},
                 {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
@@ -327,6 +328,7 @@ update_test(Config) ->
                 <<"imported">> => [true, false]
             },
             bad_values = [
+                %% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
                 {<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)},
                 {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
@@ -756,6 +758,7 @@ support_with_imported_storage_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
     {ok, {P2, P2Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME2),
+    Providers = [P1, P2],
     {ok, ImportedStorageP1} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
@@ -769,10 +772,22 @@ support_with_imported_storage_test(Config) ->
         element(2, {ok, _} = tokens:serialize(SpInvProvToken))
     end,
     
-    % check that adding next support with imported storage fails
+    AddMultipleNotImportedSupportsFun = fun() -> 
+        lists:foreach(fun(_) ->
+            Provider = lists:nth(rand:uniform(length(Providers)), Providers),
+            {ok, St} = oz_test_utils:create_storage(Config, ?PROVIDER(Provider), ?STORAGE_NAME1),
+            {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(Provider), St, S1)
+        end, lists:seq(1,8))
+    end,
+    
+    % add some supports with not imported storages
+    AddMultipleNotImportedSupportsFun(),
+    
+    % support space with imported storage
     {ok, ImportedStorageP2} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
     {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(P1), ImportedStorageP1, S1),
     
+    % check that adding next support with imported storage fails
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [{provider, P2, P2Token}]
@@ -799,7 +814,7 @@ support_with_imported_storage_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
     
-    % adding second support with imported storage also should fail
+    % supporting second space with imported storage also should fail
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
             correct = [{provider, P1, P1Token}]
@@ -824,7 +839,10 @@ support_with_imported_storage_test(Config) ->
             }
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec1)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec1)),
+    
+    % check that space still can be supported with not imported storages
+    AddMultipleNotImportedSupportsFun().
 
 modify_imported_storage_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
@@ -891,6 +909,7 @@ modify_imported_storage_test(Config) ->
             data_spec = #data_spec{
                 at_least_one = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>],
                 correct_values = #{
+                    %% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
                     <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
                     <<"qosParameters">> => [#{<<"key">> => <<"value">>}],
                     <<"imported">> => [IsImported]

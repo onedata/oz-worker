@@ -413,8 +413,8 @@ support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) ->
     
     case is_imported_storage(Storage) of
         true -> 
-            supports_any_space(Storage) andalso throw(?ERROR_STORAGE_IN_USE),
-            check_if_space_supported_by_imported_storage(SpaceId);
+            ensure_storage_not_supporting_any_space(Storage),
+            ensure_space_not_supported_by_imported_storage(SpaceId);
         _ -> ok
     end,
     
@@ -438,13 +438,19 @@ support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) ->
 
 
 %% @private
--spec check_if_space_supported_by_imported_storage(od_space:id()) -> ok | no_return().
-check_if_space_supported_by_imported_storage(SpaceId) ->
+-spec ensure_space_not_supported_by_imported_storage(od_space:id()) -> ok | no_return().
+ensure_space_not_supported_by_imported_storage(SpaceId) ->
     {true, {#od_space{storages = StorageIds}, _}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
     lists:foreach(fun (StorageId) ->
         is_imported_storage(StorageId)
             andalso throw(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(SpaceId, StorageId))
     end, maps:keys(StorageIds)).
+
+
+%% @private
+-spec ensure_storage_not_supporting_any_space(od_storage:record()) -> false | no_return().
+ensure_storage_not_supporting_any_space(Storage) ->
+    supports_any_space(Storage) andalso throw(?ERROR_STORAGE_IN_USE).
 
 
 %% @private
@@ -482,8 +488,7 @@ get_spaces(StorageId) when is_binary(StorageId) ->
 supports_any_space(Storage) ->
     case get_spaces(Storage) of
         [] -> false;
-        {error, _} = Error -> Error;
-        _ -> true
+        [_|_] -> true
     end.
 
 
