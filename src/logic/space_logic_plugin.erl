@@ -668,6 +668,10 @@ authorize(Req = #el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect
         auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse
         auth_by_support(Req, Space);
 
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = eff_providers}}, Space) ->
+    % any space member can learn the list of providers
+    provider_logic:has_eff_user(Space, UserId);
+
 authorize(Req = #el_req{operation = get}, Space) ->
     % All other resources can be accessed with view privileges or by the supporting provider
     auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse auth_by_support(Req, Space);
