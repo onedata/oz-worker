@@ -1219,14 +1219,14 @@ check_adding_carried_privileges_to_named_token(Tc = #testcase{token_type = Token
                     named, Auth, EligibleSubject, #{<<"type">> => TokenType, <<"privileges">> => CustomPrivileges},
                     ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
                 ),
-                ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
                 ModifyPrivsFun(EligibleSubject, {revoke, to_set_privs}),
+                ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
                 assert_creation_fails(
                     named, Auth, EligibleSubject, #{<<"type">> => TokenType, <<"privileges">> => CustomPrivileges},
                     ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
                 ),
-                ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
                 ModifyPrivsFun(EligibleSubject, {revoke, to_invite}),
+                ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
                 assert_creation_fails(
                     named, Auth, EligibleSubject, #{<<"type">> => TokenType, <<"privileges">> => CustomPrivileges},
                     ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
@@ -1383,6 +1383,7 @@ check_multi_use_privileges_carrying_named_token(Tc = #testcase{token_type = Toke
                 case lists:sort(CustomPrivileges) =:= lists:sort(DefaultPrivileges) of
                     true ->
                         ModifyPrivsFun(EligibleSubject, {revoke, to_set_privs}),
+                        ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
                         ?assertMatch({ok, _}, consume_token(Tc, ConsumerBeta, Token)),
                         CheckPrivilegesFun(ConsumerBeta, CustomPrivileges),
                         ModifyPrivsFun(EligibleSubject, {grant, to_set_privs});
@@ -1704,7 +1705,7 @@ set_user_privs_in_harvester(HarvesterId, UserId, {GrantOrRevoke, to_set_privs}) 
 % Grants or revokes privileges to perform an operation. In case of revoke,
 % randomly removes the member from the entity (making him effectively lose all
 % privileges) or revokes given privileges. These two scenarios which should be
-% equivalent from the point of view of authorization to invite .
+% equivalent from the point of view of authorization to invite.
 set_user_privs(LogicModule, EntityId, UserId, grant, Privileges) ->
     ozt:rpc(LogicModule, add_user, [?ROOT, EntityId, UserId]),
     ozt:rpc(LogicModule, update_user_privileges, [?ROOT, EntityId, UserId, Privileges, []]),
