@@ -35,20 +35,20 @@
 %% @doc
 %% Tries to authenticate a client by an access token.
 %%   {true, #auth{}} - the client was authenticated
-%%   errors:error() - provided access token was invalid
+%%   errors:unauthorized_error() - provided access token was invalid
 %% @end
 %%--------------------------------------------------------------------
 -spec authenticate(tokens:serialized() | tokens:token(), aai:auth_ctx()) ->
-    {true, aai:auth()} | errors:error().
+    {true, aai:auth()} | errors:unauthorized_error().
 authenticate(Serialized, AuthCtx) when is_binary(Serialized) ->
     case tokens:deserialize(Serialized) of
         {ok, Token} -> authenticate(Token, AuthCtx);
-        {error, _} = Error -> Error
+        {error, _} = Error -> ?ERROR_UNAUTHORIZED(Error)
     end;
 authenticate(Token, AuthCtx) ->
     case verify_access_token(Token, AuthCtx) of
         {ok, Auth} -> {true, Auth};
-        {error, _} = Error -> Error
+        {error, _} = Error -> ?ERROR_UNAUTHORIZED(Error)
     end.
 
 
@@ -59,11 +59,11 @@ authenticate(Token, AuthCtx) ->
 %% Supports third party access tokens originating from Identity Providers.
 %%   {true, #auth{}} - the client was authenticated
 %%   false - access token was not found
-%%   errors:error() - provided access token was invalid
+%%   errors:unauthorized_error() - provided access token was invalid
 %% @end
 %%--------------------------------------------------------------------
 -spec authenticate_for_rest_interface(cowboy_req:req()) ->
-    {true, aai:auth()} | false | errors:error().
+    {true, aai:auth()} | false | errors:unauthorized_error().
 authenticate_for_rest_interface(Req) when is_map(Req) ->
     case tokens:parse_access_token_header(Req) of
         undefined ->
@@ -78,24 +78,23 @@ authenticate_for_rest_interface(Req) when is_map(Req) ->
                             LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
                             {ok, #document{key = UserId}} = linked_accounts:acquire_user(LinkedAccount),
                             {true, ?USER(UserId)};
-                        {error, _} = Error ->
-                            Error;
+                        ?ERROR_UNAUTHORIZED(_) = AuthenticationError ->
+                            AuthenticationError;
                         false ->
-                            ?ERROR_BAD_TOKEN
+                            ?ERROR_UNAUTHORIZED(?ERROR_BAD_TOKEN)
                     end
             end
     end.
 
-
 %% @private
 -spec authenticate_for_rest_interface(cowboy_req:req(), tokens:token()) ->
-    {true, aai:auth()} | errors:error().
+    {true, aai:auth()} | errors:unauthorized_error().
 authenticate_for_rest_interface(Req, Token) ->
     case {resolve_service_for_rest_interface(Req), resolve_consumer_for_rest_interface(Req)} of
         {{error, _} = Error, _} ->
-            Error;
+            ?ERROR_UNAUTHORIZED(Error);
         {_, {error, _} = Error} ->
-            Error;
+            ?ERROR_UNAUTHORIZED(Error);
         {{ok, Service}, {ok, Consumer}} ->
             {PeerIp, _} = cowboy_req:peer(Req),
             authenticate(Token, #auth_ctx{ip = PeerIp, interface = rest, service = Service, consumer = Consumer})

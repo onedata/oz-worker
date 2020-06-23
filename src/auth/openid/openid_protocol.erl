@@ -92,15 +92,15 @@ authenticate_by_idp_access_token(AccessTokenWithPrefix) ->
                 {true, {IdP, Attributes}}
             catch
                 throw:?ERROR_BAD_IDP_RESPONSE(_, 401, _, _) ->
-                    ?ERROR_BAD_IDP_ACCESS_TOKEN(IdP);
+                    ?ERROR_UNAUTHORIZED(?ERROR_BAD_IDP_ACCESS_TOKEN(IdP));
                 throw:?ERROR_BAD_IDP_RESPONSE(_, 403, _, _) ->
-                    ?ERROR_BAD_IDP_ACCESS_TOKEN(IdP);
+                    ?ERROR_UNAUTHORIZED(?ERROR_BAD_IDP_ACCESS_TOKEN(IdP));
                 Type:Reason ->
                     ?error_stacktrace(
                         "Unexpected error during authentication by IdP access token - ~p:~p",
                         [Type, Reason]
                     ),
-                    ?ERROR_INTERNAL_SERVER_ERROR
+                    ?ERROR_UNAUTHORIZED(?ERROR_INTERNAL_SERVER_ERROR)
             end
     end.
 

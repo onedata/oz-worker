@@ -472,6 +472,7 @@ get_group_test(Config) ->
         #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
     ),
     oz_test_utils:space_add_group(Config, S1, G1),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{

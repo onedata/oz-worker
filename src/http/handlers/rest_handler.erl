@@ -18,6 +18,7 @@
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/errors.hrl").
 
@@ -144,22 +145,22 @@ is_authorized(Req, State) ->
         case token_auth:authenticate_for_rest_interface(Req) of
             {true, TokenAuth} ->
                 {ok, TokenAuth};
-            {error, Err1} ->
-                {error, Err1};
+            {error, _} = Error1 ->
+                Error1;
             false ->
                 {PeerIp, _} = cowboy_req:peer(Req),
                 case basic_auth:authenticate(Req) of
                     {true, BasicAuth} ->
                         {ok, BasicAuth#auth{peer_ip = PeerIp}};
-                    {error, Err2} ->
-                        {error, Err2};
+                    {error, _} = Error2 ->
+                        Error2;
                     false ->
                         {ok, #auth{subject = ?SUB(nobody), peer_ip = PeerIp}}
                 end
         end
     catch
-        throw:Err3 ->
-            Err3;
+        throw:Error3 ->
+            ?ERROR_UNAUTHORIZED(Error3);
         Type:Message ->
             ?error_stacktrace("Unexpected error in ~p:is_authorized - ~p:~p", [
                 ?MODULE, Type, Message

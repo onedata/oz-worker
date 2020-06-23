@@ -44,11 +44,11 @@
 %% Tries to authenticate a client by basic credentials (username and password).
 %%   {true, #auth{}} - the client was authenticated
 %%   false - credentials were not found
-%%   errors:error() - provided credentials were invalid
+%%   errors:unauthorized_error() - provided credentials were invalid
 %% @end
 %%--------------------------------------------------------------------
 -spec authenticate(cowboy_req:req()) ->
-    {true, aai:auth()} | false | errors:error().
+    {true, aai:auth()} | false | errors:unauthorized_error().
 authenticate(Req) ->
     case cowboy_req:header(?HDR_AUTHORIZATION, Req, undefined) of
         <<"Basic ", UserPasswdB64/binary>> ->
@@ -57,31 +57,31 @@ authenticate(Req) ->
                 [Username, Password] = binary:split(UsernamePassword, <<":">>),
                 authenticate(Username, Password)
             catch _:_ ->
-                ?ERROR_BAD_BASIC_CREDENTIALS
+                ?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS)
             end;
         _ ->
             false
     end.
 
 -spec authenticate(od_user:username(), password()) ->
-    {true, aai:auth()} | errors:error().
+    {true, aai:auth()} | errors:unauthorized_error().
 authenticate(Username, Password) ->
     case auth_config:is_basic_auth_enabled() of
         false ->
-            ?ERROR_BASIC_AUTH_NOT_SUPPORTED;
+            ?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_NOT_SUPPORTED);
         true ->
             case od_user:get_by_username(Username) of
                 {ok, #document{value = #od_user{basic_auth_enabled = false}}} ->
-                    ?ERROR_BASIC_AUTH_DISABLED;
+                    ?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED);
                 {ok, #document{value = #od_user{password_hash = undefined}}} ->
-                    ?ERROR_BASIC_AUTH_DISABLED;
+                    ?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED);
                 {ok, #document{value = #od_user{password_hash = Hash}, key = UserId}} ->
                     case onedata_passwords:verify(Password, Hash) of
                         true -> {true, ?USER(UserId)};
-                        false -> ?ERROR_BAD_BASIC_CREDENTIALS
+                        false -> ?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS)
                     end;
                 {error, not_found} ->
-                    ?ERROR_BAD_BASIC_CREDENTIALS
+                    ?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS)
             end
     end.
 
@@ -103,21 +103,21 @@ toggle_basic_auth(UserRecord, Flag) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec change_password(od_user:record(), OldPass :: password(), NewPass :: password()) ->
-    {ok, od_user:record()} | errors:error().
+    {ok, od_user:record()} | errors:unauthorized_error().
 change_password(#od_user{basic_auth_enabled = false} = _User, _OldPass, _NewPass) ->
-    ?ERROR_BASIC_AUTH_DISABLED;
+    ?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED);
 change_password(#od_user{password_hash = undefined} = User, undefined, NewPass) ->
     {ok, User#od_user{password_hash = onedata_passwords:create_hash(NewPass)}};
 change_password(#od_user{password_hash = undefined} = _User, _OldPass, _NewPass) ->
-    ?ERROR_BAD_BASIC_CREDENTIALS;
+    ?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS);
 change_password(#od_user{password_hash = _Hash} = _User, undefined, _NewPass) ->
-    ?ERROR_BAD_BASIC_CREDENTIALS;
+    ?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS);
 change_password(#od_user{password_hash = Hash} = User, OldPass, NewPass) ->
     case onedata_passwords:verify(OldPass, Hash) of
         true ->
             {ok, User#od_user{password_hash = onedata_passwords:create_hash(NewPass)}};
         false ->
-            ?ERROR_BAD_BASIC_CREDENTIALS
+            ?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS)
     end.
 
 

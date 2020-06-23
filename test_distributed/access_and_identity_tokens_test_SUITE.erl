@@ -325,7 +325,7 @@ check_bad_token_scenarios(RequestSpec) ->
 
     BadToken = <<"this-is-a-bad-token-that-cannot-be-decoded">>,
     ?assertEqual(
-        ?ERROR_BAD_TOKEN,
+        ?ERROR_UNAUTHORIZED(?ERROR_BAD_TOKEN),
         make_request_with_random_context(RequestSpec, ?SUB(user, DummyUser), {token, BadToken})
     ),
 
@@ -334,7 +334,7 @@ check_bad_token_scenarios(RequestSpec) ->
         ?INVITE_TOKEN(?USER_JOIN_CLUSTER, DummyProvider)
     ),
     ?assertEqual(
-        ?ERROR_NOT_AN_ACCESS_TOKEN(?INVITE_TOKEN(?USER_JOIN_CLUSTER, DummyProvider)),
+        ?ERROR_UNAUTHORIZED(?ERROR_NOT_AN_ACCESS_TOKEN(?INVITE_TOKEN(?USER_JOIN_CLUSTER, DummyProvider))),
         make_request_with_random_context(RequestSpec, ?SUB(user, DummyUser), {token, InviteToken})
     ),
 
@@ -346,7 +346,7 @@ check_bad_token_scenarios(RequestSpec) ->
     % The error depends on the request context, which is randomized with every request
     ?assert(lists:member(Error, [
         ?ERROR_FORBIDDEN,
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)]})
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)]}))
     ])),
 
     lists:foreach(fun(EligibleSubject) ->
@@ -360,7 +360,7 @@ check_bad_token_scenarios(RequestSpec) ->
 
         ForgedTokenAlpha = tokens:construct(Prototype, <<"secret">>, []),
         ?assertEqual(
-            ?ERROR_TOKEN_INVALID,
+            ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID),
             make_request_with_random_context(RequestSpec, EligibleSubject, {token, ForgedTokenAlpha})
         ),
 
@@ -374,21 +374,21 @@ check_bad_token_scenarios(RequestSpec) ->
         % tokens, but useful for subjects with good intentions.
         ForgedTokenBeta = tokens:construct(Prototype#token{persistence = {temporary, CurrentGeneration - 1}}, <<"secret">>, []),
         ?assertEqual(
-            ?ERROR_TOKEN_REVOKED,
+            ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_REVOKED),
             make_request_with_random_context(RequestSpec, EligibleSubject, {token, ForgedTokenBeta})
         ),
 
         % If the generation is the same, forged token is considered invalid.
         ForgedTokenGamma = tokens:construct(Prototype#token{persistence = {temporary, CurrentGeneration}}, <<"secret">>, []),
         ?assertEqual(
-            ?ERROR_TOKEN_INVALID,
+            ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID),
             make_request_with_random_context(RequestSpec, EligibleSubject, {token, ForgedTokenGamma})
         ),
 
         % Future generation implies that the token must have been forged.
         ForgedTokenDelta = tokens:construct(Prototype#token{persistence = {temporary, 857346}}, <<"secret">>, []),
         ?assertEqual(
-            ?ERROR_TOKEN_INVALID,
+            ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID),
             make_request_with_random_context(RequestSpec, EligibleSubject, {token, ForgedTokenDelta})
         )
     end, RequestSpec#request_spec.eligible_subjects).
@@ -425,7 +425,7 @@ check_forbidden_service_when_consuming_scenarios(RequestSpec) ->
                     service = ForbiddenService
                 },
                 ?assertMatch(
-                    ?ERROR_TOKEN_SERVICE_FORBIDDEN(ForbiddenService),
+                    ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SERVICE_FORBIDDEN(ForbiddenService)),
                     make_request(RequestSpec, RequestContextWithService, ClientAuth)
                 )
             end, gen_forbidden_services(EligibleSubject))
@@ -465,7 +465,10 @@ check_temporary_token_revocation(RequestSpec) ->
         ClientAuth = gen_client_auth(EligibleSubject, temporary),
         ?assertMatch(ok, make_request_with_random_context(RequestSpec, EligibleSubject, ClientAuth)),
         ozt_tokens:revoke_all_temporary_tokens(EligibleSubject),
-        ?assertMatch(?ERROR_TOKEN_REVOKED, make_request_with_random_context(RequestSpec, EligibleSubject, ClientAuth))
+        ?assertMatch(
+            ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_REVOKED),
+            make_request_with_random_context(RequestSpec, EligibleSubject, ClientAuth)
+        )
     end, RequestSpec#request_spec.eligible_subjects).
 
 
@@ -477,13 +480,19 @@ check_named_token_revocation(RequestSpec) ->
         ?assertMatch(ok, make_request_with_random_context(RequestSpec, EligibleSubject, ClientAuthBeta)),
 
         ozt_tokens:toggle_revoked(TokenAlpha, true),
-        ?assertMatch(?ERROR_TOKEN_REVOKED, make_request_with_random_context(RequestSpec, EligibleSubject, ClientAuthAlpha)),
+        ?assertMatch(
+            ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_REVOKED),
+            make_request_with_random_context(RequestSpec, EligibleSubject, ClientAuthAlpha))
+        ,
         ?assertMatch(ok, make_request_with_random_context(RequestSpec, EligibleSubject, ClientAuthBeta)),
 
         ozt_tokens:toggle_revoked(TokenAlpha, false),
         ozt_tokens:toggle_revoked(TokenBeta, true),
         ?assertMatch(ok, make_request_with_random_context(RequestSpec, EligibleSubject, ClientAuthAlpha)),
-        ?assertMatch(?ERROR_TOKEN_REVOKED, make_request_with_random_context(RequestSpec, EligibleSubject, ClientAuthBeta))
+        ?assertMatch(
+            ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_REVOKED),
+            make_request_with_random_context(RequestSpec, EligibleSubject, ClientAuthBeta)
+        )
     end, RequestSpec#request_spec.eligible_subjects).
 
 
@@ -500,8 +509,8 @@ check_token_caveats_handling(RequestSpec) ->
                     [] ->
                         ?assertMatch(ok, Result);
                     _ ->
-                        ?assertMatch(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_), Result),
-                        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiedCaveat) = Result,
+                        ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_)), Result),
+                        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiedCaveat)) = Result,
                         ?assert(lists:member(UnverifiedCaveat, RandUnverifiedCaveats))
                 end
             end, lists:seq(1, ?CAVEAT_RANDOMIZATION_REPEATS))
@@ -552,11 +561,11 @@ check_service_token_caveats_handling(RequestSpec) ->
                             % The service token may be used to init GS connection, in such
                             % case the returned error will not be wrapped in ?ERROR_BAD_SERVICE_TOKEN
                             TokenError = case Result of
-                                ?ERROR_BAD_SERVICE_TOKEN(Error) -> Error;
+                                ?ERROR_UNAUTHORIZED(?ERROR_BAD_SERVICE_TOKEN(Error)) -> ?ERROR_UNAUTHORIZED(Error);
                                 Error -> Error
                             end,
-                            ?assertMatch(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_), TokenError),
-                            ?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiedCaveat) = TokenError,
+                            ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_)), TokenError),
+                            ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiedCaveat)) = TokenError,
                             ?assert(lists:member(UnverifiedCaveat, RandUnverifiedCaveats))
                     end
                 end, lists:seq(1, ?CAVEAT_RANDOMIZATION_REPEATS))
@@ -595,8 +604,8 @@ check_consumer_token_caveats_handling(RequestSpec) ->
                         [] ->
                             ?assertMatch(ok, Result);
                         _ ->
-                            ?assertMatch(?ERROR_BAD_CONSUMER_TOKEN(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_)), Result),
-                            ?ERROR_BAD_CONSUMER_TOKEN(?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiedCaveat)) = Result,
+                            ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BAD_CONSUMER_TOKEN(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_))), Result),
+                            ?ERROR_UNAUTHORIZED(?ERROR_BAD_CONSUMER_TOKEN(?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiedCaveat))) = Result,
                             ?assert(lists:member(UnverifiedCaveat, RandUnverifiedCaveats))
                     end
                 end, lists:seq(1, ?CAVEAT_RANDOMIZATION_REPEATS))
@@ -618,7 +627,7 @@ check_subject_deleted_scenarios(RequestSpec) ->
     end, RequestSpec#request_spec.eligible_subjects),
 
     lists:foreach(fun({RequestContext, ClientAuth}) ->
-        ?assertMatch(?ERROR_TOKEN_INVALID, make_request(RequestSpec, RequestContext, ClientAuth))
+        ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID), make_request(RequestSpec, RequestContext, ClientAuth))
     end, RequestsToCheck).
 
 
@@ -749,7 +758,7 @@ request_via_logic(RequestSpec, Rc, ClientAuth) ->
                     {ok, Service} ->
                         ?assertEqual(Service, Rc#request_context.service);
                     {error, _} = Err1 ->
-                        throw(Err1)
+                        throw(?ERROR_UNAUTHORIZED(Err1))
                 end
         end,
 
@@ -765,7 +774,7 @@ request_via_logic(RequestSpec, Rc, ClientAuth) ->
                     {ok, Consumer} ->
                         ?assertEqual(Consumer, Rc#request_context.consumer);
                     {error, _} = Err2 ->
-                        throw(Err2)
+                        throw(?ERROR_UNAUTHORIZED(Err2))
                 end
         end,
 
