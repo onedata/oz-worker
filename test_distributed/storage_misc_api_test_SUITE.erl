@@ -42,7 +42,10 @@
 
     list_spaces_test/1,
 
-    upgrade_legacy_support_test/1
+    upgrade_legacy_support_test/1,
+    
+    support_with_imported_storage_test/1,
+    modify_imported_storage_test/1
 ]).
 
 all() ->
@@ -58,7 +61,10 @@ all() ->
 
         list_spaces_test,
 
-        upgrade_legacy_support_test
+        upgrade_legacy_support_test,
+    
+        support_with_imported_storage_test,
+        modify_imported_storage_test
     ]).
 
 
@@ -71,11 +77,12 @@ create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
 
-    VerifyFun = fun(StorageId, ExpectedQosParams) ->
+    VerifyFun = fun(StorageId, ExpectedQosParams, ExpectedImported) ->
         {ok, Storage} = oz_test_utils:get_storage(Config, StorageId),
         ?assertEqual(?CORRECT_NAME, Storage#od_storage.name),
         ?assertEqual(P1, Storage#od_storage.provider),
         ?assertEqual(ExpectedQosParams, Storage#od_storage.qos_parameters),
+        ?assertEqual(ExpectedImported, Storage#od_storage.imported),
         true
     end,
 
@@ -94,34 +101,52 @@ create_test(Config) ->
             function = create,
             args = [auth, data],
             expected_result = ?OK_ENV(fun(_, DataSet) ->
-                ExpectedQosParams = maps:get(<<"qos_parameters">>, DataSet, #{}),
-                ?OK_TERM(fun(StorageId) -> VerifyFun(StorageId, ExpectedQosParams) end)
+                ExpectedQosParams =
+                    case maps:get(<<"qosParameters">>, DataSet, undefined) of
+                        undefined -> maps:get(<<"qos_parameters">>, DataSet, #{});
+                        Parameters -> Parameters
+                    end,
+                ExpectedImported = maps:get(<<"imported">>, DataSet, unknown),
+
+                ?OK_TERM(fun(StorageId) -> VerifyFun(StorageId, ExpectedQosParams, ExpectedImported) end)
             end)
         },
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_storage, aspect = instance},
             expected_result = ?OK_ENV(fun(_, DataSet) ->
-                ExpectedQosParams = maps:get(<<"qos_parameters">>, DataSet, #{}),
+                ExpectedQosParams =
+                    case maps:get(<<"qosParameters">>, DataSet, undefined) of
+                        undefined -> maps:get(<<"qos_parameters">>, DataSet, #{});
+                        Parameters -> Parameters
+                    end,
+                ExpectedImported = maps:get(<<"imported">>, DataSet, unknown),
                 ?OK_MAP_CONTAINS(#{
                 <<"provider">> => P1,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = StorageId} = gri:deserialize(EncodedGri),
-                    VerifyFun(StorageId, ExpectedQosParams)
+                    VerifyFun(StorageId, ExpectedQosParams, ExpectedImported)
                 end})
             end)
         },
         data_spec = #data_spec{
             required = [<<"name">>],
-            optional = [<<"qos_parameters">>],
+            optional = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
-                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}]
+                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
+                <<"qosParameters">> => [#{<<"key">> => <<"value">>}],
+                <<"imported">> => [true, false]
             },
             bad_values = [
+                %% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
                 {<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)},
                 {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS}
+                {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"qosParameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qosParameters">>)},
+                {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"qosParameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)}
             ] ++ ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
         }
     },
@@ -145,7 +170,7 @@ get_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ExpectedQosParameters = #{<<"key">> => <<"value">>},
-    oz_test_utils:update_storage(Config, St1, #{<<"qos_parameters">> => ExpectedQosParameters}),
+    oz_test_utils:update_storage(Config, St1, #{<<"qosParameters">> => ExpectedQosParameters}),
 
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
@@ -195,6 +220,7 @@ get_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?STORAGE_NAME1,
                 <<"provider">> => P1,
+                <<"qosParameters">> => ExpectedQosParameters,
                 <<"qos_parameters">> => ExpectedQosParameters,
                 <<"spaces">> => [S],
                 <<"gri">> => fun(EncodedGri) ->
@@ -225,7 +251,7 @@ get_test(Config) ->
             function = get_shared_data,
             args = [auth, St1, S],
             expected_result = ?OK_MAP_CONTAINS(#{
-                <<"qos_parameters">> => ExpectedQosParameters
+                <<"qosParameters">> => ExpectedQosParameters
             })
         },
         gs_spec = #gs_spec{
@@ -234,6 +260,7 @@ get_test(Config) ->
             auth_hint = ?THROUGH_SPACE(S),
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"provider">> => P1,
+                <<"qosParameters">> => ExpectedQosParameters,
                 <<"qos_parameters">> => ExpectedQosParameters,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
@@ -256,11 +283,18 @@ update_test(Config) ->
     end,
     VerifyEndFun = fun(ShouldSucceed, #{storageId := StorageId} = _Env, Data) ->
         {ok, Storage} = oz_test_utils:get_storage(Config, StorageId),
-        ExpoQosParams = case ShouldSucceed of
+        case ShouldSucceed of
             false -> #{};
-            true -> maps:get(<<"qos_parameters">>, Data)
-        end,
-        ?assertEqual(ExpoQosParams, Storage#od_storage.qos_parameters)
+            true ->
+                ExpQosParams =
+                    case maps:get(<<"qosParameters">>, Data, undefined) of
+                        undefined -> maps:get(<<"qos_parameters">>, Data, #{});
+                        Parameters -> Parameters
+                    end,
+                ExpImportedStorage = maps:get(<<"imported">>, Data, false),
+                ?assertEqual(ExpImportedStorage, Storage#od_storage.imported),
+                ?assertEqual(ExpQosParams, Storage#od_storage.qos_parameters)
+        end
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -287,14 +321,21 @@ update_test(Config) ->
             expected_result = ?OK
         },
         data_spec = #data_spec{
-            at_least_one = [<<"qos_parameters">>],
+            at_least_one = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>],
             correct_values = #{
-                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}]
+                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
+                <<"qosParameters">> => [#{<<"key">> => <<"value">>}],
+                <<"imported">> => [true, false]
             },
             bad_values = [
+                %% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
                 {<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)},
                 {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS}
+                {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"qosParameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qosParameters">>)},
+                {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"qosParameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)}
             ]
         }
     },
@@ -711,6 +752,215 @@ upgrade_legacy_support_test(Config) ->
     ?assertEqual(false, oz_test_utils:call_oz(Config, storage_logic, supports_space, [P1, S])),
     ?assertEqual(true, oz_test_utils:call_oz(Config, storage_logic, supports_space, [St1, S])).
 
+
+support_with_imported_storage_test(Config) ->
+    MinSupportSize = oz_test_utils:minimum_support_size(Config),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
+    {ok, {P2, P2Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME2),
+    Providers = [P1, P2],
+    {ok, ImportedStorageP1} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    
+    CreateTokenFun = fun(SpaceId) ->
+        {ok, SpInvProvToken} = oz_test_utils:create_space_support_token(
+            Config, ?USER(U1), SpaceId
+        ),
+        element(2, {ok, _} = tokens:serialize(SpInvProvToken))
+    end,
+    
+    AddMultipleNotImportedSupportsFun = fun() -> 
+        lists:foreach(fun(_) ->
+            Provider = lists:nth(rand:uniform(length(Providers)), Providers),
+            {ok, St} = oz_test_utils:create_storage(Config, ?PROVIDER(Provider), ?STORAGE_NAME1),
+            {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(Provider), St, S1)
+        end, lists:seq(1,8))
+    end,
+    
+    % add some supports with not imported storages
+    AddMultipleNotImportedSupportsFun(),
+    
+    % support space with imported storage
+    {ok, ImportedStorageP2} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
+    {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(P1), ImportedStorageP1, S1),
+    
+    % check that adding next support with imported storage fails
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P2, P2Token}]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            module = storage_logic,
+            function = support_space,
+            args = [auth, ImportedStorageP2, data],
+            expected_result = ?ERROR_REASON(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(S1, ImportedStorageP1))
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_storage, id = ImportedStorageP2, aspect = support},
+            expected_result = ?ERROR_REASON(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(S1, ImportedStorageP1))
+        },
+        data_spec = #data_spec{
+            required = [<<"token">>, <<"size">>],
+            correct_values = #{
+                <<"token">> => [CreateTokenFun(S1)],
+                <<"size">> => [MinSupportSize]
+            }
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    
+    % supporting second space with imported storage also should fail
+    ApiTestSpec1 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P1, P1Token}]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            module = storage_logic,
+            function = support_space,
+            args = [auth, ImportedStorageP1, data],
+            expected_result = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_storage, id = ImportedStorageP1, aspect = support},
+            expected_result = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
+        },
+        data_spec = #data_spec{
+            required = [<<"token">>, <<"size">>],
+            correct_values = #{
+                <<"token">> => [CreateTokenFun(S2)],
+                <<"size">> => [MinSupportSize]
+            }
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec1)),
+    
+    % check that space still can be supported with not imported storages
+    AddMultipleNotImportedSupportsFun().
+
+modify_imported_storage_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
+    {ok, ImportedStorage} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+    {ok, Storage} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    
+    % check that modifying imported storage value is prohibited when storage supports a space
+    {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(P1), ImportedStorage, S1),
+    {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(P1), Storage, S1),
+    
+    ApiTestSpecFun = fun(St, IsImported) ->
+        #api_test_spec{
+            client_spec = #client_spec{
+                correct = [{provider, P1, P1Token}]
+            },
+            rest_spec = undefined,
+            logic_spec = #logic_spec{
+                module = storage_logic,
+                function = update,
+                args = [auth, St, data],
+                expected_result = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
+            },
+            gs_spec = #gs_spec{
+                operation = update,
+                gri = #gri{type = od_storage, id = St, aspect = instance},
+                expected_result = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
+            },
+            data_spec = #data_spec{
+                at_least_one = [<<"imported">>],
+                correct_values = #{
+                    <<"imported">> => [not IsImported]
+                }
+            }
+        }
+    end,
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecFun(ImportedStorage, true))),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecFun(Storage, false))),
+
+    % check that modifying other values is allowed when storage supports a space
+    % also check that not changing imported value will not generate error
+    ApiTestSpec1Fun = fun(St, IsImported) -> 
+        #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {provider, P1, P1Token}
+                ]
+            },
+            logic_spec = #logic_spec{
+                module = storage_logic,
+                function = update,
+                args = [auth, St, data],
+                expected_result = ?OK
+            },
+            gs_spec = #gs_spec{
+                operation = update,
+                gri = #gri{type = od_storage, id = St, aspect = instance},
+                expected_result = ?OK
+            },
+            data_spec = #data_spec{
+                at_least_one = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>],
+                correct_values = #{
+                    %% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
+                    <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
+                    <<"qosParameters">> => [#{<<"key">> => <<"value">>}],
+                    <<"imported">> => [IsImported]
+                }
+            }
+        }
+    end, 
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec1Fun(ImportedStorage, true))),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec1Fun(Storage, false))),
+    
+    % check that imported value can be changed, if previously was set to unknown
+    EnvSetUpFun = fun() ->
+        oz_test_utils:call_oz(Config, od_storage, update, 
+            [Storage, fun(Storage) -> {ok, Storage#od_storage{imported = unknown}} end]),
+        #{}        
+    end,
+    VerifyEndFun = fun(ShouldSucceed, _Env, Data) ->
+        {ok, St} = oz_test_utils:get_storage(Config, Storage),
+        ExpImported = case ShouldSucceed of
+            true -> maps:get(<<"imported">>, Data);
+            false -> unknown
+        end,
+        ?assertEqual(ExpImported, St#od_storage.imported)
+    end,
+    ApiTestSpec2 =
+        #api_test_spec{
+            client_spec = #client_spec{
+                correct = [{provider, P1, P1Token}]
+            },
+            rest_spec = undefined,
+            logic_spec = #logic_spec{
+                module = storage_logic,
+                function = update,
+                args = [auth, Storage, data],
+                expected_result = ?OK
+            },
+            gs_spec = #gs_spec{
+                operation = update,
+                gri = #gri{type = od_storage, id = Storage, aspect = instance},
+                expected_result = ?OK
+            },
+            data_spec = #data_spec{
+                at_least_one = [<<"imported">>],
+                correct_values = #{
+                    <<"imported">> => [true, false]
+                }
+            }
+        },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
+    )).
 
 %%%===================================================================
 %%% Setup/teardown functions

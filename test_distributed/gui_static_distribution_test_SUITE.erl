@@ -335,7 +335,7 @@ gui_upload_with_confined_or_no_token_returns_proper_error(Config) ->
 
     UserCaveat = #cv_data_path{whitelist = [<<"/abc">>]},
     ConfinedGuiToken = tokens:confine(GuiToken, UserCaveat),
-    ?assertMatch(?ERROR_TOKEN_CAVEAT_UNVERIFIED(UserCaveat), perform_upload(
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(UserCaveat)), perform_upload(
         Config, <<"hrv">>, HarvesterId, HrvGuiPackage, #{?HDR_X_AUTH_TOKEN => ConfinedGuiToken}
     )),
 
@@ -343,7 +343,7 @@ gui_upload_with_confined_or_no_token_returns_proper_error(Config) ->
     {OpGuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
     ProviderCaveat = #cv_api{whitelist = [{?OZ_WORKER, get, ?GRI_PATTERN('*', '*', '*', '*')}]},
     ConfinedProviderToken = tokens:confine(ProviderToken, ProviderCaveat),
-    ?assertMatch(?ERROR_TOKEN_CAVEAT_UNVERIFIED(ProviderCaveat), perform_upload(
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(ProviderCaveat)), perform_upload(
         Config, <<"opw">>, ProviderId, OpGuiPackage, #{?HDR_X_AUTH_TOKEN => ConfinedProviderToken}
     )),
 

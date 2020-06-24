@@ -1419,8 +1419,8 @@ verify_identity_token(_Config) ->
         true, {?SUB(?ONEPROVIDER, Provider), ?DEFAULT_TEMP_CAVEAT_TTL}
     ),
 
-    %% @todo VFS-6098 legacy provider access tokens should be accepted as
-    %% identity tokens for backward compatibility with old providers, but not for users
+    %% @todo VFS-6098 for backward compatibility - legacy provider access tokens should be
+    %% accepted as identity tokens for backward compatibility with old providers
     TokenRho = ozt_tokens:create_legacy_access_token(?SUB(?ONEPROVIDER, Provider)),
     verify_identity_token_base(
         AllClients, TokenRho, #identity_token_ctx{},
@@ -1433,14 +1433,16 @@ verify_identity_token(_Config) ->
         true, {?SUB(?ONEPROVIDER, Provider), undefined}
     ),
 
-    % modern access tokens should not be accepted, even with the cv_scope caveat
-    % (previously authorization_none caveat)
+    %% @todo VFS-6098 for backward compatibility - when a legacy provider is
+    %% registered in a modern zone, it gets a modern token but uses it in legacy
+    %% way (presenting the access token as its identity proof) - this should
+    %% also be supported
     #named_token_data{token = TokenOmega} = create_provider_named_token(Provider, ?ACCESS_TOKEN, [
         #cv_scope{scope = identity_token}
     ]),
     verify_identity_token_base(
         AllClients, TokenOmega, #identity_token_ctx{},
-        false, ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN)
+        true, {?SUB(?ONEPROVIDER, Provider), undefined}
     ),
 
     % user access tokens should never be accepted, regardless if legacy or modern
@@ -2908,7 +2910,7 @@ assert_token_deleted(true, Token, TokenName) ->
     ?assertMatch({error, not_found}, ozt:rpc(token_names, lookup, [Subject, TokenName])),
     case Type of
         ?ACCESS_TOKEN ->
-            ?assertEqual(?ERROR_TOKEN_INVALID, ozt_tokens:authenticate(Token));
+            ?assertEqual(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID), ozt_tokens:authenticate(Token));
         _ ->
             ok
     end;

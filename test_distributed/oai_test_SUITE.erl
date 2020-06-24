@@ -449,12 +449,13 @@ identify_test_base(Config, Method) ->
 
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    {ok, ?SHARE_ID} = oz_test_utils:create_share(
-        Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
+    ShareId = datastore_key:new(),
+    {ok, ShareId} = oz_test_utils:create_share(
+        Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
     ),
     HSId = create_handle_service(Config, User),
     Timestamp = erlang:universaltime(),
-    create_handle_with_mocked_timestamp(Config, User, HSId, ?SHARE_ID,
+    create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
         ?DC_METADATA_XML, Timestamp),
 
     ExpResponseContent = [
@@ -518,12 +519,13 @@ get_record_test_base(Config, Method) ->
 
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    {ok, ?SHARE_ID} = oz_test_utils:create_share(
-        Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
+    ShareId = datastore_key:new(),
+    {ok, ShareId} = oz_test_utils:create_share(
+        Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
     ),
     HSId = create_handle_service(Config, User),
     Timestamp = erlang:universaltime(),
-    Identifier = create_handle_with_mocked_timestamp(Config, User, HSId, ?SHARE_ID,
+    Identifier = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
         ?DC_METADATA_XML, Timestamp),
 
     ExpectedDCMetadata = expected_dc_metadata(Config, Identifier, ?DC_METADATA_XML),
@@ -570,9 +572,6 @@ get_record_with_bad_metadata_test_base(Config, Method) ->
 
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    {ok, ?SHARE_ID} = oz_test_utils:create_share(
-        Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
-    ),
     HSId = create_handle_service(Config, User),
     Timestamp = erlang:universaltime(),
 
@@ -583,7 +582,11 @@ get_record_with_bad_metadata_test_base(Config, Method) ->
     ],
 
     lists:foreach(fun(Metadata) ->
-        Identifier = create_handle_with_mocked_timestamp(Config, User, HSId, ?SHARE_ID,
+        ShareId = datastore_key:new(),
+        {ok, ShareId} = oz_test_utils:create_share(
+            Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
+        ),
+        Identifier = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
             Metadata, Timestamp),
         Args = [
             {<<"identifier">>, oai_identifier(Config, Identifier)},
@@ -951,11 +954,12 @@ id_not_existing_test_base(Config, Method) ->
 cannot_disseminate_format_test_base(Config, Method) ->
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    {ok, ?SHARE_ID} = oz_test_utils:create_share(
-        Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
+    ShareId = datastore_key:new(),
+    {ok, ShareId} = oz_test_utils:create_share(
+        Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
     ),
     HSId = create_handle_service(Config, User),
-    Identifier = create_handle(Config, User, HSId, ?SHARE_ID, ?DC_METADATA_XML),
+    Identifier = create_handle(Config, User, HSId, ShareId, ?DC_METADATA_XML),
 
     Args = [
         {<<"identifier">>, oai_identifier(Config, Identifier)},
@@ -969,11 +973,12 @@ no_set_hierarchy_test_base(Config, Method) ->
 list_metadata_formats_no_format_error_test_base(Config, Method) ->
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    {ok, ?SHARE_ID} = oz_test_utils:create_share(
-        Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
+    ShareId = datastore_key:new(),
+    {ok, ShareId} = oz_test_utils:create_share(
+        Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
     ),
     HSId = create_handle_service(Config, User),
-    Identifier = create_handle(Config, User, HSId, ?SHARE_ID, ?DC_METADATA_XML),
+    Identifier = create_handle(Config, User, HSId, ShareId, ?DC_METADATA_XML),
     % Modify handle metadata to undefined (this should not occur in normal
     % conditions because entity logic won't accept undefined metadata,
     % but check if returned OAI error in such case is correct).

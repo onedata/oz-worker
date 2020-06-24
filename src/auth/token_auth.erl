@@ -35,20 +35,20 @@
 %% @doc
 %% Tries to authenticate a client by an access token.
 %%   {true, #auth{}} - the client was authenticated
-%%   errors:error() - provided access token was invalid
+%%   errors:unauthorized_error() - provided access token was invalid
 %% @end
 %%--------------------------------------------------------------------
 -spec authenticate(tokens:serialized() | tokens:token(), aai:auth_ctx()) ->
-    {true, aai:auth()} | errors:error().
+    {true, aai:auth()} | errors:unauthorized_error().
 authenticate(Serialized, AuthCtx) when is_binary(Serialized) ->
     case tokens:deserialize(Serialized) of
         {ok, Token} -> authenticate(Token, AuthCtx);
-        {error, _} = Error -> Error
+        {error, _} = Error -> ?ERROR_UNAUTHORIZED(Error)
     end;
 authenticate(Token, AuthCtx) ->
     case verify_access_token(Token, AuthCtx) of
         {ok, Auth} -> {true, Auth};
-        {error, _} = Error -> Error
+        {error, _} = Error -> ?ERROR_UNAUTHORIZED(Error)
     end.
 
 
@@ -59,11 +59,11 @@ authenticate(Token, AuthCtx) ->
 %% Supports third party access tokens originating from Identity Providers.
 %%   {true, #auth{}} - the client was authenticated
 %%   false - access token was not found
-%%   errors:error() - provided access token was invalid
+%%   errors:unauthorized_error() - provided access token was invalid
 %% @end
 %%--------------------------------------------------------------------
 -spec authenticate_for_rest_interface(cowboy_req:req()) ->
-    {true, aai:auth()} | false | errors:error().
+    {true, aai:auth()} | false | errors:unauthorized_error().
 authenticate_for_rest_interface(Req) when is_map(Req) ->
     case tokens:parse_access_token_header(Req) of
         undefined ->
@@ -78,24 +78,23 @@ authenticate_for_rest_interface(Req) when is_map(Req) ->
                             LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
                             {ok, #document{key = UserId}} = linked_accounts:acquire_user(LinkedAccount),
                             {true, ?USER(UserId)};
-                        {error, _} = Error ->
-                            Error;
+                        ?ERROR_UNAUTHORIZED(_) = AuthenticationError ->
+                            AuthenticationError;
                         false ->
-                            ?ERROR_BAD_TOKEN
+                            ?ERROR_UNAUTHORIZED(?ERROR_BAD_TOKEN)
                     end
             end
     end.
 
-
 %% @private
 -spec authenticate_for_rest_interface(cowboy_req:req(), tokens:token()) ->
-    {true, aai:auth()} | errors:error().
+    {true, aai:auth()} | errors:unauthorized_error().
 authenticate_for_rest_interface(Req, Token) ->
     case {resolve_service_for_rest_interface(Req), resolve_consumer_for_rest_interface(Req)} of
         {{error, _} = Error, _} ->
-            Error;
+            ?ERROR_UNAUTHORIZED(Error);
         {_, {error, _} = Error} ->
-            Error;
+            ?ERROR_UNAUTHORIZED(Error);
         {{ok, Service}, {ok, Consumer}} ->
             {PeerIp, _} = cowboy_req:peer(Req),
             authenticate(Token, #auth_ctx{ip = PeerIp, interface = rest, service = Service, consumer = Consumer})
@@ -124,15 +123,15 @@ verify_access_token(#token{type = ReceivedTokenType}, _AuthCtx) ->
 %%--------------------------------------------------------------------
 -spec verify_identity_token(tokens:token(), aai:auth_ctx()) ->
     {ok, {aai:subject(), [caveats:caveat()]}} | errors:error().
-verify_identity_token(#token{version = 1, type = ?ACCESS_TOKEN} = Token, AuthCtx) ->
-    %% @todo VFS-6098 legacy provider access tokens are still accepted as
-    %% identity tokens for backward compatibility with older providers
+verify_identity_token(#token{type = ?ACCESS_TOKEN = Type} = Token, AuthCtx) ->
+    %% @todo VFS-6098 access tokens are still accepted as identity tokens
+    %% for backward compatibility with legacy providers
     case verify_token(Token, AuthCtx#auth_ctx{scope = identity_token}) of
         {ok, #auth{subject = ?SUB(?ONEPROVIDER, _) = Subject, caveats = Caveats}} ->
             {ok, {Subject, Caveats}};
         {ok, _} ->
             % user access tokens are never accepted as identity tokens
-            ?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN);
+            ?ERROR_NOT_AN_IDENTITY_TOKEN(Type);
         {error, _} = Error ->
             Error
     end;
@@ -179,7 +178,7 @@ verify_invite_token(Token = #token{type = ReceivedType}, ExpectedType, AuthCtx) 
     {ok, aai:service_spec()} | errors:error().
 verify_service_token(SerializedServiceToken, AuthCtx) when is_binary(SerializedServiceToken) ->
     case tokens:deserialize(SerializedServiceToken) of
-        {ok, #token{version = 1} = ServiceToken} ->
+        {ok, ServiceToken} ->
             %% @todo VFS-6098 legacy onepanel sends its access token as service
             %% token with service indication, but since version 1 tokens do not
             %% carry inscribed subject, it is ignored during deserialization -
@@ -191,8 +190,6 @@ verify_service_token(SerializedServiceToken, AuthCtx) when is_binary(SerializedS
                 {OtherResult, _} ->
                     OtherResult
             end;
-        {ok, ServiceToken} ->
-            verify_service_token(ServiceToken, AuthCtx);
         {error, _} = Error ->
             ?ERROR_BAD_SERVICE_TOKEN(Error)
     end;

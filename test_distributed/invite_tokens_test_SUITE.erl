@@ -1219,14 +1219,14 @@ check_adding_carried_privileges_to_named_token(Tc = #testcase{token_type = Token
                     named, Auth, EligibleSubject, #{<<"type">> => TokenType, <<"privileges">> => CustomPrivileges},
                     ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
                 ),
-                ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
                 ModifyPrivsFun(EligibleSubject, {revoke, to_set_privs}),
+                ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
                 assert_creation_fails(
                     named, Auth, EligibleSubject, #{<<"type">> => TokenType, <<"privileges">> => CustomPrivileges},
                     ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
                 ),
-                ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
                 ModifyPrivsFun(EligibleSubject, {revoke, to_invite}),
+                ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
                 assert_creation_fails(
                     named, Auth, EligibleSubject, #{<<"type">> => TokenType, <<"privileges">> => CustomPrivileges},
                     ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
@@ -1347,6 +1347,7 @@ check_multi_use_privileges_carrying_named_token(#testcase{supports_carried_privi
     ok;
 check_multi_use_privileges_carrying_named_token(Tc = #testcase{token_type = TokenType}) ->
     AllowedPrivileges = Tc#testcase.allowed_carried_privileges,
+    DefaultPrivileges = Tc#testcase.default_carried_privileges,
     CustomPrivileges = lists_utils:random_sublist(AllowedPrivileges),
     ModifyPrivsFun = Tc#testcase.modify_privileges_fun,
     CheckPrivilegesFun = Tc#testcase.check_privileges_fun,
@@ -1373,15 +1374,28 @@ check_multi_use_privileges_carrying_named_token(Tc = #testcase{token_type = Toke
         ConsumerBeta = create_consumer_with_privs_to_consume(Tc, random_eligible),
         case Tc#testcase.requires_privileges_to_set_privileges of
             false ->
-                ok;
+                ?assertMatch({ok, _}, consume_token(Tc, ConsumerBeta, Token)),
+                CheckPrivilegesFun(ConsumerBeta, CustomPrivileges);
             true ->
-                ModifyPrivsFun(EligibleSubject, {revoke, to_set_privs}),
-                ?assertMatch(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, ConsumerBeta, Token)),
-                ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
-                ModifyPrivsFun(EligibleSubject, {grant, to_set_privs})
+                % Token becomes invalid when the subject loses privileges to set privileges,
+                % however if the carried privileges in an already existing token are
+                % identical to default, consuming is still possible
+                case lists:sort(CustomPrivileges) =:= lists:sort(DefaultPrivileges) of
+                    true ->
+                        ModifyPrivsFun(EligibleSubject, {revoke, to_set_privs}),
+                        ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
+                        ?assertMatch({ok, _}, consume_token(Tc, ConsumerBeta, Token)),
+                        CheckPrivilegesFun(ConsumerBeta, CustomPrivileges),
+                        ModifyPrivsFun(EligibleSubject, {grant, to_set_privs});
+                    false ->
+                        ModifyPrivsFun(EligibleSubject, {revoke, to_set_privs}),
+                        ?assertMatch(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, ConsumerBeta, Token)),
+                        ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
+                        ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
+                        ?assertMatch({ok, _}, consume_token(Tc, ConsumerBeta, Token)),
+                        CheckPrivilegesFun(ConsumerBeta, CustomPrivileges)
+                end
         end,
-        ?assertMatch({ok, _}, consume_token(Tc, ConsumerBeta, Token)),
-        CheckPrivilegesFun(ConsumerBeta, CustomPrivileges),
         % There should be 1 use left
         ConsumerGamma = create_consumer_by_type(lists_utils:random_element(Tc#testcase.eligible_consumer_types)),
         case Tc#testcase.requires_privileges_to_consume of
@@ -1691,7 +1705,7 @@ set_user_privs_in_harvester(HarvesterId, UserId, {GrantOrRevoke, to_set_privs}) 
 % Grants or revokes privileges to perform an operation. In case of revoke,
 % randomly removes the member from the entity (making him effectively lose all
 % privileges) or revokes given privileges. These two scenarios which should be
-% equivalent from the point of view of authorization to invite .
+% equivalent from the point of view of authorization to invite.
 set_user_privs(LogicModule, EntityId, UserId, grant, Privileges) ->
     ozt:rpc(LogicModule, add_user, [?ROOT, EntityId, UserId]),
     ozt:rpc(LogicModule, update_user_privileges, [?ROOT, EntityId, UserId, Privileges, []]),

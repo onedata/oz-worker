@@ -32,6 +32,7 @@
     gui_tokens_are_bound_to_specific_service/1,
     gui_tokens_have_limited_api_power/1,
     gui_tokens_can_be_created_via_endpoint/1,
+    gui_tokens_are_accepted_from_legacy_providers/1,
     gui_tokens_expire/1,
     gui_tokens_are_invalidated_upon_logout/1,
     gui_tokens_are_invalidated_when_member_leaves_a_service/1,
@@ -44,6 +45,7 @@ all() ->
         gui_tokens_are_bound_to_specific_service,
         gui_tokens_have_limited_api_power,
         gui_tokens_can_be_created_via_endpoint,
+        gui_tokens_are_accepted_from_legacy_providers,
         gui_tokens_expire,
         gui_tokens_are_invalidated_upon_logout,
         gui_tokens_are_invalidated_when_member_leaves_a_service,
@@ -60,7 +62,7 @@ all() ->
 -define(OPP_SRV(ServiceId), ?SERVICE(?OP_PANEL, ServiceId)).
 
 -define(assertUnverifiedService(ExpService, Term), ?assertEqual(
-    ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [ExpService]}),
+    ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [ExpService]})),
     Term
 )).
 
@@ -225,7 +227,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
 
     % The user is a member of provider cluster, but is not supported by the provider,
     % so he can't generate a token for the provider GUI.
-    {ok, OppTokenU1Serialized} = ?assertMatch({ok, _}, AcquireGuiToken(CookieU1, ?ONEPANEL_GUI, ProviderId)),
+    ?assertMatch({ok, _}, AcquireGuiToken(CookieU1, ?ONEPANEL_GUI, ProviderId)),
     ?assertMatch(
         ?ERROR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_WORKER, ProviderId)),
         AcquireGuiToken(CookieU1, ?OP_WORKER_GUI, ProviderId)
@@ -291,27 +293,67 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
         <<"">>,
         [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
     )),
-    %% @todo VFS-6098 legacy provider access tokens should be accepted as
-    %% identity tokens for backward compatibility with old providers
+    ?assertMatch(#{<<"userId">> := User1}, json_utils:decode(UserData)).
+
+
+gui_tokens_are_accepted_from_legacy_providers(Config) ->
+    {ok, UserId} = oz_test_utils:create_user(Config),
+    {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, UserId),
+    % The user will belong to the cluster as the provider admin
+    {ok, {ProviderId, ProviderRootToken}} = oz_test_utils:create_provider(Config, UserId, ?UNIQUE_STRING),
+    {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, SpaceId),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {ok, {OpwToken, _}} = create_access_token_for_gui(Config, UserId, SessionId, ?OPW_SRV(ProviderId)),
+    {ok, {OppToken, _}} = create_access_token_for_gui(Config, UserId, SessionId, ?OPP_SRV(ProviderId)),
+    {ok, OpwTokenSerialized} = tokens:serialize(OpwToken),
+    {ok, OppTokenSerialized} = tokens:serialize(OppToken),
+
+    %% @todo VFS-6098 for backward compatibility - legacy provider access tokens should be
+    %% accepted as identity tokens for backward compatibility with old providers
     LegacyProviderToken = oz_test_utils:create_legacy_access_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
     LegacyProviderTokenAuthNone = oz_test_utils:confine_token_with_legacy_auth_none_caveat(LegacyProviderToken),
     {ok, SerializedLegacyAuthNone} = tokens:serialize(LegacyProviderTokenAuthNone),
     {ok, _, _, UserData} = ?assertMatch({ok, 200, _, UserData}, http_client:get(
         ?URL(Config, [<<"/user">>]),
         #{
-            ?HDR_X_AUTH_TOKEN => OpwTokenU1Serialized,
+            ?HDR_X_AUTH_TOKEN => OpwTokenSerialized,
             ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, SerializedLegacyAuthNone)
         },
         <<"">>,
         [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
     )),
-    ?assertMatch(#{<<"userId">> := User1}, json_utils:decode(UserData)),
+    ?assertMatch(#{<<"userId">> := UserId}, json_utils:decode(UserData)),
 
     ?assertMatch({ok, 200, _, UserData}, http_client:get(
         ?URL(Config, [<<"/user">>]),
         #{
-            ?HDR_X_AUTH_TOKEN => OppTokenU1Serialized,
+            ?HDR_X_AUTH_TOKEN => OppTokenSerialized,
             ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_PANEL, SerializedLegacyAuthNone)
+        },
+        <<"">>,
+        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
+    )),
+
+    %% @todo VFS-6098 for backward compatibility - when a legacy provider is
+    %% registered in a modern zone, it gets a modern token but uses it in legacy
+    %% way (presenting the access token as its identity proof) - this should
+    %% also be supported
+    ?assertMatch({ok, 200, _, UserData}, http_client:get(
+        ?URL(Config, [<<"/user">>]),
+        #{
+            ?HDR_X_AUTH_TOKEN => OpwTokenSerialized,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, ProviderRootToken)
+        },
+        <<"">>,
+        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
+    )),
+    ?assertMatch({ok, 200, _, UserData}, http_client:get(
+        ?URL(Config, [<<"/user">>]),
+        #{
+            ?HDR_X_AUTH_TOKEN => OppTokenSerialized,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_PANEL, ProviderRootToken)
         },
         <<"">>,
         [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
@@ -342,7 +384,7 @@ gui_tokens_expire(Config) ->
     oz_test_utils:simulate_time_passing(Config, Ttl1 - 10 + 1),
 
     ?assertEqual(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil1}),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil1})),
         verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))
     ),
     ?assertMatch(
@@ -352,11 +394,11 @@ gui_tokens_expire(Config) ->
 
     oz_test_utils:simulate_time_passing(Config, 10),
     ?assertEqual(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil1}),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil1})),
         verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))
     ),
     ?assertEqual(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil2}),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil2})),
         verify_token(Config, Token2, ?OPW_SRV(ProviderId))
     ).
 
@@ -376,19 +418,19 @@ gui_tokens_are_invalidated_upon_logout(Config) ->
     {ok, {Token4, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OPP_SRV(ProviderId)),
 
     oz_test_utils:log_out(Config, Cookie1),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
     ?assertMatch(
         {true, ?EXP_AUTH(UserId, Session2)},
         verify_token(Config, Token4, ?OPP_SRV(ProviderId))
     ),
 
     oz_test_utils:log_out(Config, Cookie2),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
 
 
 gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
@@ -413,7 +455,7 @@ gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
     ?assertMatch({true, _}, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
     ?assertMatch({true, _}, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId)),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId))),
         verify_token(Config, Token3, ?OPW_SRV(ProviderId))
     ),
     ?assertMatch({true, _}, verify_token(Config, Token4, ?OPP_SRV(ProviderId))),
@@ -421,11 +463,11 @@ gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
     oz_test_utils:cluster_remove_user(Config, ?ONEZONE_CLUSTER_ID, UserId),
     ?assertMatch({true, _}, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OZP_SRV(?ONEZONE_CLUSTER_ID)),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SERVICE_FORBIDDEN(?OZP_SRV(?ONEZONE_CLUSTER_ID))),
         verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))
     ),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId)),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId))),
         verify_token(Config, Token3, ?OPW_SRV(ProviderId))
     ),
     ?assertMatch({true, _}, verify_token(Config, Token4, ?OPP_SRV(ProviderId))),
@@ -433,15 +475,15 @@ gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
     oz_test_utils:cluster_remove_user(Config, ProviderId, UserId),
     ?assertMatch({true, _}, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OZP_SRV(?ONEZONE_CLUSTER_ID)),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SERVICE_FORBIDDEN(?OZP_SRV(?ONEZONE_CLUSTER_ID))),
         verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))
     ),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId)),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId))),
         verify_token(Config, Token3, ?OPW_SRV(ProviderId))
     ),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPP_SRV(ProviderId)),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPP_SRV(ProviderId))),
         verify_token(Config, Token4, ?OPP_SRV(ProviderId))
     ).
 
@@ -471,10 +513,10 @@ gui_tokens_are_invalidated_upon_temporary_token_secret_change(Config) ->
 
     % Make sure that this works for the tested user
     oz_test_utils:call_oz(Config, temporary_token_secret, regenerate_for_subject, [?SUB(user, UserId)]),
-    ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
-    ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_REVOKED), verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_REVOKED), verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_REVOKED), verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_REVOKED), verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
 
 
 gui_tokens_are_invalidated_when_user_is_deleted(Config) ->
@@ -492,10 +534,10 @@ gui_tokens_are_invalidated_when_user_is_deleted(Config) ->
     {ok, {Token4, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OPP_SRV(ProviderId)),
 
     oz_test_utils:delete_user(Config, UserId),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID), verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID), verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID), verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID), verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
 
 %%%===================================================================
 %%% Setup/teardown functions

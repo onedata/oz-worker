@@ -858,12 +858,12 @@ list_effective_providers_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
+                {user, U1},
                 {user, U2}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, NonAdmin},
-                {user, U1}
+                {user, NonAdmin}
             ]
         },
         rest_spec = #rest_spec{
