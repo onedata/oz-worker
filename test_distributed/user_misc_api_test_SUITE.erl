@@ -623,7 +623,7 @@ update_test(Config) ->
 change_password_test(Config) ->
     TestCases = [
         % {WasBasicAuthEnabled, OldPassword, ExpHttpCode, ExpResult}
-        {false, undefined, ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)},
+        {false, undefined, ?HTTP_401_UNAUTHORIZED, ?ERROR_REASON(?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED))},
         {true, undefined, ?HTTP_204_NO_CONTENT, ?OK_RES},
         {true, ?UNIQUE_STRING, ?HTTP_204_NO_CONTENT, ?OK_RES}
     ],
@@ -665,10 +665,10 @@ change_password_test(Config) ->
                 bad_values = [
                     {<<"oldPassword">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"oldPassword">>)},
                     {<<"oldPassword">>, 34.5, ?ERROR_BAD_VALUE_BINARY(<<"oldPassword">>)},
-                    {<<"oldPassword">>, <<"bad-old-password">>, case WasBasicAuthEnabled of
+                    {<<"oldPassword">>, <<"bad-old-password">>, ?ERROR_UNAUTHORIZED(case WasBasicAuthEnabled of
                         false -> ?ERROR_BASIC_AUTH_DISABLED;
                         true -> ?ERROR_BAD_BASIC_CREDENTIALS
-                    end},
+                    end)},
                     {<<"newPassword">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"newPassword">>)},
                     {<<"newPassword">>, 34.5, ?ERROR_BAD_VALUE_BINARY(<<"newPassword">>)},
                     {<<"newPassword">>, null, ?ERROR_BAD_VALUE_PASSWORD},

@@ -179,7 +179,7 @@ verify_auth_override(?PROVIDER(ProviderId) = Auth, #auth_override{client_auth = 
                 {error, _} = Err1 -> Err1
             end;
         {error, _} = Err2 ->
-            Err2
+            ?ERROR_UNAUTHORIZED(Err2)
     end;
 verify_auth_override(_, _) ->
     ?ERROR_FORBIDDEN.
