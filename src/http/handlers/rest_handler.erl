@@ -165,7 +165,7 @@ is_authorized(Req, State) ->
             ?error_stacktrace("Unexpected error in ~p:is_authorized - ~p:~p", [
                 ?MODULE, Type, Message
             ]),
-            ?ERROR_INTERNAL_SERVER_ERROR
+            ?ERROR_UNAUTHORIZED(?ERROR_INTERNAL_SERVER_ERROR)
     end,
 
     case Result of
