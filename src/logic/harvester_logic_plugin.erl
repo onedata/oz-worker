@@ -78,6 +78,7 @@ operation_supported(create, group, private) -> true;
 operation_supported(create, index, private) -> true;
 operation_supported(create, {submit_batch, _}, private) -> true;
 operation_supported(create, {query, _}, private) -> true;
+operation_supported(create, {query_curl_request, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
 operation_supported(get, all_plugins, private) -> true;
@@ -357,6 +358,15 @@ create(#el_req{gri = #gri{aspect = {query, IndexId}}, data = Data}) ->
             {error, _} = Error -> Error
         end
     end;
+
+create(#el_req{gri = #gri{id = HarvesterId, aspect = {query_curl_request, IndexId}}, data = Data}) ->
+    Uri = oz_worker:get_uri(<<"/api/v3/onezone/harvesters/", HarvesterId/binary, "/indices/", IndexId/binary, "/query">>),
+    Headers = #{<<"X-Auth-Token">> => <<"$TOKEN">>, <<"Content-Type">> => <<"application/json">>},
+    Prefix = <<"curl -X POST " >>,
+    EncodedHeaders = maps:fold(fun(Key, Val, Acc) -> [<<"\"", Key/binary, ": ", Val/binary, "\"">> | Acc] end, [], Headers),
+    PrefixWithHeaders = lists:foldl(fun(Header, Acc) -> <<Acc/binary, "-H ", Header/binary, " ">> end, Prefix, EncodedHeaders),
+    EncodedData = json_utils:encode(Data),
+    {ok, value, <<PrefixWithHeaders/binary, Uri/binary, " -d '", EncodedData/binary, "'">>};
 
 create(#el_req{auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch, SpaceId}, id = HarvesterId}, data = Data}) ->
     #{
@@ -792,6 +802,8 @@ authorize(#el_req{operation = create, gri = #gri{aspect = {query, _}}, auth = Au
             % client can be nobody
             Harvester#od_harvester.public
     end;
+authorize(Req = #el_req{operation = create, gri = GRI = #gri{aspect = {query_curl_request, IndexId}}}, Harvester) ->
+    authorize(Req#el_req{gri = GRI#gri{aspect = {query, IndexId}}}, Harvester);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
@@ -965,6 +977,9 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = index}
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {query, _}}}) ->
     [?OZ_HARVESTERS_VIEW];
 
+required_admin_privileges(Req = #el_req{operation = create, gri = GRI = #gri{aspect = {query_curl_request, IndexId}}}) ->
+    required_admin_privileges(Req#el_req{gri = GRI#gri{aspect = {query, IndexId}}});
+
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
     [?OZ_HARVESTERS_LIST];
 
@@ -1095,6 +1110,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = {query, _}}}) ->
     fun(#od_harvester{plugin = Plugin}) ->
         Plugin:query_validator()
     end;
+validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = {query_curl_request, IndexId}}}) ->
+    validate(Req#el_req{gri = GRI#gri{aspect = {query, IndexId}}});
 
 validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
     #{

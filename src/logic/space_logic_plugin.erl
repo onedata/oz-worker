@@ -94,6 +94,7 @@ operation_supported(get, {eff_group_membership, _}, private) -> true;
 operation_supported(get, shares, private) -> true;
 
 operation_supported(get, eff_providers, private) -> true;
+operation_supported(get, provider_details, private) -> true;
 operation_supported(get, harvesters, private) -> true;
 
 operation_supported(get, storages, private) -> true;
@@ -352,6 +353,17 @@ get(#el_req{gri = #gri{aspect = shares}}, Space) ->
 get(#el_req{gri = #gri{aspect = eff_providers}}, Space) ->
     {ok, entity_graph:get_relations(effective, top_down, od_provider, Space)};
 
+get(#el_req{gri = #gri{aspect = provider_details}}, Space) ->
+    Providers = entity_graph:get_relations(effective, top_down, od_provider, Space),
+    {ok, lists:foldl(fun(ProviderId, Acc) ->
+        {true, {#od_provider{domain = Domain}, _}} = provider_logic_plugin:fetch_entity(#gri{id = ProviderId}),
+        Acc#{
+            <<"providerId">> => ProviderId,
+            <<"domain">> => Domain,
+            <<"online">> => provider_connections:is_online(ProviderId)
+        }
+    end, #{}, Providers)};
+        
 get(#el_req{gri = #gri{aspect = harvesters}}, Space) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_harvester, Space)};
 
@@ -779,6 +791,9 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = shares}})
     [?OZ_SPACES_LIST_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_providers}}) ->
+    [?OZ_SPACES_LIST_RELATIONSHIPS];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = provider_details}}) ->
     [?OZ_SPACES_LIST_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = harvesters}}) ->
