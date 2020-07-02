@@ -366,7 +366,7 @@ create(#el_req{gri = #gri{id = HarvesterId, aspect = {query_curl_request, IndexI
         <<"/harvesters/", HarvesterId/binary, "/indices/", IndexId/binary, "/query">>
     ),
     HeadersTokens = [?HDR_X_AUTH_TOKEN, <<"$TOKEN">>, ?HDR_CONTENT_TYPE, <<"application/json">>],
-    PrefixWithHeaders = str_utils:format_bin(<<"curl -X POST -H \"~s: ~s\" -H \"~s: ~s\" ">>, HeadersTokens),
+    PrefixWithHeaders = str_utils:format_bin("curl -X POST -H \"~s: ~s\" -H \"~s: ~s\" ", HeadersTokens),
     % escape all single quotation marks (') with backslashes (\)
     EncodedData = re:replace(json_utils:encode(Data), <<"'">>, <<"\\\\'">>, [{return, binary}, global]),
     {ok, value, <<PrefixWithHeaders/binary, Uri/binary, " -d '", EncodedData/binary, "'">>};
