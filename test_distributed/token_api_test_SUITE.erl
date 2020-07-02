@@ -2910,7 +2910,7 @@ assert_token_deleted(true, Token, TokenName) ->
     ?assertMatch({error, not_found}, ozt:rpc(token_names, lookup, [Subject, TokenName])),
     case Type of
         ?ACCESS_TOKEN ->
-            ?assertEqual(?ERROR_TOKEN_INVALID, ozt_tokens:authenticate(Token));
+            ?assertEqual(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID), ozt_tokens:authenticate(Token));
         _ ->
             ok
     end;

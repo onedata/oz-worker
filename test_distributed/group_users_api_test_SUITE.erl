@@ -596,6 +596,7 @@ list_eff_users_test(Config) ->
     oz_test_utils:group_set_user_privileges(Config, G1, U2,
         [?GROUP_VIEW], AllGroupPrivs -- [?GROUP_VIEW]
     ),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ExpUsers = [U1, U2, U3, U4, U5, U6],
     ApiTestSpec = #api_test_spec{

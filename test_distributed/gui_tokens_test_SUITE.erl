@@ -62,7 +62,7 @@ all() ->
 -define(OPP_SRV(ServiceId), ?SERVICE(?OP_PANEL, ServiceId)).
 
 -define(assertUnverifiedService(ExpService, Term), ?assertEqual(
-    ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [ExpService]}),
+    ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [ExpService]})),
     Term
 )).
 
@@ -384,7 +384,7 @@ gui_tokens_expire(Config) ->
     oz_test_utils:simulate_time_passing(Config, Ttl1 - 10 + 1),
 
     ?assertEqual(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil1}),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil1})),
         verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))
     ),
     ?assertMatch(
@@ -394,11 +394,11 @@ gui_tokens_expire(Config) ->
 
     oz_test_utils:simulate_time_passing(Config, 10),
     ?assertEqual(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil1}),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil1})),
         verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))
     ),
     ?assertEqual(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil2}),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil2})),
         verify_token(Config, Token2, ?OPW_SRV(ProviderId))
     ).
 
@@ -418,19 +418,19 @@ gui_tokens_are_invalidated_upon_logout(Config) ->
     {ok, {Token4, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OPP_SRV(ProviderId)),
 
     oz_test_utils:log_out(Config, Cookie1),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
     ?assertMatch(
         {true, ?EXP_AUTH(UserId, Session2)},
         verify_token(Config, Token4, ?OPP_SRV(ProviderId))
     ),
 
     oz_test_utils:log_out(Config, Cookie2),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
 
 
 gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
@@ -455,7 +455,7 @@ gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
     ?assertMatch({true, _}, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
     ?assertMatch({true, _}, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId)),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId))),
         verify_token(Config, Token3, ?OPW_SRV(ProviderId))
     ),
     ?assertMatch({true, _}, verify_token(Config, Token4, ?OPP_SRV(ProviderId))),
@@ -463,11 +463,11 @@ gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
     oz_test_utils:cluster_remove_user(Config, ?ONEZONE_CLUSTER_ID, UserId),
     ?assertMatch({true, _}, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OZP_SRV(?ONEZONE_CLUSTER_ID)),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SERVICE_FORBIDDEN(?OZP_SRV(?ONEZONE_CLUSTER_ID))),
         verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))
     ),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId)),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId))),
         verify_token(Config, Token3, ?OPW_SRV(ProviderId))
     ),
     ?assertMatch({true, _}, verify_token(Config, Token4, ?OPP_SRV(ProviderId))),
@@ -475,15 +475,15 @@ gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
     oz_test_utils:cluster_remove_user(Config, ProviderId, UserId),
     ?assertMatch({true, _}, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OZP_SRV(?ONEZONE_CLUSTER_ID)),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SERVICE_FORBIDDEN(?OZP_SRV(?ONEZONE_CLUSTER_ID))),
         verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))
     ),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId)),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId))),
         verify_token(Config, Token3, ?OPW_SRV(ProviderId))
     ),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPP_SRV(ProviderId)),
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPP_SRV(ProviderId))),
         verify_token(Config, Token4, ?OPP_SRV(ProviderId))
     ).
 
@@ -513,10 +513,10 @@ gui_tokens_are_invalidated_upon_temporary_token_secret_change(Config) ->
 
     % Make sure that this works for the tested user
     oz_test_utils:call_oz(Config, temporary_token_secret, regenerate_for_subject, [?SUB(user, UserId)]),
-    ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
-    ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_REVOKED), verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_REVOKED), verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_REVOKED), verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_REVOKED), verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
 
 
 gui_tokens_are_invalidated_when_user_is_deleted(Config) ->
@@ -534,10 +534,10 @@ gui_tokens_are_invalidated_when_user_is_deleted(Config) ->
     {ok, {Token4, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OPP_SRV(ProviderId)),
 
     oz_test_utils:delete_user(Config, UserId),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID), verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID), verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID), verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID), verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
 
 %%%===================================================================
 %%% Setup/teardown functions
