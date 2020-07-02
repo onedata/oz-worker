@@ -1231,6 +1231,13 @@ query_index_test(Config) ->
     
     % Test query request curl generation
     ApiTestSpec1 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                nobody,
+                {user, U1},
+                {user, U2}
+            ]
+        },
         rest_spec = undefined,
         logic_spec = #logic_spec{
             module = harvester_logic,
@@ -1255,17 +1262,13 @@ query_index_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, PublicHarvesterApiTestSpec)),
     
-    % Test query request curl generation on public harvester
-    PublicHarvesterApiTestSpec1 = ApiTestSpec1#api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                nobody,
-                {user, U1},
-                {user, U2}
-            ]
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, PublicHarvesterApiTestSpec1)).
+    % check that generated curl works properly
+    {ok, CurlBinary} = oz_test_utils:call_oz(Config, harvester_logic, query_curl_request, 
+        [?ROOT, H1, IndexId, #{<<"method">> => <<"post">>, <<"path">> => <<"path">>}]),
+    CurlString = re:replace(CurlBinary, <<"curl">>, <<"curl -k -s">>, [{return, list}]),
+    
+    Result = os:cmd(CurlString),
+    ?assertEqual(?HARVESTER_MOCKED_QUERY_DATA_MAP, json_utils:decode(Result)).
 
 
 list_indices_test(Config) ->

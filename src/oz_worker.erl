@@ -20,6 +20,7 @@
 -export([get_env/1, get_env/2, set_env/2]).
 -export([get_name/0]).
 -export([get_domain/0, get_url/0, get_uri/1]).
+-export([get_rest_api_path/1, get_rest_uri/1]).
 -export([get_release_version/0, get_build_version/0]).
 -export([entity_logic_plugin/0]).
 
@@ -92,6 +93,30 @@ get_uri(PathWithSlash) when is_binary(PathWithSlash) ->
     <<(get_url())/binary, PathWithSlash/binary>>;
 get_uri(PathWithSlash) when is_list(PathWithSlash) ->
     get_uri(list_to_binary(PathWithSlash)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns given path preceded with REST API prefix (the path must start with a slash).
+%% @end
+%%--------------------------------------------------------------------
+get_rest_api_path(PathWithSlash) when is_binary(PathWithSlash)->
+    ApiPrefix = str_utils:to_binary(oz_worker:get_env(rest_api_prefix)),
+   <<ApiPrefix/binary, PathWithSlash/binary>>;
+get_rest_api_path(PathWithSlash) when is_list(PathWithSlash)->
+    get_rest_api_path(str_utils:to_binary(PathWithSlash)).
+    
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns Onezone URI (with HTTPS scheme), REST API prefix and given 
+%% path appended (the path must start with a slash).
+%% @end
+%%--------------------------------------------------------------------
+get_rest_uri(PathWithSlash) when is_binary(PathWithSlash) ->
+    get_uri(get_rest_api_path(PathWithSlash));
+get_rest_uri(PathWithSlash) when is_list(PathWithSlash) ->
+    get_rest_uri(list_to_binary(PathWithSlash)).
 
 
 %%--------------------------------------------------------------------

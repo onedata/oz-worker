@@ -16,12 +16,12 @@
 
 -include("entity_logic.hrl").
 -include("http/gui_paths.hrl").
--include("http/rest.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
@@ -79,6 +79,7 @@ operation_supported(create, group, private) -> true;
 operation_supported(create, index, private) -> true;
 operation_supported(create, {submit_batch, _}, private) -> true;
 operation_supported(create, {query, _}, private) -> true;
+%% @TODO VFS-6462 change to gen_curl_query
 operation_supported(create, {query_curl_request, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
@@ -361,25 +362,13 @@ create(#el_req{gri = #gri{aspect = {query, IndexId}}, data = Data}) ->
     end;
 
 create(#el_req{gri = #gri{id = HarvesterId, aspect = {query_curl_request, IndexId}}, data = Data}) ->
-    ApiPrefix = list_to_binary(oz_worker:get_env(rest_api_prefix)),
-    [Path] = lists:filtermap(
-        fun ({Path, #rest_req{b_gri = #b_gri{aspect = {query, _}}}}) -> {true, Path}; 
-            (_) -> false 
-        end, 
-        harvester_routes:routes()
+    Uri = oz_worker:get_rest_uri(
+        <<"/harvesters/", HarvesterId/binary, "/indices/", IndexId/binary, "/query">>
     ),
-    PathWithHarvesterId = re:replace(Path, <<":id">>, HarvesterId, [{return, binary}]),
-    PathWithIds = re:replace(PathWithHarvesterId, <<":idx">>, IndexId, [{return, binary}]),
-    Uri = oz_worker:get_uri(<<ApiPrefix/binary, PathWithIds/binary>>),
-    Headers = #{<<"X-Auth-Token">> => <<"$TOKEN">>, <<"Content-Type">> => <<"application/json">>},
-    Prefix = <<"curl -X POST " >>,
-    EncodedHeaders = maps:fold(fun(Key, Val, Acc) -> 
-        [<<"\"", Key/binary, ": ", Val/binary, "\"">> | Acc] 
-    end, [], Headers),
-    PrefixWithHeaders = lists:foldl(fun(Header, Acc) -> 
-        <<Acc/binary, "-H ", Header/binary, " ">> 
-    end, Prefix, EncodedHeaders),
-    EncodedData = json_utils:encode(Data),
+    HeadersTokens = [?HDR_X_AUTH_TOKEN, <<"$TOKEN">>, ?HDR_CONTENT_TYPE, <<"application/json">>],
+    PrefixWithHeaders = str_utils:format_bin(<<"curl -X POST -H \"~s: ~s\" -H \"~s: ~s\" ">>, HeadersTokens),
+    % escape all single quotation marks (') with backslashes (\)
+    EncodedData = re:replace(json_utils:encode(Data), <<"'">>, <<"\\\\'">>, [{return, binary}, global]),
     {ok, value, <<PrefixWithHeaders/binary, Uri/binary, " -d '", EncodedData/binary, "'">>};
 
 create(#el_req{auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch, SpaceId}, id = HarvesterId}, data = Data}) ->
@@ -816,8 +805,9 @@ authorize(#el_req{operation = create, gri = #gri{aspect = {query, _}}, auth = Au
             % client can be nobody
             Harvester#od_harvester.public
     end;
-authorize(Req = #el_req{operation = create, gri = GRI = #gri{aspect = {query_curl_request, IndexId}}}, Harvester) ->
-    authorize(Req#el_req{gri = GRI#gri{aspect = {query, IndexId}}}, Harvester);
+
+authorize(#el_req{operation = create, gri = #gri{aspect = {query_curl_request, _}}}, _) ->
+    true;
 
 authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
@@ -990,9 +980,6 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = index}
 
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {query, _}}}) ->
     [?OZ_HARVESTERS_VIEW];
-
-required_admin_privileges(Req = #el_req{operation = create, gri = GRI = #gri{aspect = {query_curl_request, IndexId}}}) ->
-    required_admin_privileges(Req#el_req{gri = GRI#gri{aspect = {query, IndexId}}});
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
     [?OZ_HARVESTERS_LIST];
