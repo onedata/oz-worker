@@ -71,6 +71,8 @@ translate_value(_, #gri{aspect = {user_temporary_token, _}}, Token) ->
     serialize_token(Token);
 translate_value(_, #gri{type = od_harvester, aspect = {query, _}}, Response) ->
     Response;
+translate_value(_, #gri{type = od_harvester, aspect = {query_curl_request, _}}, Response) ->
+    Response;
 translate_value(_, #gri{type = od_token, aspect = examine}, Response) ->
     #{
         <<"onezoneDomain">> := OnezoneDomain,

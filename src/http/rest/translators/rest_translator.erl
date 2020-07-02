@@ -95,13 +95,8 @@ created_reply_with_body(Body) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec created_reply_with_location(PathTokens :: [binary()]) -> #rest_resp{}.
-% Make sure there is no leading slash (so filename can be used for joining path)
-created_reply_with_location([<<"/", Path/binary>> | Tail]) ->
-    created_reply_with_location([Path | Tail]);
 created_reply_with_location(PathTokens) ->
-    RestPrefix = oz_worker:get_env(rest_api_prefix),
-    Path = filename:join([RestPrefix | PathTokens]),
-    LocationHeader = #{<<"Location">> => oz_worker:get_uri(Path)},
+    LocationHeader = #{<<"Location">> => oz_worker:get_rest_uri(filename:join(["/" | PathTokens]))},
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
 
 

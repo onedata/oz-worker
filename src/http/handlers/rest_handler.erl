@@ -243,9 +243,8 @@ rest_routes() ->
     % - prepend REST prefix to every route
     % - rest handler module must be added as second element to the tuples
     % - RoutesForPath will serve as Opts to rest handler init.
-    Prefix = str_utils:to_binary(oz_worker:get_env(rest_api_prefix)),
     lists:map(fun({Path, RoutesForPath}) ->
-        {<<Prefix/binary, Path/binary>>, ?REST_HANDLER_MODULE, RoutesForPath}
+        {oz_worker:get_rest_api_path(Path), ?REST_HANDLER_MODULE, RoutesForPath}
     end, AggregatedRoutes).
 
 
