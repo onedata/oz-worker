@@ -16,6 +16,7 @@
 
 -include("entity_logic.hrl").
 -include("http/gui_paths.hrl").
+-include("http/rest.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -360,11 +361,24 @@ create(#el_req{gri = #gri{aspect = {query, IndexId}}, data = Data}) ->
     end;
 
 create(#el_req{gri = #gri{id = HarvesterId, aspect = {query_curl_request, IndexId}}, data = Data}) ->
-    Uri = oz_worker:get_uri(<<"/api/v3/onezone/harvesters/", HarvesterId/binary, "/indices/", IndexId/binary, "/query">>),
+    ApiPrefix = list_to_binary(oz_worker:get_env(rest_api_prefix)),
+    [Path] = lists:filtermap(
+        fun ({Path, #rest_req{b_gri = #b_gri{aspect = {query, _}}}}) -> {true, Path}; 
+            (_) -> false 
+        end, 
+        harvester_routes:routes()
+    ),
+    PathWithHarvesterId = re:replace(Path, <<":id">>, HarvesterId, [{return, binary}]),
+    PathWithIds = re:replace(PathWithHarvesterId, <<":idx">>, IndexId, [{return, binary}]),
+    Uri = oz_worker:get_uri(<<ApiPrefix/binary, PathWithIds/binary>>),
     Headers = #{<<"X-Auth-Token">> => <<"$TOKEN">>, <<"Content-Type">> => <<"application/json">>},
     Prefix = <<"curl -X POST " >>,
-    EncodedHeaders = maps:fold(fun(Key, Val, Acc) -> [<<"\"", Key/binary, ": ", Val/binary, "\"">> | Acc] end, [], Headers),
-    PrefixWithHeaders = lists:foldl(fun(Header, Acc) -> <<Acc/binary, "-H ", Header/binary, " ">> end, Prefix, EncodedHeaders),
+    EncodedHeaders = maps:fold(fun(Key, Val, Acc) -> 
+        [<<"\"", Key/binary, ": ", Val/binary, "\"">> | Acc] 
+    end, [], Headers),
+    PrefixWithHeaders = lists:foldl(fun(Header, Acc) -> 
+        <<Acc/binary, "-H ", Header/binary, " ">> 
+    end, Prefix, EncodedHeaders),
     EncodedData = json_utils:encode(Data),
     {ok, value, <<PrefixWithHeaders/binary, Uri/binary, " -d '", EncodedData/binary, "'">>};
 

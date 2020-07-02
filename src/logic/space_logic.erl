@@ -57,7 +57,6 @@
     get_shares/2, get_share/3,
 
     get_eff_providers/2, get_provider/3,
-    provider_details/2,
 
     get_harvesters/2, get_harvester/3,
 
@@ -710,15 +709,6 @@ get_provider(Auth, SpaceId, ProviderId) ->
         auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_SPACE(SpaceId)
-    }).
-
-
-% fixme
-provider_details(Auth, SpaceId) ->
-    entity_logic:handle(#el_req{
-        operation = get,
-        auth = Auth,
-        gri = #gri{type = od_space, id = SpaceId, aspect = provider_details}
     }).
 
 
