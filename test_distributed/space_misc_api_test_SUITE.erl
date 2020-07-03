@@ -549,6 +549,7 @@ get_share_test(Config) ->
 
     ExpShareDetails = #{
         <<"name">> => ShareName,
+        <<"description">> => <<"">>,
         <<"spaceId">> => S1,
         <<"rootFileId">> => ?ROOT_FILE_ID,
         <<"fileType">> => <<"dir">>,

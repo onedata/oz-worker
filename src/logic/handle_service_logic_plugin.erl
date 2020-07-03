@@ -119,7 +119,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         name = Name,
         proxy_endpoint = ProxyEndpoint,
         service_properties = ServiceProperties,
-        creator = Auth#auth.subject
+        creator = aai:normalize_subject(Auth#auth.subject)
     }},
     {ok, #document{key = HServiceId}} = od_handle_service:create(HandleService),
     case Req#el_req.auth_hint of

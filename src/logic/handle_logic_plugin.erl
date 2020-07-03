@@ -24,6 +24,8 @@
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
+-define(METADATA_SIZE_LIMIT, 100000).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -132,7 +134,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             resource_id = ResourceId,
             public_handle = PublicHandle,
             metadata = Metadata,
-            creator = Auth#auth.subject
+            creator = aai:normalize_subject(Auth#auth.subject)
         }},
         {ok, #document{key = HandleId}} = od_handle:create(Handle),
         entity_graph:add_relation(
@@ -548,7 +550,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"resourceId">> => {any, {exists, fun(Value) ->
             share_logic:exists(Value) end
         }},
-        <<"metadata">> => {binary, any}
+        <<"metadata">> => {binary, {size_limit, ?METADATA_SIZE_LIMIT}}
     }
 };
 
@@ -576,7 +578,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) -> #{
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     required => #{
-        <<"metadata">> => {binary, any}
+        <<"metadata">> => {binary, {size_limit, ?METADATA_SIZE_LIMIT}}
     }
 };
 

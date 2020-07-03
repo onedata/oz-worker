@@ -29,7 +29,9 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
--export_type([name/0]).
+% publicly visible share description in markdown (.md) format
+-type description() :: binary().
+-export_type([name/0, description/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -119,7 +121,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    5.
+    6.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -193,6 +195,21 @@ get_record_struct(5) ->
         {creation_time, integer},
         % nested #subject{} record was extended and is now encoded as string
         % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
+    ]};
+get_record_struct(6) ->
+    % new field - description
+    {record, [
+        {name, string},
+        {description, string}, % new field
+        {public_url, string},
+        {space, string},
+        {handle, string},
+
+        {root_file, string},
+        {file_type, atom},
+
+        {creation_time, integer},
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
     ]}.
 
@@ -279,16 +296,45 @@ upgrade_record(4, Share) ->
         CreationTime,
         Subject
     } = Share,
-    {5, #od_share{
+    {5, {od_share,
+        Name,
+        PublicUrl,
+
+        SpaceId,
+        HandleId,
+
+        RootFileId,
+        dir,
+
+        CreationTime,
+        upgrade_common:upgrade_subject_record(Subject)
+    }};
+upgrade_record(5, Share) ->
+    {
+        od_share,
+        Name,
+        PublicUrl,
+
+        SpaceId,
+        HandleId,
+
+        RootFileId,
+        FileType,
+
+        CreationTime,
+        Creator
+    } = Share,
+    {6, #od_share{
         name = Name,
+        description = <<"">>,
         public_url = PublicUrl,
 
         space = SpaceId,
         handle = HandleId,
 
         root_file = RootFileId,
-        file_type = dir,
+        file_type = FileType,
 
         creation_time = CreationTime,
-        creator = upgrade_common:upgrade_subject_record(Subject)
+        creator = Creator
     }}.

@@ -246,6 +246,7 @@
 %% as of the parent space).
 -record(od_share, {
     name = <<"">> :: od_share:name(),
+    description = <<"">> :: od_share:description(),
     public_url = undefined :: undefined | binary(),
 
     % Direct relations to other entities

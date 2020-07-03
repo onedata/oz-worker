@@ -111,7 +111,7 @@ update(ProviderId, ConnectionsDiff) ->
     },
     case datastore_model:update(?CTX, ProviderId, Diff, Default) of
         {ok, #document{value = #provider_connections{connections = Connections}}} ->
-            % Update can fail, e.g. when the provider has been deregistered.
+            % update can fail, e.g. when the provider has been deregistered
             od_provider:update(ProviderId, fun(Provider) ->
                 {ok, Provider#od_provider{last_activity = time_utils:cluster_time_seconds()}}
             end),

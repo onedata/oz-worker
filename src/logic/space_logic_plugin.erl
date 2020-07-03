@@ -148,7 +148,7 @@ is_subscribable(_, _) -> false.
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     #{<<"name">> := Name} = Req#el_req.data,
     {ok, #document{key = SpaceId}} = od_space:create(#document{
-        value = #od_space{name = Name, creator = Auth#auth.subject}
+        value = #od_space{name = Name, creator = aai:normalize_subject(Auth#auth.subject)}
     }),
     case Req#el_req.auth_hint of
         ?AS_USER(UserId) ->

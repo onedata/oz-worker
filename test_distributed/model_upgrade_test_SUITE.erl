@@ -1688,10 +1688,24 @@ get_record(od_share, 4) -> {od_share,
     <<"root_file_id">>,
 
     ?DUMMY_TIMESTAMP,
-    {subject, root, undefined}
+    {subject, nobody, undefined}
 };
-get_record(od_share, 5) -> #od_share{
+get_record(od_share, 5) -> {od_share,
+    <<"name">>,
+    <<"public_url">>,
+
+    <<"parent_space_id">>,
+    <<"handle_id">>,
+
+    <<"root_file_id">>,
+    dir,
+
+    ?DUMMY_TIMESTAMP,
+    ?SUB(nobody)
+};
+get_record(od_share, 6) -> #od_share{
     name = <<"name">>,
+    description = <<"">>,
     public_url = <<"public_url">>,
 
     space = <<"parent_space_id">>,
@@ -1701,7 +1715,7 @@ get_record(od_share, 5) -> #od_share{
     file_type = dir,
 
     creation_time = ?DUMMY_TIMESTAMP,
-    creator = ?SUB(root)
+    creator = ?SUB(nobody)
 };
 
 
@@ -2351,7 +2365,7 @@ get_record(od_harvester, 2) -> #od_harvester{
     eff_providers = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,
-    creator = {subject, root, undefined},
+    creator = {subject, nobody, undefined},
 
     bottom_up_dirty = true,
     top_down_dirty = true
@@ -2411,7 +2425,7 @@ get_record(od_harvester, 3) -> #od_harvester{
     eff_providers = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,
-    creator = ?SUB(root),
+    creator = ?SUB(nobody),
 
     bottom_up_dirty = true,
     top_down_dirty = true

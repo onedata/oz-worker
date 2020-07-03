@@ -111,7 +111,7 @@ create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PRO
             name = Name,
             qos_parameters = QosParameters,
             imported = ImportedStorage,
-            creator = Auth#auth.subject,
+            creator = aai:normalize_subject(Auth#auth.subject),
             provider = ProviderId
         }
     },

@@ -191,7 +191,7 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
             endpoint = NormalizedEndpoint,
             plugin = Plugin,
             gui_plugin_config = Config,
-            creator = Auth#auth.subject
+            creator = aai:normalize_subject(Auth#auth.subject)
         }
     }),
 

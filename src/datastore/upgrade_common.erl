@@ -37,7 +37,8 @@
 -spec client_to_subject(undefined | #client{}) ->
     undefined | obsolete_subject_record().
 client_to_subject(undefined) -> undefined;
-client_to_subject(#client{type = root}) -> {subject, root, undefined};
+% root subject must not have a representation outside of the application
+client_to_subject(#client{type = root}) -> {subject, nobody, undefined};
 client_to_subject(#client{type = nobody}) -> {subject, nobody, undefined};
 client_to_subject(#client{type = user, id = <<"">>}) -> {subject, nobody, undefined};
 client_to_subject(#client{type = user, id = Id}) -> {subject, user, Id};
@@ -53,7 +54,8 @@ client_to_subject(#client{type = provider, id = Id}) -> {subject, oneprovider, I
 -spec upgrade_subject_record(undefined | obsolete_subject_record()) ->
     undefined | aai:subject().
 upgrade_subject_record(undefined) -> undefined;
-upgrade_subject_record({subject, root, undefined}) -> ?SUB(root);
+% root subject must not have a representation outside of the application
+upgrade_subject_record({subject, root, undefined}) -> ?SUB(nobody);
 upgrade_subject_record({subject, nobody, undefined}) -> ?SUB(nobody);
 upgrade_subject_record({subject, user, Id}) -> ?SUB(user, Id);
 upgrade_subject_record({subject, oneprovider, Id}) -> ?SUB(?ONEPROVIDER, Id).
