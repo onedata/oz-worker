@@ -276,19 +276,36 @@ prepare_elasticsearch_batch(Batch) ->
             <<"submit">> -> <<"index">>;
             <<"delete">> -> <<"delete">>
         end,
-        Payload = maps:get(<<"payload">>, BatchEntry, #{}),
-        % submit only JSON, ignore other metadata, delete entry when there is no JSON
-        {FinalOperation, Data} = case maps:find(<<"json">>, Payload) of
-            {ok, JSON} -> {ESOperation, JSON};
-            _ -> {<<"delete">>, undefined}
-        end,
-        Req = json_utils:encode(#{FinalOperation => #{<<"_id">> => EntryId}}),
-        case FinalOperation of
-            <<"index">> -> str_utils:join_binary([Req, Data], <<"\n">>);
+        Req = json_utils:encode(#{ESOperation => #{<<"_id">> => EntryId}}),
+        case ESOperation of
+            <<"index">> ->
+                Data = json_utils:encode(prepare_data(BatchEntry)),
+                str_utils:join_binary([Req, Data], <<"\n">>);
             _ -> Req
         end
     end, Batch),
     <<(str_utils:join_binary(Requests, <<"\n">>))/binary, "\n">>.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Prepares data to be sent to Elasticsearch based on entry sent by provider.
+%% SpaceId, FileName and Xattrs are stored under special key `__onedata`,
+%% which is added to json metadata.
+%% @end
+%%--------------------------------------------------------------------
+-spec prepare_data(od_harvester:batch_entry()) -> map().
+prepare_data(BatchEntry) ->
+    Payload = maps:get(<<"payload">>, BatchEntry, #{}),
+    InternalParams = maps:with([<<"spaceId">>, <<"fileName">>], BatchEntry),
+    InternalParams1 = case maps:find(<<"xattrs">>, Payload) of
+        {ok, Xattrs} -> InternalParams#{<<"xattrs">> => Xattrs};
+        _ -> InternalParams
+    end,
+    EncodedJson = maps:get(<<"json">>, Payload, #{}),
+    DecodedJson = json_utils:decode(EncodedJson),
+    DecodedJson#{<<"__onedata">> => InternalParams1}.
 
 
 %%--------------------------------------------------------------------
