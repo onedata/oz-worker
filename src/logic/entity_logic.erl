@@ -654,7 +654,7 @@ ensure_valid(#state{req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Re
         {0, false} ->
             ok;
         {_, false} ->
-            throw(?ERROR_MISSING_AT_LEAST_ONE_VALUE(maps:keys(AtLeastOne)))
+            throw(?ERROR_MISSING_AT_LEAST_ONE_VALUE(lists:sort(maps:keys(AtLeastOne))))
     end,
     State#state{req = Req#el_req{data = Data4}}.
 
