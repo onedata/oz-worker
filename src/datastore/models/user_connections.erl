@@ -114,7 +114,8 @@ update(UserId, ConnectionsDiff) ->
     },
     case datastore_model:update(?CTX, UserId, Diff, Default) of
         {ok, _} ->
-            {ok, _} = od_user:update(UserId, fun(User) ->
+            % update can fail, e.g. when the user has been deleted
+            od_user:update(UserId, fun(User) ->
                 {ok, User#od_user{last_activity = time_utils:cluster_time_seconds()}}
             end),
             ok;

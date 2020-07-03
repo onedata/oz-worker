@@ -42,11 +42,13 @@ create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id =
 -spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
 get_response(#gri{id = ShareId, aspect = instance, scope = private}, Share) ->
     #od_share{
-        name = Name, public_url = PublicUrl, space = SpaceId,
+        name = Name, description = Description,
+        public_url = PublicUrl, space = SpaceId,
         root_file = RootFileId, file_type = FileType, handle = HandleId
     } = Share,
     rest_translator:ok_body_reply(#{
-        <<"shareId">> => ShareId, <<"name">> => Name,
+        <<"shareId">> => ShareId,
+        <<"name">> => Name, <<"description">> => Description,
         <<"publicUrl">> => PublicUrl, <<"spaceId">> => SpaceId,
         <<"rootFileId">> => element(2, {ok, _} = file_id:guid_to_objectid(RootFileId)),
         <<"fileType">> => FileType,

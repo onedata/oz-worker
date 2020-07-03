@@ -242,6 +242,7 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected
 translate_resource(_, #gri{type = od_share, aspect = instance, scope = private}, Share) ->
     #od_share{
         name = Name,
+        description = Description,
         public_url = PublicUrl,
         space = SpaceId,
         handle = HandleId,
@@ -250,6 +251,7 @@ translate_resource(_, #gri{type = od_share, aspect = instance, scope = private},
     } = Share,
     #{
         <<"name">> => Name,
+        <<"description">> => Description,
         <<"publicUrl">> => PublicUrl,
         <<"spaceId">> => SpaceId,
         <<"handleId">> => utils:undefined_to_null(HandleId),
@@ -259,12 +261,14 @@ translate_resource(_, #gri{type = od_share, aspect = instance, scope = private},
 
 translate_resource(_, #gri{type = od_share, aspect = instance, scope = public}, ShareData) ->
     #{
-        <<"name">> := Name, <<"publicUrl">> := PublicUrl,
+        <<"name">> := Name, <<"description">> := Description,
+        <<"publicUrl">> := PublicUrl,
         <<"handleId">> := HandleId,
         <<"rootFileId">> := RootFileId, <<"fileType">> := FileType
     } = ShareData,
     #{
-        <<"name">> => Name, <<"publicUrl">> => PublicUrl,
+        <<"name">> => Name, <<"description">> => Description,
+        <<"publicUrl">> => PublicUrl,
         <<"handleId">> => HandleId,
         <<"rootFileId">> => RootFileId, <<"fileType">> => FileType
     };

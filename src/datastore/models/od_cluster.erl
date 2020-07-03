@@ -152,7 +152,7 @@ entity_logic_plugin() ->
 ensure_onezone_cluster() ->
     NewClusterDoc = #document{key = ?ONEZONE_CLUSTER_ID, value = #od_cluster{
         type = ?ONEZONE,
-        creator = ?SUB(root)
+        creator = ?SUB(nobody)
     }},
     case create(NewClusterDoc) of
         {ok, _} -> ok;

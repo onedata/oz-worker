@@ -99,7 +99,7 @@ create_oneprovider_cluster(CreatorUserId, ProviderId) ->
     {ok, _} = od_cluster:create(#document{key = ClusterId, value = #od_cluster{
         type = ?ONEPROVIDER,
         creator = case CreatorUserId of
-            undefined -> ?SUB(root);
+            undefined -> ?SUB(nobody);
             _ -> ?SUB(user, CreatorUserId)
         end
     }}),

@@ -255,7 +255,9 @@ create_test(Config) ->
                 {<<"resourceId">>, 1234,
                     ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"metadata">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
+                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
+                {<<"metadata">>, str_utils:rand_hex(50001),
+                    ?ERROR_BAD_VALUE_BINARY_TOO_LARGE(<<"metadata">>, 100000)}
             ]
         }
     },
@@ -469,7 +471,9 @@ update_test(Config) ->
             required = [<<"metadata">>],
             correct_values = #{<<"metadata">> => [?DC_METADATA2]},
             bad_values = [
-                {<<"metadata">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
+                {<<"metadata">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
+                {<<"metadata">>, str_utils:rand_hex(50001),
+                    ?ERROR_BAD_VALUE_BINARY_TOO_LARGE(<<"metadata">>, 100000)}
             ]
         }
     },

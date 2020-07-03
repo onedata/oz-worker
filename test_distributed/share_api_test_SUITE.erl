@@ -132,12 +132,16 @@ create_test(Config) ->
     ], []),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    VerifyFun = fun(ShareId) ->
+    VerifyFun = fun(ShareId, Data) ->
         {ok, Share} = oz_test_utils:get_share(Config, ShareId),
         PublicURL = oz_test_utils:get_share_public_url(Config, ShareId),
+        ExpectedFileType = maps:get(<<"fileType">>, Data, dir),
+        ExpectedDescription = maps:get(<<"description">>, Data, <<"">>),
         ?assertMatch(#od_share{
-            name = ?CORRECT_NAME, space = S1,
-            root_file = ?ROOT_FILE_ID, public_url = PublicURL
+            name = ?CORRECT_NAME, description = ExpectedDescription,
+            public_url = PublicURL,
+            space = S1, root_file = ?ROOT_FILE_ID,
+            file_type = ExpectedFileType
         }, Share),
         true
     end,
@@ -145,6 +149,8 @@ create_test(Config) ->
     BadDataValues = [
         {<<"shareId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"shareId">>)},
         {<<"shareId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"shareId">>)},
+        {<<"description">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"description">>)},
+        {<<"description">>, str_utils:rand_hex(50001), ?ERROR_BAD_VALUE_BINARY_TOO_LARGE(<<"description">>, 100000)},
         {<<"rootFileId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"rootFileId">>)},
         {<<"rootFileId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"rootFileId">>)},
         {<<"fileType">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"fileType">>)},
@@ -168,32 +174,37 @@ create_test(Config) ->
             module = share_logic,
             function = create,
             args = [auth, data],
-            expected_result = ?OK_TERM(VerifyFun)
+            expected_result = ?OK_ENV(fun(_Env, Data) ->
+                ?OK_TERM(fun(Result) -> VerifyFun(Result, Data) end)
+            end)
         },
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_share, aspect = instance},
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"handleId">> => null,
-                <<"name">> => ?CORRECT_NAME,
-                <<"rootFileId">> => ?ROOT_FILE_ID,
-                <<"spaceId">> => S1,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    VerifyFun(Id)
-                end
-            })
+            expected_result = ?OK_ENV(fun(_, Data) ->
+                ?OK_MAP_CONTAINS(#{
+                    <<"handleId">> => null,
+                    <<"name">> => ?CORRECT_NAME,
+                    <<"rootFileId">> => ?ROOT_FILE_ID,
+                    <<"spaceId">> => S1,
+                    <<"gri">> => fun(EncodedGri) ->
+                        #gri{id = Id} = gri:deserialize(EncodedGri),
+                        VerifyFun(Id, Data)
+                    end
+                })
+            end)
         },
         data_spec = DataSpec = #data_spec{
             required = [
                 <<"shareId">>, <<"name">>, <<"rootFileId">>, <<"spaceId">>
             ],
             optional = [
-                <<"fileType">>
+                <<"description">>, <<"fileType">>
             ],
             correct_values = #{
                 <<"shareId">> => [fun() -> ?UNIQUE_STRING end],
                 <<"name">> => [?CORRECT_NAME],
+                <<"description">> => [<<"">>, str_utils:rand_hex(769)],
                 <<"rootFileId">> => [?ROOT_FILE_ID],
                 <<"fileType">> => [file, dir],
                 <<"spaceId">> => [S1]
@@ -241,16 +252,19 @@ get_test(Config, ShareId, FileType) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    Description = str_utils:rand_hex(rand:uniform(1000) - 1),
     {ok, ShareId} = oz_test_utils:create_share(Config, ?ROOT, #{
         <<"shareId">> => ShareId,
         <<"spaceId">> => S1,
         <<"name">> => ?SHARE_NAME1,
+        <<"description">> => Description,
         <<"rootFileId">> => ?ROOT_FILE_ID,
         <<"fileType">> => FileType
     }),
     SharePublicURL = oz_test_utils:get_share_public_url(Config, ShareId),
     SharePublicDetails = #{
         <<"name">> => ?SHARE_NAME1,
+        <<"description">> => Description,
         <<"publicUrl">> => SharePublicURL,
         <<"rootFileId">> => ?ROOT_FILE_ID,
         <<"fileType">> => atom_to_binary(FileType, utf8),
@@ -359,10 +373,17 @@ update_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    InitialDescription = <<"This is a share">>,
     EnvSetUpFun = fun() ->
         ShareId = ?UNIQUE_STRING,
         {ok, ShareId} = oz_test_utils:create_share(
-            Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+            Config, ?ROOT, #{
+                <<"shareId">> => ShareId,
+                <<"name">> => ?SHARE_NAME1,
+                <<"description">> => InitialDescription,
+                <<"rootFileId">> => ?ROOT_FILE_ID,
+                <<"spaceId">> => S1
+            }
         ),
         #{shareId => ShareId}
     end,
@@ -372,7 +393,12 @@ update_test(Config) ->
             false -> ?SHARE_NAME1;
             true -> maps:get(<<"name">>, Data)
         end,
-        ?assertEqual(ExpName, Share#od_share.name)
+        ExpDescription = case ShouldSucceed of
+            false -> InitialDescription;
+            true -> maps:get(<<"description">>, Data, InitialDescription)
+        end,
+        ?assertEqual(ExpName, Share#od_share.name),
+        ?assertEqual(ExpDescription, Share#od_share.description)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -406,8 +432,14 @@ update_test(Config) ->
         },
         data_spec = #data_spec{
             required = [<<"name">>],
-            correct_values = #{<<"name">> => [?CORRECT_NAME]},
-            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+            optional = [<<"description">>],
+            correct_values = #{
+                <<"name">> => [?CORRECT_NAME],
+                <<"description">> => [<<"">>, str_utils:rand_hex(1397)]
+            },
+            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME) ++ [
+                {<<"description">>, str_utils:rand_hex(50001), ?ERROR_BAD_VALUE_BINARY_TOO_LARGE(<<"description">>, 100000)}
+            ]
         }
     },
     ?assert(api_test_utils:run_tests(

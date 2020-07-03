@@ -24,6 +24,8 @@
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
+-define(DESCRIPTION_SIZE_LIMIT, 100000).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -95,15 +97,17 @@ is_subscribable(_, _) -> false.
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     ShareId = maps:get(<<"shareId">>, Req#el_req.data),
     Name = maps:get(<<"name">>, Req#el_req.data),
+    Description = maps:get(<<"description">>, Req#el_req.data, <<"">>),
     SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
     RootFileId = maps:get(<<"rootFileId">>, Req#el_req.data),
     FileType = maps:get(<<"fileType">>, Req#el_req.data, dir),
     ShareDoc = #document{key = ShareId, value = #od_share{
         name = Name,
+        description = Description,
         root_file = RootFileId,
         file_type = FileType,
         public_url = share_logic:share_id_to_public_url(ShareId),
-        creator = Auth#auth.subject
+        creator = aai:normalize_subject(Auth#auth.subject)
     }},
     case od_share:create(ShareDoc) of
         {ok, _} ->
@@ -136,13 +140,15 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Share) ->
     {ok, Share};
 get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
     #od_share{
-        name = Name, public_url = PublicUrl,
+        name = Name, description = Description,
+        public_url = PublicUrl,
         handle = HandleId,
         root_file = RootFileId, file_type = FileType,
         creation_time = CreationTime, creator = Creator
     } = Share,
     {ok, #{
-        <<"name">> => Name, <<"publicUrl">> => PublicUrl,
+        <<"name">> => Name, <<"description">> => Description,
+        <<"publicUrl">> => PublicUrl,
         <<"rootFileId">> => RootFileId,
         <<"fileType">> => FileType,
         <<"handleId">> => utils:undefined_to_null(HandleId),
@@ -157,9 +163,12 @@ get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = ShareId, aspect = instance}, data = Data}) ->
-    NewName = maps:get(<<"name">>, Data),
-    {ok, _} = od_share:update(ShareId, fun(Share = #od_share{}) ->
-        {ok, Share#od_share{name = NewName}}
+    {ok, _} = od_share:update(ShareId, fun(Share) ->
+        #od_share{name = OldName, description = OldDescription} = Share,
+        {ok, Share#od_share{
+            name = maps:get(<<"name">>, Data, OldName),
+            description = maps:get(<<"description">>, Data, OldDescription)
+        }}
     end),
     ok.
 
@@ -275,13 +284,15 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         end}}
     },
     optional => #{
-        <<"fileType">> => {atom, [file, dir]}
+        <<"fileType">> => {atom, [file, dir]},
+        <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}}
     }
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
-    required => #{
-        <<"name">> => {binary, name}
+    at_least_one => #{
+        <<"name">> => {binary, name},
+        <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}}
     }
 }.
 
