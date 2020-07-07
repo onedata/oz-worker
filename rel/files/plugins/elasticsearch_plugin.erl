@@ -303,7 +303,7 @@ prepare_data(BatchEntry) ->
         {ok, Xattrs} -> InternalParams#{<<"xattrs">> => Xattrs};
         _ -> InternalParams
     end,
-    EncodedJson = maps:get(<<"json">>, Payload, #{}),
+    EncodedJson = maps:get(<<"json">>, Payload, <<"{}">>),
     DecodedJson = json_utils:decode(EncodedJson),
     DecodedJson#{<<"__onedata">> => InternalParams1}.
 
