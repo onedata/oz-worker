@@ -1241,7 +1241,7 @@ query_index_test(Config) ->
         rest_spec = undefined,
         logic_spec = #logic_spec{
             module = harvester_logic,
-            function = query_curl_request,
+            function = gen_curl_query,
             args = [auth, H1, IndexId, data],
             expected_result = ?OK_BINARY
         }
@@ -1263,7 +1263,7 @@ query_index_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, PublicHarvesterApiTestSpec)),
     
     % check that generated curl works properly
-    {ok, CurlBinary} = oz_test_utils:call_oz(Config, harvester_logic, query_curl_request, 
+    {ok, CurlBinary} = oz_test_utils:call_oz(Config, harvester_logic, gen_curl_query, 
         [?ROOT, H1, IndexId, #{<<"method">> => <<"post">>, <<"path">> => <<"path">>}]),
     CurlString = re:replace(CurlBinary, <<"curl">>, <<"curl -k -s">>, [{return, list}]),
     

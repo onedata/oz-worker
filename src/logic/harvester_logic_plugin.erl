@@ -79,8 +79,7 @@ operation_supported(create, group, private) -> true;
 operation_supported(create, index, private) -> true;
 operation_supported(create, {submit_batch, _}, private) -> true;
 operation_supported(create, {query, _}, private) -> true;
-%% @TODO VFS-6462 change to gen_curl_query
-operation_supported(create, {query_curl_request, _}, private) -> true;
+operation_supported(create, {gen_curl_query, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
 operation_supported(get, all_plugins, private) -> true;
@@ -361,7 +360,7 @@ create(#el_req{gri = #gri{aspect = {query, IndexId}}, data = Data}) ->
         end
     end;
 
-create(#el_req{gri = #gri{id = HarvesterId, aspect = {query_curl_request, IndexId}}, data = Data}) ->
+create(#el_req{gri = #gri{id = HarvesterId, aspect = {gen_curl_query, IndexId}}, data = Data}) ->
     Uri = oz_worker:get_rest_uri(
         <<"/harvesters/", HarvesterId/binary, "/indices/", IndexId/binary, "/query">>
     ),
@@ -806,7 +805,7 @@ authorize(#el_req{operation = create, gri = #gri{aspect = {query, _}}, auth = Au
             Harvester#od_harvester.public
     end;
 
-authorize(#el_req{operation = create, gri = #gri{aspect = {query_curl_request, _}}}, _) ->
+authorize(#el_req{operation = create, gri = #gri{aspect = {gen_curl_query, _}}}, _) ->
     true;
 
 authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
@@ -1111,7 +1110,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {query, _}}}) ->
     fun(#od_harvester{plugin = Plugin}) ->
         Plugin:query_validator()
     end;
-validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = {query_curl_request, IndexId}}}) ->
+validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = {gen_curl_query, IndexId}}}) ->
     validate(Req#el_req{gri = GRI#gri{aspect = {query, IndexId}}});
 
 validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->

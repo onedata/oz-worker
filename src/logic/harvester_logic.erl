@@ -43,7 +43,7 @@
     update_index/4,
     delete_index/3, delete_index_metadata/3,
     query_index/4,
-    query_curl_request/4,
+    gen_curl_query/4,
     list_indices/2
 ]).
 -export([
@@ -517,13 +517,13 @@ query_index(Auth, HarvesterId, IndexId, Data) ->
 %% Generate curl request to query harvester backend using given data.
 %% @end
 %%--------------------------------------------------------------------
--spec query_curl_request(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
+-spec gen_curl_query(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     IndexId :: od_harvester:index_id(), Data :: map()) -> ok | errors:error().
-query_curl_request(Auth, HarvesterId, IndexId, Data) ->
+gen_curl_query(Auth, HarvesterId, IndexId, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
         auth = Auth,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {query_curl_request, IndexId}},
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {gen_curl_query, IndexId}},
         data = Data
     })).
 
