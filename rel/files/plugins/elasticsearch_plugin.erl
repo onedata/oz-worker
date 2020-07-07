@@ -305,7 +305,11 @@ prepare_data(BatchEntry) ->
     end,
     EncodedJson = maps:get(<<"json">>, Payload, <<"{}">>),
     DecodedJson = json_utils:decode(EncodedJson),
-    DecodedJson#{<<"__onedata">> => InternalParams1}.
+    InternalParams2 = InternalParams1#{
+        <<"json_metadata_exists">> => maps:is_key(<<"json">>, Payload),
+        <<"xattr_metadata_exists">> => maps:is_key(<<"xattrs">>, Payload)
+    },
+    DecodedJson#{<<"__onedata">> => InternalParams2}.
 
 
 %%--------------------------------------------------------------------
