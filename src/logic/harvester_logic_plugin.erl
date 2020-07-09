@@ -15,7 +15,6 @@
 -behaviour(entity_logic_plugin_behaviour).
 
 -include("entity_logic.hrl").
--include("http/gui_paths.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -211,9 +210,7 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
             ok
     end,
     
-    % fixme env on all nodes
-    {ok, GuiHash} = simple_cache:get(harvester_default_gui_hash),
-    ok = gui_static:link_gui(?HARVESTER_GUI, HarvesterId, GuiHash),
+    ok = gui_static:link_gui(?HARVESTER_GUI, HarvesterId, ?DEFAULT_GUI_HASH),
 
     {true, {Harvester, Rev}} = fetch_entity(#gri{aspect = instance, id = HarvesterId}),
     {ok, resource, {GRI#gri{id = HarvesterId}, {Harvester, Rev}}};

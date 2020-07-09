@@ -44,7 +44,7 @@
 -export_type([gui_id/0]).
 
 %% API
--export([deploy_package/3, deploy_package/4, ensure_package/4]).
+-export([deploy_package/3, deploy_package/4, deploy_package_as_default/2, ensure_package/4]).
 -export([link_gui/3, link_gui/4]).
 -export([unlink_gui/2, unlink_gui/3]).
 -export([gui_exists/2]).
@@ -108,6 +108,22 @@ deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
             end;
         {error, _} = Error ->
             Error
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Reads given GUI package, and upon success, deploys the GUI package under 
+%% given GUI prefix on all cluster nodes. 
+%% Deployed package can be later linked using ?DEFAULT_GUI_HASH as GUI hash.
+%% @end
+%%--------------------------------------------------------------------
+-spec deploy_package_as_default(onedata:gui(), file:name_all()) ->
+    {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE | ?ERROR_GUI_PACKAGE_TOO_LARGE.
+deploy_package_as_default(GuiType, PackagePath) ->
+    case gui:read_package(PackagePath) of
+        {ok, _, PackageBin} -> ensure_package(GuiType, PackageBin, ?DEFAULT_GUI_HASH);
+        {error, _} = Error -> Error
     end.
 
 

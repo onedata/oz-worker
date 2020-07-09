@@ -35,6 +35,7 @@
 -export([
     oz_worker_gui_is_set_up_after_startup/1,
     oz_panel_gui_setup_works/1,
+    harvester_gui_setup_works/1,
     empty_gui_is_linked_after_provider_registration/1,
     op_worker_and_panel_gui_is_linked_upon_version_info_update/1,
     gui_is_unlinked_after_provider_deletion/1,
@@ -60,6 +61,7 @@ all() ->
     ?ALL([
         oz_worker_gui_is_set_up_after_startup,
         oz_panel_gui_setup_works,
+        harvester_gui_setup_works,
         empty_gui_is_linked_after_provider_registration,
         op_worker_and_panel_gui_is_linked_upon_version_info_update,
         gui_is_unlinked_after_provider_deletion,
@@ -129,6 +131,15 @@ oz_panel_gui_setup_works(Config) ->
     ?assert(file_is_served(Config, IndexContent, [<<"/onp/">>, ?ONEZONE_CLUSTER_ID, <<"/i">>])),
     ?assert(file_is_served(Config, IndexContent, [<<"/onp/">>, ?ONEZONE_CLUSTER_ID, <<"/index.html">>])),
     ?assert(version_info_is_set(Config, ?ONEZONE_CLUSTER_ID, ?ONEPANEL, {Release, Build, GuiHash})).
+
+harvester_gui_setup_works(Config) ->
+    HarvesterId = ozt_harvesters:create(),
+    HrvIndexContent = read_content(Config, [<<"./hrv/default/index.html">>]),
+    
+    ?assert(static_directory_exists(Config, [<<"./hrv/default">>])),
+    ?assert(link_exists(Config, <<"./hrv/", HarvesterId/binary>>, <<"default">>)),
+    ?assert(file_is_served(Config, HrvIndexContent, [<<"/hrv/">>, HarvesterId, <<"/i">>])),
+    ?assert(file_is_served(Config, HrvIndexContent, [<<"/hrv/">>, HarvesterId, <<"/index.html">>])).
 
 
 empty_gui_is_linked_after_provider_registration(Config) ->
@@ -715,7 +726,7 @@ custom_static_files_are_served_from_legacy_location(Config) ->
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
+    ozt:init_per_suite([{?LOAD_MODULES, [oz_test_utils]} | Config]).
 
 
 end_per_suite(_Config) ->

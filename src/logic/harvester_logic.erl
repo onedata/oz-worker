@@ -1230,8 +1230,4 @@ has_eff_provider(Harvester, ProviderId) ->
 -spec deploy_default_gui_package() -> ok.
 deploy_default_gui_package() ->    
     PackagePath = oz_worker:get_env(hrv_gui_package_path),
-    {ok, GuiHash} = gui_static:deploy_package(
-        ?HARVESTER_GUI, oz_worker:get_build_version(), PackagePath, false),
-    % fixme env on all nodes
-    simple_cache:put(harvester_default_gui_hash, GuiHash),
-    ok.
+    ok = gui_static:deploy_package_as_default(?HARVESTER_GUI, PackagePath).
