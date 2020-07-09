@@ -3188,7 +3188,7 @@ mock_harvester_plugin(Config, Nodes, PluginName) ->
         fun (?HARVESTER_ENDPOINT1) -> ok;
             (?HARVESTER_ENDPOINT2) -> ok;
             (Endpoint) -> 
-                case call_oz(Config, oz_worker, get_env, [harvester_default_endpoint]) of
+                case get_env(Config, harvester_default_endpoint) of
                     Endpoint -> ok;
                     _ -> ?ERROR_TEMPORARY_FAILURE
                 end

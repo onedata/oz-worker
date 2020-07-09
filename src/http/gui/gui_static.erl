@@ -45,7 +45,7 @@
 
 %% API
 -export([deploy_package/3, deploy_package/4, ensure_package/4]).
--export([deploy_default_harvester_package/2, link_default_harvester_gui/1]).
+-export([deploy_default_harvester_package/1, link_default_harvester_gui/1]).
 -export([link_gui/3, link_gui/4]).
 -export([unlink_gui/2, unlink_gui/3]).
 -export([gui_exists/2]).
@@ -117,14 +117,14 @@ deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
 %% @doc
 %% Reads given GUI package, and upon success, deploys the GUI package under 
 %% given GUI prefix on all cluster nodes. 
-%% Deployed package can be later linked using ?DEFAULT_HARVESTER_GUI_HASH as GUI hash.
+%% Deployed package can be later linked using link_default_harvester_gui/1.
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_default_harvester_package(onedata:gui(), file:name_all()) ->
+-spec deploy_default_harvester_package(file:name_all()) ->
     {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE | ?ERROR_GUI_PACKAGE_TOO_LARGE.
-deploy_default_harvester_package(GuiType, PackagePath) ->
+deploy_default_harvester_package(PackagePath) ->
     case gui:read_package(PackagePath) of
-        {ok, _, PackageBin} -> ensure_package(GuiType, PackageBin, ?DEFAULT_HARVESTER_GUI_HASH);
+        {ok, _, PackageBin} -> ensure_package(?HARVESTER_GUI, PackageBin, ?DEFAULT_HARVESTER_GUI_HASH);
         {error, _} = Error -> Error
     end.
 

@@ -35,7 +35,7 @@
 -export([
     oz_worker_gui_is_set_up_after_startup/1,
     oz_panel_gui_setup_works/1,
-    harvester_gui_setup_works/1,
+    default_harvester_gui_is_automatically_linked/1,
     empty_gui_is_linked_after_provider_registration/1,
     op_worker_and_panel_gui_is_linked_upon_version_info_update/1,
     gui_is_unlinked_after_provider_deletion/1,
@@ -61,7 +61,7 @@ all() ->
     ?ALL([
         oz_worker_gui_is_set_up_after_startup,
         oz_panel_gui_setup_works,
-        harvester_gui_setup_works,
+        default_harvester_gui_is_automatically_linked,
         empty_gui_is_linked_after_provider_registration,
         op_worker_and_panel_gui_is_linked_upon_version_info_update,
         gui_is_unlinked_after_provider_deletion,
@@ -132,7 +132,7 @@ oz_panel_gui_setup_works(Config) ->
     ?assert(file_is_served(Config, IndexContent, [<<"/onp/">>, ?ONEZONE_CLUSTER_ID, <<"/index.html">>])),
     ?assert(version_info_is_set(Config, ?ONEZONE_CLUSTER_ID, ?ONEPANEL, {Release, Build, GuiHash})).
 
-harvester_gui_setup_works(Config) ->
+default_harvester_gui_is_automatically_linked(Config) ->
     HarvesterId = ozt_harvesters:create(),
     HrvIndexContent = read_content(Config, [<<"./hrv/default/index.html">>]),
     

@@ -92,8 +92,8 @@ create_test(Config) ->
     VerifyFun = fun(HarvesterId, Data) ->
         ExpConfig = maps:get(<<"guiPluginConfig">>, Data, #{}),
         ExpEndpoint = utils:null_to_undefined(maps:get(<<"endpoint">>, Data, 
-            oz_test_utils:call_oz(Config, oz_worker, get_env, [harvester_default_endpoint]))
-        ),
+            oz_test_utils:get_env(Config, harvester_default_endpoint)
+        )),
         {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
         ?assertEqual(?CORRECT_NAME, Harvester#od_harvester.name),
         ?assertEqual(ExpEndpoint, Harvester#od_harvester.endpoint),
