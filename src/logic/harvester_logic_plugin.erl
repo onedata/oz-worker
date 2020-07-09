@@ -210,7 +210,7 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
             ok
     end,
     
-    ok = gui_static:link_gui(?HARVESTER_GUI, HarvesterId, ?DEFAULT_GUI_HASH),
+    ok = gui_static:link_default_harvester_gui(HarvesterId),
 
     {true, {Harvester, Rev}} = fetch_entity(#gri{aspect = instance, id = HarvesterId}),
     {ok, resource, {GRI#gri{id = HarvesterId}, {Harvester, Rev}}};

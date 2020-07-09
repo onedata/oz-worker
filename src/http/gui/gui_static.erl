@@ -44,7 +44,8 @@
 -export_type([gui_id/0]).
 
 %% API
--export([deploy_package/3, deploy_package/4, deploy_package_as_default/2, ensure_package/4]).
+-export([deploy_package/3, deploy_package/4, ensure_package/4]).
+-export([deploy_default_harvester_package/2, link_default_harvester_gui/1]).
 -export([link_gui/3, link_gui/4]).
 -export([unlink_gui/2, unlink_gui/3]).
 -export([gui_exists/2]).
@@ -68,6 +69,7 @@
 
 -define(CRITICAL_SECTION(LockId, Fun), critical_section:run({gui_static, LockId}, Fun)).
 
+-define(DEFAULT_HARVESTER_GUI_HASH, <<"default">>).
 
 %%%===================================================================
 %%% API
@@ -115,14 +117,14 @@ deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
 %% @doc
 %% Reads given GUI package, and upon success, deploys the GUI package under 
 %% given GUI prefix on all cluster nodes. 
-%% Deployed package can be later linked using ?DEFAULT_GUI_HASH as GUI hash.
+%% Deployed package can be later linked using ?DEFAULT_HARVESTER_GUI_HASH as GUI hash.
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_package_as_default(onedata:gui(), file:name_all()) ->
+-spec deploy_default_harvester_package(onedata:gui(), file:name_all()) ->
     {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE | ?ERROR_GUI_PACKAGE_TOO_LARGE.
-deploy_package_as_default(GuiType, PackagePath) ->
+deploy_default_harvester_package(GuiType, PackagePath) ->
     case gui:read_package(PackagePath) of
-        {ok, _, PackageBin} -> ensure_package(GuiType, PackageBin, ?DEFAULT_GUI_HASH);
+        {ok, _, PackageBin} -> ensure_package(GuiType, PackageBin, ?DEFAULT_HARVESTER_GUI_HASH);
         {error, _} = Error -> Error
     end.
 
@@ -184,6 +186,15 @@ link_gui(GuiType, GuiId, GuiHash) ->
     link_gui(on_cluster, GuiType, GuiId, GuiHash),
     schedule_removal_of_unused_packages().
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @equiv link_gui(?HARVESTER_GUI, GuiId, ?DEFAULT_HARVESTER_GUI_HASH).
+%% @end
+%%--------------------------------------------------------------------
+-spec link_default_harvester_gui(od_harvester:id()) -> ok.
+link_default_harvester_gui(HarvesterId) ->
+    link_gui(?HARVESTER_GUI, HarvesterId, ?DEFAULT_HARVESTER_GUI_HASH).
 
 %%--------------------------------------------------------------------
 %% @doc
