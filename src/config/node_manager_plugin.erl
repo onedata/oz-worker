@@ -162,6 +162,7 @@ on_db_and_workers_ready() ->
                 ok;
             true ->
                 cluster_logic:set_up_oz_worker_service(),
+                harvester_logic:deploy_default_gui_package(),
                 entity_graph:init_state(),
                 broadcast_dns_config(),
                 group_logic:ensure_predefined_groups()

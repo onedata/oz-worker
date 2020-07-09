@@ -95,7 +95,7 @@ all() ->
 %%%===================================================================
 
 oz_worker_gui_is_set_up_after_startup(Config) ->
-    GuiPackagePath = oz_test_utils:get_env(Config, gui_package_path),
+    GuiPackagePath = oz_test_utils:get_env(Config, ozw_gui_package_path),
     {ok, GuiHash} = oz_test_utils:call_oz(Config, gui, package_hash, [GuiPackagePath]),
     Release = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
     Build = oz_test_utils:call_oz(Config, oz_worker, get_build_version, []),

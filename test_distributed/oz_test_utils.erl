@@ -3185,9 +3185,13 @@ mock_harvester_plugin(Config, Nodes, PluginName) ->
     test_utils:mock_new(Nodes, PluginName, [non_strict]),
     test_utils:mock_expect(Nodes, PluginName, type, fun() -> harvester_plugin end),
     test_utils:mock_expect(Nodes, PluginName, ping,
-        fun(?HARVESTER_ENDPOINT1) -> ok;
+        fun (?HARVESTER_ENDPOINT1) -> ok;
             (?HARVESTER_ENDPOINT2) -> ok;
-            (_) -> ?ERROR_TEMPORARY_FAILURE
+            (Endpoint) -> 
+                case call_oz(Config, oz_worker, get_env, [harvester_default_endpoint]) of
+                    Endpoint -> ok;
+                    _ -> ?ERROR_TEMPORARY_FAILURE
+                end
         end),
     test_utils:mock_expect(Nodes, PluginName, submit_batch, fun(_, HarvesterId, Indices, Batch) ->
         FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),

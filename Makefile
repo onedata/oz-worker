@@ -48,7 +48,8 @@ compile:
 	$(REBAR) compile
 
 inject-gui:
-	$(LIB_DIR)/gui/pull-gui.sh gui-image.conf
+	$(LIB_DIR)/gui/pull-gui.sh gui-image.conf --target-path _build/default/lib/ozw_gui_static.tar.gz
+	$(LIB_DIR)/gui/pull-gui.sh default-harvester-gui-image.conf --target-path _build/default/lib/hrv_gui_static.tar.gz
 
 ## Generates a production release
 generate: template compile inject-gui

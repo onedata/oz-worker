@@ -77,7 +77,7 @@
     json_to_version_info/1
 ]).
 
--define(GUI_PACKAGE_PATH, oz_worker:get_env(gui_package_path)).
+-define(OZW_GUI_PACKAGE_PATH, oz_worker:get_env(ozw_gui_package_path)).
 
 %%%===================================================================
 %%% API
@@ -834,7 +834,7 @@ set_up_oz_worker_service() ->
     ?info("Setting up Onezone worker service"),
     Version = oz_worker:get_release_version(),
     ok = od_cluster:ensure_onezone_cluster(),
-    {ok, GuiHash} = gui_static:deploy_package(?OZ_WORKER_GUI, Version, ?GUI_PACKAGE_PATH, false),
+    {ok, GuiHash} = gui_static:deploy_package(?OZ_WORKER_GUI, Version, ?OZW_GUI_PACKAGE_PATH, false),
     ok = update_version_info(?ROOT, ?ONEZONE_CLUSTER_ID, ?WORKER, {
         Version,
         oz_worker:get_build_version(),
