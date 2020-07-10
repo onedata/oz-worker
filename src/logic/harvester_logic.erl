@@ -90,6 +90,9 @@
     has_space/2,
     has_eff_provider/2
 ]).
+-export([
+    deploy_default_gui_package/0
+]).
 
 
 %%%===================================================================
@@ -1224,3 +1227,7 @@ has_eff_provider(Harvester, ProviderId) ->
     entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Harvester).
 
 
+-spec deploy_default_gui_package() -> ok.
+deploy_default_gui_package() ->    
+    PackagePath = oz_worker:get_env(default_hrv_gui_package_path),
+    ok = gui_static:deploy_default_harvester_package(PackagePath).

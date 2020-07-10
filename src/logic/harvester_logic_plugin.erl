@@ -15,7 +15,6 @@
 -behaviour(entity_logic_plugin_behaviour).
 
 -include("entity_logic.hrl").
--include("http/gui_paths.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -172,9 +171,9 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
     auth_hint = AuthHint, data = Data}) ->
     #{
         <<"name">> := Name,
-        <<"endpoint">> := Endpoint,
         <<"plugin">> := Plugin
     } = Data,
+    Endpoint = maps:get(<<"endpoint">>, Data, oz_worker:get_env(harvester_default_endpoint)),
     Config = maps:get(<<"guiPluginConfig">>, Data, #{}),
 
 
@@ -210,6 +209,8 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
         _ ->
             ok
     end,
+    
+    ok = gui_static:link_default_harvester_gui(HarvesterId),
 
     {true, {Harvester, Rev}} = fetch_entity(#gri{aspect = instance, id = HarvesterId}),
     {ok, resource, {GRI#gri{id = HarvesterId}, {Harvester, Rev}}};
@@ -1078,10 +1079,10 @@ required_admin_privileges(_) ->
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"name">> => {binary, name},
-        <<"endpoint">> => {binary, non_empty},
         <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)}
     },
     optional => #{
+        <<"endpoint">> => {binary, non_empty},
         <<"guiPluginConfig">> => {json, any}
     }
 };
@@ -1236,7 +1237,7 @@ auth_by_privilege(UserId, HarvesterOrId, Privilege) ->
 -spec normalize_endpoint_and_check_connectivity(od_harvester:endpoint(), od_harvester:plugin()) ->
     {ok, od_harvester:endpoint()} | {error, term()}.
 normalize_endpoint_and_check_connectivity(Endpoint, Plugin) ->
-    NormalizedEndpoint = re:replace(Endpoint, <<"/$">>, <<"">>, [{return, binary}]),
+    NormalizedEndpoint = re:replace(Endpoint, <<"\s|/$">>, <<"">>, [{return, binary}]),
     case Plugin:ping(NormalizedEndpoint) of
         ok -> {ok, NormalizedEndpoint};
         {error, _} = Error -> Error

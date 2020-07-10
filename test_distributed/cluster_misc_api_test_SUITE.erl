@@ -141,7 +141,7 @@ list_privileges_test(Config) ->
 
 get_onezone_cluster_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
-    GuiPackagePath = oz_test_utils:get_env(Config, gui_package_path),
+    GuiPackagePath = oz_test_utils:get_env(Config, ozw_gui_package_path),
     {ok, GuiHash} = oz_test_utils:call_oz(Config, gui, package_hash, [GuiPackagePath]),
     Release = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
     Build = oz_test_utils:call_oz(Config, oz_worker, get_build_version, []),

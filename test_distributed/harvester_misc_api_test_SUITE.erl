@@ -91,7 +91,9 @@ create_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     VerifyFun = fun(HarvesterId, Data) ->
         ExpConfig = maps:get(<<"guiPluginConfig">>, Data, #{}),
-        ExpEndpoint = utils:null_to_undefined(maps:get(<<"endpoint">>, Data, undefined)),
+        ExpEndpoint = utils:null_to_undefined(maps:get(<<"endpoint">>, Data, 
+            oz_test_utils:get_env(Config, harvester_default_endpoint)
+        )),
         {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
         ?assertEqual(?CORRECT_NAME, Harvester#od_harvester.name),
         ?assertEqual(ExpEndpoint, Harvester#od_harvester.endpoint),
@@ -132,8 +134,8 @@ create_test(Config) ->
             end)
         },
         data_spec = #data_spec{
-            required = [<<"name">>, <<"endpoint">>, <<"plugin">>],
-            optional = [<<"guiPluginConfig">>],
+            required = [<<"name">>, <<"plugin">>],
+            optional = [<<"endpoint">>, <<"guiPluginConfig">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"endpoint">> => [?HARVESTER_ENDPOINT1],
