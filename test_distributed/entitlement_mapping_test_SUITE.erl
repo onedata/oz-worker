@@ -55,7 +55,7 @@
     manual_changes_in_group_privileges_are_persisted/1,
     invalid_entitlements_are_ignored/1,
     entitlements_resulting_in_invalid_onedata_group_name_or_type_are_ignored/1,
-    entitlements_with_invalid_privileges_default_to_member/1,
+    entitlements_with_invalid_privileges_default_to_none/1,
     invalid_admin_group_is_ignored/1,
     admin_group_resulting_in_invalid_onedata_group_name_or_type_are_ignored/1,
     entitlements_are_coalesced_correctly_in_a_mixed_scenario/1,
@@ -96,7 +96,7 @@ all() ->
         manual_changes_in_group_privileges_are_persisted,
         invalid_entitlements_are_ignored,
         entitlements_resulting_in_invalid_onedata_group_name_or_type_are_ignored,
-        entitlements_with_invalid_privileges_default_to_member,
+        entitlements_with_invalid_privileges_default_to_none,
         invalid_admin_group_is_ignored,
         admin_group_resulting_in_invalid_onedata_group_name_or_type_are_ignored,
         entitlements_are_coalesced_correctly_in_a_mixed_scenario,
@@ -445,14 +445,14 @@ entitlements_are_added_with_admin_and_vo_group_upon_first_login(_) ->
         <<"staff:member/vm-operators:member/user:manager">>,
         <<"task4.1:manager/user:member">>,
         <<"testGroup:admin/user:admin">>,
-        <<"staff:member/admins:member/readonly:member/user:member">>,
+        <<"staff:member/admins:member/readonly:member/user:none">>,
         <<"staff:member/admins:member/privileged:admin/user:manager">>
     ]),
     ?assertUserGroupsCount(5, 8),
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:manager">>, direct),
     ?assertHasGroup(true, ?THIRD_IDP, <<"task4.1:manager/user:member">>, direct),
     ?assertHasGroup(true, ?THIRD_IDP, <<"testGroup:admin/user:admin">>, direct),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:member/readonly:member/user:member">>, direct),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:member/readonly:member/user:none">>, direct),
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:member/privileged:admin/user:manager">>, direct),
     ?assertHasGroup(true, ?THIRD_IDP, <<"Third-VO">>, effective),
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member">>, effective),
@@ -465,11 +465,11 @@ entitlements_are_added_with_admin_and_vo_group_upon_first_login(_) ->
     ?assertGroupStructure(?THIRD_IDP,
         <<"staff:member">>, <<"staff:member/admins:member">>, direct),
     ?assertGroupStructure(?THIRD_IDP,
-        <<"staff:member/admins:member">>, <<"staff:member/admins:member/readonly:member/user:member">>, direct),
+        <<"staff:member/admins:member">>, <<"staff:member/admins:member/readonly:member/user:none">>, direct),
     ?assertGroupStructure(?THIRD_IDP,
         <<"staff:member/admins:member">>, <<"staff:member/admins:member/privileged:admin/user:manager">>, direct),
     ?assertGroupStructure(?THIRD_IDP,
-        <<"staff:member">>, <<"staff:member/admins:member/readonly:member/user:member">>, effective),
+        <<"staff:member">>, <<"staff:member/admins:member/readonly:member/user:none">>, effective),
     ?assertGroupStructure(?THIRD_IDP,
         <<"staff:member">>, <<"staff:member/admins:member/privileged:admin/user:manager">>, effective),
     ?assertGroupStructure(?THIRD_IDP,
@@ -479,7 +479,7 @@ entitlements_are_added_with_admin_and_vo_group_upon_first_login(_) ->
     ?assertGroupStructure(?THIRD_IDP,
         <<"Third-VO">>, <<"staff:member/admins:member">>, effective),
     ?assertGroupStructure(?THIRD_IDP,
-        <<"Third-VO">>, <<"staff:member/admins:member/readonly:member/user:member">>, effective),
+        <<"Third-VO">>, <<"staff:member/admins:member/readonly:member/user:none">>, effective),
     ?assertGroupStructure(?THIRD_IDP,
         <<"Third-VO">>, <<"staff:member/admins:member/privileged:admin/user:manager">>, effective),
     % The admin group should belong to all groups
@@ -488,7 +488,7 @@ entitlements_are_added_with_admin_and_vo_group_upon_first_login(_) ->
     ?assertGroupStructure(?THIRD_IDP,
         <<"staff:member/admins:member">>, <<"staff:member/admins:member/privileged:admin">>, direct),
     ?assertGroupStructure(?THIRD_IDP,
-        <<"staff:member/admins:member/readonly:member/user:member">>, <<"staff:member/admins:member/privileged:admin">>, direct),
+        <<"staff:member/admins:member/readonly:member/user:none">>, <<"staff:member/admins:member/privileged:admin">>, direct),
     ?assertGroupStructure(?THIRD_IDP,
         <<"task4.1:manager/user:member">>, <<"staff:member/admins:member/privileged:admin">>, direct),
     ?assertGroupStructure(?THIRD_IDP,
@@ -508,7 +508,7 @@ entitlements_are_added_with_admin_and_vo_group_upon_consecutive_login(_) ->
         <<"staff:member/vm-operators:member/user:manager">>,
         <<"task4.1:manager/user:member">>,
         <<"testGroup:admin/user:admin">>,
-        <<"staff:member/admins:member/readonly:member/user:member">>,
+        <<"staff:member/admins:member/readonly:member/user:none">>,
         <<"staff:member/admins:member/privileged:admin/user:manager">>
     ]),
     ?assertUserGroupsCount(5, 8),
@@ -523,7 +523,8 @@ highest_role_prevails_with_duplicate_entitlements(_) ->
     simulate_first_login(?THIRD_IDP, [
         <<"staff:member/vm-operators:member/user:manager">>,
         <<"staff:member/vm-operators:member/user:admin">>,
-        <<"staff:member/vm-operators:member/user:member">>
+        <<"staff:member/vm-operators:member/user:member">>,
+        <<"staff:member/vm-operators:member/user:none">>
     ]),
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:admin">>, direct),
 
@@ -540,7 +541,7 @@ highest_role_prevails_with_duplicate_entitlements(_) ->
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:admin">>, direct),
 
     simulate_consecutive_login(?THIRD_IDP, [
-        <<"staff:member/vm-operators:member/user:member">>,
+        <<"staff:member/vm-operators:member/user:none">>,
         <<"staff:member/vm-operators:member/user:manager">>
     ]),
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:manager">>, direct),
@@ -549,7 +550,13 @@ highest_role_prevails_with_duplicate_entitlements(_) ->
         <<"staff:member/vm-operators:member/user:member">>,
         <<"staff:member/vm-operators:member/user:member">>
     ]),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:member">>, direct).
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:member">>, direct),
+
+    simulate_consecutive_login(?THIRD_IDP, [
+        <<"staff:member/vm-operators:member/user:none">>,
+        <<"staff:member/vm-operators:member/user:none">>
+    ]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:none">>, direct).
 
 
 user_privileges_are_modified_on_consecutive_login(_) ->
@@ -566,8 +573,8 @@ user_privileges_are_modified_on_consecutive_login(_) ->
     simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:manager">>]),
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:manager">>, direct),
 
-    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:admin">>]),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:admin">>, direct),
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:none">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:none">>, direct),
 
     simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:member">>]),
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:member">>, direct),
@@ -595,9 +602,12 @@ group_privileges_are_not_modified_on_consecutive_login(_) ->
     ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
     ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:member">>, direct),
 
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:none">>]),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
+    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:none">>, direct),
+
     simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager">>]),
     ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct).
-
 
 
 manual_changes_in_user_privileges_are_overwritten_upon_change_in_idp(Config) ->
@@ -624,8 +634,8 @@ manual_changes_in_user_privileges_are_overwritten_upon_change_in_idp(Config) ->
     ?assertHasGroup(false, ?THIRD_IDP, <<"staff:member/admins:manager/user:admin">>, direct),
 
     % If the privileges change in the IdP, the manual changes should be overwritten
-    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:member">>]),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:member">>, direct),
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:none">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:none">>, direct),
     ?assertHasGroup(false, ?THIRD_IDP, <<"staff:member/admins:manager/user:manager">>, direct).
 
 
@@ -684,13 +694,13 @@ entitlements_resulting_in_invalid_onedata_group_name_or_type_are_ignored(_) ->
     ?assertTotalGroupsCount(1).
 
 
-entitlements_with_invalid_privileges_default_to_member(_) ->
+entitlements_with_invalid_privileges_default_to_none(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
-        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+        {voGroupName, "Third-VO"}
     ]),
-    simulate_first_login(?THIRD_IDP, [<<"staff:error/admins:undefined/user:none">>]),
-    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:member">>, direct),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:member/user:member">>, direct).
+    simulate_first_login(?THIRD_IDP, [<<"staff:error/admins:undefined/user:null">>]),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:none">>, <<"staff:none/admins:none">>, direct),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:none/admins:none/user:none">>, direct).
 
 
 invalid_admin_group_is_ignored(_) ->
@@ -752,7 +762,7 @@ entitlements_are_coalesced_correctly_in_a_mixed_scenario(_) ->
         <<"staff:member/vm-operators:member/user:manager">>,
         <<"task4.1:manager/user:member">>,
         <<"testGroup:admin/user:admin">>,
-        <<"staff:member/admins:member/readonly:member/user:member">>,
+        <<"staff:member/admins:member/readonly:member/user:none">>,
         <<"staff:member/admins:member/privileged:admin/user:manager">>
     ]),
     ?assertUserGroupsCount(10, 14),
@@ -799,7 +809,7 @@ entitlement_groups_are_protected(_) ->
     simulate_account_link(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>, <<"thirdGroup">>]),
     simulate_account_link(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
     simulate_account_link(?THIRD_IDP, [
-        <<"staff:member/vm-operators:member/user:manager">>,
+        <<"staff:member/vm-operators:member/user:none">>,
         <<"task4.1:manager/user:member">>,
         <<"testGroup:admin/user:admin">>,
         <<"staff:member/admins:member/readonly:member/user:member">>,
@@ -816,7 +826,7 @@ entitlement_groups_are_protected(_) ->
     ?assertGroupProtected(?OTHER_IDP, <<"users/technicians">>),
 
     ?assertGroupProtected(?THIRD_IDP, <<"staff:member">>),
-    ?assertGroupProtected(?THIRD_IDP, <<"staff:member/vm-operators:member/user:manager">>),
+    ?assertGroupProtected(?THIRD_IDP, <<"staff:member/vm-operators:member/user:none">>),
     ?assertGroupProtected(?THIRD_IDP, <<"staff:member/admins:member">>),
     ?assertGroupProtected(?THIRD_IDP, <<"staff:member/admins:member/privileged:admin/user:manager">>),
     ?assertGroupProtected(?THIRD_IDP, <<"staff:member/admins:member/readonly:member/user:member">>),
