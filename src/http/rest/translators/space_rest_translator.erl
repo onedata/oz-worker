@@ -94,12 +94,14 @@ get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
 get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
     #{
         <<"name">> := Name,
-        <<"providers">> := Providers
+        <<"providers">> := Providers,
+        <<"creator">> := Creator
     } = SpaceData,
     rest_translator:ok_body_reply(#{
         <<"spaceId">> => SpaceId,
         <<"name">> => Name,
-        <<"providers">> => Providers
+        <<"providers">> => Providers,
+        <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody)))
     });
 
 get_response(#gri{aspect = users}, Users) ->
@@ -140,4 +142,3 @@ get_response(#gri{aspect = eff_providers}, Providers) ->
 
 get_response(#gri{aspect = harvesters}, Harvesters) ->
     rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters}).
-

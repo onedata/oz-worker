@@ -1082,7 +1082,7 @@ format_intermediaries(Intermediaries) ->
 
 
 %% @private
--spec translate_creator(undefined | aai:auth()) ->
+-spec translate_creator(undefined | aai:subject()) ->
     #{binary() => null | binary()}.
 translate_creator(undefined) -> #{
     <<"creatorType">> => null,

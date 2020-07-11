@@ -298,7 +298,18 @@ update(Req = #el_req{gri = #gri{id = HandleId, aspect = {group_privileges, Group
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
-    handle_proxy:unregister_handle(HandleId),
+    try
+        handle_proxy:unregister_handle(HandleId)
+    catch Type:Reason ->
+        {ok, #document{value = #od_handle{
+            public_handle = PublicHandle,
+            handle_service = HandleService
+        }}} = od_handle:get(HandleId),
+        ?warning_stacktrace(
+            "Handle ~s (~s) was removed but it failed to be unregistered from handle service ~s - ~w:~p",
+            [HandleId, PublicHandle, HandleService, Type, Reason]
+        )
+    end,
     entity_graph:delete_with_relations(od_handle, HandleId);
 
 delete(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}}) ->
