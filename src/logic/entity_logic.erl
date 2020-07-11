@@ -311,11 +311,15 @@ handle_unsafe(State = #state{req = #el_req{operation = get}}) ->
             fetch_entity(
                 ensure_operation_supported(
                     State)))),
-    {ok, GetResult} = call_get(NewState),
-    % Return the new GRI if auto scope was requested
-    case State#state.req#el_req.gri#gri.scope of
-        auto -> {ok, NewState#state.req#el_req.gri, GetResult};
-        _ -> {ok, GetResult}
+    case call_get(NewState) of
+        {ok, GetResult} ->
+            % Return the new GRI if auto scope was requested
+            case State#state.req#el_req.gri#gri.scope of
+                auto -> {ok, NewState#state.req#el_req.gri, GetResult};
+                _ -> {ok, GetResult}
+            end;
+        Other ->
+            Other
     end;
 
 

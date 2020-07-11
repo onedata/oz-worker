@@ -324,7 +324,11 @@ get_test(Config) ->
             expected_body = #{
                 <<"spaceId">> => S1,
                 <<"name">> => ?SPACE_NAME1,
-                <<"providers">> => #{P1 => SupportSize}
+                <<"providers">> => #{P1 => SupportSize},
+                <<"creator">> => #{
+                    <<"type">> => <<"user">>,
+                    <<"id">> => U1
+                }
             }
         },
         logic_spec = #logic_spec{
@@ -333,7 +337,8 @@ get_test(Config) ->
             args = [auth, S1],
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?SPACE_NAME1,
-                <<"providers">> => #{P1 => SupportSize}
+                <<"providers">> => #{P1 => SupportSize},
+                <<"creator">> => ?SUB(user, U1)
             })
         },
         gs_spec = #gs_spec{
