@@ -4,6 +4,60 @@ Release notes for project oz\_worker
 CHANGELOG
 ---------
 
+### 20.02.1
+
+-   **VFS-6344** GUI: showing information if QoS requirement is
+    impossible to be fulfilled
+-   **VFS-6402** Disallowed creating more than one public handle for a
+    single share
+-   **VFS-6358** Optimization of files upload through GUI
+-   **VFS-6474** Added initial support for XRootD storage, including
+    direct access to XRootD storages and importing of legacy data sets
+    stored on XRootD or EOS servers.
+-   **VFS-6421** New generic GUI plugin for harvesters
+-   **VFS-6462** Every file in a space is now harvested - including
+    files without metadata. Harvested metadata now has a new key -
+    \`\_\_onedata\` - which contains file name, space id and xattrs.
+-   **VFS-6401** All authentication errors are now wrapped in
+    UNAUTHORIZED error and map to 401 HTTP code to avoid ambiguity when
+    reporting token related errors - tokens can be used for
+    authentication as well as input data for some operations (e.g.
+    invite tokens).
+-   **VFS-6390** Because of asynchronous processing, it was possible
+    that GraphSync session cleanup intertwined with deleted record
+    cleanup (that removes corresponding subscriptions from sessions,
+    possibly including the session being cleaned up) and caused an error
+    that interrupted change propagation. Now, if the session is no
+    longer existent, subscription removal errors are ignored and the
+    propagation completes.
+-   **VFS-6518** Endpoint is now optional when adding a new harvester -
+    if not provided, the default one from Onezone configuration will be
+    used. Generic GUI is now loaded by default upon harvester creation.
+-   **VFS-6346** GUI improvements: added Oneprovider GUI notifications,
+    better file selection, additional error handling, better file
+    manager refresh UX, fixed overflow of context menu in file browser,
+    fixes in responsive layout.
+-   **VFS-6453** New Open Data and share description views with visual
+    Dublin Core editor and Markdown editor.
+-   **VFS-6288** Basic HA functionality (experimental) - protect
+    Oneprovider from single node failure
+-   **VFS-4760** Added implicit API caveats that limit access tokens
+    used by Onedata GUIs behind the scenes for authentication and
+    authorization. Different services in the system are presented with
+    user\'s access token with power limited to bare minimum required for
+    the service to handle user requests. For example, Oneproviders do
+    not have access to APIs that could alter or delete user data and
+    memberships.
+-   **VFS-6457** Added new publicly visible field to shares -
+    description (supports the markdown format)
+-   **VFS-6378** Onepanel GUI and REST API now explicitly block
+    supporting a space with more than one imported storage (globally) -
+    such operation was possible in the past but was never supported by
+    the internal storage import logic and led to incoherent view on
+    space data.
+-   **VFS-6369** Fix datastore internal call, batch management during
+    links listing and infinite loop during storage directories creation.
+
 ### 20.02.0-beta4
 
 ### 20.02.0-beta3
@@ -22,9 +76,10 @@ CHANGELOG
 
 -   VFS-5524, VFS-5735 Invite and access tokens can now contain
     customizable caveats that confine the context in which the token is
-    valid. This concept is taken from Google\'s macaroons, which are in
-    fact used for underlying implementation. Example caveats include:
-    audience, IP address, ASN, geographical region, system\'s interface.
+    valid. This concept is taken from Google\\\'s macaroons, which are
+    in fact used for underlying implementation. Example caveats include:
+    audience, IP address, ASN, geographical region, system\\\'s
+    interface.
 
 -   VFS-5727 REST API for tokens is now available, allowing to create
     named and temporary tokens with caveats and including a wide range
@@ -33,40 +88,54 @@ CHANGELOG
 -   VFS-5874 Data access caveats are now supported in tokens. They are
     treated as special caveats that reduce the available API to a bare
     minimum required solely for data access. Tokens with such caveats
-    can only be used in Oneclient or Oneprovider\'s REST & CDMI. Data
+    can only be used in Oneclient or Oneprovider\\\'s REST & CDMI. Data
     access caveats include: readonly caveat (allowing readonly access),
     data path caveat (restricting the logical file paths that can be
     accessed) and objectid caveat (restricting the accessible file IDs).
 
--   VFS-5733 The concept of \"storage\", representing the Oneprovider\'s
-    storage system on which the space data is stored, has been moved to
-    Onezone. From now on, Oneproviders can share information about
-    storage parameters defined by Oneprovider admins and use this
-    knowledge in QoS algorithms that manage data replicas.
+-   VFS-5733 The concept of \\\"storage\\\", representing the
+    Oneprovider\\\'s storage system on which the space data is stored,
+    has been moved to Onezone. From now on, Oneproviders can share
+    information about storage parameters defined by Oneprovider admins
+    and use this knowledge in QoS algorithms that manage data replicas.
 
 -   VFS-5899 GUI update \* New tokens gui
 
 -   VFS-6250 Changed after\_init callback to on\_cluster\_ready
+
 -   VFS-5983 Update consistent\_hashing usage
+
 -   VFS-5983 Support datastore HA
+
 -   VFS-6231 Added upgrade essential workers in node manager
+
 -   VFS-5944 Add GUI translator for token examine endpoint, include
     invite target name info in case of invite tokens
--   VFS-6185 Update cluster\_worker to support documents\' timestamps
+
+-   VFS-6185 Update cluster\_worker to support documents\\\' timestamps
+
 -   VFS-5944 Add GUI translator for zone time
--   VFS-5944 Fix temp token\'s max ttl check
+
+-   VFS-5944 Fix temp token\\\'s max ttl check
+
 -   VFS-5944 Add GUI translator for user temporary tokens
+
 -   VFS-5944 Add max\_temporary\_token\_ttl to GUI GS handshake
     attributes
+
 -   VFS-6150 Make sure entity graph is reconciled after changing user
     privileges in invite tokens test SUITE
+
 -   VFS-6174 Update ctool and cluster-worker refs, add missing REST
     testcase for support parameters update operation
+
 -   VFS-6150 Fix a regression in OIDC code parsing headers in IDP
     responses
+
 -   VFS-6043 Add space support related concepts: parameters, dbsync
-    state and provider\'s support state *Add corresponding API* Ensure
+    state and provider\\\'s support state *Add corresponding API* Ensure
     backward compatibility and upgradeability
+
 -   VFS-6129 Increased timeout in elasticsearch plugin
 
 ### 19.02.3
@@ -110,14 +179,14 @@ CHANGELOG
 
 -   VFS-5689 Increase default GUI token TTL
 -   VFS-5678 change indices privileges to views privileges
--   VFS-5524 Add MaxMind\'s GeoLite2 database for geolocation queries
+-   VFS-5524 Add MaxMind\\\'s GeoLite2 database for geolocation queries
 -   VFS-5635 Make all records added to DNS server lowercase
 -   VFS-4893 Created endpoint to retrieve full list of privileges
 -   VFS-5498 Enable GUI package verification by default
 -   VFS-5657 Enabled Ubuntu distribution package tag
 -   VFS-5544 Fix create operation always returning the revision of
     original resource (rather than the newly created)
--   VFS-5498 Do not check oz-worker gui-sha256 (OZ GUI needn\'t be
+-   VFS-5498 Do not check oz-worker gui-sha256 (OZ GUI needn\\\'t be
     verified)
 -   VFS-5498 Disable GUI verification until acceptance tests are aware
     of it
@@ -210,7 +279,7 @@ CHANGELOG
 
 -   VFS-4695 Fix arguments order in dns soa record creation
 -   VFS-4638 Added group name normalization
--   VFS-4029 Implement responding to Let\'s Encrypt http challenge
+-   VFS-4029 Implement responding to Let\\\'s Encrypt http challenge
 -   Updating GUI, including: \* VFS-4668-add-admin-message-to-login-page
 -   VFS-4666 Add customization of brand subtitle and login notification
     (GUI) to config
@@ -419,14 +488,14 @@ CHANGELOG
 
 ### 17.06.0-rc1
 
--   VFS-3458 Make sure user\'s connected accounts are popagated through
-    subscriptions, use md5 rather than base64 to encode user and group
-    ids coming from IdPs
+-   VFS-3458 Make sure user\\\'s connected accounts are popagated
+    through subscriptions, use md5 rather than base64 to encode user and
+    group ids coming from IdPs
 -   VFS-3457 User base64 url rather than base64 in user id encoding
--   VFS-3448 Use single \'onedata\' bucket
+-   VFS-3448 Use single \\\'onedata\\\' bucket
 -   VFS-3457 Fix a bug in groups encoding from SAML assertions, do
     base64 of user ids from IdPs
--   VFS-3429 Update esaml reference to point to repo in onedata\'s
+-   VFS-3429 Update esaml reference to point to repo in onedata\\\'s
     github
 -   Reconfigure couchbase pools
 -   VFS-3376 Fix exemplary saml.config
@@ -584,7 +653,8 @@ CHANGELOG
 
 ### 3.0.0-rc8
 
--   VFS-2625 Removing share\'s reference to handle is now not obligatory
+-   VFS-2625 Removing share\\\'s reference to handle is now not
+    obligatory
 -   VFS-2625 Fix handles not being properly retrieved via REST
 -   VFS-2625 Use unencoded shalsh character in public handle field oh
     handle
@@ -646,7 +716,7 @@ CHANGELOG
 -   VFS-2500 described location service config options
 -   VFS-2309 no more bootstrap on testmaster
 -   VFS-2309 adjusted location service to use node 4
--   VFS-2176 all \'A\' DNS entries used as bootstrap nodes
+-   VFS-2176 all \\\'A\\\' DNS entries used as bootstrap nodes
 -   VFS-2309 boostrap location service client on testmaster
 -   VFS-2309 rest auth skeleton
 -   VFS-2309 public keys retrieved from directly publishers
@@ -841,7 +911,7 @@ CHANGELOG
 -   VFS-1528 Remove deprecated use of erlang:now/0
 -   VFS-1428 Add endpoint that allows for getting token issuer.
 -   VFS-1378 adjust to the new ctool API
--   VFS-1223 add rest port to macaroon\'s location
+-   VFS-1223 add rest port to macaroon\\\'s location
 -   VFS-1223 Handle empty macaroon-discharges header.
 -   VFS-1223 Parse macaroons from HTTP headers.
 -   VFS-1223 Implement first revision of macaroon-based auth.
