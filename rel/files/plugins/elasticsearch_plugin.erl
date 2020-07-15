@@ -28,6 +28,8 @@
     query_validator/0
 ]).
 
+-export([convert_xattrs/1]).
+
 -behaviour(onezone_plugin_behaviour).
 -behaviour(harvester_plugin_behaviour).
 
@@ -300,7 +302,7 @@ prepare_data(BatchEntry) ->
     Payload = maps:get(<<"payload">>, BatchEntry, #{}),
     InternalParams = maps:with([<<"spaceId">>, <<"fileName">>], BatchEntry),
     InternalParams1 = case maps:find(<<"xattrs">>, Payload) of
-        {ok, Xattrs} -> InternalParams#{<<"xattrs">> => Xattrs};
+        {ok, Xattrs} -> InternalParams#{<<"xattrs">> => convert_xattrs(Xattrs)};
         _ -> InternalParams
     end,
     EncodedJson = maps:get(<<"json">>, Payload, <<"{}">>),
@@ -406,3 +408,29 @@ is_es_error_ignored(_) -> false.
 -spec allowed_paths(http_client:method()) -> [binary()].
 allowed_paths(post) -> [<<"^_search.*$">>];
 allowed_paths(get) -> [<<"^_mapping$">>, <<"^_search.*$">>].
+
+-define(REJECTED_XATTRS_KEY, <<"__rejected">>).
+
+% fixme specs
+convert_xattrs(Xattrs) ->
+    maps:fold(fun convert_xattr/3, #{}, Xattrs).
+
+convert_xattr(Key, Value, Map) ->
+    KeyList = lists:filter(fun(A) -> 
+        byte_size(A) > 0 
+    end, binary:split(Key, <<".">>, [global])),
+    
+    try put_value(KeyList, Value, Map) catch
+        throw:rejected -> 
+            RejectedList = maps:get(?REJECTED_XATTRS_KEY, Map, []),
+            Map#{?REJECTED_XATTRS_KEY => [Key | RejectedList]}
+    end.
+
+put_value([], Value, _Map) ->
+    Value;
+put_value([H | Tail], Value, Map) ->
+    Nested = maps:get(H, Map, #{}),
+    case is_map(Nested) of
+        true -> Map#{H => put_value(Tail, Value, Nested)};
+        false -> throw(rejected)
+    end.
