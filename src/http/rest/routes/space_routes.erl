@@ -367,7 +367,7 @@ routes() -> [
     {<<"/spaces/:id/harvesters/:hid">>, #rest_req{
         method = 'GET',
         produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_harvester, id = ?BINDING(hid), aspect = instance, scope = protected},
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(hid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
     }},
     %% Remove space from harvester.

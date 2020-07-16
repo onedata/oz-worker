@@ -86,6 +86,7 @@ operation_supported(get, privileges, _) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
+operation_supported(get, instance, shared) -> true;
 operation_supported(get, instance, public) -> true;
 
 operation_supported(get, gui_plugin_config, private) -> true;
@@ -209,7 +210,7 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
         _ ->
             ok
     end,
-    
+
     ok = gui_static:link_default_harvester_gui(HarvesterId),
 
     {true, {Harvester, Rev}} = fetch_entity(#gri{aspect = instance, id = HarvesterId}),
@@ -248,16 +249,24 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
             _ ->
                 ok
         end,
-        NewGRI = #gri{type = od_harvester, id = HarvesterId, aspect = instance,
-            % Privileges are defined only for USER_JOIN_HARVESTER and GROUP_JOIN_HARVESTER
-            scope = case is_list(Privileges) andalso lists:member(?HARVESTER_VIEW, Privileges) of
-                true -> private;
-                false -> protected
-            end
-        },
+        {NewScope, NewAuthHint} = case Req#el_req.auth_hint of
+            ?AS_SPACE(SpId) ->
+                {shared, ?THROUGH_SPACE(SpId)};
+            _ ->  % ?AS_USER or ?AS_GROUP
+                Scope = case lists:member(?HARVESTER_VIEW, Privileges) of
+                    true -> private;
+                    false -> protected
+                end,
+                {Scope, undefined}
+
+        end,
+        NewGRI = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = NewScope},
         {true, {Harvester, Rev}} = fetch_entity(#gri{aspect = instance, id = HarvesterId}),
         {ok, HarvesterData} = get(#el_req{gri = NewGRI}, Harvester),
-        {ok, resource, {NewGRI, {HarvesterData, Rev}}}
+        case NewAuthHint of
+            undefined -> {ok, resource, {NewGRI, {HarvesterData, Rev}}};
+            _ -> {ok, resource, {NewGRI, NewAuthHint, {HarvesterData, Rev}}}
+        end
     end);
 
 create(#el_req{auth = Auth, gri = #gri{id = HarvesterId, aspect = invite_user_token}}) ->
@@ -438,14 +447,9 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Harvester) ->
         <<"creator">> => Creator,
         <<"creationTime">> => CreationTime
     }};
-get(#el_req{gri = #gri{aspect = instance, scope = public}}, Harvester) ->
-    #od_harvester{
-        name = Name, creator = Creator, creation_time = CreationTime
-    } = Harvester,
+get(#el_req{gri = #gri{aspect = instance, scope = _}}, Harvester) ->  % covers shared and public scopes
     {ok, #{
-        <<"name">> => Name,
-        <<"creator">> => Creator,
-        <<"creationTime">> => CreationTime
+        <<"name">> => Harvester#od_harvester.name
     }};
 
 get(#el_req{gri = #gri{aspect = all_plugins}}, _) ->
@@ -834,10 +838,6 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             % Groups's membership in this harvester is checked in 'exists'
             group_logic:has_eff_privilege(GroupId, ClientUserId, ?GROUP_VIEW);
 
-        {?USER(ClientUserId), ?THROUGH_SPACE(SpaceId)} ->
-            % Space's membership in this harvester is checked in 'exists'
-            space_logic:has_eff_privilege(SpaceId, ClientUserId, ?SPACE_VIEW);
-
         {?USER(ClientUserId), _} ->
             harvester_logic:has_eff_user(Harvester, ClientUserId);
 
@@ -846,10 +846,19 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             authorize(Req#el_req{gri = GRI#gri{scope = private}}, Harvester)
     end;
 
-authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = public}}, Harvester) ->
-    Harvester#od_harvester.public orelse
-        % Access to protected data also allows access to public data
-    authorize(Req#el_req{gri = GRI#gri{scope = protected}}, Harvester);
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = shared}}, Harvester) ->
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
+        {?USER(ClientUserId), ?THROUGH_SPACE(SpaceId)} ->
+            % Space's membership in this harvester is checked in 'exists'
+            space_logic:has_eff_privilege(SpaceId, ClientUserId, ?SPACE_VIEW);
+
+        _ ->
+            % Access to private data also allows access to shared data
+            authorize(Req#el_req{gri = GRI#gri{scope = protected}}, Harvester)
+    end;
+
+authorize(#el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = public}}, Harvester) ->
+    Harvester#od_harvester.public;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = gui_plugin_config}}, Harvester) ->
     Harvester#od_harvester.public orelse auth_by_privilege(Req, Harvester, ?HARVESTER_VIEW);
@@ -985,6 +994,9 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) -
     [?OZ_HARVESTERS_LIST];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}) ->
+    [?OZ_HARVESTERS_VIEW];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = shared}}) ->
     [?OZ_HARVESTERS_VIEW];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}) ->

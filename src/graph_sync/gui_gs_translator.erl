@@ -758,20 +758,20 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
         end
     end;
 
-translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = public}, HarvesterData) ->
+% used to display the list of harvesters in a space
+translate_harvester(#gri{aspect = instance, scope = shared}, #{<<"name">> := Name}) ->
     #{
-        <<"name">> := Name,
-        <<"creationTime">> := CreationTime,
-        <<"creator">> := Creator
-    } = HarvesterData,
+        <<"scope">> => <<"shared">>,
+        <<"name">> => Name
+    };
+
+% used to display harvester's public GUI - if the public mode is enabled
+translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = public}, #{<<"name">> := Name}) ->
     #{
         <<"scope">> => <<"public">>,
         <<"name">> => Name,
         <<"guiPluginConfig">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
-        <<"indexList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = indices}),
-        <<"info">> => maps:merge(translate_creator(Creator), #{
-            <<"creationTime">> => CreationTime
-        })
+        <<"indexList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = indices})
     };
 
 translate_harvester(#gri{aspect = gui_plugin_config}, Config) ->
