@@ -142,13 +142,14 @@ create_test(Config) ->
                 <<"plugin">> => [?HARVESTER_MOCK_PLUGIN_BINARY],
                 <<"guiPluginConfig">> => [?HARVESTER_GUI_PLUGIN_CONFIG]
             },
-            bad_values =
-            [{<<"plugin">>, <<"not_existing_plugin">>,
-                ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>,
-                    rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))},
+            bad_values = [
+                {<<"plugin">>, <<"not_existing_plugin">>,
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>,
+                        rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))},
                 {<<"endpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE},
                 {<<"endpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"endpoint">>)}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)]
+                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+            ]
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -532,14 +533,15 @@ update_test(Config) ->
                 <<"plugin">> => [?HARVESTER_MOCK_PLUGIN2_BINARY],
                 <<"public">> => [true, false]
             },
-            bad_values =
-            [{<<"plugin">>, <<"not_existing_plugin">>,
-                ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>,
-                    rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))},
+            bad_values = [
+                {<<"plugin">>, <<"not_existing_plugin">>,
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>,
+                        rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))},
                 {<<"public">>, not_boolean, ?ERROR_BAD_VALUE_BOOLEAN(<<"public">>)},
                 {<<"endpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE},
                 {<<"endpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"endpoint">>)}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)]
+                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+            ]
         }
     },
     ?assert(api_test_utils:run_tests(
