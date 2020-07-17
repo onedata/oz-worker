@@ -286,6 +286,11 @@
         <<"public">> => false
     }).
 
+-define(HARVESTER_SHARED_DATA(HarvesterName),
+    #{
+        <<"name">> => HarvesterName
+    }).
+
 -define(HARVESTER_CREATE_DATA(HarvesterName, HarvesterPlugin),
     #{
         <<"name">> => HarvesterName,

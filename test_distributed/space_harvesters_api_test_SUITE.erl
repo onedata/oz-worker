@@ -316,7 +316,7 @@ get_harvester_test(Config) ->
     oz_test_utils:harvester_add_space(Config, H1, S1),
 
 
-    ExpData = ?HARVESTER_PROTECTED_DATA(?HARVESTER_NAME2),
+    ExpData = ?HARVESTER_SHARED_DATA(?HARVESTER_NAME2),
     
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -342,7 +342,7 @@ get_harvester_test(Config) ->
             module = space_logic,
             function = get_harvester,
             args = [auth, S1, H1],
-            expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"plugin">> => ?HARVESTER_MOCK_PLUGIN})
+            expected_result = ?OK_MAP(ExpData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).

@@ -738,7 +738,7 @@ get_harvester(Auth, SpaceId, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
         auth = Auth,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = protected},
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = shared},
         auth_hint = ?THROUGH_SPACE(SpaceId)
     }).
 

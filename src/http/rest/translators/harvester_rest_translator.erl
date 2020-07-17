@@ -29,6 +29,8 @@
 -spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
     {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
+create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#gri{id = HarvesterId}, _, Rev}) ->
+    create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#gri{id = HarvesterId}, Rev});
 create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#gri{id = HarvesterId}, _}) ->
     LocationTokens = case AuthHint of
         ?AS_USER(_UserId) ->
@@ -110,6 +112,15 @@ get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, Harve
         <<"public">> => Public,
         <<"plugin">> => Plugin,
         <<"endpoint">> => Endpoint
+    });
+
+get_response(#gri{id = HarvesterId, aspect = instance, scope = shared}, HarvesterData) ->
+    #{
+        <<"name">> := Name
+    } = HarvesterData,
+    rest_translator:ok_body_reply(#{
+        <<"harvesterId">> => HarvesterId,
+        <<"name">> => Name
     });
 
 get_response(#gri{aspect = indices}, Indices) ->

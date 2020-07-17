@@ -130,7 +130,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    7.
+    8.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -247,6 +247,29 @@ get_record_struct(7) ->
         {creation_time, integer},
         % nested #subject{} record was extended and is now encoded as string
         % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(8) ->
+    % the structure does not change, but privileges are updated
+    % (new privilege was added space_register_files)
+    {record, [
+        {name, string},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {storages, #{string => integer}},
+        {shares, [string]},
+        {harvesters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => {integer, [{atom, string}]}}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
 
         {top_down_dirty, boolean},
@@ -533,23 +556,82 @@ upgrade_record(6, Space) ->
         end, Field)
     end,
 
-    {7, #od_space{
+    {7, {od_space,
+        Name,
+
+        TranslateField(Users),
+        TranslateField(Groups),
+        #{}, % storages - recalculated during cluster upgrade procedure
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        #{}, %% eff_providers - recalculated during cluster upgrade procedure
+        EffHarvesters,
+
+        CreationTime,
+        upgrade_common:upgrade_subject_record(Creator),
+
+        true,
+        true
+    }};
+upgrade_record(7, Space) ->
+    {
+        od_space,
+        Name,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        _TopDownDirty,
+        _BottomUpDirty
+    } = Space,
+
+    PreviousManagerPrivs = privileges:space_manager() -- [?SPACE_REGISTER_FILES],
+    UpgradePrivileges = fun(Privileges) ->
+        % the ?SPACE_REGISTER_FILES is granted to all members that had at least
+        % manager privileges before the upgrade
+        case lists_utils:intersect(PreviousManagerPrivs, Privileges) of
+            PreviousManagerPrivs -> privileges:from_list([?SPACE_REGISTER_FILES | Privileges]);
+            _ -> Privileges
+        end
+    end,
+
+    UpgradeRelation = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Relation}) -> {UpgradePrivileges(Privs), Relation};
+            (_, Privs) -> UpgradePrivileges(Privs)
+        end, Field)
+    end,
+
+    {8, #od_space{
         name = Name,
 
-        users = TranslateField(Users),
-        groups = TranslateField(Groups),
+        users = UpgradeRelation(Users),
+        groups = UpgradeRelation(Groups),
+        storages = Storages,
         shares = Shares,
         harvesters = Harvesters,
-        storages = #{},
 
         eff_users = EffUsers,
         eff_groups = EffGroups,
-        %% Eff providers are recalculated during cluster upgrade procedure
-        eff_providers = #{},
+        eff_providers = EffProviders,
         eff_harvesters = EffHarvesters,
 
         creation_time = CreationTime,
-        creator = upgrade_common:upgrade_subject_record(Creator),
+        creator = Creator,
 
         top_down_dirty = true,
         bottom_up_dirty = true
