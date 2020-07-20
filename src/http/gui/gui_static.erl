@@ -44,7 +44,7 @@
 -export_type([gui_id/0]).
 
 %% API
--export([deploy_package/3, deploy_package/4, ensure_package/4]).
+-export([deploy_package/3, deploy_package/4, put_package/4]).
 -export([deploy_default_harvester_package/1, link_default_harvester_gui/1]).
 -export([link_gui/3, link_gui/4]).
 -export([unlink_gui/2, unlink_gui/3]).
@@ -117,14 +117,18 @@ deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
 %% @doc
 %% Reads given GUI package, and upon success, deploys the GUI package under 
 %% given GUI prefix on all cluster nodes. 
+%% Removes previously deployed default package if it exists.
 %% Deployed package can be later linked using link_default_harvester_gui/1.
 %% @end
 %%--------------------------------------------------------------------
 -spec deploy_default_harvester_package(file:name_all()) ->
-    {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE | ?ERROR_GUI_PACKAGE_TOO_LARGE.
+    ok | ?ERROR_BAD_GUI_PACKAGE | ?ERROR_GUI_PACKAGE_TOO_LARGE.
 deploy_default_harvester_package(PackagePath) ->
     case gui:read_package(PackagePath) of
-        {ok, _, PackageBin} -> ensure_package(?HARVESTER_GUI, PackageBin, ?DEFAULT_HARVESTER_GUI_HASH);
+        {ok, _, PackageBin} ->
+            ?CRITICAL_SECTION(?DEFAULT_HARVESTER_GUI_HASH, fun() ->
+                put_package(on_cluster, ?HARVESTER_GUI, PackageBin, ?DEFAULT_HARVESTER_GUI_HASH)
+            end);
         {error, _} = Error -> Error
     end.
 
@@ -143,14 +147,15 @@ ensure_package(GuiType, PackageBin, GuiHash) ->
     ?CRITICAL_SECTION(GuiHash, fun() ->
         case gui_exists_unsafe(GuiType, GuiHash) of
             true -> ok;
-            false -> ensure_package(on_cluster, GuiType, PackageBin, GuiHash)
+            false -> put_package(on_cluster, GuiType, PackageBin, GuiHash)
         end
     end).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deploys a GUI package under given  GUI prefix.
+%% Extracts and places given GUI package under the path corresponding to the GUI 
+%% type and hash. Overwrites previous package (if any).
 %%
 %% NOTE: This function must be run in a critical section to avoid race conditions.
 %%
@@ -159,14 +164,14 @@ ensure_package(GuiType, PackageBin, GuiHash) ->
 %%  on_node - performs the operation only on the local node
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_package(on_cluster | on_node, onedata:gui(), PackageBin :: binary(),
+-spec put_package(on_cluster | on_node, onedata:gui(), PackageBin :: binary(),
     onedata:gui_hash()) -> ok.
-ensure_package(on_cluster, GuiType, PackageBin, GuiHash) ->
+put_package(on_cluster, GuiType, PackageBin, GuiHash) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, ensure_package, [on_node, GuiType, PackageBin, GuiHash])
+        ok = rpc:call(Node, ?MODULE, put_package, [on_node, GuiType, PackageBin, GuiHash])
     end, ?CLUSTER_NODES);
 
-ensure_package(on_node, GuiType, PackageBin, GuiHash) ->
+put_package(on_node, GuiType, PackageBin, GuiHash) ->
     ?info("Deploying GUI package: ~s", [gui_path(GuiType, GuiHash)]),
     TempDir = mochitemp:mkdtemp(),
     {ok, ExtractedPackagePath} = gui:extract_package({binary, PackageBin}, TempDir),
