@@ -49,6 +49,7 @@
 
 -define(INTERNAL_METADATA_KEY, <<"__onedata">>).
 -define(REJECTED_METADATA_KEY, <<"__rejected">>).
+-define(REJECTION_REASON_METADATA_KEY, <<"__rejection_reason">>).
 
 -define(MAX_SUBMIT_RETRIES, 3).
 
@@ -255,7 +256,7 @@ is_code_expected(Code, ExpectedCodes) ->
 %% Each line ends with literal '\n'
 %% @end
 %%--------------------------------------------------------------------
--spec prepare_elasticsearch_batch(od_harvester:batch(), rejected_fields()) -> es_batch().
+-spec prepare_elasticsearch_batch(od_harvester:batch(), {rejected_fields(), binary()}) -> es_batch().
 prepare_elasticsearch_batch(Batch, Rejected) ->
     Requests = lists:map(fun(BatchEntry) ->
         #{
@@ -285,7 +286,7 @@ prepare_elasticsearch_batch(Batch, Rejected) ->
 %% which is added to json metadata.
 %% @end
 %%--------------------------------------------------------------------
--spec prepare_data(od_harvester:batch_entry(), rejected_fields()) -> map().
+-spec prepare_data(od_harvester:batch_entry(), {rejected_fields(), binary()}) -> map().
 prepare_data(BatchEntry, {RejectedFields, RejectionReason}) ->
     Payload = maps:get(<<"payload">>, BatchEntry, #{}),
     InternalParams = maps:with([<<"spaceId">>, <<"fileName">>], BatchEntry),
@@ -303,9 +304,9 @@ prepare_data(BatchEntry, {RejectedFields, RejectionReason}) ->
         [] -> InternalParams2;
         [_|_] -> InternalParams2#{
             ?REJECTED_METADATA_KEY => RejectedFields,
-            <<"__rejection_reason">> => RejectionReason
+            ?REJECTION_REASON_METADATA_KEY => RejectionReason
         };
-        all -> InternalParams2#{<<"__rejection_reason">> => RejectionReason}
+        all -> InternalParams2#{?REJECTION_REASON_METADATA_KEY => RejectionReason}
     end, 
     ResultJson = prepare_json(DecodedJson, RejectedFields),
     ResultJson#{?INTERNAL_METADATA_KEY => InternalParams3}.
@@ -316,8 +317,12 @@ prepare_xattrs(Xattrs, all) ->
     #{?REJECTED_METADATA_KEY => json_utils:encode(Xattrs)};
 prepare_xattrs(Xattrs, Fields) ->
     ConvertedXattrs = convert_xattrs(Xattrs),
+    Re = <<(?INTERNAL_METADATA_KEY)/binary, "\\.xattrs\\.(.*)">>,
     lists:foldl(fun(RejectedField, Acc) ->
-        kv_utils:remove(split_on_dot(RejectedField), Acc)
+        case re:run(RejectedField, Re, [{capture, all_but_first, binary}]) of
+            {match, [Field | _]} -> remove_field(split_on_dot(Field), Acc);
+            _ -> Acc
+        end
     end, ConvertedXattrs, Fields).
 
 
@@ -448,7 +453,6 @@ do_submit_request(Endpoint, IndexId, PreparedBatch) ->
     end.
 
 
-%% @private
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -545,7 +549,7 @@ convert_xattrs(Xattrs) ->
 convert_xattr(Key, Value, Map) ->
     KeyList = split_on_dot(Key),
     
-    try put_xattr_value(KeyList ++ [<<"_value">>], Value, Map) catch
+    try put_xattr_value(KeyList ++ [<<"__value">>], Value, Map) catch
         throw:rejected ->
             RejectedList = maps:get(?REJECTED_METADATA_KEY, Map, []),
             Map#{?REJECTED_METADATA_KEY => [Key | RejectedList]}
