@@ -374,6 +374,7 @@ is_path_allowed(Method, Path) ->
 -spec is_es_schema_error(Error :: binary()) -> boolean().
 is_es_schema_error(<<"mapper_parsing_exception">>) -> true;
 is_es_schema_error(<<"strict_dynamic_mapping_exception">>) -> true;
+is_es_schema_error(<<"illegal_argument_exception">>) -> true;
 is_es_schema_error(_) -> false.
 
 
@@ -487,7 +488,7 @@ parse_batch_result(Result, Batch) ->
                 {ErrorType, ErrorReason, _Error} ->
                     case is_es_schema_error(ErrorType) of
                         true -> {rejected, retrieve_rejected_field(ErrorReason), ErrorReason};
-                        false -> {PrevSeq, {Seq, ErrorReason}}
+                        false -> {PrevSeq, {Seq, <<ErrorType/binary, ": ", ErrorReason/binary>>}}
                     end
             end;
             (_, Acc) -> Acc  % ignore rest of response when first error is found 
@@ -507,7 +508,8 @@ retrieve_rejected_field(ErrorReason) ->
     ReToRun = [
         <<"Existing mapping for \\[(.*)\\] must">>,
         <<"failed to parse field \\[(.*)\\] of type">>,
-        <<"object mapping for \\[(.*)\\] tried to parse">>
+        <<"object mapping for \\[(.*)\\] tried to parse">>,
+        <<"mapper \\[(.*)\\] of different type">>
     ],
     Res = lists:filtermap(fun(Re) -> 
         case re:run(ErrorReason, Re, [{capture, all_but_first, binary}]) of
@@ -521,7 +523,7 @@ retrieve_rejected_field(ErrorReason) ->
     end.
 
 
-% TODO VFS-6546 preserve longest conflicting xattr
+%% @TODO VFS-6546 preserve longest conflicting xattr
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
