@@ -48,7 +48,7 @@
 %%    <<"spaceId">> :: binary(),
 %%    <<"fileName">> :: binary(),
 %%    <<"operation">> :: binary(), %% <<"submit">> | <<"delete">>
-%%    <<"seq">> :: integer(),
+%%    <<"seq">> :: pos_integer(),
 %%    <<"payload">> :: #{
 %%        json :: binary(),
 %%        rdf :: binary(),
