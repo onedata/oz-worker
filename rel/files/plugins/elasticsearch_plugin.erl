@@ -31,6 +31,12 @@
 -behaviour(onezone_plugin_behaviour).
 -behaviour(harvester_plugin_behaviour).
 
+-type converted_xattrs() :: #{binary() => converted_xattrs() | binary()}.
+-type es_batch() :: binary(). %% @TODO VFS-6546 Add example 
+-type rejected_fields() :: all | [binary()]. %% @TODO VFS-6546 Add example 
+-type index_submit_response() :: ok | {error, SuccessfulSeq :: pos_integer() | undefined,
+        FailedSeq :: pos_integer(), Error :: binary()}.
+
 -define(ENTRY_PATH(Path), <<"/_doc/", Path/binary>>).
 -define(REQUEST_TIMEOUT, oz_worker:get_env(elasticsearch_plugin_request_timeout, timer:minutes(2))).
 
@@ -40,6 +46,12 @@
         {error, _} = Error -> Error
     end
 ).
+
+-define(INTERNAL_METADATA_KEY, <<"__onedata">>).
+-define(REJECTED_METADATA_KEY, <<"__rejected">>).
+-define(REJECTION_REASON_METADATA_KEY, <<"__rejection_reason">>).
+
+-define(MAX_SUBMIT_RETRIES, 3).
 
 
 %%--------------------------------------------------------------------
@@ -102,31 +114,10 @@ delete_index(Endpoint, IndexId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec submit_batch(od_harvester:endpoint(), od_harvester:id(), od_harvester:indices(), od_harvester:batch()) -> 
-    {ok, [{od_harvester:index_id(), ok | {error, SuccessfulSeq :: integer() | undefined,
-        FailedSeq :: integer(), Error :: binary()}}]}.
-submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
-    PreparedBatch = prepare_elasticsearch_batch(Batch),
-    FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
-    {ok, utils:pmap(fun(IndexId) ->
-        case do_request(post, Endpoint, IndexId, ?ENTRY_PATH(<<"_bulk">>), PreparedBatch,
-            #{?HDR_CONTENT_TYPE => <<"application/x-ndjson">>}, [{200,300}]) of
-            {ok,_,_,Body} ->
-                Res = json_utils:decode(Body),
-                case maps:get(<<"errors">>, Res) of
-                    false -> {IndexId, ok};
-                    true -> {IndexId, parse_batch_result(Res, Batch, HarvesterId, IndexId)}
-                end;
-            {error, _} = Error -> 
-                ?debug("Error when updating index ~p in harvester ~p: ~p", [IndexId, HarvesterId, Error]),
-                ErrorMsg = case Error of
-                    ?ERROR_TEMPORARY_FAILURE ->
-                        <<"Temporary failure: Elasticsearch service is currently unavailable">>;
-                    ?ERROR_BAD_DATA(<<"payload">>) ->
-                        <<"Provided payload cannot be understood by the server">>
-                end,
-                {IndexId, {error, undefined, FirstSeq, ErrorMsg}}
-        end
-    end, Indices)}.
+    {ok, [{od_harvester:index_id(), ok | {error, SuccessfulSeq :: pos_integer() | undefined,
+        FailedSeq :: pos_integer(), Error :: binary()}}]}.
+submit_batch(Endpoint, _HarvesterId, Indices, Batch) ->
+    submit_to_all_indices(Endpoint, Indices, Batch).
 
 
 %%--------------------------------------------------------------------
@@ -265,8 +256,8 @@ is_code_expected(Code, ExpectedCodes) ->
 %% Each line ends with literal '\n'
 %% @end
 %%--------------------------------------------------------------------
--spec prepare_elasticsearch_batch(od_harvester:batch()) -> binary().
-prepare_elasticsearch_batch(Batch) ->
+-spec prepare_elasticsearch_batch(od_harvester:batch(), {rejected_fields(), binary()}) -> es_batch().
+prepare_elasticsearch_batch(Batch, Rejected) ->
     Requests = lists:map(fun(BatchEntry) ->
         #{
             <<"operation">> := Operation,
@@ -279,7 +270,7 @@ prepare_elasticsearch_batch(Batch) ->
         Req = json_utils:encode(#{ESOperation => #{<<"_id">> => EntryId}}),
         case ESOperation of
             <<"index">> ->
-                Data = json_utils:encode(prepare_data(BatchEntry)),
+                Data = json_utils:encode(prepare_data(BatchEntry, Rejected)),
                 str_utils:join_binary([Req, Data], <<"\n">>);
             _ -> Req
         end
@@ -291,16 +282,16 @@ prepare_elasticsearch_batch(Batch) ->
 %% @private
 %% @doc
 %% Prepares data to be sent to Elasticsearch based on entry sent by provider.
-%% SpaceId, FileName and Xattrs are stored under special key `__onedata`,
+%% SpaceId, FileName and Xattrs are stored under special key ?INTERNAL_METADATA_KEY,
 %% which is added to json metadata.
 %% @end
 %%--------------------------------------------------------------------
--spec prepare_data(od_harvester:batch_entry()) -> map().
-prepare_data(BatchEntry) ->
+-spec prepare_data(od_harvester:batch_entry(), {rejected_fields(), binary()}) -> map().
+prepare_data(BatchEntry, {RejectedFields, RejectionReason}) ->
     Payload = maps:get(<<"payload">>, BatchEntry, #{}),
     InternalParams = maps:with([<<"spaceId">>, <<"fileName">>], BatchEntry),
     InternalParams1 = case maps:find(<<"xattrs">>, Payload) of
-        {ok, Xattrs} -> InternalParams#{<<"xattrs">> => Xattrs};
+        {ok, Xattrs} -> InternalParams#{<<"xattrs">> => prepare_xattrs(Xattrs, RejectedFields)};
         _ -> InternalParams
     end,
     EncodedJson = maps:get(<<"json">>, Payload, <<"{}">>),
@@ -309,7 +300,157 @@ prepare_data(BatchEntry) ->
         <<"json_metadata_exists">> => maps:is_key(<<"json">>, Payload),
         <<"xattr_metadata_exists">> => maps:is_key(<<"xattrs">>, Payload)
     },
-    DecodedJson#{<<"__onedata">> => InternalParams2}.
+    InternalParams3 = case RejectedFields of
+        [] -> InternalParams2;
+        [_|_] -> InternalParams2#{
+            ?REJECTED_METADATA_KEY => RejectedFields,
+            ?REJECTION_REASON_METADATA_KEY => RejectionReason
+        };
+        all -> InternalParams2#{?REJECTION_REASON_METADATA_KEY => RejectionReason}
+    end, 
+    ResultJson = prepare_json(DecodedJson, RejectedFields),
+    ResultJson#{?INTERNAL_METADATA_KEY => InternalParams3}.
+
+
+-spec prepare_xattrs(#{binary() => binary()}, rejected_fields()) -> converted_xattrs().
+prepare_xattrs(Xattrs, all) ->
+    #{?REJECTED_METADATA_KEY => json_utils:encode(Xattrs)};
+prepare_xattrs(Xattrs, Fields) ->
+    ConvertedXattrs = convert_xattrs(Xattrs),
+    Re = <<(?INTERNAL_METADATA_KEY)/binary, "\\.xattrs\\.(.*)">>,
+    lists:foldl(fun(RejectedField, Acc) ->
+        case re:run(RejectedField, Re, [{capture, all_but_first, binary}]) of
+            {match, [Field | _]} -> remove_field(split_on_dot(Field), Acc);
+            _ -> Acc
+        end
+    end, ConvertedXattrs, Fields).
+
+
+prepare_json(Json, all) when map_size(Json) == 0->
+    #{};
+prepare_json(Json, all) ->
+    #{<<(?INTERNAL_METADATA_KEY)/binary, ".", (?REJECTED_METADATA_KEY)/binary>> => json_utils:encode(Json)};
+prepare_json(Json, Fields) ->
+    lists:foldl(fun(RejectedField, Acc) ->
+        remove_field(split_on_dot(RejectedField), Acc)
+    end, Json, Fields).
+
+
+remove_field([H], Map) when is_map(Map) ->
+    maps:without([H], Map);
+remove_field([H | Tail], Map) when is_map(Map) ->
+    case maps:get(H, Map, undefined) of
+        undefined -> Map;
+        InnerMapOrList -> Map#{H => remove_field(Tail, InnerMapOrList)}
+    end;
+remove_field(Key, List) when is_list(List) ->
+    lists:map(fun(InnerMapOrList) ->
+        remove_field(Key, InnerMapOrList)
+    end, List).
+
+
+%% @private
+-spec get_entry_response_error(EntryResponse :: map()) ->
+    {ErrorType :: binary(), ErrorMap :: map()} | undefined.
+get_entry_response_error(EntryResponse) ->
+    InnerMap = case maps:find(<<"index">>, EntryResponse) of
+        {ok, M} -> M;
+        _ -> maps:get(<<"delete">>, EntryResponse)
+    end,
+    case maps:get(<<"error">>, InnerMap, undefined) of
+        undefined -> undefined;
+        ErrorMap -> 
+            ErrorType = maps:get(<<"type">>, ErrorMap, <<"unexpected_error">>),
+            ErrorReason = maps:get(<<"reason">>, ErrorMap, ErrorType), 
+            {ErrorType, ErrorReason, ErrorMap}
+    end.
+
+
+%% @private
+-spec is_path_allowed(http_client:method(), binary()) -> boolean().
+is_path_allowed(Method, Path) ->
+    AllowedPaths = allowed_paths(Method),
+    lists:any(fun(AllowedPathRe) ->
+        match == re:run(Path, AllowedPathRe, [{capture, none}])
+    end, AllowedPaths).
+
+
+%% @private
+-spec is_es_schema_error(Error :: binary()) -> boolean().
+is_es_schema_error(<<"mapper_parsing_exception">>) -> true;
+is_es_schema_error(<<"strict_dynamic_mapping_exception">>) -> true;
+is_es_schema_error(<<"illegal_argument_exception">>) -> true;
+is_es_schema_error(_) -> false.
+
+
+%% @private
+-spec allowed_paths(http_client:method()) -> [binary()].
+allowed_paths(post) -> [<<"^_search.*$">>];
+allowed_paths(get) -> [<<"^_mapping$">>, <<"^_search.*$">>].
+
+
+%% @private
+-spec submit_to_all_indices(od_harvester:endpoint(), od_harvester:indices(), od_harvester:batch()) ->
+    {ok, [{od_harvester:index_id(), index_submit_response()}]}.
+submit_to_all_indices(Endpoint, Indices, Batch) ->
+    PreparedBatch = prepare_elasticsearch_batch(Batch, {[], <<>>}),
+    FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
+    {ok, utils:pmap(fun(IndexId) ->
+        {IndexId, submit_to_index(Endpoint, IndexId, Batch, PreparedBatch, [], FirstSeq)}
+    end, Indices)}.
+
+
+%% @private
+-spec submit_to_index(od_harvester:endpoint(), od_harvester:index_id(), od_harvester:batch(), 
+    es_batch(), rejected_fields(), FirstSeq :: pos_integer()) -> index_submit_response().
+submit_to_index(Endpoint, IndexId, Batch, PreparedBatch, Fields, FirstSeq) ->
+    case do_submit_request(Endpoint, IndexId, PreparedBatch) of
+        {ok, Res} -> check_result(Endpoint, IndexId, Batch, Fields, Res);
+        {error, ErrorMsg} -> {error, undefined, FirstSeq, ErrorMsg}
+    end.
+
+
+%% @private
+-spec check_result(od_harvester:endpoint(), od_harvester:index_id(), od_harvester:batch(), 
+    rejected_fields(), map()) -> index_submit_response().
+check_result(Endpoint, IndexId, Batch, RejectedFields, Result) ->
+    case maps:get(<<"errors">>, Result) of
+        false -> ok;
+        true ->
+            case parse_batch_result(Result, Batch) of
+                {rejected, Field, Reason} ->
+                    case is_binary(Field) andalso length(RejectedFields) + 1  < ?MAX_SUBMIT_RETRIES of
+                        true -> resubmit(Endpoint, IndexId, Batch, [Field | RejectedFields], Reason);
+                        false -> resubmit(Endpoint, IndexId, Batch, all, Reason)
+                    end;
+                Other -> Other
+            end
+    end.
+
+
+%% @private
+-spec resubmit(od_harvester:endpoint(), od_harvester:index_id(), od_harvester:batch(), 
+    rejected_fields(), binary()) -> index_submit_response().
+resubmit(Endpoint, IndexId, Batch, Fields, Reason) ->
+    PreparedBatch = prepare_elasticsearch_batch(Batch, {Fields, Reason}),
+    FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
+    submit_to_index(Endpoint, IndexId, Batch, PreparedBatch, Fields, FirstSeq).
+
+
+%% @private
+do_submit_request(Endpoint, IndexId, PreparedBatch) ->
+    case do_request(post, Endpoint, IndexId, ?ENTRY_PATH(<<"_bulk">>), PreparedBatch,
+        #{?HDR_CONTENT_TYPE => <<"application/x-ndjson">>}, [{200,300}]) of
+        {ok,_,_,Body} -> {ok, json_utils:decode(Body)};
+        {error, _} = Error ->
+            ErrorMsg = case Error of
+                ?ERROR_TEMPORARY_FAILURE ->
+                    <<"Temporary failure: Elasticsearch service is currently unavailable">>;
+                ?ERROR_BAD_DATA(<<"payload">>) ->
+                    <<"Provided payload cannot be understood by the server">>
+            end,
+            {error, ErrorMsg}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -340,69 +481,96 @@ prepare_data(BatchEntry) ->
 %%  ]
 %% @end
 %%--------------------------------------------------------------------
--spec parse_batch_result(Res :: map(), od_harvester:batch(), od_harvester:id(), od_harvester:index_id()) ->
-    ok | {error, SuccessfulSeq :: integer() | undefined, FailedSeq :: integer(), Error :: binary()}.
-parse_batch_result(Res, Batch, HarvesterId, IndexId) ->
+-spec parse_batch_result(Res :: map(), od_harvester:batch()) -> 
+    index_submit_response() | {rejected, binary(), binary()}.
+parse_batch_result(Result, Batch) ->
     ParsedResult = lists:foldl(
-        fun({EntryResponse, BatchEntry}, {PrevSeq, undefined}) -> 
+        fun({EntryResponse, BatchEntry}, {PrevSeq, undefined}) ->
             Seq = maps:get(<<"seq">>, BatchEntry),
             case get_entry_response_error(EntryResponse) of
-                undefined -> 
-                    {Seq, undefined};
-                {ErrorType, Error} ->
-                    case is_es_error_ignored(ErrorType) of
-                        true ->
-                            ?debug("Entry submit in harvester ~p in index ~p dropped because of not matching schema: ~p",
-                                [HarvesterId, IndexId, Error]),
-                            {Seq, undefined};
-                        false ->
-                            ?debug("Unexpected error in batch response in harvester ~p in index ~p: ~p", 
-                                [HarvesterId, IndexId, Error]),
-                            {PrevSeq, {Seq, ErrorType}}
+                undefined -> {Seq, undefined};
+                {ErrorType, ErrorReason, _Error} ->
+                    case is_es_schema_error(ErrorType) of
+                        true -> {rejected, retrieve_rejected_field(ErrorReason), ErrorReason};
+                        false -> {PrevSeq, {Seq, <<ErrorType/binary, ": ", ErrorReason/binary>>}}
                     end
             end;
-           (_, Acc) -> 
-               % ignore rest of response when first error is found 
-               Acc 
-        end, {undefined, undefined}, lists:zip(maps:get(<<"items">>, Res), Batch)
+            (_, Acc) -> Acc  % ignore rest of response when first error is found 
+        end, {undefined, undefined}, lists:zip(maps:get(<<"items">>, Result), Batch)
     ),
     case ParsedResult of
         {_, undefined} -> ok;
-        {SuccessfulSeq, {FailedSeq, Error}} -> {error, SuccessfulSeq, FailedSeq, Error}
+        {SuccessfulSeq, {FailedSeq, Error}} -> {error, SuccessfulSeq, FailedSeq, Error};
+        Other -> Other
     end.
 
 
 %% @private
--spec get_entry_response_error(EntryResponse :: map()) ->
-    {ErrorType :: binary(), ErrorMap :: map()} | undefined.
-get_entry_response_error(EntryResponse) ->
-    InnerMap = case maps:find(<<"index">>, EntryResponse) of
-        {ok, M} -> M;
-        _ -> maps:get(<<"delete">>, EntryResponse)
-    end,
-    case maps:get(<<"error">>, InnerMap, undefined) of
-        undefined -> undefined;
-        ErrorMap -> {maps:get(<<"type">>, ErrorMap, <<"unexpected_error">>), ErrorMap}
+-spec retrieve_rejected_field(binary()) -> binary() | all.
+retrieve_rejected_field(ErrorReason) ->
+    ?debug("[Elasticsearch plugin]: ~p", [ErrorReason]),
+    ReToRun = [
+        <<"Existing mapping for \\[(.*)\\] must">>,
+        <<"failed to parse field \\[(.*)\\] of type">>,
+        <<"object mapping for \\[(.*)\\] tried to parse">>,
+        <<"mapper \\[(.*)\\] of different type">>
+    ],
+    Res = lists:filtermap(fun(Re) -> 
+        case re:run(ErrorReason, Re, [{capture, all_but_first, binary}]) of
+            {match, [Field | _]} -> {true, Field};
+            _ -> false
+        end
+    end, ReToRun),
+    case Res of
+        [] -> all;
+        [Field | _] -> Field
+    end.
+
+
+%% @TODO VFS-6546 preserve longest conflicting xattr
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Converts each xattr with '.' in key to nested maps, e.g:
+%% #{<<"aaa.bbb.ccc.ddd">> => <<"123">>} will be converted to 
+%% #{<<"aaa">> => #{<<"bbb">> => #{<<"ccc">> => #{<<"ddd">> => <<"123">>}}}} 
+%%
+%% In case of conflicting keys (e.g <<"aaa">>, <<"aaa.bbb">>) fixme
+%% Rejected keys are stored under ?REJECTED_XAATRS_KEY key.
+%% @end
+%%--------------------------------------------------------------------
+-spec convert_xattrs(#{binary() => binary()}) -> converted_xattrs().
+convert_xattrs(Xattrs) ->
+    maps:fold(fun convert_xattr/3, #{}, Xattrs).
+
+
+%% @private
+-spec convert_xattr(binary(), binary(), converted_xattrs()) -> converted_xattrs().
+convert_xattr(Key, Value, Map) ->
+    KeyList = split_on_dot(Key),
+    
+    try put_xattr_value(KeyList ++ [<<"__value">>], Value, Map) catch
+        throw:rejected ->
+            RejectedList = maps:get(?REJECTED_METADATA_KEY, Map, []),
+            Map#{?REJECTED_METADATA_KEY => [Key | RejectedList]}
     end.
 
 
 %% @private
--spec is_path_allowed(http_client:method(), binary()) -> boolean().
-is_path_allowed(Method, Path) ->
-    AllowedPaths = allowed_paths(Method),
-    lists:any(fun(AllowedPathRe) ->
-        match == re:run(Path, AllowedPathRe, [{capture, none}])
-    end, AllowedPaths).
+-spec put_xattr_value([binary()], binary(), converted_xattrs()) -> converted_xattrs().
+put_xattr_value([], Value, _Map) ->
+    Value;
+put_xattr_value([H | Tail], Value, Map) ->
+    Nested = maps:get(H, Map, #{}),
+    case is_map(Nested) of
+        true -> Map#{H => put_xattr_value(Tail, Value, Nested)};
+        false -> throw(rejected)
+    end.
 
 
 %% @private
--spec is_es_error_ignored(Error :: binary()) -> boolean().
-is_es_error_ignored(<<"mapper_parsing_exception">>) -> true;
-is_es_error_ignored(<<"strict_dynamic_mapping_exception">>) -> true;
-is_es_error_ignored(_) -> false.
-
-
-%% @private
--spec allowed_paths(http_client:method()) -> [binary()].
-allowed_paths(post) -> [<<"^_search.*$">>];
-allowed_paths(get) -> [<<"^_mapping$">>, <<"^_search.*$">>].
+-spec split_on_dot(binary()) -> [binary()].
+split_on_dot(Binary) ->
+    lists:filter(fun(A) ->
+        byte_size(A) > 0
+    end, binary:split(Binary, <<".">>, [global])).
