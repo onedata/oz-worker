@@ -74,15 +74,22 @@ all() ->
 
 
 create_test(Config) ->
+    % test cases are divided to ensure value of readonly parameter
+    create_test_base(Config, false),
+    create_test_base(Config, true).
+
+
+create_test_base(Config, ReadonlyValue) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
 
-    VerifyFun = fun(StorageId, ExpectedQosParams, ExpectedImported) ->
+    VerifyFun = fun(StorageId, ExpectedQosParams, ExpectedImported, ExpectedReadonly) ->
         {ok, Storage} = oz_test_utils:get_storage(Config, StorageId),
         ?assertEqual(?CORRECT_NAME, Storage#od_storage.name),
         ?assertEqual(P1, Storage#od_storage.provider),
         ?assertEqual(ExpectedQosParams, Storage#od_storage.qos_parameters),
         ?assertEqual(ExpectedImported, Storage#od_storage.imported),
+        ?assertEqual(ExpectedReadonly, Storage#od_storage.readonly),
         true
     end,
 
@@ -107,8 +114,15 @@ create_test(Config) ->
                         Parameters -> Parameters
                     end,
                 ExpectedImported = maps:get(<<"imported">>, DataSet, unknown),
-
-                ?OK_TERM(fun(StorageId) -> VerifyFun(StorageId, ExpectedQosParams, ExpectedImported) end)
+                ExpectedReadonly = maps:get(<<"readonly">>, DataSet, false),
+                case ExpectedReadonly andalso ExpectedImported =:= false of
+                    true ->
+                        ?ERROR_REASON(?ERROR_READONLY_REQUIRES_IMPORTED_STORAGE);
+                    false ->
+                        ?OK_TERM(fun(StorageId) ->
+                            VerifyFun(StorageId, ExpectedQosParams, ExpectedImported, ExpectedReadonly)
+                        end)
+                end
             end)
         },
         gs_spec = #gs_spec{
@@ -121,22 +135,29 @@ create_test(Config) ->
                         Parameters -> Parameters
                     end,
                 ExpectedImported = maps:get(<<"imported">>, DataSet, unknown),
-                ?OK_MAP_CONTAINS(#{
-                <<"provider">> => P1,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = StorageId} = gri:deserialize(EncodedGri),
-                    VerifyFun(StorageId, ExpectedQosParams, ExpectedImported)
-                end})
+                ExpectedReadonly = maps:get(<<"readonly">>, DataSet, false),
+                case ExpectedReadonly andalso ExpectedImported =:= false of
+                    true ->
+                        ?ERROR_REASON(?ERROR_READONLY_REQUIRES_IMPORTED_STORAGE);
+                    false ->
+                        ?OK_MAP_CONTAINS(#{
+                            <<"provider">> => P1,
+                            <<"gri">> => fun(EncodedGri) ->
+                                #gri{id = StorageId} = gri:deserialize(EncodedGri),
+                                VerifyFun(StorageId, ExpectedQosParams, ExpectedImported, ExpectedReadonly)
+                            end})
+                end
             end)
         },
         data_spec = #data_spec{
-            required = [<<"name">>],
-            optional = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>],
+            required = [<<"name">>, <<"readonly">>],
+            optional = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>, <<"readonly">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
                 <<"qosParameters">> => [#{<<"key">> => <<"value">>}],
-                <<"imported">> => [true, false]
+                <<"imported">> => [true, false],
+                <<"readonly">> => [ReadonlyValue]
             },
             bad_values = [
                 %% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
@@ -146,7 +167,8 @@ create_test(Config) ->
                 {<<"qosParameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qosParameters">>)},
                 {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"qosParameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)}
+                {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)},
+                {<<"readonly">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"readonly">>)}
             ] ++ ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
         }
     },
@@ -170,6 +192,8 @@ get_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ExpectedQosParameters = #{<<"key">> => <<"value">>},
+    ExpectedImported = false,
+    ExpectedReadonly = false,
     oz_test_utils:update_storage(Config, St1, #{<<"qosParameters">> => ExpectedQosParameters}),
 
     % Get and check private data
@@ -194,6 +218,8 @@ get_test(Config) ->
             expected_result = ?OK_TERM(
                 fun(#od_storage{
                     qos_parameters = QosParameters,
+                    imported = Imported,
+                    readonly = Readonly,
                     provider = Provider, spaces = Spaces,
                     eff_users = EffUsers, eff_groups = #{},
                     eff_harvesters = #{},
@@ -202,6 +228,8 @@ get_test(Config) ->
                     top_down_dirty = false, bottom_up_dirty = false
                 }) ->
                     ?assertEqual(QosParameters, ExpectedQosParameters),
+                    ?assertEqual(Imported, ExpectedImported),
+                    ?assertEqual(Readonly, ExpectedReadonly),
                     ?assertEqual(Spaces, #{
                         S => SupportSize
                     }),
@@ -222,6 +250,8 @@ get_test(Config) ->
                 <<"provider">> => P1,
                 <<"qosParameters">> => ExpectedQosParameters,
                 <<"qos_parameters">> => ExpectedQosParameters,
+                <<"imported">> => ExpectedImported,
+                <<"readonly">> => ExpectedReadonly,
                 <<"spaces">> => [S],
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
@@ -273,6 +303,11 @@ get_test(Config) ->
 
 
 update_test(Config) ->
+    % test cases are divided to ensure value of readonly parameter
+    update_test(Config, false),
+    update_test(Config, true).
+
+update_test(Config, ReadonlyValue) ->
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, {P2, P2Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -292,8 +327,15 @@ update_test(Config) ->
                         Parameters -> Parameters
                     end,
                 ExpImportedStorage = maps:get(<<"imported">>, Data, false),
-                ?assertEqual(ExpImportedStorage, Storage#od_storage.imported),
-                ?assertEqual(ExpQosParams, Storage#od_storage.qos_parameters)
+                ExpReadonly = maps:get(<<"readonly">>, Data, false),
+                case ExpReadonly andalso ExpImportedStorage =:= false of
+                    true ->
+                        #{};
+                    false ->
+                        ?assertEqual(ExpImportedStorage, Storage#od_storage.imported),
+                        ?assertEqual(ExpReadonly, Storage#od_storage.readonly),
+                        ?assertEqual(ExpQosParams, Storage#od_storage.qos_parameters)
+                end
         end
     end,
 
@@ -313,19 +355,41 @@ update_test(Config) ->
             module = storage_logic,
             function = update,
             args = [auth, storageId, data],
-            expected_result = ?OK
+            expected_result = ?OK_ENV(fun(Env, DataSet) ->
+                ExpectedImported = maps:get(<<"imported">>, DataSet, unknown),
+                ExpectedReadonly = maps:get(<<"readonly">>, DataSet, false),
+                case ExpectedReadonly andalso ExpectedImported =:= false of
+                    true ->
+                        StorageId = maps:get(storageId, Env),
+                        ?ERROR_REASON(?ERROR_READONLY_REQUIRES_IMPORTED_STORAGE(StorageId));
+                    false ->
+                        ?OK
+                end
+            end)
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_storage, id = storageId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_ENV(fun(Env, DataSet) ->
+                ExpectedImported = maps:get(<<"imported">>, DataSet, unknown),
+                ExpectedReadonly = maps:get(<<"readonly">>, DataSet, false),
+                case ExpectedReadonly andalso ExpectedImported =:= false of
+                    true ->
+                        StorageId = maps:get(storageId, Env),
+                        ?ERROR_REASON(?ERROR_READONLY_REQUIRES_IMPORTED_STORAGE(StorageId));
+                    false ->
+                        ?OK
+                end
+            end)
         },
         data_spec = #data_spec{
-            at_least_one = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>],
+            required = [<<"imported">>, <<"readonly">>],
+            at_least_one = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>, <<"readonly">>],
             correct_values = #{
                 <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
                 <<"qosParameters">> => [#{<<"key">> => <<"value">>}],
-                <<"imported">> => [true, false]
+                <<"imported">> => [true, false],
+                <<"readonly">> => [ReadonlyValue]
             },
             bad_values = [
                 %% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
@@ -335,7 +399,8 @@ update_test(Config) ->
                 {<<"qosParameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qosParameters">>)},
                 {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"qosParameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)}
+                {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)},
+                {<<"readonly">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"readonly">>)}
             ]
         }
     },

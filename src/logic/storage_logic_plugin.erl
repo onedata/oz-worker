@@ -105,12 +105,18 @@ create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PRO
     % Only legacy providers do not send imported value 
     % set it to `unknown` so provider could change it during its upgrade procedure
     ImportedStorage = maps:get(<<"imported">>, Data, unknown),
+    Readonly = maps:get(<<"readonly">>, Data, false),
+    case Readonly andalso ImportedStorage =:= false of
+        true -> throw(?ERROR_READONLY_REQUIRES_IMPORTED_STORAGE);
+        _ -> ok
+    end,
     StorageDoc = #document{
         key = ProposedId,
         value = #od_storage{
             name = Name,
             qos_parameters = QosParameters,
             imported = ImportedStorage,
+            readonly = Readonly,
             creator = aai:normalize_subject(Auth#auth.subject),
             provider = ProviderId
         }
@@ -198,25 +204,32 @@ update(#el_req{gri = #gri{id = StorageId, aspect = instance}, data = Data}) ->
             #od_storage{
                 name = Name,
                 qos_parameters = QosParameters,
-                imported = ImportedStorage
+                imported = ImportedStorage,
+                readonly = Readonly
             } = Storage,
 
             NewName = maps:get(<<"name">>, Data, Name),
             NewQosParameters = get_qos_parameters(Data, QosParameters),
             NewImportedStorage = maps:get(<<"imported">>, Data, ImportedStorage),
+            NewReadonly = maps:get(<<"readonly">>, Data, Readonly),
             % Modification of imported value should be blocked if storage supports any space
             % unless it was previously `unknown` meaning that storage was created by legacy provider.
             ShouldBlock = (ImportedStorage /= unknown) and
                 (ImportedStorage /= NewImportedStorage) and SupportsAnySpace,
-    
             case ShouldBlock of
                 true -> ?ERROR_STORAGE_IN_USE;
                 false ->
-                    {ok, Storage#od_storage{
-                        name = NewName,
-                        qos_parameters = NewQosParameters,
-                        imported = NewImportedStorage
-                    }}
+                    case NewReadonly andalso NewImportedStorage =:= false of
+                        true ->
+                            ?ERROR_READONLY_REQUIRES_IMPORTED_STORAGE(StorageId);
+                        false ->
+                            {ok, Storage#od_storage{
+                                name = NewName,
+                                qos_parameters = NewQosParameters,
+                                imported = NewImportedStorage,
+                                readonly = NewReadonly
+                            }}
+                    end
             end
         end),
         case Res of
@@ -359,7 +372,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     optional => #{
         <<"qos_parameters">> => {json, qos_parameters},
         <<"qosParameters">> => {json, qos_parameters},
-        <<"imported">> => {boolean, any}
+        <<"imported">> => {boolean, any},
+        <<"readonly">> => {boolean, any}
     }
 };
 
@@ -378,7 +392,8 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
         <<"name">> => {binary, name},
         <<"qos_parameters">> => {json, qos_parameters},
         <<"qosParameters">> => {json, qos_parameters},
-        <<"imported">> => {boolean, any}
+        <<"imported">> => {boolean, any},
+        <<"readonly">> => {boolean, any}
     }
 };
 

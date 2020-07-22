@@ -393,6 +393,7 @@
     name = <<>> :: od_storage:name(),
     qos_parameters = #{} :: od_storage:qos_parameters(),
     imported = false :: boolean() | unknown,
+    readonly = false :: boolean(),
 
     % Direct relations to other entities
     provider :: od_provider:id(),

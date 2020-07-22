@@ -2677,10 +2677,55 @@ get_record(od_storage, 1) -> {od_storage,
     true,
     true
 };
-get_record(od_storage, 2) -> #od_storage{
+get_record(od_storage, 2) -> {
+    {od_storage,
+        <<"storage_name">>,
+        #{<<"key">> => <<"value">>},
+        unknown,
+
+        <<"p1">>,
+        #{<<"s1">> => 8, <<"s2">> => 10},
+
+        #{},
+        #{},
+        #{},
+
+        #{},
+        #{},
+
+        ?DUMMY_TIMESTAMP,
+        ?SUB(user, <<"userId123">>),
+
+        true,
+        true
+    },
+    {od_storage,
+        <<"storage_name">>,
+        #{<<"key">> => <<"value">>},
+        true,
+
+        <<"p1">>,
+        #{<<"s1">> => 8, <<"s2">> => 10},
+
+        #{},
+        #{},
+        #{},
+
+        #{},
+        #{},
+
+        ?DUMMY_TIMESTAMP,
+        ?SUB(user, <<"userId123">>),
+
+        true,
+        true
+    }
+};
+get_record(od_storage, 3) -> #od_storage{
     name = <<"storage_name">>,
     qos_parameters = #{<<"key">> => <<"value">>},
-    imported = unknown,
+    imported = true,
+    readonly = false,
 
     provider = <<"p1">>,
     spaces = #{<<"s1">> => 8, <<"s2">> => 10},
@@ -2698,6 +2743,7 @@ get_record(od_storage, 2) -> #od_storage{
     top_down_dirty = true,
     bottom_up_dirty = true
 };
+
 
 get_record(dns_state, 1) -> {dns_state,
     #{<<"sub">> => <<"p1">>},
