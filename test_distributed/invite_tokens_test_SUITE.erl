@@ -294,11 +294,15 @@ group_join_group_token(_Config) ->
 user_join_space_token(_Config) ->
     SpaceCreatorUserId = ozt_users:create(),
     SpaceId = ozt_users:create_space_for(SpaceCreatorUserId),
+    % test a user that is not an owner to make sure privileges are checked
+    % correctly (owners effectively have all the privileges)
+    NonSpaceOwnerId = ozt_users:create(),
+    ozt_spaces:add_user(SpaceId, NonSpaceOwnerId),
 
     ?assert(run_invite_token_tests(#testcase{
         token_type = ?INVITE_TOKEN(?USER_JOIN_SPACE, SpaceId),
 
-        eligible_to_invite = [?SUB(user, SpaceCreatorUserId)],
+        eligible_to_invite = [?SUB(user, NonSpaceOwnerId)],
         requires_privileges_to_invite = true,
         admin_privilege_to_invite = ?OZ_SPACES_ADD_RELATIONSHIPS,
 
@@ -341,11 +345,15 @@ user_join_space_token(_Config) ->
 group_join_space_token(_Config) ->
     SpaceCreatorUserId = ozt_users:create(),
     SpaceId = ozt_users:create_space_for(SpaceCreatorUserId),
+    % test a user that is not an owner to make sure privileges are checked
+    % correctly (owners effectively have all the privileges)
+    NonSpaceOwnerId = ozt_users:create(),
+    ozt_spaces:add_user(SpaceId, NonSpaceOwnerId),
 
     ?assert(run_invite_token_tests(#testcase{
         token_type = ?INVITE_TOKEN(?GROUP_JOIN_SPACE, SpaceId),
 
-        eligible_to_invite = [?SUB(user, SpaceCreatorUserId)],
+        eligible_to_invite = [?SUB(user, NonSpaceOwnerId)],
         requires_privileges_to_invite = true,
         admin_privilege_to_invite = ?OZ_SPACES_ADD_RELATIONSHIPS,
 
@@ -413,6 +421,10 @@ group_join_space_token(_Config) ->
 support_space_token(_Config) ->
     SpaceCreatorUserId = ozt_users:create(),
     SpaceId = ozt_users:create_space_for(SpaceCreatorUserId),
+    % test a user that is not an owner to make sure privileges are checked
+    % correctly (owners effectively have all the privileges)
+    NonSpaceOwnerId = ozt_users:create(),
+    ozt_spaces:add_user(SpaceId, NonSpaceOwnerId),
     TokenDataWrite = lists_utils:random_element([global, none]),
     TokenMetaReplication = lists_utils:random_element([eager, lazy, none]),
 
@@ -421,7 +433,7 @@ support_space_token(_Config) ->
             ?SUPPORT_SPACE, SpaceId, support_parameters:build(TokenDataWrite, TokenMetaReplication)
         ),
 
-        eligible_to_invite = [?SUB(user, SpaceCreatorUserId)],
+        eligible_to_invite = [?SUB(user, NonSpaceOwnerId)],
         requires_privileges_to_invite = true,
         admin_privilege_to_invite = ?OZ_SPACES_ADD_RELATIONSHIPS,
 
@@ -478,11 +490,15 @@ support_space_token(_Config) ->
 harvester_join_space_token(_Config) ->
     SpaceCreatorUserId = ozt_users:create(),
     SpaceId = ozt_users:create_space_for(SpaceCreatorUserId),
+    % test a user that is not an owner to make sure privileges are checked
+    % correctly (owners effectively have all the privileges)
+    NonSpaceOwnerId = ozt_users:create(),
+    ozt_spaces:add_user(SpaceId, NonSpaceOwnerId),
 
     ?assert(run_invite_token_tests(#testcase{
         token_type = ?INVITE_TOKEN(?HARVESTER_JOIN_SPACE, SpaceId),
 
-        eligible_to_invite = [?SUB(user, SpaceCreatorUserId)],
+        eligible_to_invite = [?SUB(user, NonSpaceOwnerId)],
         requires_privileges_to_invite = true,
         admin_privilege_to_invite = ?OZ_SPACES_ADD_RELATIONSHIPS,
 
@@ -882,7 +898,11 @@ space_join_harvester_token(_Config) ->
         admin_privilege_to_set_privileges = undefined,
 
         eligible_consumer_types = [{user, fun(?SUB(user, UserId)) ->
-            SpaceId = ozt_users:create_space_for(UserId),
+            SpaceCreatorUserId = ozt_users:create(),
+            SpaceId = ozt_users:create_space_for(SpaceCreatorUserId),
+            % test a user that is not an owner to make sure privileges are checked
+            % correctly (owners effectively have all the privileges)
+            ozt_spaces:add_user(SpaceId, UserId),
             % Store the space in memory for use in different callbacks
             simple_cache:put({user_space, UserId}, SpaceId)
         end}],
@@ -1324,7 +1344,7 @@ check_multi_use_named_token(Tc = #testcase{token_type = TokenType}) ->
         ConsumersOfMultiUseToken = lists:map(fun(_) ->
             create_consumer_with_privs_to_consume(Tc, random_eligible)
         end, lists:seq(1, UsageLimit)),
-        utils:pforeach(fun(Consumer) ->
+        lists_utils:pforeach(fun(Consumer) ->
             ?assertMatch({ok, _}, consume_token(Tc, Consumer, MultiUseToken))
         end, ConsumersOfMultiUseToken),
         ConsumerGamma = create_consumer_with_privs_to_consume(Tc, random_eligible),
@@ -1336,7 +1356,7 @@ check_multi_use_named_token(Tc = #testcase{token_type = TokenType}) ->
         ConsumersOfInfiniteUseToken = lists:map(fun(_) ->
             create_consumer_with_privs_to_consume(Tc, random_eligible)
         end, lists:seq(1, 50)),
-        utils:pforeach(fun(Consumer) ->
+        lists_utils:pforeach(fun(Consumer) ->
             ?assertMatch({ok, _}, consume_token(Tc, Consumer, InfiniteUseToken))
         end, ConsumersOfInfiniteUseToken)
     end, Tc#testcase.eligible_to_invite).

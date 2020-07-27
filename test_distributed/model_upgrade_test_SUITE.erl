@@ -1666,7 +1666,8 @@ get_record(od_space, 7) -> {
                 ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
-            ])
+            ]),
+            <<"user3">> => [?SPACE_READ_DATA, ?SPACE_WRITE_DATA]
         },
         #{
             <<"group1">> => privileges:from_list([
@@ -1701,7 +1702,9 @@ get_record(od_space, 7) -> {
         [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
         [],
 
-        #{},
+        #{
+            <<"user3">> => {privileges:space_manager() -- [?SPACE_REGISTER_FILES], [{od_space, <<"self">>}]}
+        },
         #{},
         #{},
         #{},
@@ -1713,8 +1716,87 @@ get_record(od_space, 7) -> {
         true
     }
 };
-get_record(od_space, 8) -> #od_space{
+get_record(od_space, 8) -> {od_space,
+    <<"name">>,
+    #{
+        <<"user1">> => privileges:from_list([
+            ?SPACE_VIEW,
+            ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+            ?SPACE_VIEW_TRANSFERS,
+            ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+            ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+            ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_REGISTER_FILES,
+            ?SPACE_MANAGE_SHARES,
+            ?SPACE_VIEW_VIEWS,
+            ?SPACE_QUERY_VIEWS,
+            ?SPACE_VIEW_STATISTICS,
+            ?SPACE_VIEW_CHANGES_STREAM,
+            ?SPACE_SCHEDULE_REPLICATION,
+            ?SPACE_VIEW_QOS,
+            ?SPACE_REGISTER_FILES  % should be added by the upgrade procedure
+        ]),
+        <<"user2">> => privileges:from_list([
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+            ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
+            ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
+        ]),
+        <<"user3">> => [?SPACE_READ_DATA, ?SPACE_WRITE_DATA]
+    },
+    #{
+        <<"group1">> => privileges:from_list([
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT
+        ]),
+        <<"group2">> => privileges:from_list([
+            ?SPACE_VIEW,
+            ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+            ?SPACE_VIEW_TRANSFERS,
+            ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+            ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+            ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_MANAGE_SHARES,
+            ?SPACE_VIEW_VIEWS,
+            ?SPACE_QUERY_VIEWS,
+            ?SPACE_VIEW_STATISTICS,
+            ?SPACE_VIEW_CHANGES_STREAM,
+            ?SPACE_SCHEDULE_REPLICATION,
+            ?SPACE_VIEW_QOS,
+            ?SPACE_UPDATE, ?SPACE_DELETE,
+            ?SPACE_SET_PRIVILEGES,
+            ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+            ?SPACE_MANAGE_VIEWS,
+            ?SPACE_CANCEL_REPLICATION,
+            ?SPACE_SCHEDULE_EVICTION, ?SPACE_CANCEL_EVICTION,
+            ?SPACE_MANAGE_QOS,
+            ?SPACE_REGISTER_FILES  % should be added by the upgrade procedure
+        ])
+    },
+    #{},
+    [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+    [],
+
+    #{
+        <<"user3">> => {privileges:space_manager(), [{od_space, <<"self">>}]}
+    },
+    #{},
+    #{},
+    #{},
+
+    ?DUMMY_TIMESTAMP,
+    ?SUB(nobody),
+
+    true,
+    true
+};
+get_record(od_space, 9) -> #od_space{
     name = <<"name">>,
+
+    % Space ownership is automatically granted to all direct users that had the
+    % most effective privileges in the space before the upgrade
+    owners = [<<"user1">>, <<"user3">>],
+
     users = #{
         <<"user1">> => privileges:from_list([
             ?SPACE_VIEW,
@@ -1738,7 +1820,8 @@ get_record(od_space, 8) -> #od_space{
             ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
             ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
-        ])
+        ]),
+        <<"user3">> => [?SPACE_READ_DATA, ?SPACE_WRITE_DATA]
     },
     groups = #{
         <<"group1">> => privileges:from_list([
@@ -1773,7 +1856,9 @@ get_record(od_space, 8) -> #od_space{
     shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
     harvesters = [],
 
-    eff_users = #{},
+    eff_users = #{
+        <<"user3">> => {privileges:space_manager() -- [?SPACE_REGISTER_FILES], [{od_space, <<"self">>}]}
+    },
     eff_groups = #{},
     eff_providers = #{},
     eff_harvesters = #{},

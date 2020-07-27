@@ -33,6 +33,8 @@
 -export([delete_all_entities/0]).
 -export([get_env/1, get_env/2, set_env/2, set_app_env/3]).
 -export([get_domain/0, get_nodes/0]).
+-export([run_async/1, await_async/1]).
+-export([pforeach/2, pmap/2]).
 
 %%%===================================================================
 %%% API
@@ -48,11 +50,16 @@
 -spec init_per_suite(ct_test_config()) -> ct_test_config().
 init_per_suite(Config) ->
     Posthook = fun(NewConfig) ->
-        simple_cache:put(ct_test_config, NewConfig),
+        store_test_config(NewConfig),
         NewConfig
     end,
     ModulesToLoad = ?OZT_MODULES ++ proplists:get_value(?LOAD_MODULES, Config, []),
     [{?ENV_UP_POSTHOOK, Posthook}, {?LOAD_MODULES, ModulesToLoad} | proplists:delete(?LOAD_MODULES, Config)].
+
+
+-spec store_test_config(ct_test_config()) -> ok.
+store_test_config(Config) ->
+    simple_cache:put(ct_test_config, Config).
 
 
 -spec get_test_config() -> ct_test_config().
@@ -153,3 +160,67 @@ get_domain() ->
 -spec get_nodes() -> [node()].
 get_nodes() ->
     ?config(oz_worker_nodes, get_test_config()).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Spawns an async process, preceded by setting proper test context.
+%% so that it can use the ozt* modules.
+%% Returns a Ref that can be used to await result/completion.
+%% @end
+%%--------------------------------------------------------------------
+-spec run_async(fun(() -> term())) -> reference().
+run_async(Fun) ->
+    Parent = self(),
+    Config = get_test_config(),
+    Ref = make_ref(),
+    spawn(fun() ->
+        store_test_config(Config),
+        Result = Fun(),
+        Parent ! {Ref, Result}
+    end),
+    Ref.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Awaits result from run_async/1 using the Ref that was returned from it.
+%% @end
+%%--------------------------------------------------------------------
+-spec await_async(reference()) -> term().
+await_async(Ref) ->
+    receive
+        {Ref, Result} -> Result
+    after 60000 ->
+        error(await_async_timeout)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Parallel foreach - each element gets a new process.
+%% Sets proper test context for each process so that they can use the ozt* modules.
+%% @end
+%%--------------------------------------------------------------------
+-spec pforeach(fun((X) -> term()), [X]) -> ok.
+pforeach(Fun, Elements) ->
+    Config = get_test_config(),
+    lists_utils:pforeach(fun(Element) ->
+        store_test_config(Config),
+        Fun(Element)
+    end, Elements).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Parallel map - each element gets a new process.
+%% Sets proper test context for each process so that they can use the ozt* modules.
+%% @end
+%%--------------------------------------------------------------------
+-spec pmap(fun((X) -> Y), [X]) -> [Y].
+pmap(Fun, Elements) ->
+    Config = get_test_config(),
+    lists_utils:pmap(fun(Element) ->
+        store_test_config(Config),
+        Fun(Element)
+    end, Elements).

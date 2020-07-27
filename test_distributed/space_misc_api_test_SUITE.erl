@@ -624,10 +624,11 @@ get_share_test(Config) ->
 
 
 list_storages_test(Config) ->
-    % create space with 2 users:
+    % create space with 3 users:
+    %   Owner effectively has all the privileges
     %   U2 gets the SPACE_VIEW privilege
     %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -652,6 +653,7 @@ list_storages_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
+                {user, Owner},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -684,10 +686,11 @@ list_storages_test(Config) ->
 
 
 create_space_support_token(Config) ->
-    % create space with 2 users:
+    % create space with 3 users:
+    %   Owner effectively has all the privileges
     %   U2 gets the SPACE_ADD_STORAGE privilege
     %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_ADD_SUPPORT
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -698,6 +701,7 @@ create_space_support_token(Config) ->
         client_spec = #client_spec{
             correct = [
                 {admin, [?OZ_TOKENS_MANAGE, ?OZ_SPACES_ADD_RELATIONSHIPS]},
+                {user, Owner},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -724,10 +728,11 @@ create_space_support_token(Config) ->
 
 
 remove_storage_test(Config) ->
-    % create space with 2 users:
+    % create space with 3 users:
+    %   Owner effectively has all the privileges
     %   U2 gets the SPACE_REMOVE_SUPPORT privilege
     %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_REMOVE_SUPPORT
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -755,6 +760,7 @@ remove_storage_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_REMOVE_RELATIONSHIPS]},
+                {user, Owner},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -777,10 +783,13 @@ remove_storage_test(Config) ->
 
 
 remove_provider_test(Config) ->
-    % create space with 2 users:
+    % create space with 3 users:
+    %   Owner effectively has all the privileges
     %   U2 gets the SPACE_REMOVE_SUPPORT privilege
     %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(Config, ?SPACE_REMOVE_SUPPORT),
+    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_REMOVE_SUPPORT
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
     {ok, {P1, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, {P2, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
@@ -812,6 +821,7 @@ remove_provider_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_REMOVE_RELATIONSHIPS]},
+                {user, Owner},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -839,10 +849,11 @@ remove_provider_test(Config) ->
 
 
 list_effective_providers_test(Config) ->
-    % create space with 2 users:
+    % create space with 3 users:
+    %   Owner effectively has all the privileges
     %   U2 gets the SPACE_VIEW privilege
     %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -864,6 +875,7 @@ list_effective_providers_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
+                {user, Owner},
                 {user, U1},
                 {user, U2}
             ],

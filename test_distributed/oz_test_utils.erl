@@ -17,6 +17,7 @@
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
 -include("auth/auth_common.hrl").
+-include("ozt.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/privileges.hrl").
@@ -124,6 +125,8 @@
     space_remove_provider/3,
     space_remove_harvester/3,
 
+    space_add_owner/3, space_remove_owner/3,
+    create_space_owner/2,
     space_add_user/3,
     space_remove_user/3,
     space_add_group/3,
@@ -1199,6 +1202,31 @@ space_remove_harvester(Config, SpaceId, HarvesterId) ->
     ?assertMatch(ok, call_oz(
         Config, space_logic, remove_harvester, [?ROOT, SpaceId, HarvesterId]
     )).
+
+
+-spec space_add_owner(Config :: term(), od_space:id(), od_user:id()) -> {ok, od_user:id()}.
+space_add_owner(Config, SpaceId, UserId) ->
+    ?assertMatch(ok, call_oz(
+        Config, space_logic, add_owner, [?ROOT, SpaceId, UserId]
+    )).
+
+
+-spec space_remove_owner(Config :: term(), od_space:id(), od_user:id()) -> ok.
+space_remove_owner(Config, SpaceId, UserId) ->
+    ?assertMatch(ok, call_oz(
+        Config, space_logic, remove_owner, [?ROOT, SpaceId, UserId]
+    )).
+
+
+-spec create_space_owner(Config :: term(), od_space:id()) -> {ok, od_user:id()}.
+create_space_owner(Config, SpaceId) ->
+    {ok, NewUser} = create_user(Config),
+    space_add_user(Config, SpaceId, NewUser),
+    % the owner gets no privileges in the space, but being the owner should let
+    % them do any API operation anyway
+    space_add_owner(Config, SpaceId, NewUser),
+    space_set_user_privileges(Config, SpaceId, NewUser, [], privileges:space_admin()),
+    {ok, NewUser}.
 
 
 %%--------------------------------------------------------------------
@@ -3055,12 +3083,12 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     {ok, Groups} = list_groups(Config),
     {ok, Users} = list_users(Config),
     {ok, Harvesters} = list_harvesters(Config),
-    utils:pforeach(fun(PId) -> delete_provider(Config, PId) end, Providers),
-    utils:pforeach(fun(HId) -> delete_handle(Config, HId) end, Handles),
-    utils:pforeach(fun(ShId) -> delete_share(Config, ShId) end, Shares),
-    utils:pforeach(fun(SpId) -> delete_space(Config, SpId) end, Spaces),
-    utils:pforeach(fun(HSId) -> delete_handle_service(Config, HSId) end, HServices),
-    utils:pforeach(fun(HId) -> delete_harvester(Config, HId) end, Harvesters),
+    lists_utils:pforeach(fun(PId) -> delete_provider(Config, PId) end, Providers),
+    lists_utils:pforeach(fun(HId) -> delete_handle(Config, HId) end, Handles),
+    lists_utils:pforeach(fun(ShId) -> delete_share(Config, ShId) end, Shares),
+    lists_utils:pforeach(fun(SpId) -> delete_space(Config, SpId) end, Spaces),
+    lists_utils:pforeach(fun(HSId) -> delete_handle_service(Config, HSId) end, HServices),
+    lists_utils:pforeach(fun(HId) -> delete_harvester(Config, HId) end, Harvesters),
     % Clusters and storages are removed together with providers
 
     % Check if predefined groups should be removed too.
@@ -3071,14 +3099,12 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
             % Filter out predefined groups
             PredefinedGroupsMapping = get_env(Config, predefined_groups),
             PredefinedGroups = [Id || #{id := Id} <- PredefinedGroupsMapping],
-            lists:filter(fun(GroupId) ->
-                not lists:member(GroupId, PredefinedGroups)
-            end, Groups)
+            Groups -- PredefinedGroups
     end,
-    utils:pforeach(fun(GroupId) -> mark_group_protected(Config, GroupId, false) end, GroupsToDelete),
-    utils:pforeach(fun(GroupId) -> delete_group(Config, GroupId) end, GroupsToDelete),
+    lists_utils:pforeach(fun(GroupId) -> mark_group_protected(Config, GroupId, false) end, GroupsToDelete),
+    lists_utils:pforeach(fun(GroupId) -> delete_group(Config, GroupId) end, GroupsToDelete),
 
-    utils:pforeach(fun(UId) -> delete_user(Config, UId) end, Users).
+    lists_utils:pforeach(fun(UId) -> delete_user(Config, UId) end, Users).
 
 
 %%--------------------------------------------------------------------
@@ -3185,9 +3211,9 @@ mock_harvester_plugin(Config, Nodes, PluginName) ->
     test_utils:mock_new(Nodes, PluginName, [non_strict]),
     test_utils:mock_expect(Nodes, PluginName, type, fun() -> harvester_plugin end),
     test_utils:mock_expect(Nodes, PluginName, ping,
-        fun (?HARVESTER_ENDPOINT1) -> ok;
+        fun(?HARVESTER_ENDPOINT1) -> ok;
             (?HARVESTER_ENDPOINT2) -> ok;
-            (Endpoint) -> 
+            (Endpoint) ->
                 case get_env(Config, harvester_default_endpoint) of
                     Endpoint -> ok;
                     _ -> ?ERROR_TEMPORARY_FAILURE

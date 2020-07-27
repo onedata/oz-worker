@@ -19,8 +19,12 @@
 %% API
 -export([create/0, create/1]).
 -export([create_space_for/1]).
+-export([add_user/2, add_user/3]).
+-export([remove_user/2]).
+-export([add_child/2, add_child/3]).
 -export([get_user_privileges/2, get_child_privileges/2]).
 -export([grant_oz_privileges/2, revoke_oz_privileges/2]).
+-export([join_space/3]).
 -export([delete/1]).
 
 %%%===================================================================
@@ -45,6 +49,31 @@ create_space_for(GroupId) ->
     SpaceId.
 
 
+-spec add_user(od_group:id(), od_user:id()) -> ok.
+add_user(GroupId, UserId) ->
+    add_user(GroupId, UserId, privileges:group_member()).
+
+-spec add_user(od_group:id(), od_user:id(), [privileges:group_privilege()]) -> ok.
+add_user(GroupId, UserId, Privileges) ->
+    ?assertMatch({ok, _}, ozt:rpc(group_logic, add_user, [?ROOT, GroupId, UserId, Privileges])),
+    ok.
+
+
+-spec remove_user(od_group:id(), od_user:id()) -> ok.
+remove_user(GroupId, UserId) ->
+    ?assertMatch(ok, ozt:rpc(group_logic, remove_user, [?ROOT, GroupId, UserId])).
+
+
+-spec add_child(od_group:id(), od_group:id()) -> ok.
+add_child(ParentId, ChildId) ->
+    add_child(ParentId, ChildId, privileges:group_member()).
+
+-spec add_child(od_group:id(), od_group:id(), [privileges:group_privilege()]) -> ok.
+add_child(ParentId, ChildId, Privileges) ->
+    ?assertMatch({ok, _}, ozt:rpc(group_logic, add_group, [?ROOT, ParentId, ChildId, Privileges])),
+    ok.
+
+
 -spec get_user_privileges(od_group:id(), od_user:id()) -> [privileges:group_privilege()].
 get_user_privileges(GroupId, UserId) ->
     {ok, Privs} = ?assertMatch({ok, _}, ozt:rpc(group_logic, get_user_privileges, [?ROOT, GroupId, UserId])),
@@ -65,6 +94,14 @@ grant_oz_privileges(GroupId, OzPrivileges) ->
 -spec revoke_oz_privileges(od_group:id(), [privileges:oz_privilege()]) -> ok.
 revoke_oz_privileges(GroupId, OzPrivileges) ->
     ?assertMatch(ok, ozt:rpc(group_logic, update_oz_privileges, [?ROOT, GroupId, [], OzPrivileges])).
+
+
+-spec join_space(od_group:id(), od_user:id(), tokens:token()) -> od_space:id().
+join_space(GroupId, ConsumerUserId, Token) ->
+    {ok, SpaceId} = ?assertMatch({ok, _}, ozt:rpc(group_logic, join_space, [
+        ?USER(ConsumerUserId), GroupId, #{<<"token">> => Token}
+    ])),
+    SpaceId.
 
 
 -spec delete(od_group:id()) -> ok.

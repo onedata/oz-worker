@@ -42,8 +42,8 @@
 
 all() ->
     ?ALL([
-        create_test,
         list_test,
+        create_test,
         get_test,
         update_test,
         delete_test,
@@ -60,11 +60,11 @@ list_test(Config) ->
     % Make sure that shares created in other tests are deleted.
     oz_test_utils:delete_all_entities(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, SpacesOwner} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME2),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(SpacesOwner), ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(SpacesOwner), ?SPACE_NAME2),
 
     ExpShares = lists:map(
         fun(SpaceId) ->
@@ -84,7 +84,7 @@ list_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, U1},
+                {user, SpacesOwner},
                 {user, NonAdmin}
             ]
         },
@@ -118,11 +118,12 @@ list_test(Config) ->
 
 
 create_test(Config) ->
-    % create space with 3 users:
+    % create space with 4 users:
+    %   Owner effectively has all the privileges
     %   U3 gets the SPACE_MANAGE_SHARES privilege
     %   U2 gets the SPACE_MANAGE_SHARES privilege
     %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_MANAGE_SHARES
     ),
     {ok, U3} = oz_test_utils:create_user(Config),
@@ -160,6 +161,7 @@ create_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
+                {user, Owner},
                 {user, U2},
                 {user, U3}
             ],
@@ -244,10 +246,11 @@ get_test(Config) ->
     get_test(Config, ?SHARE_ID_1, file).
 
 get_test(Config, ShareId, FileType) ->
-    % create space with 2 users:
+    % create space with 3 users:
+    %   Owner effectively has all the privileges
     %   U2 gets the SPACE_MANAGE_SHARES privilege
     %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -278,6 +281,7 @@ get_test(Config, ShareId, FileType) ->
             correct = [
                 root,
                 {admin, [?OZ_SHARES_VIEW]},
+                {user, Owner},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -336,6 +340,7 @@ get_test(Config, ShareId, FileType) ->
                 root,
                 nobody,
                 {admin, [?OZ_SHARES_VIEW]},
+                {user, Owner},
                 {user, NonAdmin},
                 {user, U1},
                 {user, U2}
@@ -365,10 +370,11 @@ get_test(Config, ShareId, FileType) ->
 
 
 update_test(Config) ->
-    % create space with 2 users:
+    % create space with 3 users:
+    %   Owner effectively has all the privileges
     %   U2 gets the SPACE_MANAGE_SHARES privilege
     %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_MANAGE_SHARES
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -406,6 +412,7 @@ update_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SHARES_UPDATE]},
+                {user, Owner},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -448,10 +455,11 @@ update_test(Config) ->
 
 
 delete_test(Config) ->
-    % create space with 2 users:
+    % create space with 3 users:
+    %   Owner effectively has all the privileges
     %   U2 gets the SPACE_MANAGE_SHARES privilege
     %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_MANAGE_SHARES
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -476,6 +484,7 @@ delete_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SHARES_DELETE]},
+                {user, Owner},
                 {user, U2}
             ],
             unauthorized = [nobody],

@@ -58,6 +58,9 @@ create_response(#gri{aspect = space_support_token}, _, value, Token) ->
     {ok, Serialized} = tokens:serialize(Token),
     rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
+create_response(#gri{id = _SpaceId, aspect = {owner, _}}, _, resource, _) ->
+    rest_translator:ok_no_content_reply();
+
 create_response(#gri{id = SpaceId, aspect = {user, UserId}}, _, resource, _) ->
     rest_translator:created_reply_with_location(
         [<<"spaces">>, SpaceId, <<"users">>, UserId]
@@ -103,6 +106,9 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
         <<"providers">> => Providers,
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody)))
     });
+
+get_response(#gri{aspect = owners}, Users) ->
+    rest_translator:ok_body_reply(#{<<"users">> => Users});
 
 get_response(#gri{aspect = users}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});

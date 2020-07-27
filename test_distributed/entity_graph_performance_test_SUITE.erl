@@ -543,7 +543,7 @@ end_per_suite(_Config) ->
 
 parallel_foreach(Fun, List) ->
     ForeachSublist = fun(Sublist) -> lists:foreach(Fun, Sublist) end,
-    utils:pforeach(ForeachSublist, split_into_sublists(List)).
+    lists_utils:pforeach(ForeachSublist, split_into_sublists(List)).
 
 
 % Splits the list as evenly as possible, into (at most) ?PARALLEL_PROCESSES chunks

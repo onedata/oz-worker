@@ -67,6 +67,7 @@ operation_supported(create, space_support_token, private) -> true;
 
 operation_supported(create, instance, private) -> true;
 operation_supported(create, join, private) -> true;
+operation_supported(create, {owner, _}, private) -> true;
 
 operation_supported(create, {user, _}, private) -> true;
 operation_supported(create, {group, _}, private) -> true;
@@ -78,6 +79,7 @@ operation_supported(get, privileges, _) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
+operation_supported(get, owners, private) -> true;
 
 operation_supported(get, users, private) -> true;
 operation_supported(get, eff_users, private) -> true;
@@ -103,6 +105,8 @@ operation_supported(update, {user_privileges, _}, private) -> true;
 operation_supported(update, {group_privileges, _}, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
+operation_supported(delete, {owner, _}, private) -> true;
+
 operation_supported(delete, {user, _}, private) -> true;
 operation_supported(delete, {group, _}, private) -> true;
 operation_supported(delete, {storage, _}, private) -> true;
@@ -121,6 +125,7 @@ operation_supported(_, _, _) -> false.
 -spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
     boolean().
 is_subscribable(instance, _) -> true;
+is_subscribable(owners, private) -> true;
 is_subscribable(users, private) -> true;
 is_subscribable(eff_users, private) -> true;
 is_subscribable(groups, private) -> true;
@@ -148,7 +153,10 @@ is_subscribable(_, _) -> false.
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     #{<<"name">> := Name} = Req#el_req.data,
     {ok, #document{key = SpaceId}} = od_space:create(#document{
-        value = #od_space{name = Name, creator = aai:normalize_subject(Auth#auth.subject)}
+        value = #od_space{
+            name = Name,
+            creator = aai:normalize_subject(Auth#auth.subject)
+        }
     }),
     case Req#el_req.auth_hint of
         ?AS_USER(UserId) ->
@@ -162,7 +170,17 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
                 od_group, GroupId,
                 od_space, SpaceId,
                 privileges:space_admin()
-            );
+            ),
+            case Auth of
+                ?USER(CreatorUserId) ->
+                    entity_graph:add_relation(
+                        od_user, CreatorUserId,
+                        od_space, SpaceId,
+                        privileges:space_admin()
+                    );
+                _ ->
+                    ok
+            end;
         _ ->
             ok
     end,
@@ -227,6 +245,46 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = space_support_toke
         ?SUPPORT_SPACE, SpaceId, support_parameters:build(global, eager)
     ));
 
+create(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
+    % this is run for the entity that was fetched at the beginning of the request processing
+    fun(PreviousSpace) ->
+        case space_logic:has_eff_user(PreviousSpace, UserId) of
+            false ->
+                % only effective members can be assigned as owners
+                ?ERROR_RELATION_DOES_NOT_EXIST(od_space, SpaceId, od_user, UserId);
+            true ->
+                % add the user as direct member if he wasn't one
+                UserWasDirectMember = space_logic:has_direct_user(PreviousSpace, UserId),
+                UserWasDirectMember orelse entity_graph:add_relation(
+                    od_user, UserId,
+                    od_space, SpaceId,
+                    privileges:space_admin()
+                ),
+
+                ?extract_ok(od_space:update(SpaceId, fun(CurrentSpace = #od_space{owners = Owners}) ->
+                    case space_logic:has_direct_user(CurrentSpace, UserId) of
+                        false ->
+                            % as the adding of direct member and this update are not in one transaction,
+                            % it is possible that the direct membership has been removed in the
+                            % meantime - in such case deny the operation
+                            ?ERROR_RELATION_DOES_NOT_EXIST(od_space, SpaceId, od_user, UserId);
+                        true ->
+                            case lists:member(UserId, Owners) of
+                                true when not UserWasDirectMember ->
+                                    % calling entity_graph:add_relation before might have already
+                                    % assigned the user as owner - given that the user was added
+                                    % as the first direct member of the space
+                                    {ok, CurrentSpace};
+                                true ->
+                                    ?ERROR_ALREADY_EXISTS;
+                                false ->
+                                    {ok, CurrentSpace#od_space{owners = [UserId | Owners]}}
+                            end
+                    end
+                end))
+        end
+    end;
+
 create(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:space_member()),
     entity_graph:add_relation(
@@ -273,7 +331,7 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
         <<"batch">> := Batch
     } = Data,
 
-    Res = utils:pmap(fun(HarvesterId) ->
+    Res = lists_utils:pmap(fun(HarvesterId) ->
         Indices = maps:get(HarvesterId, Destination),
         case harvester_logic:submit_batch(Auth, HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq) of
             {ok, FailedIndices} -> {HarvesterId, FailedIndices};
@@ -307,6 +365,9 @@ get(#el_req{gri = #gri{aspect = privileges}}, _) ->
         <<"manager">> => privileges:space_manager(),
         <<"admin">> => privileges:space_admin()
     }};
+
+get(#el_req{gri = #gri{aspect = owners}}, #od_space{owners = Owners}) ->
+    {ok, Owners};
 
 get(#el_req{gri = #gri{aspect = instance, scope = private}}, Space) ->
     {ok, Space};
@@ -405,8 +466,26 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
                     harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, true)
                 end)
         end, Harvesters),
+        % remove all owners from the space to be deleted in order to avoid
+        % potential errors when cleaning up user relations
+        {ok, _} = od_space:update(SpaceId, fun(Space) ->
+            {ok, Space#od_space{owners = []}}
+        end),
         entity_graph:delete_with_relations(od_space, SpaceId)
     end;
+
+delete(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
+    ?extract_ok(od_space:update(SpaceId, fun(Space = #od_space{owners = Owners}) ->
+        case lists:member(UserId, Owners) of
+            false ->
+                ?ERROR_NOT_FOUND;
+            true ->
+                case Owners of
+                    [UserId] -> ?ERROR_CANNOT_REMOVE_LAST_OWNER(od_space, SpaceId);
+                    _ -> {ok, Space#od_space{owners = lists:delete(UserId, Owners)}}
+                end
+        end
+    end));
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}}) ->
     entity_graph:remove_relation(
@@ -495,6 +574,9 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Space) -
             true
     end;
 
+exists(#el_req{gri = #gri{aspect = {owner, UserId}}}, Space) ->
+    lists:member(UserId, Space#od_space.owners);
+
 exists(#el_req{gri = #gri{aspect = {user, UserId}}}, Space) ->
     entity_graph:has_relation(direct, bottom_up, od_user, UserId, Space);
 
@@ -561,6 +643,9 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
         _ ->
             false
     end;
+
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {owner, _UserId}}}, Space) ->
+    auth_by_ownership(Req, Space);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, auth = ?USER(UserId), data = #{<<"privileges">> := _}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_USER) andalso auth_by_privilege(Req, Space, ?SPACE_SET_PRIVILEGES);
@@ -688,6 +773,9 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = {group_privilege
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_DELETE);
 
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {owner, _}}}, Space) ->
+    auth_by_ownership(Req, Space);
+
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_REMOVE_USER);
 
@@ -705,6 +793,7 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {harvester, _}}}
 
 authorize(_, _) ->
     false.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -733,6 +822,9 @@ required_admin_privileges(Req = #el_req{operation = create, gri = #gri{aspect = 
         ?AS_HARVESTER(_) -> [?OZ_HARVESTERS_ADD_RELATIONSHIPS]
     end;
 
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {owner, _}}}) ->
+    [?OZ_SPACES_SET_PRIVILEGES];
+
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {user, _}}, data = #{<<"privileges">> := _}}) ->
     [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_SET_PRIVILEGES, ?OZ_USERS_ADD_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {user, _}}, data = _}) ->
@@ -750,6 +842,9 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) -
     [?OZ_SPACES_LIST];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}) ->
+    [?OZ_SPACES_VIEW];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = owners}}) ->
     [?OZ_SPACES_VIEW];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}) ->
@@ -797,6 +892,9 @@ required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = {group
 
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance}}) ->
     [?OZ_SPACES_DELETE];
+
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {owner, _}}}) ->
+    [?OZ_SPACES_SET_PRIVILEGES];
 
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {user, _}}}) ->
     [?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_USERS_REMOVE_RELATIONSHIPS];
@@ -850,6 +948,9 @@ validate(#el_req{operation = create, gri = #gri{aspect = invite_group_token}}) -
 validate(#el_req{operation = create, gri = #gri{aspect = space_support_token}}) ->
     #{
     };
+
+validate(#el_req{operation = create, gri = #gri{aspect = {owner, _}}}) -> #{
+};
 
 validate(#el_req{operation = create, gri = #gri{aspect = {user, _}}}) -> #{
     required => #{
@@ -914,8 +1015,17 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %%%===================================================================
 
 %% @private
--spec auth_by_privilege(entity_logic:req() | od_user:id(),
-    od_space:id() | od_space:record(), privileges:space_privilege()) -> boolean().
+-spec auth_by_ownership(entity_logic:req(), od_space:id() | od_space:record()) ->
+    boolean().
+auth_by_ownership(#el_req{auth = ?USER(UserId)}, SpaceOrId) ->
+    space_logic:is_owner(SpaceOrId, UserId);
+auth_by_ownership(_, _) ->
+    false.
+
+
+%% @private
+-spec auth_by_privilege(entity_logic:req(), od_space:id() | od_space:record(),
+    privileges:space_privilege()) -> boolean().
 auth_by_privilege(#el_req{auth = ?USER(UserId)}, SpaceOrId, Privilege) ->
     space_logic:has_eff_privilege(SpaceOrId, UserId, Privilege);
 auth_by_privilege(_, _, _) ->
@@ -923,6 +1033,7 @@ auth_by_privilege(_, _, _) ->
 
 
 %% @private
+-spec auth_by_support(entity_logic:req(), od_space:record()) -> boolean().
 auth_by_support(#el_req{auth = ?PROVIDER(ProviderId)}, Space) ->
     space_logic:is_supported_by_provider(Space, ProviderId);
 auth_by_support(_, _) ->

@@ -278,7 +278,7 @@ privileges_in_a_big_space_performance_base(Config) ->
             % Granted privileges are always a long list to generate bigger update sizes.
             _ -> lists:sublist(SpacePrivileges, PrivsNum - 2 + (Seq rem 3))
         end,
-        utils:pforeach(fun(User) ->
+        lists_utils:pforeach(fun(User) ->
             oz_test_utils:space_set_user_privileges(
                 Config, Space, User, NewPrivileges, SpacePrivileges -- NewPrivileges
             )

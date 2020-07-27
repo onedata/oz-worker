@@ -319,7 +319,6 @@ add_relation(od_space, SpaceId, od_storage, StorageId, SupportSize) ->
     add_relation(od_space, SpaceId, SupportSize, od_storage, StorageId, SupportSize).
 
 
-
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -500,17 +499,22 @@ remove_relation(ChType, ChId, ParType, ParId) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChType, ChId) of
             false ->
-                {error, relation_does_not_exist};
+                {error, relation_not_found};
             true ->
-                {ok, mark_record_dirty(bottom_up, true, remove_child(
-                    Parent, ChType, ChId
-                ))}
+                case ensure_can_remove_child(ParId, Parent, ChType, ChId) of
+                    ok ->
+                        {ok, mark_record_dirty(bottom_up, true, remove_child(
+                            Parent, ChType, ChId
+                        ))};
+                    {error, _} = Error ->
+                        Error
+                end
         end
     end,
     ChildUpdateFun = fun(Child) ->
         case has_parent(Child, ParType, ParId) of
             false ->
-                {error, relation_does_not_exist};
+                {error, relation_not_found};
             true ->
                 {ok, mark_record_dirty(top_down, true, remove_parent(
                     Child, ParType, ParId
@@ -518,28 +522,30 @@ remove_relation(ChType, ChId, ParType, ParId) ->
         end
     end,
 
-    ParentSync = fun() ->
-        update_dirty_queue(bottom_up, true, ParType, ParId),
-        update_entity(ParType, ParId, ParentUpdateFun)
+    UpdateAndCheckResult = fun(Direction, EntityType, EntityId, EntityUpdateFun) ->
+        sync_on_entity(EntityType, EntityId, fun() ->
+            update_dirty_queue(Direction, true, EntityType, EntityId),
+            case update_entity(EntityType, EntityId, EntityUpdateFun) of
+                ok -> ok;
+                % non-critical errors; either the entity or relation was not found
+                {error, not_found} -> not_found;
+                {error, relation_not_found} -> not_found;
+                % abort upon any other update error
+                {error, _} = Error -> throw(Error)
+            end
+        end)
     end,
 
-    ChildSync = fun() ->
-        update_dirty_queue(top_down, true, ChType, ChId),
-        update_entity(ChType, ChId, ChildUpdateFun)
-    end,
-
-    Result1 = sync_on_entity(ParType, ParId, ParentSync),
-    Result2 = sync_on_entity(ChType, ChId, ChildSync),
+    ParentResult = UpdateAndCheckResult(bottom_up, ParType, ParId, ParentUpdateFun),
+    ChildResult = UpdateAndCheckResult(top_down, ChType, ChId, ChildUpdateFun),
     schedule_refresh(),
-    case {Result1, Result2} of
-        {{error, relation_does_not_exist}, {error, relation_does_not_exist}} ->
-            % Both sides of relation were not found, report an error
-            throw(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId));
-        {_, _} ->
-            % At least one side of relation existed, which means success
-            % (either both sides were removed, or
-            % a broken one-side relation was fixed by removing the side)
-            ok
+
+    case {ParentResult, ChildResult} of
+        % both sides of relation were not found (either the entity or its relation)
+        {not_found, not_found} -> throw(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId));
+        % at least one side of relation existed, which means success (either both sides
+        % were removed, or a broken one-side relation was fixed by removing the other side)
+        {_, _} -> ok
     end.
 
 
@@ -603,7 +609,7 @@ get_relations_with_attrs(effective, Direction, EntityType, Entity) ->
                     % only the direct intermediary but do not appear
                     % among direct relations.
                     AccMap;
-                (EntityId, {Support, _Intermediaries}, AccMap) when is_integer(Support)->
+                (EntityId, {Support, _Intermediaries}, AccMap) when is_integer(Support) ->
                     AccMap#{EntityId => Support};
                 (EntityId, {_, Intermediaries}, AccMap) ->
                     DirectPrivs = maps:get(EntityId, AccMap, []),
@@ -749,20 +755,26 @@ remove_all_relations(EntityType, EntityId, Entity) ->
     Children = get_children(Entity),
     DependentChildren = maps:get(dependent, Children, #{}),
     IndependentChildren = maps:get(independent, Children, #{}),
-    % Try catch will catch all unexpected failures in relations removal
-    % (all sensitive operations are matched to ok)
     try
         % Remove all independent relations
         maps:map(fun(ParType, ParentIds) ->
             lists:foreach(fun(ParId) ->
                 % ignore non-existent relations
-                catch remove_relation(EntityType, EntityId, ParType, ParId)
+                try
+                    remove_relation(EntityType, EntityId, ParType, ParId)
+                catch
+                    throw:?ERROR_RELATION_DOES_NOT_EXIST(_, _, _, _) -> ok
+                end
             end, ParentIds)
         end, IndependentParents),
         maps:map(fun(ChType, ChIds) ->
             lists:foreach(fun(ChId) ->
                 % ignore non-existent relations
-                catch remove_relation(ChType, ChId, EntityType, EntityId)
+                try
+                    remove_relation(ChType, ChId, EntityType, EntityId)
+                catch
+                    throw:?ERROR_RELATION_DOES_NOT_EXIST(_, _, _, _) -> ok
+                end
             end, ChIds)
         end, IndependentChildren),
         % Remove all dependent relations and dependent entities
@@ -788,6 +800,8 @@ remove_all_relations(EntityType, EntityId, Entity) ->
         end, DependentChildren),
         ok
     catch
+        throw:{error, _} = Error ->
+            throw(Error);
         Type:Message ->
             ?error_stacktrace(
                 "Unexpected error while removing relations of ~p#~s - ~p:~p",
@@ -1261,8 +1275,15 @@ add_child(#od_group{users = Users} = Group, od_user, UserId, Privs) ->
 add_child(#od_group{children = Children} = Group, od_group, GroupId, Privs) ->
     Group#od_group{children = maps:put(GroupId, Privs, Children)};
 
-add_child(#od_space{users = Users} = Space, od_user, UserId, Privs) ->
-    Space#od_space{users = maps:put(UserId, Privs, Users)};
+add_child(#od_space{owners = Owners, users = Users} = Space, od_user, UserId, Privs) ->
+    Space#od_space{
+        % if a space has no owner, the first user that is added becomes one
+        owners = case Owners of
+            [] -> [UserId];
+            _ -> Owners
+        end,
+        users = maps:put(UserId, Privs, Users)
+    };
 add_child(#od_space{groups = Groups} = Space, od_group, GroupId, Privs) ->
     Space#od_space{groups = maps:put(GroupId, Privs, Groups)};
 add_child(#od_space{shares = Shares} = Space, od_share, ShareId, _) ->
@@ -1351,6 +1372,33 @@ update_child(Entity, _, _, undefined) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
+%% Checks if a child relation can be removed, depending on constraints specific
+%% for given entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_can_remove_child(entity_id(), entity(), entity_type(), entity_id()) -> ok | errors:error().
+ensure_can_remove_child(SpaceId, #od_space{owners = Owners} = Space, od_user, UserId) ->
+    % during the check, eff_users might not be up to date - sum with direct users
+    AllUsers = lists_utils:union(maps:keys(Space#od_space.users), maps:keys(Space#od_space.eff_users)),
+    case {Owners, AllUsers} of
+        {[UserId], [UserId]} ->
+            % an owner member can be removed if they are the last effective member
+            % of the space (there is no one to transfer ownership onto)
+            ok;
+        {[UserId], [_ | _]} ->
+            % if there are any other effective members, removing the user without
+            % transferring ownership is forbidden
+            ?ERROR_CANNOT_REMOVE_LAST_OWNER(od_space, SpaceId);
+        _ ->
+            ok
+    end;
+ensure_can_remove_child(_, _, _, _) ->
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
 %% Removes a child relation from given entity.
 %% @end
 %%--------------------------------------------------------------------
@@ -1360,8 +1408,11 @@ remove_child(#od_group{users = Users} = Group, od_user, UserId) ->
 remove_child(#od_group{children = Children} = Group, od_group, GroupId) ->
     Group#od_group{children = maps:remove(GroupId, Children)};
 
-remove_child(#od_space{users = Users} = Space, od_user, UserId) ->
-    Space#od_space{users = maps:remove(UserId, Users)};
+remove_child(#od_space{owners = Owners, users = Users} = Space, od_user, UserId) ->
+    Space#od_space{
+        owners = lists:delete(UserId, Owners),
+        users = maps:remove(UserId, Users)
+    };
 remove_child(#od_space{groups = Groups} = Space, od_group, GroupId) ->
     Space#od_space{groups = maps:remove(GroupId, Groups)};
 remove_child(#od_space{shares = Shares} = Space, od_share, ShareId) ->
@@ -1566,7 +1617,10 @@ remove_parent(#od_handle{} = Handle, od_handle_service, _HServiceId) ->
     Handle#od_handle{handle_service = undefined};
 
 remove_parent(#od_harvester{spaces = Spaces} = Harvester, od_space, SpaceId) ->
-    Harvester#od_harvester{spaces = lists:delete(SpaceId, Spaces)}.
+    Harvester#od_harvester{spaces = lists:delete(SpaceId, Spaces)};
+
+remove_parent(#od_storage{} = Storage, od_provider, _ProviderId) ->
+    Storage#od_storage{provider = undefined}.
 
 
 %%--------------------------------------------------------------------
@@ -2135,7 +2189,6 @@ get_all_eff_relations(top_down, #od_storage{} = Storage) ->
     #{od_provider => Providers}.
 
 
-
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -2273,7 +2326,7 @@ merge_eff_relations(EffMap1, EffMap2) when is_map(EffMap1) andalso is_map(EffMap
                         {{Privs1, Int1}, {Privs2, Int2}} when is_list(Privs1) andalso is_list(Privs2) ->
                             % Covers eff_relations_with_attrs() type
                             {privileges:union(Privs1, Privs2), ordsets_union(Int1, Int2)};
-                        {{Support1, Int1}, {Support2, Int2}} when is_integer(Support1) andalso is_integer(Support2)->
+                        {{Support1, Int1}, {Support2, Int2}} when is_integer(Support1) andalso is_integer(Support2) ->
                             {Support1 + Support2, ordsets_union(Int1, Int2)};
                         {List1, List2} ->
                             % Covers eff_relations() type
