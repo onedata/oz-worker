@@ -177,13 +177,16 @@ get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Storage) ->
     #od_storage{
         provider = Provider,
         qos_parameters = QosParameters,
-        creation_time = CreationTime, creator = Creator
+        creation_time = CreationTime,
+        creator = Creator,
+        readonly = Readonly
     } = Storage,
     {ok, #{
         <<"provider">> => Provider,
         <<"qosParameters">> => QosParameters,
         <<"creationTime">> => CreationTime,
-        <<"creator">> => Creator
+        <<"creator">> => Creator,
+        <<"readonly">> => Readonly
     }};
 
 get(#el_req{gri = #gri{aspect = spaces}}, Storage) ->
