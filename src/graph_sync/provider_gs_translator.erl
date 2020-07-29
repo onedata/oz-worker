@@ -207,6 +207,8 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
     #od_space{
         name = Name,
 
+        owners = Owners,
+
         users = Users,
 
         groups = Groups,
@@ -217,6 +219,8 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
     } = Space,
     #{
         <<"name">> => Name,
+
+        <<"owners">> => Owners,
 
         <<"users">> => Users,
         <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Space),

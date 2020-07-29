@@ -285,6 +285,7 @@ get_test(Config) ->
             gri = #gri{type = od_space, id = S1, aspect = instance},
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?SPACE_NAME1,
+                <<"owners">> => [Owner],
                 <<"users">> => #{
                     Owner => AllPrivsBin,
                     U1 => AllPrivsBin -- [<<"space_view">>],
