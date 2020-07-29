@@ -34,6 +34,7 @@
 
     the_only_space_owner_cannot_be_revoked_of_ownership/1,
     one_of_space_owners_can_be_revoked_of_ownership/1,
+    non_owner_cannot_remove_a_user_that_is_an_owner_from_space_or_revoke_him_of_ownership/1,
     one_of_space_owners_cannot_be_revoked_of_ownership_twice/1,
     removed_member_that_was_an_owner_loses_ownership/1,
 
@@ -84,11 +85,12 @@ all() -> ?ALL([
     non_space_member_cannot_be_granted_ownership,
     space_member_can_be_granted_ownership,
     space_member_cannot_be_granted_ownership_twice,
-    removed_member_that_was_an_owner_loses_ownership,
 
     the_only_space_owner_cannot_be_revoked_of_ownership,
     one_of_space_owners_can_be_revoked_of_ownership,
+    non_owner_cannot_remove_a_user_that_is_an_owner_from_space_or_revoke_him_of_ownership,
     one_of_space_owners_cannot_be_revoked_of_ownership_twice,
+    removed_member_that_was_an_owner_loses_ownership,
 
     new_owner_becomes_a_direct_member_if_he_was_not_one_and_gets_admin_privs,
     user_revoked_of_ownership_does_not_lose_direct_membership_nor_privileges,
@@ -219,6 +221,17 @@ one_of_space_owners_can_be_revoked_of_ownership(_Config) ->
     ozt_spaces:add_user(Space, AnotherUser),
     ozt_spaces:add_owner(Space, AnotherUser),
     ?assertEqual(ok, ozt:rpc(space_logic, remove_owner, [?ROOT, Space, AnotherUser])).
+
+non_owner_cannot_remove_a_user_that_is_an_owner_from_space_or_revoke_him_of_ownership(_Config) ->
+    OriginalOwner = ozt_users:create(),
+    Space = ozt_users:create_space_for(OriginalOwner),
+    AnotherOwner = ozt_users:create(),
+    NonOwnerButAdmin = ozt_users:create(),
+    ozt_spaces:add_user(Space, AnotherOwner),
+    ozt_spaces:add_owner(Space, AnotherOwner),
+    ozt_spaces:add_user(Space, NonOwnerButAdmin, privileges:space_admin()),
+    ?assertEqual(?ERROR_FORBIDDEN, ozt:rpc(space_logic, remove_owner, [?USER(NonOwnerButAdmin), Space, AnotherOwner])),
+    ?assertEqual(?ERROR_FORBIDDEN, ozt:rpc(space_logic, remove_user, [?USER(NonOwnerButAdmin), Space, AnotherOwner])).
 
 one_of_space_owners_cannot_be_revoked_of_ownership_twice(_Config) ->
     OriginalOwner = ozt_users:create(),

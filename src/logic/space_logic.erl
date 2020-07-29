@@ -33,7 +33,7 @@
     delete/2
 ]).
 -export([
-    list_owners/2,
+    get_owners/2,
     add_owner/3,
     remove_owner/3
 ]).
@@ -217,8 +217,8 @@ delete(Auth, SpaceId) ->
     }).
 
 
--spec list_owners(aai:auth(), od_space:id()) -> {ok, [od_user:id()]} | errors:error().
-list_owners(Auth, SpaceId) ->
+-spec get_owners(aai:auth(), od_space:id()) -> {ok, [od_user:id()]} | errors:error().
+get_owners(Auth, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
         auth = Auth,

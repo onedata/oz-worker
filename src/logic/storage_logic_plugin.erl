@@ -265,14 +265,6 @@ delete(#el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
-exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Storage) ->
-    case Req#el_req.auth_hint of
-        ?THROUGH_PROVIDER(ProviderId) ->
-            storage_logic:belongs_to_provider(Storage, ProviderId);
-        undefined ->
-            true
-    end;
-
 exists(#el_req{gri = #gri{aspect = {space, SpaceId}}}, Storage) ->
     entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, Storage);
 
@@ -311,7 +303,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, id 
             storage_logic:supports_space(StorageId, SpaceId)
                 andalso provider_logic:supports_space(ProviderId, SpaceId);
         _ ->
-            % Access to private data also allows access to protected data
+            % Access to private data also allows access to shared data
             authorize(Req#el_req{gri = GRI#gri{scope = private}}, Storage)
     end;
 

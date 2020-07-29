@@ -901,12 +901,14 @@ create_space_eff_users_env(Config) ->
         [{G1, _} | _] = Groups, Users
     } = create_eff_child_groups_env(Config),
 
+    {ok, Owner} = oz_test_utils:create_user(Config),
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllSpacePrivs = privileges:space_privileges(),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(Owner), ?SPACE_NAME1),
+    {ok, U1} = oz_test_utils:space_add_user(Config, S1, U1),
     oz_test_utils:space_set_user_privileges(Config, S1, U1, [],
         [?SPACE_VIEW]
     ),
@@ -918,7 +920,7 @@ create_space_eff_users_env(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {S1, Groups, Users, {U1, U2, NonAdmin}}.
+    {S1, Groups, Users, {Owner, U1, U2, NonAdmin}}.
 
 
 create_provider_eff_users_env(Config) ->
@@ -948,7 +950,7 @@ create_provider_eff_users_env(Config) ->
     %%      NonAdmin
 
     {
-        S1, Groups, Users, {U1, U2, NonAdmin}
+        S1, Groups, Users, {Owner, U1, U2, NonAdmin}
     } = create_space_eff_users_env(Config),
 
     {ok, {P1, ProviderToken}} = oz_test_utils:create_provider(
@@ -958,7 +960,7 @@ create_provider_eff_users_env(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {{P1, ProviderToken}, S1, Groups, Users, {U1, U2, NonAdmin}}.
+    {{P1, ProviderToken}, S1, Groups, Users, {Owner, U1, U2, NonAdmin}}.
 
 
 create_hservice_eff_users_env(Config) ->

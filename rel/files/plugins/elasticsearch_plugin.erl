@@ -395,7 +395,7 @@ allowed_paths(get) -> [<<"^_mapping$">>, <<"^_search.*$">>].
 submit_to_all_indices(Endpoint, Indices, Batch) ->
     PreparedBatch = prepare_elasticsearch_batch(Batch, {[], <<>>}),
     FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
-    {ok, utils:pmap(fun(IndexId) ->
+    {ok, lists_utils:pmap(fun(IndexId) ->
         {IndexId, submit_to_index(Endpoint, IndexId, Batch, PreparedBatch, [], FirstSeq)}
     end, Indices)}.
 

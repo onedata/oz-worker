@@ -173,7 +173,9 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             ),
             case Auth of
                 ?USER(CreatorUserId) ->
-                    entity_graph:add_relation(
+                    % if the space is created by one of the group members, add
+                    % the creator as direct user (which will make him an owner)
+                    group_logic:has_eff_user(GroupId, CreatorUserId) andalso entity_graph:add_relation(
                         od_user, CreatorUserId,
                         od_space, SpaceId,
                         privileges:space_admin()
@@ -776,8 +778,12 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Spac
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {owner, _}}}, Space) ->
     auth_by_ownership(Req, Space);
 
-authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, _}}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_REMOVE_USER);
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, UserId}}}, Space) ->
+    % only space owners can remove other owners from the space
+    case space_logic:is_owner(Space, UserId) of
+        true -> auth_by_ownership(Req, Space);
+        false -> auth_by_privilege(Req, Space, ?SPACE_REMOVE_USER)
+    end;
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {group, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_REMOVE_GROUP);

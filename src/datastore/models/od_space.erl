@@ -686,6 +686,7 @@ upgrade_record(8, Space) ->
     % Space ownership is automatically granted to all direct users that had the
     % most effective privileges in the space before the upgrade
     UserPrivilegeCounts = lists:map(fun(DirectUserId) ->
+        % during the check, eff privileges might not be up to date - sum with direct privileges
         {EffPrivileges, _} = maps:get(DirectUserId, EffUsers, {[], []}),
         DirectPrivileges = maps:get(DirectUserId, Users),
         PrivilegeCount = length(privileges:from_list(EffPrivileges ++ DirectPrivileges)),

@@ -929,6 +929,8 @@ get_eff_group_membership_intermediaries(Config) ->
     oz_test_utils:cluster_add_group(Config, C3, G4),
     oz_test_utils:cluster_set_group_privileges(Config, C3, G4, [], [?CLUSTER_VIEW]),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     % {ClusterId, SubjectUser, CorrectUsers, ExpIntermediariesRaw}
     ExpectedMembershipIntermediaries = [
         {C1, UserGroup, [{provider, P1, P1Token}], [U1], ordsets:from_list([

@@ -1714,8 +1714,10 @@ gather_eff_from_itself(top_down, #od_group{} = Group) ->
 gather_eff_from_itself(top_down, #od_space{} = Space) ->
     #od_space{storages = Storages} = Space,
     #{od_storage => relations_to_eff_relations(Storages, [{od_space, ?SELF_INTERMEDIARY}])};
-gather_eff_from_itself(top_down, #od_storage{} = Storage) ->
-    #od_storage{provider = Provider} = Storage,
+gather_eff_from_itself(top_down, #od_storage{provider = undefined}) ->
+    % possible during storage removal
+    #{od_provider => #{}};
+gather_eff_from_itself(top_down, #od_storage{provider = Provider}) ->
     #{od_provider => relations_to_eff_relations([Provider], [{od_storage, ?SELF_INTERMEDIARY}])}.
 
 
@@ -2061,7 +2063,11 @@ get_all_direct_relations(top_down, #od_handle{handle_service = HServiceId}) ->
 get_all_direct_relations(top_down, #od_harvester{spaces = Spaces}) ->
     #{od_space => Spaces};
 get_all_direct_relations(top_down, #od_storage{provider = Provider}) ->
-    #{od_provider => [Provider]}.
+    #{od_provider => case Provider of
+        % possible during storage removal
+        undefined -> [];
+        _ -> [Provider]
+    end}.
 
 
 %%--------------------------------------------------------------------

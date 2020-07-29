@@ -670,7 +670,7 @@ update_group_privileges_test(Config) ->
 list_eff_groups_test(Config) ->
     {S1,
         [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}, {G6, _}],
-        _EffUsers, {U1, U2, NonAdmin}
+        _EffUsers, {Owner, U1, U2, NonAdmin}
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
@@ -682,6 +682,7 @@ list_eff_groups_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
+                {user, Owner},
                 {user, U2},
                 {provider, P1, P1Token}
             ],
@@ -722,7 +723,7 @@ list_eff_groups_test(Config) ->
 
 get_eff_group_test(Config) ->
     {
-        S1, EffGroups, _EffUsers, {U1, U2, NonAdmin}
+        S1, EffGroups, _EffUsers, {Owner, U1, U2, NonAdmin}
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
@@ -742,6 +743,7 @@ get_eff_group_test(Config) ->
                     correct = [
                         root,
                         {admin, [?OZ_GROUPS_VIEW]},
+                        {user, Owner},
                         {user, U2},
                         {provider, P1, P1Token}
                     ],
@@ -918,9 +920,11 @@ get_eff_group_membership_intermediaries(Config) ->
     %%             '------UserGroup
     %%                      |
     %%                  User1 (view privs)
-    %%      <<user>>
-    %%      NonAdmin
+    %%
+    %%      <<user>>                          <<user>>
+    %%      NonAdmin                        AllSpacesOwner
 
+    {ok, AllSpacesOwner} = oz_test_utils:create_user(Config),
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -931,9 +935,9 @@ get_eff_group_membership_intermediaries(Config) ->
     {ok, G3} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G4} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
-    {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
-    {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(AllSpacesOwner), ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(AllSpacesOwner), ?SPACE_NAME1),
+    {ok, S3} = oz_test_utils:create_space(Config, ?USER(AllSpacesOwner), ?SPACE_NAME1),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     oz_test_utils:support_space_by_provider(Config, P1, S1),
@@ -1018,6 +1022,7 @@ get_eff_group_membership_intermediaries(Config) ->
                 correct = [
                     root,
                     {admin, [?OZ_SPACES_VIEW]},
+                    {user, AllSpacesOwner},
                     {provider, P1, P1Token}
                 ] ++ CorrectUserClients,
                 unauthorized = [nobody],

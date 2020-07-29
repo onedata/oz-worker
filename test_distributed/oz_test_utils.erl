@@ -1577,15 +1577,10 @@ support_space(Config, Client, StorageId, SpaceId) ->
     SpaceId :: od_space:id(), Size :: non_neg_integer()) ->
     {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
 support_space(Config, Client, StorageId, SpaceId, Size) ->
-    % Create a temporary user for inviting a provider, as invite tokens cannot
-    % be created as root.
-    {ok, TmpUser} = create_user(Config),
-    {ok, TmpUser} = space_add_user(Config, SpaceId, TmpUser),
-    ok = space_set_user_privileges(Config, SpaceId, TmpUser, [?SPACE_ADD_SUPPORT], []),
-    {ok, Token} = create_space_support_token(Config, ?USER(TmpUser), SpaceId),
-    Res = support_space_using_token(Config, Client, StorageId, Token, Size),
-    delete_user(Config, TmpUser),
-    Res.
+    {ok, OzAdmin} = create_user(Config),
+    user_set_oz_privileges(Config, OzAdmin, privileges:oz_admin(), []),
+    {ok, Token} = create_space_support_token(Config, ?USER(OzAdmin), SpaceId),
+    support_space_using_token(Config, Client, StorageId, Token, Size).
 
 
 %%--------------------------------------------------------------------
@@ -1646,8 +1641,7 @@ enable_subdomain_delegation(Config, ProviderId, Subdomain, IPs) ->
         <<"subdomainDelegation">> => true,
         <<"subdomain">> => Subdomain,
         <<"ipList">> => IPs},
-    ?assertMatch(ok, oz_test_utils:call_oz(Config,
-        provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
+    ?assertMatch(ok, call_oz(Config, provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
 
 
 %%--------------------------------------------------------------------
@@ -1661,8 +1655,7 @@ set_provider_domain(Config, ProviderId, Domain) ->
     Data = #{
         <<"subdomainDelegation">> => false,
         <<"domain">> => Domain},
-    ?assertMatch(ok, oz_test_utils:call_oz(Config,
-        provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
+    ?assertMatch(ok, call_oz(Config, provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
 
 
 %%--------------------------------------------------------------------
@@ -3041,7 +3034,7 @@ request_gui_token(Config, Cookie, GuiType, ClusterId) ->
             ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
         },
         <<"">>,
-        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
+        [{ssl_options, [{cacerts, gui_ca_certs(Config)}]}]
     ),
     case Result of
         {ok, 200, _, Response} ->
@@ -3129,22 +3122,12 @@ create_3_nested_groups(Config, TestUser) ->
 -spec create_3_nested_groups(Config :: term(), TestUser :: od_user:id(),
     BotGrName :: binary(), MidGrName :: binary(), TopGrName :: binary()) -> ok.
 create_3_nested_groups(Config, TestUser, BotGrName, MidGrName, TopGrName) ->
-    {ok, BottomGroup} = oz_test_utils:create_group(
-        Config, ?USER(TestUser), BotGrName
-    ),
+    {ok, BottomGroup} = create_group(Config, ?USER(TestUser), BotGrName),
     % Dummy user will be used only to create groups
-    {ok, MiddleGroup} = oz_test_utils:create_group(
-        Config, ?ROOT, MidGrName
-    ),
-    {ok, TopGroup} = oz_test_utils:create_group(
-        Config, ?ROOT, TopGrName
-    ),
-    {ok, BottomGroup} = oz_test_utils:group_add_group(
-        Config, MiddleGroup, BottomGroup
-    ),
-    {ok, MiddleGroup} = oz_test_utils:group_add_group(
-        Config, TopGroup, MiddleGroup
-    ),
+    {ok, MiddleGroup} = create_group(Config, ?ROOT, MidGrName),
+    {ok, TopGroup} = create_group(Config, ?ROOT, TopGrName),
+    {ok, BottomGroup} = group_add_group(Config, MiddleGroup, BottomGroup),
+    {ok, MiddleGroup} = group_add_group(Config, TopGroup, MiddleGroup),
     {BottomGroup, MiddleGroup, TopGroup}.
 
 
@@ -3415,7 +3398,7 @@ toggle_basic_auth(Config, Flag) ->
 -spec read_auth_config(Config :: term()) -> auth_config:config_v2_or_later().
 read_auth_config(Config) ->
     AuthConfigPath = get_env(Config, auth_config_file),
-    {ok, [AuthConfig]} = oz_test_utils:call_oz(Config, file, consult, [AuthConfigPath]),
+    {ok, [AuthConfig]} = call_oz(Config, file, consult, [AuthConfigPath]),
     AuthConfig.
 
 

@@ -1795,7 +1795,7 @@ get_record(od_space, 9) -> #od_space{
 
     % Space ownership is automatically granted to all direct users that had the
     % most effective privileges in the space before the upgrade
-    owners = [<<"user1">>, <<"user3">>],
+    owners = [<<"user3">>, <<"user1">>],
 
     users = #{
         <<"user1">> => privileges:from_list([
@@ -1857,7 +1857,7 @@ get_record(od_space, 9) -> #od_space{
     harvesters = [],
 
     eff_users = #{
-        <<"user3">> => {privileges:space_manager() -- [?SPACE_REGISTER_FILES], [{od_space, <<"self">>}]}
+        <<"user3">> => {privileges:space_manager(), [{od_space, <<"self">>}]}
     },
     eff_groups = #{},
     eff_providers = #{},
