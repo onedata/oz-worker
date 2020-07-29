@@ -21,6 +21,11 @@
 -define(DEFAULT_BUILD_VERSION, <<"unknown">>).
 -define(EMPTY_GUI_HASH, <<"empty">>).
 
+-define(extract_ok(Result), case Result of
+    {ok, _} -> ok;
+    {error, _} = __Error -> __Error
+end).
+
 %%%===================================================================
 %%% DB records definitions
 %%%===================================================================
@@ -215,6 +220,12 @@
 -record(od_space, {
     name = <<"">> :: od_space:name(),
 
+    % The list of space owners - users that have absolute power regarding the
+    % space API and files (analogical to "root", but in the scope of one space).
+    % Being an owner means that user privileges are essentially ignored and all
+    % API operations are allowed.
+    owners = [] :: [od_user:id()],
+
     % Direct relations to other entities
     users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
     groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
@@ -396,7 +407,7 @@
     readonly = false :: boolean(),
 
     % Direct relations to other entities
-    provider :: od_provider:id(),
+    provider = undefined :: undefined | od_provider:id(),
     spaces = #{} :: entity_graph:relations_with_attrs(od_space:id(), Size :: pos_integer()),
 
     % Effective relations to other entities

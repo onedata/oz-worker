@@ -588,26 +588,33 @@ create_basic_space_env(Config, Privs) ->
     %% Create environment with the following relations:
     %%
     %%                  Space
-    %%                 /     \
-    %%                /       \
-    %%       [~privileges]  [privileges]
-    %%              /           \
-    %%           User1         User2
+    %%                 /  |  \
+    %%                /   |   \
+    %%    [~privileges]   |   [privileges]
+    %%              /     |     \
+    %%          User1   Owner   User2
 
+    {ok, Owner} = oz_test_utils:create_user(Config),
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
-
     AllSpacePrivs = privileges:space_privileges(),
-    {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(
-        Config, Space, U1, [], Privs
-    ),
+
+    % create a space with the Owner, but revoke some (randomly chosen) privileges
+    % of the user - regardless of what they are, the owner should effectively have
+    % all the privileges, and the tests using this env depend on that assumption
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(Owner), ?SPACE_NAME1),
+    RandomPrivs = lists_utils:random_sublist(AllSpacePrivs),
+    oz_test_utils:space_set_user_privileges(Config, Space, Owner, RandomPrivs, AllSpacePrivs -- RandomPrivs),
+
+    {ok, U1} = oz_test_utils:space_add_user(Config, Space, U1),
+    oz_test_utils:space_set_user_privileges(Config, Space, U1, AllSpacePrivs -- Privs, Privs),
+
     {ok, U2} = oz_test_utils:space_add_user(Config, Space, U2),
     oz_test_utils:space_set_user_privileges(Config, Space, U2, Privs, AllSpacePrivs -- Privs),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {Space, U1, U2}.
+    {Space, Owner, U1, U2}.
 
 
 create_basic_doi_hservice_env(Config, Privs) when not is_list(Privs) ->
@@ -708,7 +715,7 @@ create_basic_harvester_env(Config, Privs) ->
     AllHarvesterPrivs = privileges:harvester_privileges(),
     {ok, Harvester} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
     {ok, _} = oz_test_utils:harvester_add_user(Config, Harvester, U1),
-    
+
     oz_test_utils:harvester_set_user_privileges(
         Config, Harvester, U1, [], Privs
     ),
@@ -894,12 +901,14 @@ create_space_eff_users_env(Config) ->
         [{G1, _} | _] = Groups, Users
     } = create_eff_child_groups_env(Config),
 
+    {ok, Owner} = oz_test_utils:create_user(Config),
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllSpacePrivs = privileges:space_privileges(),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(Owner), ?SPACE_NAME1),
+    {ok, U1} = oz_test_utils:space_add_user(Config, S1, U1),
     oz_test_utils:space_set_user_privileges(Config, S1, U1, [],
         [?SPACE_VIEW]
     ),
@@ -911,7 +920,7 @@ create_space_eff_users_env(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {S1, Groups, Users, {U1, U2, NonAdmin}}.
+    {S1, Groups, Users, {Owner, U1, U2, NonAdmin}}.
 
 
 create_provider_eff_users_env(Config) ->
@@ -941,7 +950,7 @@ create_provider_eff_users_env(Config) ->
     %%      NonAdmin
 
     {
-        S1, Groups, Users, {U1, U2, NonAdmin}
+        S1, Groups, Users, {Owner, U1, U2, NonAdmin}
     } = create_space_eff_users_env(Config),
 
     {ok, {P1, ProviderToken}} = oz_test_utils:create_provider(
@@ -951,7 +960,7 @@ create_provider_eff_users_env(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {{P1, ProviderToken}, S1, Groups, Users, {U1, U2, NonAdmin}}.
+    {{P1, ProviderToken}, S1, Groups, Users, {Owner, U1, U2, NonAdmin}}.
 
 
 create_hservice_eff_users_env(Config) ->
@@ -1296,7 +1305,7 @@ create_harvester_eff_providers_env(Config) ->
             <<"name">> => Name,
             <<"providerRootToken">> => PToken
         }}
-    end, lists:seq(1,3)),
+    end, lists:seq(1, 3)),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
     {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),

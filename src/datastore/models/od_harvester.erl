@@ -44,9 +44,11 @@
 
 %% Batch entry is a map in a following format:
 %% #{
-%%    <<"fileId">> :: binary()
+%%    <<"fileId">> :: binary(),
+%%    <<"spaceId">> :: binary(),
+%%    <<"fileName">> :: binary(),
 %%    <<"operation">> :: binary(), %% <<"submit">> | <<"delete">>
-%%    <<"seq">> :: integer(),
+%%    <<"seq">> :: pos_integer(),
 %%    <<"payload">> :: #{
 %%        json :: binary(),
 %%        rdf :: binary(),

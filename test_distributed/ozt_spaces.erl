@@ -19,10 +19,17 @@
 %% API
 -export([create/0, create/1]).
 -export([get/1, exists/1]).
+-export([add_owner/2, remove_owner/2]).
 -export([add_user/2, add_user/3]).
+-export([remove_user/2]).
+-export([add_group/2, add_group/3]).
+-export([remove_group/2]).
+-export([create_user_invite_token/2]).
+-export([create_group_invite_token/2]).
 -export([create_support_token/2, create_support_token/3]).
 -export([create_share/2]).
 -export([get_user_privileges/2, get_group_privileges/2]).
+-export([set_user_privileges/3]).
 -export([delete/1]).
 -export([minimum_support_size/0]).
 
@@ -52,6 +59,16 @@ exists(SpaceId) ->
     ozt:rpc(space_logic, exists, [SpaceId]).
 
 
+-spec add_owner(od_space:id(), od_user:id()) -> ok.
+add_owner(SpaceId, UserId) ->
+    ?assertMatch(ok, ozt:rpc(space_logic, add_owner, [?ROOT, SpaceId, UserId])).
+
+
+-spec remove_owner(od_space:id(), od_user:id()) -> ok.
+remove_owner(SpaceId, UserId) ->
+    ?assertMatch(ok, ozt:rpc(space_logic, remove_owner, [?ROOT, SpaceId, UserId])).
+
+
 -spec add_user(od_space:id(), od_user:id()) -> ok.
 add_user(SpaceId, UserId) ->
     add_user(SpaceId, UserId, privileges:space_member()).
@@ -60,6 +77,36 @@ add_user(SpaceId, UserId) ->
 add_user(SpaceId, UserId, Privileges) ->
     ?assertMatch({ok, _}, ozt:rpc(space_logic, add_user, [?ROOT, SpaceId, UserId, Privileges])),
     ok.
+
+
+-spec remove_user(od_space:id(), od_user:id()) -> ok.
+remove_user(SpaceId, UserId) ->
+    ?assertMatch(ok, ozt:rpc(space_logic, remove_user, [?ROOT, SpaceId, UserId])).
+
+
+-spec add_group(od_space:id(), od_group:id()) -> ok.
+add_group(SpaceId, GroupId) ->
+    add_group(SpaceId, GroupId, privileges:space_member()).
+
+-spec add_group(od_space:id(), od_group:id(), [privileges:space_privilege()]) -> ok.
+add_group(SpaceId, GroupId, Privileges) ->
+    ?assertMatch({ok, _}, ozt:rpc(space_logic, add_group, [?ROOT, SpaceId, GroupId, Privileges])),
+    ok.
+
+
+-spec remove_group(od_space:id(), od_group:id()) -> ok.
+remove_group(SpaceId, GroupId) ->
+    ?assertMatch(ok, ozt:rpc(space_logic, remove_group, [?ROOT, SpaceId, GroupId])).
+
+
+-spec create_user_invite_token(od_space:id(), od_user:id()) -> tokens:token().
+create_user_invite_token(SpaceId, UserId) ->
+    ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?USER_JOIN_SPACE, SpaceId)).
+
+
+-spec create_group_invite_token(od_space:id(), od_user:id()) -> tokens:token().
+create_group_invite_token(SpaceId, UserId) ->
+    ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?GROUP_JOIN_SPACE, SpaceId)).
 
 
 -spec create_support_token(od_space:id(), od_user:id()) -> tokens:token().
@@ -89,6 +136,14 @@ get_user_privileges(SpaceId, UserId) ->
 get_group_privileges(SpaceId, GroupId) ->
     {ok, Privs} = ?assertMatch({ok, _}, ozt:rpc(space_logic, get_group_privileges, [?ROOT, SpaceId, GroupId])),
     Privs.
+
+
+-spec set_user_privileges(od_space:id(), od_user:id(), [privileges:space_privilege()]) -> ok.
+set_user_privileges(SpaceId, UserId, Privileges) ->
+    ?assertMatch(ok, ozt:rpc(space_logic, update_user_privileges, [?ROOT, SpaceId, UserId, #{
+        <<"grant">> => Privileges,
+        <<"revoke">> => lists_utils:subtract(privileges:space_admin(), Privileges)
+    }])).
 
 
 -spec delete(od_space:id()) -> ok.

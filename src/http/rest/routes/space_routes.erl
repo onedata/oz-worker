@@ -42,7 +42,7 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = undefined, aspect = list}
     }},
-    %% List all space privileges.
+    %% List all space privileges
     %% This operation requires one of the following privileges:
     {<<"/spaces/privileges">>, #rest_req{
         method = 'GET',
@@ -378,5 +378,28 @@ routes() -> [
     {<<"/spaces/:id/harvesters/:hid">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {harvester, ?BINDING(hid)}}
+    }},
+    %% List space owners
+    %% This operation requires one of the following privileges:
+    %% - space_view
+    %% - oz_spaces_view
+    {<<"/spaces/:id/owners">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = owners}
+    }},
+    %% Add space owner
+    %% This operation requires one of the following privileges:
+    %% - oz_spaces_set_privileges
+    {<<"/spaces/:id/owners/:uid">>, #rest_req{
+        method = 'PUT',
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {owner, ?BINDING(uid)}}
+    }},
+    %% Remove space owner
+    %% This operation requires one of the following privileges:
+    %% - oz_spaces_set_privileges
+    {<<"/spaces/:id/owners/:uid">>, #rest_req{
+        method = 'DELETE',
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {owner, ?BINDING(uid)}}
     }}
 ].

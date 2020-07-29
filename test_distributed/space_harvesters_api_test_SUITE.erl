@@ -64,10 +64,11 @@ all() ->
 %%%===================================================================
 
 join_harvester_test(Config) ->
-    % create space with 2 users:
+    % create space with 3 users:
+    %   Owner effectively has all the privileges
     %   U2 gets the SPACE_ADD_HARVESTER privilege
     %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_ADD_HARVESTER
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -100,6 +101,7 @@ join_harvester_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 {admin, [?OZ_SPACES_ADD_RELATIONSHIPS]},
+                {user, Owner},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -162,6 +164,7 @@ join_harvester_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 {admin, [?OZ_SPACES_ADD_RELATIONSHIPS]},
+                {user, Owner},
                 {user, U2}
             ]
         },
@@ -191,10 +194,11 @@ join_harvester_test(Config) ->
 
 
 remove_harvester_test(Config) ->
-    % create space with 2 users:
+    % create space with 3 users:
+    %   Owner effectively has all the privileges
     %   U2 gets the REMOVE_HARVESTER privilege
     %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_REMOVE_HARVESTER
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -217,6 +221,7 @@ remove_harvester_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_HARVESTERS_REMOVE_RELATIONSHIPS]},
+                {user, Owner},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -245,10 +250,11 @@ remove_harvester_test(Config) ->
 
 
 list_harvesters_test(Config) ->
-    % create space with 2 users:
+    % create space with 3 users:
+    %   Owner effectively has all the privileges
     %   U2 gets the SPACE_VIEW privilege
     %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -272,6 +278,7 @@ list_harvesters_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
+                {user, Owner},
                 {user, U2},
                 {provider, P1, P1Token}
             ],
@@ -299,10 +306,11 @@ list_harvesters_test(Config) ->
 
 
 get_harvester_test(Config) ->
-    % create space with 2 users:
+    % create space with 3 users:
+    %   Owner effectively has all the privileges
     %   U2 gets the SPACE_VIEW privilege
     %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -323,6 +331,7 @@ get_harvester_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_HARVESTERS_VIEW]},
+                {user, Owner},
                 {user, U2},
                 {provider, P1, P1Token}
             ],

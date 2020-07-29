@@ -616,7 +616,8 @@ ensure_valid(#state{req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Re
     % is valid.
     DataWithAspect = case Data of
         undefined -> #{aspect => Aspect};
-        _ -> Data#{aspect => Aspect}
+        Map when is_map(Map) -> Data#{aspect => Aspect};
+        _ -> throw(?ERROR_MALFORMED_DATA)
     end,
     % Start with required parameters. Transform the data if needed, fail when
     % any key is missing or cannot be validated.

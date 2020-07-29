@@ -33,6 +33,11 @@
     delete/2
 ]).
 -export([
+    get_owners/2,
+    add_owner/3,
+    remove_owner/3
+]).
+-export([
     create_user_invite_token/2,
     create_group_invite_token/2,
     create_space_support_token/2,
@@ -74,6 +79,7 @@
 ]).
 -export([
     exists/1,
+    is_owner/2,
     has_eff_privilege/3,
     has_direct_user/2,
     has_eff_user/2,
@@ -208,6 +214,33 @@ delete(Auth, SpaceId) ->
         operation = delete,
         auth = Auth,
         gri = #gri{type = od_space, id = SpaceId, aspect = instance}
+    }).
+
+
+-spec get_owners(aai:auth(), od_space:id()) -> {ok, [od_user:id()]} | errors:error().
+get_owners(Auth, SpaceId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = owners}
+    }).
+
+
+-spec add_owner(aai:auth(), od_space:id(), od_user:id()) -> ok | errors:error().
+add_owner(Auth, SpaceId, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = {owner, UserId}}
+    }).
+
+
+-spec remove_owner(aai:auth(), od_space:id(), od_user:id()) -> ok | errors:error().
+remove_owner(Auth, SpaceId, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = {owner, UserId}}
     }).
 
 
@@ -911,6 +944,18 @@ exists(SpaceId) ->
     Exists.
 
 
+-spec is_owner(od_space:id() | od_space:record(), od_user:id()) -> boolean().
+is_owner(SpaceId, UserId) when is_binary(SpaceId) ->
+    case od_space:get(SpaceId) of
+        {ok, #document{value = Space}} ->
+            is_owner(Space, UserId);
+        _ ->
+            false
+    end;
+is_owner(#od_space{owners = Owners}, UserId) ->
+    lists:member(UserId, Owners).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Predicate saying whether specified effective user has specified
@@ -921,9 +966,16 @@ exists(SpaceId) ->
     UserId :: od_user:id(), Privilege :: privileges:space_privilege()) ->
     boolean().
 has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
-    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, od_space, SpaceId);
+    case od_space:get(SpaceId) of
+        {ok, #document{value = Space}} ->
+            has_eff_privilege(Space, UserId, Privilege);
+        _ ->
+            false
+    end;
 has_eff_privilege(Space, UserId, Privilege) ->
-    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, Space).
+    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, Space) orelse
+        % space owners have all the privileges, regardless those assigned
+        is_owner(Space, UserId).
 
 
 %%--------------------------------------------------------------------
