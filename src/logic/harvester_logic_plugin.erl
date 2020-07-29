@@ -857,7 +857,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             authorize(Req#el_req{gri = GRI#gri{scope = protected}}, Harvester)
     end;
 
-authorize(#el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = public}}, Harvester) ->
+authorize(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}, Harvester) ->
     Harvester#od_harvester.public;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = gui_plugin_config}}, Harvester) ->

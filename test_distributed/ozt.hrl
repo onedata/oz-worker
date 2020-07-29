@@ -22,6 +22,8 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/http/codes.hrl").
 -include_lib("ctool/include/http/headers.hrl").
+-include_lib("ctool/include/test/assertions.hrl").
+-include_lib("ctool/include/test/performance.hrl").
 -include_lib("gui/include/gui_session.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
@@ -47,5 +49,17 @@ end)).
     ?ERROR_RELATION_DOES_NOT_EXIST(_, _, _, _) -> ok;
     Other -> Other
 end)).
+
+% Macro useful for debugging
+-define(wrap_in_try_catch(Term), try
+    Term
+catch __Type:__Reason ->
+    ct:print("Test crash in ~s:~B~n~w:~p~nStacktrace: ~s", [
+        ?MODULE, ?LINE,
+        __Type, __Reason,
+        lager:pr_stacktrace(erlang:get_stacktrace())
+    ]),
+    error(test_crashed)
+end).
 
 -endif.

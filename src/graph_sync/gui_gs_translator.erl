@@ -433,6 +433,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
         <<"scope">> => <<"private">>,
         <<"canViewPrivileges">> => space_logic:has_eff_privilege(Space, UserId, ?SPACE_VIEW_PRIVILEGES),
         <<"directMembership">> => space_logic:has_direct_user(Space, UserId),
+        <<"ownerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = owners}),
         <<"userList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = users}),
         <<"effUserList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_users}),
         <<"groupList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = groups}),
@@ -466,6 +467,14 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
             <<"sharesCount">> => SharesCount
         })
     } end;
+
+translate_space(#gri{aspect = owners}, Users) ->
+    #{
+        <<"list">> => lists:map(
+            fun(UserId) ->
+                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+            end, Users)
+    };
 
 translate_space(#gri{aspect = users}, Users) ->
     #{

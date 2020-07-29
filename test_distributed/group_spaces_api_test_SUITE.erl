@@ -173,14 +173,31 @@ create_space_test(Config) ->
         {ok, Space} = oz_test_utils:get_space(Config, SpaceId),
         ?assertEqual(?SPACE_NAME1, Space#od_space.name),
 
-        ?assertEqual(#{}, Space#od_space.users),
-        ?assertEqual(
-            #{
-                U1 => {AllPrivs, [{od_group, G1}]},
-                U2 => {AllPrivs, [{od_group, G1}]}
-            },
-            Space#od_space.eff_users
-        ),
+        case maps:is_key(U2, Space#od_space.users) of
+            true ->
+                % creating user is automatically added as an owner of the space (and
+                % hence a direct member too) - given that he is a member of the group
+                ?assertMatch(#{U2 := AllPrivs}, Space#od_space.users),
+                ?assertMatch([U2], Space#od_space.owners),
+                ?assertMatch(
+                    #{
+                        U1 := {AllPrivs, [{od_group, G1}]},
+                        U2 := {AllPrivs, [{od_group, G1}, {od_space, <<"self">>}]}
+                    },
+                    Space#od_space.eff_users
+                );
+            false ->
+                ?assertEqual(#{}, Space#od_space.users),
+                ?assertEqual([], Space#od_space.owners),
+                ?assertMatch(
+                    #{
+                        U1 := {AllPrivs, [{od_group, G1}]},
+                        U2 := {AllPrivs, [{od_group, G1}]}
+                    },
+                    Space#od_space.eff_users
+                )
+        end,
+
         ?assertEqual(#{G1 => AllPrivs}, Space#od_space.groups),
         ?assertEqual(#{G1 => {AllPrivs, [{od_space, <<"self">>}]}}, Space#od_space.eff_groups),
         true
@@ -224,7 +241,6 @@ create_space_test(Config) ->
                 <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{},
                 <<"shares">> => [],
-                <<"users">> => #{},
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     VerifyFun(Id)

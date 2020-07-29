@@ -1334,7 +1334,6 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(_, Config) ->
     unmock_custom_entitlement_parser(Config),
-    oz_test_utils:delete_all_entities(Config),
     ok.
 
 end_per_suite(_Config) ->

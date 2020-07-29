@@ -208,7 +208,9 @@ get_group(_Config) ->
 get_group_as_provider(_Config) ->
     UserId = ozt_users:create(),
     GroupId = ozt_users:create_group_for(UserId),
-    SpaceId = ozt_groups:create_space_for(GroupId),
+    SpaceOwner = ozt_users:create(),
+    SpaceId = ozt_users:create_space_for(SpaceOwner),
+    ozt_spaces:add_group(SpaceId, GroupId),
     ProviderId = ozt_providers:create(),
     ozt_providers:support_space(ProviderId, SpaceId),
     ?assert(run_tests(#request_spec{

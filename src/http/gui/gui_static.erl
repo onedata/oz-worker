@@ -115,9 +115,8 @@ deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Reads given GUI package, and upon success, deploys the GUI package under 
-%% given GUI prefix on all cluster nodes. 
-%% Removes previously deployed default package if it exists.
+%% Deploys the GUI package from specified path as default harvester GUI package
+%% on all cluster nodes. Removes previously deployed default package if it exists.
 %% Deployed package can be later linked using link_default_harvester_gui/1.
 %% @end
 %%--------------------------------------------------------------------
@@ -136,9 +135,8 @@ deploy_default_harvester_package(PackagePath) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Deploys a GUI package under given GUI prefix on all cluster nodes. GuiHash
-%% must be provided manually. The operation is skipped if the GUI package
-%% already exists on all cluster nodes.
+%% Deploys a GUI package under given GUI prefix on all cluster nodes if it does
+%% not exist. GuiHash must be provided manually.
 %% @end
 %%--------------------------------------------------------------------
 -spec ensure_package(onedata:gui(), PackageBin :: binary(), onedata:gui_hash()) ->
@@ -157,11 +155,11 @@ ensure_package(GuiType, PackageBin, GuiHash) ->
 %% Extracts and places given GUI package under the path corresponding to the GUI 
 %% type and hash. Overwrites previous package (if any).
 %%
-%% NOTE: This function must be run in a critical section to avoid race conditions.
-%%
 %% Has two modes:
 %%  on_cluster - performs the operation on all cluster nodes
 %%  on_node - performs the operation only on the local node
+%%
+%% NOTE: This function must be run in a critical section to avoid race conditions.
 %% @end
 %%--------------------------------------------------------------------
 -spec put_package(on_cluster | on_node, onedata:gui(), PackageBin :: binary(),
@@ -194,7 +192,7 @@ link_gui(GuiType, GuiId, GuiHash) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @equiv link_gui(?HARVESTER_GUI, GuiId, ?DEFAULT_HARVESTER_GUI_HASH).
+%% @equiv link_gui(?HARVESTER_GUI, HarvesterId, ?DEFAULT_HARVESTER_GUI_HASH).
 %% @end
 %%--------------------------------------------------------------------
 -spec link_default_harvester_gui(od_harvester:id()) -> ok.
@@ -207,11 +205,11 @@ link_default_harvester_gui(HarvesterId) ->
 %% a symbolic link on the filesystem to reuse the same GUI packages for multiple
 %% GUI paths.
 %%
-%% NOTE: This operation assumes that the GUI package exists.
-%%
 %% Has two modes:
 %%  on_cluster - performs the operation on all cluster nodes
 %%  on_node - performs the operation only on the local node
+%%
+%% NOTE: This operation assumes that the GUI package exists.
 %% @end
 %%--------------------------------------------------------------------
 -spec link_gui(on_cluster | on_node, onedata:gui(), gui_id(),
