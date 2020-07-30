@@ -151,7 +151,7 @@ create_test_base(Config, ReadonlyValue) ->
         },
         data_spec = #data_spec{
             required = [<<"name">>, <<"readonly">>],
-            optional = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>, <<"readonly">>],
+            optional = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
@@ -384,7 +384,7 @@ update_test(Config, ReadonlyValue) ->
         },
         data_spec = #data_spec{
             required = [<<"imported">>, <<"readonly">>],
-            at_least_one = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>, <<"readonly">>],
+            at_least_one = [<<"qos_parameters">>, <<"qosParameters">>],
             correct_values = #{
                 <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
                 <<"qosParameters">> => [#{<<"key">> => <<"value">>}],

@@ -107,7 +107,7 @@ create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PRO
     ImportedStorage = maps:get(<<"imported">>, Data, unknown),
     Readonly = maps:get(<<"readonly">>, Data, false),
     case Readonly andalso ImportedStorage =:= false of
-        true -> throw(?ERROR_READONLY_REQUIRES_IMPORTED_STORAGE);
+        true -> throw(?ERROR_REQUIRES_IMPORTED_STORAGE(<<"'newly created storage'">>));
         _ -> ok
     end,
     StorageDoc = #document{
@@ -224,7 +224,7 @@ update(#el_req{gri = #gri{id = StorageId, aspect = instance}, data = Data}) ->
                 false ->
                     case NewReadonly andalso NewImportedStorage =:= false of
                         true ->
-                            ?ERROR_READONLY_REQUIRES_IMPORTED_STORAGE(StorageId);
+                            ?ERROR_REQUIRES_IMPORTED_STORAGE(StorageId);
                         false ->
                             {ok, Storage#od_storage{
                                 name = NewName,
