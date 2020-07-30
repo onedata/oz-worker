@@ -333,14 +333,20 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
         <<"batch">> := Batch
     } = Data,
 
-    Res = lists_utils:pmap(fun(HarvesterId) ->
-        Indices = maps:get(HarvesterId, Destination),
-        case harvester_logic:submit_batch(Auth, HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq) of
-            {ok, FailedIndices} -> {HarvesterId, FailedIndices};
-            Error -> {HarvesterId, Error}
-        end
-    end, maps:keys(Destination)),
-
+    Res = try
+        lists_utils:pmap(fun(HarvesterId) ->
+            Indices = maps:get(HarvesterId, Destination),
+            case harvester_logic:submit_batch(Auth, HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq) of
+                {ok, FailedIndices} -> {HarvesterId, FailedIndices};
+                Error -> {HarvesterId, Error}
+            end
+        end, maps:keys(Destination))
+    catch error:{parrallel_call_failed, {failed_processes, Errors}} ->
+        ?error("Harvesting metadata in space ~p failed due to: ~p",
+            [SpaceId, Errors]),
+        throw(?ERROR_TEMPORARY_FAILURE)
+    end,
+            
     {ok, value, lists:foldl(
         fun({HarvesterId, {error, _} = Error}, Acc) -> Acc#{HarvesterId => #{<<"error">> => Error}};
             ({HarvesterId, FailedIndices}, Acc) when map_size(FailedIndices) =/= 0 ->
