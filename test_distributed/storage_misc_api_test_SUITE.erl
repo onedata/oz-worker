@@ -117,7 +117,7 @@ create_test_base(Config, ReadonlyValue) ->
                 ExpectedReadonly = maps:get(<<"readonly">>, DataSet, false),
                 case ExpectedReadonly andalso ExpectedImported =:= false of
                     true ->
-                        ?ERROR_REASON(?ERROR_READONLY_REQUIRES_IMPORTED_STORAGE);
+                        ?ERROR_REASON(?ERROR_REQUIRES_IMPORTED_STORAGE(<<"'newly created storage'">>));
                     false ->
                         ?OK_TERM(fun(StorageId) ->
                             VerifyFun(StorageId, ExpectedQosParams, ExpectedImported, ExpectedReadonly)
@@ -138,7 +138,7 @@ create_test_base(Config, ReadonlyValue) ->
                 ExpectedReadonly = maps:get(<<"readonly">>, DataSet, false),
                 case ExpectedReadonly andalso ExpectedImported =:= false of
                     true ->
-                        ?ERROR_REASON(?ERROR_READONLY_REQUIRES_IMPORTED_STORAGE);
+                        ?ERROR_REASON(?ERROR_REQUIRES_IMPORTED_STORAGE(<<"'newly created storage'">>));
                     false ->
                         ?OK_MAP_CONTAINS(#{
                             <<"provider">> => P1,
@@ -361,7 +361,7 @@ update_test(Config, ReadonlyValue) ->
                 case ExpectedReadonly andalso ExpectedImported =:= false of
                     true ->
                         StorageId = maps:get(storageId, Env),
-                        ?ERROR_REASON(?ERROR_READONLY_REQUIRES_IMPORTED_STORAGE(StorageId));
+                        ?ERROR_REASON(?ERROR_REQUIRES_IMPORTED_STORAGE(StorageId));
                     false ->
                         ?OK
                 end
@@ -376,7 +376,7 @@ update_test(Config, ReadonlyValue) ->
                 case ExpectedReadonly andalso ExpectedImported =:= false of
                     true ->
                         StorageId = maps:get(storageId, Env),
-                        ?ERROR_REASON(?ERROR_READONLY_REQUIRES_IMPORTED_STORAGE(StorageId));
+                        ?ERROR_REASON(?ERROR_REQUIRES_IMPORTED_STORAGE(StorageId));
                     false ->
                         ?OK
                 end
