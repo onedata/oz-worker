@@ -341,11 +341,16 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
     UpdateFun = fun(#od_harvester{indices = Indices, plugin = Plugin, endpoint = Endpoint, spaces = Spaces} = Harvester) ->
         IndexStats = lists:foldl(fun(SpaceId, ExistingStats) ->
             harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, false) end, #{}, Spaces),
+        D = #harvester_index{}, % fixme remove this dummy record
         Index = #harvester_index{
             name = Name,
             schema = Schema,
             gui_plugin_name = GuiPluginName,
-            stats = IndexStats
+            stats = IndexStats,
+            include_metadata = maps:get(<<"includeMetadata">>, Data, D#harvester_index.include_metadata),
+            include_file_details = maps:get(<<"includeFileDetails">>, Data, D#harvester_index.include_file_details),
+            include_rejection_reason = maps:get(<<"includeRejectionReason">>, Data, D#harvester_index.include_rejection_reason),
+            retry_on_rejection = maps:get(<<"retryOnRejection">>, Data, D#harvester_index.retry_on_rejection)
         },
         case Plugin:create_index(Endpoint, IndexId, Schema) of
             ok ->
@@ -395,7 +400,7 @@ create(#el_req{auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch, 
         end,
         {ok, Res} = case Batch of
             [] -> {ok, lists:map(fun(IndexId) -> {IndexId, ok} end, IndicesToUpdate)};
-            _ -> Plugin:submit_batch(Endpoint, HarvesterId, IndicesToUpdate, Batch)
+            _ -> Plugin:submit_batch(Endpoint, HarvesterId, maps:with(IndicesToUpdate, ExistingIndices), Batch)
         end,
         harvester_indices:update_stats(HarvesterId, Res, fun
             (PreviousStats, ok) ->
@@ -1115,7 +1120,18 @@ validate(#el_req{operation = create, gri = #gri{aspect = index}}) -> #{
     },
     optional => #{
         <<"guiPluginName">> => {binary, any},
-        <<"schema">> => {binary, non_empty}
+        <<"schema">> => {binary, non_empty},
+        <<"includeMetadata">> => {list_of_binaries, fun(Val) ->
+            Key = <<"includeMetadata">>,
+            Val == [] andalso throw(?ERROR_BAD_VALUE_EMPTY(Key)),
+            AllowedValues = [<<"json">>, <<"xattrs">>, <<"rdf">>],
+            lists:member(Val, AllowedValues) andalso throw(?ERROR_BAD_VALUE_NOT_ALLOWED(Key, AllowedValues)),
+            true
+        end},
+        <<"includeFileDetails">> => 
+            {list_of_binaries, [<<"fileName">>, <<"spaceId">>, <<"metadataExistenceFlags">>]},
+        <<"includeRejectionReason">> => {boolean, any},
+        <<"retryOnRejection">> => {boolean, any}
     }
 };
 

@@ -52,7 +52,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback submit_batch(od_harvester:endpoint(), od_harvester:id(),
-    od_harvester:index_id(), od_harvester:batch()) ->
+    od_harvester:indices(), od_harvester:batch()) ->
     {ok, [{od_harvester:index_id(), {SuccessfulSeq :: integer() | undefined, 
         FailedSeq :: integer() | undefined}}]}.
 

@@ -159,7 +159,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    3.
+    4.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -285,6 +285,53 @@ get_record_struct(3) ->
 
         {bottom_up_dirty, boolean},
         {top_down_dirty, boolean}
+    ]};
+get_record_struct(4) ->
+    % new fields in index record:
+    %  * include_metadata
+    %  * includeFileDetails
+    %  * includeRejectionReason
+    %  * retryOnRejection
+    {record, [
+        {name, string},
+        {plugin, atom},
+        {endpoint, string},
+        
+        {gui_plugin_config, {custom, json, {json_utils, encode, decode}}},
+        {public, boolean},
+        
+        {indices, #{string => {record, [
+            {name, string},
+            {schema, string},
+            {guiPluginName, string},
+            {include_metadata, [string]},
+            {includeFileDetails, [string]},
+            {includeRejectionReason, boolean},
+            {retryOnRejection, boolean},
+            {stats, #{string => #{string => {record, [
+                {current_seq, integer},
+                {max_seq, integer},
+                {last_update, integer},
+                {error, string},
+                {archival, boolean}
+            ]}}}}
+        ]}}},
+        
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {spaces, [string]},
+        
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => [{atom, string}]}},
+        
+        {creation_time, integer},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+        
+        {bottom_up_dirty, boolean},
+        {top_down_dirty, boolean}
     ]}.
 
 
@@ -395,5 +442,64 @@ upgrade_record(2, Harvester) ->
 
         bottom_up_dirty = BottomUpDirty,
         top_down_dirty = TopDownDirty
+    }};
+upgrade_record(3, Harvester) ->
+    {
+        od_harvester,
+        Name,
+        Plugin,
+        Endpoint,
+        
+        GuiPluginConfig,
+        Public,
+        
+        Indices,
+        
+        Users,
+        Groups,
+        Spaces,
+        
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        
+        CreationTime,
+        Creator,
+        
+        BottomUpDirty,
+        TopDownDirty
+    } = Harvester,
+    {4, #od_harvester{
+        name = Name,
+        plugin = Plugin,
+        endpoint = Endpoint,
+        
+        gui_plugin_config = GuiPluginConfig,
+        public = Public,
+        
+        indices = maps:map(fun(_IndexId, IndexInfo) ->
+            {harvester_index, IndexName, IndexSchema, IndexGuiPluginName, IndexStats} = IndexInfo,
+            #harvester_index{
+                name = IndexName, 
+                schema = IndexSchema,
+                gui_plugin_name = IndexGuiPluginName,
+                stats = IndexStats
+            }
+        end, Indices),
+        
+        users = Users,
+        groups = Groups,
+        spaces = Spaces,
+        
+        eff_users = EffUsers,
+        eff_groups = EffGroups,
+        eff_providers = EffProviders,
+        
+        creation_time = CreationTime,
+        creator = upgrade_common:upgrade_subject_record(Creator),
+        
+        bottom_up_dirty = BottomUpDirty,
+        top_down_dirty = TopDownDirty
     }}.
+
 

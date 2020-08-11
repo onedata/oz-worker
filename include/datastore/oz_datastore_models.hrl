@@ -54,6 +54,10 @@ end).
     schema = undefined :: od_harvester:schema() | undefined,
     % mapping of index name to one recognized by gui plugin.
     gui_plugin_name = undefined :: binary() | undefined,
+    include_metadata = [<<"json">>] :: [binary()],
+    include_file_details = [] :: [binary()],
+    include_rejection_reason = true :: boolean(),
+    retry_on_rejection = true :: boolean(),
     stats = #{} :: od_harvester:indices_stats()
 }).
 

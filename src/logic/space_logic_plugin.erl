@@ -341,7 +341,7 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
                 Error -> {HarvesterId, Error}
             end
         end, maps:keys(Destination))
-    catch error:{parrallel_call_failed, {failed_processes, Errors}} ->
+    catch error:{parallel_call_failed, {failed_processes, Errors}} ->
         ?error("Harvesting metadata in space ~p failed due to: ~p",
             [SpaceId, Errors]),
         throw(?ERROR_TEMPORARY_FAILURE)
