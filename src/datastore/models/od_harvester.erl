@@ -44,23 +44,28 @@
 
 %% Batch entry is a map in a following format:
 %% #{
-%%    <<"fileId">> :: binary(),
-%%    <<"spaceId">> :: binary(),
-%%    <<"fileName">> :: binary(),
-%%    <<"operation">> :: binary(), %% <<"submit">> | <<"delete">>
-%%    <<"seq">> :: pos_integer(),
-%%    <<"payload">> :: #{
-%%        json :: binary(),
-%%        rdf :: binary(),
-%%        xattrs :: json_map()
+%%    <<"fileId">> := binary(),
+%%    <<"spaceId">> := binary(),
+%%    <<"fileName">> := binary(),
+%%    <<"operation">> := binary(), %% <<"submit">> | <<"delete">>
+%%    <<"seq">> := pos_integer(),
+%%    <<"payload">> := #{
+%%        <<"json">> => binary(),
+%%        <<"rdf">> => binary(),
+%%        <<"xattrs">> => json_map()
 %%    }
 %%  }
--type batch_entry() :: #{binary() => binary() | integer() | map()}.
+-type payload() :: #{binary => binary() | json_utils:json_map()}.
+-type batch_entry() :: #{binary() => binary() | integer() | payload()}.
 -type batch() :: [batch_entry()].
+-type metadata_type() :: binary(). % <<"json">>, <<"xattrs">>, <<"rdf">>
 
+-type index_submit_response() :: ok | {error, SuccessfulSeq :: pos_integer() | undefined,
+    FailedSeq :: pos_integer(), ErrorMsg :: binary()}.
 
--export_type([name/0, plugin/0, endpoint/0, schema/0, entry_id/0,
-    index_id/0, index/0, indices/0, indices_stats/0, batch/0, batch_entry/0]).
+-export_type([name/0, plugin/0, endpoint/0, schema/0, entry_id/0, 
+    index_id/0, index/0, indices/0, indices_stats/0, index_submit_response/0,
+    batch/0, batch_entry/0, payload/0, metadata_type/0]).
 
 -define(CTX, #{
     model => ?MODULE,

@@ -1011,6 +1011,13 @@ check_value(_, AllowedVals, Key, Val) when is_list(AllowedVals) ->
         _ ->
             throw(?ERROR_BAD_VALUE_NOT_ALLOWED(Key, AllowedVals))
     end;
+check_value(list_of_binaries, VerifyFun, Key, Vals) when is_function(VerifyFun, 1) andalso is_list(Vals) ->
+    case VerifyFun(Vals) of
+        true ->
+            Vals;
+        false ->
+            throw(?ERROR_BAD_DATA(Key))
+    end;
 check_value(_, VerifyFun, Key, Vals) when is_function(VerifyFun, 1) andalso is_list(Vals) ->
     case lists:all(VerifyFun, Vals) of
         true ->

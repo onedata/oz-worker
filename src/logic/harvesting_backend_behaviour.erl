@@ -9,7 +9,7 @@
 %%% This behaviour specifies the API for an harvester plugin.
 %%% @end
 %%%-------------------------------------------------------------------
--module(harvester_plugin_behaviour).
+-module(harvesting_backend_behaviour).
 
 
 %%--------------------------------------------------------------------
@@ -25,7 +25,7 @@
 %% Checks availability of server located at Endpoint.
 %% @end
 %%--------------------------------------------------------------------
--callback ping(od_harvester:endpoint()) -> {ok | {error, term()}}.
+-callback ping(od_harvester:endpoint()) -> ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------
@@ -34,7 +34,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback create_index(od_harvester:endpoint(), od_harvester:index_id(),
-    od_harvester:schema()) -> {ok | {error, term()}}.
+    od_harvester:schema()) -> ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------
@@ -43,7 +43,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback delete_index(od_harvester:endpoint(), od_harvester:index_id()) ->
-    {ok | {error, term()}}.
+    ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------
@@ -51,10 +51,8 @@
 %% Submits given batch in given index to server located at Endpoint.
 %% @end
 %%--------------------------------------------------------------------
--callback submit_batch(od_harvester:endpoint(), od_harvester:id(),
-    od_harvester:indices(), od_harvester:batch()) ->
-    {ok, [{od_harvester:index_id(), {SuccessfulSeq :: integer() | undefined, 
-        FailedSeq :: integer() | undefined}}]}.
+-callback submit_batch(od_harvester:endpoint(), od_harvester:id(), od_harvester:indices(), 
+    od_harvester:batch()) -> {ok, [{od_harvester:index_id(), od_harvester:index_submit_response()}]}.
 
 
 %%--------------------------------------------------------------------

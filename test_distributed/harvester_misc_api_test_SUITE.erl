@@ -80,6 +80,10 @@ all() ->
 
 
 -define(TEST_DATA, <<"test_data">>).
+-define(ALL_PLUGINS(Config), begin
+    {ok, List} = oz_test_utils:call_oz(Config, harvester_logic, get_all_plugins, []),
+    lists:map(fun(#{<<"id">> := Plugin}) -> Plugin end, List)
+end).
 
 %%%===================================================================
 %%% Test functions
@@ -88,7 +92,6 @@ all() ->
 
 create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
-    [Node | _] = ?config(oz_worker_nodes, Config),
     VerifyFun = fun(HarvesterId, Data) ->
         ExpConfig = maps:get(<<"guiPluginConfig">>, Data, #{}),
         ExpEndpoint = utils:null_to_undefined(maps:get(<<"endpoint">>, Data,
@@ -133,9 +136,9 @@ create_test(Config) ->
                 ?OK_TERM(fun(HarvesterId) -> VerifyFun(HarvesterId, Data) end)
             end)
         },
-        data_spec = #data_spec{
-            required = [<<"name">>, <<"plugin">>],
-            optional = [<<"endpoint">>, <<"guiPluginConfig">>],
+        data_spec = DataSpec = #data_spec{
+            required = [<<"name">>, <<"plugin">>, <<"endpoint">>],
+            optional = [<<"guiPluginConfig">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"endpoint">> => [?HARVESTER_ENDPOINT1],
@@ -144,15 +147,24 @@ create_test(Config) ->
             },
             bad_values = [
                 {<<"plugin">>, <<"not_existing_plugin">>,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>,
-                        rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))},
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>, ?ALL_PLUGINS(Config))},
                 {<<"endpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE},
                 {<<"endpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"endpoint">>)}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    
+    % check that endpoint is optional when default harvester endpoint is set in Onezone 
+    oz_test_utils:set_env(Config, harvester_default_endpoint, ?HARVESTER_ENDPOINT2),
+    ApiTestSpec1 = ApiTestSpec#api_test_spec{
+        data_spec = DataSpec#data_spec{
+            required = [<<"name">>, <<"plugin">>],
+            optional = [<<"endpoint">>, <<"guiPluginConfig">>]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec1)).
 
 
 list_test(Config) ->
@@ -456,7 +468,6 @@ get_gui_plugin_config_test(Config) ->
 
 
 update_test(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
     {ok, U1} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
     {ok, U2} = oz_test_utils:create_user(Config),
@@ -535,8 +546,7 @@ update_test(Config) ->
             },
             bad_values = [
                 {<<"plugin">>, <<"not_existing_plugin">>,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>,
-                        rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))},
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>, ?ALL_PLUGINS(Config))},
                 {<<"public">>, not_boolean, ?ERROR_BAD_VALUE_BOOLEAN(<<"public">>)},
                 {<<"endpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE},
                 {<<"endpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"endpoint">>)}
@@ -816,12 +826,31 @@ create_index_test(Config) ->
         },
         data_spec = #data_spec{
             required = [<<"name">>],
-            optional = [<<"schema">>, <<"guiPluginName">>],
+            optional = [<<"schema">>, <<"guiPluginName">>, <<"includeMetadata">>, 
+                <<"includeFileDetails">>, <<"retryOnRejection">>, <<"includeRejectionReason">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"schema">> => [?HARVESTER_INDEX_SCHEMA],
-                <<"guiPluginName">> => [?CORRECT_NAME, null]
-            }
+                <<"guiPluginName">> => [?CORRECT_NAME, null],
+                <<"includeMetadata">> => [lists_utils:random_sublist([<<"json">>, <<"xattrs">>, <<"rdf">>], 1, all)],
+                <<"includeFileDetails">> => [lists_utils:random_sublist([<<"fileName">>, <<"spaceId">>, <<"metadataExistenceFlags">>], 0, all)],
+                <<"retryOnRejection">> => [true, false],
+                <<"includeRejectionReason">> => [true, false]
+            },
+            bad_values = [
+                {<<"schema">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"schema">>)},
+                {<<"schema">>, 12321, ?ERROR_BAD_VALUE_BINARY(<<"schema">>)},
+                {<<"guiPluginName">>, 12321, ?ERROR_BAD_VALUE_BINARY(<<"guiPluginName">>)},
+                {<<"includeMetadata">>, <<"json">>, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"includeMetadata">>)},
+                {<<"includeMetadata">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"includeMetadata">>)},
+                {<<"includeMetadata">>, [<<"asd">>], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeMetadata">>, 
+                    [<<"json">>, <<"xattrs">>, <<"rdf">>])},
+                {<<"includeFileDetails">>, <<"fileName">>, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"includeFileDetails">>)},
+                {<<"includeFileDetails">>, [<<"asd">>], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeFileDetails">>,
+                    [<<"fileName">>, <<"spaceId">>, <<"metadataExistenceFlags">>])},
+                {<<"retryOnRejection">>, 12321, ?ERROR_BAD_VALUE_BOOLEAN(<<"retryOnRejection">>)},
+                {<<"includeRejectionReason">>, 12321, ?ERROR_BAD_VALUE_BOOLEAN(<<"includeRejectionReason">>)}
+            ] ++ ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -868,18 +897,36 @@ get_index_test(Config) ->
                 <<"indexId">> => IndexId,
                 <<"name">> => ?HARVESTER_INDEX_NAME,
                 <<"schema">> => ?HARVESTER_INDEX_SCHEMA,
-                <<"guiPluginName">> => null
+                <<"guiPluginName">> => null,
+                <<"includeMetadata">> => [<<"json">>],
+                <<"includeFileDetails">> => [],
+                <<"includeRejectionReason">> => true,
+                <<"retryOnRejection">> => true
             }
         },
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_index,
             args = [auth, H1, IndexId],
-            expected_result = ?OK_MAP(#{
-                <<"name">> => ?HARVESTER_INDEX_NAME,
-                <<"schema">> => ?HARVESTER_INDEX_SCHEMA,
-                <<"guiPluginName">> => undefined
-            })
+            expected_result = ?OK_TERM(
+                fun(#harvester_index{
+                    name = Name,
+                    schema = Schema,
+                    gui_plugin_name = GuiPluginName,
+                    include_metadata = IncludeMetadata,
+                    include_file_details = IncludeFileDetails,
+                    include_rejection_reason = IncludeRejectionReason,
+                    retry_on_rejection = RetryOnRejection
+                }) -> 
+                    ?assertEqual(?HARVESTER_INDEX_NAME, Name),
+                    ?assertEqual(?HARVESTER_INDEX_SCHEMA, Schema),
+                    ?assertEqual(undefined, GuiPluginName),
+                    ?assertEqual([<<"json">>], IncludeMetadata),
+                    ?assertEqual([], IncludeFileDetails),
+                    ?assertEqual(true, IncludeRejectionReason),
+                    ?assertEqual(true, RetryOnRejection)
+                end
+            )
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),

@@ -41,7 +41,7 @@
     gs_protocol:handshake_attributes().
 handshake_attributes(_Client) ->
     BrandSubtitle = oz_worker:get_env(brand_subtitle, ""),
-    DefaultHarvesterEndpoint = oz_worker:get_env(harvester_default_endpoint),
+    DefaultHarvesterEndpoint = oz_worker:get_env(harvester_default_endpoint, undefined),
     #{
         <<"zoneName">> => utils:undefined_to_null(oz_worker:get_name()),
         <<"zoneDomain">> => oz_worker:get_domain(),
@@ -870,15 +870,23 @@ translate_harvester(#gri{aspect = all_plugins}, Plugins) ->
     };
 
 translate_harvester(#gri{aspect = {index, _}, scope = private}, IndexData) ->
-    #{
-        <<"name">> := Name,
-        <<"schema">> := Schema,
-        <<"guiPluginName">> := GuiPluginName
+    #harvester_index{
+        name = Name,
+        schema = Schema,
+        gui_plugin_name = GuiPluginName,
+        include_metadata = IncludeMetadata,
+        include_file_details = IncludeFileDetails,
+        include_rejection_reason = IncludeRejectionReason,
+        retry_on_rejection = RetryOnRejection
     } = IndexData,
     #{
         <<"name">> => Name,
         <<"schema">> => utils:undefined_to_null(Schema),
-        <<"guiPluginName">> => utils:undefined_to_null(GuiPluginName)
+        <<"guiPluginName">> => utils:undefined_to_null(GuiPluginName),
+        <<"includeMetadata">> => IncludeMetadata,
+        <<"includeFileDetails">> => IncludeFileDetails,
+        <<"includeRejectionReason">> => IncludeRejectionReason,
+        <<"retryOnRejection">> => RetryOnRejection
     };
 
 translate_harvester(#gri{aspect = {index, _}, scope = public}, IndexData) ->

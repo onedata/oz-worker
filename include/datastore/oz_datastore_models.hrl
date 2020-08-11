@@ -54,8 +54,13 @@ end).
     schema = undefined :: od_harvester:schema() | undefined,
     % mapping of index name to one recognized by gui plugin.
     gui_plugin_name = undefined :: binary() | undefined,
-    include_metadata = [<<"json">>] :: [binary()],
-    include_file_details = [] :: [binary()],
+    % list of metadata types that will be harvested in this index 
+    include_metadata = [<<"json">>] :: [od_harvester:metadata_type()],
+    % List of file details that will be harvested alongside metadata.
+    % Special value `metadataExistenceFlags` for each of harvested metadata type will
+    % add information whether file has metadata of this type.
+    include_file_details = [] :: [binary()], % <<"spaceId">> | <<"fileName">> | <<"metadataExistenceFlags">>
+    % If enabled, the index will include an error description in case of a file indexing failure.
     include_rejection_reason = true :: boolean(),
     retry_on_rejection = true :: boolean(),
     stats = #{} :: od_harvester:indices_stats()

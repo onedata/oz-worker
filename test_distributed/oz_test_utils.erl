@@ -3192,7 +3192,8 @@ mock_harvester_plugins(Config, Plugin) ->
 -spec mock_harvester_plugin(Config :: term(), Nodes :: list(), PluginName :: atom()) -> ok.
 mock_harvester_plugin(Config, Nodes, PluginName) ->
     test_utils:mock_new(Nodes, PluginName, [non_strict]),
-    test_utils:mock_expect(Nodes, PluginName, type, fun() -> harvester_plugin end),
+    test_utils:mock_expect(Nodes, PluginName, type, fun() -> harvesting_backend end),
+    test_utils:mock_expect(Nodes, PluginName, get_name, fun() -> atom_to_binary(PluginName, utf8) end),
     test_utils:mock_expect(Nodes, PluginName, ping,
         fun(?HARVESTER_ENDPOINT1) -> ok;
             (?HARVESTER_ENDPOINT2) -> ok;
@@ -3219,10 +3220,10 @@ mock_harvester_plugin(Config, Nodes, PluginName) ->
         end,
         {ok, lists:map(fun(Index) ->
             case harvester_get_index(Config, HarvesterId, Index) of
-                {ok, #{<<"name">> := <<"fail">>}} -> {Index, {error, undefined, FirstSeq, <<"error_index">>}};
+                {ok, #harvester_index{name = <<"fail">>}} -> {Index, {error, undefined, FirstSeq, <<"error_index">>}};
                 _ -> {Index, Res}
             end
-        end, Indices)}
+        end, maps:keys(Indices))}
     end),
     test_utils:mock_expect(Nodes, PluginName, create_index, fun(_, _, _) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, delete_index, fun(_, _) -> ok end),

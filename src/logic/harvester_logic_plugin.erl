@@ -26,6 +26,11 @@
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
+
+-define(HARVESTING_BACKENDS, onezone_plugins:get_plugins(harvesting_backend) ++ [
+    elasticsearch_harvesting_backend
+]).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -174,7 +179,7 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
         <<"name">> := Name,
         <<"plugin">> := Plugin
     } = Data,
-    Endpoint = maps:get(<<"endpoint">>, Data, oz_worker:get_env(harvester_default_endpoint)),
+    Endpoint = maps:get(<<"endpoint">>, Data, oz_worker:get_env(harvester_default_endpoint, undefined)),
     Config = maps:get(<<"guiPluginConfig">>, Data, #{}),
 
 
@@ -337,32 +342,35 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
     Name = maps:get(<<"name">>, Data),
     Schema = maps:get(<<"schema">>, Data, undefined),
     GuiPluginName = utils:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
+    
+    Index = #harvester_index{
+        name = Name,
+        schema = Schema,
+        gui_plugin_name = GuiPluginName
+    },
 
     UpdateFun = fun(#od_harvester{indices = Indices, plugin = Plugin, endpoint = Endpoint, spaces = Spaces} = Harvester) ->
         IndexStats = lists:foldl(fun(SpaceId, ExistingStats) ->
             harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, false) end, #{}, Spaces),
-        D = #harvester_index{}, % fixme remove this dummy record
-        Index = #harvester_index{
-            name = Name,
-            schema = Schema,
-            gui_plugin_name = GuiPluginName,
+        ExtendedIndex = Index#harvester_index{
             stats = IndexStats,
-            include_metadata = maps:get(<<"includeMetadata">>, Data, D#harvester_index.include_metadata),
-            include_file_details = maps:get(<<"includeFileDetails">>, Data, D#harvester_index.include_file_details),
-            include_rejection_reason = maps:get(<<"includeRejectionReason">>, Data, D#harvester_index.include_rejection_reason),
-            retry_on_rejection = maps:get(<<"retryOnRejection">>, Data, D#harvester_index.retry_on_rejection)
+            include_metadata = maps:get(<<"includeMetadata">>, Data, Index#harvester_index.include_metadata),
+            include_file_details = maps:get(<<"includeFileDetails">>, Data, Index#harvester_index.include_file_details),
+            include_rejection_reason = maps:get(<<"includeRejectionReason">>, Data, Index#harvester_index.include_rejection_reason),
+            retry_on_rejection = maps:get(<<"retryOnRejection">>, Data, Index#harvester_index.retry_on_rejection)
         },
         case Plugin:create_index(Endpoint, IndexId, Schema) of
             ok ->
-                {ok, Harvester#od_harvester{indices = Indices#{IndexId => Index}}};
+                {ok, Harvester#od_harvester{indices = Indices#{IndexId => ExtendedIndex}}};
             {error, _} = Error ->
                 Error
         end
     end,
     NewGri = Gri#gri{aspect = {index, IndexId}, scope = private},
     case od_harvester:update(HarvesterId, UpdateFun) of
-        {ok, _} ->
-            {ok, resource, {NewGri, {Data#{<<"schema">> => Schema}, inherit_rev}}};
+        {ok, #document{value = #od_harvester{indices = UpdatedIndices}}} ->
+            UpdatedIndex = maps:get(IndexId, UpdatedIndices),
+            {ok, resource, {NewGri, {UpdatedIndex, inherit_rev}}};
         {error, _} = Error ->
             Error
     end;
@@ -458,13 +466,12 @@ get(#el_req{gri = #gri{aspect = instance, scope = _}}, Harvester) ->  % covers s
     }};
 
 get(#el_req{gri = #gri{aspect = all_plugins}}, _) ->
-    AllPlugins = onezone_plugins:get_plugins(harvester_plugin),
     {ok, lists:map(fun(Plugin) ->
         #{
             <<"id">> => Plugin,
             <<"name">> => Plugin:get_name()
         }
-    end, AllPlugins)};
+    end, ?HARVESTING_BACKENDS)};
 get(#el_req{gri = #gri{aspect = gui_plugin_config}}, #od_harvester{gui_plugin_config = Config}) ->
     {ok, Config};
 
@@ -500,16 +507,7 @@ get(#el_req{gri = #gri{aspect = indices}}, Harvester) ->
     {ok, maps:keys(Harvester#od_harvester.indices)};
 
 get(#el_req{gri = #gri{aspect = {index, IndexId}, scope = private}}, Harvester) ->
-    #harvester_index{
-        name = Name,
-        schema = Schema,
-        gui_plugin_name = GuiPluginName
-    } = maps:get(IndexId, Harvester#od_harvester.indices),
-    {ok, #{
-        <<"name">> => Name,
-        <<"schema">> => Schema,
-        <<"guiPluginName">> => GuiPluginName
-    }};
+    {ok, maps:get(IndexId, Harvester#od_harvester.indices)};
 
 get(#el_req{gri = #gri{aspect = {index, IndexId}, scope = public}}, Harvester) ->
     #harvester_index{
@@ -1093,13 +1091,17 @@ required_admin_privileges(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
-    required => #{
+validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> 
+    {Required, Optional} = case oz_worker:get_env(harvester_default_endpoint, undefined) of
+        undefined -> {#{<<"endpoint">> => {binary, non_empty}}, #{}};
+        _ -> {#{}, #{<<"endpoint">> => {binary, non_empty}}}
+    end,
+    #{
+    required => Required#{
         <<"name">> => {binary, name},
-        <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)}
+        <<"plugin">> => {atom, ?HARVESTING_BACKENDS}
     },
-    optional => #{
-        <<"endpoint">> => {binary, non_empty},
+    optional => Optional#{
         <<"guiPluginConfig">> => {json, any}
     }
 };
@@ -1121,11 +1123,12 @@ validate(#el_req{operation = create, gri = #gri{aspect = index}}) -> #{
     optional => #{
         <<"guiPluginName">> => {binary, any},
         <<"schema">> => {binary, non_empty},
-        <<"includeMetadata">> => {list_of_binaries, fun(Val) ->
+        <<"includeMetadata">> => {list_of_binaries, fun(Vals) ->
             Key = <<"includeMetadata">>,
-            Val == [] andalso throw(?ERROR_BAD_VALUE_EMPTY(Key)),
+            Vals == [] andalso throw(?ERROR_BAD_VALUE_EMPTY(Key)),
             AllowedValues = [<<"json">>, <<"xattrs">>, <<"rdf">>],
-            lists:member(Val, AllowedValues) andalso throw(?ERROR_BAD_VALUE_NOT_ALLOWED(Key, AllowedValues)),
+            lists:all(fun(Val) -> lists:member(Val, AllowedValues) end, Vals) orelse 
+                throw(?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(Key, AllowedValues)),
             true
         end},
         <<"includeFileDetails">> => 
@@ -1204,7 +1207,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
         <<"endpoint">> => {binary, non_empty},
-        <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)},
+        <<"plugin">> => {atom, ?HARVESTING_BACKENDS},
         <<"public">> => {boolean, any}
     }
 };

@@ -266,7 +266,7 @@
 -define(HARVESTER_MOCK_PLUGIN, binary_to_atom(?HARVESTER_MOCK_PLUGIN_BINARY, utf8)).
 -define(HARVESTER_MOCK_PLUGIN2_BINARY, <<"harvester_mock_plugin2">>).
 -define(HARVESTER_MOCK_PLUGIN2, binary_to_atom(?HARVESTER_MOCK_PLUGIN2_BINARY, utf8)).
--define(HARVESTER_PLUGIN, elasticsearch_plugin).
+-define(HARVESTER_PLUGIN, elasticsearch_harvesting_backend).
 -define(HARVESTER_PLUGIN_BINARY, atom_to_binary(?HARVESTER_PLUGIN, utf8)).
 -define(HARVESTER_GUI_PLUGIN_CONFIG, #{<<"a">>=><<"b">>}).
 

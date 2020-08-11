@@ -140,8 +140,8 @@ validate_plugin(Module, attribute_mapper) ->
 validate_plugin(_, openid_plugin) ->
     % openid_plugin does not undergo validation
     ok;
-validate_plugin(_, harvester_plugin) ->
-    % harvester_plugin does not undergo validation
+validate_plugin(_, harvesting_backend) ->
+    % harvesting_backend does not undergo validation
     ok;
 validate_plugin(_, Type) ->
     throw({bad_plugin_type, Type}).
