@@ -179,7 +179,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -232,6 +232,30 @@ get_record_struct(2) ->
         
         {bottom_up_dirty, boolean},
         {top_down_dirty, boolean}
+    ]};
+get_record_struct(3) ->
+    % * new field - readonly
+    {record, [
+        {name, string},
+        {qos_parameters, #{string => string}},
+        {imported, atom},
+        {readonly, boolean},
+
+        {provider, string},
+        {spaces, #{string => integer}},
+
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => {integer, [{atom, string}]}}},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {bottom_up_dirty, boolean},
+        {top_down_dirty, boolean}
     ]}.
 
 
@@ -264,24 +288,70 @@ upgrade_record(1, Storage) ->
         TopDownDirty,
         BottomUpDirty
     } = Storage,
-    {2, #od_storage{
+    {2, {
+        od_storage,
+        Name,
+        QosParameters,
+        unknown, % will be set by provider during its cluster upgrade procedure
+       
+        Provider,
+        Spaces,
+        
+        EffUsers,
+        EffGroups,
+        EffHarvesters,
+        
+        EffProviders,
+        EffSpaces,
+        
+        CreationTime,
+        Creator,
+        
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(2, Storage) ->
+    {
+        od_storage,
+        Name,
+        QosParameters,
+        Imported,
+
+        Provider,
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+        EffHarvesters,
+
+        EffProviders,
+        EffSpaces,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Storage,
+    {3, #od_storage{
         name = Name,
         qos_parameters = QosParameters,
-        imported = unknown, % will be set by provider during its cluster upgrade procedure
-       
+        imported = Imported,
+        readonly = false,
+
         provider = Provider,
         spaces = Spaces,
-        
+
         eff_users = EffUsers,
         eff_groups = EffGroups,
         eff_harvesters = EffHarvesters,
-        
+
         eff_providers = EffProviders,
         eff_spaces = EffSpaces,
-        
+
         creation_time = CreationTime,
         creator = Creator,
-        
+
         top_down_dirty = TopDownDirty,
         bottom_up_dirty = BottomUpDirty
     }}.
