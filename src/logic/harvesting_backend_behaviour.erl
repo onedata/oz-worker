@@ -33,8 +33,8 @@
 %% Creates index with given schema in server located at Endpoint.
 %% @end
 %%--------------------------------------------------------------------
--callback create_index(od_harvester:endpoint(), od_harvester:index_id(),
-    od_harvester:schema()) -> ok | {error, term()}.
+-callback create_index(od_harvester:endpoint(), od_harvester:index_id(), 
+    od_harvester:index(), od_harvester:schema()) -> ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------

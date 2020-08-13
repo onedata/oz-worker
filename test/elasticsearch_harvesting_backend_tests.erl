@@ -270,6 +270,41 @@ prepare_data_test() ->
             {all, <<"Rejection reason">>}
         )
     ),
+    
+    ?assertEqual(
+        #{
+            <<"a">> => <<"B">>,
+            <<"c">> => <<"d">>,
+            <<"__onedata">> => #{<<"__rejected">> => [<<"x">>]}
+        },
+        elasticsearch_harvesting_backend:prepare_data(#{
+            <<"fileId">> => <<"fileId">>,
+            <<"fileName">> => <<"fileName">>,
+            <<"payload">> => #{
+                <<"json">> => <<"{\"a\":\"B\", \"c\":\"d\"}">>,
+                <<"xattrs">> => #{<<"x">> => <<"y">>, <<"z">> => <<"b">>}
+            },
+            <<"spaceId">> => <<"spaceId">>},
+            #harvester_index{include_metadata = [<<"json">>], include_rejection_reason = false},
+            {[<<"x">>], <<"Rejection reason">>}
+        )
+    ),
+    
+    
+    ?assertEqual(
+        #{},
+        elasticsearch_harvesting_backend:prepare_data(#{
+            <<"fileId">> => <<"fileId">>,
+            <<"fileName">> => <<"fileName">>,
+            <<"payload">> => #{
+                <<"json">> => <<"{}">>,
+                <<"xattrs">> => #{<<"x">> => <<"y">>, <<"z">> => <<"b">>}
+            },
+            <<"spaceId">> => <<"spaceId">>},
+            #harvester_index{include_metadata = [<<"json">>], include_rejection_reason = false},
+            {all, <<"Rejection reason">>}
+        )
+    ),
     ok.
 
 
@@ -360,6 +395,101 @@ parse_batch_result_test() ->
             #{<<"index">> => ErrorResponse(<<"mapper_parsing_exception">>, Reason)}
         ]}
     ),
+    ok.
+
+
+prepare_internal_fields_schema_test() ->
+    TextEsType = elasticsearch_harvesting_backend:get_es_schema_type(text),
+    BooleanEsType = elasticsearch_harvesting_backend:get_es_schema_type(boolean),
+    ?assertEqual(
+        #{<<"rdf">> => TextEsType}, 
+        elasticsearch_harvesting_backend:prepare_internal_fields_schema(
+            #harvester_index{
+                include_metadata = [<<"rdf">>, <<"json">>, <<"xattrs">>],
+                retry_on_rejection = false,
+                include_rejection_reason = false
+            }, 
+            #{}
+    )),
+    ?assertEqual(
+        #{<<"__rejected">> => TextEsType},
+        elasticsearch_harvesting_backend:prepare_internal_fields_schema(
+            #harvester_index{
+                include_metadata = [],
+                retry_on_rejection = true,
+                include_rejection_reason = false
+            },
+            #{}
+    )),
+    ?assertEqual(
+        #{<<"__rejection_reason">> => TextEsType},
+        elasticsearch_harvesting_backend:prepare_internal_fields_schema(
+            #harvester_index{
+                include_metadata = [],
+                retry_on_rejection = false,
+                include_rejection_reason = true
+            },
+            #{}
+    )),
+    ?assertEqual(
+        #{<<"fileName">> => TextEsType, <<"spaceId">> => TextEsType},
+        elasticsearch_harvesting_backend:prepare_internal_fields_schema(
+            #harvester_index{
+                include_metadata = [],
+                include_file_details = [<<"fileName">>, <<"spaceId">>],
+                retry_on_rejection = false,
+                include_rejection_reason = false
+            },
+            #{}
+    )),
+    ?assertEqual(
+        #{
+            <<"json_metadata_exists">> => BooleanEsType,
+            <<"xattrs_metadata_exists">> => BooleanEsType
+        },
+        elasticsearch_harvesting_backend:prepare_internal_fields_schema(
+            #harvester_index{
+                include_metadata = [<<"json">>, <<"xattrs">>],
+                include_file_details = [<<"metadataExistenceFlags">>],
+                retry_on_rejection = false,
+                include_rejection_reason = false
+            },
+            #{}
+    )),
+    ?assertEqual(
+        #{
+            <<"rdf_metadata_exists">> => BooleanEsType,
+            <<"rdf">> => TextEsType
+        },
+        elasticsearch_harvesting_backend:prepare_internal_fields_schema(
+            #harvester_index{
+                include_metadata = [<<"rdf">>],
+                include_file_details = [<<"metadataExistenceFlags">>],
+                retry_on_rejection = false,
+                include_rejection_reason = false
+            },
+            #{}
+    )),
+    ?assertEqual(
+        #{
+            <<"json_metadata_exists">> => BooleanEsType,
+            <<"rdf_metadata_exists">> => BooleanEsType,
+            <<"xattrs_metadata_exists">> => BooleanEsType,
+            <<"fileName">> => TextEsType, 
+            <<"spaceId">> => TextEsType,
+            <<"__rejected">> => TextEsType,
+            <<"__rejection_reason">> => TextEsType,
+            <<"rdf">> => TextEsType
+        },
+        elasticsearch_harvesting_backend:prepare_internal_fields_schema(
+            #harvester_index{
+                include_metadata = [<<"rdf">>, <<"json">>, <<"xattrs">>],
+                include_file_details = [<<"fileName">>, <<"spaceId">>, <<"metadataExistenceFlags">>],
+                retry_on_rejection = true,
+                include_rejection_reason = true
+            },
+            #{}
+        )),
     ok.
 
 

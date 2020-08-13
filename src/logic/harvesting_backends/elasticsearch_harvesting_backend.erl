@@ -22,11 +22,14 @@
 -export([
     get_name/0,
     ping/1,
-    create_index/3, delete_index/2,
+    create_index/4, delete_index/2,
     submit_batch/4,
     query_index/3,
     query_validator/0
 ]).
+
+% for tests
+-export([do_submit_request/3]).
 
 -ifdef(TEST).
 -compile(export_all).
@@ -51,7 +54,7 @@
 % Internal params is a map that contains subset of following keys (as binaries): 
 %   - xattrs => converted_xattrs() 
 %   - rdf => binary()
-%   - {metadata_type}_metadata_exists (e.g json_metadata_exists) => boolean() 
+%   - {metadata_type} + ?METADATA_EXISTENCE_FLAG_SUFFIX (e.g json_metadata_exists) => boolean() 
 %   - specified in `include_file_details` in IndexInfo (e.g spaceId, fileName) => binary()
 %   - ?REJECTED_METADATA_KEY => rejected_fields() 
 %   - ?REJECTION_REASON_METADATA_KEY => binary()
@@ -71,13 +74,14 @@
 -define(INTERNAL_METADATA_KEY, <<"__onedata">>).
 -define(REJECTED_METADATA_KEY, <<"__rejected">>).
 -define(REJECTION_REASON_METADATA_KEY, <<"__rejection_reason">>).
+-define(METADATA_EXISTENCE_FLAG_SUFFIX, <<"_metadata_exists">>).
 
 -define(MAX_SUBMIT_RETRIES, 3).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link harvester_plugin_behaviour} callback get_name/0
+%% {@link harvesting_backend_behaviour} callback get_name/0
 %% @end
 %%--------------------------------------------------------------------
 -spec get_name() -> binary().
@@ -87,7 +91,7 @@ get_name() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link harvester_plugin_behaviour} callback ping/1
+%% {@link harvesting_backend_behaviour} callback ping/1
 %% @end
 %%--------------------------------------------------------------------
 -spec ping(od_harvester:endpoint()) -> ok | {error, term()}.
@@ -97,22 +101,24 @@ ping(Endpoint) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link harvester_plugin_behaviour} callback create_index/4.
+%% {@link harvesting_backend_behaviour} callback create_index/4.
 %% @end
 %%--------------------------------------------------------------------
--spec create_index(od_harvester:endpoint(), od_harvester:index_id(), od_harvester:schema()) ->
-    ok | {error, term()}.
-create_index(Endpoint, IndexId, Schema) ->
+-spec create_index(od_harvester:endpoint(), od_harvester:index_id(), od_harvester:index(), 
+    od_harvester:schema()) -> ok | {error, term()}.
+create_index(Endpoint, IndexId, IndexInfo, Schema) ->
     NewSchema = case Schema of
         undefined -> <<"{}">>;
         Schema -> Schema
     end,
-    ?REQUEST_RETURN_OK(do_request(put, Endpoint, IndexId, <<>>, NewSchema, [{200,300}])).
+    ExtendedSchema = extend_schema(IndexInfo, json_utils:decode(NewSchema)),
+    ?REQUEST_RETURN_OK(do_request(
+        put, Endpoint, IndexId, <<>>, json_utils:encode(ExtendedSchema), [{200,300}])).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link harvester_plugin_behaviour} callback delete_index/3.
+%% {@link harvesting_backend_behaviour} callback delete_index/3.
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_index(od_harvester:endpoint(), od_harvester:index_id()) -> ok | {error, term()}.
@@ -122,7 +128,7 @@ delete_index(Endpoint, IndexId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link harvester_plugin_behaviour} callback submit_batch/4.
+%% {@link harvesting_backend_behaviour} callback submit_batch/4.
 %% @end
 %%--------------------------------------------------------------------
 -spec submit_batch(od_harvester:endpoint(), od_harvester:id(), od_harvester:indices(), od_harvester:batch()) ->
@@ -141,7 +147,7 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link harvester_plugin_behaviour} callback query/3.
+%% {@link harvesting_backend_behaviour} callback query/3.
 %% @end
 %%--------------------------------------------------------------------
 -spec query_index(od_harvester:endpoint(), od_harvester:index_id(), Data :: #{}) ->
@@ -168,7 +174,7 @@ query_index(Endpoint, IndexId, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link harvester_plugin_behaviour} callback query_validator/0.
+%% {@link harvesting_backend_behaviour} callback query_validator/0.
 %% @end
 %%--------------------------------------------------------------------
 -spec query_validator() -> entity_logic:validity_verificator().
@@ -214,7 +220,8 @@ submit_to_index(Endpoint, IndexId, IndexInfo, Batch) ->
     od_harvester:batch(), rejection_info()) -> od_harvester:index_submit_response().
 submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {RejectedFields, _Reason} = RejectionInfo) ->
     {PreparedEsBatch, TrimmedBatch} = prepare_elasticsearch_batch(Batch, IndexInfo, RejectionInfo),
-    case do_submit_request(Endpoint, IndexId, PreparedEsBatch) of
+    % call using ?MODULE for mocking in tests
+    case ?MODULE:do_submit_request(Endpoint, IndexId, PreparedEsBatch) of
         {ok, Res} ->
             case check_result(Res, not IndexInfo#harvester_index.retry_on_rejection, RejectedFields) of
                 {retry, NewReject} ->
@@ -404,6 +411,7 @@ prepare_data(BatchEntry, IndexInfo, {RejectedFields, RejectionReason}) ->
     Payload = maps:with(MetadataTypesToInclude, maps:get(<<"payload">>, BatchEntry, #{})),
     EncodedJson = maps:get(<<"json">>, Payload, <<"{}">>),
     DecodedJson = json_utils:decode(EncodedJson),
+    ?notice("MetadataTypesToInclude: ~p", [MetadataTypesToInclude]),
     InternalParams1 = lists:foldl(fun(MetadataType, PartialInternalParams) ->
         add_to_internal_params(
             MetadataType,
@@ -443,7 +451,7 @@ add_to_internal_params(MetadataType, MetadataExistenceFlag, Payload, RejectedFie
 maybe_add_existence_flag(_MetadataType, _Exists, false, InternalParams) ->
     InternalParams;
 maybe_add_existence_flag(MetadataType, Exists, true, InternalParams) ->
-    InternalParams#{<<MetadataType/binary, "_metadata_exists">> => Exists}.
+    InternalParams#{<<MetadataType/binary, (?METADATA_EXISTENCE_FLAG_SUFFIX)/binary>> => Exists}.
 
 
 %% @private
@@ -674,6 +682,73 @@ retrieve_rejected_field(ErrorReason) ->
         [] -> all; % reject all fields when error is not recognized
         [Field | _] -> Field
     end.
+
+
+%%%===================================================================
+%%% Functions regarding Elasticsearch schema
+%%%===================================================================
+
+-spec extend_schema(od_harvester:index(), map()) -> map().
+extend_schema(IndexInfo, DecodedSchema) ->
+    InternalFieldsSchema = prepare_internal_fields_schema(IndexInfo, #{}),
+    kv_utils:put(
+        [<<"mappings">>, <<"properties">>, ?INTERNAL_METADATA_KEY, <<"properties">>],
+        InternalFieldsSchema,
+        DecodedSchema
+    ).
+
+
+-spec prepare_internal_fields_schema(od_harvester:index(), map()) -> map().
+prepare_internal_fields_schema(
+    #harvester_index{include_file_details = [_ | _] = IncludeFileDetails} = IndexInfo, Map
+) ->
+    NewMap = case lists:member(<<"metadataExistenceFlags">>, IncludeFileDetails) of
+        true ->
+            IncludeMetadata = IndexInfo#harvester_index.include_metadata,
+            ?notice("Include metadata: ~p", [IncludeMetadata]),
+            lists:foldl(fun(MetadataType, Acc) ->
+                kv_utils:put([<<MetadataType/binary, (?METADATA_EXISTENCE_FLAG_SUFFIX)/binary>>],
+                    get_es_schema_type(boolean), Acc)
+            end, Map, IncludeMetadata);
+        false -> Map
+    end,
+    NewMap1 = lists:foldl(fun(FileDetail, Acc) ->
+        kv_utils:put([FileDetail], get_es_schema_type(text), Acc)
+    end, NewMap, lists:delete(<<"metadataExistenceFlags">>, IncludeFileDetails)),
+    prepare_internal_fields_schema(IndexInfo#harvester_index{include_file_details = []}, NewMap1);
+prepare_internal_fields_schema(
+    #harvester_index{include_metadata = [_ | _] = IncludeMetadata} = IndexInfo, Map
+) ->
+    NewMap = case lists:member(<<"rdf">>, IncludeMetadata) of
+        true -> kv_utils:put([<<"rdf">>], get_es_schema_type(text), Map);
+        false -> Map
+    end,
+    prepare_internal_fields_schema(IndexInfo#harvester_index{include_metadata = []}, NewMap);
+prepare_internal_fields_schema(#harvester_index{retry_on_rejection = true} = IndexInfo, Map) ->
+    NewMap = kv_utils:put([?REJECTED_METADATA_KEY], get_es_schema_type(text), Map),
+    prepare_internal_fields_schema(IndexInfo#harvester_index{retry_on_rejection = false}, NewMap);
+prepare_internal_fields_schema(#harvester_index{include_rejection_reason = true} = IndexInfo, Map) ->
+    NewMap = kv_utils:put([?REJECTION_REASON_METADATA_KEY], get_es_schema_type(text), Map),
+    prepare_internal_fields_schema(IndexInfo#harvester_index{include_rejection_reason = false}, NewMap);
+prepare_internal_fields_schema(_, Map) ->
+    Map.
+
+
+-spec get_es_schema_type(text | boolean) -> map().
+get_es_schema_type(text) ->
+    #{
+        <<"type">> => <<"text">>,
+        <<"fields">> => #{
+            <<"keyword">> => #{
+                <<"type">> => <<"keyword">>,
+                <<"ignore_above">> => 256
+            }
+        }
+    };
+get_es_schema_type(boolean) ->
+    #{
+        <<"type">> => <<"boolean">>
+    }.
 
 
 %%%===================================================================

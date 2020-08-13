@@ -352,16 +352,16 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
     UpdateFun = fun(#od_harvester{indices = Indices, plugin = Plugin, endpoint = Endpoint, spaces = Spaces} = Harvester) ->
         IndexStats = lists:foldl(fun(SpaceId, ExistingStats) ->
             harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, false) end, #{}, Spaces),
-        ExtendedIndex = Index#harvester_index{
+        IndexInfo = Index#harvester_index{
             stats = IndexStats,
             include_metadata = maps:get(<<"includeMetadata">>, Data, Index#harvester_index.include_metadata),
             include_file_details = maps:get(<<"includeFileDetails">>, Data, Index#harvester_index.include_file_details),
             include_rejection_reason = maps:get(<<"includeRejectionReason">>, Data, Index#harvester_index.include_rejection_reason),
             retry_on_rejection = maps:get(<<"retryOnRejection">>, Data, Index#harvester_index.retry_on_rejection)
         },
-        case Plugin:create_index(Endpoint, IndexId, Schema) of
+        case Plugin:create_index(Endpoint, IndexId, IndexInfo, Schema) of
             ok ->
-                {ok, Harvester#od_harvester{indices = Indices#{IndexId => ExtendedIndex}}};
+                {ok, Harvester#od_harvester{indices = Indices#{IndexId => IndexInfo}}};
             {error, _} = Error ->
                 Error
         end
