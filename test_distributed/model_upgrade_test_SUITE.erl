@@ -2495,11 +2495,11 @@ get_record(od_harvester, 1) -> #od_harvester{
     public = true,
 
     indices = #{
-        <<"567">> => #harvester_index{
-            name = <<"Simulations index">>,
-            schema = <<"schema">>,
-            gui_plugin_name = <<"simulations">>,
-            stats = #{
+        <<"567">> => {harvester_index,
+            <<"Simulations index">>,
+            <<"schema">>,
+            <<"simulations">>,
+            #{
                 <<"space1">> => #{
                     <<"providerA">> => #index_stats{
                         current_seq = 5,
@@ -2555,11 +2555,11 @@ get_record(od_harvester, 2) -> #od_harvester{
     public = true,
 
     indices = #{
-        <<"567">> => #harvester_index{
-            name = <<"Simulations index">>,
-            schema = <<"schema">>,
-            gui_plugin_name = <<"simulations">>,
-            stats = #{
+        <<"567">> => {harvester_index,
+            <<"Simulations index">>,
+            <<"schema">>,
+            <<"simulations">>,
+            #{
                 <<"space1">> => #{
                     <<"providerA">> => #index_stats{
                         current_seq = 5,
@@ -2615,11 +2615,11 @@ get_record(od_harvester, 3) -> #od_harvester{
     public = true,
 
     indices = #{
-        <<"567">> => #harvester_index{
-            name = <<"Simulations index">>,
-            schema = <<"schema">>,
-            gui_plugin_name = <<"simulations">>,
-            stats = #{
+        <<"567">> => {harvester_index,
+            <<"Simulations index">>,
+            <<"schema">>,
+            <<"simulations">>,
+            #{
                 <<"space1">> => #{
                     <<"providerA">> => #index_stats{
                         current_seq = 5,
@@ -2660,6 +2660,70 @@ get_record(od_harvester, 3) -> #od_harvester{
     creation_time = ?DUMMY_TIMESTAMP,
     creator = ?SUB(nobody),
 
+    bottom_up_dirty = true,
+    top_down_dirty = true
+};
+get_record(od_harvester, 4) -> #od_harvester{
+    name = <<"h-name">>,
+    plugin = elasticsearch_plugin,
+    endpoint = <<"https://es.example.com:9056">>,
+    
+    gui_plugin_config = #{
+        <<"attr1">> => <<"val2">>,
+        <<"attr2">> => 15
+    },
+    public = true,
+    
+    indices = #{
+        <<"567">> => #harvester_index{
+            name = <<"Simulations index">>,
+            schema = <<"schema">>,
+            gui_plugin_name = <<"simulations">>,
+            include_metadata = [<<"json">>],
+            include_file_details = [],
+            retry_on_rejection = true,
+            include_rejection_reason = true,
+            stats = #{
+                <<"space1">> => #{
+                    <<"providerA">> => #index_stats{
+                        current_seq = 5,
+                        max_seq = 17,
+                        last_update = ?DUMMY_TIMESTAMP + 18,
+                        error = <<"temp-error">>,
+                        archival = false
+                    }
+                },
+                <<"space2">> => #{
+                    <<"providerB">> => #index_stats{
+                        current_seq = 1423,
+                        max_seq = 1423,
+                        last_update = ?DUMMY_TIMESTAMP + 892,
+                        error = undefined,
+                        archival = true
+                    }
+                }
+            }
+        }
+        
+    },
+    
+    users = #{
+        <<"user1">> => [?HARVESTER_VIEW, ?HARVESTER_UPDATE],
+        <<"user2">> => [?HARVESTER_VIEW, ?HARVESTER_UPDATE, ?HARVESTER_DELETE]
+    },
+    groups = #{
+        <<"group1">> => [?HARVESTER_UPDATE],
+        <<"group2">> => [?HARVESTER_DELETE]
+    },
+    spaces = [<<"s1">>, <<"s2">>],
+    
+    eff_users = #{},
+    eff_groups = #{},
+    eff_providers = #{},
+    
+    creation_time = ?DUMMY_TIMESTAMP,
+    creator = ?SUB(nobody),
+    
     bottom_up_dirty = true,
     top_down_dirty = true
 };

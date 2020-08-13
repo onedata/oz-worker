@@ -501,7 +501,7 @@ upgrade_record(3, Harvester) ->
         eff_providers = EffProviders,
         
         creation_time = CreationTime,
-        creator = upgrade_common:upgrade_subject_record(Creator),
+        creator = Creator,
         
         bottom_up_dirty = BottomUpDirty,
         top_down_dirty = TopDownDirty
