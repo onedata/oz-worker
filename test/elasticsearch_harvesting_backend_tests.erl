@@ -14,6 +14,7 @@
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
 
@@ -493,6 +494,130 @@ prepare_internal_fields_schema_test() ->
     ok.
 
 
+unexpected_submit_failure_test() ->
+    mock_do_submit_request(fun(_,_,_) -> error(unexpected_error) end),
+    ?assertThrow(?ERROR_TEMPORARY_FAILURE, elasticsearch_harvesting_backend:submit_batch(
+        <<"endpoint">>,
+        <<"harvester_id">>,
+        #{<<"indexId">> =>
+            #harvester_index{
+                include_metadata = [<<"rdf">>, <<"json">>, <<"xattrs">>],
+                include_file_details = [<<"fileName">>, <<"spaceId">>, <<"metadataExistenceFlags">>],
+                retry_on_rejection = true,
+                include_rejection_reason = true
+            }
+        },
+        [#{
+            <<"seq">> => 8,
+            <<"operation">> => <<"submit">>,
+            <<"fileId">> => <<"fileId">>,
+            <<"fileName">> => <<"fileName">>,
+            <<"payload">> => #{<<"xattrs">> => #{<<"x">> => <<"y">>}},
+            <<"spaceId">> => <<"spaceId">>
+        }]
+    )),
+    unmock(),
+    ok.
+
+
+es_submit_error_test() ->
+    SubmitResultFun = fun
+        (_,_,empty) -> {ok, #{}}; 
+        (_,_,_) -> 
+            {ok,
+                #{
+                    <<"errors">> => true,
+                    <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                        <<"type">> => <<"not_schema_error">>,
+                        <<"reason">> => <<"some reason">>
+                    }}}]
+                }
+            } 
+    end,
+    mock_do_submit_request(SubmitResultFun),
+    ?assertMatch({error, undefined, 8, _}, elasticsearch_harvesting_backend:submit_to_index(
+        <<"endpoint">>,
+        <<"indexId">>,
+        #harvester_index{
+            include_metadata = [<<"json">>]
+        },
+        [#{
+            <<"seq">> => 8,
+            <<"operation">> => <<"submit">>,
+            <<"fileId">> => <<"fileId">>,
+            <<"fileName">> => <<"filename">>,
+            <<"payload">> => #{<<"json">> => <<"{\"key_to_reject\":8}">>},
+            <<"spaceId">> => <<"spaceId">>
+        }]
+    )),
+    
+    ?assertMatch(ok, elasticsearch_harvesting_backend:submit_to_index(
+        <<"endpoint">>,
+        <<"indexId">>,
+        #harvester_index{
+            include_metadata = [<<"json">>]
+        },
+        [#{
+            <<"seq">> => 8,
+            <<"operation">> => <<"submit">>,
+            <<"fileId">> => <<"fileId">>,
+            <<"fileName">> => <<"filename">>,
+            <<"spaceId">> => <<"spaceId">>
+        }]
+    )),
+    
+    SubmitResultFun1 = fun(_,_,_) -> {error, <<"some error">>} end,
+    unmock(),
+    mock_do_submit_request(SubmitResultFun1),
+    ?assertMatch({error, undefined, 8, _}, elasticsearch_harvesting_backend:submit_to_index(
+        <<"endpoint">>,
+        <<"indexId">>,
+        #harvester_index{
+            include_metadata = [<<"json">>]
+        },
+        [#{
+            <<"seq">> => 8,
+            <<"operation">> => <<"delete">>,
+            <<"fileId">> => <<"fileId">>,
+            <<"fileName">> => <<"filename">>,
+            <<"spaceId">> => <<"spaceId">>
+        }]
+    )),
+    unmock(),
+    ok.
+
+
+retry_test() ->
+    SubmitResultFun = fun(_,_,_) -> {ok, 
+        #{
+            <<"errors">> => true,
+            <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                <<"type">> => <<"strict_dynamic_mapping_exception">>,
+                <<"reason">> => <<"mapper [a.b] of different type">>
+            }}}]
+        }
+    } end, 
+    retry_test_base(SubmitResultFun, true, 4),
+    retry_test_base(SubmitResultFun, false, 1),
+    
+    SubmitResultFun1 = fun(_,_,BatchString) -> 
+        {ok, case re:run(BatchString, <<"\"__rejected\":\\[\"key_to_reject\"\\]">>, [{capture, none}]) of
+            nomatch ->
+                #{
+                    <<"errors">> => true,
+                    <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                        <<"type">> => <<"illegal_argument_exception">>,
+                        <<"reason">> => <<"mapper [key_to_reject] of different type">>
+                    }}}]
+                };
+            match -> 
+                    #{}
+        end}
+    end,
+    retry_test_base(SubmitResultFun1, true, 2),
+    ok.
+
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -505,4 +630,36 @@ parse_batch_result_test_base(ExpectedWithIgnore, ExpectedWithoutIgnore, BatchRes
         BatchResult, false)
     ).
 
+retry_test_base(SubmitResultFun, RetryOnRejection, ExpectedNumCalls) ->
+    mock_do_submit_request(SubmitResultFun),
+    ?assertEqual(ok, elasticsearch_harvesting_backend:submit_to_index(
+        <<"endpoint">>,
+        <<"indexId">>,
+        #harvester_index{
+            include_metadata = [<<"rdf">>, <<"json">>, <<"xattrs">>],
+            include_file_details = [<<"fileName">>, <<"spaceId">>, <<"metadataExistenceFlags">>],
+            retry_on_rejection = RetryOnRejection,
+            include_rejection_reason = false
+        },
+        [#{
+            <<"seq">> => 8,
+            <<"operation">> => <<"submit">>,
+            <<"fileId">> => <<"fileId">>,
+            <<"fileName">> => <<"filename">>,
+            <<"payload">> => #{<<"json">> => <<"{\"key_to_reject\":8}">>},
+            <<"spaceId">> => <<"spaceId">>
+        }]
+    )),
+    ?assertEqual(ExpectedNumCalls, meck:num_calls(elasticsearch_harvesting_backend, do_submit_request, 3)),
+    unmock(),
+    ok.
+
+
+mock_do_submit_request(SubmitResultFun) ->
+    meck:new(elasticsearch_harvesting_backend, [passthrough]),
+    meck:expect(elasticsearch_harvesting_backend, do_submit_request, SubmitResultFun).
+
+unmock() ->
+    meck:unload(elasticsearch_harvesting_backend).
+    
 -endif.

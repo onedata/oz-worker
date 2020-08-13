@@ -223,9 +223,11 @@ submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {RejectedFields, _Reason} =
     % call using ?MODULE for mocking in tests
     case ?MODULE:do_submit_request(Endpoint, IndexId, PreparedEsBatch) of
         {ok, Res} ->
-            case check_result(Res, not IndexInfo#harvester_index.retry_on_rejection, RejectedFields) of
-                {retry, NewReject} ->
-                    submit_to_index(Endpoint, IndexId, IndexInfo, TrimmedBatch, NewReject);
+            IgnoreSchemaErrors = 
+                (not IndexInfo#harvester_index.retry_on_rejection) or (RejectedFields == all),
+            case check_result(Res, IgnoreSchemaErrors, RejectedFields) of
+                {retry, NewRejectionInfo} ->
+                    submit_to_index(Endpoint, IndexId, IndexInfo, TrimmedBatch, NewRejectionInfo);
                 {error, SuccessfulEntryNum, FailedEntryNum, ErrorMsg} ->
                     {error, map_entry_num_to_seq(SuccessfulEntryNum, TrimmedBatch),
                         map_entry_num_to_seq(FailedEntryNum, TrimmedBatch), ErrorMsg};
