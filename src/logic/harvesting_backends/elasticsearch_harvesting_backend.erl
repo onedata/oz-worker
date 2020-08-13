@@ -211,14 +211,14 @@ submit_to_index(Endpoint, IndexId, IndexInfo, Batch) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec submit_to_index(od_harvester:endpoint(), od_harvester:index_id(), od_harvester:index(),
-    od_harvester:batch(), {rejected_fields(), binary()}) -> od_harvester:index_submit_response().
-submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {RejectedFields, _Reason} = Reject) ->
-    {PreparedBatch, TrimmedBatch} = prepare_elasticsearch_batch(Batch, IndexInfo, Reject),
-    case do_submit_request(Endpoint, IndexId, PreparedBatch) of
+    od_harvester:batch(), rejection_info()) -> od_harvester:index_submit_response().
+submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {RejectedFields, _Reason} = RejectionInfo) ->
+    {PreparedEsBatch, TrimmedBatch} = prepare_elasticsearch_batch(Batch, IndexInfo, RejectionInfo),
+    case do_submit_request(Endpoint, IndexId, PreparedEsBatch) of
         {ok, Res} ->
             case check_result(Res, not IndexInfo#harvester_index.retry_on_rejection, RejectedFields) of
                 {retry, NewReject} ->
-                    submit_to_index(Endpoint, IndexId, IndexInfo, Batch, NewReject);
+                    submit_to_index(Endpoint, IndexId, IndexInfo, TrimmedBatch, NewReject);
                 {error, SuccessfulEntryNum, FailedEntryNum, ErrorMsg} ->
                     {error, map_entry_num_to_seq(SuccessfulEntryNum, TrimmedBatch),
                         map_entry_num_to_seq(FailedEntryNum, TrimmedBatch), ErrorMsg};
@@ -349,6 +349,10 @@ do_request(Method, Endpoint, IndexId, Path, Data, Headers, ExpectedCodes) ->
 %% { "index" : { "_id" : FileId1 } }
 %% { "field1" : "value1" }
 %% Each line ends with literal '\n'
+%% 
+%% If any batch entry would be ignored because of options selected 
+%% in IndexInfo it is removed from original batch. Processed batch 
+%% is returned from this function.
 %% @end
 %%--------------------------------------------------------------------
 -spec prepare_elasticsearch_batch(od_harvester:batch(), od_harvester:index(),
