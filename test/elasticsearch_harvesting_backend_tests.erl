@@ -39,26 +39,26 @@ remove_field_test() ->
 convert_xattr_test() ->
     ?assertEqual(
         #{<<"a">> => #{<<"b">> => #{<<"c">> => #{<<"d">> => #{<<"e">> => #{<<"__value">> => 8}}}}}}, 
-        elasticsearch_harvesting_backend:convert_xattrs(#{<<"a.b.c.d.e">> => 8})
+        elasticsearch_harvesting_backend:normalize_xattrs(#{<<"a.b.c.d.e">> => 8})
     ),
     ?assertEqual(
         #{<<"a">> => #{<<"__value">> => <<"abcba">>, <<"b">> => #{<<"__value">> => 8}}}, 
-        elasticsearch_harvesting_backend:convert_xattrs(#{<<"a.b">> => 8, <<"a">> => <<"abcba">>})
+        elasticsearch_harvesting_backend:normalize_xattrs(#{<<"a.b">> => 8, <<"a">> => <<"abcba">>})
     ),
     ?assertEqual(
         #{<<"__rejected">> => [<<"a">>], <<"a">> => #{<<"__value">> => #{<<"__value">> => <<"abcba">>}}},
-        elasticsearch_harvesting_backend:convert_xattrs(#{<<"a">> => 8, <<"a.__value">> => <<"abcba">>})
+        elasticsearch_harvesting_backend:normalize_xattrs(#{<<"a">> => 8, <<"a.__value">> => <<"abcba">>})
     ),
     ?assertEqual(
         #{<<"a">> => #{<<"__value">> => <<"abcba">>, <<"b">> => #{<<"__value">> => 8}}},
-        elasticsearch_harvesting_backend:convert_xattrs(#{<<"a...b">> => 8, <<"a">> => <<"abcba">>})
+        elasticsearch_harvesting_backend:normalize_xattrs(#{<<"a...b">> => 8, <<"a">> => <<"abcba">>})
     ),
     ?assertEqual(
         #{<<"a">> => #{
             <<"__value">> => #{<<"__value">> => 8}, 
             <<"b">> => #{<<"c">> => #{<<"d">> => #{<<"e">> => #{<<"__value">> => 8}}}}}
         }, 
-        elasticsearch_harvesting_backend:convert_xattrs(#{<<"a.b.c.d.e">> => 8, <<"a.__value">> => 8})
+        elasticsearch_harvesting_backend:normalize_xattrs(#{<<"a.b.c.d.e">> => 8, <<"a.__value">> => 8})
     ),
     ok.
 
@@ -73,10 +73,10 @@ prepare_data_test() ->
         #{
             <<"__onedata">> => #{
                 <<"fileName">> => <<"fileName">>,
-                <<"json_metadata_exists">> => true, 
+                <<"jsonMetadataExists">> => true, 
                 <<"spaceId">> => <<"spaceId">>,
-                <<"xattrs_metadata_exists">> => false,
-                <<"rdf_metadata_exists">> => false
+                <<"xattrsMetadataExists">> => false,
+                <<"rdfMetadataExists">> => false
             },
             <<"a">> => <<"B">>
         },
@@ -92,10 +92,10 @@ prepare_data_test() ->
         #{
             <<"__onedata">> => #{
                 <<"fileName">> => <<"fileName">>,
-                <<"json_metadata_exists">> => false,
+                <<"jsonMetadataExists">> => false,
                 <<"spaceId">> => <<"spaceId">>,
-                <<"rdf_metadata_exists">> => false,
-                <<"xattrs_metadata_exists">> => true,
+                <<"rdfMetadataExists">> => false,
+                <<"xattrsMetadataExists">> => true,
                 <<"xattrs">> => #{<<"x">> => #{<<"__value">> => <<"y">>}}
             }
         },
@@ -111,11 +111,11 @@ prepare_data_test() ->
         #{
             <<"__onedata">> => #{
                 <<"fileName">> => <<"fileName">>,
-                <<"json_metadata_exists">> => true,
+                <<"jsonMetadataExists">> => true,
                 <<"spaceId">> => <<"spaceId">>,
-                <<"rdf_metadata_exists">> => true,
+                <<"rdfMetadataExists">> => true,
                 <<"rdf">> => <<"some rdf">>,
-                <<"xattrs_metadata_exists">> => true,
+                <<"xattrsMetadataExists">> => true,
                 <<"xattrs">> => #{<<"x">> => #{<<"__value">> => <<"y">>}}
             },
             <<"a">> => <<"B">>
@@ -136,12 +136,12 @@ prepare_data_test() ->
         #{
             <<"__onedata">> => #{
                 <<"__rejected">> => [<<"a">>],
-                <<"__rejection_reason">> => <<"Rejection reason">>,
+                <<"__rejectionReason">> => <<"Rejection reason">>,
                 <<"fileName">> => <<"fileName">>,
-                <<"json_metadata_exists">> => true,
+                <<"jsonMetadataExists">> => true,
                 <<"spaceId">> => <<"spaceId">>,
-                <<"rdf_metadata_exists">> => false,
-                <<"xattrs_metadata_exists">> => true,
+                <<"rdfMetadataExists">> => false,
+                <<"xattrsMetadataExists">> => true,
                 <<"xattrs">> => #{<<"x">> => #{<<"__value">> => <<"y">>}}
             },
             <<"c">> => <<"d">>
@@ -158,12 +158,12 @@ prepare_data_test() ->
         #{
             <<"__onedata">> => #{
                 <<"__rejected">> => [<<"a">>,<<"x">>,<<"__onedata.xattrs.z">>],
-                <<"__rejection_reason">> => <<"Rejection reason">>,
+                <<"__rejectionReason">> => <<"Rejection reason">>,
                 <<"fileName">> => <<"fileName">>,
-                <<"json_metadata_exists">> => true,
+                <<"jsonMetadataExists">> => true,
                 <<"spaceId">> => <<"spaceId">>,
-                <<"rdf_metadata_exists">> => false,
-                <<"xattrs_metadata_exists">> => true,
+                <<"rdfMetadataExists">> => false,
+                <<"xattrsMetadataExists">> => true,
                 <<"xattrs">> => #{<<"x">> => #{<<"__value">> => <<"y">>}}
             },
             <<"c">> => <<"d">>
@@ -182,12 +182,12 @@ prepare_data_test() ->
     ?assertEqual(
         #{
             <<"__onedata">> => #{
-                <<"__rejection_reason">> => <<"Rejection reason">>,
+                <<"__rejectionReason">> => <<"Rejection reason">>,
                 <<"fileName">> => <<"fileName">>,
-                <<"json_metadata_exists">> => true,
+                <<"jsonMetadataExists">> => true,
                 <<"spaceId">> => <<"spaceId">>,
-                <<"rdf_metadata_exists">> => false,
-                <<"xattrs_metadata_exists">> => true,
+                <<"rdfMetadataExists">> => false,
+                <<"xattrsMetadataExists">> => true,
                 <<"xattrs">> => #{<<"__rejected">> => <<"{\"z\":\"b\",\"x\":\"y\"}">>}
             },
             <<"__onedata.__rejected">> => <<"{\"c\":\"d\",\"a\":\"B\"}">>
@@ -339,13 +339,13 @@ parse_batch_result_test() ->
         ]}
     ),
     parse_batch_result_test_base(
-        {error, undefined, 1, <<"error: reason">>},
-        {error, undefined, 1, <<"error: reason">>},
+        {error, 1, <<"error: reason">>},
+        {error, 1, <<"error: reason">>},
         #{<<"items">> => [#{<<"delete">> => ErrorResponse(<<"error">>, <<"reason">>)}]}
     ),
     parse_batch_result_test_base(
-        {error, 2, 3, <<"error: reason">>},
-        {error, 2, 3, <<"error: reason">>},
+        {error, 3, <<"error: reason">>},
+        {error, 3, <<"error: reason">>},
         #{<<"items">> => [
             #{<<"index">> => #{<<"no_error">> => <<"in_result">>}},
             #{<<"delete">> => #{<<"no_error">> => <<"in_result">>}},
@@ -381,7 +381,7 @@ parse_batch_result_test() ->
         ]}
     ),
     parse_batch_result_test_base(
-        {error, 1, 2, <<"error: reason">>},
+        {error, 2, <<"error: reason">>},
         {rejected, <<"a.b.c.d">>, Reason}, 
         #{<<"items">> => [
             #{<<"index">> => ErrorResponse(<<"mapper_parsing_exception">>, Reason)},
@@ -389,8 +389,8 @@ parse_batch_result_test() ->
         ]}
     ),
     parse_batch_result_test_base(
-        {error, undefined, 1, <<"error: reason">>},
-        {error, undefined, 1, <<"error: reason">>}, 
+        {error, 1, <<"error: reason">>},
+        {error, 1, <<"error: reason">>}, 
         #{<<"items">> => [
             #{<<"index">> => ErrorResponse(<<"error">>, <<"reason">>)},
             #{<<"index">> => ErrorResponse(<<"mapper_parsing_exception">>, Reason)}
@@ -423,7 +423,7 @@ prepare_internal_fields_schema_test() ->
             #{}
     )),
     ?assertEqual(
-        #{<<"__rejection_reason">> => TextEsType},
+        #{<<"__rejectionReason">> => TextEsType},
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
             #harvester_index{
                 include_metadata = [],
@@ -445,8 +445,8 @@ prepare_internal_fields_schema_test() ->
     )),
     ?assertEqual(
         #{
-            <<"json_metadata_exists">> => BooleanEsType,
-            <<"xattrs_metadata_exists">> => BooleanEsType
+            <<"jsonMetadataExists">> => BooleanEsType,
+            <<"xattrsMetadataExists">> => BooleanEsType
         },
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
             #harvester_index{
@@ -459,7 +459,7 @@ prepare_internal_fields_schema_test() ->
     )),
     ?assertEqual(
         #{
-            <<"rdf_metadata_exists">> => BooleanEsType,
+            <<"rdfMetadataExists">> => BooleanEsType,
             <<"rdf">> => TextEsType
         },
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
@@ -473,13 +473,13 @@ prepare_internal_fields_schema_test() ->
     )),
     ?assertEqual(
         #{
-            <<"json_metadata_exists">> => BooleanEsType,
-            <<"rdf_metadata_exists">> => BooleanEsType,
-            <<"xattrs_metadata_exists">> => BooleanEsType,
+            <<"jsonMetadataExists">> => BooleanEsType,
+            <<"rdfMetadataExists">> => BooleanEsType,
+            <<"xattrsMetadataExists">> => BooleanEsType,
             <<"fileName">> => TextEsType, 
             <<"spaceId">> => TextEsType,
             <<"__rejected">> => TextEsType,
-            <<"__rejection_reason">> => TextEsType,
+            <<"__rejectionReason">> => TextEsType,
             <<"rdf">> => TextEsType
         },
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(

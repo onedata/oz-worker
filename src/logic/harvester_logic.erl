@@ -26,7 +26,7 @@
     get_name/2,
     list/1,
     list_privileges/0,
-    get_all_plugins/0,
+    get_all_backend_types/0,
     get_gui_plugin_config/2
 ]).
 -export([
@@ -533,15 +533,15 @@ gen_curl_query(Auth, HarvesterId, IndexId, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Get all harvester plugins.
+%% Get all harvesting backend types.
 %% @end
 %%--------------------------------------------------------------------
--spec get_all_plugins() -> ok | errors:error().
-get_all_plugins() ->
+-spec get_all_backend_types() -> ok | errors:error().
+get_all_backend_types() ->
     entity_logic:handle(#el_req{
         operation = get,
         auth = ?ROOT,
-        gri = #gri{type = od_harvester, aspect = all_plugins}
+        gri = #gri{type = od_harvester, aspect = all_backend_types}
     }).
 
 

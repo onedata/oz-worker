@@ -62,6 +62,8 @@ end).
     include_file_details = [] :: [binary()], % <<"spaceId">> | <<"fileName">> | <<"metadataExistenceFlags">>
     % If enabled, the index will include an error description in case of a file indexing failure.
     include_rejection_reason = true :: boolean(),
+    % If enabled, all payloads rejected by the harvesting backend will be automatically analysed for
+    % offending data (e.g. fields that do not match the schema), pruned and submitted again.
     retry_on_rejection = true :: boolean(),
     stats = #{} :: od_harvester:indices_stats()
 }).
@@ -358,7 +360,7 @@ end).
 
 -record(od_harvester, {
     name = <<"">> :: od_harvester:name(),
-    plugin :: od_harvester:plugin(),
+    backend :: od_harvester:backend(),
     endpoint :: od_harvester:endpoint(),
 
     gui_plugin_config = #{} :: json_utils:json_term(),

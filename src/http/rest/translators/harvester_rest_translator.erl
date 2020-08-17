@@ -104,15 +104,15 @@ get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, Harve
     #{
         <<"name">> := Name,
         <<"public">> := Public,
-        <<"plugin">> := Plugin,
-        <<"endpoint">> := Endpoint
+        <<"harvestingBackendType">> := HarvestingBackend,
+        <<"harvestingBackendEndpoint">> := Endpoint
     } = HarvesterData,
     rest_translator:ok_body_reply(#{
         <<"harvesterId">> => HarvesterId,
         <<"name">> => Name,
         <<"public">> => Public,
-        <<"plugin">> => Plugin,
-        <<"endpoint">> => Endpoint
+        <<"harvestingBackendType">> => HarvestingBackend,
+        <<"harvestingBackendEndpoint">> => Endpoint
     });
 
 get_response(#gri{id = HarvesterId, aspect = instance, scope = shared}, HarvesterData) ->

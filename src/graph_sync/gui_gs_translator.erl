@@ -716,7 +716,7 @@ translate_harvester(#gri{id = undefined, aspect = privileges, scope = private}, 
 translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, Harvester) ->
     #od_harvester{
         name = Name, endpoint = Endpoint,
-        plugin = Plugin, public = Public
+        backend = Plugin, public = Public
     } = Harvester,
     fun(?USER(UserId)) -> #{
         <<"scope">> => <<"private">>,

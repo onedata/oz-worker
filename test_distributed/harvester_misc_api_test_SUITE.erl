@@ -90,13 +90,13 @@ create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     VerifyFun = fun(HarvesterId, Data) ->
         ExpConfig = maps:get(<<"guiPluginConfig">>, Data, #{}),
-        ExpEndpoint = utils:null_to_undefined(maps:get(<<"endpoint">>, Data,
+        ExpEndpoint = utils:null_to_undefined(maps:get(<<"harvestingBackendEndpoint">>, Data,
             oz_test_utils:get_env(Config, harvester_default_endpoint)
         )),
         {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
         ?assertEqual(?CORRECT_NAME, Harvester#od_harvester.name),
         ?assertEqual(ExpEndpoint, Harvester#od_harvester.endpoint),
-        ?assertEqual(?HARVESTER_MOCK_BACKEND, Harvester#od_harvester.plugin),
+        ?assertEqual(?HARVESTER_MOCK_BACKEND, Harvester#od_harvester.backend),
         ?assertEqual(ExpConfig, Harvester#od_harvester.gui_plugin_config),
         true
     end,
@@ -133,19 +133,19 @@ create_test(Config) ->
             end)
         },
         data_spec = DataSpec = #data_spec{
-            required = [<<"name">>, <<"plugin">>, <<"endpoint">>],
+            required = [<<"name">>, <<"harvestingBackendType">>, <<"harvestingBackendEndpoint">>],
             optional = [<<"guiPluginConfig">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
-                <<"endpoint">> => [?HARVESTER_ENDPOINT1],
-                <<"plugin">> => [?HARVESTER_MOCK_BACKEND_BINARY],
+                <<"harvestingBackendEndpoint">> => [?HARVESTER_ENDPOINT1],
+                <<"harvestingBackendType">> => [?HARVESTER_MOCK_BACKEND_BINARY],
                 <<"guiPluginConfig">> => [?HARVESTER_GUI_PLUGIN_CONFIG]
             },
             bad_values = [
-                {<<"plugin">>, <<"not_existing_plugin">>,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>, ?ALL_HARVESTING_BACKENDS(Config))},
-                {<<"endpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE},
-                {<<"endpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"endpoint">>)}
+                {<<"harvestingBackendType">>, <<"not_existing_backend">>,
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"harvestingBackendType">>, ?ALL_HARVESTING_BACKENDS(Config))},
+                {<<"harvestingBackendEndpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE},
+                {<<"harvestingBackendEndpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"harvestingBackendEndpoint">>)}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
         }
@@ -156,8 +156,8 @@ create_test(Config) ->
     oz_test_utils:set_env(Config, harvester_default_endpoint, ?HARVESTER_ENDPOINT2),
     ApiTestSpec1 = ApiTestSpec#api_test_spec{
         data_spec = DataSpec#data_spec{
-            required = [<<"name">>, <<"plugin">>],
-            optional = [<<"endpoint">>, <<"guiPluginConfig">>]
+            required = [<<"name">>, <<"harvestingBackendType">>],
+            optional = [<<"harvestingBackendEndpoint">>, <<"guiPluginConfig">>]
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec1)).
@@ -288,13 +288,13 @@ get_test(Config) ->
                 fun(#od_harvester{
                     name = Name, users = Users, groups = #{},
                     spaces = Spaces,
-                    plugin = Plugin, public = Public,
+                    backend = Backend, public = Public,
                     indices = Indices,
                     eff_users = EffUsers, eff_groups = #{},
                     bottom_up_dirty = false
                 }) ->
                     ?assertEqual(?HARVESTER_NAME1, Name),
-                    ?assertEqual(?HARVESTER_MOCK_BACKEND, Plugin),
+                    ?assertEqual(?HARVESTER_MOCK_BACKEND, Backend),
                     ?assertEqual(false, Public),
                     ?assertEqual(#{}, Indices),
                     ?assertEqual(Users, #{
@@ -351,7 +351,7 @@ get_test(Config) ->
             module = harvester_logic,
             function = get_protected_data,
             args = [auth, H1],
-            expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"plugin">> => ?HARVESTER_MOCK_BACKEND})
+            expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"harvestingBackendType">> => ?HARVESTER_MOCK_BACKEND})
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
@@ -493,13 +493,13 @@ update_test(Config) ->
         {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
 
         ExpName = ExpValueFun(ShouldSucceed, <<"name">>, Data, ?CORRECT_NAME),
-        ExpEndpoint = ExpValueFun(ShouldSucceed, <<"endpoint">>, Data, ?HARVESTER_ENDPOINT1),
-        ExpPlugin = ExpValueFun(ShouldSucceed, <<"plugin">>, Data, ?HARVESTER_MOCK_BACKEND_BINARY),
+        ExpEndpoint = ExpValueFun(ShouldSucceed, <<"harvestingBackendEndpoint">>, Data, ?HARVESTER_ENDPOINT1),
+        ExpBackend = ExpValueFun(ShouldSucceed, <<"harvestingBackendType">>, Data, ?HARVESTER_MOCK_BACKEND_BINARY),
         ExpPublic = ExpValueFun(ShouldSucceed, <<"public">>, Data, false),
 
         ?assertEqual(ExpName, Harvester#od_harvester.name),
         ?assertEqual(utils:null_to_undefined(ExpEndpoint), Harvester#od_harvester.endpoint),
-        ?assertEqual(ExpPlugin, atom_to_binary(Harvester#od_harvester.plugin, utf8)),
+        ?assertEqual(ExpBackend, atom_to_binary(Harvester#od_harvester.backend, utf8)),
         ?assertEqual(ExpPublic, Harvester#od_harvester.public)
     end,
 
@@ -533,19 +533,19 @@ update_test(Config) ->
             expected_result = ?OK_RES
         },
         data_spec = #data_spec{
-            at_least_one = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"public">>],
+            at_least_one = [<<"name">>, <<"harvestingBackendEndpoint">>, <<"harvestingBackendType">>, <<"public">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
-                <<"endpoint">> => [Endpoint],
-                <<"plugin">> => [?HARVESTER_MOCK_BACKEND2_BINARY],
+                <<"harvestingBackendEndpoint">> => [Endpoint],
+                <<"harvestingBackendType">> => [?HARVESTER_MOCK_BACKEND2_BINARY],
                 <<"public">> => [true, false]
             },
             bad_values = [
-                {<<"plugin">>, <<"not_existing_plugin">>,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>, ?ALL_HARVESTING_BACKENDS(Config))},
+                {<<"harvestingBackendType">>, <<"not_existing_backend">>,
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"harvestingBackendType">>, ?ALL_HARVESTING_BACKENDS(Config))},
                 {<<"public">>, not_boolean, ?ERROR_BAD_VALUE_BOOLEAN(<<"public">>)},
-                {<<"endpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE},
-                {<<"endpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"endpoint">>)}
+                {<<"harvestingBackendEndpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE},
+                {<<"harvestingBackendEndpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"harvestingBackendEndpoint">>)}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
         }

@@ -2485,7 +2485,7 @@ get_record(od_handle, 6) -> #od_handle{
 
 get_record(od_harvester, 1) -> #od_harvester{
     name = <<"h-name">>,
-    plugin = elasticsearch_harvesting_backend,
+    backend = elasticsearch_plugin,
     endpoint = <<"https://es.example.com:9056">>,
 
     gui_plugin_config = #{
@@ -2545,7 +2545,7 @@ get_record(od_harvester, 1) -> #od_harvester{
 };
 get_record(od_harvester, 2) -> #od_harvester{
     name = <<"h-name">>,
-    plugin = elasticsearch_harvesting_backend,
+    backend =  elasticsearch_plugin,
     endpoint = <<"https://es.example.com:9056">>,
 
     gui_plugin_config = #{
@@ -2605,7 +2605,7 @@ get_record(od_harvester, 2) -> #od_harvester{
 };
 get_record(od_harvester, 3) -> #od_harvester{
     name = <<"h-name">>,
-    plugin = elasticsearch_harvesting_backend,
+    backend = elasticsearch_plugin,
     endpoint = <<"https://es.example.com:9056">>,
 
     gui_plugin_config = #{
@@ -2665,7 +2665,7 @@ get_record(od_harvester, 3) -> #od_harvester{
 };
 get_record(od_harvester, 4) -> #od_harvester{
     name = <<"h-name">>,
-    plugin = elasticsearch_harvesting_backend,
+    backend = elasticsearch_harvesting_backend,
     endpoint = <<"https://es.example.com:9056">>,
     
     gui_plugin_config = #{

@@ -30,7 +30,7 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
--type plugin() :: module().
+-type backend() :: module().
 -type endpoint() :: binary().
 % Schema is stored as binary and it can contain e.g. encoded json.
 -type schema() :: binary() | undefined.
@@ -45,8 +45,8 @@
 %% Batch entry is a map in a following format:
 %% #{
 %%    <<"fileId">> := binary(),
-%%    <<"spaceId">> := binary(),
-%%    <<"fileName">> := binary(),
+%%    <<"spaceId">> => binary(),
+%%    <<"fileName">> => binary(),
 %%    <<"operation">> := binary(), %% <<"submit">> | <<"delete">>
 %%    <<"seq">> := pos_integer(),
 %%    <<"payload">> := #{
@@ -63,7 +63,7 @@
 -type index_submit_response() :: ok | {error, SuccessfulSeq :: pos_integer() | undefined,
     FailedSeq :: pos_integer(), ErrorMsg :: binary()}.
 
--export_type([name/0, plugin/0, endpoint/0, schema/0, entry_id/0, 
+-export_type([name/0, backend/0, endpoint/0, schema/0, entry_id/0, 
     index_id/0, index/0, indices/0, indices_stats/0, index_submit_response/0,
     batch/0, batch_entry/0, payload/0, metadata_type/0]).
 
@@ -185,7 +185,7 @@ get_record_struct(1) ->
         {indices, #{string => {record, [
             {name, string},
             {schema, string},
-            {guiPluginName, string},
+            {gui_plugin_name, string},
             {stats, #{string => #{string => {record, [
                 {current_seq, integer},
                 {max_seq, integer},
@@ -225,7 +225,7 @@ get_record_struct(2) ->
         {indices, #{string => {record, [
             {name, string},
             {schema, string},
-            {guiPluginName, string},
+            {gui_plugin_name, string},
             {stats, #{string => #{string => {record, [
                 {current_seq, integer},
                 {max_seq, integer},
@@ -265,7 +265,7 @@ get_record_struct(3) ->
         {indices, #{string => {record, [
             {name, string},
             {schema, string},
-            {guiPluginName, string},
+            {gui_plugin_name, string},
             {stats, #{string => #{string => {record, [
                 {current_seq, integer},
                 {max_seq, integer},
@@ -294,9 +294,9 @@ get_record_struct(3) ->
 get_record_struct(4) ->
     % new fields in index record:
     %  * include_metadata
-    %  * includeFileDetails
-    %  * includeRejectionReason
-    %  * retryOnRejection
+    %  * include_file_details
+    %  * include_rejection_reason
+    %  * retry_on_rejection
     {record, [
         {name, string},
         {plugin, atom},
@@ -308,11 +308,11 @@ get_record_struct(4) ->
         {indices, #{string => {record, [
             {name, string},
             {schema, string},
-            {guiPluginName, string},
+            {gui_plugin_name, string},
             {include_metadata, [string]},
-            {includeFileDetails, [string]},
-            {includeRejectionReason, boolean},
-            {retryOnRejection, boolean},
+            {include_file_details, [string]},
+            {include_rejection_reason, boolean},
+            {retry_on_rejection, boolean},
             {stats, #{string => #{string => {record, [
                 {current_seq, integer},
                 {max_seq, integer},
@@ -331,8 +331,6 @@ get_record_struct(4) ->
         {eff_providers, #{string => [{atom, string}]}},
         
         {creation_time, integer},
-        % nested #subject{} record was extended and is now encoded as string
-        % rather than record tuple
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
         
         {bottom_up_dirty, boolean},
@@ -426,7 +424,7 @@ upgrade_record(2, Harvester) ->
     } = Harvester,
     {3, #od_harvester{
         name = Name,
-        plugin = Plugin,
+        backend = Plugin,
         endpoint = Endpoint,
 
         gui_plugin_config = GuiPluginConfig,
@@ -476,7 +474,10 @@ upgrade_record(3, Harvester) ->
     } = Harvester,
     {4, #od_harvester{
         name = Name,
-        plugin = Plugin,
+        backend = case Plugin of
+            elasticsearch_plugin -> elasticsearch_harvesting_backend;
+            _ -> Plugin
+        end,
         endpoint = Endpoint,
         
         gui_plugin_config = GuiPluginConfig,
@@ -488,7 +489,11 @@ upgrade_record(3, Harvester) ->
                 name = IndexName, 
                 schema = IndexSchema,
                 gui_plugin_name = IndexGuiPluginName,
-                stats = IndexStats
+                stats = IndexStats,
+                include_metadata = [<<"json">>],
+                include_file_details = [],
+                include_rejection_reason = true,
+                retry_on_rejection = true
             }
         end, Indices),
         
