@@ -62,7 +62,7 @@
 
 
 -define(ENTRY_PATH(Path), <<"/_doc/", Path/binary>>).
--define(REQUEST_TIMEOUT, oz_worker:get_env(elasticsearch_plugin_request_timeout, timer:minutes(2))).
+-define(REQUEST_TIMEOUT, oz_worker:get_env(elasticsearch_harvesting_backend_request_timeout, timer:minutes(2))).
 
 -define(REQUEST_RETURN_OK(Response),
     case Response of

@@ -80,10 +80,6 @@ all() ->
 
 
 -define(TEST_DATA, <<"test_data">>).
--define(ALL_PLUGINS(Config), begin
-    {ok, List} = oz_test_utils:call_oz(Config, harvester_logic, get_all_plugins, []),
-    lists:map(fun(#{<<"id">> := Plugin}) -> Plugin end, List)
-end).
 
 %%%===================================================================
 %%% Test functions
@@ -100,7 +96,7 @@ create_test(Config) ->
         {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
         ?assertEqual(?CORRECT_NAME, Harvester#od_harvester.name),
         ?assertEqual(ExpEndpoint, Harvester#od_harvester.endpoint),
-        ?assertEqual(?HARVESTER_MOCK_PLUGIN, Harvester#od_harvester.plugin),
+        ?assertEqual(?HARVESTER_MOCK_BACKEND, Harvester#od_harvester.plugin),
         ?assertEqual(ExpConfig, Harvester#od_harvester.gui_plugin_config),
         true
     end,
@@ -142,12 +138,12 @@ create_test(Config) ->
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"endpoint">> => [?HARVESTER_ENDPOINT1],
-                <<"plugin">> => [?HARVESTER_MOCK_PLUGIN_BINARY],
+                <<"plugin">> => [?HARVESTER_MOCK_BACKEND_BINARY],
                 <<"guiPluginConfig">> => [?HARVESTER_GUI_PLUGIN_CONFIG]
             },
             bad_values = [
                 {<<"plugin">>, <<"not_existing_plugin">>,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>, ?ALL_PLUGINS(Config))},
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>, ?ALL_HARVESTING_BACKENDS(Config))},
                 {<<"endpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE},
                 {<<"endpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"endpoint">>)}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
@@ -298,7 +294,7 @@ get_test(Config) ->
                     bottom_up_dirty = false
                 }) ->
                     ?assertEqual(?HARVESTER_NAME1, Name),
-                    ?assertEqual(?HARVESTER_MOCK_PLUGIN, Plugin),
+                    ?assertEqual(?HARVESTER_MOCK_BACKEND, Plugin),
                     ?assertEqual(false, Public),
                     ?assertEqual(#{}, Indices),
                     ?assertEqual(Users, #{
@@ -355,7 +351,7 @@ get_test(Config) ->
             module = harvester_logic,
             function = get_protected_data,
             args = [auth, H1],
-            expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"plugin">> => ?HARVESTER_MOCK_PLUGIN})
+            expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"plugin">> => ?HARVESTER_MOCK_BACKEND})
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
@@ -498,7 +494,7 @@ update_test(Config) ->
 
         ExpName = ExpValueFun(ShouldSucceed, <<"name">>, Data, ?CORRECT_NAME),
         ExpEndpoint = ExpValueFun(ShouldSucceed, <<"endpoint">>, Data, ?HARVESTER_ENDPOINT1),
-        ExpPlugin = ExpValueFun(ShouldSucceed, <<"plugin">>, Data, ?HARVESTER_MOCK_PLUGIN_BINARY),
+        ExpPlugin = ExpValueFun(ShouldSucceed, <<"plugin">>, Data, ?HARVESTER_MOCK_BACKEND_BINARY),
         ExpPublic = ExpValueFun(ShouldSucceed, <<"public">>, Data, false),
 
         ?assertEqual(ExpName, Harvester#od_harvester.name),
@@ -541,12 +537,12 @@ update_test(Config) ->
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"endpoint">> => [Endpoint],
-                <<"plugin">> => [?HARVESTER_MOCK_PLUGIN2_BINARY],
+                <<"plugin">> => [?HARVESTER_MOCK_BACKEND2_BINARY],
                 <<"public">> => [true, false]
             },
             bad_values = [
                 {<<"plugin">>, <<"not_existing_plugin">>,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>, ?ALL_PLUGINS(Config))},
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>, ?ALL_HARVESTING_BACKENDS(Config))},
                 {<<"public">>, not_boolean, ?ERROR_BAD_VALUE_BOOLEAN(<<"public">>)},
                 {<<"endpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE},
                 {<<"endpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"endpoint">>)}
@@ -659,7 +655,7 @@ delete_test(Config) ->
     end,
     VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId} = _Env, _Data) ->
         {ok, Harvesters} = oz_test_utils:list_harvesters(Config),
-        test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 3, 0),
+        test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_BACKEND, delete_index, 3, 0),
         ?assertEqual(lists:member(HarvesterId, Harvesters), not ShouldSucceed)
     end,
 
@@ -721,12 +717,12 @@ delete_harvested_metadata_test(Config) ->
     VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId} = _Env, _Data) ->
         case ShouldSucceed of
             true ->
-                mock_assert_num_calls_sum(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 2, 2);
+                mock_assert_num_calls_sum(OzNodes, ?HARVESTER_MOCK_BACKEND, delete_index, 2, 2);
             _ ->
-                test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 2, 0)
+                test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_BACKEND, delete_index, 2, 0)
         end,
         lists:foreach(fun(Node) ->
-            rpc:call(Node, meck, reset, [?HARVESTER_MOCK_PLUGIN])
+            rpc:call(Node, meck, reset, [?HARVESTER_MOCK_BACKEND])
         end, OzNodes),
         % assert that harvester was not deleted
         {ok, Harvesters} = oz_test_utils:list_harvesters(Config),
@@ -1126,7 +1122,7 @@ delete_index_test(Config) ->
             false -> [IndexId];
             _ -> []
         end,
-        test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 3, 0),
+        test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_BACKEND, delete_index, 3, 0),
         ?assertEqual(ExpIndices, maps:keys(Harvester#od_harvester.indices))
     end,
 
@@ -1184,9 +1180,9 @@ delete_index_metadata_test(Config) ->
         {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
         case ShouldSucceed of
             true ->
-                mock_assert_num_calls_sum(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 2, 1);
+                mock_assert_num_calls_sum(OzNodes, ?HARVESTER_MOCK_BACKEND, delete_index, 2, 1);
             _ ->
-                test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 2, 0)
+                test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_BACKEND, delete_index, 2, 0)
         end,
         % assert that index was not deleted from harvester
         ?assertEqual([IndexId], maps:keys(Harvester#od_harvester.indices))
@@ -1230,7 +1226,7 @@ query_index_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config),
 
     {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT,
-        ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
+        ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_BACKEND_BINARY)),
     oz_test_utils:harvester_add_user(Config, H1, U1),
     {ok, IndexId} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
 
@@ -1393,7 +1389,7 @@ submit_batch_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
 
     {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT,
-        ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
+        ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_BACKEND_BINARY)),
     oz_test_utils:harvester_add_user(Config, H1, U1),
 
     {ok, {P1, T1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
@@ -1441,7 +1437,7 @@ submit_batch_index_stats_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
 
     {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT,
-        ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
+        ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_BACKEND_BINARY)),
     oz_test_utils:harvester_add_user(Config, H1, U1),
 
     {ok, {P1, _T1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
@@ -1558,10 +1554,10 @@ init_per_suite(Config) ->
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 init_per_testcase(_, Config) ->
-    oz_test_utils:mock_harvester_plugins(Config, [?HARVESTER_MOCK_PLUGIN, ?HARVESTER_MOCK_PLUGIN2]).
+    oz_test_utils:mock_harvesting_backends(Config, [?HARVESTER_MOCK_BACKEND, ?HARVESTER_MOCK_BACKEND2]).
 
 end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_harvester_plugins(Config, [?HARVESTER_MOCK_PLUGIN, ?HARVESTER_MOCK_PLUGIN2]).
+    oz_test_utils:unmock_harvesting_backends(Config, [?HARVESTER_MOCK_BACKEND, ?HARVESTER_MOCK_BACKEND2]).
 
 end_per_suite(_Config) ->
     hackney:stop(),

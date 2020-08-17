@@ -105,13 +105,13 @@ end_per_suite(_Config) ->
 
 init_per_testcase(_, Config) ->
     ozt_mocks:mock_time(),
-    ozt_mocks:mock_harvester_plugins(),
+    ozt_mocks:mock_harvesting_backends(),
     Config.
 
 
 end_per_testcase(_, _Config) ->
     ozt_mocks:unmock_time(),
-    ozt_mocks:unmock_harvester_plugins(),
+    ozt_mocks:unmock_harvesting_backends(),
     ok.
 
 
