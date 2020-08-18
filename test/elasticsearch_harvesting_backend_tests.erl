@@ -500,6 +500,17 @@ prepare_internal_fields_schema_test() ->
             },
             #{}
         )),
+    ?assertEqual(
+        #{},
+        elasticsearch_harvesting_backend:prepare_internal_fields_schema(
+            #harvester_index{
+                include_metadata = [json],
+                include_file_details = [],
+                retry_on_rejection = false,
+                include_rejection_reason = false
+            },
+            #{}
+        )),
     ok.
 
 

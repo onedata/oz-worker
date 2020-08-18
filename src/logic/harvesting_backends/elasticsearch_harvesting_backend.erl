@@ -435,7 +435,7 @@ prepare_data(BatchEntry, IndexInfo, {RejectedFields, RejectionReason}) ->
 
 
 %% @private
--spec add_to_internal_params(metadata_type_binary(), od_harvester:index(), od_harvester:payload(), 
+-spec add_to_internal_params(metadata_type_binary(), od_harvester:index(), od_harvester:payload(),
     rejected_fields(), internal_params()) -> internal_params().
 add_to_internal_params(<<"json">>, IndexInfo, Payload, _RejectedFields, InternalParams) ->
     Exists = maps:is_key(<<"json">>, Payload),
@@ -455,7 +455,7 @@ add_to_internal_params(MetadataTypeBinary, IndexInfo, Payload, RejectedFields, I
 %% @private
 -spec maybe_add_existence_flag(metadata_type_binary(), Exists :: boolean(),
     od_harvester:index(), internal_params()) -> internal_params().
-maybe_add_existence_flag(MetadataType, Exists, 
+maybe_add_existence_flag(MetadataType, Exists,
     #harvester_index{include_file_details = FileDetailsToInclude}, InternalParams
 ) ->
     case lists:member(metadataExistenceFlags, FileDetailsToInclude) of
@@ -480,21 +480,21 @@ prepare_internal_metadata(<<"rdf">>, Rdf, _RejectedFields) ->
     od_harvester:index()) -> internal_params().
 maybe_add_rejection_info(InternalParams, [], _RejectionReason, _) ->
     InternalParams;
-maybe_add_rejection_info(InternalParams, all, _RejectionReason, 
+maybe_add_rejection_info(InternalParams, all, _RejectionReason,
     #harvester_index{include_rejection_reason = false}
 ) ->
     InternalParams;
-maybe_add_rejection_info(InternalParams, RejectedFields, _RejectionReason, 
+maybe_add_rejection_info(InternalParams, RejectedFields, _RejectionReason,
     #harvester_index{include_rejection_reason = false}
 ) ->
     InternalParams#{?REJECTED_METADATA_KEY => RejectedFields};
-maybe_add_rejection_info(InternalParams, all, RejectionReason, 
+maybe_add_rejection_info(InternalParams, all, RejectionReason,
     #harvester_index{include_rejection_reason = true}
 ) ->
     InternalParams#{
         ?REJECTION_REASON_METADATA_KEY => RejectionReason
     };
-maybe_add_rejection_info(InternalParams, RejectedFields, RejectionReason, 
+maybe_add_rejection_info(InternalParams, RejectedFields, RejectionReason,
     #harvester_index{include_rejection_reason = true}
 ) ->
     InternalParams#{
@@ -711,11 +711,15 @@ retrieve_rejected_field(ErrorReason) ->
 -spec extend_schema(od_harvester:index(), map()) -> map().
 extend_schema(IndexInfo, DecodedSchema) ->
     InternalFieldsSchema = prepare_internal_fields_schema(IndexInfo, #{}),
-    kv_utils:put(
-        [<<"mappings">>, <<"properties">>, ?INTERNAL_METADATA_KEY, <<"properties">>],
-        InternalFieldsSchema,
-        DecodedSchema
-    ).
+    case maps:size(InternalFieldsSchema) of
+        0 -> DecodedSchema;
+        _ ->
+            kv_utils:put(
+                [<<"mappings">>, <<"properties">>, ?INTERNAL_METADATA_KEY, <<"properties">>],
+                InternalFieldsSchema,
+                DecodedSchema
+            )
+    end.
 
 
 -spec prepare_internal_fields_schema(od_harvester:index(), map()) -> map().
