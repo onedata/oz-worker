@@ -2679,7 +2679,7 @@ get_record(od_harvester, 4) -> #od_harvester{
             name = <<"Simulations index">>,
             schema = <<"schema">>,
             gui_plugin_name = <<"simulations">>,
-            include_metadata = [<<"json">>],
+            include_metadata = [json],
             include_file_details = [],
             retry_on_rejection = true,
             include_rejection_reason = true,

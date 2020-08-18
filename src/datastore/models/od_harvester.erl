@@ -19,6 +19,7 @@
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
+-export([metadata_types/0, file_details/0]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -58,14 +59,15 @@
 -type payload() :: #{binary => binary() | json_utils:json_map()}.
 -type batch_entry() :: #{binary() => binary() | integer() | payload()}.
 -type batch() :: [batch_entry()].
--type metadata_type() :: binary(). % <<"json">>, <<"xattrs">>, <<"rdf">>
+-type metadata_type() :: json | xattrs | rdf.
+-type file_details() :: [spaceId | fileName | metadataExistenceFlags].
 
 -type index_submit_response() :: ok | {error, SuccessfulSeq :: pos_integer() | undefined,
     FailedSeq :: pos_integer(), ErrorMsg :: binary()}.
 
 -export_type([name/0, backend/0, endpoint/0, schema/0, entry_id/0, 
     index_id/0, index/0, indices/0, indices_stats/0, index_submit_response/0,
-    batch/0, batch_entry/0, payload/0, metadata_type/0]).
+    batch/0, batch_entry/0, payload/0, metadata_type/0, file_details/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -152,6 +154,16 @@ to_string(HarvesterId) ->
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     harvester_logic_plugin.
+
+
+-spec metadata_types() -> [metadata_type()].
+metadata_types() ->
+    [json, xattrs, rdf].
+
+
+-spec file_details() -> file_details().
+file_details() ->
+    [spaceId, fileName, metadataExistenceFlags].
 
 %%%===================================================================
 %%% datastore_model callbacks
@@ -309,8 +321,8 @@ get_record_struct(4) ->
             {name, string},
             {schema, string},
             {gui_plugin_name, string},
-            {include_metadata, [string]},
-            {include_file_details, [string]},
+            {include_metadata, [atom]},
+            {include_file_details, [atom]},
             {include_rejection_reason, boolean},
             {retry_on_rejection, boolean},
             {stats, #{string => #{string => {record, [
@@ -490,7 +502,7 @@ upgrade_record(3, Harvester) ->
                 schema = IndexSchema,
                 gui_plugin_name = IndexGuiPluginName,
                 stats = IndexStats,
-                include_metadata = [<<"json">>],
+                include_metadata = [json],
                 include_file_details = [],
                 include_rejection_reason = true,
                 retry_on_rejection = true

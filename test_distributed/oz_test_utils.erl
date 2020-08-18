@@ -3198,7 +3198,7 @@ mock_harvesting_backends(Config, Nodes, BackendName) ->
         fun(?HARVESTER_ENDPOINT1) -> ok;
             (?HARVESTER_ENDPOINT2) -> ok;
             (Endpoint) ->
-                case get_env(Config, harvester_default_endpoint) of
+                case get_env(Config, default_harvesting_backend_endpoint) of
                     Endpoint -> ok;
                     _ -> ?ERROR_TEMPORARY_FAILURE
                 end

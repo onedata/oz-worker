@@ -174,26 +174,26 @@ is_subscribable(_, _) -> false.
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
-    auth_hint = AuthHint, data = Data}) ->
-    #{
-        <<"name">> := Name,
-        <<"harvestingBackendType">> := HarvestingBackend
-    } = Data,
-    Endpoint = maps:get(<<"harvestingBackendEndpoint">>, Data, oz_worker:get_env(harvester_default_endpoint, undefined)),
+    auth_hint = AuthHint, data = #{<<"name">> := Name} = Data}
+) ->
+    % Default value in get_env is needed so error is not raised when env is not defined.
+    % If any env is not defined, all values concerning harvesting backend are in Data (see validate/1)
+    BackendType = maps:get(<<"harvestingBackendType">>, Data,
+        oz_worker:get_env(default_harvesting_backend_type, undefined)),
+    BackendEndpoint = maps:get(<<"harvestingBackendEndpoint">>, Data, 
+        oz_worker:get_env(default_harvesting_backend_endpoint, undefined)),
     Config = maps:get(<<"guiPluginConfig">>, Data, #{}),
 
-
-    NormalizedEndpoint = case normalize_endpoint_and_check_connectivity(Endpoint, HarvestingBackend) of
+    NormalizedEndpoint = case normalize_endpoint_and_check_connectivity(BackendEndpoint, BackendType) of
         {ok, NewEndpoint} -> NewEndpoint;
         {error, _} = Error -> throw(Error)
     end,
-
 
     {ok, #document{key = HarvesterId}} = od_harvester:create(#document{
         value = #od_harvester{
             name = Name,
             endpoint = NormalizedEndpoint,
-            backend = HarvestingBackend,
+            backend = BackendType,
             gui_plugin_config = Config,
             creator = aai:normalize_subject(Auth#auth.subject)
         }
@@ -449,13 +449,13 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Harvester) ->
     {ok, Harvester};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Harvester) ->
     #od_harvester{
-        name = Name, backend = HarvestingBackend, endpoint = Endpoint, public = Public,
+        name = Name, backend = HarvestingBackendType, endpoint = Endpoint, public = Public,
         creator = Creator, creation_time = CreationTime
     } = Harvester,
     {ok, #{
         <<"name">> => Name,
         <<"public">> => Public,
-        <<"harvestingBackendType">> => HarvestingBackend,
+        <<"harvestingBackendType">> => HarvestingBackendType,
         <<"harvestingBackendEndpoint">> => Endpoint,
         <<"creator">> => Creator,
         <<"creationTime">> => CreationTime
@@ -1092,14 +1092,20 @@ required_admin_privileges(_) ->
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> 
-    {Required, Optional} = case oz_worker:get_env(harvester_default_endpoint, undefined) of
-        undefined -> {#{<<"harvestingBackendEndpoint">> => {binary, non_empty}}, #{}};
-        _ -> {#{}, #{<<"harvestingBackendEndpoint">> => {binary, non_empty}}}
+    BackendValidityVerificator = #{
+        <<"harvestingBackendType">> => {atom, ?HARVESTING_BACKENDS},
+        <<"harvestingBackendEndpoint">> => {binary, non_empty}
+    },
+    {Required, Optional} = case lists:member(undefined, [
+        oz_worker:get_env(default_harvesting_backend_type, undefined), 
+        oz_worker:get_env(default_harvesting_backend_endpoint, undefined)
+    ]) of
+        true -> {BackendValidityVerificator, #{}};
+        false -> {#{}, BackendValidityVerificator}
     end,
     #{
     required => Required#{
-        <<"name">> => {binary, name},
-        <<"harvestingBackendType">> => {atom, ?HARVESTING_BACKENDS}
+        <<"name">> => {binary, name}
     },
     optional => Optional#{
         <<"guiPluginConfig">> => {json, any}
@@ -1123,16 +1129,15 @@ validate(#el_req{operation = create, gri = #gri{aspect = index}}) -> #{
     optional => #{
         <<"guiPluginName">> => {binary, any},
         <<"schema">> => {binary, non_empty},
-        <<"includeMetadata">> => {list_of_binaries, fun(Vals) ->
+        <<"includeMetadata">> => {list_of_atoms, fun(Vals) ->
             Key = <<"includeMetadata">>,
             Vals == [] andalso throw(?ERROR_BAD_VALUE_EMPTY(Key)),
-            AllowedValues = [<<"json">>, <<"xattrs">>, <<"rdf">>],
-            lists:all(fun(Val) -> lists:member(Val, AllowedValues) end, Vals) orelse 
-                throw(?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(Key, AllowedValues)),
+            lists:all(fun(Val) -> lists:member(Val, od_harvester:metadata_types()) end, Vals) 
+                orelse throw(?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(Key, od_harvester:metadata_types())),
             true
         end},
         <<"includeFileDetails">> => 
-            {list_of_binaries, [<<"fileName">>, <<"spaceId">>, <<"metadataExistenceFlags">>]},
+            {list_of_atoms, od_harvester:file_details()},
         <<"includeRejectionReason">> => {boolean, any},
         <<"retryOnRejection">> => {boolean, any}
     }

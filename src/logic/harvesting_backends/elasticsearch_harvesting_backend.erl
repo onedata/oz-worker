@@ -54,6 +54,7 @@
 
 -type rejected_fields() :: all | [binary()].
 -type rejection_info() :: {rejected_fields(), binary()}.
+-type metadata_type_binary() :: binary(). % <<"json">> | <<"xattrs">> | <<"rdf">>
 
 % Internal params is a map that contains subset of following keys (as binaries): 
 %   - xattrs => normalized_xattrs() 
@@ -409,16 +410,16 @@ prepare_elasticsearch_batch(Batch, IndexInfo, RejectionInfo) ->
 %%--------------------------------------------------------------------
 -spec prepare_data(od_harvester:batch_entry(), od_harvester:index(), rejection_info()) -> map().
 prepare_data(BatchEntry, IndexInfo, {RejectedFields, RejectionReason}) ->
-    MetadataTypesToInclude = IndexInfo#harvester_index.include_metadata,
-    FileDetailsToInclude = IndexInfo#harvester_index.include_file_details,
+    MetadataTypesToInclude = atoms_to_binaries(IndexInfo#harvester_index.include_metadata),
+    FileDetailsToInclude = atoms_to_binaries(IndexInfo#harvester_index.include_file_details),
     
     InternalParams = maps:with(FileDetailsToInclude, BatchEntry),
     Payload = maps:with(MetadataTypesToInclude, maps:get(<<"payload">>, BatchEntry, #{})),
     EncodedJson = maps:get(<<"json">>, Payload, <<"{}">>),
     DecodedJson = json_utils:decode(EncodedJson),
-    InternalParams1 = lists:foldl(fun(MetadataType, PartialInternalParams) ->
+    InternalParams1 = lists:foldl(fun(MetadataTypeBinary, PartialInternalParams) ->
         add_to_internal_params(
-            MetadataType, IndexInfo, Payload, RejectedFields, PartialInternalParams)
+            MetadataTypeBinary, IndexInfo, Payload, RejectedFields, PartialInternalParams)
     end, InternalParams, MetadataTypesToInclude),
     InternalParams2 = maybe_add_rejection_info(
         InternalParams1, RejectedFields, RejectionReason, IndexInfo),
@@ -430,30 +431,30 @@ prepare_data(BatchEntry, IndexInfo, {RejectedFields, RejectionReason}) ->
 
 
 %% @private
--spec add_to_internal_params(od_harvester:metadata_type(), od_harvester:index(),
-    od_harvester:payload(), rejected_fields(), internal_params()) -> internal_params().
+-spec add_to_internal_params(metadata_type_binary(), od_harvester:index(), od_harvester:payload(), 
+    rejected_fields(), internal_params()) -> internal_params().
 add_to_internal_params(<<"json">>, IndexInfo, Payload, _RejectedFields, InternalParams) ->
     Exists = maps:is_key(<<"json">>, Payload),
     maybe_add_existence_flag(<<"json">>, Exists, IndexInfo, InternalParams);
-add_to_internal_params(MetadataType, IndexInfo, Payload, RejectedFields, InternalParams) ->
-    case maps:find(MetadataType, Payload) of
+add_to_internal_params(MetadataTypeBinary, IndexInfo, Payload, RejectedFields, InternalParams) ->
+    case maps:find(MetadataTypeBinary, Payload) of
         {ok, Metadata} ->
-            maybe_add_existence_flag(MetadataType, true, IndexInfo,
+            maybe_add_existence_flag(MetadataTypeBinary, true, IndexInfo,
                 InternalParams#{
-                    MetadataType => prepare_internal_metadata(MetadataType, Metadata, RejectedFields)
+                    MetadataTypeBinary => prepare_internal_metadata(MetadataTypeBinary, Metadata, RejectedFields)
                 });
         _ ->
-            maybe_add_existence_flag(MetadataType, false, IndexInfo, InternalParams)
+            maybe_add_existence_flag(MetadataTypeBinary, false, IndexInfo, InternalParams)
     end.
 
 
 %% @private
--spec maybe_add_existence_flag(od_harvester:metadata_type(), Exists :: boolean(),
+-spec maybe_add_existence_flag(metadata_type_binary(), Exists :: boolean(),
     od_harvester:index(), internal_params()) -> internal_params().
 maybe_add_existence_flag(MetadataType, Exists, 
     #harvester_index{include_file_details = FileDetailsToInclude}, InternalParams
 ) ->
-    case lists:member(<<"metadataExistenceFlags">>, FileDetailsToInclude) of
+    case lists:member(metadataExistenceFlags, FileDetailsToInclude) of
         true ->
             InternalParams#{<<MetadataType/binary, (?METADATA_EXISTENCE_FLAG_SUFFIX)/binary>> => Exists};
         false ->
@@ -462,7 +463,7 @@ maybe_add_existence_flag(MetadataType, Exists,
 
 
 %% @private
--spec prepare_internal_metadata(od_harvester:metadata_type(), binary() | json_utils:json_map(),
+-spec prepare_internal_metadata(metadata_type_binary(), binary() | json_utils:json_map(),
     rejected_fields()) -> binary() | normalized_xattrs().
 prepare_internal_metadata(<<"xattrs">>, Xattrs, RejectedFields) ->
     prepare_xattrs(Xattrs, RejectedFields);
@@ -717,9 +718,9 @@ extend_schema(IndexInfo, DecodedSchema) ->
 prepare_internal_fields_schema(
     #harvester_index{include_file_details = [_ | _] = IncludeFileDetails} = IndexInfo, Map
 ) ->
-    NewMap = case lists:member(<<"metadataExistenceFlags">>, IncludeFileDetails) of
+    NewMap = case lists:member(metadataExistenceFlags, IncludeFileDetails) of
         true ->
-            IncludeMetadata = IndexInfo#harvester_index.include_metadata,
+            IncludeMetadata = atoms_to_binaries(IndexInfo#harvester_index.include_metadata),
             lists:foldl(fun(MetadataType, Acc) ->
                 kv_utils:put([<<MetadataType/binary, (?METADATA_EXISTENCE_FLAG_SUFFIX)/binary>>],
                     get_es_schema_type(boolean), Acc)
@@ -728,12 +729,12 @@ prepare_internal_fields_schema(
     end,
     NewMap1 = lists:foldl(fun(FileDetail, Acc) ->
         kv_utils:put([FileDetail], get_es_schema_type(text), Acc)
-    end, NewMap, lists:delete(<<"metadataExistenceFlags">>, IncludeFileDetails)),
+    end, NewMap, atoms_to_binaries(lists:delete(metadataExistenceFlags, IncludeFileDetails))),
     prepare_internal_fields_schema(IndexInfo#harvester_index{include_file_details = []}, NewMap1);
 prepare_internal_fields_schema(
     #harvester_index{include_metadata = [_ | _] = IncludeMetadata} = IndexInfo, Map
 ) ->
-    NewMap = case lists:member(<<"rdf">>, IncludeMetadata) of
+    NewMap = case lists:member(rdf, IncludeMetadata) of
         true -> kv_utils:put([<<"rdf">>], get_es_schema_type(text), Map);
         false -> Map
     end,
@@ -801,3 +802,11 @@ is_path_allowed(Method, Path) ->
 -spec allowed_paths(http_client:method()) -> [binary()].
 allowed_paths(post) -> [<<"^_search.*$">>];
 allowed_paths(get) -> [<<"^_mapping$">>, <<"^_search.*$">>].
+
+
+%% @private
+-spec atoms_to_binaries([atom()]) -> [binary()].
+atoms_to_binaries(ListOfAtoms) ->
+    lists:map(fun(Atom) ->
+        atom_to_binary(Atom, utf8)
+    end, ListOfAtoms).

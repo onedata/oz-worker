@@ -41,7 +41,8 @@
     gs_protocol:handshake_attributes().
 handshake_attributes(_Client) ->
     BrandSubtitle = oz_worker:get_env(brand_subtitle, ""),
-    DefaultHarvesterEndpoint = oz_worker:get_env(harvester_default_endpoint, undefined),
+    DefaultHarvestingBackendType = oz_worker:get_env(default_harvesting_backend_type, undefined),
+    DefaultHarvestingBackendEndpoint = oz_worker:get_env(default_harvesting_backend_endpoint, undefined),
     #{
         <<"zoneName">> => utils:undefined_to_null(oz_worker:get_name()),
         <<"zoneDomain">> => oz_worker:get_domain(),
@@ -49,7 +50,8 @@ handshake_attributes(_Client) ->
         <<"serviceBuildVersion">> => oz_worker:get_build_version(),
         <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle),
         <<"maxTemporaryTokenTtl">> => oz_worker:get_env(max_temporary_token_ttl, 604800), % 1 week
-        <<"defaultHarvesterEndpoint">> => utils:undefined_to_null(DefaultHarvesterEndpoint)
+        <<"defaultHarvestingBackendType">> => utils:undefined_to_null(DefaultHarvestingBackendType),
+        <<"defaultHarvestingBackendEndpoint">> => utils:undefined_to_null(DefaultHarvestingBackendEndpoint)
     }.
 
 
@@ -722,8 +724,8 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, 
         <<"scope">> => <<"private">>,
         <<"name">> => Name,
         <<"public">> => Public,
-        <<"endpoint">> => Endpoint,
-        <<"plugin">> => atom_to_binary(Plugin, utf8),
+        <<"harvestingBackendEndpoint">> => Endpoint,
+        <<"harvestingBackendType">> => atom_to_binary(Plugin, utf8),
         <<"canViewPrivileges">> => harvester_logic:has_eff_privilege(Harvester, UserId, ?HARVESTER_VIEW_PRIVILEGES),
         <<"directMembership">> => harvester_logic:has_direct_user(Harvester, UserId),
         <<"guiPluginConfig">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
@@ -743,8 +745,8 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
     #{
         <<"name">> := Name,
         <<"public">> := Public,
-        <<"plugin">> := Plugin,
-        <<"endpoint">> := Endpoint,
+        <<"harvestingBackendType">> := Plugin,
+        <<"harvestingBackendEndpoint">> := Endpoint,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator
     } = HarvesterData,
@@ -752,8 +754,8 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
         <<"scope">> => <<"protected">>,
         <<"name">> => Name,
         <<"public">> => Public,
-        <<"plugin">> => Plugin,
-        <<"endpoint">> => Endpoint,
+        <<"harvestingBackendType">> => Plugin,
+        <<"harvestingBackendEndpoint">> => Endpoint,
         <<"directMembership">> => harvester_logic:has_direct_user(HarvesterId, UserId),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime

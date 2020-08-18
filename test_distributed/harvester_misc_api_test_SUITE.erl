@@ -85,18 +85,21 @@ all() ->
 %%% Test functions
 %%%===================================================================
 
-
 create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     VerifyFun = fun(HarvesterId, Data) ->
         ExpConfig = maps:get(<<"guiPluginConfig">>, Data, #{}),
+        % dummy defaults needed so get_env does not throw if env not defined
+        ExpBackendType = binary_to_atom(maps:get(<<"harvestingBackendType">>, Data,
+            atom_to_binary(oz_test_utils:get_env(Config, default_harvesting_backend_type, dummy_default), utf8)
+        ), utf8),
         ExpEndpoint = utils:null_to_undefined(maps:get(<<"harvestingBackendEndpoint">>, Data,
-            oz_test_utils:get_env(Config, harvester_default_endpoint)
+            oz_test_utils:get_env(Config, default_harvesting_backend_endpoint, <<"dummy_default">>)
         )),
         {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
         ?assertEqual(?CORRECT_NAME, Harvester#od_harvester.name),
+        ?assertEqual(ExpBackendType, Harvester#od_harvester.backend),
         ?assertEqual(ExpEndpoint, Harvester#od_harvester.endpoint),
-        ?assertEqual(?HARVESTER_MOCK_BACKEND, Harvester#od_harvester.backend),
         ?assertEqual(ExpConfig, Harvester#od_harvester.gui_plugin_config),
         true
     end,
@@ -152,12 +155,13 @@ create_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
     
-    % check that endpoint is optional when default harvester endpoint is set in Onezone 
-    oz_test_utils:set_env(Config, harvester_default_endpoint, ?HARVESTER_ENDPOINT2),
+    % check that backend type and endpoint are optional when defaults are set in Onezone 
+    oz_test_utils:set_env(Config, default_harvesting_backend_type, ?HARVESTER_MOCK_BACKEND),
+    oz_test_utils:set_env(Config, default_harvesting_backend_endpoint, ?HARVESTER_ENDPOINT2),
     ApiTestSpec1 = ApiTestSpec#api_test_spec{
         data_spec = DataSpec#data_spec{
-            required = [<<"name">>, <<"harvestingBackendType">>],
-            optional = [<<"harvestingBackendEndpoint">>, <<"guiPluginConfig">>]
+            required = [<<"name">>],
+            optional = [<<"harvestingBackendType">>, <<"harvestingBackendEndpoint">>, <<"guiPluginConfig">>]
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec1)).
@@ -828,8 +832,8 @@ create_index_test(Config) ->
                 <<"name">> => [?CORRECT_NAME],
                 <<"schema">> => [?HARVESTER_INDEX_SCHEMA],
                 <<"guiPluginName">> => [?CORRECT_NAME, null],
-                <<"includeMetadata">> => [lists_utils:random_sublist([<<"json">>, <<"xattrs">>, <<"rdf">>], 1, all)],
-                <<"includeFileDetails">> => [lists_utils:random_sublist([<<"fileName">>, <<"spaceId">>, <<"metadataExistenceFlags">>], 0, all)],
+                <<"includeMetadata">> => [lists_utils:random_sublist(od_harvester:metadata_types(), 1, all)],
+                <<"includeFileDetails">> => [lists_utils:random_sublist(od_harvester:file_details(), 0, all)],
                 <<"retryOnRejection">> => [true, false],
                 <<"includeRejectionReason">> => [true, false]
             },
@@ -837,13 +841,13 @@ create_index_test(Config) ->
                 {<<"schema">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"schema">>)},
                 {<<"schema">>, 12321, ?ERROR_BAD_VALUE_BINARY(<<"schema">>)},
                 {<<"guiPluginName">>, 12321, ?ERROR_BAD_VALUE_BINARY(<<"guiPluginName">>)},
-                {<<"includeMetadata">>, <<"json">>, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"includeMetadata">>)},
+                {<<"includeMetadata">>, json, ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"includeMetadata">>)},
                 {<<"includeMetadata">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"includeMetadata">>)},
-                {<<"includeMetadata">>, [<<"asd">>], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeMetadata">>, 
-                    [<<"json">>, <<"xattrs">>, <<"rdf">>])},
-                {<<"includeFileDetails">>, <<"fileName">>, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"includeFileDetails">>)},
-                {<<"includeFileDetails">>, [<<"asd">>], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeFileDetails">>,
-                    [<<"fileName">>, <<"spaceId">>, <<"metadataExistenceFlags">>])},
+                {<<"includeMetadata">>, [asd], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeMetadata">>, 
+                    od_harvester:metadata_types())},
+                {<<"includeFileDetails">>, fileName, ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"includeFileDetails">>)},
+                {<<"includeFileDetails">>, [asd], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeFileDetails">>,
+                    od_harvester:file_details())},
                 {<<"retryOnRejection">>, 12321, ?ERROR_BAD_VALUE_BOOLEAN(<<"retryOnRejection">>)},
                 {<<"includeRejectionReason">>, 12321, ?ERROR_BAD_VALUE_BOOLEAN(<<"includeRejectionReason">>)}
             ] ++ ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
@@ -917,7 +921,7 @@ get_index_test(Config) ->
                     ?assertEqual(?HARVESTER_INDEX_NAME, Name),
                     ?assertEqual(?HARVESTER_INDEX_SCHEMA, Schema),
                     ?assertEqual(undefined, GuiPluginName),
-                    ?assertEqual([<<"json">>], IncludeMetadata),
+                    ?assertEqual([json], IncludeMetadata),
                     ?assertEqual([], IncludeFileDetails),
                     ?assertEqual(true, IncludeRejectionReason),
                     ?assertEqual(true, RetryOnRejection)

@@ -65,8 +65,8 @@ convert_xattr_test() ->
 
 prepare_data_test() ->
     IndexInfo = #harvester_index{
-        include_metadata = [<<"json">>, <<"xattrs">>, <<"rdf">>],
-        include_file_details = [<<"fileName">>, <<"spaceId">>, <<"metadataExistenceFlags">>],
+        include_metadata = [json, xattrs, rdf],
+        include_file_details = [fileName, spaceId, metadataExistenceFlags],
         include_rejection_reason = true
     },
     ?assertEqual(
@@ -216,7 +216,7 @@ prepare_data_test() ->
                 <<"rdf">> => <<"\"some rdf\"">>
             },
             <<"spaceId">> => <<"spaceId">>
-        }, #harvester_index{include_metadata = [<<"json">>]}, {[], <<>>})
+        }, #harvester_index{include_metadata = [json]}, {[], <<>>})
     ),
     
     ?assertEqual(
@@ -234,7 +234,7 @@ prepare_data_test() ->
                 <<"rdf">> => <<"\"some rdf\"">>
             },
             <<"spaceId">> => <<"spaceId">>
-        }, #harvester_index{include_metadata = [<<"xattrs">>]}, {[], <<>>})
+        }, #harvester_index{include_metadata = [xattrs]}, {[], <<>>})
     ),
     
     ?assertEqual(
@@ -252,7 +252,7 @@ prepare_data_test() ->
                 <<"rdf">> => <<"\"some rdf\"">>
             },
             <<"spaceId">> => <<"spaceId">>
-        }, #harvester_index{include_metadata = [<<"rdf">>]}, {[], <<>>})
+        }, #harvester_index{include_metadata = [rdf]}, {[], <<>>})
     ),
     
     ?assertEqual(
@@ -267,7 +267,7 @@ prepare_data_test() ->
                 <<"xattrs">> => #{<<"x">> => <<"y">>, <<"z">> => <<"b">>}
             },
             <<"spaceId">> => <<"spaceId">>}, 
-            #harvester_index{include_metadata = [<<"json">>], include_rejection_reason = false}, 
+            #harvester_index{include_metadata = [json], include_rejection_reason = false}, 
             {all, <<"Rejection reason">>}
         )
     ),
@@ -286,7 +286,7 @@ prepare_data_test() ->
                 <<"xattrs">> => #{<<"x">> => <<"y">>, <<"z">> => <<"b">>}
             },
             <<"spaceId">> => <<"spaceId">>},
-            #harvester_index{include_metadata = [<<"json">>], include_rejection_reason = false},
+            #harvester_index{include_metadata = [json], include_rejection_reason = false},
             {[<<"x">>], <<"Rejection reason">>}
         )
     ),
@@ -302,7 +302,7 @@ prepare_data_test() ->
                 <<"xattrs">> => #{<<"x">> => <<"y">>, <<"z">> => <<"b">>}
             },
             <<"spaceId">> => <<"spaceId">>},
-            #harvester_index{include_metadata = [<<"json">>], include_rejection_reason = false},
+            #harvester_index{include_metadata = [json], include_rejection_reason = false},
             {all, <<"Rejection reason">>}
         )
     ),
@@ -414,7 +414,7 @@ prepare_internal_fields_schema_test() ->
         #{<<"rdf">> => TextEsType}, 
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
             #harvester_index{
-                include_metadata = [<<"rdf">>, <<"json">>, <<"xattrs">>],
+                include_metadata = [rdf, json, xattrs],
                 retry_on_rejection = false,
                 include_rejection_reason = false
             }, 
@@ -445,7 +445,7 @@ prepare_internal_fields_schema_test() ->
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
             #harvester_index{
                 include_metadata = [],
-                include_file_details = [<<"fileName">>, <<"spaceId">>],
+                include_file_details = [fileName, spaceId],
                 retry_on_rejection = false,
                 include_rejection_reason = false
             },
@@ -458,8 +458,8 @@ prepare_internal_fields_schema_test() ->
         },
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
             #harvester_index{
-                include_metadata = [<<"json">>, <<"xattrs">>],
-                include_file_details = [<<"metadataExistenceFlags">>],
+                include_metadata = [json, xattrs],
+                include_file_details = [metadataExistenceFlags],
                 retry_on_rejection = false,
                 include_rejection_reason = false
             },
@@ -472,8 +472,8 @@ prepare_internal_fields_schema_test() ->
         },
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
             #harvester_index{
-                include_metadata = [<<"rdf">>],
-                include_file_details = [<<"metadataExistenceFlags">>],
+                include_metadata = [rdf],
+                include_file_details = [metadataExistenceFlags],
                 retry_on_rejection = false,
                 include_rejection_reason = false
             },
@@ -492,8 +492,8 @@ prepare_internal_fields_schema_test() ->
         },
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
             #harvester_index{
-                include_metadata = [<<"rdf">>, <<"json">>, <<"xattrs">>],
-                include_file_details = [<<"fileName">>, <<"spaceId">>, <<"metadataExistenceFlags">>],
+                include_metadata = [rdf, json, xattrs],
+                include_file_details = [fileName, spaceId, metadataExistenceFlags],
                 retry_on_rejection = true,
                 include_rejection_reason = true
             },
@@ -509,8 +509,8 @@ unexpected_submit_failure_test() ->
         <<"harvester_id">>,
         #{<<"indexId">> =>
             #harvester_index{
-                include_metadata = [<<"rdf">>, <<"json">>, <<"xattrs">>],
-                include_file_details = [<<"fileName">>, <<"spaceId">>, <<"metadataExistenceFlags">>],
+                include_metadata = [rdf, json, xattrs],
+                include_file_details = [fileName, spaceId, metadataExistenceFlags],
                 retry_on_rejection = true,
                 include_rejection_reason = true
             }
@@ -547,7 +547,7 @@ es_submit_error_test() ->
         <<"endpoint">>,
         <<"indexId">>,
         #harvester_index{
-            include_metadata = [<<"json">>]
+            include_metadata = [json]
         },
         [#{
             <<"seq">> => 8,
@@ -563,7 +563,7 @@ es_submit_error_test() ->
         <<"endpoint">>,
         <<"indexId">>,
         #harvester_index{
-            include_metadata = [<<"json">>]
+            include_metadata = [json]
         },
         [#{
             <<"seq">> => 8,
@@ -581,7 +581,7 @@ es_submit_error_test() ->
         <<"endpoint">>,
         <<"indexId">>,
         #harvester_index{
-            include_metadata = [<<"json">>]
+            include_metadata = [json]
         },
         [#{
             <<"seq">> => 8,
@@ -631,8 +631,8 @@ retry_test_base(SubmitResultFun, RetryOnRejection, ExpectedNumCalls) ->
         <<"endpoint">>,
         <<"indexId">>,
         #harvester_index{
-            include_metadata = [<<"rdf">>, <<"json">>, <<"xattrs">>],
-            include_file_details = [<<"fileName">>, <<"spaceId">>, <<"metadataExistenceFlags">>],
+            include_metadata = [rdf, json, xattrs],
+            include_file_details = [fileName, spaceId, metadataExistenceFlags],
             retry_on_rejection = RetryOnRejection,
             include_rejection_reason = false
         },
