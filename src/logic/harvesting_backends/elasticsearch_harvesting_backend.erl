@@ -83,6 +83,8 @@
 
 -define(MAX_SUBMIT_RETRIES, 3).
 
+-define(prepare_log(Format), ?prepare_log(Format, [])).
+-define(prepare_log(Format, Args), str_utils:format("[Elasticsearch backend]: " ++ Format, Args)).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -142,8 +144,8 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
             {IndexId, submit_to_index(Endpoint, IndexId, IndexInfo, Batch)}
         end, maps:to_list(Indices))}
     catch error:{parallel_call_failed, {failed_processes, Errors}} ->
-        ?error_stacktrace("[Elasticsearch backend] Submit batch in harvester ~p failed due to: ~p",
-            [HarvesterId, Errors]),
+        ?error_stacktrace(?prepare_log("Submit batch in harvester ~p failed due to: ~p",
+            [HarvesterId, Errors])),
         throw(?ERROR_TEMPORARY_FAILURE)
     end.
 
@@ -335,15 +337,15 @@ do_request(Method, Endpoint, IndexId, Path, Data, Headers, ExpectedCodes) ->
                 true ->
                     Response;
                 _ ->
-                    ?error("[Elasticsearch backend]: ~p ~p returned unexpected response ~p:~n ~p~n~p",
-                        [Method, Url, Code, RespHeaders, json_utils:decode(Body)]),
+                    ?error(?prepare_log("~p ~p returned unexpected response ~p:~n ~p~n~p",
+                        [Method, Url, Code, RespHeaders, json_utils:decode(Body)])),
                     ?ERROR_BAD_DATA(<<"payload">>)
             end;
         {ok, _, _, _} = Response ->
             Response;
         {error, _} = Error ->
-            ?error("[Elasticsearch backend]: ~p ~p was unsuccessful due to ~w",
-                [Method, Url, Error]),
+            ?error(?prepare_log("~p ~p was unsuccessful due to ~w",
+                [Method, Url, Error])),
             ?ERROR_TEMPORARY_FAILURE
     end.
 
@@ -415,15 +417,14 @@ prepare_data(BatchEntry, IndexInfo, {RejectedFields, RejectionReason}) ->
     
     InternalParams = maps:with(FileDetailsToInclude, BatchEntry),
     Payload = maps:with(MetadataTypesToInclude, maps:get(<<"payload">>, BatchEntry, #{})),
-    EncodedJson = maps:get(<<"json">>, Payload, <<"{}">>),
-    DecodedJson = json_utils:decode(EncodedJson),
+    JsonMetadata = maps:get(<<"json">>, Payload, <<"{}">>),
     InternalParams1 = lists:foldl(fun(MetadataTypeBinary, PartialInternalParams) ->
         add_to_internal_params(
             MetadataTypeBinary, IndexInfo, Payload, RejectedFields, PartialInternalParams)
     end, InternalParams, MetadataTypesToInclude),
     InternalParams2 = maybe_add_rejection_info(
         InternalParams1, RejectedFields, RejectionReason, IndexInfo),
-    ResultJson = prepare_json(DecodedJson, RejectedFields),
+    ResultJson = prepare_json(JsonMetadata, RejectedFields),
     case maps:size(InternalParams2) == 0 of
         true -> ResultJson;
         false -> ResultJson#{?INTERNAL_METADATA_KEY => InternalParams2}
@@ -468,7 +469,7 @@ maybe_add_existence_flag(MetadataType, Exists,
 prepare_internal_metadata(<<"xattrs">>, Xattrs, RejectedFields) ->
     prepare_xattrs(Xattrs, RejectedFields);
 prepare_internal_metadata(<<"rdf">>, Rdf, _RejectedFields) ->
-    json_utils:decode(Rdf).
+    Rdf.
 
 
 %% @private
@@ -636,8 +637,8 @@ parse_batch_result(Result, IgnoreSchemaErrors) ->
                         {true, false} ->
                             {rejected, retrieve_rejected_field(ErrorReason), ErrorReason};
                         {true, true} ->
-                            ?debug("[Elasticsearch backend] Entry submit dropped due to non-matching schema: ~p",
-                                [EntryResponse]),
+                            ?debug(?prepare_log("Entry submit dropped due to non-matching schema: ~p",
+                                [EntryResponse])),
                             ok;
                         {false, _} ->
                             {Num, <<ErrorType/binary, ": ", ErrorReason/binary>>}
@@ -681,7 +682,7 @@ is_es_schema_error(_) -> false.
 %% @private
 -spec retrieve_rejected_field(binary()) -> binary() | all.
 retrieve_rejected_field(ErrorReason) ->
-    ?debug("[Elasticsearch backend]: ~ts", [ErrorReason]),
+    ?debug(?prepare_log("~ts", [ErrorReason])),
     ReToRun = [
         <<"Existing mapping for \\[(.*)\\] must">>,
         <<"failed to parse field \\[(.*)\\] of type">>,

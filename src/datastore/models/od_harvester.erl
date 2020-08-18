@@ -56,9 +56,9 @@
 %%        <<"xattrs">> => json_map()
 %%    }
 %%  }
--type payload() :: #{binary => binary() | json_utils:json_map()}.
 -type batch_entry() :: #{binary() => binary() | integer() | payload()}.
 -type batch() :: [batch_entry()].
+-type payload() :: #{binary => binary() | json_utils:json_map()}.
 -type metadata_type() :: json | xattrs | rdf.
 -type file_details() :: [spaceId | fileName | metadataExistenceFlags].
 

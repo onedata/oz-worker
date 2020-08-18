@@ -26,23 +26,23 @@ remove_field_test() ->
     ?assertEqual(#{}, elasticsearch_harvesting_backend:remove_field([a], #{a => b})),
     ?assertEqual([#{}], elasticsearch_harvesting_backend:remove_field([a], [#{a => b}])),
     
-    ?assertEqual(#{a => #{}}, elasticsearch_harvesting_backend:remove_field([a,b], #{a => #{b => c}})),
-    ?assertEqual(#{a => [#{}]}, elasticsearch_harvesting_backend:remove_field([a,b], #{a => [#{b => c}]})),
-    ?assertEqual(#{a => [[[#{}]]]}, elasticsearch_harvesting_backend:remove_field([a,b], #{a => [[[#{b => c}]]]})),
-    ?assertEqual(#{a => [[[#{}]],#{}]}, elasticsearch_harvesting_backend:remove_field([a,b], #{a => [[[#{b => c}]], #{b => 8}]})),
+    ?assertEqual(#{a => #{}}, elasticsearch_harvesting_backend:remove_field([a, b], #{a => #{b => c}})),
+    ?assertEqual(#{a => [#{}]}, elasticsearch_harvesting_backend:remove_field([a, b], #{a => [#{b => c}]})),
+    ?assertEqual(#{a => [[[#{}]]]}, elasticsearch_harvesting_backend:remove_field([a, b], #{a => [[[#{b => c}]]]})),
+    ?assertEqual(#{a => [[[#{}]], #{}]}, elasticsearch_harvesting_backend:remove_field([a, b], #{a => [[[#{b => c}]], #{b => 8}]})),
     
-    ?assertEqual(#{a => #{d => e},b => c}, elasticsearch_harvesting_backend:remove_field([a,b], #{a => #{b => c, d => e}, b => c})),
-    ?assertEqual(#{a => [#{},#{}]}, elasticsearch_harvesting_backend:remove_field([a,b], #{a => [#{b => c}, #{b => c}]})),
+    ?assertEqual(#{a => #{d => e}, b => c}, elasticsearch_harvesting_backend:remove_field([a, b], #{a => #{b => c, d => e}, b => c})),
+    ?assertEqual(#{a => [#{}, #{}]}, elasticsearch_harvesting_backend:remove_field([a, b], #{a => [#{b => c}, #{b => c}]})),
     ok.
 
 
 convert_xattr_test() ->
     ?assertEqual(
-        #{<<"a">> => #{<<"b">> => #{<<"c">> => #{<<"d">> => #{<<"e">> => #{<<"__value">> => 8}}}}}}, 
+        #{<<"a">> => #{<<"b">> => #{<<"c">> => #{<<"d">> => #{<<"e">> => #{<<"__value">> => 8}}}}}},
         elasticsearch_harvesting_backend:normalize_xattrs(#{<<"a.b.c.d.e">> => 8})
     ),
     ?assertEqual(
-        #{<<"a">> => #{<<"__value">> => <<"abcba">>, <<"b">> => #{<<"__value">> => 8}}}, 
+        #{<<"a">> => #{<<"__value">> => <<"abcba">>, <<"b">> => #{<<"__value">> => 8}}},
         elasticsearch_harvesting_backend:normalize_xattrs(#{<<"a.b">> => 8, <<"a">> => <<"abcba">>})
     ),
     ?assertEqual(
@@ -55,9 +55,9 @@ convert_xattr_test() ->
     ),
     ?assertEqual(
         #{<<"a">> => #{
-            <<"__value">> => #{<<"__value">> => 8}, 
+            <<"__value">> => #{<<"__value">> => 8},
             <<"b">> => #{<<"c">> => #{<<"d">> => #{<<"e">> => #{<<"__value">> => 8}}}}}
-        }, 
+        },
         elasticsearch_harvesting_backend:normalize_xattrs(#{<<"a.b.c.d.e">> => 8, <<"a.__value">> => 8})
     ),
     ok.
@@ -73,7 +73,7 @@ prepare_data_test() ->
         #{
             <<"__onedata">> => #{
                 <<"fileName">> => <<"fileName">>,
-                <<"jsonMetadataExists">> => true, 
+                <<"jsonMetadataExists">> => true,
                 <<"spaceId">> => <<"spaceId">>,
                 <<"xattrsMetadataExists">> => false,
                 <<"rdfMetadataExists">> => false
@@ -124,7 +124,7 @@ prepare_data_test() ->
             <<"fileId">> => <<"fileId">>,
             <<"fileName">> => <<"fileName">>,
             <<"payload">> => #{
-                <<"json">> => <<"{\"a\":\"B\"}">>, 
+                <<"json">> => <<"{\"a\":\"B\"}">>,
                 <<"xattrs">> => #{<<"x">> => <<"y">>},
                 <<"rdf">> => <<"\"some rdf\"">>
             },
@@ -157,7 +157,7 @@ prepare_data_test() ->
     ?assertEqual(
         #{
             <<"__onedata">> => #{
-                <<"__rejected">> => [<<"a">>,<<"x">>,<<"__onedata.xattrs.z">>],
+                <<"__rejected">> => [<<"a">>, <<"x">>, <<"__onedata.xattrs.z">>],
                 <<"__rejectionReason">> => <<"Rejection reason">>,
                 <<"fileName">> => <<"fileName">>,
                 <<"jsonMetadataExists">> => true,
@@ -172,7 +172,7 @@ prepare_data_test() ->
             <<"fileId">> => <<"fileId">>,
             <<"fileName">> => <<"fileName">>,
             <<"payload">> => #{
-                <<"json">> => <<"{\"a\":\"B\", \"c\":\"d\"}">>, 
+                <<"json">> => <<"{\"a\":\"B\", \"c\":\"d\"}">>,
                 <<"xattrs">> => #{<<"x">> => <<"y">>, <<"z">> => <<"b">>}
             },
             <<"spaceId">> => <<"spaceId">>
@@ -266,8 +266,8 @@ prepare_data_test() ->
                 <<"json">> => <<"{\"a\":\"B\", \"c\":\"d\"}">>,
                 <<"xattrs">> => #{<<"x">> => <<"y">>, <<"z">> => <<"b">>}
             },
-            <<"spaceId">> => <<"spaceId">>}, 
-            #harvester_index{include_metadata = [json], include_rejection_reason = false}, 
+            <<"spaceId">> => <<"spaceId">>},
+            #harvester_index{include_metadata = [json], include_rejection_reason = false},
             {all, <<"Rejection reason">>}
         )
     ),
@@ -319,20 +319,21 @@ retrieve_rejected_field_test() ->
 
 
 parse_batch_result_test() ->
-    ErrorResponse = fun(Type, Reason) -> #{<<"error">> => #{<<"type">> => Type, <<"reason">> => Reason}} end,
+    ErrorResponse = fun(Type, Reason) ->
+        #{<<"error">> => #{<<"type">> => Type, <<"reason">> => Reason}} end,
     parse_batch_result_test_base(
-        ok, 
-        ok, 
+        ok,
+        ok,
         #{<<"items">> => [#{<<"index">> => #{<<"no_error">> => <<"in_result">>}}]}
     ),
     parse_batch_result_test_base(
         ok,
-        ok, 
+        ok,
         #{<<"items">> => [#{<<"delete">> => #{<<"no_error">> => <<"in_result">>}}]}
     ),
     parse_batch_result_test_base(
         ok,
-        ok, 
+        ok,
         #{<<"items">> => [
             #{<<"index">> => #{<<"no_error">> => <<"in_result">>}},
             #{<<"delete">> => #{<<"no_error">> => <<"in_result">>}}
@@ -364,14 +365,14 @@ parse_batch_result_test() ->
     ),
     parse_batch_result_test_base(
         ok,
-        {rejected, all, <<"unrecognized error">>}, 
+        {rejected, all, <<"unrecognized error">>},
         #{<<"items">> => [
             #{<<"index">> => ErrorResponse(<<"mapper_parsing_exception">>, <<"unrecognized error">>)}
         ]}
     ),
     parse_batch_result_test_base(
         ok,
-        {rejected, <<"a.b.c.d">>, Reason}, 
+        {rejected, <<"a.b.c.d">>, Reason},
         #{<<"items">> => [
             #{<<"index">> => #{<<"no_error">> => <<"in_result">>}},
             #{<<"delete">> => #{<<"no_error">> => <<"in_result">>}},
@@ -382,7 +383,7 @@ parse_batch_result_test() ->
     ),
     parse_batch_result_test_base(
         {error, 2, <<"error: reason">>},
-        {rejected, <<"a.b.c.d">>, Reason}, 
+        {rejected, <<"a.b.c.d">>, Reason},
         #{<<"items">> => [
             #{<<"index">> => ErrorResponse(<<"mapper_parsing_exception">>, Reason)},
             #{<<"index">> => ErrorResponse(<<"error">>, <<"reason">>)}
@@ -390,7 +391,7 @@ parse_batch_result_test() ->
     ),
     parse_batch_result_test_base(
         {error, 1, <<"error: reason">>},
-        {error, 1, <<"error: reason">>}, 
+        {error, 1, <<"error: reason">>},
         #{<<"items">> => [
             #{<<"index">> => ErrorResponse(<<"error">>, <<"reason">>)},
             #{<<"index">> => ErrorResponse(<<"mapper_parsing_exception">>, Reason)}
@@ -411,15 +412,15 @@ prepare_internal_fields_schema_test() ->
     TextEsType = elasticsearch_harvesting_backend:get_es_schema_type(text),
     BooleanEsType = elasticsearch_harvesting_backend:get_es_schema_type(boolean),
     ?assertEqual(
-        #{<<"rdf">> => TextEsType}, 
+        #{<<"rdf">> => TextEsType},
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
             #harvester_index{
                 include_metadata = [rdf, json, xattrs],
                 retry_on_rejection = false,
                 include_rejection_reason = false
-            }, 
+            },
             #{}
-    )),
+        )),
     ?assertEqual(
         #{<<"__rejected">> => TextEsType},
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
@@ -429,7 +430,7 @@ prepare_internal_fields_schema_test() ->
                 include_rejection_reason = false
             },
             #{}
-    )),
+        )),
     ?assertEqual(
         #{<<"__rejectionReason">> => TextEsType},
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
@@ -439,7 +440,7 @@ prepare_internal_fields_schema_test() ->
                 include_rejection_reason = true
             },
             #{}
-    )),
+        )),
     ?assertEqual(
         #{<<"fileName">> => TextEsType, <<"spaceId">> => TextEsType},
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
@@ -450,7 +451,7 @@ prepare_internal_fields_schema_test() ->
                 include_rejection_reason = false
             },
             #{}
-    )),
+        )),
     ?assertEqual(
         #{
             <<"jsonMetadataExists">> => BooleanEsType,
@@ -464,7 +465,7 @@ prepare_internal_fields_schema_test() ->
                 include_rejection_reason = false
             },
             #{}
-    )),
+        )),
     ?assertEqual(
         #{
             <<"rdfMetadataExists">> => BooleanEsType,
@@ -478,13 +479,13 @@ prepare_internal_fields_schema_test() ->
                 include_rejection_reason = false
             },
             #{}
-    )),
+        )),
     ?assertEqual(
         #{
             <<"jsonMetadataExists">> => BooleanEsType,
             <<"rdfMetadataExists">> => BooleanEsType,
             <<"xattrsMetadataExists">> => BooleanEsType,
-            <<"fileName">> => TextEsType, 
+            <<"fileName">> => TextEsType,
             <<"spaceId">> => TextEsType,
             <<"__rejected">> => TextEsType,
             <<"__rejectionReason">> => TextEsType,
@@ -503,17 +504,17 @@ prepare_internal_fields_schema_test() ->
 
 
 unexpected_submit_failure_test() ->
-    mock_do_submit_request(fun(_,_,_) -> error(unexpected_error) end),
+    mock_do_submit_request(fun(_, _, _) -> error(unexpected_error) end),
     ?assertThrow(?ERROR_TEMPORARY_FAILURE, elasticsearch_harvesting_backend:submit_batch(
         <<"endpoint">>,
         <<"harvester_id">>,
         #{<<"indexId">> =>
-            #harvester_index{
-                include_metadata = [rdf, json, xattrs],
-                include_file_details = [fileName, spaceId, metadataExistenceFlags],
-                retry_on_rejection = true,
-                include_rejection_reason = true
-            }
+        #harvester_index{
+            include_metadata = [rdf, json, xattrs],
+            include_file_details = [fileName, spaceId, metadataExistenceFlags],
+            retry_on_rejection = true,
+            include_rejection_reason = true
+        }
         },
         [#{
             <<"seq">> => 8,
@@ -530,8 +531,8 @@ unexpected_submit_failure_test() ->
 
 es_submit_error_test() ->
     SubmitResultFun = fun
-        (_,_,empty) -> {ok, #{}}; 
-        (_,_,_) -> 
+        (_, _, empty) -> {ok, #{}};
+        (_, _, _) ->
             {ok,
                 #{
                     <<"errors">> => true,
@@ -540,7 +541,7 @@ es_submit_error_test() ->
                         <<"reason">> => <<"some reason">>
                     }}}]
                 }
-            } 
+            }
     end,
     mock_do_submit_request(SubmitResultFun),
     ?assertMatch({error, undefined, 8, _}, elasticsearch_harvesting_backend:submit_to_index(
@@ -574,7 +575,7 @@ es_submit_error_test() ->
         }]
     )),
     
-    SubmitResultFun1 = fun(_,_,_) -> {error, <<"some error">>} end,
+    SubmitResultFun1 = fun(_, _, _) -> {error, <<"some error">>} end,
     unmock_do_submit_request(),
     mock_do_submit_request(SubmitResultFun1),
     ?assertMatch({error, undefined, 8, _}, elasticsearch_harvesting_backend:submit_to_index(
@@ -596,7 +597,7 @@ es_submit_error_test() ->
 
 
 retry_test() ->
-    SubmitResultFun = fun(_,_,_) -> {ok, 
+    SubmitResultFun = fun(_, _, _) -> {ok,
         #{
             <<"errors">> => true,
             <<"items">> => [#{<<"index">> => #{<<"error">> => #{
@@ -604,11 +605,11 @@ retry_test() ->
                 <<"reason">> => <<"mapper [a.b] of different type">>
             }}}]
         }
-    } end, 
+    } end,
     retry_test_base(SubmitResultFun, true, 4),
     retry_test_base(SubmitResultFun, false, 1),
     
-    SubmitResultFun1 = fun(_,_,BatchString) -> 
+    SubmitResultFun1 = fun(_, _, BatchString) ->
         {ok, case re:run(BatchString, <<"\"__rejected\":\\[\"key_to_reject\"\\]">>, [{capture, none}]) of
             nomatch ->
                 #{
@@ -618,11 +619,20 @@ retry_test() ->
                         <<"reason">> => <<"mapper [key_to_reject] of different type">>
                     }}}]
                 };
-            match -> 
-                    #{}
+            match ->
+                #{}
         end}
     end,
     retry_test_base(SubmitResultFun1, true, 2),
+    
+    SubmitResultFun2 = fun(Arg1, Arg2, BatchString) ->
+        {ok, case re:run(BatchString, <<"\"__rejected\":\\[\"another_key_to_reject\", \"key_to_reject\"\\]">>, [{capture, none}]) of
+            nomatch ->
+                SubmitResultFun1(Arg1, Arg2, BatchString);
+            match ->
+                #{}
+        end}
+    end,
     ok.
 
 retry_test_base(SubmitResultFun, RetryOnRejection, ExpectedNumCalls) ->
@@ -659,5 +669,5 @@ mock_do_submit_request(SubmitResultFun) ->
 
 unmock_do_submit_request() ->
     meck:unload(elasticsearch_harvesting_backend).
-    
+
 -endif.

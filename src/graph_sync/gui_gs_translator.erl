@@ -718,14 +718,14 @@ translate_harvester(#gri{id = undefined, aspect = privileges, scope = private}, 
 translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, Harvester) ->
     #od_harvester{
         name = Name, endpoint = Endpoint,
-        backend = Plugin, public = Public
+        backend = BackendType, public = Public
     } = Harvester,
     fun(?USER(UserId)) -> #{
         <<"scope">> => <<"private">>,
         <<"name">> => Name,
         <<"public">> => Public,
         <<"harvestingBackendEndpoint">> => Endpoint,
-        <<"harvestingBackendType">> => atom_to_binary(Plugin, utf8),
+        <<"harvestingBackendType">> => atom_to_binary(BackendType, utf8),
         <<"canViewPrivileges">> => harvester_logic:has_eff_privilege(Harvester, UserId, ?HARVESTER_VIEW_PRIVILEGES),
         <<"directMembership">> => harvester_logic:has_direct_user(Harvester, UserId),
         <<"guiPluginConfig">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
@@ -745,7 +745,7 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
     #{
         <<"name">> := Name,
         <<"public">> := Public,
-        <<"harvestingBackendType">> := Plugin,
+        <<"harvestingBackendType">> := HarvestingBackendType,
         <<"harvestingBackendEndpoint">> := Endpoint,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator
@@ -754,7 +754,7 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
         <<"scope">> => <<"protected">>,
         <<"name">> => Name,
         <<"public">> => Public,
-        <<"harvestingBackendType">> => Plugin,
+        <<"harvestingBackendType">> => HarvestingBackendType,
         <<"harvestingBackendEndpoint">> => Endpoint,
         <<"directMembership">> => harvester_logic:has_direct_user(HarvesterId, UserId),
         <<"info">> => maps:merge(translate_creator(Creator), #{

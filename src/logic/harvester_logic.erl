@@ -107,11 +107,11 @@
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), Name :: binary(), Endpoint :: binary(),
     Plugin :: binary(), Config :: #{}) -> {ok, od_harvester:id()} | errors:error().
-create(Auth, Name, Endpoint, Plugin, Config) ->
+create(Auth, Name, Endpoint, BackendType, Config) ->
     create(Auth, #{
         <<"name">> => Name,
-        <<"endpoint">> => Endpoint,
-        <<"plugin">> => Plugin,
+        <<"harvestingBackendType">> => BackendType,
+        <<"harvestingBackendEndpoint">> => Endpoint,
         <<"guiPLuginConfig">> => Config
     }).
 

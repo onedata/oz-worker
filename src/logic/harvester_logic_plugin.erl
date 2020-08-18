@@ -1211,8 +1211,8 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = group}}) ->
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"harvestingBackendEndpoint">> => {binary, non_empty},
         <<"harvestingBackendType">> => {atom, ?HARVESTING_BACKENDS},
+        <<"harvestingBackendEndpoint">> => {binary, non_empty},
         <<"public">> => {boolean, any}
     }
 };
