@@ -222,7 +222,7 @@ submit_to_index(Endpoint, IndexId, IndexInfo, Batch) ->
 -spec submit_to_index(od_harvester:endpoint(), od_harvester:index_id(), od_harvester:index(),
     od_harvester:batch(), rejection_info()) -> od_harvester:index_submit_response().
 submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {RejectedFields, _Reason} = RejectionInfo) ->
-    {PreparedEsBatch, TrimmedBatch} = prepare_elasticsearch_batch(Batch, IndexInfo, RejectionInfo),
+    {PreparedEsBatch, PrunedBatch} = prepare_elasticsearch_batch(Batch, IndexInfo, RejectionInfo),
     % call using ?MODULE for mocking in tests
     case ?MODULE:do_submit_request(Endpoint, IndexId, PreparedEsBatch) of
         {ok, Res} ->
@@ -230,14 +230,14 @@ submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {RejectedFields, _Reason} =
                 (not IndexInfo#harvester_index.retry_on_rejection) or (RejectedFields == all),
             case check_submission_result(Res, IgnoreSchemaErrors, RejectedFields) of
                 {retry, NewRejectionInfo} ->
-                    submit_to_index(Endpoint, IndexId, IndexInfo, TrimmedBatch, NewRejectionInfo);
+                    submit_to_index(Endpoint, IndexId, IndexInfo, PrunedBatch, NewRejectionInfo);
                 {error, FailedEntryNum, ErrorMsg} ->
-                    {error, map_entry_num_to_seq(FailedEntryNum - 1, TrimmedBatch),
-                        map_entry_num_to_seq(FailedEntryNum, TrimmedBatch), ErrorMsg};
+                    {error, map_entry_num_to_seq(FailedEntryNum - 1, PrunedBatch),
+                        map_entry_num_to_seq(FailedEntryNum, PrunedBatch), ErrorMsg};
                 ok ->
                     ok
             end;
-        {error, ErrorMsg} -> {error, undefined, map_entry_num_to_seq(1, TrimmedBatch), ErrorMsg}
+        {error, ErrorMsg} -> {error, undefined, map_entry_num_to_seq(1, PrunedBatch), ErrorMsg}
     end.
 
 
@@ -362,9 +362,8 @@ do_request(Method, Endpoint, IndexId, Path, Data, Headers, ExpectedCodes) ->
 %% { "field1" : "value1" }
 %% Each line ends with literal '\n'
 %% 
-%% If any batch entry would be ignored because of options selected 
-%% in IndexInfo it is removed from original batch. Processed batch 
-%% is returned from this function.
+%% Input Batch is pruned from entries based on index options in IndexInfo. 
+%% The pruned batch is then returned along with corresponding ES payload.
 %% @end
 %%--------------------------------------------------------------------
 -spec prepare_elasticsearch_batch(od_harvester:batch(), od_harvester:index(),
@@ -379,7 +378,7 @@ prepare_elasticsearch_batch(Batch, IndexInfo, RejectionInfo) ->
             <<"submit">> -> <<"index">>;
             <<"delete">> -> <<"delete">>
         end,
-        Req = json_utils:encode(#{ESOperation => #{<<"_id">> => EntryId}}),
+        EsReq = json_utils:encode(#{ESOperation => #{<<"_id">> => EntryId}}),
         case ESOperation of
             <<"index">> ->
                 Data = prepare_data(BatchEntry, IndexInfo, RejectionInfo),
@@ -388,15 +387,15 @@ prepare_elasticsearch_batch(Batch, IndexInfo, RejectionInfo) ->
                         false;
                     false ->
                         EncodedData = json_utils:encode(Data),
-                        {true, {str_utils:join_binary([Req, EncodedData], <<"\n">>), BatchEntry}}
+                        {true, {str_utils:join_binary([EsReq, EncodedData], <<"\n">>), BatchEntry}}
                 end;
-            _ -> {true, {Req, BatchEntry}}
+            _ -> {true, {EsReq, BatchEntry}}
         end
     end, Batch),
     case lists:unzip(Res) of
         {[], []} -> {empty, []};
-        {Requests, Entries} ->
-            {<<(str_utils:join_binary(Requests, <<"\n">>))/binary, "\n">>, Entries}
+        {EsRequests, PrunedBatch} ->
+            {<<(str_utils:join_binary(EsRequests, <<"\n">>))/binary, "\n">>, PrunedBatch}
     end.
 
 %%--------------------------------------------------------------------
@@ -450,7 +449,7 @@ add_to_internal_params(MetadataType, IndexInfo, Payload, RejectedFields, Interna
 
 %% @private
 -spec maybe_add_existence_flag(od_harvester:metadata_type(), Exists :: boolean(),
-    AddExistenceFlags :: boolean(), internal_params()) -> internal_params().
+    od_harvester:index(), internal_params()) -> internal_params().
 maybe_add_existence_flag(MetadataType, Exists, 
     #harvester_index{include_file_details = FileDetailsToInclude}, InternalParams
 ) ->

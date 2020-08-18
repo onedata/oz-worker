@@ -398,6 +398,14 @@ parse_batch_result_test() ->
     ),
     ok.
 
+parse_batch_result_test_base(ExpectedWithIgnore, ExpectedWithoutIgnore, BatchResult) ->
+    ?assertEqual(ExpectedWithIgnore, elasticsearch_harvesting_backend:parse_batch_result(
+        BatchResult, true)
+    ),
+    ?assertEqual(ExpectedWithoutIgnore, elasticsearch_harvesting_backend:parse_batch_result(
+        BatchResult, false)
+    ).
+
 
 prepare_internal_fields_schema_test() ->
     TextEsType = elasticsearch_harvesting_backend:get_es_schema_type(text),
@@ -516,7 +524,7 @@ unexpected_submit_failure_test() ->
             <<"spaceId">> => <<"spaceId">>
         }]
     )),
-    unmock(),
+    unmock_do_submit_request(),
     ok.
 
 
@@ -567,7 +575,7 @@ es_submit_error_test() ->
     )),
     
     SubmitResultFun1 = fun(_,_,_) -> {error, <<"some error">>} end,
-    unmock(),
+    unmock_do_submit_request(),
     mock_do_submit_request(SubmitResultFun1),
     ?assertMatch({error, undefined, 8, _}, elasticsearch_harvesting_backend:submit_to_index(
         <<"endpoint">>,
@@ -583,7 +591,7 @@ es_submit_error_test() ->
             <<"spaceId">> => <<"spaceId">>
         }]
     )),
-    unmock(),
+    unmock_do_submit_request(),
     ok.
 
 
@@ -617,19 +625,6 @@ retry_test() ->
     retry_test_base(SubmitResultFun1, true, 2),
     ok.
 
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-parse_batch_result_test_base(ExpectedWithIgnore, ExpectedWithoutIgnore, BatchResult) ->
-    ?assertEqual(ExpectedWithIgnore, elasticsearch_harvesting_backend:parse_batch_result(
-        BatchResult, true)
-    ),
-    ?assertEqual(ExpectedWithoutIgnore, elasticsearch_harvesting_backend:parse_batch_result(
-        BatchResult, false)
-    ).
-
 retry_test_base(SubmitResultFun, RetryOnRejection, ExpectedNumCalls) ->
     mock_do_submit_request(SubmitResultFun),
     ?assertEqual(ok, elasticsearch_harvesting_backend:submit_to_index(
@@ -651,15 +646,18 @@ retry_test_base(SubmitResultFun, RetryOnRejection, ExpectedNumCalls) ->
         }]
     )),
     ?assertEqual(ExpectedNumCalls, meck:num_calls(elasticsearch_harvesting_backend, do_submit_request, 3)),
-    unmock(),
+    unmock_do_submit_request(),
     ok.
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
 mock_do_submit_request(SubmitResultFun) ->
     meck:new(elasticsearch_harvesting_backend, [passthrough]),
     meck:expect(elasticsearch_harvesting_backend, do_submit_request, SubmitResultFun).
 
-unmock() ->
+unmock_do_submit_request() ->
     meck:unload(elasticsearch_harvesting_backend).
     
 -endif.

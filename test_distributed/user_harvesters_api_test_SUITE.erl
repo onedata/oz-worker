@@ -161,18 +161,18 @@ create_harvester_test(Config) ->
             end
         },
         data_spec = #data_spec{
-            required = [<<"name">>, <<"endpoint">>, <<"plugin">>],
+            required = [<<"name">>, <<"harvestingBackendEndpoint">>, <<"harvestingBackendType">>],
             optional = [<<"guiPluginConfig">>],
             correct_values = #{
                 <<"name">> => [ExpName],
-                <<"endpoint">> => [?HARVESTER_ENDPOINT1],
-                <<"plugin">> => [?HARVESTER_MOCK_BACKEND_BINARY],
+                <<"harvestingBackendEndpoint">> => [?HARVESTER_ENDPOINT1],
+                <<"harvestingBackendType">> => [?HARVESTER_MOCK_BACKEND_BINARY],
                 <<"guiPluginConfig">> => [?HARVESTER_GUI_PLUGIN_CONFIG]
             },
             bad_values =
-            [{<<"plugin">>, <<"not_existing_plugin">>,
-                ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>,
-                    ?ALL_HARVESTING_BACKENDS)}
+            [{<<"harvestingBackendType">>, <<"not_existing_plugin">>,
+                ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"harvestingBackendType">>,
+                    ?ALL_HARVESTING_BACKENDS(Config))}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)]
         }
     },
@@ -369,7 +369,7 @@ get_harvester_test(Config) ->
             module = user_logic,
             function = get_harvester,
             args = [auth, U1, H1],
-            expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"plugin">> => ?HARVESTER_MOCK_BACKEND})
+            expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"harvestingBackendType">> => ?HARVESTER_MOCK_BACKEND})
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
@@ -545,7 +545,7 @@ get_eff_harvester_test(Config) ->
                     module = user_logic,
                     function = get_eff_harvester,
                     args = [auth, U1, HarvesterId],
-                    expected_result = ?OK_MAP_CONTAINS(HarvesterDetails#{<<"plugin">> => ?HARVESTER_MOCK_BACKEND})
+                    expected_result = ?OK_MAP_CONTAINS(HarvesterDetails#{<<"harvestingBackendType">> => ?HARVESTER_MOCK_BACKEND})
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
