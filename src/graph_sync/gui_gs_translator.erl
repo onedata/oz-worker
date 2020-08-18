@@ -866,9 +866,9 @@ translate_harvester(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges)
         <<"privileges">> => Privileges
     };
 
-translate_harvester(#gri{aspect = all_plugins}, Plugins) ->
+translate_harvester(#gri{aspect = all_backend_types}, Plugins) ->
     #{
-        <<"allPlugins">> => Plugins
+        <<"allBackendTypes">> => Plugins
     };
 
 translate_harvester(#gri{aspect = {index, _}, scope = private}, IndexData) ->

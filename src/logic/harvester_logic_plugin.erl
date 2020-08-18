@@ -1132,12 +1132,12 @@ validate(#el_req{operation = create, gri = #gri{aspect = index}}) -> #{
         <<"includeMetadata">> => {list_of_atoms, fun(Vals) ->
             Key = <<"includeMetadata">>,
             Vals == [] andalso throw(?ERROR_BAD_VALUE_EMPTY(Key)),
-            lists:all(fun(Val) -> lists:member(Val, od_harvester:metadata_types()) end, Vals) 
-                orelse throw(?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(Key, od_harvester:metadata_types())),
+            lists:all(fun(Val) -> lists:member(Val, od_harvester:all_metadata_types()) end, Vals) 
+                orelse throw(?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(Key, od_harvester:all_metadata_types())),
             true
         end},
         <<"includeFileDetails">> => 
-            {list_of_atoms, od_harvester:file_details()},
+            {list_of_atoms, od_harvester:all_file_details()},
         <<"includeRejectionReason">> => {boolean, any},
         <<"retryOnRejection">> => {boolean, any}
     }

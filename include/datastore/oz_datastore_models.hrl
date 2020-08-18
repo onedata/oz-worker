@@ -59,7 +59,7 @@ end).
     % List of file details that will be harvested alongside metadata.
     % Special value `metadataExistenceFlags` for each of harvested metadata type will
     % add information whether file has metadata of this type.
-    include_file_details = [] :: od_harvester:file_details(),
+    include_file_details = [] :: [od_harvester:file_details()],
     % If enabled, the index will include an error description in case of a file indexing failure.
     include_rejection_reason = true :: boolean(),
     % If enabled, all payloads rejected by the harvesting backend will be automatically analysed for

@@ -417,7 +417,10 @@ prepare_data(BatchEntry, IndexInfo, {RejectedFields, RejectionReason}) ->
     
     InternalParams = maps:with(FileDetailsToInclude, BatchEntry),
     Payload = maps:with(MetadataTypesToInclude, maps:get(<<"payload">>, BatchEntry, #{})),
-    JsonMetadata = maps:get(<<"json">>, Payload, <<"{}">>),
+    JsonMetadata = case maps:get(<<"json">>, Payload, <<"{}">>) of
+        Map when is_map(Map) -> Map;
+        String when is_list(String) -> json_utils:decode(String)
+    end,
     InternalParams1 = lists:foldl(fun(MetadataTypeBinary, PartialInternalParams) ->
         add_to_internal_params(
             MetadataTypeBinary, IndexInfo, Payload, RejectedFields, PartialInternalParams)

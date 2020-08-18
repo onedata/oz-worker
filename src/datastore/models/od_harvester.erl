@@ -19,7 +19,7 @@
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
--export([metadata_types/0, file_details/0]).
+-export([all_metadata_types/0, all_file_details/0]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -60,7 +60,7 @@
 -type batch() :: [batch_entry()].
 -type payload() :: #{binary => binary() | json_utils:json_map()}.
 -type metadata_type() :: json | xattrs | rdf.
--type file_details() :: [spaceId | fileName | metadataExistenceFlags].
+-type file_details() :: spaceId | fileName | metadataExistenceFlags.
 
 -type index_submit_response() :: ok | {error, SuccessfulSeq :: pos_integer() | undefined,
     FailedSeq :: pos_integer(), ErrorMsg :: binary()}.
@@ -156,13 +156,13 @@ entity_logic_plugin() ->
     harvester_logic_plugin.
 
 
--spec metadata_types() -> [metadata_type()].
-metadata_types() ->
+-spec all_metadata_types() -> [metadata_type()].
+all_metadata_types() ->
     [json, xattrs, rdf].
 
 
--spec file_details() -> file_details().
-file_details() ->
+-spec all_file_details() -> [file_details()].
+all_file_details() ->
     [spaceId, fileName, metadataExistenceFlags].
 
 %%%===================================================================

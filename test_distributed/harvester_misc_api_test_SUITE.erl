@@ -832,8 +832,8 @@ create_index_test(Config) ->
                 <<"name">> => [?CORRECT_NAME],
                 <<"schema">> => [?HARVESTER_INDEX_SCHEMA],
                 <<"guiPluginName">> => [?CORRECT_NAME, null],
-                <<"includeMetadata">> => [lists_utils:random_sublist(od_harvester:metadata_types(), 1, all)],
-                <<"includeFileDetails">> => [lists_utils:random_sublist(od_harvester:file_details(), 0, all)],
+                <<"includeMetadata">> => [lists_utils:random_sublist(od_harvester:all_metadata_types(), 1, all)],
+                <<"includeFileDetails">> => [lists_utils:random_sublist(od_harvester:all_file_details(), 0, all)],
                 <<"retryOnRejection">> => [true, false],
                 <<"includeRejectionReason">> => [true, false]
             },
@@ -844,10 +844,10 @@ create_index_test(Config) ->
                 {<<"includeMetadata">>, json, ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"includeMetadata">>)},
                 {<<"includeMetadata">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"includeMetadata">>)},
                 {<<"includeMetadata">>, [asd], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeMetadata">>, 
-                    od_harvester:metadata_types())},
+                    od_harvester:all_metadata_types())},
                 {<<"includeFileDetails">>, fileName, ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"includeFileDetails">>)},
                 {<<"includeFileDetails">>, [asd], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeFileDetails">>,
-                    od_harvester:file_details())},
+                    od_harvester:all_file_details())},
                 {<<"retryOnRejection">>, 12321, ?ERROR_BAD_VALUE_BOOLEAN(<<"retryOnRejection">>)},
                 {<<"includeRejectionReason">>, 12321, ?ERROR_BAD_VALUE_BOOLEAN(<<"includeRejectionReason">>)}
             ] ++ ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
