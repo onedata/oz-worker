@@ -126,7 +126,7 @@ prepare_data_test() ->
             <<"payload">> => #{
                 <<"json">> => <<"{\"a\":\"B\"}">>,
                 <<"xattrs">> => #{<<"x">> => <<"y">>},
-                <<"rdf">> => <<"\"some rdf\"">>
+                <<"rdf">> => <<"some rdf">>
             },
             <<"spaceId">> => <<"spaceId">>
         }, IndexInfo, {[], <<>>})
@@ -213,7 +213,7 @@ prepare_data_test() ->
             <<"payload">> => #{
                 <<"json">> => <<"{\"a\":\"B\"}">>,
                 <<"xattrs">> => #{<<"x">> => <<"y">>},
-                <<"rdf">> => <<"\"some rdf\"">>
+                <<"rdf">> => <<"some rdf">>
             },
             <<"spaceId">> => <<"spaceId">>
         }, #harvester_index{include_metadata = [json]}, {[], <<>>})
@@ -231,7 +231,7 @@ prepare_data_test() ->
             <<"payload">> => #{
                 <<"json">> => <<"{\"a\":\"B\"}">>,
                 <<"xattrs">> => #{<<"x">> => <<"y">>},
-                <<"rdf">> => <<"\"some rdf\"">>
+                <<"rdf">> => <<"some rdf">>
             },
             <<"spaceId">> => <<"spaceId">>
         }, #harvester_index{include_metadata = [xattrs]}, {[], <<>>})
@@ -249,7 +249,7 @@ prepare_data_test() ->
             <<"payload">> => #{
                 <<"json">> => <<"{\"a\":\"B\"}">>,
                 <<"xattrs">> => #{<<"x">> => <<"y">>},
-                <<"rdf">> => <<"\"some rdf\"">>
+                <<"rdf">> => <<"some rdf">>
             },
             <<"spaceId">> => <<"spaceId">>
         }, #harvester_index{include_metadata = [rdf]}, {[], <<>>})
@@ -609,30 +609,39 @@ retry_test() ->
     retry_test_base(SubmitResultFun, true, 4),
     retry_test_base(SubmitResultFun, false, 1),
     
+    ErrorBadKey = fun(Key) ->
+        #{
+            <<"errors">> => true,
+            <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                <<"type">> => <<"illegal_argument_exception">>,
+                <<"reason">> => <<"mapper [", Key/binary, "] of different type">>
+            }}}]
+        }
+    end,
+    
+    IsSubstring = fun(Substring, BatchString) ->
+        match == re:run(BatchString, Substring, [{capture, none}])
+    end,
+    
     SubmitResultFun1 = fun(_, _, BatchString) ->
-        {ok, case re:run(BatchString, <<"\"__rejected\":\\[\"key_to_reject\"\\]">>, [{capture, none}]) of
-            nomatch ->
-                #{
-                    <<"errors">> => true,
-                    <<"items">> => [#{<<"index">> => #{<<"error">> => #{
-                        <<"type">> => <<"illegal_argument_exception">>,
-                        <<"reason">> => <<"mapper [key_to_reject] of different type">>
-                    }}}]
-                };
-            match ->
-                #{}
+        {ok, case IsSubstring(<<"\"__rejected\":\\[\"key_to_reject\"\\]">>, BatchString) of
+            false -> ErrorBadKey(<<"key_to_reject">>);
+            true -> #{}
         end}
     end,
     retry_test_base(SubmitResultFun1, true, 2),
     
-    SubmitResultFun2 = fun(Arg1, Arg2, BatchString) ->
-        {ok, case re:run(BatchString, <<"\"__rejected\":\\[\"another_key_to_reject\", \"key_to_reject\"\\]">>, [{capture, none}]) of
-            nomatch ->
-                SubmitResultFun1(Arg1, Arg2, BatchString);
-            match ->
-                #{}
+    SubmitResultFun2 = fun(_, _, BatchString) ->
+        {ok, case IsSubstring(<<"__rejected">>, BatchString) of
+            false -> ErrorBadKey(<<"key_to_reject">>);
+            true ->
+                case IsSubstring(<<"\"__rejected\":\\[\"key_to_reject\"\\]">>, BatchString) of
+                    true -> ErrorBadKey(<<"another_key_to_reject">>);
+                    false -> #{}
+                end
         end}
     end,
+    retry_test_base(SubmitResultFun2, true, 3),
     ok.
 
 retry_test_base(SubmitResultFun, RetryOnRejection, ExpectedNumCalls) ->
@@ -651,7 +660,7 @@ retry_test_base(SubmitResultFun, RetryOnRejection, ExpectedNumCalls) ->
             <<"operation">> => <<"submit">>,
             <<"fileId">> => <<"fileId">>,
             <<"fileName">> => <<"filename">>,
-            <<"payload">> => #{<<"json">> => <<"{\"key_to_reject\":8}">>},
+            <<"payload">> => #{<<"json">> => #{<<"another_key_to_reject">> => 8,<<"key_to_reject">> => 8}},
             <<"spaceId">> => <<"spaceId">>
         }]
     )),
