@@ -504,8 +504,8 @@ upgrade_record(3, Harvester) ->
                 stats = IndexStats,
                 include_metadata = [json],
                 include_file_details = [],
-                include_rejection_reason = true,
-                retry_on_rejection = true
+                include_rejection_reason = false,
+                retry_on_rejection = false
             }
         end, Indices),
         

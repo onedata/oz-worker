@@ -2681,8 +2681,8 @@ get_record(od_harvester, 4) -> #od_harvester{
             gui_plugin_name = <<"simulations">>,
             include_metadata = [json],
             include_file_details = [],
-            retry_on_rejection = true,
-            include_rejection_reason = true,
+            retry_on_rejection = false,
+            include_rejection_reason = false,
             stats = #{
                 <<"space1">> => #{
                     <<"providerA">> => #index_stats{

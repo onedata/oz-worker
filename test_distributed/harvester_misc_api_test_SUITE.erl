@@ -900,8 +900,8 @@ get_index_test(Config) ->
                 <<"guiPluginName">> => null,
                 <<"includeMetadata">> => [<<"json">>],
                 <<"includeFileDetails">> => [],
-                <<"includeRejectionReason">> => true,
-                <<"retryOnRejection">> => true
+                <<"includeRejectionReason">> => false,
+                <<"retryOnRejection">> => false
             }
         },
         logic_spec = #logic_spec{
@@ -923,8 +923,8 @@ get_index_test(Config) ->
                     ?assertEqual(undefined, GuiPluginName),
                     ?assertEqual([json], IncludeMetadata),
                     ?assertEqual([], IncludeFileDetails),
-                    ?assertEqual(true, IncludeRejectionReason),
-                    ?assertEqual(true, RetryOnRejection)
+                    ?assertEqual(false, IncludeRejectionReason),
+                    ?assertEqual(false, RetryOnRejection)
                 end
             )
         }

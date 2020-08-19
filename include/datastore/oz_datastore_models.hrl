@@ -61,10 +61,10 @@ end).
     % add information whether file has metadata of this type.
     include_file_details = [] :: [od_harvester:file_details()],
     % If enabled, the index will include an error description in case of a file indexing failure.
-    include_rejection_reason = true :: boolean(),
+    include_rejection_reason = false :: boolean(),
     % If enabled, all payloads rejected by the harvesting backend will be automatically analysed for
     % offending data (e.g. fields that do not match the schema), pruned and submitted again.
-    retry_on_rejection = true :: boolean(),
+    retry_on_rejection = false :: boolean(),
     stats = #{} :: od_harvester:indices_stats()
 }).
 
