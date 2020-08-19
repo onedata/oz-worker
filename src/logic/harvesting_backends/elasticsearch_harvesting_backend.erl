@@ -631,7 +631,7 @@ split_on_dot(Binary) ->
     ok | {error, pos_integer(), binary()} | {rejected, binary(), binary()}.
 parse_batch_result(Result, IgnoreSchemaErrors) ->
     Items = maps:get(<<"items">>, Result),
-    ParsedResult = lists:foldl(
+    lists:foldl(
         fun({EntryResponse, Num}, ok) ->
             case get_entry_response_error(EntryResponse) of
                 undefined -> ok;
@@ -644,17 +644,12 @@ parse_batch_result(Result, IgnoreSchemaErrors) ->
                                 [EntryResponse])),
                             ok;
                         {false, _} ->
-                            {Num, <<ErrorType/binary, ": ", ErrorReason/binary>>}
+                            {error, Num, <<ErrorType/binary, ": ", ErrorReason/binary>>}
                     end
             end;
             (_, Acc) -> Acc  % ignore rest of response when first error is found 
         end, ok, lists:zip(Items, lists:seq(1, length(Items)))
-    ),
-    case ParsedResult of
-        ok -> ok;
-        {FailedEntryNum, Error} -> {error, FailedEntryNum, Error};
-        {rejected, _, _} = Rejected -> Rejected
-    end.
+    ).
 
 
 %% @private
