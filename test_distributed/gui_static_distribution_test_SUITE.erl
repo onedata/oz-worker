@@ -36,6 +36,7 @@
     oz_worker_gui_is_set_up_after_startup/1,
     oz_panel_gui_setup_works/1,
     default_harvester_gui_is_automatically_linked/1,
+    default_harvester_gui_is_updated_on_deployment/1,
     empty_gui_is_linked_after_provider_registration/1,
     op_worker_and_panel_gui_is_linked_upon_version_info_update/1,
     gui_is_unlinked_after_provider_deletion/1,
@@ -62,6 +63,7 @@ all() ->
         oz_worker_gui_is_set_up_after_startup,
         oz_panel_gui_setup_works,
         default_harvester_gui_is_automatically_linked,
+        default_harvester_gui_is_updated_on_deployment,
         empty_gui_is_linked_after_provider_registration,
         op_worker_and_panel_gui_is_linked_upon_version_info_update,
         gui_is_unlinked_after_provider_deletion,
@@ -140,6 +142,24 @@ default_harvester_gui_is_automatically_linked(Config) ->
     ?assert(link_exists(Config, <<"./hrv/", HarvesterId/binary>>, <<"default">>)),
     ?assert(file_is_served(Config, HrvIndexContent, [<<"/hrv/">>, HarvesterId, <<"/i">>])),
     ?assert(file_is_served(Config, HrvIndexContent, [<<"/hrv/">>, HarvesterId, <<"/index.html">>])).
+
+
+default_harvester_gui_is_updated_on_deployment(Config) ->
+    {TmpPath, NewHrvIndexContent} = oz_test_utils:create_dummy_gui_package(),
+    ?assertNotEqual(NewHrvIndexContent, read_content(Config, [<<"./hrv/default/index.html">>])),
+    
+    % replace harvester gui package on all nodes
+    Path = oz_test_utils:get_env(Config, default_hrv_gui_package_path),
+    AbsPath = oz_test_utils:call_oz(Config, filename, absname, [Path]),
+    {ok, Package} = file:read_file(TmpPath),
+    Nodes = ?config(oz_worker_nodes, Config),
+    lists:foreach(fun(Node) ->
+        ok = rpc:call(Node, filelib, ensure_dir, [AbsPath]),
+        ok = rpc:call(Node, file, write_file, [AbsPath, Package])
+    end, Nodes),
+    
+    oz_test_utils:call_oz(Config, harvester_logic, deploy_default_gui_package, []),
+    ?assertEqual(NewHrvIndexContent, read_content(Config, [<<"./hrv/default/index.html">>])).
 
 
 empty_gui_is_linked_after_provider_registration(Config) ->
@@ -744,7 +764,7 @@ init_per_testcase(unused_packages_are_cleaned, Config) ->
 init_per_testcase(_, Config) ->
     oz_test_utils:set_env(Config, gui_package_verification, false),
     oz_test_utils:set_app_env(Config, gui, max_gui_package_size_mb, 50),
-    oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
+    oz_test_utils:mock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND),
     Config.
 
 
@@ -753,7 +773,7 @@ end_per_testcase(unused_packages_are_cleaned, Config) ->
     test_utils:mock_unload(Nodes, file_utils),
     end_per_testcase(default, Config);
 end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
+    oz_test_utils:unmock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND),
     ok.
 
 

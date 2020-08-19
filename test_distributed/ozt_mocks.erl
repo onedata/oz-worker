@@ -29,8 +29,8 @@
 
 -export([mock_handle_proxy/0, unmock_handle_proxy/0]).
 
--export([mock_harvester_plugins/0, mock_harvester_plugins/1]).
--export([unmock_harvester_plugins/0, unmock_harvester_plugins/1]).
+-export([mock_harvesting_backends/0, mock_harvesting_backends/1]).
+-export([unmock_harvesting_backends/0, unmock_harvesting_backends/1]).
 
 %%%===================================================================
 %%% API
@@ -135,19 +135,19 @@ unmock_handle_proxy() ->
     oz_test_utils:unmock_handle_proxy(ozt:get_test_config()).
 
 
--spec mock_harvester_plugins() -> ok.
-mock_harvester_plugins() ->
-    mock_harvester_plugins(?HARVESTER_MOCK_PLUGIN).
+-spec mock_harvesting_backends() -> ok.
+mock_harvesting_backends() ->
+    mock_harvesting_backends(?HARVESTER_MOCK_BACKEND).
 
--spec mock_harvester_plugins(Plugins :: atom() | list()) -> ok.
-mock_harvester_plugins(Plugins) ->
-    oz_test_utils:mock_harvester_plugins(ozt:get_test_config(), Plugins).
+-spec mock_harvesting_backends(Backends :: atom() | list()) -> ok.
+mock_harvesting_backends(Backends) ->
+    oz_test_utils:mock_harvesting_backends(ozt:get_test_config(), Backends).
 
 
--spec unmock_harvester_plugins() -> ok.
-unmock_harvester_plugins() ->
-    unmock_harvester_plugins(?HARVESTER_MOCK_PLUGIN).
+-spec unmock_harvesting_backends() -> ok.
+unmock_harvesting_backends() ->
+    unmock_harvesting_backends(?HARVESTER_MOCK_BACKEND).
 
--spec unmock_harvester_plugins(Plugins :: atom() | list()) -> ok.
-unmock_harvester_plugins(Plugins) ->
-    oz_test_utils:unmock_harvester_plugins(ozt:get_test_config(), Plugins).
+-spec unmock_harvesting_backends(Plugins :: atom() | list()) -> ok.
+unmock_harvesting_backends(Backends) ->
+    oz_test_utils:unmock_harvesting_backends(ozt:get_test_config(), Backends).

@@ -399,12 +399,14 @@ get_space_test(Config) ->
 
 
 leave_space_test(Config) ->
+    {ok, Owner} = oz_test_utils:create_user(Config),
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+        {ok, S1} = oz_test_utils:create_space(Config, ?USER(Owner), ?SPACE_NAME1),
+        {ok, U1} = oz_test_utils:space_add_user(Config, S1, U1),
         {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
         #{spaceId => S1}
     end,

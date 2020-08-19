@@ -21,6 +21,11 @@
 -define(DEFAULT_BUILD_VERSION, <<"unknown">>).
 -define(EMPTY_GUI_HASH, <<"empty">>).
 
+-define(extract_ok(Result), case Result of
+    {ok, _} -> ok;
+    {error, _} = __Error -> __Error
+end).
+
 %%%===================================================================
 %%% DB records definitions
 %%%===================================================================
@@ -49,6 +54,17 @@
     schema = undefined :: od_harvester:schema() | undefined,
     % mapping of index name to one recognized by gui plugin.
     gui_plugin_name = undefined :: binary() | undefined,
+    % list of metadata types that will be harvested in this index 
+    include_metadata = [json] :: [od_harvester:metadata_type()],
+    % List of file details that will be harvested alongside metadata.
+    % Special value `metadataExistenceFlags` for each of harvested metadata type will
+    % add information whether file has metadata of this type.
+    include_file_details = [] :: [od_harvester:file_details()],
+    % If enabled, the index will include an error description in case of a file indexing failure.
+    include_rejection_reason = false :: boolean(),
+    % If enabled, all payloads rejected by the harvesting backend will be automatically analysed for
+    % offending data (e.g. fields that do not match the schema), pruned and submitted again.
+    retry_on_rejection = false :: boolean(),
     stats = #{} :: od_harvester:indices_stats()
 }).
 
@@ -215,6 +231,12 @@
 -record(od_space, {
     name = <<"">> :: od_space:name(),
 
+    % The list of space owners - users that have absolute power regarding the
+    % space API and files (analogical to "root", but in the scope of one space).
+    % Being an owner means that user privileges are essentially ignored and all
+    % API operations are allowed.
+    owners = [] :: [od_user:id()],
+
     % Direct relations to other entities
     users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
     groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
@@ -338,7 +360,7 @@
 
 -record(od_harvester, {
     name = <<"">> :: od_harvester:name(),
-    plugin :: od_harvester:plugin(),
+    backend :: od_harvester:backend(),
     endpoint :: od_harvester:endpoint(),
 
     gui_plugin_config = #{} :: json_utils:json_term(),
@@ -393,9 +415,10 @@
     name = <<>> :: od_storage:name(),
     qos_parameters = #{} :: od_storage:qos_parameters(),
     imported = false :: boolean() | unknown,
+    readonly = false :: boolean(),
 
     % Direct relations to other entities
-    provider :: od_provider:id(),
+    provider = undefined :: undefined | od_provider:id(),
     spaces = #{} :: entity_graph:relations_with_attrs(od_space:id(), Size :: pos_integer()),
 
     % Effective relations to other entities

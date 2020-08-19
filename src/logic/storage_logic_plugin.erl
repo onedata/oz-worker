@@ -105,12 +105,18 @@ create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PRO
     % Only legacy providers do not send imported value 
     % set it to `unknown` so provider could change it during its upgrade procedure
     ImportedStorage = maps:get(<<"imported">>, Data, unknown),
+    Readonly = maps:get(<<"readonly">>, Data, false),
+    case Readonly andalso ImportedStorage =:= false of
+        true -> throw(?ERROR_REQUIRES_IMPORTED_STORAGE(<<"'newly created storage'">>));
+        _ -> ok
+    end,
     StorageDoc = #document{
         key = ProposedId,
         value = #od_storage{
             name = Name,
             qos_parameters = QosParameters,
             imported = ImportedStorage,
+            readonly = Readonly,
             creator = aai:normalize_subject(Auth#auth.subject),
             provider = ProviderId
         }
@@ -171,13 +177,16 @@ get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Storage) ->
     #od_storage{
         provider = Provider,
         qos_parameters = QosParameters,
-        creation_time = CreationTime, creator = Creator
+        creation_time = CreationTime,
+        creator = Creator,
+        readonly = Readonly
     } = Storage,
     {ok, #{
         <<"provider">> => Provider,
         <<"qosParameters">> => QosParameters,
         <<"creationTime">> => CreationTime,
-        <<"creator">> => Creator
+        <<"creator">> => Creator,
+        <<"readonly">> => Readonly
     }};
 
 get(#el_req{gri = #gri{aspect = spaces}}, Storage) ->
@@ -198,25 +207,32 @@ update(#el_req{gri = #gri{id = StorageId, aspect = instance}, data = Data}) ->
             #od_storage{
                 name = Name,
                 qos_parameters = QosParameters,
-                imported = ImportedStorage
+                imported = ImportedStorage,
+                readonly = Readonly
             } = Storage,
 
             NewName = maps:get(<<"name">>, Data, Name),
             NewQosParameters = get_qos_parameters(Data, QosParameters),
             NewImportedStorage = maps:get(<<"imported">>, Data, ImportedStorage),
+            NewReadonly = maps:get(<<"readonly">>, Data, Readonly),
             % Modification of imported value should be blocked if storage supports any space
             % unless it was previously `unknown` meaning that storage was created by legacy provider.
             ShouldBlock = (ImportedStorage /= unknown) and
                 (ImportedStorage /= NewImportedStorage) and SupportsAnySpace,
-    
             case ShouldBlock of
                 true -> ?ERROR_STORAGE_IN_USE;
                 false ->
-                    {ok, Storage#od_storage{
-                        name = NewName,
-                        qos_parameters = NewQosParameters,
-                        imported = NewImportedStorage
-                    }}
+                    case NewReadonly andalso NewImportedStorage =:= false of
+                        true ->
+                            ?ERROR_REQUIRES_IMPORTED_STORAGE(StorageId);
+                        false ->
+                            {ok, Storage#od_storage{
+                                name = NewName,
+                                qos_parameters = NewQosParameters,
+                                imported = NewImportedStorage,
+                                readonly = NewReadonly
+                            }}
+                    end
             end
         end),
         case Res of
@@ -265,14 +281,6 @@ delete(#el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
-exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Storage) ->
-    case Req#el_req.auth_hint of
-        ?THROUGH_PROVIDER(ProviderId) ->
-            storage_logic:belongs_to_provider(Storage, ProviderId);
-        undefined ->
-            true
-    end;
-
 exists(#el_req{gri = #gri{aspect = {space, SpaceId}}}, Storage) ->
     entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, Storage);
 
@@ -311,7 +319,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, id 
             storage_logic:supports_space(StorageId, SpaceId)
                 andalso provider_logic:supports_space(ProviderId, SpaceId);
         _ ->
-            % Access to private data also allows access to protected data
+            % Access to private data also allows access to shared data
             authorize(Req#el_req{gri = GRI#gri{scope = private}}, Storage)
     end;
 
@@ -359,7 +367,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     optional => #{
         <<"qos_parameters">> => {json, qos_parameters},
         <<"qosParameters">> => {json, qos_parameters},
-        <<"imported">> => {boolean, any}
+        <<"imported">> => {boolean, any},
+        <<"readonly">> => {boolean, any}
     }
 };
 
@@ -378,7 +387,8 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
         <<"name">> => {binary, name},
         <<"qos_parameters">> => {json, qos_parameters},
         <<"qosParameters">> => {json, qos_parameters},
-        <<"imported">> => {boolean, any}
+        <<"imported">> => {boolean, any},
+        <<"readonly">> => {boolean, any}
     }
 };
 

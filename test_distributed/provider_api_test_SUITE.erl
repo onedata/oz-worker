@@ -777,7 +777,7 @@ delete_self_test(Config) ->
 
 list_eff_users_test(Config) ->
     {
-        {P1, P1Token}, _S1, _Groups, Users, {U1, U2, NonAdmin}
+        {P1, P1Token}, _S1, _Groups, Users, {Owner, U1, U2, NonAdmin}
     } = api_test_scenarios:create_provider_eff_users_env(Config),
 
     {ok, {P2, P2Token}} = oz_test_utils:create_provider(
@@ -788,7 +788,7 @@ list_eff_users_test(Config) ->
     Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
 
     [{U3, _}, {U4, _}, {U5, _}, {U6, _}] = Users,
-    ExpUsers = [U1, U2, U3, U4, U5, U6],
+    ExpUsers = [Owner, U1, U2, U3, U4, U5, U6],
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -801,6 +801,7 @@ list_eff_users_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, Cluster1MemberNoViewPrivs},
+                {user, Owner},
                 {user, U1},
                 {user, U2},
                 {user, NonAdmin},
@@ -838,7 +839,7 @@ list_eff_users_test(Config) ->
 
 get_eff_user_test(Config) ->
     {
-        {P1, P1Token}, S1, _Groups, EffUsers, {U1, U2, NonAdmin}
+        {P1, P1Token}, S1, _Groups, EffUsers, {Owner, U1, U2, NonAdmin}
     } = api_test_scenarios:create_provider_eff_users_env(Config),
 
     {ok, {P2, P2Token}} = oz_test_utils:create_provider(
@@ -867,6 +868,7 @@ get_eff_user_test(Config) ->
                     unauthorized = [nobody],
                     forbidden = [
                         {user, Cluster1MemberNoViewPrivs},
+                        {user, Owner},
                         {user, U1},
                         {user, U2},
                         {user, NonAdmin},
@@ -1045,7 +1047,7 @@ get_eff_user_membership_intermediaries(Config) ->
 
 list_eff_groups_test(Config) ->
     {
-        {P1, P1Token}, _S1, Groups, _Users, {U1, U2, NonAdmin}
+        {P1, P1Token}, _S1, Groups, _Users, {Owner, U1, U2, NonAdmin}
     } = api_test_scenarios:create_provider_eff_users_env(Config),
 
     {ok, {P2, P2Token}} = oz_test_utils:create_provider(
@@ -1068,6 +1070,7 @@ list_eff_groups_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, Cluster1MemberNoViewPrivs},
+                {user, Owner},
                 {user, U1},
                 {user, U2},
                 {user, NonAdmin},
@@ -1105,7 +1108,7 @@ list_eff_groups_test(Config) ->
 
 get_eff_group_test(Config) ->
     {
-        {P1, P1Token}, S1, EffGroups, _Users, {U1, U2, NonAdmin}
+        {P1, P1Token}, S1, EffGroups, _Users, {Owner, U1, U2, NonAdmin}
     } = api_test_scenarios:create_provider_eff_users_env(Config),
 
     {ok, {P2, P2Token}} = oz_test_utils:create_provider(
@@ -1135,6 +1138,7 @@ get_eff_group_test(Config) ->
                     unauthorized = [nobody],
                     forbidden = [
                         {user, Cluster1MemberNoViewPrivs},
+                        {user, Owner},
                         {user, U1},
                         {user, U2},
                         {user, NonAdmin},
@@ -2614,7 +2618,7 @@ end_per_suite(_Config) ->
 
 
 init_per_testcase(list_eff_harvesters_test, Config) ->
-    oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
+    oz_test_utils:mock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND),
     init_per_testcase(default, Config);
 init_per_testcase(last_activity_tracking, Config) ->
     oz_test_utils:mock_time(Config),
@@ -2624,7 +2628,7 @@ init_per_testcase(_, Config) ->
 
 
 end_per_testcase(list_eff_harvesters_test, Config) ->
-    oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
+    oz_test_utils:unmock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND),
     end_per_testcase(default, Config);
 end_per_testcase(last_activity_tracking, Config) ->
     oz_test_utils:unmock_time(Config),

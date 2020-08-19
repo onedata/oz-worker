@@ -130,7 +130,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    7.
+    9.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -247,6 +247,53 @@ get_record_struct(7) ->
         {creation_time, integer},
         % nested #subject{} record was extended and is now encoded as string
         % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(8) ->
+    % the structure does not change, but privileges are updated
+    % (new privilege was added space_register_files)
+    {record, [
+        {name, string},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {storages, #{string => integer}},
+        {shares, [string]},
+        {harvesters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => {integer, [{atom, string}]}}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(9) ->
+    % new field - owners
+    {record, [
+        {name, string},
+
+        {owners, [string]},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {storages, #{string => integer}},
+        {shares, [string]},
+        {harvesters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => {integer, [{atom, string}]}}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
 
         {top_down_dirty, boolean},
@@ -518,7 +565,7 @@ upgrade_record(6, Space) ->
 
     } = Space,
 
-    TranslatePrivileges = fun(Privileges) ->
+    UpgradePrivileges = fun(Privileges) ->
         privileges:from_list(lists:flatmap(fun
             (space_add_provider) -> [?SPACE_ADD_SUPPORT];
             (space_remove_provider) -> [?SPACE_REMOVE_SUPPORT];
@@ -526,31 +573,158 @@ upgrade_record(6, Space) ->
         end, Privileges))
     end,
 
-    TranslateField = fun(Field) ->
+    UpgradeRelation = fun(Field) ->
         maps:map(fun
-            (_, {Privs, Relation}) -> {TranslatePrivileges(Privs), Relation};
-            (_, Privs) -> TranslatePrivileges(Privs)
+            (_, {Privs, Relation}) -> {UpgradePrivileges(Privs), Relation};
+            (_, Privs) -> UpgradePrivileges(Privs)
         end, Field)
     end,
 
-    {7, #od_space{
+    {7, {od_space,
+        Name,
+
+        UpgradeRelation(Users),
+        UpgradeRelation(Groups),
+        #{}, % storages - recalculated during cluster upgrade procedure
+        Shares,
+        Harvesters,
+
+        UpgradeRelation(EffUsers),
+        UpgradeRelation(EffGroups),
+        #{}, %% eff_providers - recalculated during cluster upgrade procedure
+        EffHarvesters,
+
+        CreationTime,
+        upgrade_common:upgrade_subject_record(Creator),
+
+        true,
+        true
+    }};
+upgrade_record(7, Space) ->
+    {
+        od_space,
+        Name,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        _TopDownDirty,
+        _BottomUpDirty
+    } = Space,
+
+    PreviousManagerPrivs = privileges:space_manager() -- [?SPACE_REGISTER_FILES],
+    UpgradePrivileges = fun(Privileges) ->
+        % the ?SPACE_REGISTER_FILES is granted to all members that had at least
+        % manager privileges before the upgrade
+        case lists_utils:intersect(PreviousManagerPrivs, Privileges) of
+            PreviousManagerPrivs -> privileges:from_list([?SPACE_REGISTER_FILES | Privileges]);
+            _ -> Privileges
+        end
+    end,
+
+    UpgradeRelation = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Relation}) -> {UpgradePrivileges(Privs), Relation};
+            (_, Privs) -> UpgradePrivileges(Privs)
+        end, Field)
+    end,
+
+    {8, {od_space,
+        Name,
+
+        UpgradeRelation(Users),
+        UpgradeRelation(Groups),
+        Storages,
+        Shares,
+        Harvesters,
+
+        UpgradeRelation(EffUsers),
+        UpgradeRelation(EffGroups),
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        true,
+        true
+    }};
+upgrade_record(8, Space) ->
+    {
+        od_space,
+        Name,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Space,
+
+    % Space ownership is automatically granted to all direct users that had the
+    % most effective privileges in the space before the upgrade
+    UserPrivilegeCounts = lists:map(fun(DirectUserId) ->
+        % during the check, eff privileges might not be up to date - sum with direct privileges
+        {EffPrivileges, _} = maps:get(DirectUserId, EffUsers, {[], []}),
+        DirectPrivileges = maps:get(DirectUserId, Users),
+        PrivilegeCount = length(privileges:from_list(EffPrivileges ++ DirectPrivileges)),
+        {PrivilegeCount, DirectUserId}
+    end, maps:keys(Users)),
+
+    SortedByPrivilegeCount = lists:reverse(lists:sort(UserPrivilegeCounts)),
+    MostPrivileges = case SortedByPrivilegeCount of
+        [] -> 0;
+        [{Count, _} | _] -> Count
+    end,
+
+    Owners = lists:filtermap(fun({PrivilegeCount, DirectUserId}) ->
+        case PrivilegeCount of
+            MostPrivileges -> {true, DirectUserId};
+            _ -> false
+        end
+    end, SortedByPrivilegeCount),
+
+    {9, #od_space{
         name = Name,
 
-        users = TranslateField(Users),
-        groups = TranslateField(Groups),
+        owners = Owners,
+
+        users = Users,
+        groups = Groups,
+        storages = Storages,
         shares = Shares,
         harvesters = Harvesters,
-        storages = #{},
 
         eff_users = EffUsers,
         eff_groups = EffGroups,
-        %% Eff providers are recalculated during cluster upgrade procedure
-        eff_providers = #{},
+        eff_providers = EffProviders,
         eff_harvesters = EffHarvesters,
 
         creation_time = CreationTime,
-        creator = upgrade_common:upgrade_subject_record(Creator),
+        creator = Creator,
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        top_down_dirty = TopDownDirty,
+        bottom_up_dirty = BottomUpDirty
     }}.

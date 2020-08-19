@@ -76,9 +76,9 @@ CHANGELOG
 
 -   VFS-5524, VFS-5735 Invite and access tokens can now contain
     customizable caveats that confine the context in which the token is
-    valid. This concept is taken from Google\\\'s macaroons, which are
+    valid. This concept is taken from Google\'s macaroons, which are
     in fact used for underlying implementation. Example caveats include:
-    audience, IP address, ASN, geographical region, system\\\'s
+    audience, IP address, ASN, geographical region, system\'s
     interface.
 
 -   VFS-5727 REST API for tokens is now available, allowing to create
@@ -88,13 +88,13 @@ CHANGELOG
 -   VFS-5874 Data access caveats are now supported in tokens. They are
     treated as special caveats that reduce the available API to a bare
     minimum required solely for data access. Tokens with such caveats
-    can only be used in Oneclient or Oneprovider\\\'s REST & CDMI. Data
+    can only be used in Oneclient or Oneprovider\'s REST & CDMI. Data
     access caveats include: readonly caveat (allowing readonly access),
     data path caveat (restricting the logical file paths that can be
     accessed) and objectid caveat (restricting the accessible file IDs).
 
 -   VFS-5733 The concept of \\\"storage\\\", representing the
-    Oneprovider\\\'s storage system on which the space data is stored,
+    Oneprovider\'s storage system on which the space data is stored,
     has been moved to Onezone. From now on, Oneproviders can share
     information about storage parameters defined by Oneprovider admins
     and use this knowledge in QoS algorithms that manage data replicas.
@@ -112,11 +112,11 @@ CHANGELOG
 -   VFS-5944 Add GUI translator for token examine endpoint, include
     invite target name info in case of invite tokens
 
--   VFS-6185 Update cluster\_worker to support documents\\\' timestamps
+-   VFS-6185 Update cluster\_worker to support documents\' timestamps
 
 -   VFS-5944 Add GUI translator for zone time
 
--   VFS-5944 Fix temp token\\\'s max ttl check
+-   VFS-5944 Fix temp token\'s max ttl check
 
 -   VFS-5944 Add GUI translator for user temporary tokens
 
@@ -133,7 +133,7 @@ CHANGELOG
     responses
 
 -   VFS-6043 Add space support related concepts: parameters, dbsync
-    state and provider\\\'s support state *Add corresponding API* Ensure
+    state and provider\'s support state *Add corresponding API* Ensure
     backward compatibility and upgradeability
 
 -   VFS-6129 Increased timeout in elasticsearch plugin
@@ -179,14 +179,14 @@ CHANGELOG
 
 -   VFS-5689 Increase default GUI token TTL
 -   VFS-5678 change indices privileges to views privileges
--   VFS-5524 Add MaxMind\\\'s GeoLite2 database for geolocation queries
+-   VFS-5524 Add MaxMind\'s GeoLite2 database for geolocation queries
 -   VFS-5635 Make all records added to DNS server lowercase
 -   VFS-4893 Created endpoint to retrieve full list of privileges
 -   VFS-5498 Enable GUI package verification by default
 -   VFS-5657 Enabled Ubuntu distribution package tag
 -   VFS-5544 Fix create operation always returning the revision of
     original resource (rather than the newly created)
--   VFS-5498 Do not check oz-worker gui-sha256 (OZ GUI needn\\\'t be
+-   VFS-5498 Do not check oz-worker gui-sha256 (OZ GUI needn\'t be
     verified)
 -   VFS-5498 Disable GUI verification until acceptance tests are aware
     of it
@@ -279,7 +279,7 @@ CHANGELOG
 
 -   VFS-4695 Fix arguments order in dns soa record creation
 -   VFS-4638 Added group name normalization
--   VFS-4029 Implement responding to Let\\\'s Encrypt http challenge
+-   VFS-4029 Implement responding to Let\'s Encrypt http challenge
 -   Updating GUI, including: \* VFS-4668-add-admin-message-to-login-page
 -   VFS-4666 Add customization of brand subtitle and login notification
     (GUI) to config
@@ -488,14 +488,14 @@ CHANGELOG
 
 ### 17.06.0-rc1
 
--   VFS-3458 Make sure user\\\'s connected accounts are popagated
+-   VFS-3458 Make sure user\'s connected accounts are popagated
     through subscriptions, use md5 rather than base64 to encode user and
     group ids coming from IdPs
 -   VFS-3457 User base64 url rather than base64 in user id encoding
--   VFS-3448 Use single \\\'onedata\\\' bucket
+-   VFS-3448 Use single \'onedata\' bucket
 -   VFS-3457 Fix a bug in groups encoding from SAML assertions, do
     base64 of user ids from IdPs
--   VFS-3429 Update esaml reference to point to repo in onedata\\\'s
+-   VFS-3429 Update esaml reference to point to repo in onedata\'s
     github
 -   Reconfigure couchbase pools
 -   VFS-3376 Fix exemplary saml.config
@@ -653,7 +653,7 @@ CHANGELOG
 
 ### 3.0.0-rc8
 
--   VFS-2625 Removing share\\\'s reference to handle is now not
+-   VFS-2625 Removing share\'s reference to handle is now not
     obligatory
 -   VFS-2625 Fix handles not being properly retrieved via REST
 -   VFS-2625 Use unencoded shalsh character in public handle field oh
@@ -716,7 +716,7 @@ CHANGELOG
 -   VFS-2500 described location service config options
 -   VFS-2309 no more bootstrap on testmaster
 -   VFS-2309 adjusted location service to use node 4
--   VFS-2176 all \\\'A\\\' DNS entries used as bootstrap nodes
+-   VFS-2176 all \'A\' DNS entries used as bootstrap nodes
 -   VFS-2309 boostrap location service client on testmaster
 -   VFS-2309 rest auth skeleton
 -   VFS-2309 public keys retrieved from directly publishers
@@ -911,7 +911,7 @@ CHANGELOG
 -   VFS-1528 Remove deprecated use of erlang:now/0
 -   VFS-1428 Add endpoint that allows for getting token issuer.
 -   VFS-1378 adjust to the new ctool API
--   VFS-1223 add rest port to macaroon\\\'s location
+-   VFS-1223 add rest port to macaroon\'s location
 -   VFS-1223 Handle empty macaroon-discharges header.
 -   VFS-1223 Parse macaroons from HTTP headers.
 -   VFS-1223 Implement first revision of macaroon-based auth.

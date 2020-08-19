@@ -19,8 +19,10 @@
 %% API
 -export([create/0, create/1]).
 -export([create_admin/0, create_admin/1]).
+-export([get/1]).
 -export([create_group_for/1]).
 -export([create_space_for/1]).
+-export([join_space/2, leave_space/2]).
 -export([create_handle_service_for/1]).
 -export([create_harvester_for/1]).
 -export([get_eff_providers/1]).
@@ -52,6 +54,12 @@ create_admin(OzPrivileges) ->
     UserId.
 
 
+-spec get(od_user:id()) -> od_user:record().
+get(UserId) ->
+    {ok, User} = ?assertMatch({ok, _}, ozt:rpc(user_logic, get, [?ROOT, UserId])),
+    User.
+
+
 -spec create_group_for(od_user:id()) -> od_group:id().
 create_group_for(UserId) ->
     {ok, GroupId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create_group, [
@@ -66,6 +74,19 @@ create_space_for(UserId) ->
         ?USER(UserId), UserId, #{<<"name">> => <<"of-user-", UserId/binary>>}
     ])),
     SpaceId.
+
+
+-spec join_space(od_user:id(), tokens:token()) -> od_space:id().
+join_space(UserId, Token) ->
+    {ok, SpaceId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, join_space, [
+        ?USER(UserId), UserId, #{<<"token">> => Token}
+    ])),
+    SpaceId.
+
+
+-spec leave_space(od_user:id(), od_space:id()) -> ok.
+leave_space(UserId, SpaceId) ->
+    ?assertMatch(ok, ozt:rpc(user_logic, leave_space, [?USER(UserId), UserId, SpaceId])).
 
 
 -spec create_handle_service_for(od_user:id()) -> od_handle_service:id().
