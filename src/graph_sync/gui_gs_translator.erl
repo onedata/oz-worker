@@ -41,13 +41,17 @@
     gs_protocol:handshake_attributes().
 handshake_attributes(_Client) ->
     BrandSubtitle = oz_worker:get_env(brand_subtitle, ""),
+    DefaultHarvestingBackendType = oz_worker:get_env(default_harvesting_backend_type, undefined),
+    DefaultHarvestingBackendEndpoint = oz_worker:get_env(default_harvesting_backend_endpoint, undefined),
     #{
         <<"zoneName">> => utils:undefined_to_null(oz_worker:get_name()),
         <<"zoneDomain">> => oz_worker:get_domain(),
         <<"serviceVersion">> => oz_worker:get_release_version(),
         <<"serviceBuildVersion">> => oz_worker:get_build_version(),
         <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle),
-        <<"maxTemporaryTokenTtl">> => oz_worker:get_env(max_temporary_token_ttl, 604800) % 1 week
+        <<"maxTemporaryTokenTtl">> => oz_worker:get_env(max_temporary_token_ttl, 604800), % 1 week
+        <<"defaultHarvestingBackendType">> => utils:undefined_to_null(DefaultHarvestingBackendType),
+        <<"defaultHarvestingBackendEndpoint">> => utils:undefined_to_null(DefaultHarvestingBackendEndpoint)
     }.
 
 
@@ -714,14 +718,14 @@ translate_harvester(#gri{id = undefined, aspect = privileges, scope = private}, 
 translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, Harvester) ->
     #od_harvester{
         name = Name, endpoint = Endpoint,
-        plugin = Plugin, public = Public
+        backend = BackendType, public = Public
     } = Harvester,
     fun(?USER(UserId)) -> #{
         <<"scope">> => <<"private">>,
         <<"name">> => Name,
         <<"public">> => Public,
-        <<"endpoint">> => Endpoint,
-        <<"plugin">> => atom_to_binary(Plugin, utf8),
+        <<"harvestingBackendEndpoint">> => Endpoint,
+        <<"harvestingBackendType">> => atom_to_binary(BackendType, utf8),
         <<"canViewPrivileges">> => harvester_logic:has_eff_privilege(Harvester, UserId, ?HARVESTER_VIEW_PRIVILEGES),
         <<"directMembership">> => harvester_logic:has_direct_user(Harvester, UserId),
         <<"guiPluginConfig">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
@@ -741,8 +745,8 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
     #{
         <<"name">> := Name,
         <<"public">> := Public,
-        <<"plugin">> := Plugin,
-        <<"endpoint">> := Endpoint,
+        <<"harvestingBackendType">> := HarvestingBackendType,
+        <<"harvestingBackendEndpoint">> := Endpoint,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator
     } = HarvesterData,
@@ -750,8 +754,8 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
         <<"scope">> => <<"protected">>,
         <<"name">> => Name,
         <<"public">> => Public,
-        <<"plugin">> => Plugin,
-        <<"endpoint">> => Endpoint,
+        <<"harvestingBackendType">> => HarvestingBackendType,
+        <<"harvestingBackendEndpoint">> => Endpoint,
         <<"directMembership">> => harvester_logic:has_direct_user(HarvesterId, UserId),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
@@ -862,21 +866,29 @@ translate_harvester(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges)
         <<"privileges">> => Privileges
     };
 
-translate_harvester(#gri{aspect = all_plugins}, Plugins) ->
+translate_harvester(#gri{aspect = all_backend_types}, Plugins) ->
     #{
-        <<"allPlugins">> => Plugins
+        <<"allBackendTypes">> => Plugins
     };
 
 translate_harvester(#gri{aspect = {index, _}, scope = private}, IndexData) ->
-    #{
-        <<"name">> := Name,
-        <<"schema">> := Schema,
-        <<"guiPluginName">> := GuiPluginName
+    #harvester_index{
+        name = Name,
+        schema = Schema,
+        gui_plugin_name = GuiPluginName,
+        include_metadata = IncludeMetadata,
+        include_file_details = IncludeFileDetails,
+        include_rejection_reason = IncludeRejectionReason,
+        retry_on_rejection = RetryOnRejection
     } = IndexData,
     #{
         <<"name">> => Name,
         <<"schema">> => utils:undefined_to_null(Schema),
-        <<"guiPluginName">> => utils:undefined_to_null(GuiPluginName)
+        <<"guiPluginName">> => utils:undefined_to_null(GuiPluginName),
+        <<"includeMetadata">> => IncludeMetadata,
+        <<"includeFileDetails">> => IncludeFileDetails,
+        <<"includeRejectionReason">> => IncludeRejectionReason,
+        <<"retryOnRejection">> => RetryOnRejection
     };
 
 translate_harvester(#gri{aspect = {index, _}, scope = public}, IndexData) ->

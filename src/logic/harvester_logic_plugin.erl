@@ -26,6 +26,11 @@
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
+
+-define(HARVESTING_BACKENDS, onezone_plugins:get_plugins(harvesting_backend) ++ [
+    elasticsearch_harvesting_backend
+]).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -81,7 +86,7 @@ operation_supported(create, {query, _}, private) -> true;
 operation_supported(create, {gen_curl_query, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
-operation_supported(get, all_plugins, private) -> true;
+operation_supported(get, all_backend_types, private) -> true;
 operation_supported(get, privileges, _) -> true;
 
 operation_supported(get, instance, private) -> true;
@@ -169,26 +174,26 @@ is_subscribable(_, _) -> false.
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
-    auth_hint = AuthHint, data = Data}) ->
-    #{
-        <<"name">> := Name,
-        <<"plugin">> := Plugin
-    } = Data,
-    Endpoint = maps:get(<<"endpoint">>, Data, oz_worker:get_env(harvester_default_endpoint)),
+    auth_hint = AuthHint, data = #{<<"name">> := Name} = Data}
+) ->
+    % Default value in get_env is needed so error is not raised when env is not defined.
+    % If any env is not defined, all values concerning harvesting backend are in Data (see validate/1)
+    BackendType = maps:get(<<"harvestingBackendType">>, Data,
+        oz_worker:get_env(default_harvesting_backend_type, undefined)),
+    BackendEndpoint = maps:get(<<"harvestingBackendEndpoint">>, Data, 
+        oz_worker:get_env(default_harvesting_backend_endpoint, undefined)),
     Config = maps:get(<<"guiPluginConfig">>, Data, #{}),
 
-
-    NormalizedEndpoint = case normalize_endpoint_and_check_connectivity(Endpoint, Plugin) of
+    NormalizedEndpoint = case normalize_endpoint_and_check_connectivity(BackendEndpoint, BackendType) of
         {ok, NewEndpoint} -> NewEndpoint;
         {error, _} = Error -> throw(Error)
     end,
-
 
     {ok, #document{key = HarvesterId}} = od_harvester:create(#document{
         value = #od_harvester{
             name = Name,
             endpoint = NormalizedEndpoint,
-            plugin = Plugin,
+            backend = BackendType,
             gui_plugin_config = Config,
             creator = aai:normalize_subject(Auth#auth.subject)
         }
@@ -337,34 +342,42 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
     Name = maps:get(<<"name">>, Data),
     Schema = maps:get(<<"schema">>, Data, undefined),
     GuiPluginName = utils:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
+    
+    Index = #harvester_index{
+        name = Name,
+        schema = Schema,
+        gui_plugin_name = GuiPluginName
+    },
 
-    UpdateFun = fun(#od_harvester{indices = Indices, plugin = Plugin, endpoint = Endpoint, spaces = Spaces} = Harvester) ->
+    UpdateFun = fun(#od_harvester{indices = Indices, backend = HarvestingBackend, endpoint = Endpoint, spaces = Spaces} = Harvester) ->
         IndexStats = lists:foldl(fun(SpaceId, ExistingStats) ->
             harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, false) end, #{}, Spaces),
-        Index = #harvester_index{
-            name = Name,
-            schema = Schema,
-            gui_plugin_name = GuiPluginName,
-            stats = IndexStats
+        IndexInfo = Index#harvester_index{
+            stats = IndexStats,
+            include_metadata = maps:get(<<"includeMetadata">>, Data, Index#harvester_index.include_metadata),
+            include_file_details = maps:get(<<"includeFileDetails">>, Data, Index#harvester_index.include_file_details),
+            include_rejection_reason = maps:get(<<"includeRejectionReason">>, Data, Index#harvester_index.include_rejection_reason),
+            retry_on_rejection = maps:get(<<"retryOnRejection">>, Data, Index#harvester_index.retry_on_rejection)
         },
-        case Plugin:create_index(Endpoint, IndexId, Schema) of
+        case HarvestingBackend:create_index(Endpoint, IndexId, IndexInfo, Schema) of
             ok ->
-                {ok, Harvester#od_harvester{indices = Indices#{IndexId => Index}}};
+                {ok, Harvester#od_harvester{indices = Indices#{IndexId => IndexInfo}}};
             {error, _} = Error ->
                 Error
         end
     end,
     NewGri = Gri#gri{aspect = {index, IndexId}, scope = private},
     case od_harvester:update(HarvesterId, UpdateFun) of
-        {ok, _} ->
-            {ok, resource, {NewGri, {Data#{<<"schema">> => Schema}, inherit_rev}}};
+        {ok, #document{value = #od_harvester{indices = UpdatedIndices}}} ->
+            UpdatedIndex = maps:get(IndexId, UpdatedIndices),
+            {ok, resource, {NewGri, {UpdatedIndex, inherit_rev}}};
         {error, _} = Error ->
             Error
     end;
 
 create(#el_req{gri = #gri{aspect = {query, IndexId}}, data = Data}) ->
-    fun(#od_harvester{plugin = Plugin, endpoint = Endpoint}) ->
-        case Plugin:query_index(Endpoint, IndexId, Data) of
+    fun(#od_harvester{backend = HarvestingBackend, endpoint = Endpoint}) ->
+        case HarvestingBackend:query_index(Endpoint, IndexId, Data) of
             {ok, Value} -> {ok, value, Value};
             {error, _} = Error -> Error
         end
@@ -387,7 +400,7 @@ create(#el_req{auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch, 
         <<"maxStreamSeq">> := MaxStreamSeq,
         <<"batch">> := Batch
     } = Data,
-    fun(#od_harvester{endpoint = Endpoint, plugin = Plugin, indices = ExistingIndices}) ->
+    fun(#od_harvester{endpoint = Endpoint, backend = HarvestingBackend, indices = ExistingIndices}) ->
         IndicesToUpdate = [X || X <- Indices, Y <- maps:keys(ExistingIndices), X == Y],
         case Indices -- IndicesToUpdate of
             [] -> ok;
@@ -395,7 +408,7 @@ create(#el_req{auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch, 
         end,
         {ok, Res} = case Batch of
             [] -> {ok, lists:map(fun(IndexId) -> {IndexId, ok} end, IndicesToUpdate)};
-            _ -> Plugin:submit_batch(Endpoint, HarvesterId, IndicesToUpdate, Batch)
+            _ -> HarvestingBackend:submit_batch(Endpoint, HarvesterId, maps:with(IndicesToUpdate, ExistingIndices), Batch)
         end,
         harvester_indices:update_stats(HarvesterId, Res, fun
             (PreviousStats, ok) ->
@@ -436,14 +449,14 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Harvester) ->
     {ok, Harvester};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Harvester) ->
     #od_harvester{
-        name = Name, plugin = Plugin, endpoint = Endpoint, public = Public,
+        name = Name, backend = HarvestingBackendType, endpoint = Endpoint, public = Public,
         creator = Creator, creation_time = CreationTime
     } = Harvester,
     {ok, #{
         <<"name">> => Name,
         <<"public">> => Public,
-        <<"plugin">> => Plugin,
-        <<"endpoint">> => Endpoint,
+        <<"harvestingBackendType">> => HarvestingBackendType,
+        <<"harvestingBackendEndpoint">> => Endpoint,
         <<"creator">> => Creator,
         <<"creationTime">> => CreationTime
     }};
@@ -452,14 +465,13 @@ get(#el_req{gri = #gri{aspect = instance, scope = _}}, Harvester) ->  % covers s
         <<"name">> => Harvester#od_harvester.name
     }};
 
-get(#el_req{gri = #gri{aspect = all_plugins}}, _) ->
-    AllPlugins = onezone_plugins:get_plugins(harvester_plugin),
-    {ok, lists:map(fun(Plugin) ->
+get(#el_req{gri = #gri{aspect = all_backend_types}}, _) ->
+    {ok, lists:map(fun(HarvestingBackend) ->
         #{
-            <<"id">> => Plugin,
-            <<"name">> => Plugin:get_name()
+            <<"id">> => HarvestingBackend,
+            <<"name">> => HarvestingBackend:get_name()
         }
-    end, AllPlugins)};
+    end, ?HARVESTING_BACKENDS)};
 get(#el_req{gri = #gri{aspect = gui_plugin_config}}, #od_harvester{gui_plugin_config = Config}) ->
     {ok, Config};
 
@@ -495,16 +507,7 @@ get(#el_req{gri = #gri{aspect = indices}}, Harvester) ->
     {ok, maps:keys(Harvester#od_harvester.indices)};
 
 get(#el_req{gri = #gri{aspect = {index, IndexId}, scope = private}}, Harvester) ->
-    #harvester_index{
-        name = Name,
-        schema = Schema,
-        gui_plugin_name = GuiPluginName
-    } = maps:get(IndexId, Harvester#od_harvester.indices),
-    {ok, #{
-        <<"name">> => Name,
-        <<"schema">> => Schema,
-        <<"guiPluginName">> => GuiPluginName
-    }};
+    {ok, maps:get(IndexId, Harvester#od_harvester.indices)};
 
 get(#el_req{gri = #gri{aspect = {index, IndexId}, scope = public}}, Harvester) ->
     #harvester_index{
@@ -549,21 +552,21 @@ update(#el_req{gri = #gri{id = HarvesterId, aspect = instance}, data = Data}) ->
     UpdateFun = fun(Harvester) ->
         #od_harvester{
             name = Name, endpoint = Endpoint,
-            plugin = Plugin, public = Public
+            backend = HarvestingBackend, public = Public
         } = Harvester,
 
         NewName = maps:get(<<"name">>, Data, Name),
-        NewEndpoint = maps:get(<<"endpoint">>, Data, Endpoint),
-        NewPlugin = maps:get(<<"plugin">>, Data, Plugin),
+        NewEndpoint = maps:get(<<"harvestingBackendEndpoint">>, Data, Endpoint),
+        NewHarvestingBackend = maps:get(<<"harvestingBackendType">>, Data, HarvestingBackend),
         NewPublic = maps:get(<<"public">>, Data, Public),
 
         NewHarvester = Harvester#od_harvester{
             name = NewName,
-            plugin = NewPlugin,
+            backend = NewHarvestingBackend,
             public = NewPublic
         },
 
-        case normalize_endpoint_and_check_connectivity(NewEndpoint, NewPlugin) of
+        case normalize_endpoint_and_check_connectivity(NewEndpoint, NewHarvestingBackend) of
             {ok, NormalizedEndpoint} ->
                 {ok, NewHarvester#od_harvester{endpoint = NormalizedEndpoint}};
             {error, _} = Error ->
@@ -653,16 +656,16 @@ delete(#el_req{gri = #gri{id = HarvesterId, aspect = {index, IndexId}}}) ->
     ok;
 
 delete(#el_req{gri = #gri{aspect = metadata}}) ->
-    fun(#od_harvester{indices = ExistingIndices, plugin = Plugin, endpoint = Endpoint}) ->
+    fun(#od_harvester{indices = ExistingIndices, backend = HarvestingBackend, endpoint = Endpoint}) ->
         IndicesIds = maps:keys(ExistingIndices),
         lists:foreach(fun(IndexId) ->
-            Plugin:delete_index(Endpoint, IndexId)
+            HarvestingBackend:delete_index(Endpoint, IndexId)
         end, IndicesIds)
     end;
 
 delete(#el_req{gri = #gri{aspect = {index_metadata, IndexId}}}) ->
-    fun(#od_harvester{plugin = Plugin, endpoint = Endpoint}) ->
-        Plugin:delete_index(Endpoint, IndexId)
+    fun(#od_harvester{backend = HarvestingBackend, endpoint = Endpoint}) ->
+        HarvestingBackend:delete_index(Endpoint, IndexId)
     end.
 
 
@@ -896,7 +899,7 @@ authorize(#el_req{operation = get, gri = #gri{aspect = {index, _}, scope = publi
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = indices}}, Harvester) ->
     Harvester#od_harvester.public orelse auth_by_privilege(Req, Harvester, ?HARVESTER_VIEW);
 
-authorize(#el_req{operation = get, gri = #gri{aspect = all_plugins}}, _) ->
+authorize(#el_req{operation = get, gri = #gri{aspect = all_backend_types}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, auth = ?USER}, Harvester) ->
@@ -1088,13 +1091,23 @@ required_admin_privileges(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
-    required => #{
-        <<"name">> => {binary, name},
-        <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)}
+validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> 
+    BackendValidityVerificator = #{
+        <<"harvestingBackendType">> => {atom, ?HARVESTING_BACKENDS},
+        <<"harvestingBackendEndpoint">> => {binary, non_empty}
     },
-    optional => #{
-        <<"endpoint">> => {binary, non_empty},
+    {Required, Optional} = case lists:member(undefined, [
+        oz_worker:get_env(default_harvesting_backend_type, undefined), 
+        oz_worker:get_env(default_harvesting_backend_endpoint, undefined)
+    ]) of
+        true -> {BackendValidityVerificator, #{}};
+        false -> {#{}, BackendValidityVerificator}
+    end,
+    #{
+    required => Required#{
+        <<"name">> => {binary, name}
+    },
+    optional => Optional#{
         <<"guiPluginConfig">> => {json, any}
     }
 };
@@ -1115,13 +1128,24 @@ validate(#el_req{operation = create, gri = #gri{aspect = index}}) -> #{
     },
     optional => #{
         <<"guiPluginName">> => {binary, any},
-        <<"schema">> => {binary, non_empty}
+        <<"schema">> => {binary, non_empty},
+        <<"includeMetadata">> => {list_of_atoms, fun(Vals) ->
+            Key = <<"includeMetadata">>,
+            Vals == [] andalso throw(?ERROR_BAD_VALUE_EMPTY(Key)),
+            lists:all(fun(Val) -> lists:member(Val, od_harvester:all_metadata_types()) end, Vals) 
+                orelse throw(?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(Key, od_harvester:all_metadata_types())),
+            true
+        end},
+        <<"includeFileDetails">> => 
+            {list_of_atoms, od_harvester:all_file_details()},
+        <<"includeRejectionReason">> => {boolean, any},
+        <<"retryOnRejection">> => {boolean, any}
     }
 };
 
 validate(#el_req{operation = create, gri = #gri{aspect = {query, _}}}) ->
-    fun(#od_harvester{plugin = Plugin}) ->
-        Plugin:query_validator()
+    fun(#od_harvester{backend = HarvestingBackend}) ->
+        HarvestingBackend:query_validator()
     end;
 validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = {gen_curl_query, IndexId}}}) ->
     validate(Req#el_req{gri = GRI#gri{aspect = {query, IndexId}}});
@@ -1187,8 +1211,8 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = group}}) ->
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"endpoint">> => {binary, non_empty},
-        <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)},
+        <<"harvestingBackendType">> => {atom, ?HARVESTING_BACKENDS},
+        <<"harvestingBackendEndpoint">> => {binary, non_empty},
         <<"public">> => {boolean, any}
     }
 };
@@ -1246,11 +1270,11 @@ auth_by_privilege(UserId, HarvesterOrId, Privilege) ->
 %% Checks whether resulting endpoint is responding.
 %% @end
 %%--------------------------------------------------------------------
--spec normalize_endpoint_and_check_connectivity(od_harvester:endpoint(), od_harvester:plugin()) ->
+-spec normalize_endpoint_and_check_connectivity(od_harvester:endpoint(), od_harvester:backend()) ->
     {ok, od_harvester:endpoint()} | {error, term()}.
-normalize_endpoint_and_check_connectivity(Endpoint, Plugin) ->
+normalize_endpoint_and_check_connectivity(Endpoint, HarvestingBackend) ->
     NormalizedEndpoint = re:replace(Endpoint, <<"\s|/$">>, <<"">>, [{return, binary}]),
-    case Plugin:ping(NormalizedEndpoint) of
+    case HarvestingBackend:ping(NormalizedEndpoint) of
         ok -> {ok, NormalizedEndpoint};
         {error, _} = Error -> Error
     end.

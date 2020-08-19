@@ -13,6 +13,7 @@
 -behaviour(rest_translator_behaviour).
 -author("Michal Stanisz").
 
+-include("datastore/oz_datastore_models.hrl").
 -include("http/rest.hrl").
 
 -export([create_response/4, get_response/2]).
@@ -103,15 +104,15 @@ get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, Harve
     #{
         <<"name">> := Name,
         <<"public">> := Public,
-        <<"plugin">> := Plugin,
-        <<"endpoint">> := Endpoint
+        <<"harvestingBackendType">> := HarvestingBackend,
+        <<"harvestingBackendEndpoint">> := Endpoint
     } = HarvesterData,
     rest_translator:ok_body_reply(#{
         <<"harvesterId">> => HarvesterId,
         <<"name">> => Name,
         <<"public">> => Public,
-        <<"plugin">> => Plugin,
-        <<"endpoint">> => Endpoint
+        <<"harvestingBackendType">> => HarvestingBackend,
+        <<"harvestingBackendEndpoint">> => Endpoint
     });
 
 get_response(#gri{id = HarvesterId, aspect = instance, scope = shared}, HarvesterData) ->
@@ -127,16 +128,24 @@ get_response(#gri{aspect = indices}, Indices) ->
     rest_translator:ok_body_reply(#{<<"indices">> => Indices});
 
 get_response(#gri{aspect = {index, IndexId}}, IndexData) ->
-    #{
-        <<"name">> := Name,
-        <<"schema">> := Schema,
-        <<"guiPluginName">> := GuiPluginName
+    #harvester_index{
+        name = Name,
+        schema = Schema,
+        gui_plugin_name = GuiPluginName,
+        include_metadata = IncludeMetadata,
+        include_file_details = IncludeFileDetails,
+        include_rejection_reason = IncludeRejectionReason,
+        retry_on_rejection = RetryOnRejection
     } = IndexData,
     rest_translator:ok_body_reply(#{
         <<"indexId">> => IndexId,
         <<"name">> => Name,
         <<"schema">> => utils:undefined_to_null(Schema),
-        <<"guiPluginName">> => utils:undefined_to_null(GuiPluginName)
+        <<"guiPluginName">> => utils:undefined_to_null(GuiPluginName),
+        <<"includeMetadata">> => IncludeMetadata,
+        <<"includeFileDetails">> => IncludeFileDetails,
+        <<"includeRejectionReason">> => IncludeRejectionReason,
+        <<"retryOnRejection">> => RetryOnRejection
     });
 
 get_response(#gri{aspect = {index_stats, _}}, IndexStats) ->

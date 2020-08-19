@@ -764,7 +764,7 @@ init_per_testcase(unused_packages_are_cleaned, Config) ->
 init_per_testcase(_, Config) ->
     oz_test_utils:set_env(Config, gui_package_verification, false),
     oz_test_utils:set_app_env(Config, gui, max_gui_package_size_mb, 50),
-    oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
+    oz_test_utils:mock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND),
     Config.
 
 
@@ -773,7 +773,7 @@ end_per_testcase(unused_packages_are_cleaned, Config) ->
     test_utils:mock_unload(Nodes, file_utils),
     end_per_testcase(default, Config);
 end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
+    oz_test_utils:unmock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND),
     ok.
 
 

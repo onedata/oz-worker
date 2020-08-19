@@ -152,7 +152,7 @@ init_per_suite(Config) ->
 init_per_testcase(_, Config) ->
     ozt_mocks:mock_gui_static(),
     ozt_mocks:mock_time(),
-    ozt_mocks:mock_harvester_plugins(),
+    ozt_mocks:mock_harvesting_backends(),
     ozt_mocks:mock_peer_ip_of_all_connections(?PEER_IP),
     ozt_mocks:mock_geo_db_entry_for_all_ips(?CLIENT_ASN, ?CLIENT_COUNTRY, ?CLIENT_REGIONS),
     Config.
@@ -160,7 +160,7 @@ init_per_testcase(_, Config) ->
 end_per_testcase(_, _Config) ->
     ozt_mocks:unmock_time(),
     ozt_mocks:unmock_gui_static(),
-    ozt_mocks:unmock_harvester_plugins(),
+    ozt_mocks:unmock_harvesting_backends(),
     ozt_mocks:unmock_peer_ip_of_all_connections(),
     ozt_mocks:unmock_geo_db_entry_for_all_ips().
 

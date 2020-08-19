@@ -281,8 +281,8 @@
     create_3_nested_groups/2, create_3_nested_groups/5,
     create_and_support_3_spaces/2,
     minimum_support_size/1,
-    mock_harvester_plugins/2,
-    unmock_harvester_plugins/2,
+    mock_harvesting_backends/2,
+    unmock_harvesting_backends/2,
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
     cluster_time_seconds/1,
@@ -3173,36 +3173,37 @@ minimum_support_size(Config) ->
 %% Mocks harvester plugins on all nodes of onezone.
 %% @end
 %%--------------------------------------------------------------------
-mock_harvester_plugins(Config, Plugins) when is_list(Plugins) ->
+mock_harvesting_backends(Config, Backends) when is_list(Backends) ->
     Nodes = ?OZ_NODES(Config),
-    lists:foreach(fun(Plugin) -> mock_harvester_plugin(Config, Nodes, Plugin) end, Plugins),
+    lists:foreach(fun(Plugin) -> mock_harvesting_backends(Config, Nodes, Plugin) end, Backends),
     test_utils:mock_new(Nodes, onezone_plugins),
 
     test_utils:mock_expect(Nodes, onezone_plugins, get_plugins,
-        fun(Type) -> Plugins ++ meck:passthrough([Type]) end),
+        fun(Type) -> Backends ++ meck:passthrough([Type]) end),
     Config;
-mock_harvester_plugins(Config, Plugin) ->
-    mock_harvester_plugins(Config, [Plugin]).
+mock_harvesting_backends(Config, Plugin) ->
+    mock_harvesting_backends(Config, [Plugin]).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates mocked harvester plugin on all nodes of onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec mock_harvester_plugin(Config :: term(), Nodes :: list(), PluginName :: atom()) -> ok.
-mock_harvester_plugin(Config, Nodes, PluginName) ->
-    test_utils:mock_new(Nodes, PluginName, [non_strict]),
-    test_utils:mock_expect(Nodes, PluginName, type, fun() -> harvester_plugin end),
-    test_utils:mock_expect(Nodes, PluginName, ping,
+-spec mock_harvesting_backends(Config :: term(), Nodes :: list(), PluginName :: atom()) -> ok.
+mock_harvesting_backends(Config, Nodes, BackendName) ->
+    test_utils:mock_new(Nodes, BackendName, [non_strict]),
+    test_utils:mock_expect(Nodes, BackendName, type, fun() -> harvesting_backend end),
+    test_utils:mock_expect(Nodes, BackendName, get_name, fun() -> atom_to_binary(BackendName, utf8) end),
+    test_utils:mock_expect(Nodes, BackendName, ping,
         fun(?HARVESTER_ENDPOINT1) -> ok;
             (?HARVESTER_ENDPOINT2) -> ok;
             (Endpoint) ->
-                case get_env(Config, harvester_default_endpoint) of
+                case get_env(Config, default_harvesting_backend_endpoint) of
                     Endpoint -> ok;
                     _ -> ?ERROR_TEMPORARY_FAILURE
                 end
         end),
-    test_utils:mock_expect(Nodes, PluginName, submit_batch, fun(_, HarvesterId, Indices, Batch) ->
+    test_utils:mock_expect(Nodes, BackendName, submit_batch, fun(_, HarvesterId, Indices, Batch) ->
         FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
         {LastSeq, ErrorSeq} = lists:foldl(
             fun(BatchEntry, {A, undefined}) ->
@@ -3219,15 +3220,15 @@ mock_harvester_plugin(Config, Nodes, PluginName) ->
         end,
         {ok, lists:map(fun(Index) ->
             case harvester_get_index(Config, HarvesterId, Index) of
-                {ok, #{<<"name">> := <<"fail">>}} -> {Index, {error, undefined, FirstSeq, <<"error_index">>}};
+                {ok, #harvester_index{name = <<"fail">>}} -> {Index, {error, undefined, FirstSeq, <<"error_index">>}};
                 _ -> {Index, Res}
             end
-        end, Indices)}
+        end, maps:keys(Indices))}
     end),
-    test_utils:mock_expect(Nodes, PluginName, create_index, fun(_, _, _) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, delete_index, fun(_, _) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, query_index, fun(_, _, _) -> {ok, ?HARVESTER_MOCKED_QUERY_DATA_MAP} end),
-    test_utils:mock_expect(Nodes, PluginName, query_validator, fun() -> ?HARVESTER_PLUGIN:query_validator() end).
+    test_utils:mock_expect(Nodes, BackendName, create_index, fun(_, _, _, _) -> ok end),
+    test_utils:mock_expect(Nodes, BackendName, delete_index, fun(_, _) -> ok end),
+    test_utils:mock_expect(Nodes, BackendName, query_index, fun(_, _, _) -> {ok, ?HARVESTER_MOCKED_QUERY_DATA_MAP} end),
+    test_utils:mock_expect(Nodes, BackendName, query_validator, fun() -> ?HARVESTER_BACKEND:query_validator() end).
 
 
 %%--------------------------------------------------------------------
@@ -3235,11 +3236,11 @@ mock_harvester_plugin(Config, Nodes, PluginName) ->
 %% Unmocks harvester plugins on all nodes of onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec unmock_harvester_plugins(Config :: term(), Plugins :: atom() | list()) -> ok.
-unmock_harvester_plugins(Config, PluginName) when is_atom(PluginName) ->
-    unmock_harvester_plugins(Config, [PluginName]);
+-spec unmock_harvesting_backends(Config :: term(), Plugins :: atom() | list()) -> ok.
+unmock_harvesting_backends(Config, PluginName) when is_atom(PluginName) ->
+    unmock_harvesting_backends(Config, [PluginName]);
 
-unmock_harvester_plugins(Config, Plugins) ->
+unmock_harvesting_backends(Config, Plugins) ->
     test_utils:mock_unload(?OZ_NODES(Config), onezone_plugins),
     lists:foreach(fun(PluginName) -> test_utils:mock_unload(?OZ_NODES(Config), PluginName) end, Plugins).
 

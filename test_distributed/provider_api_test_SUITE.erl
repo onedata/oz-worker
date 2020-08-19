@@ -2618,7 +2618,7 @@ end_per_suite(_Config) ->
 
 
 init_per_testcase(list_eff_harvesters_test, Config) ->
-    oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
+    oz_test_utils:mock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND),
     init_per_testcase(default, Config);
 init_per_testcase(last_activity_tracking, Config) ->
     oz_test_utils:mock_time(Config),
@@ -2628,7 +2628,7 @@ init_per_testcase(_, Config) ->
 
 
 end_per_testcase(list_eff_harvesters_test, Config) ->
-    oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
+    oz_test_utils:unmock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND),
     end_per_testcase(default, Config);
 end_per_testcase(last_activity_tracking, Config) ->
     oz_test_utils:unmock_time(Config),

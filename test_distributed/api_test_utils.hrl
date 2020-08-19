@@ -262,12 +262,12 @@
 -define(HARVESTER_NAME2, <<"harvester2">>).
 -define(HARVESTER_ENDPOINT1, <<"test.endpoint1:9200">>).
 -define(HARVESTER_ENDPOINT2, <<"test.endpoint2">>).
--define(HARVESTER_MOCK_PLUGIN_BINARY, <<"harvester_mock_plugin">>).
--define(HARVESTER_MOCK_PLUGIN, binary_to_atom(?HARVESTER_MOCK_PLUGIN_BINARY, utf8)).
--define(HARVESTER_MOCK_PLUGIN2_BINARY, <<"harvester_mock_plugin2">>).
--define(HARVESTER_MOCK_PLUGIN2, binary_to_atom(?HARVESTER_MOCK_PLUGIN2_BINARY, utf8)).
--define(HARVESTER_PLUGIN, elasticsearch_plugin).
--define(HARVESTER_PLUGIN_BINARY, atom_to_binary(?HARVESTER_PLUGIN, utf8)).
+-define(HARVESTER_MOCK_BACKEND_BINARY, <<"harvester_mock_backend">>).
+-define(HARVESTER_MOCK_BACKEND, binary_to_atom(?HARVESTER_MOCK_BACKEND_BINARY, utf8)).
+-define(HARVESTER_MOCK_BACKEND2_BINARY, <<"harvester_mock_backend2">>).
+-define(HARVESTER_MOCK_BACKEND2, binary_to_atom(?HARVESTER_MOCK_BACKEND2_BINARY, utf8)).
+-define(HARVESTER_BACKEND, elasticsearch_harvesting_backend).
+-define(HARVESTER_BACKEND_BINARY, atom_to_binary(?HARVESTER_BACKEND, utf8)).
 -define(HARVESTER_GUI_PLUGIN_CONFIG, #{<<"a">>=><<"b">>}).
 
 -define(HARVESTER_INDEX_NAME, <<"index_name">>).
@@ -281,8 +281,8 @@
 -define(HARVESTER_PROTECTED_DATA(HarvesterName),
     #{
         <<"name">> => HarvesterName,
-        <<"endpoint">> => ?HARVESTER_ENDPOINT1,
-        <<"plugin">> => ?HARVESTER_MOCK_PLUGIN_BINARY,
+        <<"harvestingBackendEndpoint">> => ?HARVESTER_ENDPOINT1,
+        <<"harvestingBackendType">> => ?HARVESTER_MOCK_BACKEND_BINARY,
         <<"public">> => false
     }).
 
@@ -291,15 +291,15 @@
         <<"name">> => HarvesterName
     }).
 
--define(HARVESTER_CREATE_DATA(HarvesterName, HarvesterPlugin),
+-define(HARVESTER_CREATE_DATA(HarvesterName, HarvestingBackend),
     #{
         <<"name">> => HarvesterName,
-        <<"endpoint">> => ?HARVESTER_ENDPOINT1,
-        <<"plugin">> => HarvesterPlugin,
+        <<"harvestingBackendEndpoint">> => ?HARVESTER_ENDPOINT1,
+        <<"harvestingBackendType">> => HarvestingBackend,
         <<"guiPluginConfig">> => ?HARVESTER_GUI_PLUGIN_CONFIG
     }).
--define(HARVESTER_CREATE_DATA(HarvesterName), ?HARVESTER_CREATE_DATA(HarvesterName, ?HARVESTER_MOCK_PLUGIN_BINARY)).
--define(HARVESTER_CREATE_DATA, ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)).
+-define(HARVESTER_CREATE_DATA(HarvesterName), ?HARVESTER_CREATE_DATA(HarvesterName, ?HARVESTER_MOCK_BACKEND_BINARY)).
+-define(HARVESTER_CREATE_DATA, ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_BACKEND_BINARY)).
 
 -define(HARVESTER_MOCKED_QUERY_DATA_MAP, #{<<"key">> => <<"mocked_query_data">>}).
 
@@ -327,7 +327,12 @@
     <<"archival">> => Archival
 }).
 
--define(HARVESTER_PLUGIN_INDEX_ID(H, I), <<H/binary, I/binary>>).
+-define(HARVESTING_BACKEND_INDEX_ID(H, I), <<H/binary, I/binary>>).
+
+-define(ALL_HARVESTING_BACKENDS(Config), begin
+    {ok, List} = oz_test_utils:call_oz(Config, harvester_logic, get_all_backend_types, []),
+    lists:map(fun(#{<<"id">> := Backend}) -> Backend end, List)
+end).
 
 -define(HARVESTER_MOCK_BATCH_ENTRY(Seq, Operation), #{<<"seq">> => Seq, <<"operation">> => Operation}).
 
