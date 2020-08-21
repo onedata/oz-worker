@@ -8,7 +8,7 @@
 %%% @doc
 %%% This module implements harvesting_backend_behaviour and is called 
 %%% by harvester_logic_plugin to handle operations on Elasticsearch.
-%%% This harvesting backend is compatible with Elasticsearch 6.x and 7.x (up to 7.1).
+%%% This harvesting backend is compatible with Elasticsearch 7.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(elasticsearch_harvesting_backend).

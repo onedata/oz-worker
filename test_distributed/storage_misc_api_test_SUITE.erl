@@ -154,8 +154,8 @@ create_test_base(Config, ReadonlyValue) ->
             optional = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
-                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
-                <<"qosParameters">> => [#{<<"key">> => <<"value">>}],
+                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}],
+                <<"qosParameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}],
                 <<"imported">> => [true, false],
                 <<"readonly">> => [ReadonlyValue]
             },
@@ -163,10 +163,8 @@ create_test_base(Config, ReadonlyValue) ->
                 %% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
                 {<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)},
                 {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"qosParameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qosParameters">>)},
                 {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"qosParameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)},
                 {<<"readonly">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"readonly">>)}
             ] ++ ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
@@ -386,8 +384,8 @@ update_test(Config, ReadonlyValue) ->
             required = [<<"imported">>, <<"readonly">>],
             at_least_one = [<<"qos_parameters">>, <<"qosParameters">>],
             correct_values = #{
-                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
-                <<"qosParameters">> => [#{<<"key">> => <<"value">>}],
+                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}],
+                <<"qosParameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}],
                 <<"imported">> => [true, false],
                 <<"readonly">> => [ReadonlyValue]
             },
@@ -395,10 +393,8 @@ update_test(Config, ReadonlyValue) ->
                 %% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
                 {<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)},
                 {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"qosParameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qosParameters">>)},
                 {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"qosParameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)},
                 {<<"readonly">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"readonly">>)}
             ]
