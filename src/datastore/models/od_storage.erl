@@ -28,7 +28,7 @@
 -type doc() :: datastore_doc:doc(record()).
 -type diff() :: datastore_doc:diff(record()).
 % Map with key-value pairs used for describing storage QoS parameters
--type qos_parameters() :: #{binary() => binary()}.
+-type qos_parameters() :: #{binary() => binary() | integer()}.
 -export_type([id/0, record/0, qos_parameters/0]).
 
 -type name() :: binary().
@@ -235,9 +235,10 @@ get_record_struct(2) ->
     ]};
 get_record_struct(3) ->
     % * new field - readonly
+    % * changed qos_parameters type
     {record, [
         {name, string},
-        {qos_parameters, #{string => string}},
+        {qos_parameters, {custom, json, {json_utils, encode, decode}}},
         {imported, atom},
         {readonly, boolean},
 
