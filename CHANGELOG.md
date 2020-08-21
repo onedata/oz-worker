@@ -78,6 +78,11 @@ CHANGELOG
     ownership must be transferred first.
 -   **VFS-6167** Allow nodes adding and deleting in-fly basing on HA
     sub-system.
+-   **VFS-5648** Extended QoS expression to allow comparators (\<, \>,
+    \<=, \>=) and numeric values. Changed \"-\" operator to \"\\\".
+    Space characters (\" \"), dashes (\"-\") and underscores (\"\_\")
+    are now allowed in QoS parameters. Added more details to invalid QoS
+    expression errors.
 -   **VFS-4760** Added implicit API caveats that limit access tokens
     used by Onedata GUIs behind the scenes for authentication and
     authorization. Different services in the system are presented with
