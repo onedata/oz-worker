@@ -1,8 +1,34 @@
-# Release notes for project oz_worker
-
+Release notes for project oz-worker
+===================================
 
 CHANGELOG
 ---------
+
+### 19.02.4
+
+-   **VFS-6402** Disallowed creating more than one public handle for a
+    single share.
+-   **VFS-6401** All authentication errors are now wrapped in
+    UNAUTHORIZED error and map to 401 HTTP code to avoid ambiguity when
+    reporting token related errors - tokens can be used for
+    authentication as well as input data for some operations (e.g.
+    invite tokens).
+-   **VFS-6390** Because of asynchronous processing, it was possible
+    that GraphSync session cleanup intertwined with deleted record
+    cleanup (that removes corresponding subscriptions from sessions,
+    possibly including the session being cleaned up) and caused an error
+    that interrupted change propagation. Now, if the session is no
+    longer existent, subscription removal errors are ignored and the
+    propagation completes.
+-   **VFS-6369** Fix datastore internal call, batch management during
+    links listing and infinite loop during storage directories creation.
+-   **VFS-6184** Added the space owner concept. Space owner works like
+    "root" within the space - such user is allowed to perform all
+    file/API operations, regardless of the assigned privileges and file
+    permissions / ACLs. Ownership can be assigned to any number of
+    users, and it is forbidden to leave a space without an owner -
+    ownership must be transferred first.
+
 
 ### 19.02.3
 
