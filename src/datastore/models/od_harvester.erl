@@ -197,7 +197,7 @@ get_record_struct(1) ->
         {indices, #{string => {record, [
             {name, string},
             {schema, string},
-            {gui_plugin_name, string},
+            {guiPluginName, string},
             {stats, #{string => #{string => {record, [
                 {current_seq, integer},
                 {max_seq, integer},
@@ -237,7 +237,7 @@ get_record_struct(2) ->
         {indices, #{string => {record, [
             {name, string},
             {schema, string},
-            {gui_plugin_name, string},
+            {guiPluginName, string},
             {stats, #{string => #{string => {record, [
                 {current_seq, integer},
                 {max_seq, integer},
@@ -277,7 +277,7 @@ get_record_struct(3) ->
         {indices, #{string => {record, [
             {name, string},
             {schema, string},
-            {gui_plugin_name, string},
+            {guiPluginName, string},
             {stats, #{string => #{string => {record, [
                 {current_seq, integer},
                 {max_seq, integer},
@@ -309,6 +309,7 @@ get_record_struct(4) ->
     %  * include_file_details
     %  * include_rejection_reason
     %  * retry_on_rejection
+    % changed guiPluginName to gui_plugin_name in index record
     {record, [
         {name, string},
         {plugin, atom},
