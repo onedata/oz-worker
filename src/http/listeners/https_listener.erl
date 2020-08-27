@@ -101,7 +101,8 @@ start() ->
         max_keepalive = ?MAX_KEEPALIVE,
         request_timeout = ?REQUEST_TIMEOUT,
         dynamic_pages = DynamicPageRoutes,
-        custom_cowboy_routes = CustomCowboyRoutes
+        custom_cowboy_routes = CustomCowboyRoutes,
+        custom_response_headers = fun gui_static:maybe_add_cache_control_headers/1
     }).
 
 
