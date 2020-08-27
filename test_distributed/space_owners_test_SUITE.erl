@@ -25,7 +25,7 @@
 ]).
 -export([
     space_creator_becomes_the_first_owner_when_creating_a_space_for_self/1,
-    space_creator_becomes_the_first_owner_when_creating_a_space_for_their_group/1,
+    space_creator_becomes_the_first_owner_when_creating_a_space_for_his_group/1,
     space_owner_effectively_has_all_privileges_regardless_of_those_assigned/1,
 
     non_space_member_cannot_be_granted_ownership/1,
@@ -79,7 +79,7 @@
 
 all() -> ?ALL([
     space_creator_becomes_the_first_owner_when_creating_a_space_for_self,
-    space_creator_becomes_the_first_owner_when_creating_a_space_for_their_group,
+    space_creator_becomes_the_first_owner_when_creating_a_space_for_his_group,
     space_owner_effectively_has_all_privileges_regardless_of_those_assigned,
 
     non_space_member_cannot_be_granted_ownership,
@@ -157,7 +157,7 @@ space_creator_becomes_the_first_owner_when_creating_a_space_for_self(_Config) ->
     ?assert(is_owner(Space, User)),
     ?assert(is_direct_member(Space, User)).
 
-space_creator_becomes_the_first_owner_when_creating_a_space_for_their_group(_Config) ->
+space_creator_becomes_the_first_owner_when_creating_a_space_for_his_group(_Config) ->
     User = ozt_users:create(),
     Group = ozt_users:create_group_for(User),
     {ok, Space} = ?assertMatch({ok, _}, ozt:rpc(group_logic, create_space, [?USER(User), Group, <<"space">>])),
@@ -636,7 +636,7 @@ adding_owner_while_removing_corresponding_member_is_safe_from_race_conditions(_C
         User
     end, lists:seq(1, UserCount)),
 
-    % For each user, try to add the user as owner and remove them from space at
+    % For each user, try to add the user as owner and remove him from space at
     % the same time. There are two possible, correct scenarios:
     %   1) the user is first made an owner and then removed
     %   2) the user is first removed and then making him an owner fails
@@ -730,8 +730,8 @@ adding_an_indirect_user_as_owner_while_removing_him_indirectly_from_space_is_saf
     end, lists:seq(1, IndirectUserCount)),
     ozt:reconcile_entity_graph(),
 
-    % For each indirect user, try to make them an owner and at the same time remove their
-    % effective relation in the space - remove their group or remove them from the group.
+    % For each indirect user, try to make him an owner and at the same time remove his
+    % effective relation in the space - remove his group or remove him from the group.
     % There are two possible, correct scenarios:
     %   1) the new owner is added and the user is made a direct member first, then
     %      his group or his group membership is removed
@@ -785,7 +785,7 @@ adding_an_indirect_user_as_owner_while_removing_him_directly_from_space_is_safe_
     end, lists:seq(1, IndirectUserCount)),
     ozt:reconcile_entity_graph(),
 
-    % For each indirect user, try to make them an owner and at the same time remove their
+    % For each indirect user, try to make him an owner and at the same time remove his
     % direct membership in the space - assuming that adding as owner in the meantime might
     % have made him a direct member (it is done before marking the user as owner,
     % and without a transaction).
