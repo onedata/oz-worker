@@ -412,7 +412,7 @@ check_forbidden_service_when_creating_scenarios(RequestSpec) ->
                     ?ERROR_TOKEN_SERVICE_FORBIDDEN(ForbiddenService),
                     ozt_tokens:confine(Token, [#cv_service{whitelist = [ForbiddenService]}])
                 )
-            end, gen_forbidden_services(EligibleSubject))
+            end, gen_forbidden_service_specs(EligibleSubject))
         end, RequestSpec#request_spec.eligible_subjects)
     end, [named, temporary]).
 
@@ -430,7 +430,7 @@ check_forbidden_service_when_consuming_scenarios(RequestSpec) ->
                     ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SERVICE_FORBIDDEN(ForbiddenService)),
                     make_request(RequestSpec, RequestContextWithService, ClientAuth)
                 )
-            end, gen_forbidden_services(EligibleSubject))
+            end, gen_forbidden_service_specs(EligibleSubject))
         end, RequestSpec#request_spec.eligible_subjects)
     end, [named, temporary]).
 
@@ -1081,50 +1081,64 @@ gen_unverified_caveats(RequestSpec, RC) -> lists:flatten([
 
 gen_correct_service_caveat(_RequestSpec, #request_context{service = undefined}) ->
     undefined;
-gen_correct_service_caveat(RequestSpec, Rc = #request_context{service = ?SERVICE(Type, _Id)}) ->
+gen_correct_service_caveat(RequestSpec, Rc = #request_context{subject = Subject, service = ?SERVICE(Type, _Id)}) ->
+    UnverifiedServiceSpecs = gen_unverified_service_specs(RequestSpec, Rc),
     case lists:member(Type, RequestSpec#request_spec.services_allowed_to_call_this_api) of
         false ->
-            % Adding a service caveat would cause implicit API limitations to block the operation
-            undefined;
+            % if the request context service is not allowed to call the API, there has
+            % to be another service on the whitelist that is allowed, or there can be
+            % no service caveat at all for the request to succeed
+            case rand:uniform(2) of
+                1 ->
+                    undefined;
+                2 ->
+                    APIAllowedService = set_up_service(Subject, lists_utils:random_element(
+                        RequestSpec#request_spec.services_allowed_to_call_this_api
+                    )),
+                    #cv_service{whitelist = lists_utils:shuffle(lists:flatten([
+                        lists_utils:random_sublist(gen_correct_service_specs(Rc), 1, all),
+                        lists_utils:random_sublist(gen_correct_service_specs(APIAllowedService), 1, all),
+                        lists_utils:random_sublist(UnverifiedServiceSpecs)
+                    ]))}
+            end;
         true ->
-            CorrectServices = gen_correct_services(Rc),
-            UnverifiedServices = gen_unverified_services(RequestSpec, Rc),
             #cv_service{whitelist = lists_utils:shuffle(lists:flatten([
-                lists_utils:random_sublist(CorrectServices, 1, all),
-                lists_utils:random_sublist(UnverifiedServices)
+                lists_utils:random_sublist(gen_correct_service_specs(Rc), 1, all),
+                lists_utils:random_sublist(UnverifiedServiceSpecs)
             ]))}
     end.
 
 gen_unverified_service_caveat(RequestSpec, Rc) ->
-    case gen_unverified_services(RequestSpec, Rc) of
+    case gen_unverified_service_specs(RequestSpec, Rc) of
         [] ->
             undefined;
-        UnverifiedServices ->
-            #cv_service{whitelist = lists_utils:random_sublist(UnverifiedServices, 1, all)}
+        UnverifiedServiceSpecs ->
+            #cv_service{whitelist = lists_utils:random_sublist(UnverifiedServiceSpecs, 1, all)}
     end.
 
 
-gen_correct_services(#request_context{service = ?SERVICE(Type, Id)}) ->
+gen_correct_service_specs(#request_context{service = Service}) ->
+    gen_correct_service_specs(Service);
+gen_correct_service_specs(?SERVICE(Type, Id)) ->
     [
         ?SERVICE(Type, Id),
         ?SERVICE(Type, <<"*">>)
     ].
 
-gen_unverified_services(RequestSpec, #request_context{subject = Subject, service = RequestService}) ->
+gen_unverified_service_specs(RequestSpec, #request_context{subject = Subject, service = RequestService}) ->
     EligibleTypes = eligible_service_types(Subject),
     UnverifiedTypes = case RequestService of
         undefined ->
             % If not specified, service defaults to OZ_WORKER
             EligibleTypes -- [?OZ_WORKER];
         ?SERVICE(Type, _) ->
-            case lists:member(Type, RequestSpec#request_spec.services_allowed_to_call_this_api) of
-                true ->
-                    % Any non-matching service should cause verification error
+            case rand:uniform(2) of
+                1 ->
+                    % all services that do not match the service in request context
                     EligibleTypes -- [Type];
-                false ->
-                    % Even a matching service should cause verification error, as
-                    % the operation should be blocked by implicit API caveats
-                    EligibleTypes
+                2 ->
+                    % all services that are forbidden to call the API
+                    EligibleTypes -- RequestSpec#request_spec.services_allowed_to_call_this_api
             end
     end,
     lists:map(fun(ServiceType) ->
@@ -1136,7 +1150,7 @@ gen_unverified_services(RequestSpec, #request_context{subject = Subject, service
     end, UnverifiedTypes).
 
 
-gen_forbidden_services(?SUB(user, UserId)) ->
+gen_forbidden_service_specs(?SUB(user, UserId)) ->
     ProviderId = ozt_providers:create(),
     ozt_clusters:ensure_not_a_member(?ONEZONE_CLUSTER_ID, UserId),
     [
@@ -1144,7 +1158,7 @@ gen_forbidden_services(?SUB(user, UserId)) ->
         ?SERVICE(?OP_WORKER, ProviderId),
         ?SERVICE(?OP_PANEL, ProviderId)
     ];
-gen_forbidden_services(?SUB(?ONEPROVIDER)) ->
+gen_forbidden_service_specs(?SUB(?ONEPROVIDER)) ->
     OtherProviderId = ozt_providers:create(),
     [
         ?SERVICE(?OZ_PANEL, ?ONEZONE_CLUSTER_ID),
