@@ -73,6 +73,12 @@
 
 -define(DEFAULT_HARVESTER_GUI_HASH, <<"default">>).
 
+-define(CACHE_DISABLING_HEADERS, #{
+    ?HDR_CACHE_CONTROL => <<"max-age=0, no-cache, no-store, must-revalidate">>,
+    ?HDR_PRAGMA => <<"no-cache">>,
+    ?HDR_EXPIRES => <<"0">>
+}).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -361,22 +367,18 @@ routes() ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Callback for custom_response_headers option in gui listener. Adds proper
-%% cache-control=no-cache headers for selected GUI files to ensure that they are
-%% not cached too eagerly by web browsers - this option forces the browser to
-%% make a request with previous etag and verify if it has the newest version.
+%% cache related headers for selected GUI files to ensure that they are not
+%% cached by web browsers - the browsers are forced to always fetch the current
+%% version, which mitigates problems with stale GUIs after product upgrades.
 %% @end
 %%--------------------------------------------------------------------
 -spec maybe_add_cache_control_headers(cowboy_req:req()) -> cowboy:http_headers().
 maybe_add_cache_control_headers(Req) ->
-    ShouldAddCacheControlHeader = case cowboy_req:path_info(Req) of
-        [_, _, <<"index.html">>] -> true;
-        [_, _, <<"i">>] -> true;  % alias for the index.html file
-        [<<"hrv">>, _, <<"manifest.json">>] -> true;  % harvester's manifest file
-        _ -> false
-    end,
-    case ShouldAddCacheControlHeader of
-        true -> #{?HDR_CACHE_CONTROL => <<"no-cache">>};
-        false -> #{}
+    case cowboy_req:path_info(Req) of
+        [_, _, <<"index.html">>] -> ?CACHE_DISABLING_HEADERS;
+        [_, _, <<"i">>] -> ?CACHE_DISABLING_HEADERS;  % alias for index.html
+        [<<"hrv">>, _, <<"manifest.json">>] -> ?CACHE_DISABLING_HEADERS;  % harvester's manifest
+        _ -> #{}
     end.
 
 
