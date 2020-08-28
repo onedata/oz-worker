@@ -36,6 +36,7 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include("http/gui_paths.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
@@ -51,6 +52,7 @@
 -export([gui_exists/2]).
 -export([remove_unused_packages/1, remove_unused_packages/2]).
 -export([routes/0]).
+-export([maybe_add_cache_control_headers/1]).
 -export([oz_worker_gui_path/1]).
 -export([mimetype/1]).
 
@@ -70,6 +72,12 @@
 -define(CRITICAL_SECTION(LockId, Fun), critical_section:run({gui_static, LockId}, Fun)).
 
 -define(DEFAULT_HARVESTER_GUI_HASH, <<"default">>).
+
+-define(CACHE_DISABLING_HEADERS, #{
+    ?HDR_CACHE_CONTROL => <<"max-age=0, no-cache, no-store, must-revalidate">>,
+    ?HDR_PRAGMA => <<"no-cache">>,
+    ?HDR_EXPIRES => <<"0">>
+}).
 
 %%%===================================================================
 %%% API
@@ -358,6 +366,24 @@ routes() ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Callback for custom_response_headers option in gui listener. Adds proper
+%% cache related headers for selected GUI files to ensure that they are not
+%% cached by web browsers - the browsers are forced to always fetch the current
+%% version, which mitigates problems with stale GUIs after product upgrades.
+%% @end
+%%--------------------------------------------------------------------
+-spec maybe_add_cache_control_headers(cowboy_req:req()) -> cowboy:http_headers().
+maybe_add_cache_control_headers(Req) ->
+    case cowboy_req:path_info(Req) of
+        [_, _, <<"index.html">>] -> ?CACHE_DISABLING_HEADERS;
+        [_, _, <<"i">>] -> ?CACHE_DISABLING_HEADERS;  % alias for index.html
+        [<<"hrv">>, _, <<"manifest.json">>] -> ?CACHE_DISABLING_HEADERS;  % harvester's manifest
+        _ -> #{}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Returns the full absolute path to given resource within oz worker GUI, e.g.:
 %% oz_worker_gui_path(<<"/custom/image.png">>) -> <<"/ozw/onezone/custom/image.png">>
 %% @end
@@ -532,6 +558,7 @@ mimetype_by_ext(<<"jpeg">>) -> {<<"image">>, <<"jpeg">>, []};
 mimetype_by_ext(<<"jpg">>) -> {<<"image">>, <<"jpeg">>, []};
 mimetype_by_ext(<<"js">>) -> {<<"application">>, <<"javascript">>, []};
 mimetype_by_ext(<<"json">>) -> {<<"application">>, <<"json">>, []};
+mimetype_by_ext(<<"webmanifest">>) -> {<<"application">>, <<"manifest+json">>, []};
 mimetype_by_ext(<<"mp3">>) -> {<<"audio">>, <<"mpeg">>, []};
 mimetype_by_ext(<<"mp4">>) -> {<<"video">>, <<"mp4">>, []};
 mimetype_by_ext(<<"ogg">>) -> {<<"audio">>, <<"ogg">>, []};
