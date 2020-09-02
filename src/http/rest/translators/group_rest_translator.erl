@@ -80,11 +80,32 @@ get_response(#gri{id = undefined, aspect = list}, Groups) ->
 get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
     rest_translator:ok_body_reply(Privileges);
 
-get_response(#gri{id = GroupId, aspect = instance, scope = _}, GroupData) ->
-    % scope can be protected or shared
-    #{<<"name">> := Name, <<"type">> := Type} = GroupData,
+get_response(#gri{id = GroupId, aspect = instance, scope = protected}, GroupData) ->
+    #{
+        <<"name">> := Name,
+        <<"type">> := Type,
+        <<"creator">> := Creator,
+        <<"creationTime">> := CreationTime
+    } = GroupData,
     rest_translator:ok_body_reply(#{
-        <<"groupId">> => GroupId, <<"name">> => Name, <<"type">> => Type
+        <<"groupId">> => GroupId,
+        <<"name">> => Name,
+        <<"type">> => Type,
+        <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
+        <<"creationTime">> => CreationTime
+    });
+
+get_response(#gri{id = GroupId, aspect = instance, scope = shared}, GroupData) ->
+    #{
+        <<"name">> := Name,
+        <<"type">> := Type,
+        <<"creationTime">> := CreationTime
+    } = GroupData,
+    rest_translator:ok_body_reply(#{
+        <<"groupId">> => GroupId,
+        <<"name">> => Name,
+        <<"type">> => Type,
+        <<"creationTime">> => CreationTime
     });
 
 get_response(#gri{aspect = oz_privileges}, Privileges) ->

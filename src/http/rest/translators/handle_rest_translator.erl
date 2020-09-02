@@ -69,7 +69,9 @@ get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleDa
         <<"resourceType">> := ResourceType,
         <<"resourceId">> := ResourceId,
         <<"metadata">> := Metadata,
-        <<"timestamp">> := Timestamp
+        <<"timestamp">> := Timestamp,
+        <<"creator">> := Creator,
+        <<"creationTime">> := CreationTime
     } = HandleData,
     rest_translator:ok_body_reply(#{
         <<"handleId">> => HandleId,
@@ -78,7 +80,9 @@ get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleDa
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
-        <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp)
+        <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp),
+        <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
+        <<"creationTime">> => CreationTime
     });
 
 get_response(#gri{aspect = users}, Users) ->

@@ -105,14 +105,18 @@ get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, Harve
         <<"name">> := Name,
         <<"public">> := Public,
         <<"harvestingBackendType">> := HarvestingBackend,
-        <<"harvestingBackendEndpoint">> := Endpoint
+        <<"harvestingBackendEndpoint">> := Endpoint,
+        <<"creator">> := Creator,
+        <<"creationTime">> := CreationTime
     } = HarvesterData,
     rest_translator:ok_body_reply(#{
         <<"harvesterId">> => HarvesterId,
         <<"name">> => Name,
         <<"public">> => Public,
         <<"harvestingBackendType">> => HarvestingBackend,
-        <<"harvestingBackendEndpoint">> => Endpoint
+        <<"harvestingBackendEndpoint">> => Endpoint,
+        <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
+        <<"creationTime">> => CreationTime
     });
 
 get_response(#gri{id = HarvesterId, aspect = instance, scope = shared}, HarvesterData) ->

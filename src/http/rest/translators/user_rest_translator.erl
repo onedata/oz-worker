@@ -61,7 +61,8 @@ get_response(#gri{id = UserId, aspect = instance, scope = protected}, UserData) 
         <<"basicAuthEnabled">> := BasicAuthEnabled,
         <<"fullName">> := FullName, <<"username">> := Username,
         <<"emails">> := Emails,
-        <<"linkedAccounts">> := LinkedAccounts
+        <<"linkedAccounts">> := LinkedAccounts,
+        <<"creationTime">> := CreationTime
     } = UserData,
     rest_translator:ok_body_reply(#{
         <<"basicAuthEnabled">> => BasicAuthEnabled,
@@ -70,6 +71,7 @@ get_response(#gri{id = UserId, aspect = instance, scope = protected}, UserData) 
         <<"username">> => utils:undefined_to_null(Username),
         <<"emails">> => Emails,
         <<"linkedAccounts">> => LinkedAccounts,
+        <<"creationTime">> => CreationTime,
 
         %% @TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => FullName,
@@ -80,12 +82,15 @@ get_response(#gri{id = UserId, aspect = instance, scope = protected}, UserData) 
 
 get_response(#gri{id = UserId, aspect = instance, scope = shared}, UserData) ->
     #{
-        <<"fullName">> := FullName, <<"username">> := Username
+        <<"fullName">> := FullName,
+        <<"username">> := Username,
+        <<"creationTime">> := CreationTime
     } = UserData,
     rest_translator:ok_body_reply(#{
         <<"userId">> => UserId,
         <<"fullName">> => FullName,
         <<"username">> => utils:undefined_to_null(Username),
+        <<"creationTime">> => CreationTime,
 
         %% @TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => FullName,

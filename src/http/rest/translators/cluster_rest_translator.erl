@@ -81,14 +81,18 @@ get_response(#gri{id = ClusterId, aspect = instance, scope = protected}, Cluster
         <<"type">> := Type,
         <<"workerVersion">> := WorkerVersion,
         <<"onepanelVersion">> := OnepanelVersion,
-        <<"onepanelProxy">> := OnepanelProxy
+        <<"onepanelProxy">> := OnepanelProxy,
+        <<"creator">> := Creator,
+        <<"creationTime">> := CreationTime
     } = ClusterData,
     rest_translator:ok_body_reply(#{
         <<"clusterId">> => ClusterId,
         <<"type">> => Type,
         <<"workerVersion">> => WorkerVersion,
         <<"onepanelVersion">> => OnepanelVersion,
-        <<"onepanelProxy">> => OnepanelProxy
+        <<"onepanelProxy">> => OnepanelProxy,
+        <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
+        <<"creationTime">> => CreationTime
     });
 
 get_response(#gri{aspect = users}, Users) ->
