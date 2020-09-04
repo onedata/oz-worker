@@ -1,23 +1,44 @@
-Release notes for project oz\_worker
-====================================
+Release notes for project oz-worker
+===================================
 
 CHANGELOG
 ---------
 
 ### 20.02.1
 
--   **VFS-6344** GUI: showing information if QoS requirement is
-    impossible to be fulfilled
--   **VFS-6402** Disallowed creating more than one public handle for a
-    single share
--   **VFS-6358** Optimization of files upload through GUI
+-   **VFS-6645** Optimize changes querrying.
+-   **VFS-6628** Extended harvesting configuration - it is now possible
+    to select harvesting options, like metadata types to harvest or
+    additional file details (fileName, spaceId), upon index creation.
+    New metadata types are now harvestable - xattrs and rdf. Default
+    values of HarvestingBackendType and HarvestingBackendEndpoint can
+    now be set by Onezone admin - if set, these values can be omitted
+    when creating a new harvester. New option (retry\_on\_rejection)
+    allowing for all payloads rejected by the harvesting backend to be
+    automatically analysed for offending data (e.g. fields that do not
+    match the schema), pruned and submitted again.
+-   **VFS-6607** Fix node restart with HA disabled.
+-   **VFS-6568** Introduced concept of readonly storage. If enabled,
+    Oneprovider will block any operation that writes, modifies or
+    deletes data on the storage. Such storage can only be used to import
+    data into the space. Mandatory to ensure proper behaviour if the
+    backend storage is actually configured as readonly.
+-   **VFS-6518** Endpoint is now optional when adding a new harvester -
+    if not provided, the default one from Onezone configuration will be
+    used. Generic GUI is now loaded by default upon harvester creation.
 -   **VFS-6474** Added initial support for XRootD storage, including
     direct access to XRootD storages and importing of legacy data sets
     stored on XRootD or EOS servers.
--   **VFS-6421** New generic GUI plugin for harvesters
 -   **VFS-6462** Every file in a space is now harvested - including
     files without metadata. Harvested metadata now has a new key -
     \`\_\_onedata\` - which contains file name, space id and xattrs.
+-   **VFS-6457** Added new publicly visible field to shares -
+    description (supports the markdown format).
+-   **VFS-6453** New Open Data and share description views with visual
+    Dublin Core editor and Markdown editor.
+-   **VFS-6421** New generic GUI plugin for harvesters.
+-   **VFS-6402** Disallowed creating more than one public handle for a
+    single share.
 -   **VFS-6401** All authentication errors are now wrapped in
     UNAUTHORIZED error and map to 401 HTTP code to avoid ambiguity when
     reporting token related errors - tokens can be used for
@@ -30,26 +51,6 @@ CHANGELOG
     that interrupted change propagation. Now, if the session is no
     longer existent, subscription removal errors are ignored and the
     propagation completes.
--   **VFS-6518** Endpoint is now optional when adding a new harvester -
-    if not provided, the default one from Onezone configuration will be
-    used. Generic GUI is now loaded by default upon harvester creation.
--   **VFS-6346** GUI improvements: added Oneprovider GUI notifications,
-    better file selection, additional error handling, better file
-    manager refresh UX, fixed overflow of context menu in file browser,
-    fixes in responsive layout.
--   **VFS-6453** New Open Data and share description views with visual
-    Dublin Core editor and Markdown editor.
--   **VFS-6288** Basic HA functionality (experimental) - protect
-    Oneprovider from single node failure
--   **VFS-4760** Added implicit API caveats that limit access tokens
-    used by Onedata GUIs behind the scenes for authentication and
-    authorization. Different services in the system are presented with
-    user\'s access token with power limited to bare minimum required for
-    the service to handle user requests. For example, Oneproviders do
-    not have access to APIs that could alter or delete user data and
-    memberships.
--   **VFS-6457** Added new publicly visible field to shares -
-    description (supports the markdown format)
 -   **VFS-6378** Onepanel GUI and REST API now explicitly block
     supporting a space with more than one imported storage (globally) -
     such operation was possible in the past but was never supported by
@@ -57,6 +58,38 @@ CHANGELOG
     space data.
 -   **VFS-6369** Fix datastore internal call, batch management during
     links listing and infinite loop during storage directories creation.
+-   **VFS-6358** Optimization of files upload through GUI.
+-   **VFS-6346** GUI improvements: added Oneprovider GUI notifications,
+    better file selection, additional error handling, better file
+    manager refresh UX, fixed overflow of context menu in file browser,
+    fixes in responsive layout.
+-   **VFS-6344** GUI: showing information if QoS requirement is
+    impossible to be fulfilled.
+-   **VFS-6343** Added delete account feature in GUI.
+-   **VFS-6288** Basic HA functionality (experimental) - protect
+    Oneprovider from single node failure.
+-   **VFS-6287** Integrate traverse pools with HA sub-system.
+-   **VFS-6261** Integrate high-level services with HA sub-system.
+-   **VFS-6184** Added the space owner concept. Space owner works like
+    \"root\" within the space - such user is allowed to perform all
+    file/API operations, regardless of the assigned privileges and file
+    permissions / ACLs. Ownership can be assigned to any number of
+    users, and it is forbidden to leave a space without an owner -
+    ownership must be transferred first.
+-   **VFS-6167** Allow nodes adding and deleting in-fly basing on HA
+    sub-system.
+-   **VFS-5648** Extended QoS expression to allow comparators (\<, \>,
+    \<=, \>=) and numeric values. Changed \"-\" operator to \"\\\".
+    Space characters (\" \"), dashes (\"-\") and underscores (\"\_\")
+    are now allowed in QoS parameters. Added more details to invalid QoS
+    expression errors.
+-   **VFS-4760** Added implicit API caveats that limit access tokens
+    used by Onedata GUIs behind the scenes for authentication and
+    authorization. Different services in the system are presented with
+    user\'s access token with power limited to bare minimum required for
+    the service to handle user requests. For example, Oneproviders do
+    not have access to APIs that could alter or delete user data and
+    memberships.
 
 ### 20.02.0-beta4
 
