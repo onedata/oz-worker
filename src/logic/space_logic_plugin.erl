@@ -346,7 +346,7 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
             [SpaceId, Errors]),
         throw(?ERROR_TEMPORARY_FAILURE)
     end,
-            
+
     {ok, value, lists:foldl(
         fun({HarvesterId, {error, _} = Error}, Acc) -> Acc#{HarvesterId => #{<<"error">> => Error}};
             ({HarvesterId, FailedIndices}, Acc) when map_size(FailedIndices) =/= 0 ->
@@ -383,7 +383,8 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{
         name = Name,
         shares = Shares,
-        creation_time = CreationTime, creator = Creator
+        creation_time = CreationTime,
+        creator = Creator
     } = Space,
     {ok, #{
         <<"name">> => Name,

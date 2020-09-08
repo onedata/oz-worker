@@ -435,8 +435,9 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
     fun(?USER(UserId)) -> #{
         <<"name">> => Name,
         <<"scope">> => <<"private">>,
-        <<"canViewPrivileges">> => space_logic:has_eff_privilege(Space, UserId, ?SPACE_VIEW_PRIVILEGES),
         <<"directMembership">> => space_logic:has_direct_user(Space, UserId),
+        <<"currentUserIsOwner">> => space_logic:is_owner(Space, UserId),
+        <<"currentUserEffPrivileges">> => entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Space),
         <<"ownerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = owners}),
         <<"userList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = users}),
         <<"effUserList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_users}),
@@ -460,16 +461,20 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"creator">> := Creator,
         <<"sharesCount">> := SharesCount
     } = SpaceData,
+    {ok, #document{value = Space}} = od_space:get(SpaceId),
     fun(?USER(UserId)) -> #{
         <<"name">> => Name,
         <<"scope">> => <<"protected">>,
-        <<"directMembership">> => space_logic:has_direct_user(SpaceId, UserId),
+        <<"directMembership">> => space_logic:has_direct_user(Space, UserId),
+        <<"currentUserIsOwner">> => space_logic:is_owner(Space, UserId),
+        <<"currentUserEffPrivileges">> => entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Space),
         <<"supportSizes">> => SupportSizes,
         <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_providers}),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime,
             <<"sharesCount">> => SharesCount
         })
+
     } end;
 
 translate_space(#gri{aspect = owners}, Users) ->
