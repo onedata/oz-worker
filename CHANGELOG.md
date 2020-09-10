@@ -23,12 +23,11 @@ CHANGELOG
 -   **VFS-6369** Fix datastore internal call, batch management during
     links listing and infinite loop during storage directories creation.
 -   **VFS-6184** Added the space owner concept. Space owner works like
-    "root" within the space - such user is allowed to perform all
+    \"root\" within the space - such user is allowed to perform all
     file/API operations, regardless of the assigned privileges and file
     permissions / ACLs. Ownership can be assigned to any number of
     users, and it is forbidden to leave a space without an owner -
     ownership must be transferred first.
-
 
 ### 19.02.3
 
