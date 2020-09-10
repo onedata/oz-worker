@@ -18,6 +18,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("ctool/include/space_support/support_stage.hrl").
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
@@ -48,7 +49,10 @@
     remove_provider_test/1,
 
     list_effective_providers_test/1,
-    get_eff_provider_test/1
+    get_eff_provider_test/1,
+
+    update_support_parameters_test/1,
+    update_provider_sync_progress_test/1
 ]).
 
 all() ->
@@ -69,7 +73,10 @@ all() ->
         remove_provider_test,
 
         list_effective_providers_test,
-        get_eff_provider_test
+        get_eff_provider_test,
+
+        update_support_parameters_test,
+        update_provider_sync_progress_test
     ]).
 
 
@@ -235,6 +242,28 @@ get_test(Config) ->
 
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
+    ExpSupportParametersPerProvider = #{
+        P1 => support_parameters:build(global, eager)
+    },
+    ExpSupportParametersPerProviderJson = #{
+        P1 => #{<<"dataWrite">> => <<"global">>, <<"metadataReplication">> => <<"eager">>}
+    },
+    ExpSupportStagePerProvider = #{
+        P1 => #support_stage_details{
+            provider_stage = active,
+            per_storage = #{
+                St1 => active
+            }
+        }},
+    ExpSupportStagePerProviderJson = #{
+        P1 => #{
+            <<"providerStage">> => <<"active">>,
+            <<"perStorage">> => #{
+                St1 => <<"active">>
+            }
+        }
+    },
+
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -262,6 +291,8 @@ get_test(Config) ->
                     harvesters = [],
                     eff_users = EffUsers, eff_groups = #{},
                     eff_providers = EffProviders,
+                    support_parameters_per_provider = SupportParameters,
+                    support_stage_per_provider = SupportStage,
                     top_down_dirty = false, bottom_up_dirty = false
                 }) ->
                     ?assertEqual(?SPACE_NAME1, Name),
@@ -276,7 +307,9 @@ get_test(Config) ->
                         U2 => {[?SPACE_VIEW], [{od_space, <<"self">>}]}
                     }),
                     ?assertEqual(Storages, #{St1 => SupportSize}),
-                    ?assertEqual(EffProviders, #{P1 => {SupportSize, [{od_storage, St1}]}})
+                    ?assertEqual(EffProviders, #{P1 => {SupportSize, [{od_storage, St1}]}}),
+                    ?assertEqual(SupportParameters, ExpSupportParametersPerProvider),
+                    ?assertEqual(SupportStage, ExpSupportStagePerProvider)
                 end
             )
         },
@@ -301,6 +334,8 @@ get_test(Config) ->
                     U2 => [<<"space_view">>]
                 },
                 <<"effectiveGroups">> => #{},
+                <<"supportParametersPerProvider">> => ExpSupportParametersPerProviderJson,
+                <<"supportStagePerProvider">> => ExpSupportStagePerProviderJson,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(S1, Id)
@@ -311,7 +346,7 @@ get_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
 
     % Get and check protected data
-    SpaceData = #{<<"name">> => ?SPACE_NAME1, <<"providers">> => #{P1 => SupportSize}},
+    SpaceData = #{<<"name">> => ?SPACE_NAME1, <<"providers">> => #{P1 => #{St1 => SupportSize}}},
     GetProtectedDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -951,6 +986,215 @@ get_eff_provider_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+
+
+update_support_parameters_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config),
+    {ok, {P2, P2Token}} = oz_test_utils:create_provider(Config),
+    {ok, {P3, P3Token}} = oz_test_utils:create_provider(Config),
+    oz_test_utils:support_space_by_provider(Config, P1, Space),
+    oz_test_utils:support_space_by_provider(Config, P2, Space),
+    oz_test_utils:support_space_by_provider(Config, P3, Space),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    ForbiddenClients = [
+        {admin, privileges:oz_privileges()},
+        {user, NonAdmin},
+        {provider, P1, P1Token},
+        {provider, P2, P2Token},
+        {provider, P3, P3Token}
+    ],
+    update_support_parameters_test(Config, U1, Space, P1, ForbiddenClients),
+    update_support_parameters_test(Config, U1, Space, P2, ForbiddenClients),
+    update_support_parameters_test(Config, U1, Space, P3, ForbiddenClients).
+
+update_support_parameters_test(Config, SpaceAdmin, Space, Provider, ForbiddenClients) ->
+    EnvSetUpFun = fun() ->
+        {ok, #od_space{support_parameters_per_provider = SupportParameters}} = oz_test_utils:get_space(Config, Space),
+        #{previous => SupportParameters}
+    end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{previous := PreviousSupportParameters}, Data) ->
+        {ok, #od_space{support_parameters_per_provider = SupportParameters}} = oz_test_utils:get_space(Config, Space),
+        case ShouldSucceed of
+            false ->
+                ?assertEqual(SupportParameters, PreviousSupportParameters);
+            true ->
+                PreviousForProvider = maps:get(Provider, PreviousSupportParameters),
+                ExpParametersForProvider = support_parameters:build(
+                    case maps:find(<<"dataWrite">>, Data) of
+                        {ok, DW} -> binary_to_atom(DW, utf8);
+                        error -> support_parameters:get_data_write(PreviousForProvider)
+                    end,
+                    case maps:find(<<"metadataReplication">>, Data) of
+                        {ok, MR} -> binary_to_atom(MR, utf8);
+                        error -> support_parameters:get_metadata_replication(PreviousForProvider)
+                    end
+                ),
+                ?assertEqual(SupportParameters, PreviousSupportParameters#{
+                    Provider => ExpParametersForProvider
+                })
+        end
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, SpaceAdmin}
+            ],
+            unauthorized = [nobody],
+            forbidden = ForbiddenClients
+        },
+        rest_spec = #rest_spec{
+            method = patch,
+            path = [<<"/spaces/">>, Space, <<"/providers/">>, Provider, <<"/support_parameters">>],
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = update_support_parameters,
+            args = [auth, Space, Provider, data],
+            expected_result = ?OK_RES
+        },
+        gs_spec = #gs_spec{
+            operation = update,
+            gri = #gri{type = od_space, id = Space, aspect = {support_parameters, Provider}},
+            expected_result = ?OK_RES
+        },
+        data_spec = #data_spec{
+            at_least_one = [<<"dataWrite">>, <<"metadataReplication">>],
+            correct_values = #{
+                <<"dataWrite">> => [<<"global">>, <<"none">>],
+                <<"metadataReplication">> => [<<"eager">>, <<"lazy">>, <<"none">>]
+            },
+            bad_values = [
+                {<<"dataWrite">>, <<"binary">>,
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"dataWrite">>, [global, none])},
+                {<<"dataWrite">>, 1234,
+                    ?ERROR_BAD_VALUE_ATOM(<<"dataWrite">>)},
+                {<<"metadataReplication">>, <<"binary">>,
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"metadataReplication">>, [eager, lazy, none])},
+                {<<"metadataReplication">>, 1234,
+                    ?ERROR_BAD_VALUE_ATOM(<<"metadataReplication">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+    )).
+
+
+update_provider_sync_progress_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config),
+    {ok, {P2, P2Token}} = oz_test_utils:create_provider(Config),
+    {ok, {P3, P3Token}} = oz_test_utils:create_provider(Config),
+    {ok, {NonSupporter, NonSupporterToken}} = oz_test_utils:create_provider(Config),
+    oz_test_utils:support_space_by_provider(Config, P1, Space),
+    oz_test_utils:support_space_by_provider(Config, P2, Space),
+    oz_test_utils:support_space_by_provider(Config, P3, Space),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    AllClients = [
+        {admin, privileges:oz_privileges()},
+        {user, U1},
+        {user, NonAdmin},
+        {provider, P1, P1Token},
+        {provider, P2, P2Token},
+        {provider, P3, P3Token},
+        {provider, NonSupporter, NonSupporterToken}
+    ],
+    update_provider_sync_progress_test(Config, Space, P1, P1Token, AllClients),
+    update_provider_sync_progress_test(Config, Space, P2, P2Token, AllClients),
+    update_provider_sync_progress_test(Config, Space, P3, P3Token, AllClients).
+
+
+update_provider_sync_progress_test(Config, Space, SubjectProvider, SubjectProviderToken, AllClients) ->
+    {ok, SpaceRecord} = oz_test_utils:get_space(Config, Space),
+    SupportingProviders = maps:keys(SpaceRecord#od_space.eff_providers),
+    Now = oz_test_utils:cluster_time_seconds(Config),
+    RandomizeSyncProgressPerProvider = fun() ->
+        lists:foldl(fun(Provider, Acc) ->
+            % Due to delays in GraphSync, providers might not know all the other
+            % providers for a while after a new support - simulate by randomly
+            % dropping them out of the sequence map. They should default to
+            % seq=1 and timestamp=0.
+            case rand:uniform(3) of
+                1 -> Acc;
+                _ -> Acc#{Provider => #{<<"seq">> => rand:uniform(1000), <<"timestamp">> => Now - rand:uniform(50000)}}
+            end
+        end, #{}, SupportingProviders)
+    end,
+
+    EnvSetUpFun = fun() ->
+        #{previous => get_sync_progress_per_provider(Config, Space)}
+    end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{previous := PreviousSyncProgressPerProvider}, Data) ->
+        SyncProgressPerProvider = get_sync_progress_per_provider(Config, Space),
+        case ShouldSucceed of
+            false ->
+                ?assertEqual(SyncProgressPerProvider, PreviousSyncProgressPerProvider);
+            true ->
+                ProviderSyncProgressDecoded = provider_sync_progress:from_json(maps:get(<<"providerSyncProgress">>, Data)),
+                ExpProviderSyncProgress = lists:foldl(fun(Provider, Acc) ->
+                    Acc#{Provider => maps:get(Provider, ProviderSyncProgressDecoded, {1, 0})}
+                end, #{}, SupportingProviders),
+                ?assertEqual(SyncProgressPerProvider, PreviousSyncProgressPerProvider#{
+                    SubjectProvider => ExpProviderSyncProgress
+                })
+        end
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {provider, SubjectProvider, SubjectProviderToken}
+            ],
+            unauthorized = [nobody],
+            forbidden = AllClients -- [{provider, SubjectProvider, SubjectProviderToken}]
+        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = update_provider_sync_progress,
+            args = [auth, Space, SubjectProvider, data],
+            expected_result = ?OK_RES
+        },
+        gs_spec = #gs_spec{
+            operation = update,
+            gri = #gri{type = space_stats, id = Space, aspect = {provider_sync_progress, SubjectProvider}},
+            expected_result = ?OK_RES
+        },
+        data_spec = #data_spec{
+            required = [<<"providerSyncProgress">>],
+            correct_values = #{<<"providerSyncProgress">> => [RandomizeSyncProgressPerProvider]},
+            bad_values = [
+                {<<"providerSyncProgress">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"providerSyncProgress">>)},
+                {<<"providerSyncProgress">>, 1234, ?ERROR_BAD_VALUE_JSON(<<"providerSyncProgress">>)},
+                {<<"providerSyncProgress">>, #{<<"providerid">> => [123, <<"value">>]}, ?ERROR_BAD_DATA(<<"providerSyncProgress">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+    )).
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+get_sync_progress_per_provider(Config, SpaceId) ->
+    {ok, #space_stats{sync_progress_per_provider = PerProvider}} = oz_test_utils:call_oz(
+        Config, space_logic, get_stats, [?ROOT, SpaceId]
+    ),
+    PerProvider.
 
 %%%===================================================================
 %%% Setup/teardown functions

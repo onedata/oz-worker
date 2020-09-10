@@ -16,6 +16,7 @@
 
 -include("api_test_utils.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/space_support/support_stage.hrl").
 -include_lib("ctool/include/graph_sync/gri.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 
@@ -157,26 +158,35 @@ shared_group(gs, Id, GroupData) ->
 
 -spec protected_space(interface(), od_space:id(), map(), aai:subject()) -> expectation().
 protected_space(logic, _Id, SpaceData, Creator) ->
+    Providers = maps:get(<<"providers">>, SpaceData, #{}),
     ?OK_MAP(#{
         <<"name">> => maps:get(<<"name">>, SpaceData),
-        <<"providers">> => maps:get(<<"providers">>, SpaceData, #{}),
+        <<"providers">> => expected_provider_support_sizes(Providers),
+        <<"supportParametersPerProvider">> => expected_support_parameters_per_provider(Providers),
+        <<"supportStagePerProvider">> => expected_support_stage_per_provider(Providers),
         <<"creationTime">> => ozt_mocks:get_mocked_time(),
         <<"creator">> => Creator,
         <<"sharesCount">> => 0
     });
 protected_space(rest, Id, SpaceData, Creator) ->
+    Providers = maps:get(<<"providers">>, SpaceData, #{}),
     #{
         <<"spaceId">> => Id,
         <<"name">> => maps:get(<<"name">>, SpaceData),
-        <<"providers">> => maps:get(<<"providers">>, SpaceData, #{}),
+        <<"providers">> => expected_provider_support_sizes(Providers),
+        <<"supportParametersPerProvider">> => support_parameters:to_json(expected_support_parameters_per_provider(Providers)),
+        <<"supportStagePerProvider">> => support_stage:per_provider_to_json(expected_support_stage_per_provider(Providers)),
         <<"creationTime">> => ozt_mocks:get_mocked_time(),
         <<"creator">> => aai:subject_to_json(Creator)
     };
 protected_space(gs, Id, SpaceData, _Creator) ->
+    Providers = maps:get(<<"providers">>, SpaceData, #{}),
     ?OK_MAP(#{
         <<"gri">> => gri:serialize(?GRI(od_space, Id, instance, protected)),
         <<"name">> => maps:get(<<"name">>, SpaceData),
-        <<"providers">> => maps:get(<<"providers">>, SpaceData, #{})
+        <<"providers">> => expected_provider_support_sizes(Providers),
+        <<"supportParametersPerProvider">> => support_parameters:to_json(expected_support_parameters_per_provider(Providers)),
+        <<"supportStagePerProvider">> => support_stage:per_provider_to_json(expected_support_stage_per_provider(Providers))
     }).
 
 
@@ -420,6 +430,38 @@ shared_or_public_harvester(rest, Id, HarvesterData) ->
 %%%===================================================================
 %%% helpers
 %%%===================================================================
+
+%% @private
+-spec expected_provider_support_sizes(
+    #{od_provider:id() => #{od_storage:id() => od_space:support_size()}}) -> map().
+expected_provider_support_sizes(ProviderSupports) ->
+    maps:map(fun(_ProviderId, _StorageSupports) ->
+        support_parameters:build(global, eager)
+    end, ProviderSupports).
+
+
+%% @private
+-spec expected_support_parameters_per_provider(
+    #{od_provider:id() => #{od_storage:id() => od_space:support_size()}}) -> map().
+expected_support_parameters_per_provider(ProviderSupports) ->
+    maps:map(fun(_ProviderId, _StorageSupports) ->
+        support_parameters:build(global, eager)
+    end, ProviderSupports).
+
+
+%% @private
+-spec expected_support_stage_per_provider(
+    #{od_provider:id() => #{od_storage:id() => od_space:support_size()}}) -> map().
+expected_support_stage_per_provider(ProviderSupports) ->
+    maps:map(fun(_ProviderId, StorageSupports) ->
+        #support_stage_details{
+            provider_stage = active,
+            per_storage = maps:map(fun(_StorageId, _SupportSize) ->
+                active
+            end, StorageSupports)
+        }
+    end, ProviderSupports).
+
 
 %% @private
 expected_public_share_url(ShareId) ->

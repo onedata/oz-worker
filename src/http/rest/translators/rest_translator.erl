@@ -165,5 +165,6 @@ entity_type_to_translator(od_handle) -> handle_rest_translator;
 entity_type_to_translator(od_harvester) -> harvester_rest_translator;
 entity_type_to_translator(od_cluster) -> cluster_rest_translator;
 entity_type_to_translator(od_token) -> token_rest_translator;
+entity_type_to_translator(space_stats) -> space_rest_translator;
 entity_type_to_translator(temporary_token_secret) -> token_rest_translator;
 entity_type_to_translator(oz_worker) -> zone_rest_translator.

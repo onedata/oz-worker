@@ -215,7 +215,10 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
 
         storages = Storages,
         shares = Shares,
-        harvesters = Harvesters
+        harvesters = Harvesters,
+
+        support_parameters_per_provider = SupportParametersPerProvider,
+        support_stage_per_provider = SupportStagePerProvider
     } = Space,
     #{
         <<"name">> => Name,
@@ -231,16 +234,23 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"storages">> => Storages,
         <<"shares">> => Shares,
-        <<"harvesters">> => Harvesters
+        <<"harvesters">> => Harvesters,
+
+        <<"supportParametersPerProvider">> => support_parameters:per_provider_to_json(SupportParametersPerProvider),
+        <<"supportStagePerProvider">> => support_stage:per_provider_to_json(SupportStagePerProvider)
     };
 translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected}, SpaceData) ->
     #{
         <<"name">> := Name,
-        <<"providers">> := Providers
+        <<"providers">> := Providers,
+        <<"supportParametersPerProvider">> := SupportParametersPerProvider,
+        <<"supportStagePerProvider">> := SupportStagePerProvider
     } = SpaceData,
     #{
         <<"name">> => Name,
-        <<"providers">> => Providers
+        <<"providers">> => Providers,
+        <<"supportParametersPerProvider">> => support_parameters:per_provider_to_json(SupportParametersPerProvider),
+        <<"supportStagePerProvider">> => support_stage:per_provider_to_json(SupportStagePerProvider)
     };
 
 translate_resource(_, #gri{type = od_share, aspect = instance, scope = private}, Share) ->

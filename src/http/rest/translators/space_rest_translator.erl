@@ -88,6 +88,13 @@ create_response(#gri{id = SpaceId, aspect = harvester}, _, resource, {#gri{id = 
 %% @end
 %%--------------------------------------------------------------------
 -spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
+get_response(#gri{type = space_stats, aspect = instance}, SpaceStats) ->
+    rest_translator:ok_body_reply(#{
+        <<"syncProgressPerProvider">> => provider_sync_progress:to_json(
+            SpaceStats#space_stats.sync_progress_per_provider
+        )
+    });
+
 get_response(#gri{id = undefined, aspect = list}, Spaces) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
 
@@ -98,6 +105,8 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
     #{
         <<"name">> := Name,
         <<"providers">> := Providers,
+        <<"supportParametersPerProvider">> := SupportParametersPerProvider,
+        <<"supportStagePerProvider">> := SupportStagePerProvider,
         <<"creator">> := Creator,
         <<"creationTime">> := CreationTime
     } = SpaceData,
@@ -105,6 +114,8 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
         <<"spaceId">> => SpaceId,
         <<"name">> => Name,
         <<"providers">> => Providers,
+        <<"supportParametersPerProvider">> => support_parameters:per_provider_to_json(SupportParametersPerProvider),
+        <<"supportStagePerProvider">> => support_stage:per_provider_to_json(SupportStagePerProvider),
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
         <<"creationTime">> => CreationTime
     });

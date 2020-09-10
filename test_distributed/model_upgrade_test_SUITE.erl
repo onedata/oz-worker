@@ -1790,7 +1790,86 @@ get_record(od_space, 8) -> {od_space,
     true,
     true
 };
-get_record(od_space, 9) -> #od_space{
+get_record(od_space, 9) -> {od_space,
+    <<"name">>,
+
+    % Space ownership is automatically granted to all direct users that had the
+    % most effective privileges in the space before the upgrade
+    [<<"user3">>, <<"user1">>],
+
+    #{
+        <<"user1">> => privileges:from_list([
+            ?SPACE_VIEW,
+            ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+            ?SPACE_VIEW_TRANSFERS,
+            ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+            ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+            ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_REGISTER_FILES,
+            ?SPACE_MANAGE_SHARES,
+            ?SPACE_VIEW_VIEWS,
+            ?SPACE_QUERY_VIEWS,
+            ?SPACE_VIEW_STATISTICS,
+            ?SPACE_VIEW_CHANGES_STREAM,
+            ?SPACE_SCHEDULE_REPLICATION,
+            ?SPACE_VIEW_QOS,
+            ?SPACE_REGISTER_FILES  % should be added by the upgrade procedure
+        ]),
+        <<"user2">> => privileges:from_list([
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+            ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
+            ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
+        ]),
+        <<"user3">> => [?SPACE_READ_DATA, ?SPACE_WRITE_DATA]
+    },
+    #{
+        <<"group1">> => privileges:from_list([
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT
+        ]),
+        <<"group2">> => privileges:from_list([
+            ?SPACE_VIEW,
+            ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+            ?SPACE_VIEW_TRANSFERS,
+            ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+            ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+            ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_MANAGE_SHARES,
+            ?SPACE_VIEW_VIEWS,
+            ?SPACE_QUERY_VIEWS,
+            ?SPACE_VIEW_STATISTICS,
+            ?SPACE_VIEW_CHANGES_STREAM,
+            ?SPACE_SCHEDULE_REPLICATION,
+            ?SPACE_VIEW_QOS,
+            ?SPACE_UPDATE, ?SPACE_DELETE,
+            ?SPACE_SET_PRIVILEGES,
+            ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+            ?SPACE_MANAGE_VIEWS,
+            ?SPACE_CANCEL_REPLICATION,
+            ?SPACE_SCHEDULE_EVICTION, ?SPACE_CANCEL_EVICTION,
+            ?SPACE_MANAGE_QOS,
+            ?SPACE_REGISTER_FILES  % should be added by the upgrade procedure
+        ])
+    },
+    #{},
+    [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+    [],
+
+    #{
+        <<"user3">> => {privileges:space_manager(), [{od_space, <<"self">>}]}
+    },
+    #{},
+    #{},
+    #{},
+
+    ?DUMMY_TIMESTAMP,
+    ?SUB(nobody),
+
+    true,
+    true
+};
+get_record(od_space, 10) -> #od_space{
     name = <<"name">>,
 
     % Space ownership is automatically granted to all direct users that had the
@@ -1862,6 +1941,10 @@ get_record(od_space, 9) -> #od_space{
     eff_groups = #{},
     eff_providers = #{},
     eff_harvesters = #{},
+
+    %% Support related info is initialized during cluster upgrade procedure
+    support_parameters_per_provider = #{},
+    support_stage_per_provider = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,
     creator = ?SUB(nobody),
@@ -2667,13 +2750,13 @@ get_record(od_harvester, 4) -> #od_harvester{
     name = <<"h-name">>,
     backend = elasticsearch_harvesting_backend,
     endpoint = <<"https://es.example.com:9056">>,
-    
+
     gui_plugin_config = #{
         <<"attr1">> => <<"val2">>,
         <<"attr2">> => 15
     },
     public = true,
-    
+
     indices = #{
         <<"567">> => #harvester_index{
             name = <<"Simulations index">>,
@@ -2704,9 +2787,9 @@ get_record(od_harvester, 4) -> #od_harvester{
                 }
             }
         }
-        
+
     },
-    
+
     users = #{
         <<"user1">> => [?HARVESTER_VIEW, ?HARVESTER_UPDATE],
         <<"user2">> => [?HARVESTER_VIEW, ?HARVESTER_UPDATE, ?HARVESTER_DELETE]
@@ -2716,14 +2799,14 @@ get_record(od_harvester, 4) -> #od_harvester{
         <<"group2">> => [?HARVESTER_DELETE]
     },
     spaces = [<<"s1">>, <<"s2">>],
-    
+
     eff_users = #{},
     eff_groups = #{},
     eff_providers = #{},
-    
+
     creation_time = ?DUMMY_TIMESTAMP,
     creator = ?SUB(nobody),
-    
+
     bottom_up_dirty = true,
     top_down_dirty = true
 };

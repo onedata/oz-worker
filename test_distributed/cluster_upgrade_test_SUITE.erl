@@ -15,6 +15,8 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include("api_test_utils.hrl").
+-include_lib("ctool/include/space_support/support_stage.hrl").
+-include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
@@ -28,7 +30,9 @@
 ]).
 -export([
     upgrade_from_19_02_x_tokens/1,
-    upgrade_from_19_02_x_storages/1
+    upgrade_from_19_02_x_storages/1,
+    upgrade_from_20_02_0_beta3_space_support_info/1,
+    upgrade_from_19_02_space_lifecycle_with_providers_of_different_versions/1
 ]).
 
 %%%===================================================================
@@ -37,7 +41,9 @@
 
 all() -> ?ALL([
     upgrade_from_19_02_x_tokens,
-    upgrade_from_19_02_x_storages
+    upgrade_from_19_02_x_storages,
+    upgrade_from_20_02_0_beta3_space_support_info,
+    upgrade_from_19_02_space_lifecycle_with_providers_of_different_versions
 ]).
 
 
@@ -242,6 +248,154 @@ upgrade_from_19_02_x_storages(_Config) ->
         )
     end, SpacesMap2).
 
+
+upgrade_from_20_02_0_beta3_space_support_info(_Config) ->
+    SpaceAlpha = ozt_spaces:create(),
+    SpaceBeta = ozt_spaces:create(),
+    SpaceGamma = ozt_spaces:create(),
+    SpaceDelta = ozt_spaces:create(),
+    SpaceOmega = ozt_spaces:create(),
+
+    {P1, _} = create_legacy_provider_with_spaces([SpaceAlpha, SpaceBeta, SpaceGamma]),
+    {P2, _} = create_legacy_provider_with_spaces([SpaceAlpha, SpaceGamma, SpaceDelta]),
+    {P3, _} = create_legacy_provider_with_spaces([SpaceGamma, SpaceDelta, SpaceOmega]),
+
+    ?assertEqual({ok, 2}, ozt:rpc(node_manager_plugin, upgrade_cluster, [1])),
+    ?assertEqual({ok, 3}, ozt:rpc(node_manager_plugin, upgrade_cluster, [2])),
+    ozt:reconcile_entity_graph(),
+
+    DefaultParameters = support_parameters:build(global, eager),
+
+    AlphaRecord = ozt_spaces:get(SpaceAlpha),
+    BetaRecord = ozt_spaces:get(SpaceBeta),
+    GammaRecord = ozt_spaces:get(SpaceGamma),
+    DeltaRecord = ozt_spaces:get(SpaceDelta),
+    OmegaRecord = ozt_spaces:get(SpaceOmega),
+
+    ?assertEqual(AlphaRecord#od_space.support_parameters_per_provider, #{
+        P1 => DefaultParameters, P2 => DefaultParameters
+    }),
+    ?assertEqual(BetaRecord#od_space.support_parameters_per_provider, #{
+        P1 => DefaultParameters
+    }),
+    ?assertEqual(GammaRecord#od_space.support_parameters_per_provider, #{
+        P1 => DefaultParameters, P2 => DefaultParameters, P3 => DefaultParameters
+    }),
+    ?assertEqual(DeltaRecord#od_space.support_parameters_per_provider, #{
+        P2 => DefaultParameters, P3 => DefaultParameters
+    }),
+    ?assertEqual(OmegaRecord#od_space.support_parameters_per_provider, #{
+        P3 => DefaultParameters
+    }),
+
+    ?assertEqual(AlphaRecord#od_space.support_stage_per_provider, #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS, P2 => ?LEGACY_SUPPORT_STAGE_DETAILS
+    }),
+    ?assertEqual(BetaRecord#od_space.support_stage_per_provider, #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS
+    }),
+    ?assertEqual(GammaRecord#od_space.support_stage_per_provider, #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS, P2 => ?LEGACY_SUPPORT_STAGE_DETAILS, P3 => ?LEGACY_SUPPORT_STAGE_DETAILS
+    }),
+    ?assertEqual(DeltaRecord#od_space.support_stage_per_provider, #{
+        P2 => ?LEGACY_SUPPORT_STAGE_DETAILS, P3 => ?LEGACY_SUPPORT_STAGE_DETAILS
+    }),
+    ?assertEqual(OmegaRecord#od_space.support_stage_per_provider, #{
+        P3 => ?LEGACY_SUPPORT_STAGE_DETAILS
+    }),
+
+    ?assertEqual(sync_progress_per_provider(SpaceAlpha), #{
+        P1 => #{P1 => {1, 0}, P2 => {1, 0}},
+        P2 => #{P1 => {1, 0}, P2 => {1, 0}}
+    }),
+    ?assertEqual(sync_progress_per_provider(SpaceBeta), #{
+        P1 => #{P1 => {1, 0}}
+    }),
+    ?assertEqual(sync_progress_per_provider(SpaceGamma), #{
+        P1 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}},
+        P2 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}},
+        P3 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}}
+    }),
+    ?assertEqual(sync_progress_per_provider(SpaceDelta), #{
+        P2 => #{P2 => {1, 0}, P3 => {1, 0}},
+        P3 => #{P2 => {1, 0}, P3 => {1, 0}}
+    }),
+    ?assertEqual(sync_progress_per_provider(SpaceOmega), #{
+        P3 => #{P3 => {1, 0}}
+    }).
+
+
+upgrade_from_19_02_space_lifecycle_with_providers_of_different_versions(_Config) ->
+    SpaceAlpha = ozt_spaces:create(),
+    SpaceBeta = ozt_spaces:create(),
+    {P1, _} = create_legacy_provider_with_spaces([SpaceAlpha, SpaceBeta]),
+    {P2, _} = create_legacy_provider_with_spaces([]),
+    {P3, _} = create_legacy_provider_with_spaces([SpaceAlpha]),
+
+    ?assertEqual({ok, 2}, ozt:rpc(node_manager_plugin, upgrade_cluster, [1])),
+    ?assertEqual({ok, 3}, ozt:rpc(node_manager_plugin, upgrade_cluster, [2])),
+
+    GetSupportStagePerProvider = fun(SpaceId) ->
+        Space = ozt_spaces:get(SpaceId),
+        Space#od_space.support_stage_per_provider
+    end,
+
+    ?assertEqual(GetSupportStagePerProvider(SpaceAlpha), #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS,
+        P3 => ?LEGACY_SUPPORT_STAGE_DETAILS
+    }),
+    ?assertEqual(GetSupportStagePerProvider(SpaceBeta), #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS
+    }),
+
+    % at this point, all providers are in legacy versions
+
+    % support SpaceBeta using the legacy support procedure
+    ozt_providers:support_space_with_legacy_storage(P2, SpaceBeta),
+    ?assertEqual(GetSupportStagePerProvider(SpaceBeta), #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS,
+        P2 => ?LEGACY_SUPPORT_STAGE_DETAILS
+    }),
+
+    % simulate P2 being upgraded to the newest version
+    P2Storage = ozt_providers:create_storage(P2),
+    upgrade_legacy_support(P2, P2Storage, SpaceBeta),
+    ?assertEqual(GetSupportStagePerProvider(SpaceBeta), #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS,
+        P2 => #support_stage_details{provider_stage = active, per_storage = #{P2Storage => active}}
+    }),
+
+    % simulate P3 being upgraded to the newest version
+    P3Storage = ozt_providers:create_storage(P3),
+    upgrade_legacy_support(P3, P3Storage, SpaceAlpha),
+    ?assertEqual(GetSupportStagePerProvider(SpaceAlpha), #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS,
+        P3 => #support_stage_details{provider_stage = active, per_storage = #{P3Storage => active}}
+    }),
+    ?assertEqual(sync_progress_per_provider(SpaceAlpha), #{
+        P1 => #{P1 => {1, 0}, P3 => {1, 0}},
+        P3 => #{P1 => {1, 0}, P3 => {1, 0}}
+    }),
+
+    % support the SpaceBeta with P3 using the modern procedure
+    ozt_providers:support_space(P3, P3Storage, SpaceBeta),
+    ?assertEqual(GetSupportStagePerProvider(SpaceBeta), #{
+        P1 => ?LEGACY_SUPPORT_STAGE_DETAILS,
+        P2 => #support_stage_details{provider_stage = active, per_storage = #{P2Storage => active}},
+        P3 => #support_stage_details{provider_stage = active, per_storage = #{P3Storage => active}}
+    }),
+    ?assertEqual(sync_progress_per_provider(SpaceBeta), #{
+        P1 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}},
+        P2 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}},
+        P3 => #{P1 => {1, 0}, P2 => {1, 0}, P3 => {1, 0}}
+    }).
+
+%% @todo VFS-6311 implement the following tests when space lifecycle integration is complete
+%%  * space is unsupported by a legacy provider
+%%  * space is re-supported by a legacy provider (before or after upgrade)
+%%  * support size is modified by a legacy provider
+%% Consider moving the tests to a new SUITE (space_lifecycle?)
+
 %%%===================================================================
 %%% Helper functions
 %%%===================================================================
@@ -319,6 +473,22 @@ create_legacy_provider_with_spaces(SpaceIds) ->
         {ok, Provider#od_provider{legacy_spaces = Spaces}}
     end]),
     {ProviderId, Spaces}.
+
+
+upgrade_legacy_support(ProviderId, StorageId, SpaceId) ->
+    Token = ozt_providers:get_root_token(ProviderId),
+    ?assertMatch({ok, _}, ozt_gs:connect_and_request(oneprovider, {token, Token}, #gs_req_graph{
+        gri = ?GRI(od_storage, StorageId, {upgrade_legacy_support, SpaceId}),
+        operation = create,
+        data = #{}
+    })).
+
+
+sync_progress_per_provider(SpaceId) ->
+    {ok, #space_stats{
+        sync_progress_per_provider = SyncProgressPerProvider
+    }} = ozt:rpc(space_logic, get_stats, [?ROOT, SpaceId]),
+    SyncProgressPerProvider.
 
 
 list_all_tokens() ->

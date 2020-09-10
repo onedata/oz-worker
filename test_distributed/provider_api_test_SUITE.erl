@@ -1726,6 +1726,7 @@ legacy_revoke_support_test(Config) ->
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
         % run the same procedures as during Onezone upgrade
         ?assertEqual(ok, oz_test_utils:call_oz(Config, storage_logic, migrate_legacy_supports, [])),
+        ?assertEqual(ok, oz_test_utils:call_oz(Config, space_logic, initialize_support_info, [])),
         #{spaceId => S1}
     end,
     DeleteEntityFun = fun(#{spaceId := SpaceId} = _Env) ->
@@ -2569,11 +2570,11 @@ create_2_providers_and_5_supported_spaces(Config) ->
             {ok, SpaceId} = oz_test_utils:create_space(Config, ?ROOT, Name),
             {ok, SpaceId} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, SpaceId, SupportSize),
             {ok, SpaceId} = oz_test_utils:support_space(Config, ?PROVIDER(P2), St2, SpaceId, SupportSize),
-            SpaceDetails = #{
+            SpaceData = #{
                 <<"name">> => Name,
-                <<"providers">> => #{P1 => SupportSize, P2 => SupportSize}
+                <<"providers">> => #{P1 => #{St1 => SupportSize}, P2 => #{St2 => SupportSize}}
             },
-            {SpaceId, SpaceDetails}
+            {SpaceId, SpaceData}
         end, lists:seq(1, 5)
     ),
 
