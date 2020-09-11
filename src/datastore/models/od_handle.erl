@@ -124,12 +124,12 @@ entity_logic_plugin() ->
     handle_logic_plugin.
 
 %%--------------------------------------------------------------------
-%% @equiv erlang:universaltime().
+%% @equiv time_utils:epoch_to_datetime(time_utils:cluster_time_seconds()).
 %% @end
 %%--------------------------------------------------------------------
 -spec actual_timestamp() -> timestamp().
 actual_timestamp() ->
-    erlang:universaltime().
+    time_utils:epoch_to_datetime(time_utils:cluster_time_seconds()).
 
 %%%===================================================================
 %%% datastore_model callbacks

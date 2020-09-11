@@ -273,7 +273,7 @@ translate_resource(_, #gri{type = od_share, aspect = instance, scope = public}, 
     #{
         <<"name">> => Name, <<"description">> => Description,
         <<"publicUrl">> => PublicUrl,
-        <<"handleId">> => HandleId,
+        <<"handleId">> => utils:undefined_to_null(HandleId),
         <<"rootFileId">> => RootFileId, <<"fileType">> => FileType
     };
 

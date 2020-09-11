@@ -75,8 +75,8 @@ get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleDa
     } = HandleData,
     rest_translator:ok_body_reply(#{
         <<"handleId">> => HandleId,
+        <<"publicHandle">> => PublicHandle,
         <<"handleServiceId">> => HandleService,
-        <<"handle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,

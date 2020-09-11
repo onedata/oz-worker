@@ -29,7 +29,8 @@
 
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     list_handle_services_test/1,
@@ -224,9 +225,7 @@ get_handle_service_details_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?ROOT, ?DOI_SERVICE
-    ),
+    {ok, HService} = oz_test_utils:create_handle_service(Config, ?ROOT, ?DOI_SERVICE),
     {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
 
     ApiTestSpec = #api_test_spec{
@@ -246,15 +245,13 @@ get_handle_service_details_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/handle_services/">>, HService],
             expected_code = ?HTTP_200_OK,
-            expected_body = ?DOI_SERVICE#{
-                <<"handleServiceId">> => HService
-            }
+            expected_body = api_test_expect:protected_hservice(rest, HService, ?DOI_SERVICE, ?SUB(nobody))
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_handle_service,
             args = [auth, G1, HService],
-            expected_result = ?OK_MAP_CONTAINS(?DOI_SERVICE)
+            expected_result = api_test_expect:protected_hservice(logic, HService, ?DOI_SERVICE, ?SUB(nobody))
         }
         % TODO gs
     },
@@ -375,56 +372,54 @@ get_eff_handle_service_details_test(Config) ->
         EffHServices, [{G1, _} | _Groups], {U1, _U2, NonAdmin}
     } = api_test_scenarios:create_eff_handle_services_env(Config),
 
-    lists:foreach(
-        fun({HService, HSDetails}) ->
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {user, U1},
-                        {admin, [?OZ_HANDLE_SERVICES_VIEW]}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, NonAdmin}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [
-                        <<"/groups/">>, G1,
-                        <<"/effective_handle_services/">>, HService
-                    ],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = HSDetails#{
-                        <<"handleServiceId">> => HService
-                    }
-                },
-                logic_spec = #logic_spec{
-                    module = group_logic,
-                    function = get_eff_handle_service,
-                    args = [auth, G1, HService],
-                    expected_result = ?OK_MAP_CONTAINS(HSDetails)
-                }
-                % TODO gs
+    lists:foreach(fun({HServiceId, HServiceData}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {user, U1},
+                    {admin, [?OZ_HANDLE_SERVICES_VIEW]}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, NonAdmin}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/groups/">>, G1, <<"/effective_handle_services/">>, HServiceId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_hservice(rest, HServiceId, HServiceData, ?SUB(nobody))
+            },
+            logic_spec = #logic_spec{
+                module = group_logic,
+                function = get_eff_handle_service,
+                args = [auth, G1, HServiceId],
+                expected_result = api_test_expect:protected_hservice(logic, HServiceId, HServiceData, ?SUB(nobody))
+            }
+            % TODO gs
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-        end, EffHServices
-    ).
+    end, EffHServices).
 
 
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_time().

@@ -28,8 +28,8 @@
 
 -export([
     all/0,
-    init_per_testcase/2, end_per_testcase/2,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     list_harvesters_test/1,
@@ -140,7 +140,7 @@ create_harvester_test(Config) ->
         ?assertEqual(#{}, Harvester#od_harvester.eff_groups),
 
         true
-                end,
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -166,7 +166,7 @@ create_harvester_test(Config) ->
             correct_values = #{
                 <<"name">> => [ExpName],
                 <<"harvestingBackendEndpoint">> => [?HARVESTER_ENDPOINT1],
-                <<"harvestingBackendType">> => [?HARVESTER_MOCK_BACKEND_BINARY],
+                <<"harvestingBackendType">> => [?HARVESTER_MOCK_BACKEND],
                 <<"guiPluginConfig">> => [?HARVESTER_GUI_PLUGIN_CONFIG]
             },
             bad_values =
@@ -187,8 +187,8 @@ create_harvester_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [{user, U2}]
-        }, 
-            
+        },
+
         rest_spec = undefined,
         logic_spec = #logic_spec{
             module = user_logic,
@@ -217,7 +217,7 @@ join_harvester_test(Config) ->
             token => Serialized,
             tokenNonce => Token#token.id
         }
-        end,
+    end,
     VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId, tokenNonce := TokenId} = _Env, _) ->
         {ok, Harvesters} = oz_test_utils:user_get_harvesters(Config, U1),
         ?assertEqual(lists:member(HarvesterId, Harvesters), ShouldSucceed),
@@ -314,7 +314,7 @@ join_harvester_test(Config) ->
             correct_values = #{<<"token">> => [Serialized2]}
         }
     },
-    VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
+    VerifyEndFun1 = fun(_ShouldSucceed, _Env, _) ->
         oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token2#token.id)
     end,
     ?assert(api_test_utils:run_tests(
@@ -331,9 +331,6 @@ get_harvester_test(Config) ->
     {ok, U1} = oz_test_utils:harvester_add_user(Config, H1, U1),
     {ok, U2} = oz_test_utils:harvester_add_user(Config, H1, U2),
 
-
-    ExpData = ?HARVESTER_PROTECTED_DATA(?HARVESTER_NAME1),
-    
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -345,7 +342,7 @@ get_harvester_test(Config) ->
             method = get,
             path = [<<"/user/harvesters/">>, H1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpData#{<<"harvesterId">> => H1}
+            expected_body = api_test_expect:protected_harvester(rest, H1, ?HARVESTER_CREATE_DATA, ?SUB(nobody))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -369,7 +366,7 @@ get_harvester_test(Config) ->
             module = user_logic,
             function = get_harvester,
             args = [auth, U1, H1],
-            expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"harvestingBackendType">> => ?HARVESTER_MOCK_BACKEND})
+            expected_result = api_test_expect:protected_harvester(logic, H1, ?HARVESTER_CREATE_DATA, ?SUB(nobody))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
@@ -504,73 +501,75 @@ get_eff_harvester_test(Config) ->
 
     oz_test_utils:user_set_oz_privileges(Config, U2, [?OZ_HARVESTERS_CREATE], []),
     {ok, H6} = oz_test_utils:create_harvester(Config, ?USER(U2), ?HARVESTER_CREATE_DATA),
-    H6Details = ?HARVESTER_PROTECTED_DATA(?HARVESTER_NAME1),
     {ok, U1} = oz_test_utils:harvester_add_user(Config, H6, U1),
 
-    NewEffHarvestersList = [{H6, H6Details} | EffHarvestersList],
-    lists:foreach(
-        fun({HarvesterId, HarvesterDetails}) ->
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        {user, U1},
-                        {user, U2}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [<<"/user/effective_harvesters/">>, HarvesterId],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = HarvesterDetails#{<<"harvesterId">> => HarvesterId}
-                }
+    NewEffHarvestersList = [{H6, ?HARVESTER_CREATE_DATA} | EffHarvestersList],
+    lists:foreach(fun({HarvesterId, HarvesterData}) ->
+        Creator = case HarvesterId of
+            H6 -> ?SUB(user, U2);
+            _ -> ?SUB(nobody)
+        end,
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    {user, U1},
+                    {user, U2}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/user/effective_harvesters/">>, HarvesterId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_harvester(rest, HarvesterId, HarvesterData, Creator)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-            % Check that regular client can't make request
-            % on behalf of other client
-            ApiTestSpec2 = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {admin, [?OZ_HARVESTERS_VIEW]},
-                        {user, U1}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, U2},
-                        {user, NonAdmin}
-                    ]
-                },
-                logic_spec = #logic_spec{
-                    module = user_logic,
-                    function = get_eff_harvester,
-                    args = [auth, U1, HarvesterId],
-                    expected_result = ?OK_MAP_CONTAINS(HarvesterDetails#{<<"harvestingBackendType">> => ?HARVESTER_MOCK_BACKEND})
-                }
+        % Check that regular client can't make request
+        % on behalf of other client
+        ApiTestSpec2 = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_HARVESTERS_VIEW]},
+                    {user, U1}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, U2},
+                    {user, NonAdmin}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
+            logic_spec = #logic_spec{
+                module = user_logic,
+                function = get_eff_harvester,
+                args = [auth, U1, HarvesterId],
+                expected_result = api_test_expect:protected_harvester(logic, HarvesterId, HarvesterData, Creator)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
 
-        end, NewEffHarvestersList
-    ).
+    end, NewEffHarvestersList).
 
 
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
-init_per_testcase(_, Config) ->
-    oz_test_utils:mock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND).
-
-end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND).
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    ozt_mocks:mock_harvesting_backends(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_harvesting_backends(),
+    ozt_mocks:unmock_time().

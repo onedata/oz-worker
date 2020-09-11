@@ -28,7 +28,8 @@
 
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     list_groups_test/1,
@@ -355,9 +356,8 @@ get_group_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1),
-        #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
-    ),
+    GroupData = #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1},
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), GroupData),
     {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -373,11 +373,7 @@ get_group_test(Config) ->
             method = get,
             path = [<<"/user/groups/">>, G1],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"groupId">> => G1,
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1_BIN
-            }
+            expected_body = api_test_expect:protected_group(rest, G1, GroupData, ?SUB(user, U1))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -400,10 +396,7 @@ get_group_test(Config) ->
             module = user_logic,
             function = get_group,
             args = [auth, U1, G1],
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1
-            })
+            expected_result = api_test_expect:protected_group(logic, G1, GroupData, ?SUB(user, U1))
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -411,14 +404,7 @@ get_group_test(Config) ->
                 type = od_group, id = G1, aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_USER(U1),
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1_BIN,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(Id, G1)
-                end
-            })
+            expected_result = api_test_expect:protected_group(gs, G1, GroupData, ?SUB(user, U1))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
@@ -544,78 +530,70 @@ get_eff_group_test(Config) ->
         EffGroups, {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_parent_groups_env(Config),
 
-    lists:foreach(
-        fun({GroupId, GroupDetails}) ->
-            ExpType = maps:get(<<"type">>, GroupDetails, ?DEFAULT_GROUP_TYPE),
+    lists:foreach(fun({GroupId, GroupData}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{correct = [{user, U1}]},
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/user/effective_groups/">>, GroupId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_group(rest, GroupId, GroupData, ?SUB(nobody))
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{correct = [{user, U1}]},
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [<<"/user/effective_groups/">>, GroupId],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = GroupDetails#{
-                        <<"groupId">> => GroupId,
-                        <<"type">> => atom_to_binary(ExpType, utf8)
-                    }
-                }
+        % Check that regular client can't make request
+        % on behalf of other client
+        ApiTestSpec2 = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_GROUPS_VIEW]},
+                    {user, U1}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, U2},
+                    {user, NonAdmin}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-            % Check that regular client can't make request
-            % on behalf of other client
-            ApiTestSpec2 = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {admin, [?OZ_GROUPS_VIEW]},
-                        {user, U1}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, U2},
-                        {user, NonAdmin}
-                    ]
-                },
-                logic_spec = #logic_spec{
-                    module = user_logic,
-                    function = get_eff_group,
-                    args = [auth, U1, GroupId],
-                    expected_result = ?OK_MAP_CONTAINS(GroupDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_group, id = GroupId,
-                        aspect = instance, scope = protected
-                    },
-                    auth_hint = ?THROUGH_USER(U1),
-                    expected_result = ?OK_MAP_CONTAINS(GroupDetails#{
-                        <<"type">> => atom_to_binary(ExpType, utf8),
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = gri:deserialize(EncodedGri),
-                            ?assertEqual(Id, GroupId)
-                        end
-                    })
-                }
+            logic_spec = #logic_spec{
+                module = user_logic,
+                function = get_eff_group,
+                args = [auth, U1, GroupId],
+                expected_result = api_test_expect:protected_group(logic, GroupId, GroupData, ?SUB(nobody))
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{
+                    type = od_group, id = GroupId,
+                    aspect = instance, scope = protected
+                },
+                auth_hint = ?THROUGH_USER(U1),
+                expected_result = api_test_expect:protected_group(gs, GroupId, GroupData, ?SUB(nobody))
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
 
-        end, EffGroups
-    ).
+    end, EffGroups).
 
 
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_time().

@@ -271,7 +271,7 @@ get_test(Config) ->
                         U2 => [?SPACE_VIEW]}
                     ),
                     ?assertEqual(EffUsers, #{
-                        Owner => {AllPrivs , [{od_space, <<"self">>}]},
+                        Owner => {AllPrivs, [{od_space, <<"self">>}]},
                         U1 => {AllPrivs -- [?SPACE_VIEW], [{od_space, <<"self">>}]},
                         U2 => {[?SPACE_VIEW], [{od_space, <<"self">>}]}
                     }),
@@ -311,6 +311,7 @@ get_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
 
     % Get and check protected data
+    SpaceData = #{<<"name">> => ?SPACE_NAME1, <<"providers">> => #{P1 => SupportSize}},
     GetProtectedDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -330,39 +331,20 @@ get_test(Config) ->
             method = get,
             path = [<<"/spaces/">>, S1],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"spaceId">> => S1,
-                <<"name">> => ?SPACE_NAME1,
-                <<"providers">> => #{P1 => SupportSize},
-                <<"creator">> => #{
-                    <<"type">> => <<"user">>,
-                    <<"id">> => Owner
-                }
-            }
+            expected_body = api_test_expect:protected_space(rest, S1, SpaceData, ?SUB(user, Owner))
         },
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_protected_data,
             args = [auth, S1],
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?SPACE_NAME1,
-                <<"providers">> => #{P1 => SupportSize},
-                <<"creator">> => ?SUB(user, Owner)
-            })
+            expected_result = api_test_expect:protected_space(logic, S1, SpaceData, ?SUB(user, Owner))
         },
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{
                 type = od_space, id = S1, aspect = instance, scope = protected
             },
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?SPACE_NAME1,
-                <<"providers">> => #{P1 => SupportSize},
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(S1, Id)
-                end
-            })
+            expected_result = api_test_expect:protected_space(gs, S1, SpaceData, ?SUB(user, Owner))
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
@@ -558,24 +540,17 @@ get_share_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    ShareName = <<"Share">>,
     ShareId = ?UNIQUE_STRING,
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ShareId, ShareName, ?ROOT_FILE_ID, S1
-    ),
-
-    OzDomain = oz_test_utils:oz_domain(Config),
-    SharePublicUrl = ?SHARE_PUBLIC_URL(OzDomain, ShareId),
-
-    ExpShareDetails = #{
-        <<"name">> => ShareName,
-        <<"description">> => <<"">>,
+    ShareData = #{
+        <<"shareId">> => ShareId,
+        <<"name">> => str_utils:rand_hex(12),
+        <<"description">> => <<"## Share description">>,
         <<"spaceId">> => S1,
         <<"rootFileId">> => ?ROOT_FILE_ID,
-        <<"fileType">> => <<"dir">>,
-        <<"handleId">> => null,
-        <<"publicUrl">> => SharePublicUrl
+        <<"fileType">> => lists_utils:random_element([dir, file])
     },
+    {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(User), ShareData),
+
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -593,31 +568,13 @@ get_share_test(Config) ->
             method = get,
             path = [<<"/spaces/">>, S1, <<"/shares/">>, ShareId],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpShareDetails#{
-                <<"shareId">> => ShareId,
-                % In REST, the rootFileId GUID is converted to ObjectID
-                <<"rootFileId">> => element(2, {ok, _} = file_id:guid_to_objectid(?ROOT_FILE_ID))
-            }
+            expected_body = api_test_expect:private_share(rest, ShareId, ShareData, ?SUB(user, User))
         },
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_share,
             args = [auth, S1, ShareId],
-            expected_result = ?OK_TERM(
-                fun(#od_share{
-                    name = Name,
-                    public_url = PublicUrl,
-                    space = SpaceId,
-                    handle = undefined,
-                    root_file = RootFile,
-                    file_type = FileType
-                }) ->
-                    ?assertEqual(Name, ShareName),
-                    ?assertEqual(PublicUrl, SharePublicUrl),
-                    ?assertEqual(SpaceId, S1),
-                    ?assertEqual(RootFile, ?ROOT_FILE_ID),
-                    ?assertEqual(FileType, dir)
-                end)
+            expected_result = api_test_expect:private_share(logic, ShareId, ShareData, ?SUB(user, User))
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -626,13 +583,7 @@ get_share_test(Config) ->
                 aspect = instance, scope = private
             },
             auth_hint = ?THROUGH_SPACE(S1),
-            expected_result = ?OK_MAP_CONTAINS(ExpShareDetails#{
-                <<"handleId">> => null,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(Id, ShareId)
-                end
-            })
+            expected_result = api_test_expect:private_share(gs, ShareId, ShareData, ?SUB(user, User))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -952,9 +903,6 @@ get_eff_provider_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    ExpDetails = maps:remove(<<"adminEmail">>, ProviderDetails#{
-        <<"online">> => false
-    }),
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -973,15 +921,13 @@ get_eff_provider_test(Config) ->
             method = get,
             path = [<<"/spaces/">>, S1, <<"/providers/">>, P1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpDetails#{
-                <<"providerId">> => P1
-            }
+            expected_body = api_test_expect:protected_provider(rest, P1, ProviderDetails)
         },
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_provider,
             args = [auth, S1, P1],
-            expected_result = ?OK_MAP_CONTAINS(ExpDetails)
+            expected_result = api_test_expect:protected_provider(logic, P1, ProviderDetails)
         },
         gs_spec = GsSpec = #gs_spec{
             operation = get,
@@ -990,29 +936,18 @@ get_eff_provider_test(Config) ->
                 aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_SPACE(S1),
-            expected_result = ?OK_MAP_CONTAINS(ExpDetails#{
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(Id, P1)
-                end
-            })
+            expected_result = api_test_expect:protected_provider(gs, P1, ProviderDetails)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % When making connection with gs provider becomes online
-    ExpDetails2 = ExpDetails#{<<"online">> => true},
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
             correct = [{provider, P1, P1Token}]
         },
         gs_spec = GsSpec#gs_spec{
-            expected_result = ?OK_MAP_CONTAINS(ExpDetails2#{
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(Id, P1)
-                end
-            })
+            expected_result = api_test_expect:protected_provider(gs, P1, ProviderDetails#{<<"online">> => true})
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
@@ -1024,14 +959,15 @@ get_eff_provider_test(Config) ->
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
-init_per_testcase(_, Config) ->
-    Config.
-
-end_per_testcase(_, _Config) ->
-    ok.
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_time().

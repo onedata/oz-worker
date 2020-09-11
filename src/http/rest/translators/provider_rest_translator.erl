@@ -81,6 +81,7 @@ get_response(#gri{id = ProviderId, aspect = instance, scope = protected}, Provid
     } = ProviderData,
     rest_translator:ok_body_reply(#{
         <<"providerId">> => ProviderId,
+        <<"clusterId">> => ProviderId,
         <<"name">> => Name, <<"domain">> => Domain,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude,
         <<"online">> => Online,

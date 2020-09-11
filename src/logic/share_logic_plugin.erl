@@ -107,7 +107,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         root_file = RootFileId,
         file_type = FileType,
         public_url = share_logic:share_id_to_public_url(ShareId),
-        creator = aai:normalize_subject(Auth#auth.subject)
+        creator = aai:normalize_subject(Auth#auth.subject),
+        creation_time = time_utils:cluster_time_seconds()
     }},
     case od_share:create(ShareDoc) of
         {ok, _} ->
@@ -144,15 +145,15 @@ get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
         public_url = PublicUrl,
         handle = HandleId,
         root_file = RootFileId, file_type = FileType,
-        creation_time = CreationTime, creator = Creator
+        creation_time = CreationTime
     } = Share,
     {ok, #{
         <<"name">> => Name, <<"description">> => Description,
         <<"publicUrl">> => PublicUrl,
         <<"rootFileId">> => RootFileId,
         <<"fileType">> => FileType,
-        <<"handleId">> => utils:undefined_to_null(HandleId),
-        <<"creationTime">> => CreationTime, <<"creator">> => Creator
+        <<"handleId">> => HandleId,
+        <<"creationTime">> => CreationTime
     }}.
 
 

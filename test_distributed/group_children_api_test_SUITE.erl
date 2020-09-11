@@ -28,7 +28,8 @@
 
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     list_children_test/1,
@@ -241,9 +242,8 @@ get_child_details_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, G2} = oz_test_utils:create_group(Config, ?ROOT,
-        #{<<"name">> => ?GROUP_NAME2, <<"type">> => ?GROUP_TYPE2}
-    ),
+    GroupData = #{<<"name">> => ?GROUP_NAME2, <<"type">> => ?GROUP_TYPE2},
+    {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, GroupData),
     oz_test_utils:group_add_group(Config, G1, G2),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -264,20 +264,13 @@ get_child_details_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/children/">>, G2],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"groupId">> => G2,
-                <<"name">> => ?GROUP_NAME2,
-                <<"type">> => ?GROUP_TYPE2_BIN
-            }
+            expected_body = api_test_expect:shared_group(rest, G2, GroupData)
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_child,
             args = [auth, G1, G2],
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?GROUP_NAME2,
-                <<"type">> => ?GROUP_TYPE2
-            })
+            expected_result = api_test_expect:shared_group(logic, G2, GroupData)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -285,14 +278,7 @@ get_child_details_test(Config) ->
                 type = od_group, id = G2, aspect = instance, scope = shared
             },
             auth_hint = ?THROUGH_GROUP(G1),
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?GROUP_NAME2,
-                <<"type">> => ?GROUP_TYPE2_BIN,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(Id, G2)
-                end
-            })
+            expected_result = api_test_expect:shared_group(gs, G2, GroupData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -724,61 +710,47 @@ get_eff_child_details_test(Config) ->
     ),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    lists:foreach(
-        fun({GroupId, GroupDetails}) ->
-            GroupDetailsBinary = GroupDetails#{
-                <<"type">> => atom_to_binary(
-                    maps:get(<<"type">>, GroupDetails), utf8
-                )
+    lists:foreach(fun({GroupId, GroupData}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_GROUPS_VIEW]},
+                    {user, U2}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, U1},
+                    {user, NonAdmin}
+                ]
             },
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {admin, [?OZ_GROUPS_VIEW]},
-                        {user, U2}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, U1},
-                        {user, NonAdmin}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [
-                        <<"/groups/">>, G1, <<"/effective_children/">>, GroupId
-                    ],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = GroupDetailsBinary#{
-                        <<"groupId">> => GroupId
-                    }
-                },
-                logic_spec = #logic_spec{
-                    module = group_logic,
-                    function = get_eff_child,
-                    args = [auth, G1, GroupId],
-                    expected_result = ?OK_MAP_CONTAINS(GroupDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_group, id = GroupId,
-                        aspect = instance, scope = shared
-                    },
-                    auth_hint = ?THROUGH_GROUP(G1),
-                    expected_result = ?OK_MAP_CONTAINS(GroupDetailsBinary#{
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Gid} = gri:deserialize(EncodedGri),
-                            ?assertEqual(Gid, GroupId)
-                        end
-                    })
-                }
+            rest_spec = #rest_spec{
+                method = get,
+                path = [
+                    <<"/groups/">>, G1, <<"/effective_children/">>, GroupId
+                ],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:shared_group(rest, GroupId, GroupData)
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+            logic_spec = #logic_spec{
+                module = group_logic,
+                function = get_eff_child,
+                args = [auth, G1, GroupId],
+                expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
+            },
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{
+                    type = od_group, id = GroupId,
+                    aspect = instance, scope = shared
+                },
+                auth_hint = ?THROUGH_GROUP(G1),
+                expected_result = api_test_expect:shared_group(gs, GroupId, GroupData)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-        end, EffChildren
-    ).
+    end, EffChildren).
 
 
 get_eff_child_privileges_test(Config) ->
@@ -1027,13 +999,18 @@ get_eff_child_membership_intermediaries(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_time().

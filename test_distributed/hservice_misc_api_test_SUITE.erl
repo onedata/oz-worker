@@ -326,7 +326,7 @@ get_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
 
     % Get and check protected data
-    GetSharedDataApiTestSpec = #api_test_spec{
+    GetProtectedDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
@@ -343,19 +343,17 @@ get_test(Config) ->
             method = get,
             path = [<<"/handle_services/">>, HService],
             expected_code = ?HTTP_200_OK,
-            expected_body = ?DOI_SERVICE#{
-                <<"handleServiceId">> => HService
-            }
+            expected_body = api_test_expect:protected_hservice(rest, HService, ?DOI_SERVICE, ?SUB(user, U1))
         },
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_protected_data,
             args = [auth, HService],
-            expected_result = ?OK_MAP_CONTAINS(?DOI_SERVICE)
+            expected_result = api_test_expect:protected_hservice(logic, HService, ?DOI_SERVICE, ?SUB(user, U1))
         }
         % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
 
 
 update_test(Config) ->
@@ -587,8 +585,8 @@ get_handle_test(Config) ->
         Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
     ),
 
-    HandleDetails = ?HANDLE(HService, ShareId),
-    {ok, HandleId} = oz_test_utils:create_handle(Config, ?ROOT, HandleDetails),
+    HandleData = ?HANDLE(HService, ShareId),
+    {ok, HandleId} = oz_test_utils:create_handle(Config, ?ROOT, HandleData),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -605,17 +603,15 @@ get_handle_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [
-                <<"/handle_services/">>, HService, <<"/handles/">>, HandleId
-            ],
+            path = [<<"/handle_services/">>, HService, <<"/handles/">>, HandleId],
             expected_code = ?HTTP_200_OK,
-            expected_body = {contains, HandleDetails}
+            expected_body = api_test_expect:protected_handle(rest, HandleId, HandleData, ?SUB(nobody))
         },
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_handle,
             args = [auth, HService, HandleId],
-            expected_result = ?OK_MAP_CONTAINS(HandleDetails)
+            expected_result = api_test_expect:protected_handle(logic, HandleId, HandleData, ?SUB(nobody))
         }
         % TODO gs
     },
@@ -626,35 +622,21 @@ get_handle_test(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
-
-init_per_testcase(list_handles_test, Config) ->
-    init_per_testcase(handle_tests, Config);
-init_per_testcase(get_handle_test, Config) ->
-    init_per_testcase(handle_tests, Config);
-init_per_testcase(handle_tests, Config) ->
-    oz_test_utils:mock_handle_proxy(Config),
-    Config;
 init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    ozt_mocks:mock_handle_proxy(),
     Config.
 
-
-end_per_testcase(list_handles_test, Config) ->
-    end_per_testcase(handle_tests, Config);
-end_per_testcase(get_handle_test, Config) ->
-    end_per_testcase(handle_tests, Config);
-end_per_testcase(handle_tests, Config) ->
-    oz_test_utils:delete_all_entities(Config),
-    oz_test_utils:unmock_handle_proxy(Config);
 end_per_testcase(_, _Config) ->
-    ok.
+    ozt:delete_all_entities(),
+    ozt_mocks:unmock_handle_proxy(),
+    ozt_mocks:unmock_time().

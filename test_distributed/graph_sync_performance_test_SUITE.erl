@@ -324,10 +324,10 @@ concurrent_active_clients_spawning_performance(Config) ->
         {success_rate, 100},
         {description, "Checks the performance of spawning multiple, parallel GS "
         "clients that regularly make a request."},
-        {parameters, [?USER_NUM(100), ?REQUEST_INTERVAL_SECONDS(2)]},
-        ?PERF_CFG(small, [?USER_NUM(100), ?REQUEST_INTERVAL_SECONDS(2)]),
-        ?PERF_CFG(medium, [?USER_NUM(500), ?REQUEST_INTERVAL_SECONDS(2)]),
-        ?PERF_CFG(large, [?USER_NUM(1000), ?REQUEST_INTERVAL_SECONDS(2)])
+        {parameters, [?USER_NUM(50), ?REQUEST_INTERVAL_SECONDS(2)]},
+        ?PERF_CFG(small, [?USER_NUM(50), ?REQUEST_INTERVAL_SECONDS(2)]),
+        ?PERF_CFG(medium, [?USER_NUM(200), ?REQUEST_INTERVAL_SECONDS(3)]),
+        ?PERF_CFG(large, [?USER_NUM(400), ?REQUEST_INTERVAL_SECONDS(4)])
     ]).
 concurrent_active_clients_spawning_performance_base(Config) ->
     UserNum = ?USER_NUM,

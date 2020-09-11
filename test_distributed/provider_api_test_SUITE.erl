@@ -306,7 +306,7 @@ get_test(Config) ->
     ExpAdminEmail = ?ADMIN_EMAIL,
     ExpLatitude = rand:uniform() * 90,
     ExpLongitude = rand:uniform() * 180,
-    PrivateProviderDetails = #{
+    ProviderData = #{
         <<"name">> => ExpName,
         <<"adminEmail">> => ExpAdminEmail,
         <<"domain">> => ExpDomain,
@@ -315,7 +315,7 @@ get_test(Config) ->
     },
     {ok, P1Creator} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(
-        Config, P1Creator, PrivateProviderDetails#{<<"subdomainDelegation">> => false}
+        Config, P1Creator, ProviderData#{<<"subdomainDelegation">> => false}
     ),
     {ok, P2Creator} = oz_test_utils:create_user(Config),
     {ok, {P2, P2Token}} = oz_test_utils:create_provider(
@@ -398,10 +398,6 @@ get_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
 
-    ExpProtectedDetails = maps:remove(<<"adminEmail">>, PrivateProviderDetails#{
-        <<"online">> => true
-    }),
-
     % Get and check protected data
     GetProtectedDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -423,14 +419,14 @@ get_test(Config) ->
             method = get,
             path = [<<"/providers/">>, P1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpProtectedDetails#{<<"providerId">> => P1}
+            expected_body = api_test_expect:protected_provider(rest, P1, ProviderData#{<<"online">> => true})
         },
         logic_spec = #logic_spec{
             operation = get,
             module = provider_logic,
             function = get_protected_data,
             args = [auth, P1],
-            expected_result = ?OK_MAP_CONTAINS(ExpProtectedDetails)
+            expected_result = api_test_expect:protected_provider(logic, P1, ProviderData#{<<"online">> => true})
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -438,27 +434,15 @@ get_test(Config) ->
                 type = od_provider, id = P1,
                 aspect = instance, scope = protected
             },
-            expected_result = ?OK_MAP_CONTAINS(ExpProtectedDetails#{
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(P1, Id)
-                end
-            })
+            expected_result = api_test_expect:protected_provider(gs, P1, ProviderData#{<<"online">> => true})
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
 
 
 get_self_test(Config) ->
-    ProviderDetails = ?PROVIDER_DETAILS(?PROVIDER_NAME1),
-    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
-        Config, ProviderDetails#{<<"subdomainDelegation">> => false}
-    ),
-
-    ExpDetails = maps:remove(<<"adminEmail">>, ProviderDetails#{
-        <<"name">> => ?PROVIDER_NAME1,
-        <<"online">> => false
-    }),
+    ProviderData = ?PROVIDER_DETAILS(?PROVIDER_NAME1),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ProviderData),
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [{provider, P1, P1Token}]
@@ -467,7 +451,7 @@ get_self_test(Config) ->
             method = get,
             path = <<"/provider">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpDetails#{<<"providerId">> => P1}
+            expected_body = api_test_expect:protected_provider(rest, P1, ProviderData)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -475,16 +459,11 @@ get_self_test(Config) ->
                 type = od_provider, id = ?SELF,
                 aspect = instance, scope = protected
             },
-            expected_result = ?OK_MAP_CONTAINS(ExpDetails#{
-                <<"online">> => true,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(P1, Id)
-                end
-            })
+            expected_result = api_test_expect:protected_provider(gs, P1, ProviderData#{<<"online">> => true})
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
 
 list_test(Config) ->
     % Make sure that providers created in other tests are deleted.
@@ -852,11 +831,6 @@ get_eff_user_test(Config) ->
 
     lists:foreach(
         fun({UserId, UserDetails}) ->
-            ExpDetails = UserDetails#{
-                <<"emails">> => [],
-                <<"linkedAccounts">> => []
-            },
-
             ApiTestSpec = #api_test_spec{
                 client_spec = #client_spec{
                     correct = [
@@ -877,26 +851,15 @@ get_eff_user_test(Config) ->
                 },
                 rest_spec = #rest_spec{
                     method = get,
-                    path = [
-                        <<"/providers/">>, P1, <<"/effective_users/">>, UserId
-                    ],
+                    path = [<<"/providers/">>, P1, <<"/effective_users/">>, UserId],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = ExpDetails#{
-                        <<"userId">> => UserId,
-                        <<"basicAuthEnabled">> => false,
-
-                        % TODO VFS-4506 deprecated, included for backward compatibility
-                        <<"name">> => maps:get(<<"fullName">>, UserDetails),
-                        <<"login">> => maps:get(<<"username">>, UserDetails),
-                        <<"alias">> => maps:get(<<"username">>, UserDetails),
-                        <<"emailList">> => maps:get(<<"emails">>, ExpDetails)
-                    }
+                    expected_body = api_test_expect:protected_user(rest, UserId, UserDetails)
                 },
                 logic_spec = #logic_spec{
                     module = provider_logic,
                     function = get_eff_user,
                     args = [auth, P1, UserId],
-                    expected_result = ?OK_MAP_CONTAINS(ExpDetails)
+                    expected_result = api_test_expect:protected_user(logic, UserId, UserDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -905,18 +868,7 @@ get_eff_user_test(Config) ->
                         aspect = instance, scope = protected
                     },
                     auth_hint = ?THROUGH_PROVIDER(P1),
-                    expected_result = ?OK_MAP_CONTAINS(ExpDetails#{
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = gri:deserialize(EncodedGri),
-                            ?assertEqual(Id, UserId)
-                        end,
-
-                        % TODO VFS-4506 deprecated, included for backward compatibility
-                        <<"name">> => maps:get(<<"fullName">>, UserDetails),
-                        <<"login">> => maps:get(<<"username">>, UserDetails),
-                        <<"alias">> => maps:get(<<"username">>, UserDetails),
-                        <<"emailList">> => maps:get(<<"emails">>, ExpDetails)
-                    })
+                    expected_result = api_test_expect:protected_user(gs, UserId, UserDetails)
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
@@ -1119,67 +1071,50 @@ get_eff_group_test(Config) ->
 
     {ok, S1} = oz_test_utils:support_space_by_provider(Config, P2, S1),
 
-    lists:foreach(
-        fun({GroupId, GroupDetails}) ->
-            GroupDetailsBinary = GroupDetails#{
-                <<"type">> => atom_to_binary(
-                    maps:get(<<"type">>, GroupDetails), utf8
-                )
+    lists:foreach(fun({GroupId, GroupData}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {user, Cluster1Member},
+                    {admin, [?OZ_GROUPS_VIEW]},
+                    {provider, P1, P1Token}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, Cluster1MemberNoViewPrivs},
+                    {user, Owner},
+                    {user, U1},
+                    {user, U2},
+                    {user, NonAdmin},
+                    {provider, P2, P2Token}
+                ]
             },
-
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {user, Cluster1Member},
-                        {admin, [?OZ_GROUPS_VIEW]},
-                        {provider, P1, P1Token}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, Cluster1MemberNoViewPrivs},
-                        {user, Owner},
-                        {user, U1},
-                        {user, U2},
-                        {user, NonAdmin},
-                        {provider, P2, P2Token}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [
-                        <<"/providers/">>, P1, <<"/effective_groups/">>, GroupId
-                    ],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = GroupDetailsBinary#{
-                        <<"groupId">> => GroupId
-                    }
-                },
-                logic_spec = #logic_spec{
-                    module = provider_logic,
-                    function = get_eff_group,
-                    args = [auth, P1, GroupId],
-                    expected_result = ?OK_MAP_CONTAINS(GroupDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_group, id = GroupId,
-                        aspect = instance, scope = protected
-                    },
-                    auth_hint = ?THROUGH_PROVIDER(P1),
-                    expected_result = ?OK_MAP_CONTAINS(GroupDetailsBinary#{
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = gri:deserialize(EncodedGri),
-                            ?assertEqual(Id, GroupId)
-                        end
-                    })
-                }
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/providers/">>, P1, <<"/effective_groups/">>, GroupId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_group(rest, GroupId, GroupData, ?SUB(nobody))
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+            logic_spec = #logic_spec{
+                module = provider_logic,
+                function = get_eff_group,
+                args = [auth, P1, GroupId],
+                expected_result = api_test_expect:protected_group(logic, GroupId, GroupData, ?SUB(nobody))
+            },
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{
+                    type = od_group, id = GroupId,
+                    aspect = instance, scope = protected
+                },
+                auth_hint = ?THROUGH_PROVIDER(P1),
+                expected_result = api_test_expect:protected_group(gs, GroupId, GroupData, ?SUB(nobody))
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-        end, EffGroups
-    ).
+    end, EffGroups).
 
 
 get_eff_group_membership_intermediaries(Config) ->
@@ -1494,81 +1429,71 @@ get_eff_space_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    lists:foreach(
-        fun({SpaceId, SpaceDetails}) ->
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {user, Cluster1Member},
-                        {admin, [?OZ_SPACES_VIEW]},
-                        {provider, P1, P1Token}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, Cluster1MemberNoViewPrivs},
-                        {user, NonAdmin},
-                        {provider, P2, P2Token}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [<<"/providers/">>, P1, <<"/spaces/">>, SpaceId],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = {contains, SpaceDetails#{<<"spaceId">> => SpaceId}}
-                },
-                logic_spec = #logic_spec{
-                    operation = get,
-                    module = provider_logic,
-                    function = get_eff_space,
-                    args = [auth, P1, SpaceId],
-                    expected_result = ?OK_MAP_CONTAINS(SpaceDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_space, id = SpaceId,
-                        aspect = instance, scope = protected
-                    },
-                    auth_hint = ?THROUGH_PROVIDER(P1),
-                    expected_result = ?OK_MAP_CONTAINS(SpaceDetails#{
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = gri:deserialize(EncodedGri),
-                            ?assertEqual(Id, SpaceId)
-                        end
-                    })
-                }
+    lists:foreach(fun({SpaceId, SpaceData}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {user, Cluster1Member},
+                    {admin, [?OZ_SPACES_VIEW]},
+                    {provider, P1, P1Token}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, Cluster1MemberNoViewPrivs},
+                    {user, NonAdmin},
+                    {provider, P2, P2Token}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/providers/">>, P1, <<"/spaces/">>, SpaceId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_space(rest, SpaceId, SpaceData, ?SUB(nobody))
+            },
+            logic_spec = #logic_spec{
+                operation = get,
+                module = provider_logic,
+                function = get_eff_space,
+                args = [auth, P1, SpaceId],
+                expected_result = api_test_expect:protected_space(logic, SpaceId, SpaceData, ?SUB(nobody))
+            },
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{
+                    type = od_space, id = SpaceId,
+                    aspect = instance, scope = protected
+                },
+                auth_hint = ?THROUGH_PROVIDER(P1),
+                expected_result = api_test_expect:protected_space(gs, SpaceId, SpaceData, ?SUB(nobody))
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-        end, Spaces
-    ).
+    end, Spaces).
 
 
 get_own_space_test(Config) ->
     {
         {P1, P1Token}, _, Spaces, _Storages
     } = create_2_providers_and_5_supported_spaces(Config),
-
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    lists:foreach(
-        fun({SpaceId, SpaceDetails}) ->
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [{provider, P1, P1Token}]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [<<"/provider/spaces/">>, SpaceId],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = {contains, SpaceDetails#{<<"spaceId">> => SpaceId}}
-                }
+    lists:foreach(fun({SpaceId, SpaceData}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [{provider, P1, P1Token}]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/provider/spaces/">>, SpaceId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_space(rest, SpaceId, SpaceData, ?SUB(nobody))
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-        end, Spaces
-    ).
+    end, Spaces).
 
 
 legacy_support_space_test(Config) ->
@@ -2033,7 +1958,7 @@ update_subdomain_test(Config) ->
     EnvSetUpFun = fun() ->
         {ok, Cluster1Member} = oz_test_utils:create_user(Config),
         {ok, {P1, P1Token}} = oz_test_utils:create_provider(
-            Config, Cluster1Member, ?PROVIDER_DETAILS(?PROVIDER_NAME1, Domain)#{<<"subdomainDelegation">> => false}
+            Config, Cluster1Member, ?PROVIDER_DETAILS(?PROVIDER_NAME1, Domain)
         ),
         Cluster1MemberNoUpdatePriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
         #{
@@ -2300,11 +2225,11 @@ get_domain_config_test(Config) ->
 
     {ok, Cluster1Member} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(
-        Config, Cluster1Member, ?PROVIDER_DETAILS(?PROVIDER_NAME1, ExpDomain)#{<<"subdomainDelegation">> => false}
+        Config, Cluster1Member, ?PROVIDER_DETAILS(?PROVIDER_NAME1, ExpDomain)
     ),
     Cluster1MemberNoViewPriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
     {ok, {P2, P2Token}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_DETAILS(?PROVIDER_NAME2, ?UNIQUE_DOMAIN)#{<<"subdomainDelegation">> => false}
+        Config, ?PROVIDER_DETAILS(?PROVIDER_NAME2, ?UNIQUE_DOMAIN)
     ),
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -2388,9 +2313,7 @@ get_domain_config_test(Config) ->
 
 get_own_domain_config_test(Config) ->
     ExpDomain = ?UNIQUE_DOMAIN,
-    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_DETAILS(?PROVIDER_NAME1, ExpDomain)#{<<"subdomainDelegation">> => false}
-    ),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_DETAILS(?PROVIDER_NAME1, ExpDomain)),
     ExpBody = #{
         <<"subdomainDelegation">> => false,
         <<"domain">> => ExpDomain,
@@ -2605,39 +2528,29 @@ last_activity_tracking(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
-
 init_per_testcase(list_eff_harvesters_test, Config) ->
     oz_test_utils:mock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND),
     init_per_testcase(default, Config);
-init_per_testcase(last_activity_tracking, Config) ->
-    oz_test_utils:mock_time(Config),
-    init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
     Config.
-
 
 end_per_testcase(list_eff_harvesters_test, Config) ->
     oz_test_utils:unmock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND),
     end_per_testcase(default, Config);
-end_per_testcase(last_activity_tracking, Config) ->
-    oz_test_utils:unmock_time(Config),
-    end_per_testcase(default, Config);
-end_per_testcase(_, Config) ->
-    oz_test_utils:set_env(Config, require_token_for_provider_registration, false),
-    oz_test_utils:set_env(Config, subdomain_delegation_supported, true),
-    ok.
-
+end_per_testcase(_, _Config) ->
+    ozt:set_env(require_token_for_provider_registration, false),
+    ozt:set_env(subdomain_delegation_supported, true),
+    ozt_mocks:unmock_time().
 
 %%%===================================================================
 %%% Helper functions

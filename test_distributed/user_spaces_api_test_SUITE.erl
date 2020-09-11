@@ -28,7 +28,8 @@
 
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     list_spaces_test/1,
@@ -340,9 +341,9 @@ get_space_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    SpaceData = #{<<"name">> => ?SPACE_NAME1},
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), SpaceData),
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
-    ExpDetails = #{<<"name">> => ?SPACE_NAME1, <<"providers">> => #{}},
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -355,7 +356,7 @@ get_space_test(Config) ->
             method = get,
             path = [<<"/user/spaces/">>, S1],
             expected_code = ?HTTP_200_OK,
-            expected_body = {contains, ExpDetails#{<<"spaceId">> => S1}}
+            expected_body = api_test_expect:protected_space(rest, S1, SpaceData, ?SUB(user, U1))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -379,7 +380,7 @@ get_space_test(Config) ->
             module = user_logic,
             function = get_space,
             args = [auth, U1, S1],
-            expected_result = ?OK_MAP_CONTAINS(ExpDetails)
+            expected_result = api_test_expect:protected_space(logic, S1, SpaceData, ?SUB(user, U1))
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -387,12 +388,7 @@ get_space_test(Config) ->
                 type = od_space, id = S1, aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_USER(U1),
-            expected_result = ?OK_MAP_CONTAINS(ExpDetails#{
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(Id, S1)
-                end
-            })
+            expected_result = api_test_expect:protected_space(gs, S1, SpaceData, ?SUB(user, U1))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
@@ -736,77 +732,79 @@ get_eff_space_test(Config) ->
     {ok, U1} = oz_test_utils:space_add_user(Config, S6, U1),
 
     NewEffSpacesList = [{S6, S6Details} | EffSpacesList],
-    lists:foreach(
-        fun({SpaceId, SpaceDetails}) ->
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        {user, U1},
-                        {user, U2}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [<<"/user/effective_spaces/">>, SpaceId],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = {contains, SpaceDetails#{<<"spaceId">> => SpaceId}}
-                }
+    lists:foreach(fun({SpaceId, SpaceData}) ->
+        Creator = case SpaceId of
+            S6 -> ?SUB(user, U2);
+            _ -> ?SUB(nobody)
+        end,
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    {user, U1},
+                    {user, U2}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/user/effective_spaces/">>, SpaceId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_space(rest, SpaceId, SpaceData, Creator)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-            % Check that regular client can't make request
-            % on behalf of other client
-            ApiTestSpec2 = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {admin, [?OZ_SPACES_VIEW]},
-                        {user, U1}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, U2},
-                        {user, NonAdmin}
-                    ]
-                },
-                logic_spec = #logic_spec{
-                    module = user_logic,
-                    function = get_eff_space,
-                    args = [auth, U1, SpaceId],
-                    expected_result = ?OK_MAP_CONTAINS(SpaceDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_space, id = SpaceId,
-                        aspect = instance, scope = protected
-                    },
-                    auth_hint = ?THROUGH_USER(U1),
-                    expected_result = ?OK_MAP_CONTAINS(SpaceDetails#{
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = gri:deserialize(EncodedGri),
-                            ?assertEqual(Id, SpaceId)
-                        end
-                    })
-                }
+        % Check that regular client can't make request
+        % on behalf of other client
+        ApiTestSpec2 = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_SPACES_VIEW]},
+                    {user, U1}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, U2},
+                    {user, NonAdmin}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
+            logic_spec = #logic_spec{
+                module = user_logic,
+                function = get_eff_space,
+                args = [auth, U1, SpaceId],
+                expected_result = api_test_expect:protected_space(logic, SpaceId, SpaceData, Creator)
+            },
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{
+                    type = od_space, id = SpaceId,
+                    aspect = instance, scope = protected
+                },
+                auth_hint = ?THROUGH_USER(U1),
+                expected_result = api_test_expect:protected_space(gs, SpaceId, SpaceData, Creator)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
 
-        end, NewEffSpacesList
-    ).
+    end, NewEffSpacesList).
 
 
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_time().

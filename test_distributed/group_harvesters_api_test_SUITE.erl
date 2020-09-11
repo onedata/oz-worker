@@ -28,8 +28,8 @@
 
 -export([
     all/0,
-    init_per_testcase/2, end_per_testcase/2,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     list_harvesters_test/1,
@@ -114,8 +114,6 @@ get_harvester_details_test(Config) ->
 
     {ok, H1} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_CREATE_DATA),
 
-    ExpData = ?HARVESTER_PROTECTED_DATA(?HARVESTER_NAME1),
-
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -133,13 +131,13 @@ get_harvester_details_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/harvesters/">>, H1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpData#{<<"harvesterId">> => H1}
+            expected_body = api_test_expect:protected_harvester(rest, H1, ?HARVESTER_CREATE_DATA, ?SUB(nobody))
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_harvester,
             args = [auth, G1, H1],
-            expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"harvestingBackendType">> => ?HARVESTER_MOCK_BACKEND})
+            expected_result = api_test_expect:protected_harvester(logic, H1, ?HARVESTER_CREATE_DATA, ?SUB(nobody))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -149,7 +147,6 @@ create_harvester_test(Config) ->
     % create group with 2 users:
     %   U2 gets the GROUP_ADD_HARVESTER privilege
     %   U1 gets all remaining privileges
-    [Node | _] = ?config(oz_worker_nodes, Config),
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_ADD_HARVESTER
     ),
@@ -211,7 +208,7 @@ create_harvester_test(Config) ->
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"harvestingBackendEndpoint">> => [?HARVESTER_ENDPOINT1],
-                <<"harvestingBackendType">> => [?HARVESTER_MOCK_BACKEND_BINARY],
+                <<"harvestingBackendType">> => [?HARVESTER_MOCK_BACKEND],
                 <<"guiPluginConfig">> => [?HARVESTER_GUI_PLUGIN_CONFIG]
             },
             bad_values =
@@ -297,7 +294,7 @@ join_harvester_test(Config) ->
             correct_values = #{
                 <<"token">> => [fun(#{token := Token} = _Env) ->
                     Token
-            end]
+                end]
             },
             bad_values = [
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
@@ -345,7 +342,7 @@ join_harvester_test(Config) ->
             correct_values = #{<<"token">> => [Serialized2]}
         }
     },
-    VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
+    VerifyEndFun1 = fun(_ShouldSucceed, _Env, _) ->
         oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token2#token.id)
     end,
     ?assert(api_test_utils:run_tests(
@@ -367,7 +364,7 @@ leave_harvester_test(Config) ->
             Config, G1, ?HARVESTER_CREATE_DATA
         ),
         #{harvesterId => H1}
-                  end,
+    end,
     DeleteEntityFun = fun(#{harvesterId := HarvesterId} = _Env) ->
         oz_test_utils:harvester_remove_group(Config, HarvesterId, G1)
     end,
@@ -463,59 +460,56 @@ get_eff_harvester_details_test(Config) ->
         EffHarvestersList, [{G1, _} | _Groups], {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_harvesters_env(Config),
 
-    lists:foreach(
-        fun({HarvesterId, HarvesterDetails}) ->
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {admin, [?OZ_HARVESTERS_VIEW]},
-                        {user, U1}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, U2},
-                        {user, NonAdmin}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [
-                        <<"/groups/">>, G1, <<"/effective_harvesters/">>, HarvesterId
-                    ],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = HarvesterDetails#{<<"harvesterId">> => HarvesterId}
-                },
-                logic_spec = #logic_spec{
-                    module = group_logic,
-                    function = get_eff_harvester,
-                    args = [auth, G1, HarvesterId],
-                    expected_result = ?OK_MAP_CONTAINS(HarvesterDetails#{<<"harvestingBackendType">> => ?HARVESTER_MOCK_BACKEND})
-                }
+    lists:foreach(fun({HarvesterId, HarvesterData}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_HARVESTERS_VIEW]},
+                    {user, U1}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, U2},
+                    {user, NonAdmin}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/groups/">>, G1, <<"/effective_harvesters/">>, HarvesterId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_harvester(rest, HarvesterId, HarvesterData, ?SUB(nobody))
+            },
+            logic_spec = #logic_spec{
+                module = group_logic,
+                function = get_eff_harvester,
+                args = [auth, G1, HarvesterId],
+                expected_result = api_test_expect:protected_harvester(logic, HarvesterId, HarvesterData, ?SUB(nobody))
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-        end, EffHarvestersList
-    ).
+    end, EffHarvestersList).
 
 
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
-init_per_testcase(_, Config) ->
-    oz_test_utils:mock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND).
-
-end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND).
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    ozt_mocks:mock_harvesting_backends(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_harvesting_backends(),
+    ozt_mocks:unmock_time().

@@ -19,7 +19,7 @@
 -define(TIME_MOCK_STARTING_TIMESTAMP, 1500000000).
 
 %% API
--export([mock_time/0, unmock_time/0, simulate_time_passing/1, get_mocked_time/0]).
+-export([mock_time/0, unmock_time/0, get_mocked_time/0, simulate_time_passing/1]).
 
 -export([mock_gui_static/0, unmock_gui_static/0]).
 
@@ -44,25 +44,36 @@
 %%--------------------------------------------------------------------
 -spec mock_time() -> ok.
 mock_time() ->
+    set_mocked_time(?TIME_MOCK_STARTING_TIMESTAMP),
     ok = test_utils:mock_new(ozt:get_nodes(), time_utils, [passthrough]),
     ok = test_utils:mock_expect(ozt:get_nodes(), time_utils, cluster_time_seconds, fun() ->
-        oz_worker:get_env(mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP)
+        oz_worker:get_env(mocked_time)
     end).
 
 
 -spec unmock_time() -> ok.
 unmock_time() ->
+    set_mocked_time(undefined),
     ok = test_utils:mock_unload(ozt:get_nodes(), time_utils).
+
+
+%% @private
+-spec set_mocked_time(time_utils:seconds() | undefined) -> ok.
+set_mocked_time(Time) ->
+    ozt:set_env(mocked_time, Time).
+
+
+-spec get_mocked_time() -> time_utils:seconds() | no_return().
+get_mocked_time() ->
+    case ozt:get_env(mocked_time, undefined) of
+        Time when is_integer(Time) -> Time;
+        undefined -> error("~p:mock_time/0 must be called first to use get_mocked_time/0", [?MODULE])
+    end.
 
 
 -spec simulate_time_passing(time_utils:seconds()) -> ok.
 simulate_time_passing(Seconds) ->
-    ozt:set_env(mocked_time, get_mocked_time() + Seconds).
-
-
--spec get_mocked_time() -> time_utils:seconds().
-get_mocked_time() ->
-    ozt:get_env(mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP).
+    set_mocked_time(get_mocked_time() + Seconds).
 
 
 %%--------------------------------------------------------------------
@@ -137,7 +148,7 @@ unmock_handle_proxy() ->
 
 -spec mock_harvesting_backends() -> ok.
 mock_harvesting_backends() ->
-    mock_harvesting_backends(?HARVESTER_MOCK_BACKEND).
+    mock_harvesting_backends([?HARVESTER_MOCK_BACKEND, ?HARVESTER_MOCK_BACKEND2]).
 
 -spec mock_harvesting_backends(Backends :: atom() | list()) -> ok.
 mock_harvesting_backends(Backends) ->
@@ -146,7 +157,7 @@ mock_harvesting_backends(Backends) ->
 
 -spec unmock_harvesting_backends() -> ok.
 unmock_harvesting_backends() ->
-    unmock_harvesting_backends(?HARVESTER_MOCK_BACKEND).
+    unmock_harvesting_backends([?HARVESTER_MOCK_BACKEND, ?HARVESTER_MOCK_BACKEND2]).
 
 -spec unmock_harvesting_backends(Plugins :: atom() | list()) -> ok.
 unmock_harvesting_backends(Backends) ->

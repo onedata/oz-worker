@@ -134,7 +134,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             resource_id = ResourceId,
             public_handle = PublicHandle,
             metadata = Metadata,
-            creator = aai:normalize_subject(Auth#auth.subject)
+            creator = aai:normalize_subject(Auth#auth.subject),
+            creation_time = time_utils:cluster_time_seconds()
         }},
         {ok, #document{key = HandleId}} = od_handle:create(Handle),
         entity_graph:add_relation(

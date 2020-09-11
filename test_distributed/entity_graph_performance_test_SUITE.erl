@@ -19,7 +19,8 @@
 %% API
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 
 -export([
@@ -46,7 +47,7 @@
 
 
 % Number of parallel processes making requests
--define(PARALLEL_PROCESSES, 300).
+-define(PARALLEL_PROCESSES, 100).
 
 % Performance tests parameters
 -define(USER_NUM(Value), ?PERF_PARAM(
@@ -117,17 +118,16 @@ create_group_performance(Config) ->
         {parameters, [?GROUP_NUM(100)]},
         ?PERF_CFG(small_rpc, [?GROUP_NUM(100), ?API_TYPE(rpc)]),
         ?PERF_CFG(small_rest, [?GROUP_NUM(100), ?API_TYPE(rest)]),
-        ?PERF_CFG(medium_rpc, [?GROUP_NUM(1500), ?API_TYPE(rpc)]),
-        ?PERF_CFG(medium_rest, [?GROUP_NUM(1500), ?API_TYPE(rest)]),
-        ?PERF_CFG(large_rpc, [?GROUP_NUM(3000), ?API_TYPE(rpc)]),
-        ?PERF_CFG(large_rest, [?GROUP_NUM(3000), ?API_TYPE(rest)])
+        ?PERF_CFG(medium_rpc, [?GROUP_NUM(500), ?API_TYPE(rpc)]),
+        ?PERF_CFG(medium_rest, [?GROUP_NUM(500), ?API_TYPE(rest)]),
+        ?PERF_CFG(large_rpc, [?GROUP_NUM(1200), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_rest, [?GROUP_NUM(1200), ?API_TYPE(rest)])
     ]).
 create_group_performance_base(Config) ->
     GroupNum = ?GROUP_NUM,
     ApiType = ?API_TYPE,
     UsersAndAuths = create_n_users(Config, GroupNum),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-
 
     ?begin_measurement(groups_creation_time),
     ok = parallel_foreach(fun(UserAndAuth) ->
@@ -166,22 +166,21 @@ create_space_performance(Config) ->
         {parameters, [?SPACE_NUM(100), ?API_TYPE(rpc), ?API_TYPE(rpc)]},
         ?PERF_CFG(small_rpc, [?SPACE_NUM(100), ?API_TYPE(rpc)]),
         ?PERF_CFG(small_rest, [?SPACE_NUM(100), ?API_TYPE(rest)]),
-        ?PERF_CFG(medium_rpc, [?SPACE_NUM(1500), ?API_TYPE(rpc)]),
-        ?PERF_CFG(medium_rest, [?SPACE_NUM(1500), ?API_TYPE(rest)]),
-        ?PERF_CFG(large_rpc, [?SPACE_NUM(3000), ?API_TYPE(rpc)]),
-        ?PERF_CFG(large_rest, [?SPACE_NUM(3000), ?API_TYPE(rest)])
+        ?PERF_CFG(medium_rpc, [?SPACE_NUM(500), ?API_TYPE(rpc)]),
+        ?PERF_CFG(medium_rest, [?SPACE_NUM(500), ?API_TYPE(rest)]),
+        ?PERF_CFG(large_rpc, [?SPACE_NUM(1200), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_rest, [?SPACE_NUM(1200), ?API_TYPE(rest)])
     ]).
 create_space_performance_base(Config) ->
     SpaceNum = ?SPACE_NUM,
     ApiType = ?API_TYPE,
-    GroupOwners = create_n_users(Config, SpaceNum),
+    SpaceOwners = create_n_users(Config, SpaceNum),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-
     ?begin_measurement(space_creation_time),
-    ok = parallel_foreach(fun(User) ->
-        create_space(Config, ApiType, ?USER(User), <<"space">>)
-    end, GroupOwners),
+    ok = parallel_foreach(fun(UserAndAuth) ->
+        create_space(Config, ApiType, UserAndAuth, <<"space">>)
+    end, SpaceOwners),
     ?end_measurement(space_creation_time),
 
     ?begin_measurement(reconciliation_time),
@@ -381,10 +380,10 @@ update_privileges_performance(Config) ->
         {parameters, [?USER_NUM(100), ?API_TYPE(rpc)]},
         ?PERF_CFG(small_rpc, [?USER_NUM(100), ?API_TYPE(rpc)]),
         ?PERF_CFG(small_rest, [?USER_NUM(100), ?API_TYPE(rest)]),
-        ?PERF_CFG(medium_rpc, [?USER_NUM(750), ?API_TYPE(rpc)]),
-        ?PERF_CFG(medium_rest, [?USER_NUM(750), ?API_TYPE(rest)]),
-        ?PERF_CFG(large_rpc, [?USER_NUM(1500), ?API_TYPE(rpc)]),
-        ?PERF_CFG(large_rest, [?USER_NUM(1500), ?API_TYPE(rest)])
+        ?PERF_CFG(medium_rpc, [?USER_NUM(500), ?API_TYPE(rpc)]),
+        ?PERF_CFG(medium_rest, [?USER_NUM(500), ?API_TYPE(rest)]),
+        ?PERF_CFG(large_rpc, [?USER_NUM(1200), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_rest, [?USER_NUM(1200), ?API_TYPE(rest)])
     ]).
 update_privileges_performance_base(Config) ->
     UserNum = ?USER_NUM,
@@ -541,6 +540,18 @@ end_per_suite(_Config) ->
     ok.
 
 
+init_per_testcase(_, Config) ->
+    % restart the listeners to kill any keep-alive connections
+    OzNodes = ?config(oz_worker_nodes, Config),
+    [rpc:call(N, https_listener, stop, []) || N <- OzNodes],
+    [rpc:call(N, https_listener, start, []) || N <- OzNodes],
+    Config.
+
+
+end_per_testcase(_, _Config) ->
+    ok.
+
+
 parallel_foreach(Fun, List) ->
     ForeachSublist = fun(Sublist) -> lists:foreach(Fun, Sublist) end,
     lists_utils:pforeach(ForeachSublist, split_into_sublists(List)).
@@ -587,11 +598,11 @@ group_add_group(Config, rest, {_User, Token}, Group, ChildGroup) ->
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.
 
 
-group_set_user_privileges(Config, rpc, {User, _Token}, Group, User, PrivsToGrant, PrivsToRevoke) ->
-    oz_test_utils:group_set_user_privileges(Config, ?USER(User), Group, User, PrivsToGrant, PrivsToRevoke);
-group_set_user_privileges(Config, rest, {_User, Token}, Group, User, PrivsToGrant, PrivsToRevoke) ->
+group_set_user_privileges(Config, rpc, {ClientUser, _Token}, Group, User, PrivsToGrant, PrivsToRevoke) ->
+    oz_test_utils:group_set_user_privileges(Config, ?USER(ClientUser), Group, User, PrivsToGrant, PrivsToRevoke);
+group_set_user_privileges(Config, rest, {_ClientUser, Token}, Group, User, PrivsToGrant, PrivsToRevoke) ->
     {ok, 204, _, _} = rest_req(
-        Config, Token, put, [<<"/groups/">>, Group, <<"/users/">>, User, <<"/privileges">>], #{
+        Config, Token, patch, [<<"/groups/">>, Group, <<"/users/">>, User, <<"/privileges">>], #{
             <<"grant">> => [atom_to_binary(P, utf8) || P <- PrivsToGrant],
             <<"revoke">> => [atom_to_binary(P, utf8) || P <- PrivsToRevoke]
         }
@@ -608,14 +619,31 @@ create_space(Config, rest, {_User, Token}, Name) ->
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.
 
 
+-define(MAX_HTTP_RETRIES, 3).
+
 rest_req(Config, Token, Method, Path) ->
     rest_req(Config, Token, Method, Path, #{}).
 
 rest_req(Config, Token, Method, Path, Body) ->
-    Opts = [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}],
     URL = oz_test_utils:oz_rest_url(Config, Path),
     Headers = #{
         ?HDR_CONTENT_TYPE => <<"application/json">>,
         ?HDR_X_AUTH_TOKEN => Token
     },
-    http_client:request(Method, URL, Headers, json_utils:encode(Body), Opts).
+    Opts = [
+        {connect_timeout, 60000},
+        {recv_timeout, 60000},
+        {ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}
+    ],
+    rest_req_with_retries(Method, URL, Headers, json_utils:encode(Body), Opts, ?MAX_HTTP_RETRIES).
+
+rest_req_with_retries(Method, URL, Headers, Body, Opts, RetriesLeft) ->
+    case http_client:request(Method, URL, Headers, Body, Opts) of
+        {ok, _, _, _} = Response ->
+            Response;
+        {error, _} = Error ->
+            case RetriesLeft of
+                0 -> Error;
+                _ -> rest_req_with_retries(Method, URL, Headers, Body, Opts, RetriesLeft - 1)
+            end
+    end.

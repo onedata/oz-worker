@@ -166,7 +166,10 @@ create(Req = #el_req{gri = #gri{id = ProposedGroupId, aspect = instance} = GRI, 
     Name = maps:get(<<"name">>, Req#el_req.data),
     Type = maps:get(<<"type">>, Req#el_req.data, ?DEFAULT_GROUP_TYPE),
     GroupDoc = #document{key = ProposedGroupId, value = #od_group{
-        name = Name, type = Type, creator = aai:normalize_subject(Auth#auth.subject)
+        name = Name,
+        type = Type,
+        creator = aai:normalize_subject(Auth#auth.subject),
+        creation_time = time_utils:cluster_time_seconds()
     }},
     case od_group:create(GroupDoc) of
         {error, already_exists} ->

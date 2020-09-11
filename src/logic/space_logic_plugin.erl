@@ -155,7 +155,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     {ok, #document{key = SpaceId}} = od_space:create(#document{
         value = #od_space{
             name = Name,
-            creator = aai:normalize_subject(Auth#auth.subject)
+            creator = aai:normalize_subject(Auth#auth.subject),
+            creation_time = time_utils:cluster_time_seconds()
         }
     }),
     case Req#el_req.auth_hint of

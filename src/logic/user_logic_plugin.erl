@@ -161,7 +161,11 @@ create(#el_req{gri = GRI = #gri{id = ProposedUserId, aspect = instance}, data = 
     % assigned automatically (in this case ProposedUserId is undefined).
     FullName = maps:get(<<"fullName">>, Data, ?DEFAULT_FULL_NAME),
     Username = maps:get(<<"username">>, Data, undefined),
-    BasicUserRecord = #od_user{full_name = FullName, username = Username},
+    BasicUserRecord = #od_user{
+        full_name = FullName,
+        username = Username,
+        creation_time = time_utils:cluster_time_seconds()
+    },
 
     UserRecord = case maps:find(<<"password">>, Data) of
         error ->

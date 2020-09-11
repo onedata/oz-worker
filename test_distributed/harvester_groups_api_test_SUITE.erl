@@ -28,8 +28,8 @@
 
 -export([
     all/0,
-    init_per_testcase/2, end_per_testcase/2,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     add_group_test/1,
@@ -103,14 +103,14 @@ add_group_test(Config) ->
     ),
 
     VerifyEndFun = fun
-                       (true = _ShouldSucceed, _, _) ->
-                           {ok, Groups} = oz_test_utils:harvester_get_groups(Config, H1),
-                           ?assert(lists:member(G1, Groups)),
-                           oz_test_utils:harvester_remove_group(Config, H1, G1);
-                       (false = _ShouldSucceed, _, _) ->
-                           {ok, Groups} = oz_test_utils:harvester_get_groups(Config, H1),
-                           ?assertNot(lists:member(G1, Groups))
-                   end,
+        (true = _ShouldSucceed, _, _) ->
+            {ok, Groups} = oz_test_utils:harvester_get_groups(Config, H1),
+            ?assert(lists:member(G1, Groups)),
+            oz_test_utils:harvester_remove_group(Config, H1, G1);
+        (false = _ShouldSucceed, _, _) ->
+            {ok, Groups} = oz_test_utils:harvester_get_groups(Config, H1),
+            ?assertNot(lists:member(G1, Groups))
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -134,7 +134,7 @@ add_group_test(Config) ->
                 ExpLocation = ?URL(Config, [<<"/harvesters/">>, H1, <<"/groups/">>, G1]),
                 ?assertEqual(ExpLocation, Location),
                 true
-                               end
+            end
         },
         logic_spec = #logic_spec{
             module = harvester_logic,
@@ -175,17 +175,17 @@ add_group_with_privileges_test(Config) ->
 
 
     VerifyEndFun = fun
-                       (true = _ShouldSucceed, _, Data) ->
-                           ExpPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
-                           {ok, Privs} = oz_test_utils:harvester_get_group_privileges(
-                               Config, H1, G1
-                           ),
-                           ?assertEqual(ExpPrivs, lists:sort(Privs)),
-                           oz_test_utils:harvester_remove_group(Config, H1, G1);
-                       (false = ShouldSucceed, _, _) ->
-                           {ok, Groups} = oz_test_utils:harvester_get_groups(Config, H1),
-                           ?assertEqual(lists:member(G1, Groups), ShouldSucceed)
-                   end,
+        (true = _ShouldSucceed, _, Data) ->
+            ExpPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
+            {ok, Privs} = oz_test_utils:harvester_get_group_privileges(
+                Config, H1, G1
+            ),
+            ?assertEqual(ExpPrivs, lists:sort(Privs)),
+            oz_test_utils:harvester_remove_group(Config, H1, G1);
+        (false = ShouldSucceed, _, _) ->
+            {ok, Groups} = oz_test_utils:harvester_get_groups(Config, H1),
+            ?assertEqual(lists:member(G1, Groups), ShouldSucceed)
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -280,7 +280,7 @@ create_group_test(Config) ->
                     [GroupId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(GroupId, ExpType)
                 end
-                end)
+            end)
         },
         logic_spec = #logic_spec{
             module = harvester_logic,
@@ -363,14 +363,14 @@ remove_group_test(Config) ->
         {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
         {ok, G1} = oz_test_utils:harvester_add_group(Config, H1, G1),
         #{groupId => G1}
-                  end,
+    end,
     DeleteEntityFun = fun(#{groupId := GroupId} = _Env) ->
         oz_test_utils:harvester_remove_group(Config, H1, GroupId)
-                      end,
+    end,
     VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, _) ->
         {ok, Groups} = oz_test_utils:harvester_get_groups(Config, H1),
         ?assertEqual(lists:member(GroupId, Groups), not ShouldSucceed)
-                   end,
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -462,10 +462,8 @@ get_group_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, G1} = oz_test_utils:create_group(
-        Config, ?ROOT,
-        #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
-    ),
+    GroupData = #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1},
+    {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, GroupData),
     oz_test_utils:harvester_add_group(Config, H1, G1),
 
     ApiTestSpec = #api_test_spec{
@@ -485,20 +483,13 @@ get_group_test(Config) ->
             method = get,
             path = [<<"/harvesters/">>, H1, <<"/groups/">>, G1],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"groupId">> => G1,
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1_BIN
-            }
+            expected_body = api_test_expect:shared_group(rest, G1, GroupData)
         },
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_group,
             args = [auth, H1, G1],
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1
-            })
+            expected_result = api_test_expect:shared_group(logic, G1, GroupData)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -506,14 +497,7 @@ get_group_test(Config) ->
                 type = od_group, id = G1, aspect = instance, scope = shared
             },
             auth_hint = ?THROUGH_HARVESTER(H1),
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1_BIN,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(Id, G1)
-            end
-            })
+            expected_result = api_test_expect:shared_group(gs, G1, GroupData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -542,7 +526,7 @@ get_group_privileges_test(Config) ->
         oz_test_utils:harvester_set_group_privileges(
             Config, H1, G1, PrivsToGrant, PrivsToRevoke
         )
-                  end,
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -600,11 +584,11 @@ update_group_privileges_test(Config) ->
         oz_test_utils:harvester_set_group_privileges(
             Config, H1, G1, PrivsToGrant, PrivsToRevoke
         )
-                  end,
+    end,
     GetPrivsFun = fun() ->
         {ok, Privs} = oz_test_utils:harvester_get_group_privileges(Config, H1, G1),
         Privs
-                  end,
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -696,61 +680,45 @@ get_eff_group_test(Config) ->
         H1, EffGroups, _EffUsers, {U1, U2, NonAdmin}
     } = api_test_scenarios:create_harvester_eff_users_env(Config),
 
-    lists:foreach(
-        fun({GroupId, GroupDetails}) ->
-            GroupDetailsBinary = GroupDetails#{
-                <<"type">> => atom_to_binary(
-                    maps:get(<<"type">>, GroupDetails), utf8
-                )
+    lists:foreach(fun({GroupId, GroupData}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_GROUPS_VIEW]},
+                    {user, U2}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, U1},
+                    {user, NonAdmin}
+                ]
             },
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {admin, [?OZ_GROUPS_VIEW]},
-                        {user, U2}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, U1},
-                        {user, NonAdmin}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [
-                        <<"/harvesters/">>, H1, <<"/effective_groups/">>, GroupId
-                    ],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = GroupDetailsBinary#{
-                        <<"groupId">> => GroupId
-                    }
-                },
-                logic_spec = #logic_spec{
-                    module = harvester_logic,
-                    function = get_eff_group,
-                    args = [auth, H1, GroupId],
-                    expected_result = ?OK_MAP_CONTAINS(GroupDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_group, id = GroupId,
-                        aspect = instance, scope = shared
-                    },
-                    auth_hint = ?THROUGH_HARVESTER(H1),
-                    expected_result = ?OK_MAP_CONTAINS(GroupDetailsBinary#{
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = gri:deserialize(EncodedGri),
-                            ?assertEqual(Id, GroupId)
-                                     end
-                    })
-                }
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/harvesters/">>, H1, <<"/effective_groups/">>, GroupId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:shared_group(rest, GroupId, GroupData)
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+            logic_spec = #logic_spec{
+                module = harvester_logic,
+                function = get_eff_group,
+                args = [auth, H1, GroupId],
+                expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
+            },
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{
+                    type = od_group, id = GroupId,
+                    aspect = instance, scope = shared
+                },
+                auth_hint = ?THROUGH_HARVESTER(H1),
+                expected_result = api_test_expect:shared_group(gs, GroupId, GroupData)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-        end, EffGroups
-    ).
+    end, EffGroups).
 
 
 get_eff_group_privileges_test(Config) ->
@@ -822,7 +790,7 @@ get_eff_group_privileges_test(Config) ->
 
         oz_test_utils:harvester_set_group_privileges(Config, H1, G1, PrivsToGrant1, PrivsToRevoke),
         oz_test_utils:harvester_set_group_privileges(Config, H1, G2, PrivsToGrant2, PrivsToRevoke)
-                  end,
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -965,7 +933,7 @@ get_eff_group_membership_intermediaries(Config) ->
     lists:foreach(fun({HarvesterId, GroupId, CorrectUsers, ExpIntermediariesRaw}) ->
         ExpIntermediaries = lists:map(fun({Type, Id}) ->
             #{<<"type">> => gri:serialize_type(Type), <<"id">> => Id}
-                                      end, ExpIntermediariesRaw),
+        end, ExpIntermediariesRaw),
         CorrectUserClients = [{user, U} || U <- CorrectUsers],
         ApiTestSpec = #api_test_spec{
             client_spec = #client_spec{
@@ -990,26 +958,27 @@ get_eff_group_membership_intermediaries(Config) ->
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
-                  end, ExpectedMembershipIntermediaries).
+    end, ExpectedMembershipIntermediaries).
 
 
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
-init_per_testcase(_, Config) ->
-    oz_test_utils:mock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND).
-
-end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND).
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    ozt_mocks:mock_harvesting_backends(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_harvesting_backends(),
+    ozt_mocks:unmock_time().

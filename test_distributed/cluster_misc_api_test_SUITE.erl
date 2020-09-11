@@ -153,12 +153,12 @@ get_onezone_cluster_test(Config) ->
         [{user, NonAdmin}]
     ),
     get_protected_data_test_base(
-        Config, ?ONEZONE_CLUSTER_ID, ?ONEZONE, VersionInfo,
+        Config, ?ONEZONE_CLUSTER_ID, ?ONEZONE, ?SUB(nobody),
         [],
         [{user, NonAdmin}]
     ),
     get_public_data_test_base(
-        Config, ?ONEZONE_CLUSTER_ID, ?ONEZONE, VersionInfo,
+        Config, ?ONEZONE_CLUSTER_ID, ?ONEZONE,
         [{user, NonAdmin}], % Every user of onezone is allowed to view public data
         []
     ).
@@ -182,12 +182,12 @@ get_oneprovider_cluster_test(Config) ->
         [{user, NonAdmin}, {user, EffUserOfProvider}]
     ),
     get_protected_data_test_base(
-        Config, ClusterId, ?ONEPROVIDER, VersionInfo,
+        Config, ClusterId, ?ONEPROVIDER, ?SUB(user, ProviderAdmin),
         [{provider, ProviderId, ProviderToken}],
         [{user, NonAdmin}, {user, EffUserOfProvider}]
     ),
     get_public_data_test_base(
-        Config, ClusterId, ?ONEPROVIDER, VersionInfo,
+        Config, ClusterId, ?ONEPROVIDER,
         % Every user of onezone is allowed to view public data
         [{provider, ProviderId, ProviderToken}, {user, EffUserOfProvider}, {user, NonAdmin}],
         []
@@ -255,7 +255,7 @@ get_private_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectC
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
-get_protected_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectClients, ForbiddenClients) ->
+get_protected_data_test_base(Config, ClusterId, ClusterType, Creator, CorrectClients, ForbiddenClients) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, U1} = oz_test_utils:cluster_add_user(Config, ClusterId, U1),
@@ -263,26 +263,6 @@ get_protected_data_test_base(Config, ClusterId, ClusterType, VersionInfo, Correc
     {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
     oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U2, [?CLUSTER_VIEW], []),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-
-    {Release, Build, Gui} = VersionInfo,
-    ExpectedWorkerVersionInfoJson = #{
-        <<"release">> => Release,
-        <<"build">> => Build,
-        <<"gui">> => Gui
-    },
-    ExpectedOnepanelVersionInfoJson = #{
-        <<"release">> => ?DEFAULT_RELEASE_VERSION,
-        <<"build">> => ?DEFAULT_BUILD_VERSION,
-        <<"gui">> => ?EMPTY_GUI_HASH
-    },
-    ExpectedOnepanelProxy = true,
-
-    ClusterDetails = #{
-        <<"type">> => ClusterType,
-        <<"workerVersion">> => ExpectedWorkerVersionInfoJson,
-        <<"onepanelVersion">> => ExpectedOnepanelVersionInfoJson,
-        <<"onepanelProxy">> => ExpectedOnepanelProxy
-    },
 
     % Get and check protected data
     ApiTestSpec = #api_test_spec{
@@ -300,23 +280,20 @@ get_protected_data_test_base(Config, ClusterId, ClusterType, VersionInfo, Correc
             method = get,
             path = [<<"/clusters/">>, ClusterId],
             expected_code = ?HTTP_200_OK,
-            expected_body = {contains, ClusterDetails#{
-                <<"clusterId">> => ClusterId,
-                <<"type">> => atom_to_binary(ClusterType, utf8)
-            }}
+            expected_body = api_test_expect:protected_cluster(rest, ClusterId, ClusterType, Creator)
         },
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = get_protected_data,
             args = [auth, ClusterId],
-            expected_result = ?OK_MAP_CONTAINS(ClusterDetails)
+            expected_result = api_test_expect:protected_cluster(logic, ClusterId, ClusterType, Creator)
         }
         % TODO gs
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
-get_public_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectClients, ForbiddenClients) ->
+get_public_data_test_base(Config, ClusterId, ClusterType, CorrectClients, ForbiddenClients) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, AnyUser} = oz_test_utils:create_user(Config),
@@ -325,24 +302,6 @@ get_public_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectCl
     {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
     oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U2, [?CLUSTER_VIEW], []),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-
-    {Release, Build, Gui} = VersionInfo,
-    ExpectedWorkerVersionInfoJson = #{
-        <<"release">> => Release,
-        <<"build">> => Build,
-        <<"gui">> => Gui
-    },
-    ExpectedOnepanelVersionInfoJson = #{
-        <<"release">> => ?DEFAULT_RELEASE_VERSION,
-        <<"build">> => ?DEFAULT_BUILD_VERSION,
-        <<"gui">> => ?EMPTY_GUI_HASH
-    },
-
-    ClusterDetails = #{
-        <<"type">> => ClusterType,
-        <<"workerVersion">> => ExpectedWorkerVersionInfoJson,
-        <<"onepanelVersion">> => ExpectedOnepanelVersionInfoJson
-    },
 
     % Get and check public data
     ApiTestSpec = #api_test_spec{
@@ -362,7 +321,7 @@ get_public_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectCl
             module = cluster_logic,
             function = get_public_data,
             args = [auth, ClusterId],
-            expected_result = ?OK_MAP_CONTAINS(ClusterDetails)
+            expected_result = api_test_expect:public_cluster(logic, ClusterId, ClusterType)
         }
         % TODO gs
     },
@@ -591,25 +550,22 @@ update_version_info_test_base(Config, ClusterType, ServiceType) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
-
 init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
     Config.
 
-
-end_per_testcase(_, Config) ->
-    oz_test_utils:delete_all_entities(Config).
-
+end_per_testcase(_, _Config) ->
+    ozt:delete_all_entities(),
+    ozt_mocks:unmock_time().
 
 %%%===================================================================
 %%% Helper functions

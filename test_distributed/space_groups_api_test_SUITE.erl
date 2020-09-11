@@ -28,7 +28,8 @@
 
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     add_group_test/1,
@@ -476,10 +477,8 @@ get_group_test(Config) ->
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     oz_test_utils:support_space_by_provider(Config, P1, S1),
 
-    {ok, G1} = oz_test_utils:create_group(
-        Config, ?ROOT,
-        #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
-    ),
+    GroupData = #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1},
+    {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, GroupData),
     oz_test_utils:space_add_group(Config, S1, G1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -502,20 +501,13 @@ get_group_test(Config) ->
             method = get,
             path = [<<"/spaces/">>, S1, <<"/groups/">>, G1],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"groupId">> => G1,
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1_BIN
-            }
+            expected_body = api_test_expect:shared_group(rest, G1, GroupData)
         },
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_group,
             args = [auth, S1, G1],
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1
-            })
+            expected_result = api_test_expect:shared_group(logic, G1, GroupData)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -523,14 +515,7 @@ get_group_test(Config) ->
                 type = od_group, id = G1, aspect = instance, scope = shared
             },
             auth_hint = ?THROUGH_SPACE(S1),
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1_BIN,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(Id, G1)
-                end
-            })
+            expected_result = api_test_expect:shared_group(gs, G1, GroupData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -732,12 +717,7 @@ get_eff_group_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     lists:foreach(
-        fun({GroupId, GroupDetails}) ->
-            GroupDetailsBinary = GroupDetails#{
-                <<"type">> => atom_to_binary(
-                    maps:get(<<"type">>, GroupDetails), utf8
-                )
-            },
+        fun({GroupId, GroupData}) ->
             ApiTestSpec = #api_test_spec{
                 client_spec = #client_spec{
                     correct = [
@@ -755,19 +735,15 @@ get_eff_group_test(Config) ->
                 },
                 rest_spec = #rest_spec{
                     method = get,
-                    path = [
-                        <<"/spaces/">>, S1, <<"/effective_groups/">>, GroupId
-                    ],
+                    path = [<<"/spaces/">>, S1, <<"/effective_groups/">>, GroupId],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = GroupDetailsBinary#{
-                        <<"groupId">> => GroupId
-                    }
+                    expected_body = api_test_expect:shared_group(rest, GroupId, GroupData)
                 },
                 logic_spec = #logic_spec{
                     module = space_logic,
                     function = get_eff_group,
                     args = [auth, S1, GroupId],
-                    expected_result = ?OK_MAP_CONTAINS(GroupDetails)
+                    expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -776,12 +752,7 @@ get_eff_group_test(Config) ->
                         aspect = instance, scope = shared
                     },
                     auth_hint = ?THROUGH_SPACE(S1),
-                    expected_result = ?OK_MAP_CONTAINS(GroupDetailsBinary#{
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = gri:deserialize(EncodedGri),
-                            ?assertEqual(Id, GroupId)
-                        end
-                    })
+                    expected_result = api_test_expect:shared_group(gs, GroupId, GroupData)
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
@@ -1049,13 +1020,18 @@ get_eff_group_membership_intermediaries(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_time().
