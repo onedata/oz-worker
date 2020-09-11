@@ -21,9 +21,12 @@
 -export([installed_cluster_generation/0]).
 -export([oldest_known_cluster_generation/0]).
 -export([app_name/0, cm_nodes/0, db_nodes/0]).
--export([listeners/0, modules_with_args/0]).
--export([before_init/1, after_init/1]).
+-export([before_init/0]).
+-export([before_cluster_upgrade/0]).
 -export([upgrade_cluster/1]).
+-export([custom_workers/0]).
+-export([on_db_and_workers_ready/0]).
+-export([listeners/0]).
 -export([handle_call/3, handle_cast/2]).
 
 -export([reconcile_dns_config/0]).
@@ -36,7 +39,7 @@
 % This can be used to e.g. move models between services.
 % Oldest known generation is the lowest one that can be directly upgraded to newest.
 % Human readable version is included to for logging purposes.
--define(INSTALLED_CLUSTER_GENERATION, 1).
+-define(INSTALLED_CLUSTER_GENERATION, 2).
 -define(OLDEST_KNOWN_CLUSTER_GENERATION, {1, <<"19.02.*">>}).
 
 %%%===================================================================
@@ -93,34 +96,12 @@ db_nodes() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Overrides {@link node_manager_plugin_default:listeners/0}.
-%% @end
-%%--------------------------------------------------------------------
--spec listeners() -> Listeners :: [atom()].
-listeners() -> [
-    http_listener,
-    https_listener
-].
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Overrides {@link node_manager_plugin_default:modules_with_args/0}.
-%% @end
-%%--------------------------------------------------------------------
--spec modules_with_args() -> Models :: [{atom(), [any()]}].
-modules_with_args() ->
-    [{gs_worker, [
-        {supervisor_flags, gs_worker:supervisor_flags()}
-    ]}].
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Overrides {@link node_manager_plugin_default:before_init/1}.
+%% Overrides {@link node_manager_plugin_default:before_init/0}.
 %% This callback is executed on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec before_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
-before_init([]) ->
+-spec before_init() -> Result :: ok | {error, Reason :: term()}.
+before_init() ->
     try
         oz_worker_sup:start_link(),
         ok
@@ -133,31 +114,12 @@ before_init([]) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Overrides {@link node_manager_plugin_default:after_init/1}.
-%% This callback is executed on all cluster nodes.
+%% Callback executed before cluster upgrade so that any required preparation
+%% can be done.
 %% @end
 %%--------------------------------------------------------------------
--spec after_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
-after_init([]) ->
-    try
-        % Logic run on every node of the cluster
-        onezone_plugins:init(),
-
-        % Logic that should be run on a single node
-        is_dedicated_node(shared_token_secret) andalso shared_token_secret:init(),
-        is_dedicated_node(set_up_service) andalso cluster_logic:set_up_oz_worker_service(),
-        is_dedicated_node(init_entity_graph) andalso entity_graph:init_state(),
-        is_dedicated_node(dns) andalso broadcast_dns_config(),
-        is_dedicated_node(predefined_groups) andalso group_logic:ensure_predefined_groups(),
-
-        ok
-    catch
-        _:Error ->
-            ?error_stacktrace("Error in node_manager_plugin:after_init: ~p",
-                [Error]),
-            {error, cannot_start_node_manager_plugin}
-    end.
-
+-spec before_cluster_upgrade() -> ok.
+before_cluster_upgrade() -> ok.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -165,10 +127,63 @@ after_init([]) ->
 %% This callback is executed only on one cluster node.
 %% @end
 %%--------------------------------------------------------------------
--spec upgrade_cluster(node_manager:cluster_generation()) -> no_return().
-upgrade_cluster(_CurrentGeneration) ->
-    error(not_supported).
+-spec upgrade_cluster(node_manager:cluster_generation()) ->
+    {ok, node_manager:cluster_generation()}.
+upgrade_cluster(1) ->
+    token_logic:migrate_deprecated_tokens(),
+    storage_logic:migrate_legacy_supports(),
+    {ok, 2}.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:custom_workers/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec custom_workers() -> Models :: [{atom(), [any()]}].
+custom_workers() ->
+    [{gs_worker, [
+        {supervisor_flags, gs_worker:supervisor_flags()}
+    ]}].
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:on_db_and_workers_ready/0}.
+%% This callback is executed on all cluster nodes.
+%% @end
+%%--------------------------------------------------------------------
+-spec on_db_and_workers_ready() -> ok | {error, Reason :: term()}.
+on_db_and_workers_ready() ->
+    try
+        % Logic that should be run on every node of the cluster
+        onezone_plugins:init(),
+
+        % Logic that should be run on a single node
+        case is_dedicated_node(cluster_setup) of
+            false ->
+                ok;
+            true ->
+                cluster_logic:set_up_oz_worker_service(),
+                harvester_logic:deploy_default_gui_package(),
+                entity_graph:init_state(),
+                broadcast_dns_config(),
+                group_logic:ensure_predefined_groups()
+        end
+    catch
+        _:Error ->
+            ?error_stacktrace("Error in node_manager_plugin:on_db_and_workers_ready: ~p", [Error]),
+            {error, cannot_start_node_manager_plugin}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:listeners/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec listeners() -> Listeners :: [atom()].
+listeners() -> [
+    http_listener,
+    https_listener
+].
 
 %%--------------------------------------------------------------------
 %% @private
@@ -246,7 +261,7 @@ is_dedicated_node(Identifier) ->
 %%--------------------------------------------------------------------
 -spec dedicated_node(Identifier :: atom()) -> node().
 dedicated_node(Identifier) ->
-    consistent_hashing:get_node(Identifier).
+    consistent_hashing:get_assigned_node(Identifier).
 
 
 %%--------------------------------------------------------------------
@@ -262,7 +277,6 @@ broadcast_dns_config() ->
     try
         DnsConfig = dns_config:build_config(),
 
-        {ok, Nodes} = node_manager:get_cluster_nodes(),
         lists:map(fun(Node) ->
             case Node == node() of
                 true -> ok = dns_config:insert_config(DnsConfig);
@@ -270,7 +284,7 @@ broadcast_dns_config() ->
                     {update_dns_config, DnsConfig},
                     timer:seconds(30))
             end
-        end, Nodes),
+        end, consistent_hashing:get_all_nodes()),
         ok
     catch
         Type:Message ->

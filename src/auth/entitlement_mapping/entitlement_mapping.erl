@@ -19,7 +19,7 @@
 %%%         parser => nested_entitlement_parser,
 %%%         parserConfig => #{
 %%%             topGroupType => unit,
-%%%             topGroupPrivilegesInVo => member,
+%%%             topGroupPrivilegesInVo => none,
 %%%             subGroupsType => team,
 %%%             subGroupsPrivilegesInParent => member,
 %%%             userPrivileges => member
@@ -332,13 +332,13 @@
 -include("auth/entitlement_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 
 -type raw_entitlement() :: binary().
 -type idp_group() :: #idp_group{}.
 -type idp_entitlement() :: #idp_entitlement{}.
--type privileges() :: member | manager | admin.
+-type privileges() :: none | member | manager | admin.
 -export_type([raw_entitlement/0, idp_group/0, idp_entitlement/0, privileges/0]).
 
 -define(ADMIN_GROUP_CACHE_TTL, oz_worker:get_env(auth_config_cache_ttl, timer:minutes(1))).
@@ -511,14 +511,15 @@ map_entitlements(IdP, Entitlements) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns the list of privileges represented by given privileges set.
-%% Defaults to member privileges in case of invalid identifier.
+%% Defaults to no privileges (none) in case of invalid identifier.
 %% @end
 %%--------------------------------------------------------------------
 -spec map_privileges(privileges() | term()) -> [privileges:group_privilege()].
+map_privileges(none) -> privileges:from_list([]);
 map_privileges(member) -> privileges:group_member();
 map_privileges(manager) -> privileges:group_manager();
 map_privileges(admin) -> privileges:group_admin();
-map_privileges(_) -> privileges:group_member().
+map_privileges(_) -> map_privileges(none).
 
 %%%===================================================================
 %%% Internal functions
@@ -734,4 +735,6 @@ max_privileges(admin, _) -> admin;
 max_privileges(_, admin) -> admin;
 max_privileges(manager, _) -> manager;
 max_privileges(_, manager) -> manager;
-max_privileges(_, _) -> member.
+max_privileges(member, _) -> member;
+max_privileges(_, member) -> member;
+max_privileges(_, _) -> none.

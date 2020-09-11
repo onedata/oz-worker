@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module encapsulates all share logic functionalities.
+%%% This module encapsulates all share logic functionality.
 %%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
@@ -23,6 +23,7 @@
 -export([
     get/2,
     get_public_data/2,
+    get_space/2,
     list/1
 ]).
 -export([
@@ -36,8 +37,11 @@
 ]).
 -export([
     share_id_to_public_url/1,
-    share_id_to_redirect_url/1
+    choose_provider_for_public_view/1
 ]).
+
+% Time for which a provider choice for public view is cached, per space.
+-define(CHOSEN_PROVIDER_CACHE_TTL, timer:seconds(30)).
 
 %%%===================================================================
 %%% API
@@ -51,7 +55,7 @@
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), ShareId :: od_share:id(),
     Name :: binary(), RootFileId :: binary(), SpaceId :: od_space:id()) ->
-    {ok, od_share:id()} | {error, term()}.
+    {ok, od_share:id()} | errors:error().
 create(Auth, ShareId, Name, RootFileId, SpaceId) ->
     create(Auth, #{
         <<"shareId">> => ShareId,
@@ -68,7 +72,7 @@ create(Auth, ShareId, Name, RootFileId, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), Data :: #{}) ->
-    {ok, od_share:id()} | {error, term()}.
+    {ok, od_share:id()} | errors:error().
 create(Auth, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
@@ -84,7 +88,7 @@ create(Auth, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get(Auth :: aai:auth(), ShareId :: od_share:id()) ->
-    {ok, #od_share{}} | {error, term()}.
+    {ok, #od_share{}} | errors:error().
 get(Auth, ShareId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -99,7 +103,7 @@ get(Auth, ShareId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_public_data(Auth :: aai:auth(), ShareId :: od_share:id()) ->
-    {ok, map()} | {error, term()}.
+    {ok, map()} | errors:error().
 get_public_data(Auth, ShareId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -110,11 +114,24 @@ get_public_data(Auth, ShareId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves the space in which given share was created.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_space(aai:auth(), od_share:id()) -> {ok, od_space:id()} | errors:error().
+get_space(Auth, ShareId) ->
+    case get(Auth, ShareId) of
+        {ok, #od_share{space = SpaceId}} -> {ok, SpaceId};
+        {error, _} = Error -> Error
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Lists all shares (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
 -spec list(Auth :: aai:auth()) ->
-    {ok, [od_share:id()]} | {error, term()}.
+    {ok, [od_share:id()]} | errors:error().
 list(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -132,7 +149,7 @@ list(Auth) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Auth :: aai:auth(), ShareId :: od_share:id(),
-    Data :: #{}) -> ok | {error, term()}.
+    Data :: #{}) -> ok | errors:error().
 update(Auth, ShareId, NewName) when is_binary(NewName) ->
     update(Auth, ShareId, #{<<"name">> => NewName});
 update(Auth, ShareId, Data) ->
@@ -150,7 +167,7 @@ update(Auth, ShareId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete(Auth :: aai:auth(), ShareId :: od_share:id()) ->
-    ok | {error, term()}.
+    ok | errors:error().
 delete(Auth, ShareId) ->
     entity_logic:handle(#el_req{
         operation = delete,
@@ -164,52 +181,81 @@ delete(Auth, ShareId) ->
 %% Returns whether a share exists.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(ShareId :: od_share:id()) -> boolean().
+-spec exists(od_share:id()) -> boolean().
 exists(ShareId) ->
     {ok, Exists} = od_share:exists(ShareId),
     Exists.
 
 
 %%--------------------------------------------------------------------
-%% @doc Returns public access URL for given share that points to onezone.
-%% OneZone will then redirect such clients to one of providers that support the
+%% @doc
+%% Returns public access URL for given share that points to Onezone. Onezone
+%% will then redirect clients to one of providers that support the
 %% parent space of the share.
+%% @end
 %%--------------------------------------------------------------------
--spec share_id_to_public_url(ShareId :: binary()) -> binary().
+-spec share_id_to_public_url(od_share:id()) -> binary().
 share_id_to_public_url(ShareId) ->
-    oz_worker:get_uri(?PUBLIC_SHARE_PATH(ShareId)).
+    oz_worker:get_uri(?PUBLIC_SHARE_URN(ShareId)).
 
 
 %%--------------------------------------------------------------------
-%% @doc Returns public access URL for given share that points to one of
-%% providers that support the parent space of the share.
+%% @doc
+%% Chooses a provider to handle viewing of a public share. Online providers that
+%% are in newest version are preferred, then any online provider. Returns the
+%% provider Id and its version, or undefined values if there are no online providers.
+%% This operation is performed each time a public share is visited. To minimize
+%% the cost (as each choice requires several request to the database), it is
+%% cached for some time per space. There is an additional check in case the
+%% cached, chosen provider has gone offline in the meantime, which repeats the
+%% procedure if needed.
+%% @end
 %%--------------------------------------------------------------------
--spec share_id_to_redirect_url(ShareId :: binary()) -> binary().
-share_id_to_redirect_url(ShareId) ->
-    {ok, #document{
-        value = #od_share{space = ParentSpaceId}
-    }} = od_share:get(ShareId),
-    {ok, #document{
-        value = #od_space{providers = Providers}
-    }} = od_space:get(ParentSpaceId),
-    % Prefer online providers
-    {Online, Offline} = lists:partition(
-        fun(ProviderId) ->
-            provider_connections:is_online(ProviderId)
-        end, maps:keys(Providers)),
-    % But if there are none, choose one of inactive
-    Choice = case length(Online) of
-        0 -> Offline;
-        _ -> Online
-    end,
-    ChosenProvider = lists:nth(rand:uniform(length(Choice)), Choice),
+-spec choose_provider_for_public_view(od_share:id()) ->
+    {od_provider:id() | undefined, onedata:release_version() | undefined}.
+choose_provider_for_public_view(ShareId) ->
+    {ok, SpaceId} = get_space(?ROOT, ShareId),
+    {ok, Result} = simple_cache:get({chosen_provider_for_public_view, SpaceId}, fun() ->
+        {true, choose_provider_for_space(SpaceId), ?CHOSEN_PROVIDER_CACHE_TTL}
+    end),
+    case Result of
+        {undefined, undefined} ->
+            Result;
+        {ChosenProviderId, _} ->
+            case provider_connections:is_online(ChosenProviderId) of
+                true ->
+                    Result;
+                false ->
+                    simple_cache:clear({chosen_provider_for_public_view, SpaceId}),
+                    choose_provider_for_public_view(ShareId)
+            end
+    end.
 
-    ClusterId = ChosenProvider,
-    Path = case cluster_logic:get(?ROOT, ClusterId) of
-        {ok, #od_cluster{worker_version = {?DEFAULT_RELEASE_VERSION, _, _}}} ->
-            ?LEGACY_PROVIDER_PUBLIC_SHARE_PATH(ShareId);
-        {ok, _} ->
-            ?PROVIDER_PUBLIC_SHARE_PATH(ShareId)
+
+%% @private
+-spec choose_provider_for_space(od_space:id()) ->
+    {od_provider:id() | undefined, onedata:release_version() | undefined}.
+choose_provider_for_space(SpaceId) ->
+    {ok, Providers} = space_logic:get_eff_providers(?ROOT, SpaceId),
+    <<OzWorkerMajorVersion:6/binary, _/binary>> = oz_worker:get_release_version(),
+    EligibleProviders = lists:filtermap(fun(ProviderId) ->
+        case provider_connections:is_online(ProviderId) of
+            false ->
+                false;
+            true ->
+                {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, ProviderId),
+                VersionClassification = case Version of
+                    <<OzWorkerMajorVersion:6/binary, _/binary>> -> up_to_date;
+                    _ -> legacy
+                end,
+                {true, {ProviderId, Version, VersionClassification}}
+        end
+    end, Providers),
+    UpToDateProviders = [UpToDateProv || UpToDateProv = {_, _, up_to_date} <- EligibleProviders],
+
+    {ChosenProviderId, ChosenProviderVersion, _} = case {EligibleProviders, UpToDateProviders} of
+        {[], _} -> {undefined, undefined, undefined};
+        {_, []} -> lists_utils:random_element(EligibleProviders);
+        {_, _} -> lists_utils:random_element(UpToDateProviders)
     end,
-    {ok, ProviderURL} = provider_logic:get_url(ChosenProvider),
-    str_utils:format_bin("~s~s", [ProviderURL, Path]).
+    {ChosenProviderId, ChosenProviderVersion}.

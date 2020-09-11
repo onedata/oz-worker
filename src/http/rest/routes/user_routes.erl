@@ -125,12 +125,6 @@ routes() -> [
         method = 'PATCH',
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = password}
     }},
-    %% Authenticate user
-    %% This operation does not require any specific privileges.
-    {<<"/user/authorize">>, #rest_req{
-        method = 'POST',
-        b_gri = #b_gri{type = od_user, id = undefined, aspect = authorize}
-    }},
     %% List current user privileges
     %% This operation does not require any specific privileges.
     {<<"/user/privileges">>, #rest_req{

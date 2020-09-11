@@ -16,7 +16,8 @@
 -include("http/gui_paths.hrl").
 -include("api_test_utils.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
@@ -62,25 +63,25 @@ basic_auth_authenticate_test(Config) ->
         oz_test_utils:call_oz(Config, basic_auth, authenticate, [Username, Password])
     end,
 
-    ?assertMatch({ok, U1}, Authenticate(Username1, Pass1)),
-    ?assertMatch({ok, U2}, Authenticate(Username2, Pass2)),
+    ?assertMatch({true, ?USER(U1)}, Authenticate(Username1, Pass1)),
+    ?assertMatch({true, ?USER(U2)}, Authenticate(Username2, Pass2)),
 
-    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(Username1, Pass2)),
-    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(Username2, Pass1)),
-    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(<<"foo">>, <<"bar">>)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS), Authenticate(Username1, Pass2)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS), Authenticate(Username2, Pass1)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS), Authenticate(<<"foo">>, <<"bar">>)),
 
     oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, U1, false]),
     oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, U2, false]),
-    ?assertMatch(?ERROR_BASIC_AUTH_DISABLED, Authenticate(Username1, Pass1)),
-    ?assertMatch(?ERROR_BASIC_AUTH_DISABLED, Authenticate(Username2, Pass2)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED), Authenticate(Username1, Pass1)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED), Authenticate(Username2, Pass2)),
 
     oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, U2, true]),
-    ?assertMatch(?ERROR_BASIC_AUTH_DISABLED, Authenticate(Username1, Pass1)),
-    ?assertMatch({ok, U2}, Authenticate(Username2, Pass2)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED), Authenticate(Username1, Pass1)),
+    ?assertMatch({true, ?USER(U2)}, Authenticate(Username2, Pass2)),
 
     oz_test_utils:toggle_basic_auth(Config, false),
-    ?assertMatch(?ERROR_BASIC_AUTH_NOT_SUPPORTED, Authenticate(Username1, Pass1)),
-    ?assertMatch(?ERROR_BASIC_AUTH_NOT_SUPPORTED, Authenticate(Username2, Pass2)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_NOT_SUPPORTED), Authenticate(Username1, Pass1)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_NOT_SUPPORTED), Authenticate(Username2, Pass2)),
     ok.
 
 
@@ -92,7 +93,7 @@ basic_auth_endpoint_test(Config) ->
     Endpoint = oz_test_utils:oz_url(Config, <<?LOGIN_PATH>>),
     UserPasswordB64 = base64:encode(<<Username/binary, ":", Pass/binary>>),
     BasicAuthHeaders = #{
-        <<"authorization">> => <<"Basic ", UserPasswordB64/binary>>
+        ?HDR_AUTHORIZATION => <<"Basic ", UserPasswordB64/binary>>
     },
     Opts = [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}],
     Response = http_client:post(Endpoint, BasicAuthHeaders, [], Opts),
@@ -119,14 +120,14 @@ basic_auth_endpoint_test(Config) ->
     % Try some inexistent user credentials
     WrongUserPasswordB64 = base64:encode(<<"lol:wut">>),
     WrongBasicAuthHeaders = #{
-        <<"authorization">> => <<"Basic ", WrongUserPasswordB64/binary>>
+        ?HDR_AUTHORIZATION => <<"Basic ", WrongUserPasswordB64/binary>>
     },
     ?assertMatch({ok, 401, _, _}, http_client:post(Endpoint, WrongBasicAuthHeaders, [], Opts)),
 
     % Basic auth login should not work if basic auth is disabled in auth.config
     oz_test_utils:toggle_basic_auth(Config, false),
-    ?assertMatch({ok, 400, _, _}, http_client:post(Endpoint, BasicAuthHeaders, [], Opts)),
-    ?assertMatch({ok, 400, _, _}, http_client:post(Endpoint, WrongBasicAuthHeaders, [], Opts)),
+    ?assertMatch({ok, 401, _, _}, http_client:post(Endpoint, BasicAuthHeaders, [], Opts)),
+    ?assertMatch({ok, 401, _, _}, http_client:post(Endpoint, WrongBasicAuthHeaders, [], Opts)),
 
     ok.
 
@@ -144,15 +145,15 @@ change_password_test(Config) ->
         oz_test_utils:call_oz(Config, user_logic, change_password, [?USER(User), User, OldPassword, NewPassword])
     end,
 
-    ?assertMatch({ok, U1}, Authenticate(Username1, OldPass1)),
-    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(Username1, NewPass1)),
+    ?assertMatch({true, ?USER(U1)}, Authenticate(Username1, OldPass1)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS), Authenticate(Username1, NewPass1)),
 
-    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, ChangePassword(U1, <<"asdfsdaf">>, NewPass1)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS), ChangePassword(U1, <<"asdfsdaf">>, NewPass1)),
     ?assertMatch(?ERROR_BAD_VALUE_PASSWORD, ChangePassword(U1, OldPass1, <<"1">>)),
 
     ?assertMatch(ok, ChangePassword(U1, OldPass1, NewPass1)),
-    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(Username1, OldPass1)),
-    ?assertMatch({ok, U1}, Authenticate(Username1, NewPass1)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS), Authenticate(Username1, OldPass1)),
+    ?assertMatch({true, ?USER(U1)}, Authenticate(Username1, NewPass1)),
 
     % Create second user without basic auth enabled
     Username2 = <<"user2">>,
@@ -160,17 +161,17 @@ change_password_test(Config) ->
     SecondPass2 = <<"newPass2">>,
     {ok, U2} = oz_test_utils:create_user(Config, #{<<"username">> => Username2}),
 
-    ?assertMatch(?ERROR_BASIC_AUTH_DISABLED, ChangePassword(U2, undefined, FirstPass2)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED), ChangePassword(U2, undefined, FirstPass2)),
     oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, U2, true]),
-    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, ChangePassword(U2, <<"123">>, FirstPass2)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS), ChangePassword(U2, <<"123">>, FirstPass2)),
     ?assertMatch(ok, ChangePassword(U2, undefined, FirstPass2)),
 
-    ?assertMatch({ok, U2}, Authenticate(Username2, FirstPass2)),
-    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(Username2, SecondPass2)),
+    ?assertMatch({true, ?USER(U2)}, Authenticate(Username2, FirstPass2)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS), Authenticate(Username2, SecondPass2)),
 
     ?assertMatch(ok, ChangePassword(U2, FirstPass2, SecondPass2)),
-    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(Username2, FirstPass2)),
-    ?assertMatch({ok, U2}, Authenticate(Username2, SecondPass2)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS), Authenticate(Username2, FirstPass2)),
+    ?assertMatch({true, ?USER(U2)}, Authenticate(Username2, SecondPass2)),
 
     ok.
 
@@ -187,15 +188,15 @@ set_password_test(Config) ->
         oz_test_utils:call_oz(Config, user_logic, set_password, [?ROOT, User, NewPassword])
     end,
 
-    ?assertMatch(?ERROR_BASIC_AUTH_DISABLED, Authenticate(Username1, NewPass1)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED), Authenticate(Username1, NewPass1)),
     oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, U1, true]),
     % If no password was set, ERROR_BASIC_AUTH_DISABLED is expected
-    ?assertMatch(?ERROR_BASIC_AUTH_DISABLED, Authenticate(Username1, NewPass1)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED), Authenticate(Username1, NewPass1)),
 
     ?assertMatch(?ERROR_BAD_VALUE_PASSWORD, SetPassword(U1, <<"1">>)),
     ?assertMatch(ok, SetPassword(U1, NewPass1)),
-    ?assertMatch({ok, U1}, Authenticate(Username1, NewPass1)),
-    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(Username1, <<"bad-pass">>)),
+    ?assertMatch({true, ?USER(U1)}, Authenticate(Username1, NewPass1)),
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS), Authenticate(Username1, <<"bad-pass">>)),
     ok.
 
 
@@ -215,7 +216,7 @@ migrate_onepanel_user_to_onezone(Config) ->
         ]),
 
         ExpUserId = oz_test_utils:call_oz(Config, basic_auth, onepanel_uid_to_system_uid, [OnepanelUserId]),
-        ?assertMatch({ok, ExpUserId}, oz_test_utils:call_oz(Config, basic_auth, authenticate, [
+        ?assertMatch({true, ?USER(ExpUserId)}, oz_test_utils:call_oz(Config, basic_auth, authenticate, [
             OnepanelUsername, Password
         ])),
 

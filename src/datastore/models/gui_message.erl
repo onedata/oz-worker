@@ -19,7 +19,7 @@
 -author("Wojciech Geisler").
 
 -include("datastore/oz_datastore_models.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 %% API
 -export([exists/1, get/1, update/2]).
@@ -34,7 +34,10 @@
 -type doc() :: datastore_doc:doc(record()).
 -export_type([id/0, record/0, map_repr/0]).
 
--define(CTX, #{model => ?MODULE}).
+-define(CTX, #{
+    model => ?MODULE,
+    memory_copies => all
+}).
 
 -define(ALLOWED_IDS, [
     <<"cookie_consent_notification">>,

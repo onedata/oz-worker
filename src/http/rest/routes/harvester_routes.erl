@@ -42,7 +42,7 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = undefined, aspect = list}
     }},
-    %% List all harvester privileges.
+    %% List all harvester privileges
     %% This operation requires one of the following privileges:
     {<<"/harvesters/privileges">>, #rest_req{
         method = 'GET',
@@ -312,6 +312,16 @@ routes() -> [
         method = 'POST',
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = invite_space_token}
+    }},
+    %% Join harvester to a space
+    %% This operation requires one of the following privileges:
+    %% - harvester_add_space
+    %% - oz_harvesters_add_relationships
+    %% - oz_spaces_add_relationships
+    {<<"/harvesters/:id/spaces/join">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_space, id = undefined, aspect = join},
+        b_auth_hint = ?AS_HARVESTER(?BINDING(id))
     }},
     %% Add space to harvester
     %% This operation requires one of the following privileges:

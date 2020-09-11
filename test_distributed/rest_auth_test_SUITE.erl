@@ -16,6 +16,7 @@
 -include("auth/auth_errors.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
@@ -35,7 +36,7 @@
     init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
-    macaroon_test/1,
+    access_token_test/1,
     basic_auth_test/1,
     external_access_token_test/1,
     gui_token_test/1
@@ -43,7 +44,7 @@
 
 all() ->
     ?ALL([
-        macaroon_test,
+        access_token_test,
         basic_auth_test,
         external_access_token_test,
         gui_token_test
@@ -53,11 +54,11 @@ all() ->
 %%% Test functions
 %%%===================================================================
 
-% Check macaroon based authorization
-macaroon_test(Config) ->
+% Check access token based authorization
+access_token_test(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config, #{<<"fullName">> => <<"U1">>}),
 
-    {ok, Macaroon} = oz_test_utils:create_client_token(
+    {ok, Token} = oz_test_utils:create_client_token(
         Config, UserId
     ),
 
@@ -65,7 +66,7 @@ macaroon_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"macaroon">> => Macaroon}
+            headers => #{?HDR_X_AUTH_TOKEN => Token}
         },
         expect => #{
             code => 200,
@@ -77,7 +78,7 @@ macaroon_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"x-auth-token">> => Macaroon}
+            headers => #{?HDR_X_AUTH_TOKEN => Token}
         },
         expect => #{
             code => 200,
@@ -89,7 +90,7 @@ macaroon_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"macaroon">> => <<"bad-macaroon">>}
+            headers => #{?HDR_X_AUTH_TOKEN => <<"bad-token">>}
         },
         expect => #{
             code => 401
@@ -179,7 +180,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"x-auth-token">> => XAuthTokenFun(DummyIdP)}
+            headers => #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(DummyIdP)}
         },
         expect => #{
             code => 200,
@@ -194,7 +195,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"x-auth-token">> => XAuthTokenFun(AnotherIdP)}
+            headers => #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(AnotherIdP)}
         },
         expect => #{
             code => 200,
@@ -210,7 +211,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"x-auth-token">> => XAuthTokenFun(DisabledIdP)}
+            headers => #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(DisabledIdP)}
         },
         expect => #{
             code => 401
@@ -222,7 +223,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"x-auth-token">> => <<
+            headers => #{?HDR_X_AUTH_TOKEN => <<
                 (PrefixFun(DummyIdP))/binary, (CorrectAccessTokenFun(AnotherIdP))/binary
             >>}
         },
@@ -235,7 +236,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"x-auth-token">> => <<"completely-bad-token">>}
+            headers => #{?HDR_X_AUTH_TOKEN => <<"completely-bad-token">>}
         },
         expect => #{
             code => 401
@@ -246,37 +247,48 @@ external_access_token_test(Config) ->
 
 
 gui_token_test(Config) ->
-    {ok, {Provider1, Provider1Token}} = oz_test_utils:create_provider(
-        Config, ?UNIQUE_STRING
-    ),
-    {ok, {_Provider2, Provider2Token}} = oz_test_utils:create_provider(
-        Config, ?UNIQUE_STRING
-    ),
     {ok, UserId} = oz_test_utils:create_user(Config, #{<<"fullName">> => <<"U1">>}),
+    {ok, {Provider1, _}} = oz_test_utils:create_provider(
+        Config, UserId, ?UNIQUE_STRING
+    ),
+    {ok, {Provider2, _}} = oz_test_utils:create_provider(
+        Config, UserId, ?UNIQUE_STRING
+    ),
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
-    oz_test_utils:support_space(Config, Provider1, SpaceId),
+    oz_test_utils:support_space_by_provider(Config, Provider1, SpaceId),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, UserId),
 
-    {ok, Token, Expires} = oz_test_utils:call_oz(Config, gui_tokens, create, [
-        UserId, SessionId, ?AUD(?OP_WORKER, Provider1)
+    {ok, {GuiToken1, Ttl}} = oz_test_utils:call_oz(Config, token_logic, create_access_token_for_gui, [
+        ?USER(UserId), UserId, SessionId, ?SERVICE(?OP_WORKER, Provider1)
     ]),
-    {ok, Serialized} = tokens:serialize(Token),
+    {ok, SerializedGuiToken1} = tokens:serialize(GuiToken1),
 
-    Provider1AudToken = tokens:serialize_audience_token(?OP_WORKER, Provider1Token),
-    Provider2AudToken = tokens:serialize_audience_token(?OP_WORKER, Provider2Token),
+    {ok, {GuiToken2, Ttl}} = oz_test_utils:call_oz(Config, token_logic, create_access_token_for_gui, [
+        ?USER(UserId), UserId, SessionId, ?SERVICE(?OP_PANEL, Provider1)
+    ]),
+    {ok, SerializedGuiToken2} = tokens:serialize(GuiToken2),
+
+    {ok, Provider1IdentityToken} = oz_test_utils:call_oz(Config, token_logic, create_provider_named_token, [
+        ?PROVIDER(Provider1), Provider1, #{<<"name">> => datastore_key:new(), <<"type">> => ?IDENTITY_TOKEN}
+    ]),
+    {ok, Provider2IdentityToken} = oz_test_utils:call_oz(Config, token_logic, create_provider_named_token, [
+        ?PROVIDER(Provider2), Provider2, #{<<"name">> => datastore_key:new(), <<"type">> => ?IDENTITY_TOKEN}
+    ]),
+    Provider1ServiceToken = tokens:add_oneprovider_service_indication(?OP_WORKER, ozt_tokens:ensure_serialized(Provider1IdentityToken)),
+    Provider2ServiceToken = tokens:add_oneprovider_service_indication(?OP_PANEL, ozt_tokens:ensure_serialized(Provider2IdentityToken)),
 
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{
             method => get,
             path => <<"/user">>,
             headers => #{
-                <<"X-Auth-Token">> => Serialized,
-                <<"X-Onedata-Audience-Token">> => Provider1AudToken
+                ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
             }
         },
         expect => #{
-            code => 200, % correct audience
+            code => 200, % correct service
             body => {contains, #{<<"fullName">> => <<"U1">>}}
         }
     })),
@@ -286,12 +298,12 @@ gui_token_test(Config) ->
             method => get,
             path => <<"/user">>,
             headers => #{
-                <<"Authorization">> => <<"Bearer ", Serialized/binary>>,
-                <<"x-onedata-audience-token">> => Provider2AudToken
+                ?HDR_AUTHORIZATION => <<"Bearer ", SerializedGuiToken2/binary>>,
+                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider2ServiceToken
             }
         },
         expect => #{
-            code => 401 % invalid audience
+            code => 401 % invalid service
         }
     })),
 
@@ -300,24 +312,37 @@ gui_token_test(Config) ->
             method => get,
             path => <<"/user">>,
             headers => #{
-                <<"x-auth-token">> => Serialized
+                ?HDR_AUTHORIZATION => <<"Bearer ", SerializedGuiToken2/binary>>,
+                ?HDR_X_ONEDATA_SERVICE_TOKEN => SerializedGuiToken1
             }
         },
         expect => #{
-            code => 401 % missing audience token
+            code => 401 % bad service token
         }
     })),
-
-    CurrentTime = oz_test_utils:get_mocked_time(Config),
-    oz_test_utils:simulate_time_passing(Config, Expires - CurrentTime + 1),
 
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{
             method => get,
             path => <<"/user">>,
             headers => #{
-                <<"macaroon">> => Serialized,
-                <<"x-onedata-audience-token">> => Provider1AudToken
+                ?HDR_X_AUTH_TOKEN => SerializedGuiToken1
+            }
+        },
+        expect => #{
+            code => 401 % missing service token
+        }
+    })),
+
+    oz_test_utils:simulate_time_passing(Config, Ttl + 1),
+
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => #{
+                ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
             }
         },
         expect => #{
@@ -332,7 +357,7 @@ gui_token_test(Config) ->
 
 basic_auth_header(Username, Password) ->
     UserPasswdB64 = base64:encode(<<Username/binary, ":", Password/binary>>),
-    #{<<"authorization">> => <<"Basic ", UserPasswdB64/binary>>}.
+    #{?HDR_AUTHORIZATION => <<"Basic ", UserPasswdB64/binary>>}.
 
 %%%===================================================================
 %%% Setup/teardown functions

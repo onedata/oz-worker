@@ -16,9 +16,10 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
+-export([get_ctx/0]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -30,12 +31,13 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
--export_type([name/0]).
+-export_type([doc/0, name/0]).
 
 -define(CTX, #{
     model => od_provider,
-    fold_enabled => true,
-    sync_enabled => true
+    secure_fold_enabled => true,
+    sync_enabled => true,
+    memory_copies => all
 }).
 
 %%%===================================================================
@@ -50,15 +52,6 @@
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Saves provider.
-%% @end
-%%--------------------------------------------------------------------
--spec save(doc()) -> {ok, doc()} | {error, term()}.
-save(Doc) ->
-    datastore_model:save(?CTX, Doc).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -126,6 +119,10 @@ to_string(ProviderId) ->
 entity_logic_plugin() ->
     provider_logic_plugin.
 
+-spec get_ctx() -> datastore:ctx().
+get_ctx() ->
+    ?CTX.
+
 %%%===================================================================
 %%% datastore_model callbacks
 %%%===================================================================
@@ -137,7 +134,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    6.
+    7.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -241,6 +238,36 @@ get_record_struct(6) ->
 
         {creation_time, integer},
         {last_activity, integer}, % new field
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(7) ->
+    % * root_macaroon renamed to root_token
+    % * renamed field - spaces -> legacy_spaces
+    % * new field - storages
+    % * new field - eff spaces
+    {record, [
+        {name, string},
+        {admin_email, string},
+        {root_token, string},
+
+        {subdomain_delegation, boolean},
+        {domain, string},
+        {subdomain, string},
+
+        {latitude, float},
+        {longitude, float},
+
+        {legacy_spaces, #{string => integer}}, % Renamed field
+        {storages, [string]}, % New field
+
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => {integer, [{atom, string}]}}}, % New field
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {last_activity, integer},
 
         {bottom_up_dirty, boolean}
     ]}.
@@ -422,10 +449,56 @@ upgrade_record(5, Provider) ->
 
         BottomUpDirty
     } = Provider,
-    {6, #od_provider{
+    {6, {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+        EffHarvesters,
+
+        CreationTime,
+        0,
+
+        BottomUpDirty
+    }};
+upgrade_record(6, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        _EffUsers,
+        _EffGroups,
+        _EffHarvesters,
+
+        CreationTime,
+        LastActivity,
+
+        _BottomUpDirty
+    } = Provider,
+    %% Eff relations are recalculated during cluster upgrade procedure
+    {7, #od_provider{
         name = Name,
         admin_email = AdminEmail,
-        root_macaroon = RootMacaroon,
+        root_token = RootMacaroon,
         subdomain_delegation = SubdomainDelegation,
         domain = Domain,
         subdomain = Subdomain,
@@ -433,14 +506,16 @@ upgrade_record(5, Provider) ->
         latitude = Latitude,
         longitude = Longitude,
 
-        spaces = Spaces,
+        legacy_spaces = Spaces,
+        storages = [],
 
-        eff_users = EffUsers,
-        eff_groups = EffGroups,
-        eff_harvesters = EffHarvesters,
+        eff_users = #{},
+        eff_groups = #{},
+        eff_harvesters = #{},
+        eff_spaces = #{},
 
         creation_time = CreationTime,
-        last_activity = 0,
+        last_activity = LastActivity,
 
-        bottom_up_dirty = BottomUpDirty
+        bottom_up_dirty = true
     }}.

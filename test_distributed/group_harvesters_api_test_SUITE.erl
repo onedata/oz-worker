@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -139,7 +139,7 @@ get_harvester_details_test(Config) ->
             module = group_logic,
             function = get_harvester,
             args = [auth, G1, H1],
-            expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"plugin">> => ?HARVESTER_MOCK_PLUGIN})
+            expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"harvestingBackendType">> => ?HARVESTER_MOCK_BACKEND})
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -206,18 +206,18 @@ create_harvester_test(Config) ->
             expected_result = ?OK_TERM(VerifyFun)
         },
         data_spec = #data_spec{
-            required = [<<"name">>, <<"endpoint">>, <<"plugin">>],
+            required = [<<"name">>, <<"harvestingBackendEndpoint">>, <<"harvestingBackendType">>],
             optional = [<<"guiPluginConfig">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
-                <<"endpoint">> => [?HARVESTER_ENDPOINT1],
-                <<"plugin">> => [?HARVESTER_MOCK_PLUGIN_BINARY],
+                <<"harvestingBackendEndpoint">> => [?HARVESTER_ENDPOINT1],
+                <<"harvestingBackendType">> => [?HARVESTER_MOCK_BACKEND_BINARY],
                 <<"guiPluginConfig">> => [?HARVESTER_GUI_PLUGIN_CONFIG]
             },
             bad_values =
-            [{<<"plugin">>, <<"not_existing_plugin">>,
-                ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>,
-                    rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))}
+            [{<<"harvestingBackendType">>, <<"not_existing_plugin">>,
+                ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"harvestingBackendType">>,
+                    ?ALL_HARVESTING_BACKENDS(Config))}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)]
         }
     },
@@ -234,23 +234,25 @@ join_harvester_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
-        {ok, Macaroon} = oz_test_utils:harvester_invite_group_token(
-            Config, ?ROOT, HarvesterId
+        {ok, Creator} = oz_test_utils:create_user(Config),
+        oz_test_utils:user_set_oz_privileges(Config, Creator, [?OZ_HARVESTERS_CREATE], []),
+        {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?USER(Creator), ?HARVESTER_CREATE_DATA),
+        {ok, Token} = oz_test_utils:harvester_invite_group_token(
+            Config, ?USER(Creator), HarvesterId
         ),
-        {ok, Token} = macaroons:serialize(Macaroon),
+        {ok, Serialized} = tokens:serialize(Token),
         #{
             harvesterId => HarvesterId,
-            token => Token,
-            macaroonId => macaroon:identifier(Macaroon)
+            token => Serialized,
+            tokenNonce => Token#token.id
         }
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId, macaroonId := MacaroonId} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId, tokenNonce := TokenId} = _Env, _) ->
         {ok, Harvesters} = oz_test_utils:group_get_harvesters(Config, G1),
         ?assertEqual(lists:member(HarvesterId, Harvesters), ShouldSucceed),
         case ShouldSucceed of
             true ->
-                oz_test_utils:assert_token_not_exists(Config, MacaroonId);
+                oz_test_utils:assert_invite_token_usage_limit_reached(Config, true, TokenId);
             false -> ok
         end
     end,
@@ -258,7 +260,6 @@ join_harvester_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
                 {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
@@ -300,9 +301,8 @@ join_harvester_test(Config) ->
             },
             bad_values = [
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
-                {<<"token">>, <<"123qwe">>,
-                    ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}
+                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
+                {<<"token">>, <<"123qwe">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)}
             ]
         }
     },
@@ -315,22 +315,23 @@ join_harvester_test(Config) ->
     {ok, Harvester} = oz_test_utils:create_harvester(Config, ?USER(U1),
         ?HARVESTER_CREATE_DATA
     ),
-    {ok, Macaroon1} = oz_test_utils:harvester_invite_group_token(
-        Config, ?ROOT, Harvester
+    {ok, Token2} = oz_test_utils:harvester_invite_group_token(
+        Config, ?USER(U1), Harvester
     ),
-    {ok, Token} = macaroons:serialize(Macaroon1),
+    {ok, Serialized2} = tokens:serialize(Token2),
     oz_test_utils:harvester_add_group(Config, Harvester, G1),
 
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root
+                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]},
+                {user, U2}
             ]
         },
         rest_spec = #rest_spec{
             method = post,
             path = [<<"/groups/">>, G1, <<"/harvesters/join">>],
-            expected_code = ?HTTP_400_BAD_REQUEST
+            expected_code = ?HTTP_409_CONFLICT
         },
         logic_spec = #logic_spec{
             module = group_logic,
@@ -341,11 +342,11 @@ join_harvester_test(Config) ->
         % TODO gs
         data_spec = #data_spec{
             required = [<<"token">>],
-            correct_values = #{<<"token">> => [Token]}
+            correct_values = #{<<"token">> => [Serialized2]}
         }
     },
     VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
-        oz_test_utils:assert_token_exists(Config, macaroon:identifier(Macaroon1))
+        oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token2#token.id)
     end,
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1
@@ -397,7 +398,7 @@ leave_harvester_test(Config) ->
             module = group_logic,
             function = leave_harvester,
             args = [auth, G1, harvesterId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -489,7 +490,7 @@ get_eff_harvester_details_test(Config) ->
                     module = group_logic,
                     function = get_eff_harvester,
                     args = [auth, G1, HarvesterId],
-                    expected_result = ?OK_MAP_CONTAINS(HarvesterDetails#{<<"plugin">> => ?HARVESTER_MOCK_PLUGIN})
+                    expected_result = ?OK_MAP_CONTAINS(HarvesterDetails#{<<"harvestingBackendType">> => ?HARVESTER_MOCK_BACKEND})
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
@@ -509,10 +510,10 @@ init_per_suite(Config) ->
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 init_per_testcase(_, Config) ->
-    oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN).
+    oz_test_utils:mock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND).
 
 end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN).
+    oz_test_utils:unmock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND).
 
 end_per_suite(_Config) ->
     hackney:stop(),

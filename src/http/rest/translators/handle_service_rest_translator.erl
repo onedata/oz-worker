@@ -38,15 +38,15 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#g
         _ ->
             [<<"handle_services">>, HServiceId]
     end,
-    rest_translator:created_reply(LocationTokens);
+    rest_translator:created_reply_with_location(LocationTokens);
 
 create_response(#gri{id = HServiceId, aspect = {user, UserId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"handle_services">>, HServiceId, <<"users">>, UserId]
     );
 
 create_response(#gri{id = HServiceId, aspect = {group, GrId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"handle_services">>, HServiceId, <<"groups">>, GrId]
     ).
 

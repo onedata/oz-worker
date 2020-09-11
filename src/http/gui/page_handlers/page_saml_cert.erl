@@ -16,6 +16,7 @@
 -behaviour(dynamic_page_behaviour).
 
 -include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([handle/2]).
 
@@ -35,6 +36,6 @@ handle(<<"GET">>, Req) ->
             cowboy_req:reply(?HTTP_404_NOT_FOUND, Req);
         {ok, Cert} ->
             cowboy_req:reply(?HTTP_200_OK, #{
-                <<"content-type">> => <<"application/x-pem-file">>
+                ?HDR_CONTENT_TYPE => <<"application/x-pem-file">>
             }, Cert, Req)
     end.

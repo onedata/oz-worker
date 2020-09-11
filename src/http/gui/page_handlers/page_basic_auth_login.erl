@@ -16,9 +16,10 @@
 -behaviour(dynamic_page_behaviour).
 
 -include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 %% API
 -export([handle/2]).
@@ -34,23 +35,27 @@
 %%--------------------------------------------------------------------
 -spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"POST">>, Req) ->
-    try
-        case auth_logic:authorize_by_basic_auth(Req) of
+    Result = try
+        case basic_auth:authenticate(Req) of
             {true, ?USER(UserId)} ->
                 {ok, FullName} = user_logic:get_full_name(?ROOT, UserId),
                 ?info("User '~ts' has logged in (~s)", [FullName, UserId]),
-                Req2 = gui_session:log_in(UserId, Req),
-                JSONHeader = #{<<"content-type">> => <<"application/json">>},
-                Body = json_utils:encode(#{<<"url">> => <<"/">>}),
-                cowboy_req:reply(?HTTP_200_OK, JSONHeader, Body, Req2);
-            ?ERROR_BAD_BASIC_CREDENTIALS ->
-                cowboy_req:reply(?HTTP_401_UNAUTHORIZED, #{}, <<"Invalid username or password">>, Req);
-            ?ERROR_BASIC_AUTH_DISABLED ->
-                cowboy_req:reply(?HTTP_401_UNAUTHORIZED, #{}, <<"Basic auth is disabled for this user">>, Req);
-            ?ERROR_BASIC_AUTH_NOT_SUPPORTED ->
-                cowboy_req:reply(?HTTP_400_BAD_REQUEST, #{}, <<"Basic auth is not supported by this Onezone">>, Req)
+                {ok, gui_session:log_in(UserId, Req)};
+            false ->
+                ?ERROR_UNAUTHORIZED;
+            {error, _} = AuthenticationError ->
+                AuthenticationError
         end
-    catch T:M ->
-        ?error_stacktrace("Login by credentials failed - ~p:~p", [T, M]),
-        cowboy_req:reply(?HTTP_401_UNAUTHORIZED, Req)
+    catch Type:Reason ->
+        ?error_stacktrace("Login by basic credentials failed - ~w:~p", [Type, Reason]),
+        ?ERROR_INTERNAL_SERVER_ERROR
+    end,
+    case Result of
+        {ok, NewReq} ->
+            Body = json_utils:encode(#{<<"url">> => <<"/">>}),
+            cowboy_req:reply(?HTTP_200_OK, #{?HDR_CONTENT_TYPE => <<"application/json">>}, Body, NewReq);
+        {error, _} = Error ->
+            Code = errors:to_http_code(Error),
+            Body = json_utils:encode(#{<<"error">> => errors:to_json(Error)}),
+            cowboy_req:reply(Code, #{?HDR_CONTENT_TYPE => <<"application/json">>}, Body, Req)
     end.

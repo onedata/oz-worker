@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -210,9 +210,7 @@ create_handle_test(Config) ->
                     <<"resourceType">> => ExpResourceType,
                     <<"resourceId">> => ShareId,
                     <<"gri">> => fun(EncodedGri) ->
-                        #gri{id = HandleId} = oz_test_utils:decode_gri(
-                            Config, EncodedGri
-                        ),
+                        #gri{id = HandleId} = gri:deserialize(EncodedGri),
                         VerifyResult(Env, HandleId)
                     end
                 })
@@ -232,18 +230,15 @@ create_handle_test(Config) ->
                 <<"metadata">> => [?DC_METADATA]
             },
             bad_values = [
-                % One cannot check privileges of hs if it does not exist so 403
-                {<<"handleServiceId">>, <<"">>, ?ERROR_FORBIDDEN},
-                {<<"handleServiceId">>, 1234, ?ERROR_FORBIDDEN},
+                {<<"handleServiceId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
+                {<<"handleServiceId">>, 1234, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
                 {<<"resourceType">>, <<"">>,
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"resourceType">>,
                         [<<"Share">>])},
                 {<<"resourceType">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
-                % one cannot check privileges of resource
-                % if it does not exist so 403
-                {<<"resourceId">>, <<"">>, ?ERROR_FORBIDDEN},
-                {<<"resourceId">>, 1234, ?ERROR_FORBIDDEN},
+                {<<"resourceId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
+                {<<"resourceId">>, 1234, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"resourceId">>, ShareIdThatAlreadyHasAHandle, ?ERROR_ALREADY_EXISTS},
                 {<<"metadata">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
@@ -266,20 +261,18 @@ create_handle_test(Config) ->
         data_spec = DataSpec#data_spec{
             bad_values = [
                 {<<"handleServiceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"handleServiceId">>)},
+                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
                 {<<"handleServiceId">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"handleServiceId">>)},
+                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
                 {<<"resourceType">>, <<"">>,
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"resourceType">>,
                         [<<"Share">>])},
                 {<<"resourceType">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
-                % one cannot check privileges of resource
-                % if it does not exist so 403
                 {<<"resourceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"resourceId">>)},
+                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"resourceId">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"resourceId">>)},
+                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"metadata">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
@@ -393,7 +386,7 @@ leave_handle_test(Config) ->
             module = group_logic,
             function = leave_handle,
             args = [auth, G1, handleId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },

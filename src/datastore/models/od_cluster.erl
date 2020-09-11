@@ -18,7 +18,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([ensure_onezone_cluster/0]).
@@ -44,8 +44,9 @@
 
 -define(CTX, #{
     model => ?MODULE,
-    fold_enabled => true,
-    sync_enabled => true
+    secure_fold_enabled => true,
+    sync_enabled => true,
+    memory_copies => all
 }).
 
 %%%===================================================================
@@ -63,15 +64,6 @@ create(Doc) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Saves cluster.
-%% @end
-%%--------------------------------------------------------------------
--spec save(doc()) -> {ok, doc()} | {error, term()}.
-save(Doc) ->
-    datastore_model:save(?CTX, Doc).
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Returns cluster by ID.
 %% @end
 %%--------------------------------------------------------------------
@@ -79,7 +71,7 @@ save(Doc) ->
 get(ClusterId) ->
     case datastore_model:get(?CTX, ClusterId) of
         {error, not_found} ->
-            % @todo VFS-5207 remove when no longer needed for compatibility
+            %% @TODO VFS-5207 remove when no longer needed for compatibility
             ensure_cluster_for_legacy_provider(ClusterId),
             datastore_model:get(?CTX, ClusterId);
         OtherResult ->
@@ -95,7 +87,7 @@ get(ClusterId) ->
 exists(ClusterId) ->
     case datastore_model:exists(?CTX, ClusterId) of
         {ok, false} ->
-            % @todo VFS-5207 remove when no longer needed for compatibility
+            %% @TODO VFS-5207 remove when no longer needed for compatibility
             ensure_cluster_for_legacy_provider(ClusterId),
             datastore_model:exists(?CTX, ClusterId);
         OtherResult ->
@@ -158,14 +150,14 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec ensure_onezone_cluster() -> ok.
 ensure_onezone_cluster() ->
-    {ok, _} = datastore_model:update(?CTX, ?ONEZONE_CLUSTER_ID,
-        fun(Cluster) -> {ok, Cluster} end,
-        #document{key = ?ONEZONE_CLUSTER_ID, value = #od_cluster{
-            type = ?ONEZONE,
-            creator = ?SUB(root)
-        }}
-    ),
-    ok.
+    NewClusterDoc = #document{key = ?ONEZONE_CLUSTER_ID, value = #od_cluster{
+        type = ?ONEZONE,
+        creator = ?SUB(nobody)
+    }},
+    case create(NewClusterDoc) of
+        {ok, _} -> ok;
+        {error, already_exists} -> ok
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -204,7 +196,7 @@ ensure_cluster_for_legacy_provider(ClusterId) ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -256,6 +248,28 @@ get_record_struct(2) ->
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
 
         {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(3) ->
+    % creator field - nested #subject{} record and encoding changed
+    {record, [
+        {type, atom},
+
+        {worker_version, {string, string, string}},
+        {onepanel_version, {string, string, string}},
+        {onepanel_proxy, boolean},
+
+        {creation_time, integer},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+
+        {bottom_up_dirty, boolean}
     ]}.
 
 
@@ -287,7 +301,44 @@ upgrade_record(1, Cluster) ->
         BottomUpDirty
     } = Cluster,
 
-    {2, #od_cluster{
+    {2, {od_cluster,
+        Type,
+
+        WorkerVersion,
+        OnepanelVersion,
+        OnepanelProxy,
+
+        CreationTime,
+        upgrade_common:client_to_subject(Creator),
+
+        Users,
+        Groups,
+
+        EffUsers,
+        EffGroups,
+
+        BottomUpDirty
+    }};
+upgrade_record(2, Cluster) ->
+    {od_cluster,
+        Type,
+
+        WorkerVersion,
+        OnepanelVersion,
+        OnepanelProxy,
+
+        CreationTime,
+        Creator,
+
+        Users,
+        Groups,
+
+        EffUsers,
+        EffGroups,
+
+        BottomUpDirty
+    } = Cluster,
+    {3, #od_cluster{
         type = Type,
 
         worker_version = WorkerVersion,
@@ -295,7 +346,7 @@ upgrade_record(1, Cluster) ->
         onepanel_proxy = OnepanelProxy,
 
         creation_time = CreationTime,
-        creator = upgrade_common:client_to_subject(Creator),
+        creator = upgrade_common:upgrade_subject_record(Creator),
 
         users = Users,
         groups = Groups,

@@ -15,7 +15,7 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("kernel/src/inet_dns.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").

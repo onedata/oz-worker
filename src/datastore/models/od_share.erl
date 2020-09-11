@@ -15,7 +15,7 @@
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
--export([create/1, save/1, get/1, get_handle/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, get_handle/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -29,12 +29,15 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
--export_type([name/0]).
+% publicly visible share description in markdown (.md) format
+-type description() :: binary().
+-export_type([name/0, description/0]).
 
 -define(CTX, #{
     model => ?MODULE,
-    fold_enabled => true,
-    sync_enabled => true
+    secure_fold_enabled => true,
+    sync_enabled => true,
+    memory_copies => all
 }).
 
 %%%===================================================================
@@ -47,15 +50,6 @@ create(Doc) ->
     datastore_model:create(?CTX, Doc).
 
 
--spec save(doc()) -> {ok, doc()} | {error, term()}.
-save(Doc) ->
-    datastore_model:save(?CTX, Doc).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns share by ID.
-%% @end
-%%--------------------------------------------------------------------
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(ShareId) ->
     datastore_model:get(?CTX, ShareId).
@@ -127,7 +121,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    4.
+    6.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -185,6 +179,38 @@ get_record_struct(4) ->
             {type, atom},
             {id, string}
         ]}}
+    ]};
+get_record_struct(5) ->
+    % new field - file_type
+    % creator field - nested #subject{} record and encoding changed
+    {record, [
+        {name, string},
+        {public_url, string},
+        {space, string},
+        {handle, string},
+
+        {root_file, string},
+        {file_type, atom},
+
+        {creation_time, integer},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
+    ]};
+get_record_struct(6) ->
+    % new field - description
+    {record, [
+        {name, string},
+        {description, string}, % new field
+        {public_url, string},
+        {space, string},
+        {handle, string},
+
+        {root_file, string},
+        {file_type, atom},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -247,13 +273,68 @@ upgrade_record(3, Share) ->
         CreationTime,
         Creator
     } = Share,
-    {4, #od_share{
+    {4, {
+        od_share,
+        Name,
+        PublicUrl,
+        SpaceId,
+        HandleId,
+        RootFileId,
+
+        CreationTime,
+        upgrade_common:client_to_subject(Creator)
+    }};
+upgrade_record(4, Share) ->
+    {
+        od_share,
+        Name,
+        PublicUrl,
+        SpaceId,
+        HandleId,
+        RootFileId,
+
+        CreationTime,
+        Subject
+    } = Share,
+    {5, {od_share,
+        Name,
+        PublicUrl,
+
+        SpaceId,
+        HandleId,
+
+        RootFileId,
+        dir,
+
+        CreationTime,
+        upgrade_common:upgrade_subject_record(Subject)
+    }};
+upgrade_record(5, Share) ->
+    {
+        od_share,
+        Name,
+        PublicUrl,
+
+        SpaceId,
+        HandleId,
+
+        RootFileId,
+        FileType,
+
+        CreationTime,
+        Creator
+    } = Share,
+    {6, #od_share{
         name = Name,
+        description = <<"">>,
         public_url = PublicUrl,
+
         space = SpaceId,
         handle = HandleId,
+
         root_file = RootFileId,
+        file_type = FileType,
 
         creation_time = CreationTime,
-        creator = upgrade_common:client_to_subject(Creator)
+        creator = Creator
     }}.

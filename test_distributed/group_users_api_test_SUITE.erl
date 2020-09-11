@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -113,7 +113,7 @@ list_users_test(Config) ->
 
 create_user_invite_token_test(Config) ->
     % create group with 2 users:
-    %   U2 gets the GROUP_INVITE_USER privilege
+    %   U2 gets the GROUP_INVITE_USER_TOKEN privilege
     %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_ADD_USER
@@ -125,8 +125,7 @@ create_user_invite_token_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
-                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]},
+                {admin, [?OZ_TOKENS_MANAGE, ?OZ_GROUPS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -232,7 +231,7 @@ get_user_details_test(Config) ->
                     <<"gri">> => fun(EncodedGri) ->
                         ?assertMatch(
                             #gri{id = SubjectUser},
-                            oz_test_utils:decode_gri(Config, EncodedGri)
+                            gri:deserialize(EncodedGri)
                         )
                     end,
 
@@ -450,7 +449,7 @@ remove_user_test(Config) ->
             module = group_logic,
             function = remove_user,
             args = [auth, G1, userId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -568,7 +567,7 @@ update_user_privileges_test(Config) ->
             module = group_logic,
             function = update_user_privileges,
             args = [auth, G1, U3, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -597,6 +596,7 @@ list_eff_users_test(Config) ->
     oz_test_utils:group_set_user_privileges(Config, G1, U2,
         [?GROUP_VIEW], AllGroupPrivs -- [?GROUP_VIEW]
     ),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ExpUsers = [U1, U2, U3, U4, U5, U6],
     ApiTestSpec = #api_test_spec{
@@ -705,9 +705,7 @@ get_eff_user_details_test(Config) ->
                     auth_hint = ?THROUGH_GROUP(G1),
                     expected_result = ?OK_MAP_CONTAINS(UserDetails#{
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = UId} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = UId} = gri:deserialize(EncodedGri),
                             ?assertEqual(UId, UserId)
                         end,
 
@@ -919,7 +917,7 @@ get_eff_user_membership_intermediaries(Config) ->
 
     lists:foreach(fun({GroupId, SubjectUser, CorrectUsers, ExpIntermediariesRaw}) ->
         ExpIntermediaries = lists:map(fun({Type, Id}) ->
-            #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+            #{<<"type">> => gri:serialize_type(Type), <<"id">> => Id}
         end, ExpIntermediariesRaw),
         CorrectUserClients = [{user, U} || U <- CorrectUsers],
         ApiTestSpec = #api_test_spec{

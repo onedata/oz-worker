@@ -37,8 +37,8 @@
     handle_upgrade_test/1,
     harvester_upgrade_test/1,
     cluster_upgrade_test/1,
+    storage_upgrade_test/1,
     dns_state_upgrade_test/1,
-    token_upgrade_test/1,
     macaroon_auth_upgrade_test/1,
     generate_cluster_for_a_legacy_provider_test/1
 ]).
@@ -57,8 +57,8 @@ all() -> ?ALL([
     handle_upgrade_test,
     harvester_upgrade_test,
     cluster_upgrade_test,
+    storage_upgrade_test,
     dns_state_upgrade_test,
-    token_upgrade_test,
     macaroon_auth_upgrade_test,
     generate_cluster_for_a_legacy_provider_test
 ]).
@@ -125,12 +125,12 @@ cluster_upgrade_test(Config) ->
     test_record_upgrade(Config, od_cluster).
 
 
+storage_upgrade_test(Config) ->
+    test_record_upgrade(Config, od_storage).
+
+
 dns_state_upgrade_test(Config) ->
     test_record_upgrade(Config, dns_state).
-
-
-token_upgrade_test(Config) ->
-    test_record_upgrade(Config, token).
 
 
 macaroon_auth_upgrade_test(Config) ->
@@ -144,7 +144,7 @@ generate_cluster_for_a_legacy_provider_test(Config) ->
     LegacyProviderDoc1 = #document{key = Provider1, value = #od_provider{
         name = <<"dummy1">>
     }},
-    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, save, [LegacyProviderDoc1])),
+    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, create, [LegacyProviderDoc1])),
     ?assertMatch({ok, true}, oz_test_utils:call_oz(Config, od_cluster, exists, [Cluster1])),
 
     Provider2 = datastore_key:new(),
@@ -153,7 +153,7 @@ generate_cluster_for_a_legacy_provider_test(Config) ->
     LegacyProviderDoc2 = #document{key = Provider2, value = #od_provider{
         name = <<"dummy2">>
     }},
-    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, save, [LegacyProviderDoc2])),
+    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, create, [LegacyProviderDoc2])),
     ?assertMatch({ok, #document{
         key = Provider2, value = #od_cluster{}}
     }, oz_test_utils:call_oz(Config, od_cluster, get, [Cluster2])).
@@ -1291,6 +1291,51 @@ get_record(od_group, 7) -> #od_group{
     eff_clusters = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,
+    creator = {subject, user, <<"userId123">>},
+
+    top_down_dirty = true,
+    bottom_up_dirty = true
+};
+get_record(od_group, 8) -> #od_group{
+    name = <<"ńąµę"/utf8>>,
+    type = role_holders,
+    protected = false,
+    oz_privileges = [
+        ?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_LIST, ?OZ_GROUPS_LIST_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_VIEW,
+        ?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_LIST_RELATIONSHIPS, ?OZ_PROVIDERS_VIEW,
+        ?OZ_SET_PRIVILEGES,
+        ?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_LIST, ?OZ_SPACES_LIST_RELATIONSHIPS, ?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_SPACES_VIEW,
+        ?OZ_USERS_LIST, ?OZ_USERS_VIEW, ?OZ_VIEW_PRIVILEGES
+    ],
+    eff_oz_privileges = [],
+
+    parents = [<<"parent1">>, <<"parent2">>],
+    children = #{
+        <<"child1">> => [?GROUP_ADD_CHILD, ?GROUP_ADD_SPACE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES],
+        <<"child2">> => [?GROUP_DELETE, ?GROUP_REMOVE_CHILD, ?GROUP_UPDATE]
+    },
+    eff_parents = #{},
+    eff_children = #{},
+
+    users = #{
+        <<"user1">> => [?GROUP_ADD_PARENT, ?GROUP_ADD_SPACE, ?GROUP_SET_PRIVILEGES],
+        <<"user2">> => [?GROUP_ADD_USER, ?GROUP_LEAVE_PARENT, ?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES]
+    },
+    spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
+    handle_services = [<<"handle_service1">>],
+    handles = [<<"handle1">>, <<"handle2">>],
+    harvesters = [],
+    clusters = [],
+
+    eff_users = #{},
+    eff_spaces = #{},
+    eff_providers = #{},
+    eff_handle_services = #{},
+    eff_handles = #{},
+    eff_harvesters = #{},
+    eff_clusters = #{},
+
+    creation_time = ?DUMMY_TIMESTAMP,
     creator = ?SUB(user, <<"userId123">>),
 
     top_down_dirty = true,
@@ -1311,7 +1356,7 @@ get_record(od_space, 1) -> {od_space,
     ],
     [
         {<<"group1">>, [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_invite_provider]},
-        {<<"group2">>, [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]}
+        {<<"group2">>, [space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]}
     ],
     [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
     [],  % eff_users
@@ -1327,7 +1372,7 @@ get_record(od_space, 2) -> {od_space,
     },
     #{
         <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_invite_provider],
-        <<"group2">> => [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
+        <<"group2">> => [space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
     },
     #{
         <<"prov1">> => 1000,
@@ -1351,7 +1396,7 @@ get_record(od_space, 3) -> {od_space,
     },
     #{
         <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_invite_provider],
-        <<"group2">> => [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
+        <<"group2">> => [space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
     },
     #{
         <<"prov1">> => 1000,
@@ -1367,177 +1412,456 @@ get_record(od_space, 3) -> {od_space,
     true,
     true
 };
-get_record(od_space, 4) -> #od_space{
-    name = <<"name">>,
-    users = #{
+get_record(od_space, 4) -> {od_space,
+    <<"name">>,
+    #{
         <<"user1">> => privileges:from_list([
             ?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES, ?SPACE_REMOVE_GROUP,
             ?SPACE_READ_DATA, space_manage_indexes, space_query_indexes, ?SPACE_VIEW_STATISTICS
         ]),
         <<"user2">> => privileges:from_list([
-            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, space_add_provider,
             ?SPACE_READ_DATA, space_manage_indexes, space_query_indexes, ?SPACE_VIEW_STATISTICS,
             ?SPACE_ADD_USER
         ])
     },
-    groups = #{
+    #{
         <<"group1">> => privileges:from_list([
-            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_add_provider,
             ?SPACE_READ_DATA, space_manage_indexes, space_query_indexes, ?SPACE_VIEW_STATISTICS
         ]),
         <<"group2">> => privileges:from_list([
-            ?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+            space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
             ?SPACE_READ_DATA, space_manage_indexes, space_query_indexes, ?SPACE_VIEW_STATISTICS
         ])
     },
-    providers = #{
+    #{
         <<"prov1">> => 1000,
         <<"prov2">> => 250000,
         <<"prov3">> => 19999999
     },
-    shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
-    harvesters = [],
+    [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+    [], % harvesters
 
-    eff_users = #{},
-    eff_groups = #{},
-    eff_providers = #{},
+    #{}, % effective_users
+    #{}, % effective_groups
+    #{}, % effective_providers
+    #{}, % effective_harvesters
 
-    creation_time = ?DUMMY_TIMESTAMP,
-    creator = undefined,
+    ?DUMMY_TIMESTAMP,
+    undefined,
 
-    top_down_dirty = true,
-    bottom_up_dirty = true
+    true,
+    true
 };
 get_record(od_space, 5) -> {
     % Returns two records:
     %   ExpAfterUpgrade - expected value after upgrade from previous version
     %   NextIteration - different record that will be upgraded to the next version
-    #od_space{
-        name = <<"name">>,
-        users = #{
+    {od_space,
+        <<"name">>,
+        #{
             <<"user1">> => privileges:from_list([
                 ?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_CHANGES_STREAM, ?SPACE_VIEW_PRIVILEGES,
                 ?SPACE_REMOVE_GROUP, ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ]),
             <<"user2">> => privileges:from_list([
-                ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+                ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, space_add_provider,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ])
         },
-        groups = #{
+        #{
             <<"group1">> => privileges:from_list([
-                ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+                ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_add_provider,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ]),
             <<"group2">> => privileges:from_list([
-                ?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+                space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ])
         },
-        providers = #{
+        #{
             <<"prov1">> => 1000,
             <<"prov2">> => 250000,
             <<"prov3">> => 19999999
         },
-        shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
-        harvesters = [],
+        [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+        [], % harvesters
 
-        eff_users = #{},
-        eff_groups = #{},
-        eff_providers = #{},
+        #{}, % effective_users
+        #{}, % effective_groups
+        #{}, % effective_providers
+        #{}, % effective_harvesters
 
-        creation_time = ?DUMMY_TIMESTAMP,
-        creator = undefined,
+        ?DUMMY_TIMESTAMP,
+        undefined,
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        true,
+        true
     },
-    #od_space{
-        name = <<"name">>,
-        users = #{
+    {od_space,
+        <<"name">>,
+        #{
             <<"user1">> => privileges:from_list([
                 ?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_CHANGES_STREAM, ?SPACE_VIEW_PRIVILEGES,
                 ?SPACE_REMOVE_GROUP, ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ]),
             <<"user2">> => privileges:from_list([
-                ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+                ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, space_add_provider, space_remove_provider,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ])
         },
-        groups = #{
+        #{
             <<"group1">> => privileges:from_list([
-                ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+                ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_add_provider, space_remove_provider,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ]),
             <<"group2">> => privileges:from_list([
-                ?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+                space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ])
         },
-        providers = #{
+        #{
             <<"prov1">> => 1000,
             <<"prov2">> => 250000,
             <<"prov3">> => 19999999
         },
-        shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
-        harvesters = [],
+        [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+        [], % harvesters
 
-        eff_users = #{},
-        eff_groups = #{},
-        eff_providers = #{},
+        #{}, % effective_users
+        #{}, % effective_groups
+        #{}, % effective_providers
+        #{}, % effective_harvesters
 
-        creation_time = ?DUMMY_TIMESTAMP,
-        creator = {client, nobody, <<"">>},
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        ?DUMMY_TIMESTAMP,
+        {client, nobody, <<"">>},
+
+        true,
+        true
     }
 };
-get_record(od_space, 6) -> #od_space{
-    name = <<"name">>,
-    users = #{
+get_record(od_space, 6) -> {od_space,
+    <<"name">>,
+    #{
         <<"user1">> => privileges:from_list([
             ?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_CHANGES_STREAM, ?SPACE_VIEW_PRIVILEGES,
             ?SPACE_REMOVE_GROUP, ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
         ]),
         <<"user2">> => privileges:from_list([
-            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, space_add_provider, space_remove_provider,
             ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
         ])
     },
-    groups = #{
+    #{
         <<"group1">> => privileges:from_list([
-            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_add_provider, space_remove_provider,
             ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
         ]),
         <<"group2">> => privileges:from_list([
-            ?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+            space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
             ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
         ])
     },
-    providers = #{
+    #{
         <<"prov1">> => 1000,
         <<"prov2">> => 250000,
         <<"prov3">> => 19999999
     },
+    [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+    [], % harvesters
+
+    #{}, % effective_users
+    #{}, % effective_groups
+    #{}, % effective_providers
+    #{}, % effective_harvesters
+
+    ?DUMMY_TIMESTAMP,
+    {subject, nobody, undefined},
+
+    true,
+    true
+};
+get_record(od_space, 7) -> {
+    % Returns two records:
+    %   ExpAfterUpgrade - expected value after upgrade from previous version
+    %   NextIteration - different record that will be upgraded to the next version
+    {od_space,
+        <<"name">>,
+        #{
+            <<"user1">> => privileges:from_list([
+                ?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_CHANGES_STREAM, ?SPACE_VIEW_PRIVILEGES,
+                ?SPACE_REMOVE_GROUP, ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
+                ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
+            ]),
+            <<"user2">> => privileges:from_list([
+                ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+                ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
+                ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
+            ])
+        },
+        #{
+            <<"group1">> => privileges:from_list([
+                ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+                ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
+                ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
+            ]),
+            <<"group2">> => privileges:from_list([
+                ?SPACE_REMOVE_SUPPORT, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+                ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
+                ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
+            ])
+        },
+        #{},
+        [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+        [],
+
+        #{},
+        #{},
+        #{},
+        #{},
+
+        ?DUMMY_TIMESTAMP,
+        ?SUB(nobody),
+
+        true,
+        true
+    },
+
+    {od_space,
+        <<"name">>,
+        #{
+            <<"user1">> => privileges:from_list([
+                % manager privs - should be given ?SPACE_REGISTER_FILES after upgrade
+                ?SPACE_VIEW,
+                ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+                ?SPACE_VIEW_TRANSFERS,
+                ?SPACE_VIEW_PRIVILEGES,
+                ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+                ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+                ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+                ?SPACE_REGISTER_FILES,
+                ?SPACE_MANAGE_SHARES,
+                ?SPACE_VIEW_VIEWS,
+                ?SPACE_QUERY_VIEWS,
+                ?SPACE_VIEW_STATISTICS,
+                ?SPACE_VIEW_CHANGES_STREAM,
+                ?SPACE_SCHEDULE_REPLICATION,
+                ?SPACE_VIEW_QOS
+            ]),
+            <<"user2">> => privileges:from_list([
+                ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+                ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
+                ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
+            ]),
+            <<"user3">> => [?SPACE_READ_DATA, ?SPACE_WRITE_DATA]
+        },
+        #{
+            <<"group1">> => privileges:from_list([
+                ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT
+            ]),
+            <<"group2">> => privileges:from_list([
+                % admin privs - should be given ?SPACE_REGISTER_FILES after upgrade
+                ?SPACE_VIEW,
+                ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+                ?SPACE_VIEW_TRANSFERS,
+                ?SPACE_VIEW_PRIVILEGES,
+                ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+                ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+                ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+                ?SPACE_MANAGE_SHARES,
+                ?SPACE_VIEW_VIEWS,
+                ?SPACE_QUERY_VIEWS,
+                ?SPACE_VIEW_STATISTICS,
+                ?SPACE_VIEW_CHANGES_STREAM,
+                ?SPACE_SCHEDULE_REPLICATION,
+                ?SPACE_VIEW_QOS,
+                ?SPACE_UPDATE, ?SPACE_DELETE,
+                ?SPACE_SET_PRIVILEGES,
+                ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+                ?SPACE_MANAGE_VIEWS,
+                ?SPACE_CANCEL_REPLICATION,
+                ?SPACE_SCHEDULE_EVICTION, ?SPACE_CANCEL_EVICTION,
+                ?SPACE_MANAGE_QOS
+            ])
+        },
+        #{},
+        [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+        [],
+
+        #{
+            <<"user3">> => {privileges:space_manager() -- [?SPACE_REGISTER_FILES], [{od_space, <<"self">>}]}
+        },
+        #{},
+        #{},
+        #{},
+
+        ?DUMMY_TIMESTAMP,
+        ?SUB(nobody),
+
+        true,
+        true
+    }
+};
+get_record(od_space, 8) -> {od_space,
+    <<"name">>,
+    #{
+        <<"user1">> => privileges:from_list([
+            ?SPACE_VIEW,
+            ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+            ?SPACE_VIEW_TRANSFERS,
+            ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+            ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+            ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_REGISTER_FILES,
+            ?SPACE_MANAGE_SHARES,
+            ?SPACE_VIEW_VIEWS,
+            ?SPACE_QUERY_VIEWS,
+            ?SPACE_VIEW_STATISTICS,
+            ?SPACE_VIEW_CHANGES_STREAM,
+            ?SPACE_SCHEDULE_REPLICATION,
+            ?SPACE_VIEW_QOS,
+            ?SPACE_REGISTER_FILES  % should be added by the upgrade procedure
+        ]),
+        <<"user2">> => privileges:from_list([
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+            ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
+            ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
+        ]),
+        <<"user3">> => [?SPACE_READ_DATA, ?SPACE_WRITE_DATA]
+    },
+    #{
+        <<"group1">> => privileges:from_list([
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT
+        ]),
+        <<"group2">> => privileges:from_list([
+            ?SPACE_VIEW,
+            ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+            ?SPACE_VIEW_TRANSFERS,
+            ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+            ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+            ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_MANAGE_SHARES,
+            ?SPACE_VIEW_VIEWS,
+            ?SPACE_QUERY_VIEWS,
+            ?SPACE_VIEW_STATISTICS,
+            ?SPACE_VIEW_CHANGES_STREAM,
+            ?SPACE_SCHEDULE_REPLICATION,
+            ?SPACE_VIEW_QOS,
+            ?SPACE_UPDATE, ?SPACE_DELETE,
+            ?SPACE_SET_PRIVILEGES,
+            ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+            ?SPACE_MANAGE_VIEWS,
+            ?SPACE_CANCEL_REPLICATION,
+            ?SPACE_SCHEDULE_EVICTION, ?SPACE_CANCEL_EVICTION,
+            ?SPACE_MANAGE_QOS,
+            ?SPACE_REGISTER_FILES  % should be added by the upgrade procedure
+        ])
+    },
+    #{},
+    [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+    [],
+
+    #{
+        <<"user3">> => {privileges:space_manager(), [{od_space, <<"self">>}]}
+    },
+    #{},
+    #{},
+    #{},
+
+    ?DUMMY_TIMESTAMP,
+    ?SUB(nobody),
+
+    true,
+    true
+};
+get_record(od_space, 9) -> #od_space{
+    name = <<"name">>,
+
+    % Space ownership is automatically granted to all direct users that had the
+    % most effective privileges in the space before the upgrade
+    owners = [<<"user3">>, <<"user1">>],
+
+    users = #{
+        <<"user1">> => privileges:from_list([
+            ?SPACE_VIEW,
+            ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+            ?SPACE_VIEW_TRANSFERS,
+            ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+            ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+            ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_REGISTER_FILES,
+            ?SPACE_MANAGE_SHARES,
+            ?SPACE_VIEW_VIEWS,
+            ?SPACE_QUERY_VIEWS,
+            ?SPACE_VIEW_STATISTICS,
+            ?SPACE_VIEW_CHANGES_STREAM,
+            ?SPACE_SCHEDULE_REPLICATION,
+            ?SPACE_VIEW_QOS,
+            ?SPACE_REGISTER_FILES  % should be added by the upgrade procedure
+        ]),
+        <<"user2">> => privileges:from_list([
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+            ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
+            ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
+        ]),
+        <<"user3">> => [?SPACE_READ_DATA, ?SPACE_WRITE_DATA]
+    },
+    groups = #{
+        <<"group1">> => privileges:from_list([
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT
+        ]),
+        <<"group2">> => privileges:from_list([
+            ?SPACE_VIEW,
+            ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+            ?SPACE_VIEW_TRANSFERS,
+            ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+            ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+            ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_MANAGE_SHARES,
+            ?SPACE_VIEW_VIEWS,
+            ?SPACE_QUERY_VIEWS,
+            ?SPACE_VIEW_STATISTICS,
+            ?SPACE_VIEW_CHANGES_STREAM,
+            ?SPACE_SCHEDULE_REPLICATION,
+            ?SPACE_VIEW_QOS,
+            ?SPACE_UPDATE, ?SPACE_DELETE,
+            ?SPACE_SET_PRIVILEGES,
+            ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+            ?SPACE_MANAGE_VIEWS,
+            ?SPACE_CANCEL_REPLICATION,
+            ?SPACE_SCHEDULE_EVICTION, ?SPACE_CANCEL_EVICTION,
+            ?SPACE_MANAGE_QOS,
+            ?SPACE_REGISTER_FILES  % should be added by the upgrade procedure
+        ])
+    },
+    storages = #{},
     shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
     harvesters = [],
 
-    eff_users = #{},
+    eff_users = #{
+        <<"user3">> => {privileges:space_manager(), [{od_space, <<"self">>}]}
+    },
     eff_groups = #{},
     eff_providers = #{},
+    eff_harvesters = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,
     creator = ?SUB(nobody),
@@ -1568,36 +1892,63 @@ get_record(od_share, 3) -> {
     % Returns two records:
     %   ExpAfterUpgrade - expected value after upgrade from previous version
     %   NextIteration - different record that will be upgraded to the next version
-    #od_share{
-        name = <<"name">>,
-        public_url = <<"public_url">>,
-        space = <<"parent_space_id">>,
-        handle = <<"handle_id">>,
-        root_file = <<"root_file_id">>,
+    {od_share,
+        <<"name">>,
+        <<"public_url">>,
+        <<"parent_space_id">>,
+        <<"handle_id">>,
+        <<"root_file_id">>,
 
-        creation_time = ?DUMMY_TIMESTAMP,
-        creator = undefined
+        ?DUMMY_TIMESTAMP,
+        undefined
     },
-    #od_share{
-        name = <<"name">>,
-        public_url = <<"public_url">>,
-        space = <<"parent_space_id">>,
-        handle = <<"handle_id">>,
-        root_file = <<"root_file_id">>,
+    {od_share,
+        <<"name">>,
+        <<"public_url">>,
+        <<"parent_space_id">>,
+        <<"handle_id">>,
+        <<"root_file_id">>,
 
-        creation_time = ?DUMMY_TIMESTAMP,
-        creator = {client, root, <<"">>}
+        ?DUMMY_TIMESTAMP,
+        {client, root, <<"">>}
     }
 };
-get_record(od_share, 4) -> #od_share{
+get_record(od_share, 4) -> {od_share,
+    <<"name">>,
+    <<"public_url">>,
+    <<"parent_space_id">>,
+    <<"handle_id">>,
+    <<"root_file_id">>,
+
+    ?DUMMY_TIMESTAMP,
+    {subject, nobody, undefined}
+};
+get_record(od_share, 5) -> {od_share,
+    <<"name">>,
+    <<"public_url">>,
+
+    <<"parent_space_id">>,
+    <<"handle_id">>,
+
+    <<"root_file_id">>,
+    dir,
+
+    ?DUMMY_TIMESTAMP,
+    ?SUB(nobody)
+};
+get_record(od_share, 6) -> #od_share{
     name = <<"name">>,
+    description = <<"">>,
     public_url = <<"public_url">>,
+
     space = <<"parent_space_id">>,
     handle = <<"handle_id">>,
+
     root_file = <<"root_file_id">>,
+    file_type = dir,
 
     creation_time = ?DUMMY_TIMESTAMP,
-    creator = ?SUB(root)
+    creator = ?SUB(nobody)
 };
 
 
@@ -1686,6 +2037,7 @@ get_record(od_provider, 5) -> {od_provider,
     <<"name">>,
     undefined,
     undefined,
+
     false,
     <<"redirection_point">>,
     undefined,
@@ -1708,10 +2060,39 @@ get_record(od_provider, 5) -> {od_provider,
 
     true
 };
-get_record(od_provider, 6) -> #od_provider{
+get_record(od_provider, 6) -> {od_provider,
+    <<"name">>,
+    undefined,
+    undefined,
+
+    false,
+    <<"redirection_point">>,
+    undefined,
+
+    -93.2341,
+    17,
+
+    #{
+        <<"space1">> => 0,
+        <<"space2">> => 0,
+        <<"space3">> => 0,
+        <<"space4">> => 0
+    },
+
+    #{},
+    #{},
+    #{},
+
+    ?DUMMY_TIMESTAMP,
+    0,
+
+    true
+};
+get_record(od_provider, 7) -> #od_provider{
     name = <<"name">>,
     admin_email = undefined,
-    root_macaroon = undefined,
+    root_token = undefined,
+
     subdomain_delegation = false,
     domain = <<"redirection_point">>,
     subdomain = undefined,
@@ -1719,15 +2100,17 @@ get_record(od_provider, 6) -> #od_provider{
     latitude = -93.2341,
     longitude = 17,
 
-    spaces = #{
+    legacy_spaces = #{
         <<"space1">> => 0,
         <<"space2">> => 0,
         <<"space3">> => 0,
         <<"space4">> => 0
     },
+    storages = [],
 
     eff_users = #{},
     eff_groups = #{},
+    eff_spaces = #{},
     eff_harvesters = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,
@@ -1868,6 +2251,34 @@ get_record(od_handle_service, 4) -> {
     }
 };
 get_record(od_handle_service, 5) -> #od_handle_service{
+    name = <<"name">>,
+    proxy_endpoint = <<"proxy_endpoint">>,
+    service_properties = #{
+        <<"property1">> => <<"value1">>,
+        <<"property2">> => <<"value2">>,
+        <<"property3">> => <<"value3">>
+    },
+
+    users = #{
+        <<"user1">> => [?HANDLE_SERVICE_LIST_HANDLES, ?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
+        <<"user2">> => [?HANDLE_SERVICE_UPDATE, ?HANDLE_SERVICE_DELETE, ?HANDLE_SERVICE_VIEW]
+    },
+    groups = #{
+        <<"group1">> => [?HANDLE_SERVICE_DELETE, ?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_VIEW],
+        <<"group2">> => [?HANDLE_SERVICE_LIST_HANDLES, ?HANDLE_SERVICE_UPDATE, ?HANDLE_SERVICE_REGISTER_HANDLE]
+    },
+    handles = [],
+
+
+    eff_users = #{},
+    eff_groups = #{},
+
+    creation_time = ?DUMMY_TIMESTAMP,
+    creator = {subject, ?ONEPROVIDER, <<"123123">>},
+
+    bottom_up_dirty = true
+};
+get_record(od_handle_service, 6) -> #od_handle_service{
     name = <<"name">>,
     proxy_endpoint = <<"proxy_endpoint">>,
     service_properties = #{
@@ -2041,15 +2452,40 @@ get_record(od_handle, 5) -> #od_handle{
     eff_groups = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,
-    creator = ?SUB(nobody),
+    creator = {subject, nobody, undefined},
 
+    bottom_up_dirty = true
+};
+get_record(od_handle, 6) -> #od_handle{
+    public_handle = <<"public_handle">>,
+    resource_type = <<"Share">>,
+    metadata = <<"<metadata_xml_string>">>,
+    timestamp = {{2016, 4, 4}, {14, 56, 33}},
+
+    resource_id = <<"resource_id">>,
+    handle_service = <<"handle_service_id">>,
+
+    users = #{
+        <<"user1">> => [?HANDLE_VIEW, ?HANDLE_UPDATE],
+        <<"user2">> => [?HANDLE_VIEW, ?HANDLE_UPDATE, ?HANDLE_DELETE]
+    },
+    groups = #{
+        <<"group1">> => [?HANDLE_UPDATE],
+        <<"group2">> => [?HANDLE_DELETE]
+    },
+
+    eff_users = #{},
+    eff_groups = #{},
+
+    creation_time = ?DUMMY_TIMESTAMP,
+    creator = ?SUB(nobody),
     bottom_up_dirty = true
 };
 
 
 get_record(od_harvester, 1) -> #od_harvester{
     name = <<"h-name">>,
-    plugin = elasticsearch_plugin,
+    backend = elasticsearch_plugin,
     endpoint = <<"https://es.example.com:9056">>,
 
     gui_plugin_config = #{
@@ -2059,11 +2495,11 @@ get_record(od_harvester, 1) -> #od_harvester{
     public = true,
 
     indices = #{
-        <<"567">> => #harvester_index{
-            name = <<"Simulations index">>,
-            schema = <<"schema">>,
-            gui_plugin_name = <<"simulations">>,
-            stats = #{
+        <<"567">> => {harvester_index,
+            <<"Simulations index">>,
+            <<"schema">>,
+            <<"simulations">>,
+            #{
                 <<"space1">> => #{
                     <<"providerA">> => #index_stats{
                         current_seq = 5,
@@ -2109,7 +2545,7 @@ get_record(od_harvester, 1) -> #od_harvester{
 };
 get_record(od_harvester, 2) -> #od_harvester{
     name = <<"h-name">>,
-    plugin = elasticsearch_plugin,
+    backend =  elasticsearch_plugin,
     endpoint = <<"https://es.example.com:9056">>,
 
     gui_plugin_config = #{
@@ -2119,11 +2555,11 @@ get_record(od_harvester, 2) -> #od_harvester{
     public = true,
 
     indices = #{
-        <<"567">> => #harvester_index{
-            name = <<"Simulations index">>,
-            schema = <<"schema">>,
-            gui_plugin_name = <<"simulations">>,
-            stats = #{
+        <<"567">> => {harvester_index,
+            <<"Simulations index">>,
+            <<"schema">>,
+            <<"simulations">>,
+            #{
                 <<"space1">> => #{
                     <<"providerA">> => #index_stats{
                         current_seq = 5,
@@ -2162,8 +2598,132 @@ get_record(od_harvester, 2) -> #od_harvester{
     eff_providers = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,
-    creator = ?SUB(root),
+    creator = {subject, nobody, undefined},
 
+    bottom_up_dirty = true,
+    top_down_dirty = true
+};
+get_record(od_harvester, 3) -> #od_harvester{
+    name = <<"h-name">>,
+    backend = elasticsearch_plugin,
+    endpoint = <<"https://es.example.com:9056">>,
+
+    gui_plugin_config = #{
+        <<"attr1">> => <<"val2">>,
+        <<"attr2">> => 15
+    },
+    public = true,
+
+    indices = #{
+        <<"567">> => {harvester_index,
+            <<"Simulations index">>,
+            <<"schema">>,
+            <<"simulations">>,
+            #{
+                <<"space1">> => #{
+                    <<"providerA">> => #index_stats{
+                        current_seq = 5,
+                        max_seq = 17,
+                        last_update = ?DUMMY_TIMESTAMP + 18,
+                        error = <<"temp-error">>,
+                        archival = false
+                    }
+                },
+                <<"space2">> => #{
+                    <<"providerB">> => #index_stats{
+                        current_seq = 1423,
+                        max_seq = 1423,
+                        last_update = ?DUMMY_TIMESTAMP + 892,
+                        error = undefined,
+                        archival = true
+                    }
+                }
+            }
+        }
+
+    },
+
+    users = #{
+        <<"user1">> => [?HARVESTER_VIEW, ?HARVESTER_UPDATE],
+        <<"user2">> => [?HARVESTER_VIEW, ?HARVESTER_UPDATE, ?HARVESTER_DELETE]
+    },
+    groups = #{
+        <<"group1">> => [?HARVESTER_UPDATE],
+        <<"group2">> => [?HARVESTER_DELETE]
+    },
+    spaces = [<<"s1">>, <<"s2">>],
+
+    eff_users = #{},
+    eff_groups = #{},
+    eff_providers = #{},
+
+    creation_time = ?DUMMY_TIMESTAMP,
+    creator = ?SUB(nobody),
+
+    bottom_up_dirty = true,
+    top_down_dirty = true
+};
+get_record(od_harvester, 4) -> #od_harvester{
+    name = <<"h-name">>,
+    backend = elasticsearch_harvesting_backend,
+    endpoint = <<"https://es.example.com:9056">>,
+    
+    gui_plugin_config = #{
+        <<"attr1">> => <<"val2">>,
+        <<"attr2">> => 15
+    },
+    public = true,
+    
+    indices = #{
+        <<"567">> => #harvester_index{
+            name = <<"Simulations index">>,
+            schema = <<"schema">>,
+            gui_plugin_name = <<"simulations">>,
+            include_metadata = [json],
+            include_file_details = [],
+            retry_on_rejection = false,
+            include_rejection_reason = false,
+            stats = #{
+                <<"space1">> => #{
+                    <<"providerA">> => #index_stats{
+                        current_seq = 5,
+                        max_seq = 17,
+                        last_update = ?DUMMY_TIMESTAMP + 18,
+                        error = <<"temp-error">>,
+                        archival = false
+                    }
+                },
+                <<"space2">> => #{
+                    <<"providerB">> => #index_stats{
+                        current_seq = 1423,
+                        max_seq = 1423,
+                        last_update = ?DUMMY_TIMESTAMP + 892,
+                        error = undefined,
+                        archival = true
+                    }
+                }
+            }
+        }
+        
+    },
+    
+    users = #{
+        <<"user1">> => [?HARVESTER_VIEW, ?HARVESTER_UPDATE],
+        <<"user2">> => [?HARVESTER_VIEW, ?HARVESTER_UPDATE, ?HARVESTER_DELETE]
+    },
+    groups = #{
+        <<"group1">> => [?HARVESTER_UPDATE],
+        <<"group2">> => [?HARVESTER_DELETE]
+    },
+    spaces = [<<"s1">>, <<"s2">>],
+    
+    eff_users = #{},
+    eff_groups = #{},
+    eff_providers = #{},
+    
+    creation_time = ?DUMMY_TIMESTAMP,
+    creator = ?SUB(nobody),
+    
     bottom_up_dirty = true,
     top_down_dirty = true
 };
@@ -2202,6 +2762,31 @@ get_record(od_cluster, 2) -> #od_cluster{
     onepanel_proxy = true,
 
     creation_time = ?DUMMY_TIMESTAMP,
+    creator = {subject, user, <<"cluster-admin">>},
+
+
+    users = #{
+        <<"user1">> => [?CLUSTER_VIEW, ?CLUSTER_UPDATE],
+        <<"user2">> => [?CLUSTER_VIEW, ?CLUSTER_UPDATE, ?CLUSTER_DELETE]
+    },
+    groups = #{
+        <<"group1">> => [?CLUSTER_UPDATE],
+        <<"group2">> => [?CLUSTER_DELETE]
+    },
+
+    eff_users = #{},
+    eff_groups = #{},
+
+    bottom_up_dirty = false
+};
+get_record(od_cluster, 3) -> #od_cluster{
+    type = ?ONEPROVIDER,
+
+    worker_version = {<<"19.02.0-beta1">>, <<"dc6e5ad5bc-98">>, <<"0bd06a1ac53dbc6db8f9fdd0e59ff0d">>},
+    onepanel_version = {<<"19.02.0-beta1">>, <<"d92db7611a-115">>, <<"882856e9067e6c1d6b29416b66154a9">>},
+    onepanel_proxy = true,
+
+    creation_time = ?DUMMY_TIMESTAMP,
     creator = ?SUB(user, <<"cluster-admin">>),
 
 
@@ -2218,6 +2803,94 @@ get_record(od_cluster, 2) -> #od_cluster{
     eff_groups = #{},
 
     bottom_up_dirty = false
+};
+
+get_record(od_storage, 1) -> {od_storage,
+    <<"storage_name">>,
+    #{<<"key">> => <<"value">>},
+
+    <<"p1">>,
+    #{<<"s1">> => 8, <<"s2">> => 10},
+
+    #{},
+    #{},
+    #{},
+
+    #{},
+    #{},
+
+
+    ?DUMMY_TIMESTAMP,
+    ?SUB(user, <<"userId123">>),
+
+    true,
+    true
+};
+get_record(od_storage, 2) -> {
+    {od_storage,
+        <<"storage_name">>,
+        #{<<"key">> => <<"value">>},
+        unknown,
+
+        <<"p1">>,
+        #{<<"s1">> => 8, <<"s2">> => 10},
+
+        #{},
+        #{},
+        #{},
+
+        #{},
+        #{},
+
+        ?DUMMY_TIMESTAMP,
+        ?SUB(user, <<"userId123">>),
+
+        true,
+        true
+    },
+    {od_storage,
+        <<"storage_name">>,
+        #{<<"key">> => <<"value">>},
+        true,
+
+        <<"p1">>,
+        #{<<"s1">> => 8, <<"s2">> => 10},
+
+        #{},
+        #{},
+        #{},
+
+        #{},
+        #{},
+
+        ?DUMMY_TIMESTAMP,
+        ?SUB(user, <<"userId123">>),
+
+        true,
+        true
+    }
+};
+get_record(od_storage, 3) -> #od_storage{
+    name = <<"storage_name">>,
+    qos_parameters = #{<<"key">> => <<"value">>},
+    imported = true,
+    readonly = false,
+
+    provider = <<"p1">>,
+    spaces = #{<<"s1">> => 8, <<"s2">> => 10},
+
+    eff_users = #{},
+    eff_groups = #{},
+    eff_harvesters = #{},
+
+    eff_providers = #{},
+    eff_spaces = #{},
+
+    creation_time = ?DUMMY_TIMESTAMP,
+    creator = ?SUB(user, <<"userId123">>),
+
+    top_down_dirty = true,
+    bottom_up_dirty = true
 };
 
 
@@ -2241,34 +2914,17 @@ get_record(dns_state, 2) -> {dns_state,
 };
 
 
-get_record(token, 1) -> {token,
-    <<"secret">>,
-    resource,
-    <<"resource_id">>,
-    {client, user, <<"">>}
-};
-get_record(token, 2) -> {token,
-    <<"secret">>,
-    resource,
-    <<"resource_id">>,
-    {client, user, <<"">>},
-    false
-};
-get_record(token, 3) -> #token{
-    secret = <<"secret">>,
-    resource = resource,
-    resource_id = <<"resource_id">>,
-    issuer = ?SUB(nobody),
-    locked = false
-};
-
-
 get_record(macaroon_auth, 1) -> {macaroon_auth,
     <<"secret">>,
     authorization,
     {client, user, <<"client_id">>}
 };
 get_record(macaroon_auth, 2) -> #macaroon_auth{
+    secret = <<"secret">>,
+    type = authorization,
+    issuer = {subject, user, <<"client_id">>}
+};
+get_record(macaroon_auth, 3) -> #macaroon_auth{
     secret = <<"secret">>,
     type = authorization,
     issuer = ?SUB(user, <<"client_id">>)

@@ -41,18 +41,18 @@ all() -> ?ALL([
 %%%===================================================================
 
 init_per_suite(Config) ->
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
+    ozt:init_per_suite(Config).
 
 init_per_testcase(_, Config) ->
-    oz_test_utils:mock_handle_proxy(Config),
-    oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
-    oz_test_utils:mock_time(Config),
+    ozt_mocks:mock_handle_proxy(),
+    ozt_mocks:mock_harvesting_backends(),
+    ozt_mocks:mock_time(),
     Config.
 
-end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_handle_proxy(Config),
-    oz_test_utils:unmock_time(Config),
-    oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN).
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_handle_proxy(),
+    ozt_mocks:unmock_time(),
+    ozt_mocks:unmock_harvesting_backends().
 
 end_per_suite(_Config) ->
     ok.
@@ -66,8 +66,8 @@ end_per_suite(_Config) ->
 % Number of members in each (applicable) entity
 -define(MEMBERS_COUNT, 5).
 
--define(RAND_SUBLIST(List), random_sublist(List)).
--define(RAND_SUBLIST(List, Len), random_sublist(List, Len, Len)).
+-define(RAND_SUBLIST(List), lists_utils:random_sublist(List)).
+-define(RAND_SUBLIST(List, Len), lists_utils:random_sublist(List, Len, Len)).
 
 -define(NAMES_A, [
     <<"Amazing">>, <<"Competent">>, <<"Ecstatic">>, <<"Flamboyant">>,
@@ -84,7 +84,14 @@ end_per_suite(_Config) ->
     <<"źµł"/utf8>>
 ]).
 
--define(GEN_NAME(), <<(utils:random_element(?NAMES_A))/binary, " ", (utils:random_element(?NAMES_B))/binary>>).
+-define(GEN_NAME(), <<(lists_utils:random_element(?NAMES_A))/binary, " ", (lists_utils:random_element(?NAMES_B))/binary>>).
+
+-define(GEN_QOS_PARAMS, #{
+    <<"country">> => lists_utils:random_element([<<"PL">>, <<"DE">>, <<"NL">>, <<"UK">>, <<"UA">>, <<"IT">>, <<"FR">>]),
+    <<"type">> => lists_utils:random_element([<<"posix">>, <<"object">>, <<"tape">>, <<"scratch">>, <<"archive">>]),
+    <<"speed">> => integer_to_binary(rand:uniform(9999999999)),
+    <<"tier">> => <<"t", (integer_to_binary(rand:uniform(8)))/binary>>
+}).
 
 -define(EMAIL_DOMAINS, [<<"example.com">>, <<"mail.com">>, <<"email.org">>, <<"inbox.org">>]).
 
@@ -94,41 +101,38 @@ end_per_suite(_Config) ->
     spaces = [] :: [od_space:id()],
     shares = [] :: [od_share:id()],
     providers = [] :: [od_provider:id()],
+    storages = [] :: [od_storage:id()],
     clusters = [] :: [od_cluster:id()],
     handle_services = [] :: [od_handle_service:id()],
     handles = [] :: [od_handle:id()],
     harvesters = [] :: [od_harvester:id()]
 }).
 
-random_sublist(List) ->
-    random_sublist(List, 0, length(List)).
 
-random_sublist(List, MinLength, MaxLength) ->
-    Shuffled = utils:random_shuffle(List),
-    lists:sublist(Shuffled, MinLength + rand:uniform(MaxLength - MinLength + 1) - 1).
+simulate_random_delay() ->
+    ozt_mocks:simulate_time_passing(rand:uniform(2592000) * lists_utils:random_element([-1, 1])).
 
 
-simulate_random_delay(Config) ->
-    oz_test_utils:simulate_time_passing(Config, rand:uniform(2592000) * utils:random_element([-1, 1])).
+set_up_environment() ->
+    lists:foldl(fun(Fun, Acc) -> Fun(Acc) end, #environment{}, [
+        fun set_up_users/1,
+        fun set_up_groups/1,
+        fun set_up_spaces_and_shares/1,
+        fun set_up_providers_and_clusters/1,
+        fun set_up_storages/1,
+        fun set_up_handle_services_and_handles/1,
+        fun set_up_harvesters/1
+    ]).
 
 
-set_up_environment(Config) ->
-    Env1 = set_up_users(Config, #environment{}),
-    Env2 = set_up_groups(Config, Env1),
-    Env3 = set_up_spaces_and_shares(Config, Env2),
-    Env4 = set_up_providers_and_clusters(Config, Env3),
-    Env5 = set_up_handle_services_and_handles(Config, Env4),
-    set_up_harvesters(Config, Env5).
-
-
-set_up_users(Config, Environment) ->
+set_up_users(Environment) ->
     Environment#environment{
         users = lists:map(fun(_) ->
             Name = ?GEN_NAME(),
-            {ok, User} = oz_test_utils:create_user(Config, #{
-                <<"fullName">> => Name, <<"username">> => str_utils:rand_hex(4)
+            User = ozt_users:create(#{
+                <<"fullName">> => ?GEN_NAME(), <<"username">> => str_utils:rand_hex(4)
             }),
-            simulate_random_delay(Config),
+            simulate_random_delay(),
             Emails = ?RAND_SUBLIST(lists:map(fun(Domain) ->
                 str_utils:format_bin("~s@~s", [string:replace(string:lowercase(Name), " ", ".", all), Domain])
             end, ?EMAIL_DOMAINS)),
@@ -136,10 +140,10 @@ set_up_users(Config, Environment) ->
                 1 ->
                     [];
                 _ ->
-                    IdP = utils:random_element([aai_org, sso_com, firstIdP, anotherIdP]),
+                    IdP = lists_utils:random_element([aai_org, sso_com, firstIdP, anotherIdP]),
                     [#linked_account{idp = IdP, emails = ?RAND_SUBLIST(Emails)}]
             end,
-            oz_test_utils:call_oz(Config, od_user, update, [User, fun(UserRecord) ->
+            ozt:rpc(od_user, update, [User, fun(UserRecord) ->
                 {ok, UserRecord#od_user{emails = Emails, linked_accounts = LinkedAccounts}}
             end]),
             % Simulate graph sync connections of some users
@@ -147,41 +151,35 @@ set_up_users(Config, Environment) ->
                 1 ->
                     ok;
                 _ ->
-                    simulate_random_delay(Config),
-                    oz_test_utils:call_oz(Config, user_connections, add, [User, <<"sess-id">>, self()]),
+                    simulate_random_delay(),
+                    ozt:rpc(user_connections, add, [User, <<"sess-id">>, self()]),
                     case rand:uniform(4) of
                         1 ->
                             ok;
                         _ ->
-                            oz_test_utils:call_oz(Config, user_connections, remove, [User, <<"sess-id">>, self()])
+                            ozt:rpc(user_connections, remove, [User, <<"sess-id">>, self()])
                     end
             end,
             case rand:uniform(5) of
-                1 ->
-                    Privs = ?RAND_SUBLIST(privileges:oz_privileges()),
-                    oz_test_utils:user_set_oz_privileges(Config, User, Privs, []);
-                _ ->
-                    ok
+                1 -> ozt_users:grant_oz_privileges(User, ?RAND_SUBLIST(privileges:oz_privileges()));
+                _ -> ok
             end,
             User
         end, lists:seq(1, ?ENTITY_COUNT))
     }.
 
 
-set_up_groups(Config, Environment = #environment{users = Users}) ->
+set_up_groups(Environment = #environment{users = Users}) ->
     Groups = lists:map(fun(_) ->
-        {ok, Group} = oz_test_utils:create_group(Config, ?ROOT, #{
+        Group = ozt_groups:create(#{
             <<"name">> => ?GEN_NAME(),
-            <<"type">> => utils:random_element([organization, unit, team, role_holders])
+            <<"type">> => lists_utils:random_element([organization, unit, team, role_holders])
         }),
-        simulate_random_delay(Config),
-        generate_members(Config, od_group, Group, od_user, Users),
+        simulate_random_delay(),
+        generate_members(od_group, Group, od_user, Users),
         case rand:uniform(8) of
-            1 ->
-                Privs = ?RAND_SUBLIST(privileges:oz_privileges()),
-                oz_test_utils:group_set_oz_privileges(Config, Group, Privs, []);
-            _ ->
-                ok
+            1 -> ozt_groups:grant_oz_privileges(Group, ?RAND_SUBLIST(privileges:oz_privileges()));
+            _ -> ok
         end,
         Group
     end, lists:seq(1, ?ENTITY_COUNT)),
@@ -191,11 +189,11 @@ set_up_groups(Config, Environment = #environment{users = Users}) ->
     BotLevelGroups = lists:sublist(Groups, 2 * ?ENTITY_COUNT div 3 + 1, ?ENTITY_COUNT - (2 * ?ENTITY_COUNT div 3)),
 
     lists:foreach(fun(Group) ->
-        generate_members(Config, od_group, Group, od_group, MidLevelGroups)
+        generate_members(od_group, Group, od_group, MidLevelGroups)
     end, TopLevelGroups),
 
     lists:foreach(fun(Group) ->
-        generate_members(Config, od_group, Group, od_group, BotLevelGroups)
+        generate_members(od_group, Group, od_group, BotLevelGroups)
     end, MidLevelGroups),
 
     Environment#environment{
@@ -203,12 +201,12 @@ set_up_groups(Config, Environment = #environment{users = Users}) ->
     }.
 
 
-set_up_spaces_and_shares(Config, Environment = #environment{users = Users, groups = Groups}) ->
+set_up_spaces_and_shares(Environment = #environment{users = Users, groups = Groups}) ->
     Spaces = lists:map(fun(_) ->
-        {ok, Space} = oz_test_utils:create_space(Config, ?ROOT, ?GEN_NAME()),
-        simulate_random_delay(Config),
-        generate_members(Config, od_space, Space, od_user, Users),
-        generate_members(Config, od_space, Space, od_group, Groups),
+        Space = ozt_spaces:create(?GEN_NAME()),
+        simulate_random_delay(),
+        generate_members(od_space, Space, od_user, Users),
+        generate_members(od_space, Space, od_group, Groups),
         Space
     end, lists:seq(1, ?ENTITY_COUNT)),
 
@@ -216,68 +214,77 @@ set_up_spaces_and_shares(Config, Environment = #environment{users = Users, group
         spaces = Spaces,
         shares = lists:flatmap(fun(Space) ->
             lists:map(fun(_) ->
-                {ok, Share} = oz_test_utils:create_share(
-                    Config, ?ROOT, str_utils:rand_hex(16), ?GEN_NAME(), ?ROOT_FILE_ID, Space
-                ),
-                simulate_random_delay(Config),
-                Share
+                simulate_random_delay(),
+                ozt_spaces:create_share(Space, ?GEN_NAME())
             end, lists:seq(1, ?MEMBERS_COUNT))
         end, Spaces)
     }.
 
 
-set_up_providers_and_clusters(Config, Environment = #environment{users = Users, groups = Groups, spaces = Spaces}) ->
+set_up_providers_and_clusters(Environment = #environment{users = Users, groups = Groups}) ->
     Providers = lists:map(fun(_) ->
-        {ok, {Provider, _}} = oz_test_utils:create_provider(Config, undefined, ?GEN_NAME()),
-        simulate_random_delay(Config),
+        Provider = ozt_providers:create_for_admin_user(lists_utils:random_element(Users), ?GEN_NAME()),
+        simulate_random_delay(),
         Cluster = Provider,
-        generate_members(Config, od_cluster, Cluster, od_user, Users),
-        generate_members(Config, od_cluster, Cluster, od_group, Groups),
-        lists:map(fun(Space) ->
-            SupportSize = oz_test_utils:minimum_support_size(Config) + case rand:uniform(3) of
-                1 -> rand:uniform(1000000000000);
-                2 -> rand:uniform(10000000000);
-                3 -> rand:uniform(10000000)
-            end,
-            oz_test_utils:support_space(Config, Provider, Space, SupportSize)
-        end, ?RAND_SUBLIST(Spaces, ?MEMBERS_COUNT)),
+        generate_members(od_cluster, Cluster, od_user, Users),
+        generate_members(od_cluster, Cluster, od_group, Groups),
         % Simulate graph sync connections of some providers
         case rand:uniform(8) of
             1 ->
                 ok;
             _ ->
-                simulate_random_delay(Config),
-                oz_test_utils:call_oz(Config, provider_connections, add, [Provider, self()]),
+                simulate_random_delay(),
+                ozt:rpc(provider_connections, add, [Provider, self()]),
                 case rand:uniform(4) of
                     1 ->
                         ok;
                     _ ->
-                        oz_test_utils:call_oz(Config, provider_connections, remove, [Provider, self()])
+                        ozt:rpc(provider_connections, remove, [Provider, self()])
                 end
         end,
         Provider
     end, lists:seq(1, ?ENTITY_COUNT)),
-    generate_members(Config, od_cluster, ?ONEZONE_CLUSTER_ID, od_user, Users),
-    generate_members(Config, od_cluster, ?ONEZONE_CLUSTER_ID, od_group, Groups),
+    generate_members(od_cluster, ?ONEZONE_CLUSTER_ID, od_user, Users),
+    generate_members(od_cluster, ?ONEZONE_CLUSTER_ID, od_group, Groups),
     Environment#environment{
         providers = Providers,
         clusters = [?ONEZONE_CLUSTER_ID | Providers]
     }.
 
 
-set_up_handle_services_and_handles(Config, Environment = #environment{users = Users, groups = Groups, shares = Shares}) ->
+set_up_storages(Environment = #environment{providers = Providers, spaces = Spaces}) ->
+    Environment#environment{
+        storages = lists:flatmap(fun(Provider) ->
+            RandomQosParams = ?GEN_QOS_PARAMS,
+            QosParams = maps:with(lists_utils:random_sublist(maps:keys(RandomQosParams)), RandomQosParams),
+            Storages = lists:map(fun(_) ->
+                ozt_providers:create_storage(Provider, ?GEN_NAME(), QosParams)
+            end, lists:seq(1, ?MEMBERS_COUNT)),
+            lists:map(fun(Space) ->
+                SupportSize = ozt_spaces:minimum_support_size() + case rand:uniform(3) of
+                    1 -> rand:uniform(1000000000000);
+                    2 -> rand:uniform(10000000000);
+                    3 -> rand:uniform(10000000)
+                end,
+                ozt_providers:support_space(Provider, lists_utils:random_element(Storages), Space, SupportSize)
+            end, ?RAND_SUBLIST(Spaces, ?MEMBERS_COUNT)),
+            Storages
+        end, Providers)
+    }.
+
+
+set_up_handle_services_and_handles(Environment = #environment{users = Users, groups = Groups, shares = Shares}) ->
     HandleServices = lists:map(fun(_) ->
-        Data = maps:merge(?DOI_SERVICE, #{<<"name">> => ?GEN_NAME()}),
-        {ok, HService} = oz_test_utils:create_handle_service(Config, ?ROOT, Data),
-        simulate_random_delay(Config),
-        generate_members(Config, od_handle_service, HService, od_user, Users),
-        generate_members(Config, od_handle_service, HService, od_group, Groups),
+        HService = ozt_handle_services:create(?GEN_NAME()),
+        simulate_random_delay(),
+        generate_members(od_handle_service, HService, od_user, Users),
+        generate_members(od_handle_service, HService, od_group, Groups),
         HService
     end, lists:seq(1, ?ENTITY_COUNT)),
 
     HandlesCountPerService = ?MEMBERS_COUNT div 2 + 1,
     % Shuffle the shares and assign a portion (HandlesCountPerService) to each handle service
-    ShuffledShares = utils:random_shuffle(Shares),
+    ShuffledShares = lists_utils:shuffle(Shares),
     {HServicesAndShares, _} = lists:mapfoldl(fun(Hservice, SharesToAssign) ->
         {SharesForHService, RemainingToAssign} = lists:split(HandlesCountPerService, SharesToAssign),
         {{Hservice, SharesForHService}, RemainingToAssign}
@@ -287,37 +294,36 @@ set_up_handle_services_and_handles(Config, Environment = #environment{users = Us
         handle_services = HandleServices,
         handles = lists:flatmap(fun({HService, SharesToAssign}) ->
             lists:map(fun(Share) ->
-                {ok, Handle} = oz_test_utils:create_handle(Config, ?ROOT, ?HANDLE(HService, Share)),
-                simulate_random_delay(Config),
-                generate_members(Config, od_handle, Handle, od_user, Users),
-                generate_members(Config, od_handle, Handle, od_group, Groups),
+                Handle = ozt_handle_services:create_handle(HService, Share),
+                simulate_random_delay(),
+                generate_members(od_handle, Handle, od_user, Users),
+                generate_members(od_handle, Handle, od_group, Groups),
                 Handle
             end, SharesToAssign)
         end, HServicesAndShares)
     }.
 
 
-set_up_harvesters(Config, Environment = #environment{users = Users, groups = Groups, spaces = Spaces}) ->
+set_up_harvesters(Environment = #environment{users = Users, groups = Groups, spaces = Spaces}) ->
     Environment#environment{
         harvesters = lists:map(fun(_) ->
-            Data = maps:merge(?HARVESTER_CREATE_DATA, #{<<"name">> => ?GEN_NAME()}),
-            {ok, Harvester} = oz_test_utils:create_harvester(Config, ?ROOT, Data),
-            simulate_random_delay(Config),
-            generate_members(Config, od_harvester, Harvester, od_user, Users),
-            generate_members(Config, od_harvester, Harvester, od_group, Groups),
+            Harvester = ozt_harvesters:create(?GEN_NAME()),
+            simulate_random_delay(),
+            generate_members(od_harvester, Harvester, od_user, Users),
+            generate_members(od_harvester, Harvester, od_group, Groups),
             lists:map(fun(Space) ->
-                oz_test_utils:harvester_add_space(Config, Harvester, Space)
+                ozt_harvesters:add_space(Harvester, Space)
             end, ?RAND_SUBLIST(Spaces, ?MEMBERS_COUNT)),
             Harvester
         end, lists:seq(1, ?ENTITY_COUNT))
     }.
 
 
-generate_members(Config, ParentType, ParentId, MemberType, AllMembers) ->
-    [add_member(Config, ParentType, ParentId, MemberType, M) || M <- ?RAND_SUBLIST(AllMembers, ?MEMBERS_COUNT)].
+generate_members(ParentType, ParentId, MemberType, AllMembers) ->
+    [add_member(ParentType, ParentId, MemberType, M) || M <- ?RAND_SUBLIST(AllMembers, ?MEMBERS_COUNT)].
 
 
-add_member(Config, ParentType, ParentId, MemberType, MemberId) ->
+add_member(ParentType, ParentId, MemberType, MemberId) ->
     Privileges = case ParentType of
         od_group -> privileges:group_privileges();
         od_space -> privileges:space_privileges();
@@ -338,15 +344,15 @@ add_member(Config, ParentType, ParentId, MemberType, MemberId) ->
         od_user -> add_user;
         od_group -> add_group
     end,
-    oz_test_utils:call_oz(Config, Module, Function, [?ROOT, ParentId, MemberId, ?RAND_SUBLIST(Privileges)]).
+    ozt:rpc(Module, Function, [?ROOT, ParentId, MemberId, ?RAND_SUBLIST(Privileges)]).
 
 %%%===================================================================
 %%% Tests
 %%%===================================================================
 
-db_browser_test(Config) ->
+db_browser_test(_) ->
     try
-        db_browser_test_unsafe(Config)
+        db_browser_test_unsafe()
     catch Type:Reason ->
         ct:pal("db_browser test failed with ~w:~w~nStacktrace: ~ts", [
             Type, Reason, lager:pr_stacktrace(erlang:get_stacktrace())
@@ -355,66 +361,68 @@ db_browser_test(Config) ->
     end.
 
 
-db_browser_test_unsafe(Config) ->
-    Env = set_up_environment(Config),
-    AllCollections = oz_test_utils:call_oz(Config, db_browser, all_collections, []),
+db_browser_test_unsafe() ->
+    Env = set_up_environment(),
+    AllCollections = ozt:rpc(db_browser, all_collections, []),
     lists:foreach(fun(Collection) ->
-        print_collection(Config, Env, Collection)
+        print_collection(Env, Collection)
     end, [help | AllCollections]),
 
     % Check that script API for db_browser.sh works as expected
-    TmpPath = oz_test_utils:call_oz(Config, mochitemp, mkdtemp, []),
+    TmpPath = ozt:rpc(mochitemp, mkdtemp, []),
     OutputFile = filename:join(TmpPath, "dump.txt"),
-    oz_test_utils:call_oz(Config, db_browser, call_from_script, [OutputFile, "users username desc"]),
-    ExpectedResult = str_utils:unicode_list_to_binary(oz_test_utils:call_oz(
-        Config, db_browser, format, [users, username, desc])
+    ozt:rpc(db_browser, call_from_script, [OutputFile, "users username desc"]),
+    ExpectedResult = str_utils:unicode_list_to_binary(ozt:rpc(
+        db_browser, format, [users, username, desc])
     ),
-    {ok, OutputFileContent} = oz_test_utils:call_oz(Config, file, read_file, [OutputFile]),
+    {ok, OutputFileContent} = ozt:rpc(file, read_file, [OutputFile]),
     ?assertEqual(OutputFileContent, ExpectedResult),
 
     % Check that error handling and help works the same for internal use and the script
-    oz_test_utils:call_oz(Config, db_browser, call_from_script, [OutputFile, "sdf &SD F^sadf6asDF5asd"]),
-    ExpectedResult2 = str_utils:unicode_list_to_binary(oz_test_utils:call_oz(
-        Config, db_browser, format, ['sdf', '&SD', 'F^sadf6asDF5asd'])
+    ozt:rpc(db_browser, call_from_script, [OutputFile, "sdf &SD F^sadf6asDF5asd"]),
+    ExpectedResult2 = str_utils:unicode_list_to_binary(ozt:rpc(
+        db_browser, format, ['sdf', '&SD', 'F^sadf6asDF5asd'])
     ),
-    {ok, OutputFileContent2} = oz_test_utils:call_oz(Config, file, read_file, [OutputFile]),
+    {ok, OutputFileContent2} = ozt:rpc(file, read_file, [OutputFile]),
     % The stacktrace at the beginning of the output is different - check if the
     % usage help is the same.
     ?assertEqual(string:find(OutputFileContent2, "Usage"), string:find(ExpectedResult2, "Usage")).
 
 
-print_collection(Config, Env, Collection) ->
+print_collection(Env, Collection) ->
     CollectionWithExistingId = case Collection of
-        {C, <<"user_id">>} -> {C, utils:random_element(Env#environment.users)};
-        {C, <<"group_id">>} -> {C, utils:random_element(Env#environment.groups)};
-        {C, <<"space_id">>} -> {C, utils:random_element(Env#environment.spaces)};
-        {C, <<"provider_id">>} -> {C, utils:random_element(Env#environment.providers)};
-        {C, <<"cluster_id">>} -> {C, utils:random_element(Env#environment.clusters)};
-        {C, <<"handle_service_id">>} -> {C, utils:random_element(Env#environment.handle_services)};
-        {C, <<"handle_id">>} -> {C, utils:random_element(Env#environment.handles)};
-        {C, <<"harvester_id">>} -> {C, utils:random_element(Env#environment.harvesters)};
+        {C, <<"user_id">>} -> {C, lists_utils:random_element(Env#environment.users)};
+        {C, <<"group_id">>} -> {C, lists_utils:random_element(Env#environment.groups)};
+        {C, <<"space_id">>} -> {C, lists_utils:random_element(Env#environment.spaces)};
+        {C, <<"provider_id">>} -> {C, lists_utils:random_element(Env#environment.providers)};
+        {C, <<"cluster_id">>} -> {C, lists_utils:random_element(Env#environment.clusters)};
+        {C, <<"handle_service_id">>} -> {C, lists_utils:random_element(Env#environment.handle_services)};
+        {C, <<"handle_id">>} -> {C, lists_utils:random_element(Env#environment.handles)};
+        {C, <<"harvester_id">>} -> {C, lists_utils:random_element(Env#environment.harvesters)};
+        {C, <<"storage_id">>} -> {C, lists_utils:random_element(Env#environment.storages)};
         C when is_atom(C) -> C
     end,
     CollectionAtom = case CollectionWithExistingId of
         {Atom, Binary} -> list_to_atom(str_utils:format("~s@~s", [Atom, Binary]));
         Atom when is_atom(Atom) -> Atom
     end,
-    SortBy = utils:random_element([default | example_column_names()]),
-    SortOrder = utils:random_element([asc, desc]),
+    SortBy = lists_utils:random_element([default | example_column_names()]),
+    SortOrder = lists_utils:random_element([asc, desc]),
     Args = case rand:uniform(4) of
         1 -> [CollectionAtom];
         2 -> [CollectionAtom, SortBy];
         3 -> [CollectionAtom, SortOrder];
         4 -> [CollectionAtom, SortBy, SortOrder]
     end,
-    Result = oz_test_utils:call_oz(Config, db_browser, format, Args),
+    ?assertEqual(ok, ozt:rpc(db_browser, pr, Args)),
+    Result = ozt:rpc(db_browser, format, Args),
     case string:find(Result, "\n0 entries in total") of
         nomatch ->
             % Okay, dump the results to logs so that they can be examined
-            ct:pal("~w:~n~ts", [Args, oz_test_utils:call_oz(Config, db_browser, format, Args)]);
+            ct:pal("~w:~n~ts", [Args, ozt:rpc(db_browser, format, Args)]);
         _ ->
             % Repeat until collection that have at least one entry is found
-            print_collection(Config, Env, Collection)
+            print_collection(Env, Collection)
     end.
 
 

@@ -16,7 +16,7 @@
 -include_lib("ctool/include/privileges.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, update/3, force_delete/1]).
+-export([create/1, get/1, exists/1, update/2, force_delete/1]).
 -export([list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
@@ -36,8 +36,9 @@
 
 -define(CTX, #{
     model => ?MODULE,
-    fold_enabled => true,
-    sync_enabled => true
+    secure_fold_enabled => true,
+    sync_enabled => true,
+    memory_copies => all
 }).
 
 %%%===================================================================
@@ -52,15 +53,6 @@
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Saves group.
-%% @end
-%%--------------------------------------------------------------------
--spec save(doc()) -> {ok, doc()} | {error, term()}.
-save(Doc) ->
-    datastore_model:save(?CTX, Doc).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -88,15 +80,6 @@ exists(GroupId) ->
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(GroupId, Diff) ->
     datastore_model:update(?CTX, GroupId, Diff).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates group by ID or creates default one.
-%% @end
-%%--------------------------------------------------------------------
--spec update(id(), diff(), record()) -> {ok, doc()} | {error, term()}.
-update(GroupId, Diff, Default) ->
-    datastore_model:update(?CTX, GroupId, Diff, Default).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -148,7 +131,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    7.
+    8.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -296,6 +279,43 @@ get_record_struct(7) ->
             {type, atom},
             {id, string}
         ]}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(8) ->
+    % creator field - nested record changed from #client{} to #subject{}
+    {record, [
+        {name, string},
+        {type, atom},
+        {protected, boolean},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {parents, [string]},
+        {children, #{string => [atom]}},
+        {eff_parents, #{string => [{atom, string}]}},
+        {eff_children, #{string => {[atom], [{atom, string}]}}},
+
+        {users, #{string => [atom]}},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
 
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
@@ -668,7 +688,77 @@ upgrade_record(6, Group) ->
         BottomUpDirty
     } = Group,
 
-    {7, #od_group{
+    {7, {
+        od_group,
+        Name,
+        Type,
+        Protected,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        upgrade_common:client_to_subject(Creator),
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(7, Group) ->
+    {
+        od_group,
+        Name,
+        Type,
+        Protected,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Group,
+
+    {8, #od_group{
         name = Name,
         type = Type,
         protected = Protected,
@@ -696,7 +786,7 @@ upgrade_record(6, Group) ->
         eff_clusters = EffClusters,
 
         creation_time = CreationTime,
-        creator = upgrade_common:client_to_subject(Creator),
+        creator = upgrade_common:upgrade_subject_record(Creator),
 
         top_down_dirty = TopDownDirty,
         bottom_up_dirty = BottomUpDirty

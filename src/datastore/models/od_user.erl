@@ -14,12 +14,14 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, update/3, force_delete/1, list/0]).
+-export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([get_by_username/1, get_by_linked_account/1]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
+-export([get_ctx/0]).
 -export([add_session/2, remove_session/2, get_all_sessions/1]).
 
 %% datastore_model callbacks
@@ -29,7 +31,7 @@
 -type record() :: #od_user{}.
 -type doc() :: datastore_doc:doc(record()).
 -type diff() :: datastore_doc:diff(record()).
--export_type([id/0, record/0]).
+-export_type([id/0, record/0, doc/0]).
 
 -type full_name() :: binary().
 -type username() :: binary().
@@ -45,8 +47,9 @@
 
 -define(CTX, #{
     model => ?MODULE,
-    fold_enabled => true,
-    sync_enabled => true
+    secure_fold_enabled => true,
+    sync_enabled => true,
+    memory_copies => all
 }).
 
 %%%===================================================================
@@ -61,15 +64,6 @@
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Saves user.
-%% @end
-%%--------------------------------------------------------------------
--spec save(doc()) -> {ok, doc()} | {error, term()}.
-save(Doc) ->
-    datastore_model:save(?CTX, Doc).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -97,15 +91,6 @@ exists(UserId) ->
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(UserId, Diff) ->
     datastore_model:update(?CTX, UserId, Diff).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates user by ID or creates a new one with Default doc.
-%% @end
-%%--------------------------------------------------------------------
--spec update(id(), diff(), doc()) -> {ok, doc()} | {error, term()}.
-update(UserId, Diff, Default) ->
-    datastore_model:update(?CTX, UserId, Diff, Default).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -187,6 +172,10 @@ to_string(UserId) ->
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     user_logic_plugin.
+
+-spec get_ctx() -> datastore:ctx().
+get_ctx() ->
+    ?CTX.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -378,7 +367,7 @@ get_record_struct(8) ->
             {alias, string},
             {emails, [string]},
             {entitlements, [string]},
-            {custom, {custom, {json_utils, encode, decode}}}
+            {custom, {custom, json, {json_utils, encode, decode}}}
         ]}]},
         {entitlements, [string]},
 
@@ -420,7 +409,7 @@ get_record_struct(9) ->
             {alias, string},
             {emails, [string]},
             {entitlements, [string]},
-            {custom, {custom, {json_utils, encode, decode}}},
+            {custom, {custom, json, {json_utils, encode, decode}}},
             {access_token, {string, integer}},
             {refresh_token, string}
         ]}]},
@@ -476,7 +465,7 @@ get_record_struct(10) ->
             {username, string},
             {emails, [string]},
             {entitlements, [string]},
-            {custom, {custom, {json_utils, encode, decode}}},
+            {custom, {custom, json, {json_utils, encode, decode}}},
             {access_token, {string, integer}},
             {refresh_token, string}
         ]}]},
@@ -529,7 +518,7 @@ get_record_struct(11) ->
             {username, string},
             {emails, [string]},
             {entitlements, [string]},
-            {custom, {custom, {json_utils, encode, decode}}},
+            {custom, {custom, json, {json_utils, encode, decode}}},
             {access_token, {string, integer}},
             {refresh_token, string}
         ]}]},
@@ -583,7 +572,7 @@ get_record_struct(12) ->
             {username, string},
             {emails, [string]},
             {entitlements, [string]},
-            {custom, {custom, {json_utils, encode, decode}}},
+            {custom, {custom, json, {json_utils, encode, decode}}},
             {access_token, {string, integer}},
             {refresh_token, string}
         ]}]},
@@ -633,7 +622,7 @@ get_record_struct(13) ->
             {username, string},
             {emails, [string]},
             {entitlements, [string]},
-            {custom, {custom, {json_utils, encode, decode}}},
+            {custom, {custom, json, {json_utils, encode, decode}}},
             {access_token, {string, integer}},
             {refresh_token, string}
         ]}]},

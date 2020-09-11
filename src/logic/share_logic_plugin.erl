@@ -18,11 +18,13 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
+
+-define(DESCRIPTION_SIZE_LIMIT, 100000).
 
 %%%===================================================================
 %%% API
@@ -30,17 +32,23 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity and its revision from datastore based on EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:versioned_entity()} | entity_logic:error().
-fetch_entity(ShareId) ->
+-spec fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
+fetch_entity(#gri{id = ShareId}) ->
     case od_share:get(ShareId) of
         {ok, #document{value = Share, revs = [DbRev | _]}} ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
-            {ok, {Share, Revision}};
+            {true, {Share, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -89,13 +97,17 @@ is_subscribable(_, _) -> false.
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     ShareId = maps:get(<<"shareId">>, Req#el_req.data),
     Name = maps:get(<<"name">>, Req#el_req.data),
+    Description = maps:get(<<"description">>, Req#el_req.data, <<"">>),
     SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
     RootFileId = maps:get(<<"rootFileId">>, Req#el_req.data),
+    FileType = maps:get(<<"fileType">>, Req#el_req.data, dir),
     ShareDoc = #document{key = ShareId, value = #od_share{
         name = Name,
+        description = Description,
         root_file = RootFileId,
+        file_type = FileType,
         public_url = share_logic:share_id_to_public_url(ShareId),
-        creator = Auth#auth.subject
+        creator = aai:normalize_subject(Auth#auth.subject)
     }},
     case od_share:create(ShareDoc) of
         {ok, _} ->
@@ -103,12 +115,12 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
                 od_share, ShareId,
                 od_space, SpaceId
             ),
-            {ok, {Share, Rev}} = fetch_entity(ShareId),
+            {true, {Share, Rev}} = fetch_entity(#gri{aspect = instance, id = ShareId}),
             {ok, resource, {GRI#gri{id = ShareId}, {Share, Rev}}};
-        _ ->
+        {error, already_exists} ->
             % This can potentially happen if a share with given share id
             % has been created between data verification and create
-            ?ERROR_INTERNAL_SERVER_ERROR
+            ?ERROR_ALREADY_EXISTS
     end.
 
 
@@ -128,14 +140,18 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Share) ->
     {ok, Share};
 get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
     #od_share{
-        name = Name, public_url = PublicUrl,
-        root_file = RootFileId, handle = HandleId,
+        name = Name, description = Description,
+        public_url = PublicUrl,
+        handle = HandleId,
+        root_file = RootFileId, file_type = FileType,
         creation_time = CreationTime, creator = Creator
     } = Share,
     {ok, #{
-        <<"name">> => Name, <<"publicUrl">> => PublicUrl,
+        <<"name">> => Name, <<"description">> => Description,
+        <<"publicUrl">> => PublicUrl,
         <<"rootFileId">> => RootFileId,
-        <<"handleId">> => gs_protocol:undefined_to_null(HandleId),
+        <<"fileType">> => FileType,
+        <<"handleId">> => utils:undefined_to_null(HandleId),
         <<"creationTime">> => CreationTime, <<"creator">> => Creator
     }}.
 
@@ -147,9 +163,12 @@ get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = ShareId, aspect = instance}, data = Data}) ->
-    NewName = maps:get(<<"name">>, Data),
-    {ok, _} = od_share:update(ShareId, fun(Share = #od_share{}) ->
-        {ok, Share#od_share{name = NewName}}
+    {ok, _} = od_share:update(ShareId, fun(Share) ->
+        #od_share{name = OldName, description = OldDescription} = Share,
+        {ok, Share#od_share{
+            name = maps:get(<<"name">>, Data, OldName),
+            description = maps:get(<<"description">>, Data, OldDescription)
+        }}
     end),
     ok.
 
@@ -260,15 +279,20 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         end}},
         <<"name">> => {binary, name},
         <<"rootFileId">> => {binary, non_empty},
-        <<"spaceId">> => {binary, {exists, fun(Value) ->
+        <<"spaceId">> => {any, {exists, fun(Value) ->
             space_logic:exists(Value)
         end}}
+    },
+    optional => #{
+        <<"fileType">> => {atom, [file, dir]},
+        <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}}
     }
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
-    required => #{
-        <<"name">> => {binary, name}
+    at_least_one => #{
+        <<"name">> => {binary, name},
+        <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}}
     }
 }.
 
@@ -286,7 +310,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_space_privilege(entity_logic:req() | od_user:id(),
-    od_share:info() | od_space:id(), privileges:space_privilege()) ->
+    od_share:record() | od_space:id(), privileges:space_privilege()) ->
     boolean().
 auth_by_space_privilege(#el_req{auth = ?USER(UserId)}, Share, Privilege) ->
     auth_by_space_privilege(UserId, Share, Privilege);
@@ -305,8 +329,8 @@ auth_by_space_privilege(UserId, SpaceId, Privilege) ->
 %% by entity belongs.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_space_support(od_provider:id(), od_share:info()) ->
+-spec auth_by_space_support(od_provider:id(), od_share:record()) ->
     boolean().
 auth_by_space_support(ProviderId, Share) ->
-    space_logic:has_provider(Share#od_share.space, ProviderId).
+    space_logic:is_supported_by_provider(Share#od_share.space, ProviderId).
 

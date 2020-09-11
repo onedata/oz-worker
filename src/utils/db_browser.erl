@@ -22,7 +22,7 @@
 -type entries() :: all | [gri:entity_id()].
 % Basic table types - all collections reuse these tables to display the data
 -type table_type() :: users | groups | spaces | shares | providers | clusters
-| handle_services | handles | harvesters.
+| handle_services | handles | harvesters | storages.
 % Id of a column in displayed table, also used as display name
 -type column_id() :: atom().
 % Number of the column, counting from the left, starting with 1
@@ -59,6 +59,7 @@
 -export([handle_services/0]).
 -export([handles/0]).
 -export([harvesters/0]).
+-export([storages/0]).
 
 -export([pr/1, pr/2, pr/3]).
 -export([format/1, format/2, format/3]).
@@ -97,18 +98,22 @@ handles() -> pr(handles).
 -spec harvesters() -> ok.
 harvesters() -> pr(harvesters).
 
+-spec storages() -> ok.
+storages() -> pr(storages).
+
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Prints requested collection to the console in form of a table,
-%% or error details and help in case of an error.
+%% or error details and help in case of an error. Returns ok if the collection
+%% was correctly printed or error otherwise.
 %% @end
 %%--------------------------------------------------------------------
--spec pr(collection()) -> ok.
+-spec pr(collection()) -> ok | error.
 pr(Collection) ->
     pr(Collection, default).
 
--spec pr(collection(), sort_by() | sort_order()) -> ok.
+-spec pr(collection(), sort_by() | sort_order()) -> ok | error.
 pr(Collection, asc) ->
     pr(Collection, default, asc);
 pr(Collection, desc) ->
@@ -116,9 +121,11 @@ pr(Collection, desc) ->
 pr(Collection, SortBy) ->
     pr(Collection, SortBy, asc).
 
--spec pr(collection(), sort_by(), sort_order()) -> ok.
+-spec pr(collection(), sort_by(), sort_order()) -> ok | error.
 pr(Collection, SortBy, SortOrder) ->
-    io:format("~ts", [format(Collection, SortBy, SortOrder)]).
+    {OkOrError, Formatted} = parse_and_format_collection(Collection, SortBy, SortOrder),
+    io:format("~ts", [Formatted]),
+    OkOrError.
 
 
 %%--------------------------------------------------------------------
@@ -141,21 +148,8 @@ format(Collection, SortBy) ->
 
 -spec format(collection(), sort_by(), sort_order()) -> string().
 format(Collection, SortBy, SortOrder) ->
-    try
-        parse_and_format_collection(Collection, SortBy, SortOrder)
-    catch Type:Reason ->
-        str_utils:format(
-            "~ts crashed with ~w:~w~n"
-            "Stacktrace: ~ts~n"
-            "~n"
-            "~ts",
-            [
-                ?MODULE, Type, Reason,
-                lager:pr_stacktrace(erlang:get_stacktrace()),
-                format_help()
-            ]
-        )
-    end.
+    {_OkOrError, Formatted} = parse_and_format_collection(Collection, SortBy, SortOrder),
+    Formatted.
 
 
 %%--------------------------------------------------------------------
@@ -186,7 +180,7 @@ print_help() ->
 
 -spec all_collections() -> [collection()].
 all_collections() -> [
-    users, groups, spaces, shares, providers, clusters, handle_services, handles, harvesters,
+    users, groups, spaces, shares, providers, clusters, handle_services, handles, harvesters, storages,
 
     {user_groups, <<"user_id">>}, {user_spaces, <<"user_id">>},
     {user_providers, <<"user_id">>}, {user_clusters, <<"user_id">>},
@@ -201,10 +195,11 @@ all_collections() -> [
 
     {space_users, <<"space_id">>}, {space_groups, <<"space_id">>},
     {space_shares, <<"space_id">>}, {space_providers, <<"space_id">>},
-    {space_harvesters, <<"space_id">>},
+    {space_harvesters, <<"space_id">>}, {space_storages, <<"space_id">>},
 
     {provider_users, <<"provider_id">>}, {provider_groups, <<"provider_id">>},
-    {provider_spaces, <<"provider_id">>}, {provider_harvesters, <<"provider_id">>},
+    {provider_spaces, <<"provider_id">>}, {provider_storages, <<"provider_id">>},
+    {provider_harvesters, <<"provider_id">>},
 
     {cluster_users, <<"cluster_id">>}, {cluster_groups, <<"cluster_id">>},
 
@@ -215,7 +210,10 @@ all_collections() -> [
     {handle_users, <<"handle_id">>}, {handle_groups, <<"handle_id">>},
 
     {harvester_users, <<"harvester_id">>}, {harvester_groups, <<"harvester_id">>},
-    {harvester_spaces, <<"harvester_id">>}, {harvester_providers, <<"harvester_id">>}
+    {harvester_spaces, <<"harvester_id">>}, {harvester_providers, <<"harvester_id">>},
+
+    {storage_users, <<"storage_id">>}, {storage_groups, <<"storage_id">>},
+    {storage_spaces, <<"storage_id">>}, {storage_harvesters, <<"storage_id">>}
 ].
 
 %%%===================================================================
@@ -258,14 +256,28 @@ format_help() ->
 
 
 %% @private
--spec parse_and_format_collection(collection(), sort_by(), sort_order()) -> string().
+-spec parse_and_format_collection(collection(), sort_by(), sort_order()) -> {ok | error, string()}.
 parse_and_format_collection(Collection, SortBy, SortOrder) ->
-    Tokens = [string:trim(S) || S <- string:split(atom_to_list(Collection), "@", all)],
-    ParsedCollection = case Tokens of
-        [Res] -> list_to_atom(Res);
-        [Res, Id] -> {list_to_atom(Res), list_to_binary(Id)}
-    end,
-    format_collection(ParsedCollection, SortBy, SortOrder).
+    try
+        Tokens = [string:trim(S) || S <- string:split(atom_to_list(Collection), "@", all)],
+        ParsedCollection = case Tokens of
+            [Res] -> list_to_atom(Res);
+            [Res, Id] -> {list_to_atom(Res), list_to_binary(Id)}
+        end,
+        {ok, format_collection(ParsedCollection, SortBy, SortOrder)}
+    catch Type:Reason ->
+        {error, str_utils:format(
+            "~ts crashed with ~w:~p~n"
+            "Stacktrace: ~ts~n"
+            "~n"
+            "~ts",
+            [
+                ?MODULE, Type, Reason,
+                lager:pr_stacktrace(erlang:get_stacktrace()),
+                format_help()
+            ]
+        )}
+    end.
 
 
 %% @private
@@ -357,14 +369,25 @@ format_collection({space_shares, SpaceId}, SortBy, SortOrder) ->
     format_table(shares, Shares, SortBy, SortOrder);
 
 format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
-    {ok, #document{value = #od_space{providers = Providers}}} = od_space:get(SpaceId),
-    format_table(providers, maps:keys(Providers), SortBy, SortOrder, [id, last_activity, version, name, domain], [
-        {support, byte_size, 11, fun(Doc) -> maps:get(SpaceId, Doc#document.value#od_provider.spaces) end}
+    {ok, #document{value = #od_space{
+        eff_providers = EffProviders
+    }}} = od_space:get(SpaceId),
+    format_table(providers, maps:keys(EffProviders), SortBy, SortOrder, [id, last_activity, version, name, domain], [
+        {support, byte_size, 11, fun(Doc) ->
+            {Support, _} = maps:get(SpaceId, Doc#document.value#od_provider.eff_spaces),
+            Support
+        end}
     ]);
 
 format_collection({space_harvesters, SpaceId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_space{harvesters = Harvesters}}} = od_space:get(SpaceId),
     format_table(harvesters, Harvesters, SortBy, SortOrder);
+
+format_collection({space_storages, SpaceId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_space{storages = Storages}}} = od_space:get(SpaceId),
+    format_table(storages, maps:keys(Storages), SortBy, SortOrder, all, [
+        {support, byte_size, 11, fun(Doc) -> maps:get(SpaceId, Doc#document.value#od_storage.spaces) end}
+    ]);
 
 
 format_collection({provider_users, ProviderId}, SortBy, SortOrder) ->
@@ -376,15 +399,20 @@ format_collection({provider_groups, ProviderId}, SortBy, SortOrder) ->
     format_table(groups, maps:keys(EffGroups), SortBy, SortOrder);
 
 format_collection({provider_spaces, ProviderId}, SortBy, SortOrder) ->
-    {ok, #document{value = #od_provider{spaces = Spaces}}} = od_provider:get(ProviderId),
-    format_table(spaces, maps:keys(Spaces), SortBy, SortOrder, [id, name, users, groups, providers], [
+    {ok, #document{value = #od_provider{eff_spaces = EffSpaces}}} = od_provider:get(ProviderId),
+    format_table(spaces, maps:keys(EffSpaces), SortBy, SortOrder, [id, name, users, groups, providers, storages], [
         {granted_support, byte_size, 15, fun(#document{key = SpaceId}) ->
-            maps:get(SpaceId, Spaces)
+            {Support, _} = maps:get(SpaceId, EffSpaces),
+            Support
         end},
         {total_support, byte_size, 13, fun(#document{value = Space}) ->
-            lists:sum(maps:values(Space#od_space.providers))
+            lists:foldl(fun({Support, _}, AccSum) -> AccSum + Support end, 0, maps:values(Space#od_space.eff_providers))
         end}
     ]);
+
+format_collection({provider_storages, ProviderId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_provider{storages = Storages}}} = od_provider:get(ProviderId),
+    format_table(storages, Storages, SortBy, SortOrder);
 
 format_collection({provider_harvesters, ProviderId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_provider{eff_harvesters = Harvesters}}} = od_provider:get(ProviderId),
@@ -436,7 +464,29 @@ format_collection({harvester_spaces, HarvesterId}, SortBy, SortOrder) ->
 
 format_collection({harvester_providers, HarvesterId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_harvester{eff_providers = Providers}}} = od_harvester:get(HarvesterId),
-    format_table(providers, maps:keys(Providers), SortBy, SortOrder).
+    format_table(providers, maps:keys(Providers), SortBy, SortOrder);
+
+
+format_collection({storage_users, StorageId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_storage{eff_users = EffUsers}}} = od_storage:get(StorageId),
+    format_table(users, maps:keys(EffUsers), SortBy, SortOrder);
+
+format_collection({storage_groups, StorageId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_storage{eff_groups = EffGroups}}} = od_storage:get(StorageId),
+    format_table(groups, maps:keys(EffGroups), SortBy, SortOrder);
+
+format_collection({storage_spaces, StorageId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_storage{spaces = Spaces}}} = od_storage:get(StorageId),
+    format_table(spaces, maps:keys(Spaces), SortBy, SortOrder, [id, name, users, groups, providers, storages], [
+        {granted_support, byte_size, 15, fun(#document{key = SpaceId}) -> maps:get(SpaceId, Spaces) end},
+        {total_support, byte_size, 13, fun(#document{value = Space}) ->
+            lists:sum(maps:values(Space#od_space.storages))
+        end}
+    ]);
+
+format_collection({storage_harvesters, StorageId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_storage{eff_harvesters = Harvesters}}} = od_storage:get(StorageId),
+    format_table(harvesters, maps:keys(Harvesters), SortBy, SortOrder).
 
 
 %% @private
@@ -589,10 +639,13 @@ field_specs(spaces) -> [
         length(Space#od_space.shares)
     end},
     {providers, integer, 11, fun(#document{value = Space}) ->
-        maps:size(Space#od_space.providers)
+        maps:size(Space#od_space.eff_providers)
     end},
-    {support, byte_size, 11, fun(#document{value = Space}) ->
-        lists:sum(maps:values(Space#od_space.providers))
+    {storages, integer, 10, fun(#document{value = Space}) ->
+        maps:size(Space#od_space.storages)
+    end},
+    {support, byte_size, 11, fun(#document{value = #od_space{eff_providers = EffProviders}}) ->
+        lists:foldl(fun({Support, _}, AccSum) -> AccSum + Support end, 0, maps:values(EffProviders))
     end},
     {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_space.creation_time end}
 ];
@@ -611,8 +664,10 @@ field_specs(providers) -> [
     end},
     {name, text, 28, fun(Doc) -> Doc#document.value#od_provider.name end},
     {domain, text, 40, fun(Doc) -> Doc#document.value#od_provider.domain end},
-    {spaces, integer, 6, fun(Doc) -> maps:size(Doc#document.value#od_provider.spaces) end},
-    {support, byte_size, 11, fun(Doc) -> lists:sum(maps:values(Doc#document.value#od_provider.spaces)) end},
+    {spaces, integer, 6, fun(Doc) -> maps:size(Doc#document.value#od_provider.eff_spaces) end},
+    {support, byte_size, 11, fun(#document{value = #od_provider{eff_spaces = EffSpaces}}) ->
+        lists:foldl(fun({Support, _}, AccSum) -> AccSum + Support end, 0, maps:values(EffSpaces))
+    end},
     {eff_users, integer, 9, fun(Doc) -> maps:size(Doc#document.value#od_provider.eff_users) end},
     {eff_groups, integer, 10, fun(Doc) -> maps:size(Doc#document.value#od_provider.eff_groups) end},
     {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_provider.creation_time end}
@@ -676,6 +731,22 @@ field_specs(harvesters) -> [
     end},
     {eff_providers, integer, 13, fun(Doc) -> maps:size(Doc#document.value#od_harvester.eff_providers) end},
     {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_harvester.creation_time end}
+];
+field_specs(storages) -> [
+    {id, text, 38, fun(Doc) -> Doc#document.key end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_storage.name end},
+    {provider, text, 38, fun(Doc) -> Doc#document.value#od_storage.provider end},
+    {spaces, integer, 6, fun(Doc) -> maps:size(Doc#document.value#od_storage.spaces) end},
+    {support, byte_size, 11, fun(Doc) -> lists:sum(maps:values(Doc#document.value#od_storage.spaces)) end},
+    {eff_users, integer, 9, fun(Doc) -> maps:size(Doc#document.value#od_storage.eff_users) end},
+    {eff_groups, integer, 10, fun(Doc) -> maps:size(Doc#document.value#od_storage.eff_groups) end},
+    {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_storage.creation_time end},
+    {qos_params, text, 55, fun(#document{value = #od_storage{qos_parameters = QosParameters}}) ->
+        KeyValuePairs = lists:map(fun({Key, Value}) ->
+            str_utils:format_bin("~ts=~ts", [Key, Value])
+        end, maps:to_list(QosParameters)),
+        str_utils:join_binary(KeyValuePairs, <<", ">>)
+    end}
 ].
 
 
@@ -747,16 +818,14 @@ format_value({boolean, TrueStr, FalseStr}, Value) ->
         true -> TrueStr;
         false -> FalseStr
     end;
-format_value(creation_date, Value) ->
-    {{Year, Month, Day}, _} = time_utils:epoch_to_datetime(Value),
-    str_utils:format("~4..0B-~2..0B-~2..0B", [Year, Month, Day]);
+format_value(creation_date, Timestamp) ->
+    format_date(Timestamp);
 format_value(last_activity, now) ->
     str_utils:format("~ts", [<<"✓ online"/utf8>>]);
 format_value(last_activity, 0) ->
     str_utils:format("~ts", [<<"✕ unknown"/utf8>>]);
-format_value(last_activity, Value) ->
-    {{Year, Month, Day}, {Hour, Minute, _}} = time_utils:epoch_to_datetime(Value),
-    str_utils:format("~4..0B-~2..0B-~2..0B ~2..0B:~2..0B", [Year, Month, Day, Hour, Minute]);
+format_value(last_activity, Timestamp) ->
+    str_utils:format("~s ~s", [format_date(Timestamp), format_time(Timestamp, hour_min)]);
 format_value(byte_size, Value) ->
     str_utils:format_byte_size(Value);
 format_value(direct_and_eff, {Direct, Effective}) ->
@@ -774,6 +843,20 @@ format_value(admin_privileges, []) ->
     "-";
 format_value(admin_privileges, Privileges) ->
     str_utils:format("~B / ~B", [length(Privileges), length(privileges:oz_privileges())]).
+
+
+%% @private
+-spec format_date(time_utils:seconds()) -> string().
+format_date(Timestamp) ->
+    {{Year, Month, Day}, _} = time_utils:epoch_to_datetime(Timestamp),
+    str_utils:format("~4..0B-~2..0B-~2..0B", [Year, Month, Day]).
+
+
+%% @private
+-spec format_time(time_utils:seconds(), hour_min) -> string().
+format_time(Timestamp, hour_min) ->
+    {_, {Hour, Minute, _}} = time_utils:epoch_to_datetime(Timestamp),
+    str_utils:format("~2..0B:~2..0B", [Hour, Minute]).
 
 
 %% @private
@@ -837,4 +920,5 @@ module(providers) -> od_provider;
 module(clusters) -> od_cluster;
 module(handle_services) -> od_handle_service;
 module(handles) -> od_handle;
-module(harvesters) -> od_harvester.
+module(harvesters) -> od_harvester;
+module(storages) -> od_storage.

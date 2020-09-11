@@ -36,7 +36,8 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include("http/gui_paths.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/http/headers.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
 
@@ -44,12 +45,14 @@
 -export_type([gui_id/0]).
 
 %% API
--export([deploy_package/3, deploy_package/4, ensure_package/4]).
+-export([deploy_package/3, deploy_package/4, put_package/4]).
+-export([deploy_default_harvester_package/1, link_default_harvester_gui/1]).
 -export([link_gui/3, link_gui/4]).
 -export([unlink_gui/2, unlink_gui/3]).
 -export([gui_exists/2]).
 -export([remove_unused_packages/1, remove_unused_packages/2]).
 -export([routes/0]).
+-export([maybe_add_cache_control_headers/1]).
 -export([oz_worker_gui_path/1]).
 -export([mimetype/1]).
 
@@ -58,16 +61,23 @@
 -define(CLEANING_AGE_THRESHOLD, 86400). % 1 day
 
 -define(GUI_VERIFICATION_ENABLED, oz_worker:get_env(gui_package_verification, true)).
--define(HARVESTER_VERIFICATION_ENABLED, oz_worker:get_env(harvester_gui_package_verification, true)).
+-define(HRV_GUI_VERIFICATION_ENABLED, oz_worker:get_env(harvester_gui_package_verification, true)).
 
 -define(GUI_STATIC_ROOT, oz_worker:get_env(gui_static_root)).
 -define(CUSTOM_STATIC_ROOT, oz_worker:get_env(gui_custom_static_root)).
 -define(LEGACY_CUSTOM_STATIC_ROOT, oz_worker:get_env(legacy_gui_custom_static_root)).
 
--define(CLUSTER_NODES, element(2, {ok, _} = node_manager:get_cluster_nodes())).
+-define(CLUSTER_NODES, consistent_hashing:get_all_nodes()).
 
 -define(CRITICAL_SECTION(LockId, Fun), critical_section:run({gui_static, LockId}, Fun)).
 
+-define(DEFAULT_HARVESTER_GUI_HASH, <<"default">>).
+
+-define(CACHE_DISABLING_HEADERS, #{
+    ?HDR_CACHE_CONTROL => <<"max-age=0, no-cache, no-store, must-revalidate">>,
+    ?HDR_PRAGMA => <<"no-cache">>,
+    ?HDR_EXPIRES => <<"0">>
+}).
 
 %%%===================================================================
 %%% API
@@ -80,7 +90,7 @@
 %%--------------------------------------------------------------------
 -spec deploy_package(onedata:gui(), onedata:release_version(), file:name_all()) ->
     {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE |
-    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED(binary()).
+    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED(onedata:gui_hash()).
 deploy_package(GuiType, ReleaseVsn, PackagePath) ->
     deploy_package(GuiType, ReleaseVsn, PackagePath, true).
 
@@ -94,7 +104,7 @@ deploy_package(GuiType, ReleaseVsn, PackagePath) ->
 %%--------------------------------------------------------------------
 -spec deploy_package(onedata:gui(), onedata:release_version(), file:name_all(), VerifyGuiHash :: boolean()) ->
     {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE |
-    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED(binary()).
+    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED(onedata:gui_hash()).
 deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
     case gui:read_package(PackagePath) of
         {ok, _, PackageBin} ->
@@ -112,11 +122,29 @@ deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
 
 
 %%--------------------------------------------------------------------
+%% @doc
+%% Deploys the GUI package from specified path as default harvester GUI package
+%% on all cluster nodes. Removes previously deployed default package if it exists.
+%% Deployed package can be later linked using link_default_harvester_gui/1.
+%% @end
+%%--------------------------------------------------------------------
+-spec deploy_default_harvester_package(file:name_all()) ->
+    ok | ?ERROR_BAD_GUI_PACKAGE | ?ERROR_GUI_PACKAGE_TOO_LARGE.
+deploy_default_harvester_package(PackagePath) ->
+    case gui:read_package(PackagePath) of
+        {ok, _, PackageBin} ->
+            ?CRITICAL_SECTION(?DEFAULT_HARVESTER_GUI_HASH, fun() ->
+                put_package(on_cluster, ?HARVESTER_GUI, PackageBin, ?DEFAULT_HARVESTER_GUI_HASH)
+            end);
+        {error, _} = Error -> Error
+    end.
+
+
+%%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Deploys a GUI package under given GUI prefix on all cluster nodes. GuiHash
-%% must be provided manually. The operation is skipped if the GUI package
-%% already exists on all cluster nodes.
+%% Deploys a GUI package under given GUI prefix on all cluster nodes if it does
+%% not exist. GuiHash must be provided manually.
 %% @end
 %%--------------------------------------------------------------------
 -spec ensure_package(onedata:gui(), PackageBin :: binary(), onedata:gui_hash()) ->
@@ -125,30 +153,31 @@ ensure_package(GuiType, PackageBin, GuiHash) ->
     ?CRITICAL_SECTION(GuiHash, fun() ->
         case gui_exists_unsafe(GuiType, GuiHash) of
             true -> ok;
-            false -> ensure_package(on_cluster, GuiType, PackageBin, GuiHash)
+            false -> put_package(on_cluster, GuiType, PackageBin, GuiHash)
         end
     end).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deploys a GUI package under given  GUI prefix.
-%%
-%% NOTE: This function must be run in a critical section to avoid race conditions.
+%% Extracts and places given GUI package under the path corresponding to the GUI 
+%% type and hash. Overwrites previous package (if any).
 %%
 %% Has two modes:
 %%  on_cluster - performs the operation on all cluster nodes
 %%  on_node - performs the operation only on the local node
+%%
+%% NOTE: This function must be run in a critical section to avoid race conditions.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_package(on_cluster | on_node, onedata:gui(), PackageBin :: binary(),
+-spec put_package(on_cluster | on_node, onedata:gui(), PackageBin :: binary(),
     onedata:gui_hash()) -> ok.
-ensure_package(on_cluster, GuiType, PackageBin, GuiHash) ->
+put_package(on_cluster, GuiType, PackageBin, GuiHash) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, ensure_package, [on_node, GuiType, PackageBin, GuiHash])
+        ok = rpc:call(Node, ?MODULE, put_package, [on_node, GuiType, PackageBin, GuiHash])
     end, ?CLUSTER_NODES);
 
-ensure_package(on_node, GuiType, PackageBin, GuiHash) ->
+put_package(on_node, GuiType, PackageBin, GuiHash) ->
     ?info("Deploying GUI package: ~s", [gui_path(GuiType, GuiHash)]),
     TempDir = mochitemp:mkdtemp(),
     {ok, ExtractedPackagePath} = gui:extract_package({binary, PackageBin}, TempDir),
@@ -171,15 +200,24 @@ link_gui(GuiType, GuiId, GuiHash) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% @equiv link_gui(?HARVESTER_GUI, HarvesterId, ?DEFAULT_HARVESTER_GUI_HASH).
+%% @end
+%%--------------------------------------------------------------------
+-spec link_default_harvester_gui(od_harvester:id()) -> ok.
+link_default_harvester_gui(HarvesterId) ->
+    link_gui(?HARVESTER_GUI, HarvesterId, ?DEFAULT_HARVESTER_GUI_HASH).
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Links a GUI path to given GUI, defined by its hash. Under the hood, creates
 %% a symbolic link on the filesystem to reuse the same GUI packages for multiple
 %% GUI paths.
 %%
-%% NOTE: This operation assumes that the GUI package exists.
-%%
 %% Has two modes:
 %%  on_cluster - performs the operation on all cluster nodes
 %%  on_node - performs the operation only on the local node
+%%
+%% NOTE: This operation assumes that the GUI package exists.
 %% @end
 %%--------------------------------------------------------------------
 -spec link_gui(on_cluster | on_node, onedata:gui(), gui_id(),
@@ -328,6 +366,24 @@ routes() ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Callback for custom_response_headers option in gui listener. Adds proper
+%% cache related headers for selected GUI files to ensure that they are not
+%% cached by web browsers - the browsers are forced to always fetch the current
+%% version, which mitigates problems with stale GUIs after product upgrades.
+%% @end
+%%--------------------------------------------------------------------
+-spec maybe_add_cache_control_headers(cowboy_req:req()) -> cowboy:http_headers().
+maybe_add_cache_control_headers(Req) ->
+    case cowboy_req:path_info(Req) of
+        [_, _, <<"index.html">>] -> ?CACHE_DISABLING_HEADERS;
+        [_, _, <<"i">>] -> ?CACHE_DISABLING_HEADERS;  % alias for index.html
+        [<<"hrv">>, _, <<"manifest.json">>] -> ?CACHE_DISABLING_HEADERS;  % harvester's manifest
+        _ -> #{}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Returns the full absolute path to given resource within oz worker GUI, e.g.:
 %% oz_worker_gui_path(<<"/custom/image.png">>) -> <<"/ozw/onezone/custom/image.png">>
 %% @end
@@ -376,16 +432,18 @@ mimetype(Path) ->
 -spec verify_gui_hash(onedata:gui(), onedata:release_version(), onedata:gui_hash()) ->
     boolean().
 verify_gui_hash(GuiType, ReleaseVersion, GuiHash) ->
-    case {GuiType, ?GUI_VERIFICATION_ENABLED, ?HARVESTER_VERIFICATION_ENABLED} of
+    case {GuiType, ?GUI_VERIFICATION_ENABLED, ?HRV_GUI_VERIFICATION_ENABLED} of
         {?OZ_WORKER_GUI, _, _} ->
             % OZ GUI does not need to be checked as it is always present in the
             % Onezone release package.
             true;
 
         {_, false, _} ->
+            % Gui package verification is globally disabled
             true;
 
         {?HARVESTER_GUI, _, false} ->
+            % Gui package verification for harvesters is disabled
             true;
 
         {_, _, _} ->
@@ -500,6 +558,7 @@ mimetype_by_ext(<<"jpeg">>) -> {<<"image">>, <<"jpeg">>, []};
 mimetype_by_ext(<<"jpg">>) -> {<<"image">>, <<"jpeg">>, []};
 mimetype_by_ext(<<"js">>) -> {<<"application">>, <<"javascript">>, []};
 mimetype_by_ext(<<"json">>) -> {<<"application">>, <<"json">>, []};
+mimetype_by_ext(<<"webmanifest">>) -> {<<"application">>, <<"manifest+json">>, []};
 mimetype_by_ext(<<"mp3">>) -> {<<"audio">>, <<"mpeg">>, []};
 mimetype_by_ext(<<"mp4">>) -> {<<"video">>, <<"mp4">>, []};
 mimetype_by_ext(<<"ogg">>) -> {<<"audio">>, <<"ogg">>, []};

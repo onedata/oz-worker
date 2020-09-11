@@ -8,7 +8,7 @@
 %%% @doc
 %%% API for macaroon_auth record - used to store information about authorization
 %%% carried by macaroons. Record id is used as macaroon identifier.
-%%% @todo VFS-5554 This module is deprecated, kept for backward compatibility
+%%% @TODO VFS-5554 This module is deprecated, kept for backward compatibility
 %%% @end
 %%%-------------------------------------------------------------------
 -module(macaroon_auth).
@@ -35,7 +35,7 @@
 %% Creates a macaroon_auth record in database.
 %% @end
 %%--------------------------------------------------------------------
--spec create(tokens:secret(), aai:auth()) -> {ok, tokens:nonce()}.
+-spec create(tokens:secret(), aai:auth()) -> {ok, tokens:id()}.
 create(Secret, Auth) ->
     {ok, #document{key = Id}} = datastore_model:save(?CTX, #document{
         value = #macaroon_auth{
@@ -51,7 +51,7 @@ create(Secret, Auth) ->
 %% Retrieves the secret and issuer of given macaroon from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get(tokens:nonce()) -> {ok, tokens:secret(), aai:auth()} | {error, term()}.
+-spec get(tokens:id()) -> {ok, tokens:secret(), aai:auth()} | {error, term()}.
 get(Id) ->
     case datastore_model:get(?CTX, Id) of
         {ok, #document{value = #macaroon_auth{secret = Secret, type = authorization, issuer = Issuer}}} ->
@@ -65,7 +65,7 @@ get(Id) ->
 %% Deletes a macaroon_auth record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(tokens:nonce()) -> ok | {error, term()}.
+-spec delete(tokens:id()) -> ok | {error, term()}.
 delete(Id) ->
     datastore_model:delete(?CTX, Id).
 
@@ -80,7 +80,7 @@ delete(Id) ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -106,6 +106,14 @@ get_record_struct(2) ->
             {type, atom},
             {id, string}
         ]}}
+    ]};
+get_record_struct(3) ->
+    {record, [
+        {secret, string},
+        {type, atom},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {issuer, {custom, string, {aai, serialize_subject, deserialize_subject}}}
     ]}.
 
 
@@ -124,8 +132,22 @@ upgrade_record(1, MacaroonAuth) ->
         Creator
     } = MacaroonAuth,
 
-    {2, #macaroon_auth{
+    {2, {
+        macaroon_auth,
+        Secret,
+        Type,
+        upgrade_common:client_to_subject(Creator)
+    }};
+upgrade_record(2, MacaroonAuth) ->
+    {
+        macaroon_auth,
+        Secret,
+        Type,
+        Creator
+    } = MacaroonAuth,
+
+    {3, #macaroon_auth{
         secret = Secret,
         type = Type,
-        issuer = upgrade_common:client_to_subject(Creator)
+        issuer = upgrade_common:upgrade_subject_record(Creator)
     }}.

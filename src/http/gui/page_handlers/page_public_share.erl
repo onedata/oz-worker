@@ -35,10 +35,9 @@
 handle(<<"GET">>, Req) ->
     ShareId = cowboy_req:binding(?SHARE_ID_BINDING, Req),
     try
-        URL = share_logic:share_id_to_redirect_url(ShareId),
-        cowboy_req:reply(?HTTP_303_SEE_OTHER, #{<<"location">> => URL}, Req)
+        Uri = oz_worker:get_uri(gui_static:oz_worker_gui_path(?PUBLIC_SHARE_GUI_PATH(ShareId))),
+        cowboy_req:reply(?HTTP_303_SEE_OTHER, #{<<"location">> => Uri}, Req)
     catch Type:Reason ->
-        ?error_stacktrace("Error while redirecting to public share - ~p:~p",
-            [Type, Reason]),
-        cowboy_req:reply(?HTTP_404_NOT_FOUND, Req)
+        ?debug_stacktrace("Error while redirecting to public share - ~p:~p", [Type, Reason]),
+        cowboy_req:reply(?HTTP_400_BAD_REQUEST, Req)
     end.

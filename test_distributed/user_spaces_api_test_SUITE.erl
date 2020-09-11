@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -202,9 +202,7 @@ create_space_test(Config) ->
                 <<"shares">> => [],
                 <<"users">> => #{U1 => AllPrivsBin},
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     VerifyFun(Id)
                 end
             })
@@ -218,23 +216,24 @@ join_space_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, SpaceId} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
-        {ok, Macaroon} = oz_test_utils:space_invite_user_token(
-            Config, ?ROOT, SpaceId
+        {ok, Creator} = oz_test_utils:create_user(Config),
+        {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(Creator), ?SPACE_NAME1),
+        {ok, Token} = oz_test_utils:space_invite_user_token(
+            Config, ?USER(Creator), SpaceId
         ),
-        {ok, Token} = macaroons:serialize(Macaroon),
+        {ok, Serialized} = tokens:serialize(Token),
         #{
-            spaceId => SpaceId, 
-            token => Token,
-            macaroonId => macaroon:identifier(Macaroon)
+            spaceId => SpaceId,
+            token => Serialized,
+            tokenNonce => Token#token.id
         }
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId, macaroonId := MacaroonId} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId, tokenNonce := TokenId} = _Env, _) ->
         {ok, Spaces} = oz_test_utils:user_get_spaces(Config, U1),
         ?assertEqual(lists:member(SpaceId, Spaces), ShouldSucceed),
         case ShouldSucceed of
             true ->
-                oz_test_utils:assert_token_not_exists(Config, MacaroonId);
+                oz_test_utils:assert_invite_token_usage_limit_reached(Config, true, TokenId);
             false -> ok
         end
     end,
@@ -262,9 +261,8 @@ join_space_test(Config) ->
             },
             bad_values = [
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
-                {<<"token">>, <<"123qwe">>,
-                    ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}
+                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
+                {<<"token">>, <<"123qwe">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)}
             ]
         }
     },
@@ -276,7 +274,6 @@ join_space_test(Config) ->
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
                 {admin, [?OZ_USERS_ADD_RELATIONSHIPS]},
                 {user, U1}
             ],
@@ -297,26 +294,26 @@ join_space_test(Config) ->
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
     )),
-    
+
     % Check that token is not consumed upon failed operation
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1),
         #{<<"name">> => ?SPACE_NAME1}
     ),
-    {ok, Macaroon} = oz_test_utils:space_invite_user_token(
-        Config, ?ROOT, Space
+    {ok, Token2} = oz_test_utils:space_invite_user_token(
+        Config, ?USER(U1), Space
     ),
-    {ok, Token} = macaroons:serialize(Macaroon),
-    
+    {ok, Serialized2} = tokens:serialize(Token2),
+
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root
+                {user, U1}
             ]
         },
         rest_spec = #rest_spec{
             method = post,
             path = <<"/user/spaces/join">>,
-            expected_code = ?HTTP_400_BAD_REQUEST
+            expected_code = ?HTTP_409_CONFLICT
         },
         logic_spec = #logic_spec{
             module = user_logic,
@@ -327,11 +324,11 @@ join_space_test(Config) ->
         % TODO gs
         data_spec = #data_spec{
             required = [<<"token">>],
-            correct_values = #{<<"token">> => [Token]}
+            correct_values = #{<<"token">> => [Serialized2]}
         }
     },
-    VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
-            oz_test_utils:assert_token_exists(Config, macaroon:identifier(Macaroon))
+    VerifyEndFun1 = fun(_ShouldSucceed, _Env, _) ->
+        oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token2#token.id)
     end,
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1
@@ -358,7 +355,7 @@ get_space_test(Config) ->
             method = get,
             path = [<<"/user/spaces/">>, S1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpDetails#{<<"spaceId">> => S1}
+            expected_body = {contains, ExpDetails#{<<"spaceId">> => S1}}
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -392,9 +389,7 @@ get_space_test(Config) ->
             auth_hint = ?THROUGH_USER(U1),
             expected_result = ?OK_MAP_CONTAINS(ExpDetails#{
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, S1)
                 end
             })
@@ -404,12 +399,14 @@ get_space_test(Config) ->
 
 
 leave_space_test(Config) ->
+    {ok, Owner} = oz_test_utils:create_user(Config),
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+        {ok, S1} = oz_test_utils:create_space(Config, ?USER(Owner), ?SPACE_NAME1),
+        {ok, U1} = oz_test_utils:space_add_user(Config, S1, U1),
         {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
         #{spaceId => S1}
     end,
@@ -451,7 +448,7 @@ leave_space_test(Config) ->
             module = user_logic,
             function = leave_space,
             args = [auth, U1, spaceId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -518,7 +515,7 @@ set_space_alias_test(Config) ->
             module = user_logic,
             function = set_space_alias,
             args = [auth, U1, S1, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -657,7 +654,7 @@ delete_space_alias_test(Config) ->
             module = user_logic,
             function = delete_space_alias,
             args = [auth, U1, S1],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -752,7 +749,7 @@ get_eff_space_test(Config) ->
                     method = get,
                     path = [<<"/user/effective_spaces/">>, SpaceId],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = SpaceDetails#{<<"spaceId">> => SpaceId}
+                    expected_body = {contains, SpaceDetails#{<<"spaceId">> => SpaceId}}
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -787,9 +784,7 @@ get_eff_space_test(Config) ->
                     auth_hint = ?THROUGH_USER(U1),
                     expected_result = ?OK_MAP_CONTAINS(SpaceDetails#{
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = Id} = gri:deserialize(EncodedGri),
                             ?assertEqual(Id, SpaceId)
                         end
                     })

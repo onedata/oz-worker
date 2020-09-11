@@ -20,7 +20,7 @@
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
@@ -41,12 +41,17 @@
     gs_protocol:handshake_attributes().
 handshake_attributes(_Client) ->
     BrandSubtitle = oz_worker:get_env(brand_subtitle, ""),
+    DefaultHarvestingBackendType = oz_worker:get_env(default_harvesting_backend_type, undefined),
+    DefaultHarvestingBackendEndpoint = oz_worker:get_env(default_harvesting_backend_endpoint, undefined),
     #{
-        <<"zoneName">> => gs_protocol:undefined_to_null(oz_worker:get_name()),
+        <<"zoneName">> => utils:undefined_to_null(oz_worker:get_name()),
         <<"zoneDomain">> => oz_worker:get_domain(),
         <<"serviceVersion">> => oz_worker:get_release_version(),
         <<"serviceBuildVersion">> => oz_worker:get_build_version(),
-        <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle)
+        <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle),
+        <<"maxTemporaryTokenTtl">> => oz_worker:get_env(max_temporary_token_ttl, 604800), % 1 week
+        <<"defaultHarvestingBackendType">> => utils:undefined_to_null(DefaultHarvestingBackendType),
+        <<"defaultHarvestingBackendEndpoint">> => utils:undefined_to_null(DefaultHarvestingBackendEndpoint)
     }.
 
 
@@ -55,20 +60,73 @@ handshake_attributes(_Client) ->
 %% {@link gs_translator_behaviour} callback translate_value/3.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_value(gs_protocol:protocol_version(), gs_protocol:gri(),
+-spec translate_value(gs_protocol:protocol_version(), gri:gri(),
     Value :: term()) -> Result | fun((aai:auth()) -> Result) when
-    Result :: gs_protocol:data() | gs_protocol:error().
-translate_value(_, #gri{aspect = TokenType}, Macaroon) when
+    Result :: gs_protocol:data() | errors:error().
+translate_value(_, #gri{aspect = TokenType}, Token) when
     TokenType == invite_user_token;
     TokenType == invite_group_token;
     TokenType == invite_space_token;
-    TokenType == invite_provider_token;
+    TokenType == space_support_token;
     TokenType == provider_registration_token ->
 
-    {ok, Token} = macaroons:serialize(Macaroon),
-    Token;
+    serialize_token(Token);
+translate_value(_, #gri{aspect = {user_temporary_token, _}}, Token) ->
+    serialize_token(Token);
 translate_value(_, #gri{type = od_harvester, aspect = {query, _}}, Response) ->
     Response;
+translate_value(_, #gri{type = od_harvester, aspect = {gen_curl_query, _}}, Response) ->
+    Response;
+translate_value(_, #gri{type = od_token, aspect = examine}, Response) ->
+    #{
+        <<"onezoneDomain">> := OnezoneDomain,
+        <<"id">> := Id,
+        <<"persistence">> := Persistence,
+        <<"subject">> := Subject,
+        <<"type">> := Type,
+        <<"caveats">> := Caveats
+    } = Response,
+    TokenTypeJson = case Type of
+        ?INVITE_TOKEN(InviteType, EntityId) ->
+            InviteTargetNameData = case {InviteType, EntityId} of
+                {?USER_JOIN_GROUP, GroupId} ->
+                    #{<<"groupName">> => lookup_name(group_logic, GroupId)};
+                {?GROUP_JOIN_GROUP, GroupId} ->
+                    #{<<"groupName">> => lookup_name(group_logic, GroupId)};
+                {?USER_JOIN_SPACE, SpaceId} ->
+                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                {?GROUP_JOIN_SPACE, SpaceId} ->
+                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                {?SUPPORT_SPACE, SpaceId} ->
+                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                {?HARVESTER_JOIN_SPACE, SpaceId} ->
+                    #{<<"spaceName">> => lookup_name(space_logic, SpaceId)};
+                {?REGISTER_ONEPROVIDER, UserId} ->
+                    #{<<"userName">> => lookup_name(user_logic, get_full_name, UserId)};
+                {?USER_JOIN_CLUSTER, ClusterId} ->
+                    #{<<"clusterName">> => lookup_name(cluster_logic, ClusterId)};
+                {?GROUP_JOIN_CLUSTER, ClusterId} ->
+                    #{<<"clusterName">> => lookup_name(cluster_logic, ClusterId)};
+                {?USER_JOIN_HARVESTER, HarvesterId} ->
+                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
+                {?GROUP_JOIN_HARVESTER, HarvesterId} ->
+                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
+                {?SPACE_JOIN_HARVESTER, HarvesterId} ->
+                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)}
+            end,
+            #{<<"inviteToken">> := Json} = token_type:to_json(Type),
+            #{<<"inviteToken">> => maps:merge(Json, InviteTargetNameData)};
+        _ ->
+            token_type:to_json(Type)
+    end,
+    #{
+        <<"onezoneDomain">> => OnezoneDomain,
+        <<"id">> => Id,
+        <<"persistence">> => Persistence,
+        <<"subject">> => aai:subject_to_json(Subject),
+        <<"type">> => TokenTypeJson,
+        <<"caveats">> => [caveats:to_json(C) || C <- Caveats]
+    };
 
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n
@@ -85,17 +143,21 @@ translate_value(ProtocolVersion, GRI, Data) ->
 %% {@link gs_translator_behaviour} callback translate_resource/3.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_resource(gs_protocol:protocol_version(), gs_protocol:gri(),
+-spec translate_resource(gs_protocol:protocol_version(), gri:gri(),
     ResourceData :: term()) -> Result | fun((aai:auth()) -> Result) when
-    Result :: gs_protocol:data() | gs_protocol:error().
+    Result :: gs_protocol:data() | errors:error().
 translate_resource(_, GRI = #gri{type = od_user}, Data) ->
     translate_user(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_group}, Data) ->
     translate_group(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_space}, Data) ->
     translate_space(GRI, Data);
+translate_resource(_, GRI = #gri{type = od_share}, Data) ->
+    translate_share(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_provider}, Data) ->
     translate_provider(GRI, Data);
+translate_resource(_, GRI = #gri{type = od_token}, Data) ->
+    translate_token(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_harvester}, Data) ->
     translate_harvester(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_cluster}, Data) ->
@@ -117,15 +179,10 @@ translate_resource(ProtocolVersion, GRI, Data) ->
 %%% Internal functions
 %%%===================================================================
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for user related aspects.
-%% @end
-%%--------------------------------------------------------------------
--spec translate_user(gs_protocol:gri(), Data :: term()) ->
+-spec translate_user(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
-translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, User) ->
+translate_user(GRI = #gri{type = od_user, id = UserId, aspect = instance, scope = private}, User) ->
     #od_user{
         basic_auth_enabled = BasicAuthEnabled,
         password_hash = PasswordHash,
@@ -137,14 +194,14 @@ translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, U
         <<"basicAuthEnabled">> => BasicAuthEnabled,
         <<"hasPassword">> => PasswordHash /= undefined,
         <<"fullName">> => FullName,
-        <<"username">> => gs_protocol:undefined_to_null(Username),
-        <<"clientTokenList">> => gs_protocol:gri_to_string(GRI#gri{aspect = client_tokens, scope = private}),
-        <<"linkedAccountList">> => gs_protocol:gri_to_string(GRI#gri{aspect = linked_accounts, scope = private}),
-        <<"groupList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_groups, scope = private}),
-        <<"spaceList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_spaces, scope = private}),
-        <<"providerList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_providers, scope = private}),
-        <<"harvesterList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_harvesters, scope = private}),
-        <<"clusterList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_clusters, scope = private}),
+        <<"username">> => utils:undefined_to_null(Username),
+        <<"tokenList">> => gri:serialize(#gri{type = od_token, id = undefined, aspect = {user_named_tokens, UserId}}),
+        <<"linkedAccountList">> => gri:serialize(GRI#gri{aspect = linked_accounts, scope = private}),
+        <<"groupList">> => gri:serialize(GRI#gri{aspect = eff_groups, scope = private}),
+        <<"spaceList">> => gri:serialize(GRI#gri{aspect = eff_spaces, scope = private}),
+        <<"providerList">> => gri:serialize(GRI#gri{aspect = eff_providers, scope = private}),
+        <<"harvesterList">> => gri:serialize(GRI#gri{aspect = eff_harvesters, scope = private}),
+        <<"clusterList">> => gri:serialize(GRI#gri{aspect = eff_clusters, scope = private}),
         <<"info">> => #{
             <<"creationTime">> => User#od_user.creation_time
         }
@@ -158,7 +215,7 @@ translate_user(#gri{aspect = instance, scope = protected}, User) ->
     #{
         <<"scope">> => <<"protected">>,
         <<"fullName">> => FullName,
-        <<"username">> => gs_protocol:undefined_to_null(Username)
+        <<"username">> => utils:undefined_to_null(Username)
     };
 
 translate_user(#gri{aspect = instance, scope = shared}, User) ->
@@ -169,28 +226,14 @@ translate_user(#gri{aspect = instance, scope = shared}, User) ->
     #{
         <<"scope">> => <<"shared">>,
         <<"fullName">> => FullName,
-        <<"username">> => gs_protocol:undefined_to_null(Username)
-    };
-
-translate_user(GRI = #gri{aspect = client_tokens}, ClientTokens) ->
-    #{
-        <<"list">> => lists:map(
-            fun(ClientToken) ->
-                gs_protocol:gri_to_string(GRI#gri{aspect = {client_token, ClientToken}, scope = private})
-            end, ClientTokens)
-    };
-
-translate_user(#gri{aspect = {client_token, ClientToken}}, ClientToken) ->
-    #{
-        <<"id">> => ClientToken,
-        <<"token">> => ClientToken
+        <<"username">> => utils:undefined_to_null(Username)
     };
 
 translate_user(GRI = #gri{aspect = linked_accounts}, LinkedAccounts) ->
     #{
         <<"list">> => lists:map(
             fun(GeneratedUserId) ->
-                gs_protocol:gri_to_string(GRI#gri{aspect = {linked_account, GeneratedUserId}, scope = private})
+                gri:serialize(GRI#gri{aspect = {linked_account, GeneratedUserId}, scope = private})
             end, LinkedAccounts)
     };
 
@@ -204,7 +247,7 @@ translate_user(#gri{aspect = eff_groups}, Groups) ->
     #{
         <<"list">> => lists:map(
             fun(GroupId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
             end, Groups)
     };
 
@@ -212,7 +255,7 @@ translate_user(#gri{aspect = eff_spaces}, Spaces) ->
     #{
         <<"list">> => lists:map(
             fun(SpaceId) ->
-                gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
             end, Spaces)
     };
 
@@ -220,7 +263,7 @@ translate_user(#gri{aspect = eff_providers}, Providers) ->
     #{
         <<"list">> => lists:map(
             fun(ProviderId) ->
-                gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = auto})
             end, Providers)
     };
 
@@ -228,7 +271,7 @@ translate_user(#gri{aspect = eff_harvesters}, Harvesters) ->
     #{
         <<"list">> => lists:map(
             fun(HarvesterId) ->
-                gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = auto})
             end, Harvesters)
     };
 
@@ -236,19 +279,17 @@ translate_user(#gri{aspect = eff_clusters}, Clusters) ->
     #{
         <<"list">> => lists:map(
             fun(ClusterId) ->
-                gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = instance, scope = auto})
             end, Clusters)
     }.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for group related aspects.
-%% @end
-%%--------------------------------------------------------------------
--spec translate_group(gs_protocol:gri(), Data :: term()) ->
+-spec translate_group(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_group(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
+    Privileges;
+
 translate_group(#gri{id = GroupId, aspect = instance, scope = private}, Group) ->
     fun(?USER(UserId)) -> #{
         <<"name">> => Group#od_group.name,
@@ -256,13 +297,13 @@ translate_group(#gri{id = GroupId, aspect = instance, scope = private}, Group) -
         <<"scope">> => <<"private">>,
         <<"canViewPrivileges">> => group_logic:has_eff_privilege(Group, UserId, ?GROUP_VIEW_PRIVILEGES),
         <<"directMembership">> => group_logic:has_direct_user(Group, UserId),
-        <<"parentList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = parents}),
-        <<"childList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = children}),
-        <<"effChildList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = eff_children}),
-        <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = users}),
-        <<"effUserList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = eff_users}),
-        <<"spaceList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = spaces}),
-        <<"harvesterList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = eff_harvesters}),
+        <<"parentList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = parents}),
+        <<"childList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = children}),
+        <<"effChildList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = eff_children}),
+        <<"userList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = users}),
+        <<"effUserList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = eff_users}),
+        <<"spaceList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = spaces}),
+        <<"harvesterList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = eff_harvesters}),
         <<"info">> => maps:merge(translate_creator(Group#od_group.creator), #{
             <<"creationTime">> => Group#od_group.creation_time
         })
@@ -304,7 +345,7 @@ translate_group(#gri{aspect = parents}, Parents) ->
     #{
         <<"list">> => lists:map(
             fun(ParentId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = ParentId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_group, id = ParentId, aspect = instance, scope = auto})
             end, Parents)
     };
 
@@ -312,7 +353,7 @@ translate_group(#gri{aspect = children}, Children) ->
     #{
         <<"list">> => lists:map(
             fun(ChildId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = ChildId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_group, id = ChildId, aspect = instance, scope = auto})
             end, Children)
     };
 
@@ -320,7 +361,7 @@ translate_group(#gri{aspect = eff_children}, Children) ->
     #{
         <<"list">> => lists:map(
             fun(ChildId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = ChildId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_group, id = ChildId, aspect = instance, scope = auto})
             end, Children)
     };
 
@@ -328,7 +369,7 @@ translate_group(#gri{aspect = users}, Users) ->
     #{
         <<"list">> => lists:map(
             fun(UserId) ->
-                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
             end, Users)
     };
 
@@ -336,7 +377,7 @@ translate_group(#gri{aspect = eff_users}, Users) ->
     #{
         <<"list">> => lists:map(
             fun(UserId) ->
-                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
             end, Users)
     };
 
@@ -370,7 +411,7 @@ translate_group(#gri{aspect = spaces}, Spaces) ->
     #{
         <<"list">> => lists:map(
             fun(SpaceId) ->
-                gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
             end, Spaces)
     };
 
@@ -378,64 +419,77 @@ translate_group(#gri{aspect = eff_harvesters}, Harvesters) ->
     #{
         <<"list">> => lists:map(
             fun(HarvesterId) ->
-                gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = auto})
             end, Harvesters)
     }.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for space related aspects.
-%% @end
-%%--------------------------------------------------------------------
--spec translate_space(gs_protocol:gri(), Data :: term()) ->
+-spec translate_space(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_space(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
+    Privileges;
+
 translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) ->
-    #od_space{name = Name, providers = Providers, shares = Shares} = Space,
+    #od_space{name = Name, shares = Shares} = Space,
     fun(?USER(UserId)) -> #{
         <<"name">> => Name,
         <<"scope">> => <<"private">>,
-        <<"canViewPrivileges">> => space_logic:has_eff_privilege(Space, UserId, ?SPACE_VIEW_PRIVILEGES),
         <<"directMembership">> => space_logic:has_direct_user(Space, UserId),
-        <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = users}),
-        <<"effUserList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = eff_users}),
-        <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = groups}),
-        <<"effGroupList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = eff_groups}),
-        <<"supportSizes">> => Providers,
-        <<"providerList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = providers}),
-        <<"harvesterList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = harvesters}),
+        <<"currentUserIsOwner">> => space_logic:is_owner(Space, UserId),
+        <<"currentUserEffPrivileges">> => entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Space),
+        <<"ownerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = owners}),
+        <<"userList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = users}),
+        <<"effUserList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_users}),
+        <<"groupList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = groups}),
+        <<"effGroupList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_groups}),
+        <<"shareList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = shares}),
+        <<"supportSizes">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
+        <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_providers}),
+        <<"harvesterList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = harvesters}),
         <<"info">> => maps:merge(translate_creator(Space#od_space.creator), #{
             <<"creationTime">> => Space#od_space.creation_time,
-            <<"sharedDirectories">> => length(Shares)
+            <<"sharesCount">> => length(Shares)
         })
     } end;
 
 translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
     #{
         <<"name">> := Name,
-        <<"providers">> := Providers,
+        <<"providers">> := SupportSizes,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator,
-        <<"sharedDirectories">> := SharedDirectories
+        <<"sharesCount">> := SharesCount
     } = SpaceData,
+    {ok, #document{value = Space}} = od_space:get(SpaceId),
     fun(?USER(UserId)) -> #{
         <<"name">> => Name,
         <<"scope">> => <<"protected">>,
-        <<"directMembership">> => space_logic:has_direct_user(SpaceId, UserId),
-        <<"supportSizes">> => Providers,
-        <<"providerList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = providers}),
+        <<"directMembership">> => space_logic:has_direct_user(Space, UserId),
+        <<"currentUserIsOwner">> => space_logic:is_owner(Space, UserId),
+        <<"currentUserEffPrivileges">> => entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Space),
+        <<"supportSizes">> => SupportSizes,
+        <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_providers}),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime,
-            <<"sharedDirectories">> => SharedDirectories
+            <<"sharesCount">> => SharesCount
         })
+
     } end;
+
+translate_space(#gri{aspect = owners}, Users) ->
+    #{
+        <<"list">> => lists:map(
+            fun(UserId) ->
+                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+            end, Users)
+    };
 
 translate_space(#gri{aspect = users}, Users) ->
     #{
         <<"list">> => lists:map(
             fun(UserId) ->
-                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
             end, Users)
     };
 
@@ -443,7 +497,7 @@ translate_space(#gri{aspect = eff_users}, Users) ->
     #{
         <<"list">> => lists:map(
             fun(UserId) ->
-                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
             end, Users)
     };
 
@@ -451,7 +505,7 @@ translate_space(#gri{aspect = groups}, Groups) ->
     #{
         <<"list">> => lists:map(
             fun(GroupId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
             end, Groups)
     };
 
@@ -459,7 +513,7 @@ translate_space(#gri{aspect = eff_groups}, Groups) ->
     #{
         <<"list">> => lists:map(
             fun(GroupId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
             end, Groups)
     };
 
@@ -489,11 +543,19 @@ translate_space(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
         <<"privileges">> => Privileges
     };
 
-translate_space(#gri{aspect = providers, scope = private}, Providers) ->
+translate_space(#gri{aspect = shares}, Shares) ->
+    #{
+        <<"list">> => lists:map(
+            fun(ShareId) ->
+                gri:serialize(#gri{type = od_share, id = ShareId, aspect = instance, scope = auto})
+            end, Shares)
+    };
+
+translate_space(#gri{aspect = eff_providers, scope = private}, Providers) ->
     #{
         <<"list">> => lists:map(
             fun(ProviderId) ->
-                gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = auto})
             end, Providers)
     };
 
@@ -501,19 +563,41 @@ translate_space(#gri{aspect = harvesters}, Harvesters) ->
     #{
         <<"list">> => lists:map(
             fun(HarvesterId) ->
-                gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = auto})
             end, Harvesters)
     }.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for provider related aspects.
-%% @end
-%%--------------------------------------------------------------------
--spec translate_provider(gs_protocol:gri(), Data :: term()) ->
+-spec translate_share(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_share(#gri{aspect = instance, scope = private}, Share) ->
+    #od_share{name = Name, file_type = FileType, public_url = PublicUrl} = Share,
+    #{
+        <<"name">> => Name,
+        <<"fileType">> => FileType,
+        <<"publicUrl">> => PublicUrl
+    };
+translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name">> := Name}) ->
+    {ChosenProviderId, ChosenProviderVersion} = share_logic:choose_provider_for_public_view(ShareId),
+    #{
+        <<"name">> => Name,
+        <<"chosenProviderId">> => utils:undefined_to_null(ChosenProviderId),
+        <<"chosenProviderVersion">> => utils:undefined_to_null(ChosenProviderVersion)
+    }.
+
+
+%% @private
+-spec translate_provider(gri:gri(), Data :: term()) ->
+    gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_provider(#gri{type = od_provider, aspect = current_time}, TimeMillis) ->
+    #{<<"timeMillis">> => TimeMillis};
+translate_provider(#gri{type = od_provider, aspect = instance, scope = private}, {_Provider, RootToken}) ->
+    % This covers provider creation via Graph Sync, in contrast to the get
+    % request that does not return the root token
+    #{
+        <<"providerRootToken">> => serialize_token(RootToken)
+    };
 translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Provider) ->
     #od_provider{
         name = Name, domain = Domain,
@@ -528,11 +612,11 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Prov
         <<"domain">> => Domain,
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
-        <<"cluster">> => gs_protocol:gri_to_string(#gri{
+        <<"cluster">> => gri:serialize(#gri{
             type = od_cluster, id = ClusterId, aspect = instance, scope = auto
         }),
         <<"online">> => provider_connections:is_online(Id),
-        <<"spaceList">> => gs_protocol:gri_to_string(GRI#gri{aspect = {user_spaces, UserId}, scope = private}),
+        <<"spaceList">> => gri:serialize(GRI#gri{aspect = {user_spaces, UserId}, scope = private}),
         <<"info">> => #{
             <<"creationTime">> => CreationTime
         }
@@ -553,11 +637,11 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = protected}, Pr
         <<"domain">> => Domain,
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
-        <<"cluster">> => gs_protocol:gri_to_string(#gri{
+        <<"cluster">> => gri:serialize(#gri{
             type = od_cluster, id = ClusterId, aspect = instance, scope = auto
         }),
         <<"online">> => Online,
-        <<"spaceList">> => gs_protocol:gri_to_string(GRI#gri{aspect = {user_spaces, UserId}, scope = private}),
+        <<"spaceList">> => gri:serialize(GRI#gri{aspect = {user_spaces, UserId}, scope = private}),
         <<"info">> => #{
             <<"creationTime">> => CreationTime
         }
@@ -583,7 +667,7 @@ translate_provider(#gri{aspect = {user_spaces, _UserId}}, Spaces) ->
     #{
         <<"list">> => lists:map(
             fun(SpaceId) ->
-                gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
             end, Spaces)
     };
 
@@ -597,35 +681,66 @@ translate_provider(#gri{aspect = spaces}, Spaces) ->
     #{<<"list">> => Spaces}.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for harvester related aspects.
-%% @end
-%%--------------------------------------------------------------------
--spec translate_harvester(gs_protocol:gri(), Data :: term()) ->
+-spec translate_token(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_token(#gri{id = undefined, aspect = {user_named_tokens, _}}, Tokens) ->
+    #{
+        <<"list">> => lists:map(
+            fun(TokenId) ->
+                gri:serialize(#gri{type = od_token, id = TokenId, aspect = instance})
+            end, Tokens)
+    };
+translate_token(#gri{aspect = instance}, TokenData) ->
+    #{
+        <<"id">> := TokenId,
+        <<"name">> := Name,
+        <<"subject">> := Subject,
+        <<"type">> := Type,
+        <<"caveats">> := Caveats,
+        <<"metadata">> := Metadata,
+        <<"revoked">> := Revoked,
+        <<"token">> := Token
+    } = TokenData,
+    #{
+        <<"id">> => TokenId,
+        <<"name">> => Name,
+        <<"subject">> => aai:subject_to_json(Subject),
+        <<"type">> => token_type:to_json(Type),
+        <<"caveats">> => [caveats:to_json(C) || C <- Caveats],
+        <<"metadata">> => Metadata,
+        <<"revoked">> => Revoked,
+        <<"token">> => serialize_token(Token)
+    }.
+
+
+%% @private
+-spec translate_harvester(gri:gri(), Data :: term()) ->
+    gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_harvester(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
+    Privileges;
+
 translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, Harvester) ->
     #od_harvester{
         name = Name, endpoint = Endpoint,
-        plugin = Plugin, public = Public
+        backend = BackendType, public = Public
     } = Harvester,
     fun(?USER(UserId)) -> #{
         <<"scope">> => <<"private">>,
         <<"name">> => Name,
         <<"public">> => Public,
-        <<"endpoint">> => Endpoint,
-        <<"plugin">> => atom_to_binary(Plugin, utf8),
+        <<"harvestingBackendEndpoint">> => Endpoint,
+        <<"harvestingBackendType">> => atom_to_binary(BackendType, utf8),
         <<"canViewPrivileges">> => harvester_logic:has_eff_privilege(Harvester, UserId, ?HARVESTER_VIEW_PRIVILEGES),
         <<"directMembership">> => harvester_logic:has_direct_user(Harvester, UserId),
-        <<"guiPluginConfig">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
-        <<"indexList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = indices}),
-        <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = users}),
-        <<"effUserList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = eff_users}),
-        <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = groups}),
-        <<"effGroupList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = eff_groups}),
-        <<"spaceList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = spaces}),
-        <<"effProviderList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = eff_providers}),
+        <<"guiPluginConfig">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
+        <<"indexList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = indices}),
+        <<"userList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = users}),
+        <<"effUserList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = eff_users}),
+        <<"groupList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = groups}),
+        <<"effGroupList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = eff_groups}),
+        <<"spaceList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = spaces}),
+        <<"effProviderList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = eff_providers}),
         <<"info">> => maps:merge(translate_creator(Harvester#od_harvester.creator), #{
             <<"creationTime">> => Harvester#od_harvester.creation_time
         })
@@ -635,8 +750,8 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
     #{
         <<"name">> := Name,
         <<"public">> := Public,
-        <<"plugin">> := Plugin,
-        <<"endpoint">> := Endpoint,
+        <<"harvestingBackendType">> := HarvestingBackendType,
+        <<"harvestingBackendEndpoint">> := Endpoint,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator
     } = HarvesterData,
@@ -644,37 +759,37 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
         <<"scope">> => <<"protected">>,
         <<"name">> => Name,
         <<"public">> => Public,
-        <<"plugin">> => Plugin,
-        <<"endpoint">> => Endpoint,
+        <<"harvestingBackendType">> => HarvestingBackendType,
+        <<"harvestingBackendEndpoint">> => Endpoint,
         <<"directMembership">> => harvester_logic:has_direct_user(HarvesterId, UserId),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
         })},
         case Public of
-            true -> 
+            true ->
                 ProtectedData#{
-                    <<"guiPluginConfig">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
-                    <<"indexList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = indices})
+                    <<"guiPluginConfig">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
+                    <<"indexList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = indices})
                 };
             _ ->
                 ProtectedData
         end
     end;
 
-translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = public}, HarvesterData) ->
+% used to display the list of harvesters in a space
+translate_harvester(#gri{aspect = instance, scope = shared}, #{<<"name">> := Name}) ->
     #{
-        <<"name">> := Name,
-        <<"creationTime">> := CreationTime,
-        <<"creator">> := Creator
-    } = HarvesterData,
+        <<"scope">> => <<"shared">>,
+        <<"name">> => Name
+    };
+
+% used to display harvester's public GUI - if the public mode is enabled
+translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = public}, #{<<"name">> := Name}) ->
     #{
         <<"scope">> => <<"public">>,
         <<"name">> => Name,
-        <<"guiPluginConfig">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
-        <<"indexList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = indices}),
-        <<"info">> => maps:merge(translate_creator(Creator), #{
-            <<"creationTime">> => CreationTime
-        })
+        <<"guiPluginConfig">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
+        <<"indexList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = indices})
     };
 
 translate_harvester(#gri{aspect = gui_plugin_config}, Config) ->
@@ -686,7 +801,7 @@ translate_harvester(#gri{aspect = users}, Users) ->
     #{
         <<"list">> => lists:map(
             fun(UserId) ->
-                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
             end, Users)
     };
 
@@ -694,7 +809,7 @@ translate_harvester(#gri{aspect = eff_users}, Users) ->
     #{
         <<"list">> => lists:map(
             fun(UserId) ->
-                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
             end, Users)
     };
 
@@ -702,7 +817,7 @@ translate_harvester(#gri{aspect = groups}, Groups) ->
     #{
         <<"list">> => lists:map(
             fun(GroupId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
             end, Groups)
     };
 
@@ -710,7 +825,7 @@ translate_harvester(#gri{aspect = eff_groups}, Groups) ->
     #{
         <<"list">> => lists:map(
             fun(GroupId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
             end, Groups)
     };
 
@@ -718,7 +833,7 @@ translate_harvester(#gri{aspect = spaces}, Spaces) ->
     #{
         <<"list">> => lists:map(
             fun(SpaceId) ->
-                gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
             end, Spaces)
     };
 
@@ -726,7 +841,7 @@ translate_harvester(#gri{aspect = eff_providers}, Groups) ->
     #{
         <<"list">> => lists:map(
             fun(ProviderId) ->
-                gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = auto})
             end, Groups)
     };
 
@@ -756,21 +871,29 @@ translate_harvester(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges)
         <<"privileges">> => Privileges
     };
 
-translate_harvester(#gri{aspect = all_plugins}, Plugins) ->
+translate_harvester(#gri{aspect = all_backend_types}, Plugins) ->
     #{
-        <<"allPlugins">> => Plugins
+        <<"allBackendTypes">> => Plugins
     };
 
 translate_harvester(#gri{aspect = {index, _}, scope = private}, IndexData) ->
-    #{
-        <<"name">> := Name,
-        <<"schema">> := Schema,
-        <<"guiPluginName">> := GuiPluginName
+    #harvester_index{
+        name = Name,
+        schema = Schema,
+        gui_plugin_name = GuiPluginName,
+        include_metadata = IncludeMetadata,
+        include_file_details = IncludeFileDetails,
+        include_rejection_reason = IncludeRejectionReason,
+        retry_on_rejection = RetryOnRejection
     } = IndexData,
     #{
         <<"name">> => Name,
-        <<"schema">> => gs_protocol:undefined_to_null(Schema),
-        <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName)
+        <<"schema">> => utils:undefined_to_null(Schema),
+        <<"guiPluginName">> => utils:undefined_to_null(GuiPluginName),
+        <<"includeMetadata">> => IncludeMetadata,
+        <<"includeFileDetails">> => IncludeFileDetails,
+        <<"includeRejectionReason">> => IncludeRejectionReason,
+        <<"retryOnRejection">> => RetryOnRejection
     };
 
 translate_harvester(#gri{aspect = {index, _}, scope = public}, IndexData) ->
@@ -778,14 +901,14 @@ translate_harvester(#gri{aspect = {index, _}, scope = public}, IndexData) ->
         <<"guiPluginName">> := GuiPluginName
     } = IndexData,
     #{
-        <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName)
+        <<"guiPluginName">> => utils:undefined_to_null(GuiPluginName)
     };
 
 translate_harvester(#gri{aspect = indices, id = HarvesterId}, Indices) ->
     #{
         <<"list">> => lists:map(
             fun(IndexId) ->
-                gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}, scope = auto})
+                gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}, scope = auto})
             end, Indices)
     };
 
@@ -795,14 +918,12 @@ translate_harvester(#gri{aspect = {index_stats, _}}, IndexStats) ->
     }.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for cluster related aspects.
-%% @end
-%%--------------------------------------------------------------------
--spec translate_cluster(gs_protocol:gri(), Data :: term()) ->
+-spec translate_cluster(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_cluster(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
+    Privileges;
+
 translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Cluster) ->
     #od_cluster{
         type = Type,
@@ -820,7 +941,7 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Clus
             ?ONEZONE ->
                 null;
             ?ONEPROVIDER ->
-                gs_protocol:gri_to_string(#gri{
+                gri:serialize(#gri{
                     type = od_provider, id = ProviderId, aspect = instance, scope = auto
                 })
         end,
@@ -833,10 +954,10 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Clus
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
         }),
-        <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = users}),
-        <<"effUserList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = eff_users}),
-        <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = groups}),
-        <<"effGroupList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = eff_groups})
+        <<"userList">> => gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = users}),
+        <<"effUserList">> => gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = eff_users}),
+        <<"groupList">> => gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = groups}),
+        <<"effGroupList">> => gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = eff_groups})
     } end;
 
 translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cluster) ->
@@ -858,7 +979,7 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cl
             ?ONEZONE ->
                 null;
             ?ONEPROVIDER ->
-                gs_protocol:gri_to_string(#gri{
+                gri:serialize(#gri{
                     type = od_provider, id = ProviderId, aspect = instance, scope = auto
                 })
         end,
@@ -887,7 +1008,7 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = public}, Clust
             ?ONEZONE ->
                 null;
             ?ONEPROVIDER ->
-                gs_protocol:gri_to_string(#gri{
+                gri:serialize(#gri{
                     type = od_provider, id = ProviderId, aspect = instance, scope = auto
                 })
         end,
@@ -902,7 +1023,7 @@ translate_cluster(#gri{aspect = users}, Users) ->
     #{
         <<"list">> => lists:map(
             fun(UserId) ->
-                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
             end, Users)
     };
 
@@ -910,7 +1031,7 @@ translate_cluster(#gri{aspect = eff_users}, Users) ->
     #{
         <<"list">> => lists:map(
             fun(UserId) ->
-                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
             end, Users)
     };
 
@@ -918,7 +1039,7 @@ translate_cluster(#gri{aspect = groups}, Groups) ->
     #{
         <<"list">> => lists:map(
             fun(GroupId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
             end, Groups)
     };
 
@@ -926,7 +1047,7 @@ translate_cluster(#gri{aspect = eff_groups}, Groups) ->
     #{
         <<"list">> => lists:map(
             fun(GroupId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
+                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
             end, Groups)
     };
 
@@ -957,12 +1078,7 @@ translate_cluster(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) -
     }.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for aspects handled by zone_logic_plugin.
-%% @end
-%%--------------------------------------------------------------------
 -spec translate_zone(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_zone(#gri{aspect = {gui_message, _MessageId}}, GuiMessage) ->
@@ -973,13 +1089,14 @@ translate_zone(#gri{aspect = {gui_message, _MessageId}}, GuiMessage) ->
     }.
 
 
+%% @private
 -spec format_intermediaries(entity_graph:intermediaries()) -> #{}.
 format_intermediaries(Intermediaries) ->
     {GRIs, DirectMembership} = lists:foldl(fun
         ({_, ?SELF_INTERMEDIARY}, {AccGRIs, _AccDirectMembership}) ->
             {AccGRIs, true};
         ({Type, Id}, {AccGRIs, AccDirectMembership}) ->
-            GRI = gs_protocol:gri_to_string(#gri{
+            GRI = gri:serialize(#gri{
                 type = Type, id = Id, aspect = instance, scope = auto
             }),
             {AccGRIs ++ [GRI], AccDirectMembership}
@@ -990,7 +1107,8 @@ format_intermediaries(Intermediaries) ->
     }.
 
 
--spec translate_creator(undefined | aai:auth()) ->
+%% @private
+-spec translate_creator(undefined | aai:subject()) ->
     #{binary() => null | binary()}.
 translate_creator(undefined) -> #{
     <<"creatorType">> => null,
@@ -998,5 +1116,26 @@ translate_creator(undefined) -> #{
 };
 translate_creator(?SUB(Type, Id)) -> #{
     <<"creatorType">> => atom_to_binary(Type, utf8),
-    <<"creatorId">> => gs_protocol:undefined_to_null(Id)
+    <<"creatorId">> => utils:undefined_to_null(Id)
 }.
+
+
+%% @private
+-spec serialize_token(tokens:token()) -> tokens:serialized().
+serialize_token(Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    Serialized.
+
+
+%% @private
+-spec lookup_name(module(), gri:entity_id()) -> binary() | null.
+lookup_name(LogicModule, EntityId) ->
+    lookup_name(LogicModule, get_name, EntityId).
+
+%% @private
+-spec lookup_name(module(), Function :: atom(), gri:entity_id()) -> binary() | null.
+lookup_name(LogicModule, Function, EntityId) ->
+    case LogicModule:Function(?ROOT, EntityId) of
+        {ok, Name} -> Name;
+        _ -> null
+    end.

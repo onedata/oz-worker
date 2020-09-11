@@ -16,7 +16,7 @@
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -36,8 +36,9 @@
 
 -define(CTX, #{
     model => ?MODULE,
-    fold_enabled => true,
-    sync_enabled => true
+    secure_fold_enabled => true,
+    sync_enabled => true,
+    memory_copies => all
 }).
 
 %%%===================================================================
@@ -52,15 +53,6 @@
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Saves handle service.
-%% @end
-%%--------------------------------------------------------------------
--spec save(doc()) -> {ok, doc()} | {error, term()}.
-save(Doc) ->
-    datastore_model:save(?CTX, Doc).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -139,7 +131,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    5.
+    6.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -217,6 +209,27 @@ get_record_struct(5) ->
             {type, atom},
             {id, string}
         ]}},
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(6) ->
+    % creator field - nested #subject{} record and encoding changed
+    {record, [
+        {name, string},
+        {proxy_endpoint, string},
+        {service_properties, #{term => term}},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {handles, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+
+        {creation_time, integer},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
 
         {bottom_up_dirty, boolean}
     ]}.
@@ -339,7 +352,44 @@ upgrade_record(4, HandleService) ->
 
         BottomUpDirty
     } = HandleService,
-    {5, #od_handle_service{
+    {5, {
+        od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
+
+        Users,
+        Groups,
+        Handles,
+
+        EffUsers,
+        EffGroups,
+
+        CreationTime,
+        upgrade_common:client_to_subject(Creator),
+
+        BottomUpDirty
+    }};
+upgrade_record(5, HandleService) ->
+    {
+        od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
+
+        Users,
+        Groups,
+        Handles,
+
+        EffUsers,
+        EffGroups,
+
+        CreationTime,
+        Creator,
+
+        BottomUpDirty
+    } = HandleService,
+    {6, #od_handle_service{
         name = Name,
         proxy_endpoint = ProxyEndpoint,
         service_properties = ServiceProperties,
@@ -352,7 +402,7 @@ upgrade_record(4, HandleService) ->
         eff_groups = EffGroups,
 
         creation_time = CreationTime,
-        creator = upgrade_common:client_to_subject(Creator),
+        creator = upgrade_common:upgrade_subject_record(Creator),
 
         bottom_up_dirty = BottomUpDirty
     }}.

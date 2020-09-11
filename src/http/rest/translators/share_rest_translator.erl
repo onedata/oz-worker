@@ -31,7 +31,7 @@
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
     {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
 create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id = ShareId}, _}) ->
-    rest_translator:created_reply([<<"shares">>, ShareId]).
+    rest_translator:created_reply_with_location([<<"shares">>, ShareId]).
 
 
 %%--------------------------------------------------------------------
@@ -42,14 +42,17 @@ create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id =
 -spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
 get_response(#gri{id = ShareId, aspect = instance, scope = private}, Share) ->
     #od_share{
-        name = Name, public_url = PublicUrl, space = SpaceId,
-        root_file = RootFileId, handle = HandleId
+        name = Name, description = Description,
+        public_url = PublicUrl, space = SpaceId,
+        root_file = RootFileId, file_type = FileType, handle = HandleId
     } = Share,
     rest_translator:ok_body_reply(#{
-        <<"shareId">> => ShareId, <<"name">> => Name,
+        <<"shareId">> => ShareId,
+        <<"name">> => Name, <<"description">> => Description,
         <<"publicUrl">> => PublicUrl, <<"spaceId">> => SpaceId,
         <<"rootFileId">> => element(2, {ok, _} = file_id:guid_to_objectid(RootFileId)),
-        <<"handleId">> => gs_protocol:undefined_to_null(HandleId)
+        <<"fileType">> => FileType,
+        <<"handleId">> => utils:undefined_to_null(HandleId)
     });
 get_response(#gri{id = undefined, aspect = list, scope = private}, Shares) ->
     rest_translator:ok_body_reply(#{<<"shares">> => Shares}).

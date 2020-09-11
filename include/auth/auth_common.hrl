@@ -27,21 +27,21 @@
 % Login macros to use during login process handling, if auth test mode is
 % enabled, the logs will be gathered and displayed on the login results page.
 -define(auth_debug(Format, Args), begin
-    auth_test_mode:gather_log(debug, Format, Args),
+    idp_auth_test_mode:gather_log(debug, Format, Args),
     ?debug(Format, Args)
 end).
 -define(auth_debug_stacktrace(Format, Args), begin
-    auth_test_mode:gather_log(debug, Format, Args, erlang:get_stacktrace()),
+    idp_auth_test_mode:gather_log(debug, Format, Args, erlang:get_stacktrace()),
     ?debug_stacktrace(Format, Args)
 end).
 
 -define(auth_warning(Format, Args), begin
-    auth_test_mode:gather_log(warning, Format, Args),
+    idp_auth_test_mode:gather_log(warning, Format, Args),
     ?warning(Format, Args)
 end).
 
 -define(auth_error(Format, Args), begin
-    auth_test_mode:gather_log(error, Format, Args),
+    idp_auth_test_mode:gather_log(error, Format, Args),
     ?error(Format, Args)
 end).
 

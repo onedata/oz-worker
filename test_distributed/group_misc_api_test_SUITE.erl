@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -123,9 +123,7 @@ create_test(Config) ->
                     <<"name">> => ?CORRECT_NAME,
                     <<"type">> => atom_to_binary(ExpType, utf8),
                     <<"gri">> => fun(EncodedGri) ->
-                        #gri{id = Id} = oz_test_utils:decode_gri(
-                            Config, EncodedGri
-                        ),
+                        #gri{id = Id} = gri:deserialize(EncodedGri),
                         VerifyFun(Id, ExpType)
                     end
                 })
@@ -309,9 +307,7 @@ get_test(Config) ->
                     U2 => [<<"group_view">>]
                 },
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(G1, Id)
                 end
             })
@@ -349,9 +345,7 @@ get_test(Config) ->
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1_BIN,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(G1, Id)
                 end
             })
@@ -432,12 +426,12 @@ update_test(Config) ->
             module = group_logic,
             function = update,
             args = [auth, groupId, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_group, id = groupId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [<<"name">>, <<"type">>],
@@ -502,12 +496,12 @@ delete_test(Config) ->
             module = group_logic,
             function = delete,
             args = [auth, groupId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_group, id = groupId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -521,7 +515,7 @@ protected_group_test(Config) ->
     oz_test_utils:group_set_user_privileges(Config, GroupId, U1, [
         ?GROUP_DELETE
     ], []),
-    oz_test_utils:mark_group_protected(Config, GroupId),
+    oz_test_utils:mark_group_protected(Config, GroupId, true),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -642,7 +636,7 @@ update_oz_privileges_test(Config) ->
             module = group_logic,
             function = update_oz_privileges,
             args = [auth, G1, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -690,7 +684,7 @@ delete_oz_privileges_test(Config) ->
             module = group_logic,
             function = delete_oz_privileges,
             args = [auth, G1],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -877,9 +871,9 @@ get_spaces_in_eff_provider_test(Config) ->
     {ok, S2} = oz_test_utils:create_space(Config, ?USER(U2), ?UNIQUE_STRING),
     oz_test_utils:space_add_group(Config, S2, G2),
 
-    oz_test_utils:support_space(Config, ProviderId, S1_1),
-    oz_test_utils:support_space(Config, ProviderId, S1_2),
-    oz_test_utils:support_space(Config, ProviderId, S2),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, S1_1),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, S1_2),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, S2),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 

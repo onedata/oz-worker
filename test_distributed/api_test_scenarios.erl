@@ -17,7 +17,7 @@
 -include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([run_scenario/2]).
 -export([delete_entity/5]).
@@ -60,6 +60,8 @@
 % Due to asynchronous entity graph recomputation, privileges converge after a while
 -define(PRIVILEGES_CHECK_RETRIES, 600).
 -define(PRIVILEGES_CHECK_INTERVAL, 100). % Interval * retries = 1 minute
+
+-define(PRIVILEGES_RANDOMIZATION_REPEATS, 25).
 
 -define(compare_privileges(__PrivsA, __PrivsB), begin
     __SortedPrivsA = lists:sort(__PrivsA),
@@ -223,7 +225,7 @@ run_get_privs_tests(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs) ->
                 Config, prepare_get_privs_api_spec(ApiTestSpec, Privs),
                 EnvSetUpFun, undefined, undefined
             ))
-        end, generate_lists_of_privs(AllPrivs)
+        end, generate_random_sublists_of_privs(AllPrivs)
     ).
 
 
@@ -359,14 +361,11 @@ run_update_privs_tests(
             Config, NewApiTestSpec, EnvSetUpFun,
             undefined, VerifyEndFun
         ))
-    end, generate_lists_of_privs(AllPrivs)).
+    end, generate_random_sublists_of_privs(AllPrivs)).
 
 
-% Returns all sublists of privileges.
-% For example when AllPrivs is [priv1, priv2, priv3]
-% the result will be: [[], [priv1], [priv1, priv2], [priv1,priv2,priv3]]
-generate_lists_of_privs(AllPrivs) ->
-    [lists:sublist(AllPrivs, I) || I <- lists:seq(0, length(AllPrivs))].
+generate_random_sublists_of_privs(AllPrivs) ->
+    [lists_utils:random_sublist(AllPrivs) || _ <- lists:seq(1, ?PRIVILEGES_RANDOMIZATION_REPEATS)].
 
 % Grant all oz privileges and check that correct clients can delete them but
 % forbidden and unauthorized cannot.
@@ -589,26 +588,33 @@ create_basic_space_env(Config, Privs) ->
     %% Create environment with the following relations:
     %%
     %%                  Space
-    %%                 /     \
-    %%                /       \
-    %%       [~privileges]  [privileges]
-    %%              /           \
-    %%           User1         User2
+    %%                 /  |  \
+    %%                /   |   \
+    %%    [~privileges]   |   [privileges]
+    %%              /     |     \
+    %%          User1   Owner   User2
 
+    {ok, Owner} = oz_test_utils:create_user(Config),
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
-
     AllSpacePrivs = privileges:space_privileges(),
-    {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(
-        Config, Space, U1, [], Privs
-    ),
+
+    % create a space with the Owner, but revoke some (randomly chosen) privileges
+    % of the user - regardless of what they are, the owner should effectively have
+    % all the privileges, and the tests using this env depend on that assumption
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(Owner), ?SPACE_NAME1),
+    RandomPrivs = lists_utils:random_sublist(AllSpacePrivs),
+    oz_test_utils:space_set_user_privileges(Config, Space, Owner, RandomPrivs, AllSpacePrivs -- RandomPrivs),
+
+    {ok, U1} = oz_test_utils:space_add_user(Config, Space, U1),
+    oz_test_utils:space_set_user_privileges(Config, Space, U1, AllSpacePrivs -- Privs, Privs),
+
     {ok, U2} = oz_test_utils:space_add_user(Config, Space, U2),
     oz_test_utils:space_set_user_privileges(Config, Space, U2, Privs, AllSpacePrivs -- Privs),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {Space, U1, U2}.
+    {Space, Owner, U1, U2}.
 
 
 create_basic_doi_hservice_env(Config, Privs) when not is_list(Privs) ->
@@ -709,7 +715,7 @@ create_basic_harvester_env(Config, Privs) ->
     AllHarvesterPrivs = privileges:harvester_privileges(),
     {ok, Harvester} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
     {ok, _} = oz_test_utils:harvester_add_user(Config, Harvester, U1),
-    
+
     oz_test_utils:harvester_set_user_privileges(
         Config, Harvester, U1, [], Privs
     ),
@@ -738,7 +744,7 @@ create_basic_cluster_env(Config, Privs) ->
 
     AllClusterPrivs = privileges:cluster_privileges(),
 
-    {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(
         Config, U1, ?PROVIDER_NAME1
     ),
     ClusterId = ProviderId,
@@ -751,7 +757,7 @@ create_basic_cluster_env(Config, Privs) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {ClusterId, U1, U2, {ProviderId, Macaroon}}.
+    {ClusterId, U1, U2, {ProviderId, ProviderToken}}.
 
 
 create_eff_parent_groups_env(Config) ->
@@ -895,12 +901,14 @@ create_space_eff_users_env(Config) ->
         [{G1, _} | _] = Groups, Users
     } = create_eff_child_groups_env(Config),
 
+    {ok, Owner} = oz_test_utils:create_user(Config),
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllSpacePrivs = privileges:space_privileges(),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(Owner), ?SPACE_NAME1),
+    {ok, U1} = oz_test_utils:space_add_user(Config, S1, U1),
     oz_test_utils:space_set_user_privileges(Config, S1, U1, [],
         [?SPACE_VIEW]
     ),
@@ -912,7 +920,7 @@ create_space_eff_users_env(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {S1, Groups, Users, {U1, U2, NonAdmin}}.
+    {S1, Groups, Users, {Owner, U1, U2, NonAdmin}}.
 
 
 create_provider_eff_users_env(Config) ->
@@ -942,19 +950,17 @@ create_provider_eff_users_env(Config) ->
     %%      NonAdmin
 
     {
-        S1, Groups, Users, {U1, U2, NonAdmin}
+        S1, Groups, Users, {Owner, U1, U2, NonAdmin}
     } = create_space_eff_users_env(Config),
 
-    {ok, {P1, Macaroon}} = oz_test_utils:create_provider(
+    {ok, {P1, ProviderToken}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
-    ),
+    {ok, S1} = oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {{P1, Macaroon}, S1, Groups, Users, {U1, U2, NonAdmin}}.
+    {{P1, ProviderToken}, S1, Groups, Users, {Owner, U1, U2, NonAdmin}}.
 
 
 create_hservice_eff_users_env(Config) ->
@@ -1156,7 +1162,7 @@ create_cluster_eff_users_env(Config) ->
     AllClusterPrivs = privileges:cluster_privileges(),
 
 
-    {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(
         Config, U1, ?PROVIDER_NAME1
     ),
     ClusterId = ProviderId,
@@ -1172,7 +1178,7 @@ create_cluster_eff_users_env(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {ClusterId, Groups, Users, {U1, U2, NonAdmin}, {ProviderId, Macaroon}}.
+    {ClusterId, Groups, Users, {U1, U2, NonAdmin}, {ProviderId, ProviderToken}}.
 
 
 create_eff_spaces_env(Config) ->
@@ -1264,14 +1270,7 @@ create_eff_providers_env(Config) ->
 
     lists:foreach(
         fun({ProvId, SpaceId}) ->
-            {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
-                Config, ?ROOT, SpaceId
-            ),
-            {ok, Token} = macaroons:serialize(Macaroon),
-            {ok, SpaceId} = oz_test_utils:support_space(
-                Config, ?ROOT, ProvId, Token,
-                oz_test_utils:minimum_support_size(Config)
-            )
+            {ok, SpaceId} = oz_test_utils:support_space_by_provider(Config, ProvId, SpaceId)
         end, [{P1, S1}, {P2, S2}, {P2, S3}, {P3, S4}, {P4, S5}]
     ),
 
@@ -1301,20 +1300,20 @@ create_harvester_eff_providers_env(Config) ->
 
     Providers = [{P1, _}, {P2, _}, {P3, _}] = lists:map(fun(_) ->
         Name = ?UNIQUE_STRING,
-        {ok, {P, PMacaroon}} = oz_test_utils:create_provider(Config, Name),
+        {ok, {P, PToken}} = oz_test_utils:create_provider(Config, Name),
         {P, #{
             <<"name">> => Name,
-            <<"macaroon">> => PMacaroon
+            <<"providerRootToken">> => PToken
         }}
-    end, lists:seq(1,3)),
+    end, lists:seq(1, 3)),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
     {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
 
-    oz_test_utils:support_space(Config, P1, S1),
-    oz_test_utils:support_space(Config, P2, S1),
-    oz_test_utils:support_space(Config, P2, S2),
-    oz_test_utils:support_space(Config, P3, S2),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P2, S1),
+    oz_test_utils:support_space_by_provider(Config, P2, S2),
+    oz_test_utils:support_space_by_provider(Config, P3, S2),
 
     {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
 

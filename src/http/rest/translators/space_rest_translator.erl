@@ -14,6 +14,7 @@
 -author("Lukasz Opiola").
 
 -include("http/rest.hrl").
+-include("datastore/oz_datastore_models.hrl").
 
 -export([create_response/4, get_response/2]).
 
@@ -35,43 +36,48 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#g
             [<<"user">>, <<"spaces">>, SpaceId];
         ?AS_GROUP(GroupId) ->
             [<<"groups">>, GroupId, <<"spaces">>, SpaceId];
+        ?AS_HARVESTER(HarvesterId) ->
+            [<<"harvesters">>, HarvesterId, <<"spaces">>, SpaceId];
         _ ->
             [<<"spaces">>, SpaceId]
     end,
-    rest_translator:created_reply(LocationTokens);
+    rest_translator:created_reply_with_location(LocationTokens);
 
 create_response(#gri{aspect = join} = Gri, AuthHint, resource, Result) ->
     create_response(Gri#gri{aspect = instance}, AuthHint, resource, Result);
 
-create_response(#gri{aspect = invite_user_token}, _, value, Macaroon) ->
-    {ok, Token} = macaroons:serialize(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
+create_response(#gri{aspect = invite_user_token}, _, value, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
-create_response(#gri{aspect = invite_group_token}, _, value, Macaroon) ->
-    {ok, Token} = macaroons:serialize(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
+create_response(#gri{aspect = invite_group_token}, _, value, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
-create_response(#gri{aspect = invite_provider_token}, _, value, Macaroon) ->
-    {ok, Token} = macaroons:serialize(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
+create_response(#gri{aspect = space_support_token}, _, value, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    rest_translator:ok_body_reply(#{<<"token">> => Serialized});
+
+create_response(#gri{id = _SpaceId, aspect = {owner, _}}, _, resource, _) ->
+    rest_translator:ok_no_content_reply();
 
 create_response(#gri{id = SpaceId, aspect = {user, UserId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"spaces">>, SpaceId, <<"users">>, UserId]
     );
 
 create_response(#gri{id = SpaceId, aspect = {group, GroupId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"spaces">>, SpaceId, <<"groups">>, GroupId]
     );
 
 create_response(#gri{id = SpaceId, aspect = group}, _, resource, {#gri{id = GroupId}, _}) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"spaces">>, SpaceId, <<"groups">>, GroupId]
     );
 
 create_response(#gri{id = SpaceId, aspect = harvester}, _, resource, {#gri{id = HarvesterId}, _}) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"spaces">>, SpaceId, <<"harvesters">>, HarvesterId]
     ).
 
@@ -89,10 +95,20 @@ get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
     rest_translator:ok_body_reply(Privileges);
 
 get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
-    #{<<"name">> := Name, <<"providers">> := Providers} = SpaceData,
+    #{
+        <<"name">> := Name,
+        <<"providers">> := Providers,
+        <<"creator">> := Creator
+    } = SpaceData,
     rest_translator:ok_body_reply(#{
-        <<"spaceId">> => SpaceId, <<"name">> => Name, <<"providers">> => Providers
+        <<"spaceId">> => SpaceId,
+        <<"name">> => Name,
+        <<"providers">> => Providers,
+        <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody)))
     });
+
+get_response(#gri{aspect = owners}, Users) ->
+    rest_translator:ok_body_reply(#{<<"users">> => Users});
 
 get_response(#gri{aspect = users}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});
@@ -127,9 +143,8 @@ get_response(#gri{aspect = {eff_group_membership, _GroupId}}, Intermediaries) ->
 get_response(#gri{aspect = shares}, Shares) ->
     rest_translator:ok_body_reply(#{<<"shares">> => Shares});
 
-get_response(#gri{aspect = providers}, Providers) ->
+get_response(#gri{aspect = eff_providers}, Providers) ->
     rest_translator:ok_body_reply(#{<<"providers">> => Providers});
 
 get_response(#gri{aspect = harvesters}, Harvesters) ->
     rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters}).
-

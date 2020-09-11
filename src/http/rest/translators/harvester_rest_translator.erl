@@ -13,6 +13,7 @@
 -behaviour(rest_translator_behaviour).
 -author("Michal Stanisz").
 
+-include("datastore/oz_datastore_models.hrl").
 -include("http/rest.hrl").
 
 -export([create_response/4, get_response/2]).
@@ -29,6 +30,8 @@
 -spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
     {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
+create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#gri{id = HarvesterId}, _, Rev}) ->
+    create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#gri{id = HarvesterId}, Rev});
 create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#gri{id = HarvesterId}, _}) ->
     LocationTokens = case AuthHint of
         ?AS_USER(_UserId) ->
@@ -40,45 +43,45 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#g
         _ ->
             [<<"harvesters">>, HarvesterId]
     end,
-    rest_translator:created_reply(LocationTokens);
+    rest_translator:created_reply_with_location(LocationTokens);
 
 create_response(#gri{aspect = join} = Gri, AuthHint, resource, Result) ->
     create_response(Gri#gri{aspect = instance}, AuthHint, resource, Result);
 
-create_response(#gri{aspect = invite_user_token}, _, value, Macaroon) ->
-    {ok, Token} = macaroons:serialize(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
+create_response(#gri{aspect = invite_user_token}, _, value, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
-create_response(#gri{aspect = invite_group_token}, _, value, Macaroon) ->
-    {ok, Token} = macaroons:serialize(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
+create_response(#gri{aspect = invite_group_token}, _, value, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
-create_response(#gri{aspect = invite_space_token}, _, value, Macaroon) ->
-    {ok, Token} = macaroons:serialize(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
+create_response(#gri{aspect = invite_space_token}, _, value, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
 create_response(#gri{id = HarvesterId, aspect = {user, UserId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"harvesters">>, HarvesterId, <<"users">>, UserId]
     );
 
 create_response(#gri{id = HarvesterId, aspect = {group, GroupId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"harvesters">>, HarvesterId, <<"groups">>, GroupId]
     );
 
 create_response(#gri{id = HarvesterId, aspect = group}, _, resource, {#gri{id = GroupId}, _}) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"harvesters">>, HarvesterId, <<"groups">>, GroupId]
     );
 
 create_response(#gri{id = HarvesterId, aspect = {space, SpaceId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"harvesters">>, HarvesterId, <<"spaces">>, SpaceId]
     );
 
 create_response(#gri{id = HarvesterId, aspect = index}, _, resource, {#gri{aspect = {index, IndexId}}, _}) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"harvesters">>, HarvesterId, <<"indices">>, IndexId]
     );
 
@@ -101,31 +104,48 @@ get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, Harve
     #{
         <<"name">> := Name,
         <<"public">> := Public,
-        <<"plugin">> := Plugin,
-        <<"endpoint">> := Endpoint
+        <<"harvestingBackendType">> := HarvestingBackend,
+        <<"harvestingBackendEndpoint">> := Endpoint
     } = HarvesterData,
     rest_translator:ok_body_reply(#{
         <<"harvesterId">> => HarvesterId,
         <<"name">> => Name,
         <<"public">> => Public,
-        <<"plugin">> => Plugin,
-        <<"endpoint">> => Endpoint
+        <<"harvestingBackendType">> => HarvestingBackend,
+        <<"harvestingBackendEndpoint">> => Endpoint
+    });
+
+get_response(#gri{id = HarvesterId, aspect = instance, scope = shared}, HarvesterData) ->
+    #{
+        <<"name">> := Name
+    } = HarvesterData,
+    rest_translator:ok_body_reply(#{
+        <<"harvesterId">> => HarvesterId,
+        <<"name">> => Name
     });
 
 get_response(#gri{aspect = indices}, Indices) ->
     rest_translator:ok_body_reply(#{<<"indices">> => Indices});
 
 get_response(#gri{aspect = {index, IndexId}}, IndexData) ->
-    #{
-        <<"name">> := Name,
-        <<"schema">> := Schema,
-        <<"guiPluginName">> := GuiPluginName
+    #harvester_index{
+        name = Name,
+        schema = Schema,
+        gui_plugin_name = GuiPluginName,
+        include_metadata = IncludeMetadata,
+        include_file_details = IncludeFileDetails,
+        include_rejection_reason = IncludeRejectionReason,
+        retry_on_rejection = RetryOnRejection
     } = IndexData,
     rest_translator:ok_body_reply(#{
         <<"indexId">> => IndexId,
         <<"name">> => Name,
-        <<"schema">> => gs_protocol:undefined_to_null(Schema),
-        <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName)
+        <<"schema">> => utils:undefined_to_null(Schema),
+        <<"guiPluginName">> => utils:undefined_to_null(GuiPluginName),
+        <<"includeMetadata">> => IncludeMetadata,
+        <<"includeFileDetails">> => IncludeFileDetails,
+        <<"includeRejectionReason">> => IncludeRejectionReason,
+        <<"retryOnRejection">> => RetryOnRejection
     });
 
 get_response(#gri{aspect = {index_stats, _}}, IndexStats) ->

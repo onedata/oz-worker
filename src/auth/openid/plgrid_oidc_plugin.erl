@@ -17,7 +17,8 @@
 
 -include("auth/auth_common.hrl").
 -include("auth/auth_errors.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
 
@@ -45,8 +46,8 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec get_login_endpoint(auth_config:idp(), state_token:state_token(),
-    auth_logic:redirect_uri()) ->
-    auth_logic:login_endpoint().
+    idp_auth:redirect_uri()) ->
+    idp_auth:login_endpoint().
 get_login_endpoint(IdP, State, RedirectUri) ->
     Params = #{
         <<"openid.mode">> => <<"checkid_setup">>,
@@ -72,8 +73,8 @@ get_login_endpoint(IdP, State, RedirectUri) ->
 %% {@link openid_plugin_behaviour} callback validate_login/3.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login(auth_config:idp(), auth_logic:query_params(),
-    auth_logic:redirect_uri()) ->
+-spec validate_login(auth_config:idp(), idp_auth:query_params(),
+    idp_auth:redirect_uri()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 validate_login(IdP, QueryParams, _RedirectUri) ->
     % Make sure received endpoint is really the PLGrid endpoint
@@ -103,7 +104,7 @@ validate_login(IdP, QueryParams, _RedirectUri) ->
 
     % Send validation request, check if server responded positively
     {_, <<"is_valid:true\n">>} = openid_protocol:request_idp(post, 200, ReceivedEndpoint, #{
-        <<"content-type">> => <<"application/x-www-form-urlencoded">>
+        ?HDR_CONTENT_TYPE => <<"application/x-www-form-urlencoded">>
     }, Params),
 
     % Return signed attributes
@@ -122,7 +123,7 @@ validate_login(IdP, QueryParams, _RedirectUri) ->
 %% {@link openid_plugin_behaviour} callback refresh_access_token/2.
 %% @end
 %%--------------------------------------------------------------------
--spec refresh_access_token(auth_config:idp(), auth_logic:refresh_token()) ->
+-spec refresh_access_token(auth_config:idp(), idp_auth:refresh_token()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 refresh_access_token(_IdP, _RefreshToken) ->
     ?ERROR_NOT_IMPLEMENTED.
@@ -133,7 +134,7 @@ refresh_access_token(_IdP, _RefreshToken) ->
 %% {@link openid_plugin_behaviour} callback get_user_info/2.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(auth_config:idp(), auth_logic:access_token()) ->
+-spec get_user_info(auth_config:idp(), idp_auth:access_token()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 get_user_info(_IdP, _AccessToken) ->
     ?ERROR_NOT_IMPLEMENTED.
@@ -166,8 +167,8 @@ plgrid_endpoint(IdP) ->
 -spec discover_plgrid_endpoint(auth_config:idp()) -> binary().
 discover_plgrid_endpoint(IdP) ->
     {_, Xrds} = openid_protocol:request_idp(get, 200, ?CFG_XRDS_ENDPOINT(IdP), #{
-        <<"Accept">> => <<"application/xrds+xml;level=1, */*">>,
-        <<"Connection">> => <<"close">>
+        ?HDR_ACCEPT => <<"application/xrds+xml;level=1, */*">>,
+        ?HDR_CONNECTION => <<"close">>
     }, #{}, [{follow_redirect, true}, {max_redirect, 5}]),
     {Xml, _} = xmerl_scan:string(binary_to_list(Xrds)),
     [#xmlElement{content = [#xmlText{value = Uri} | _]}] = xmerl_xpath:string("//URI", Xml),

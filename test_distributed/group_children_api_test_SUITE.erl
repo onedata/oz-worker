@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -133,9 +133,8 @@ create_group_invite_token_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
                 {user, U2},
-                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]}
+                {admin, [?OZ_TOKENS_MANAGE, ?OZ_GROUPS_ADD_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -290,9 +289,7 @@ get_child_details_test(Config) ->
                 <<"name">> => ?GROUP_NAME2,
                 <<"type">> => ?GROUP_TYPE2_BIN,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, G2)
                 end
             })
@@ -506,7 +503,7 @@ remove_child_test(Config) ->
             module = group_logic,
             function = remove_group,
             args = [auth, G1, groupId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -633,7 +630,7 @@ update_child_privileges_test(Config) ->
             module = group_logic,
             function = update_child_privileges,
             args = [auth, G1, G2, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -772,9 +769,7 @@ get_eff_child_details_test(Config) ->
                     auth_hint = ?THROUGH_GROUP(G1),
                     expected_result = ?OK_MAP_CONTAINS(GroupDetailsBinary#{
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Gid} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = Gid} = gri:deserialize(EncodedGri),
                             ?assertEqual(Gid, GroupId)
                         end
                     })
@@ -999,7 +994,7 @@ get_eff_child_membership_intermediaries(Config) ->
 
     lists:foreach(fun({ParentId, ChildId, CorrectUsers, ExpIntermediariesRaw}) ->
         ExpIntermediaries = lists:map(fun({Type, Id}) ->
-            #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+            #{<<"type">> => gri:serialize_type(Type), <<"id">> => Id}
         end, ExpIntermediariesRaw),
         CorrectUserClients = [{user, U} || U <- CorrectUsers],
         ApiTestSpec = #api_test_spec{

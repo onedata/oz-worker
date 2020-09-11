@@ -14,6 +14,7 @@
 -behaviour(cowboy_rest).
 
 -include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include("http/handlers/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -161,7 +162,7 @@ handle_request(QueryParams, Req) ->
     XML = insert_to_root_xml_element([ResponseDateXML, RequestElementXML, ResponseXML]),
     Prolog = ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"],
     ResponseBody = xmerl:export_simple([XML], xmerl_xml, [{prolog, Prolog}]),
-    Req2 = cowboy_req:set_resp_header(<<"content-type">>, ?RESPONSE_CONTENT_TYPE, Req),
+    Req2 = cowboy_req:set_resp_header(?HDR_CONTENT_TYPE, ?RESPONSE_CONTENT_TYPE, Req),
     {ResponseBody, Req2}.
 
 %%%--------------------------------------------------------------------

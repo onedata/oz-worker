@@ -22,7 +22,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -185,9 +185,7 @@ create_handle_service_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?HANDLE_SERVICE_NAME1,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     VerifyFun(Id)
                 end
             })
@@ -313,7 +311,7 @@ leave_handle_service_test(Config) ->
             module = group_logic,
             function = leave_handle_service,
             args = [auth, G1, hsid],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
