@@ -162,11 +162,11 @@ protected_space(logic, _Id, SpaceData, Creator) ->
     ?OK_MAP(#{
         <<"name">> => maps:get(<<"name">>, SpaceData),
         <<"providers">> => expected_provider_support_sizes(Providers),
-        <<"supportParametersPerProvider">> => expected_support_parameters_per_provider(Providers),
-        <<"supportStagePerProvider">> => expected_support_stage_per_provider(Providers),
+        <<"supportParametersPerProvider">> => expected_support_parameters_per_provider(Providers, term),
+        <<"supportStagePerProvider">> => expected_support_stage_per_provider(Providers, term),
+        <<"sharesCount">> => 0,
         <<"creationTime">> => ozt_mocks:get_mocked_time(),
-        <<"creator">> => Creator,
-        <<"sharesCount">> => 0
+        <<"creator">> => Creator
     });
 protected_space(rest, Id, SpaceData, Creator) ->
     Providers = maps:get(<<"providers">>, SpaceData, #{}),
@@ -174,8 +174,8 @@ protected_space(rest, Id, SpaceData, Creator) ->
         <<"spaceId">> => Id,
         <<"name">> => maps:get(<<"name">>, SpaceData),
         <<"providers">> => expected_provider_support_sizes(Providers),
-        <<"supportParametersPerProvider">> => support_parameters:to_json(expected_support_parameters_per_provider(Providers)),
-        <<"supportStagePerProvider">> => support_stage:per_provider_to_json(expected_support_stage_per_provider(Providers)),
+        <<"supportParametersPerProvider">> => expected_support_parameters_per_provider(Providers, json),
+        <<"supportStagePerProvider">> => expected_support_stage_per_provider(Providers, json),
         <<"creationTime">> => ozt_mocks:get_mocked_time(),
         <<"creator">> => aai:subject_to_json(Creator)
     };
@@ -185,8 +185,8 @@ protected_space(gs, Id, SpaceData, _Creator) ->
         <<"gri">> => gri:serialize(?GRI(od_space, Id, instance, protected)),
         <<"name">> => maps:get(<<"name">>, SpaceData),
         <<"providers">> => expected_provider_support_sizes(Providers),
-        <<"supportParametersPerProvider">> => support_parameters:to_json(expected_support_parameters_per_provider(Providers)),
-        <<"supportStagePerProvider">> => support_stage:per_provider_to_json(expected_support_stage_per_provider(Providers))
+        <<"supportParametersPerProvider">> => expected_support_parameters_per_provider(Providers, json),
+        <<"supportStagePerProvider">> => expected_support_stage_per_provider(Providers, json)
     }).
 
 
@@ -435,32 +435,40 @@ shared_or_public_harvester(rest, Id, HarvesterData) ->
 -spec expected_provider_support_sizes(
     #{od_provider:id() => #{od_storage:id() => od_space:support_size()}}) -> map().
 expected_provider_support_sizes(ProviderSupports) ->
-    maps:map(fun(_ProviderId, _StorageSupports) ->
-        support_parameters:build(global, eager)
+    maps:map(fun(_ProviderId, StorageSupports) ->
+        lists:sum(maps:values(StorageSupports))
     end, ProviderSupports).
 
 
 %% @private
 -spec expected_support_parameters_per_provider(
-    #{od_provider:id() => #{od_storage:id() => od_space:support_size()}}) -> map().
-expected_support_parameters_per_provider(ProviderSupports) ->
-    maps:map(fun(_ProviderId, _StorageSupports) ->
+    #{od_provider:id() => #{od_storage:id() => od_space:support_size()}}, term | json) -> map().
+expected_support_parameters_per_provider(ProviderSupports, Format) ->
+    Result = maps:map(fun(_ProviderId, _StorageSupports) ->
         support_parameters:build(global, eager)
-    end, ProviderSupports).
+    end, ProviderSupports),
+    case Format of
+        term -> Result;
+        json -> support_parameters:per_provider_to_json(Result)
+    end.
 
 
 %% @private
 -spec expected_support_stage_per_provider(
-    #{od_provider:id() => #{od_storage:id() => od_space:support_size()}}) -> map().
-expected_support_stage_per_provider(ProviderSupports) ->
-    maps:map(fun(_ProviderId, StorageSupports) ->
+    #{od_provider:id() => #{od_storage:id() => od_space:support_size()}}, term | json) -> map().
+expected_support_stage_per_provider(ProviderSupports, Format) ->
+    Result = maps:map(fun(_ProviderId, StorageSupports) ->
         #support_stage_details{
             provider_stage = active,
             per_storage = maps:map(fun(_StorageId, _SupportSize) ->
                 active
             end, StorageSupports)
         }
-    end, ProviderSupports).
+    end, ProviderSupports),
+    case Format of
+        term -> Result;
+        json -> support_stage:per_provider_to_json(Result)
+    end.
 
 
 %% @private

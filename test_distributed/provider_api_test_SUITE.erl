@@ -2497,7 +2497,7 @@ verify_provider_identity_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
--define(awaitResult(Pattern, Value), ?assertEqual(Pattern, Value, 60)).
+-define(awaitResult(Expected, Value), ?assertEqual(Expected, Value, 60)).
 
 connection_status_tracking(Config) ->
     {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config),
@@ -2539,6 +2539,10 @@ connection_status_tracking(Config) ->
     ?awaitResult(now, GetLastActivity()),
 
     exit(ClientPid1, kill),
+    ?awaitResult(true, IsOnline()),
+    ?awaitResult({true, TimestampAlpha}, InspectStatus()),
+    ?awaitResult(now, GetLastActivity()),
+
     oz_test_utils:simulate_time_passing(Config, 14),
     exit(ClientPid2, kill),
     ?awaitResult(false, IsOnline()),
@@ -2565,7 +2569,7 @@ connection_status_tracking(Config) ->
     % wait until a heartbeat is actually done by the client
     timer:sleep(timer:seconds(12)),
     HeartbeatTimestamp = oz_test_utils:cluster_time_seconds(Config),
-    % the provider should appear as online, since the connection time
+    % the provider should appear as online since the connection time
     ?awaitResult(true, IsOnline()),
     ?awaitResult({true, TimestampBeta}, InspectStatus()),
     ?awaitResult(now, GetLastActivity()),
@@ -2610,8 +2614,8 @@ connection_status_tracking(Config) ->
             timer:sleep(rand:uniform(CheckDelayMS)),
             IsOnline() % this should trigger purging if this operation happens first
         end),
-        % regardless of the order of operations, the provider should appear as
-        % online, because new connections have been established
+        % regardless of the order of operations, the provider should eventually
+        % appear as online, because new connections have been established
         TimestampDelta = oz_test_utils:cluster_time_seconds(Config),
         ?awaitResult(true, IsOnline()),
         ?awaitResult({true, TimestampDelta}, InspectStatus()),

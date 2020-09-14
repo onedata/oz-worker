@@ -330,7 +330,7 @@ translate_resource(_, #gri{type = od_provider, aspect = instance, scope = protec
     #{
         <<"name">> := Name, <<"domain">> := Domain,
         <<"latitude">> := Latitude, <<"longitude">> := Longitude,
-        <<"connectionStatus">> := #{<<"online">> := Online}
+        <<"online">> := Online
 
     } = ProviderData,
     #{

@@ -627,7 +627,7 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = protected}, Pr
     #{
         <<"name">> := Name, <<"domain">> := Domain,
         <<"latitude">> := Latitude, <<"longitude">> := Longitude,
-        <<"connectionStatus">> := #{<<"online">> := Online},
+        <<"online">> := Online,
         <<"creationTime">> := CreationTime
     } = Provider,
 

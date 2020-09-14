@@ -217,15 +217,12 @@ get(#el_req{gri = #gri{id = Id, aspect = instance, scope = protected}}, Provider
         latitude = Latitude, longitude = Longitude,
         creation_time = CreationTime
     } = Provider,
-    {Online, Since} = provider_connections:inspect_status(Id, Provider),
+    {Online, _Since} = provider_connections:inspect_status(Id, Provider),
     {ok, #{
         <<"name">> => Name, <<"domain">> => Domain,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude,
         <<"creationTime">> => CreationTime,
-        <<"connectionStatus">> => #{
-            <<"online">> => Online,
-            <<"since">> => Since
-        }
+        <<"online">> => Online
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Provider) ->
     #od_provider{name = Name} = Provider,

@@ -106,7 +106,7 @@ inspect_status(ProviderId, #od_provider{connection_status = Status}) ->
         {disconnected, Since} ->
             {false, Since};
         {unresponsive, Since} ->
-            async_purge_unresponsive_connections(ProviderId),
+            async_purge_connections_for_unresponsive_provider(ProviderId),
             {false, Since}
     end.
 
@@ -183,14 +183,14 @@ unsafe_update_connections(ProviderId, ConnectionsDiff) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Attempts to clean all existing connections of a provider, forcing them to
-%% close (if possible) and nullifying the list of connections, which results in
-%% the provider being marked as disconnected.
+%% Attempts to clean all existing connections of an unresponsive provider,
+%% forcing them to close (if possible) and nullifying the list of connections,
+%% which results in the provider being marked as disconnected.
 %% The procedure is run asynchronously so as not to block the calling process.
 %% @end
 %%--------------------------------------------------------------------
--spec async_purge_unresponsive_connections(od_provider:id()) -> ok | {error, term()}.
-async_purge_unresponsive_connections(ProviderId) ->
+-spec async_purge_connections_for_unresponsive_provider(od_provider:id()) -> ok | {error, term()}.
+async_purge_connections_for_unresponsive_provider(ProviderId) ->
     spawn(fun() ->
         transaction_on_provider(ProviderId, fun() ->
             % make sure the provider is still unresponsive inside the
