@@ -29,7 +29,10 @@ name_normalization_test() ->
     ?assertEqual(<<"aaa---------a"/utf8>>, N(<<"][aaa*&:|}{][,a]["/utf8>>)),
     ?assertEqual(?UNKNOWN_ENTITY_NAME, N(<<"A">>)),
     ?assertEqual(<<"group_name">>, N(<<"|group_name">>)),
+    ?assertEqual(<<"group_name">>, N(<<"*&:|group_name">>)),
     ?assertEqual(<<"group_name">>, N(<<"group_name|">>)),
+    ?assertEqual(<<"group_name">>, N(<<"group_name|*&:">>)),
+    ?assertEqual(<<"group----name">>, N(<<"*&:|group*&:|name|*&:">>)),
     ?assertEqual(string:slice(?TOO_LONG_NAME, 0, ?NAME_MAXIMUM_LENGTH), N(?TOO_LONG_NAME)),
     ?assertEqual(?UNKNOWN_ENTITY_NAME, N(<<"--------------------------------------------------">>)),
     ?assertEqual(<<"µńż_źć-21.3(1)"/utf8>>, N(<<"µńż_źć-21.3(1)"/utf8>>)).
