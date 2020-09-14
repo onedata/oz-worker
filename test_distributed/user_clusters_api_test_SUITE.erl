@@ -334,19 +334,6 @@ get_cluster_test(Config) ->
     ClusterId = ProviderId,
     {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
 
-    DefaultVersionInfo = #{
-        <<"release">> => ?DEFAULT_RELEASE_VERSION,
-        <<"build">> => ?DEFAULT_BUILD_VERSION,
-        <<"gui">> => ?EMPTY_GUI_HASH
-    },
-
-    ExpDetails = #{
-        <<"type">> => ?ONEPROVIDER,
-        <<"workerVersion">> => DefaultVersionInfo,
-        <<"onepanelVersion">> => DefaultVersionInfo,
-        <<"onepanelProxy">> => true
-    },
-
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -358,10 +345,7 @@ get_cluster_test(Config) ->
             method = get,
             path = [<<"/user/clusters/">>, ClusterId],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpDetails#{
-                <<"clusterId">> => ClusterId,
-                <<"type">> => <<"oneprovider">>
-            }
+            expected_body = api_test_expect:protected_cluster(rest, ClusterId, ?ONEPROVIDER, ?SUB(user, U1))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -385,7 +369,7 @@ get_cluster_test(Config) ->
             module = user_logic,
             function = get_cluster,
             args = [auth, U1, ClusterId],
-            expected_result = ?OK_MAP_CONTAINS(ExpDetails)
+            expected_result = api_test_expect:protected_cluster(logic, ClusterId, ?ONEPROVIDER, ?SUB(user, U1))
         }
         % @todo gs
     },
@@ -463,18 +447,16 @@ list_eff_clusters_test(Config) ->
     C4 = P4,
     C5 = P5,
 
+    % U1 is already a member (creator) of clusters 1-4
+    oz_test_utils:cluster_add_user(Config, C5, U1),
+
     oz_test_utils:cluster_add_user(Config, C1, U2),
     oz_test_utils:cluster_add_user(Config, C2, U2),
     oz_test_utils:cluster_add_user(Config, C3, U2),
     oz_test_utils:cluster_add_user(Config, C4, U2),
 
-    oz_test_utils:cluster_add_user(Config, C1, U1),
-    oz_test_utils:cluster_add_user(Config, C2, U1),
-    oz_test_utils:cluster_add_user(Config, C3, U1),
-    oz_test_utils:cluster_add_user(Config, C4, U1),
-    oz_test_utils:cluster_add_user(Config, C5, U1),
-
     ExpClusters = [C1, C2, C3, C4, C5],
+
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -534,81 +516,64 @@ get_eff_cluster_test(Config) ->
         _Spaces, _Groups, {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_providers_env(Config),
 
-    EffClustersList = lists:map(fun({ProviderId, _}) ->
+    EffProviderClusters = lists:map(fun({ProviderId, _}) ->
         ClusterId = ProviderId,
-        oz_test_utils:cluster_add_user(Config, ClusterId, U1),
+        % U1 is already a member (creator)
         oz_test_utils:cluster_add_user(Config, ClusterId, U2),
-
-        {ok, #od_cluster{
-            type = Type,
-            worker_version = {WRelease, WBuild, WGui},
-            onepanel_version = {ORelease, OBuild, OGui},
-            onepanel_proxy = OnepanelProxy
-        }} = oz_test_utils:get_cluster(Config, ClusterId),
-        {ClusterId, #{
-            <<"type">> => Type,
-            <<"workerVersion">> => #{
-                <<"release">> => WRelease,
-                <<"build">> => WBuild,
-                <<"gui">> => WGui
-            },
-            <<"onepanelVersion">> => #{
-                <<"release">> => ORelease,
-                <<"build">> => OBuild,
-                <<"gui">> => OGui
-            },
-            <<"onepanelProxy">> => OnepanelProxy
-        }}
+        {ClusterId, ?ONEPROVIDER}
     end, EffProvidersList),
 
-    lists:foreach(
-        fun({ClusterId, #{<<"type">> := ExpectedType} = ClusterDetails}) ->
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        {user, U1},
-                        {user, U2}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [<<"/user/effective_clusters/">>, ClusterId],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = ClusterDetails#{
-                        <<"clusterId">> => ClusterId,
-                        <<"type">> => atom_to_binary(ExpectedType, utf8)
-                    }
-                }
-            },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    oz_test_utils:cluster_add_user(Config, ?ONEZONE_CLUSTER_ID, U1),
+    oz_test_utils:cluster_add_user(Config, ?ONEZONE_CLUSTER_ID, U2),
+    EffClustersList = [{?ONEZONE_CLUSTER_ID, ?ONEZONE} | EffProviderClusters],
 
-            % Check that regular client can't make request
-            % on behalf of other client
-            ApiTestSpec2 = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {admin, [?OZ_CLUSTERS_VIEW]},
-                        {user, U1}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, U2},
-                        {user, NonAdmin}
-                    ]
-                },
-                logic_spec = #logic_spec{
-                    module = user_logic,
-                    function = get_eff_cluster,
-                    args = [auth, U1, ClusterId],
-                    expected_result = ?OK_MAP_CONTAINS(ClusterDetails)
-                }
-                % @todo gs
+    lists:foreach(fun({ClusterId, Type}) ->
+        Creator = case Type of
+            ?ONEZONE -> ?SUB(nobody);
+            _ -> ?SUB(user, U1)
+        end,
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    {user, U1},
+                    {user, U2}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/user/effective_clusters/">>, ClusterId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_cluster(rest, ClusterId, Type, Creator)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-        end, EffClustersList
-    ).
+        % Check that regular client can't make request
+        % on behalf of other client
+        ApiTestSpec2 = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_CLUSTERS_VIEW]},
+                    {user, U1}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, U2},
+                    {user, NonAdmin}
+                ]
+            },
+            logic_spec = #logic_spec{
+                module = user_logic,
+                function = get_eff_cluster,
+                args = [auth, U1, ClusterId],
+                expected_result = api_test_expect:protected_cluster(logic, ClusterId, Type, Creator)
+            }
+            % @todo gs
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
+
+    end, EffClustersList).
 
 
 %%%===================================================================
@@ -618,17 +583,16 @@ get_eff_cluster_test(Config) ->
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
-
-init_per_testcase(_, Config) ->
-    Config.
-
-
-end_per_testcase(_, Config) ->
-    oz_test_utils:set_env(Config, provider_registration_policy, open).
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    ozt:set_env(provider_registration_policy, open),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_time().

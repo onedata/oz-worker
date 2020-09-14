@@ -28,7 +28,8 @@
 
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     create_test/1,
@@ -280,14 +281,19 @@ get_test(Config) ->
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
-    {ok, User} = oz_test_utils:create_user(Config, #{
+    UserData = #{
         <<"fullName">> => ExpFullName = <<"UserName">>,
         <<"username">> => ExpUsername = <<"UserUsername">>
-    }),
-    ExpEmailList = [<<"a@a.a">>, <<"b@b.b">>],
+    },
+    {ok, User} = oz_test_utils:create_user(Config, UserData),
+    ExpEmails = [<<"a@a.a">>, <<"b@b.b">>],
     oz_test_utils:call_oz(Config, od_user, update, [User, fun(UserRecord) ->
-        {ok, UserRecord#od_user{emails = ExpEmailList}}
+        {ok, UserRecord#od_user{emails = ExpEmails}}
     end]),
+    ProtectedUserData = UserData#{
+        <<"emails">> => ExpEmails,
+        <<"basicAuthEnabled">> => false
+    },
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
@@ -295,13 +301,6 @@ get_test(Config) ->
     {ok, S1} = oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-
-    ProtectedData = #{
-        <<"fullName">> => ExpFullName,
-        <<"username">> => ExpUsername,
-        <<"emails">> => ExpEmailList,
-        <<"linkedAccounts">> => []
-    },
 
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
@@ -342,7 +341,7 @@ get_test(Config) ->
                 }) ->
                     ?assertEqual(ExpFullName, FullName),
                     ?assertEqual(ExpUsername, Username),
-                    ?assertEqual(ExpEmailList, EmailList),
+                    ?assertEqual(ExpEmails, EmailList),
                     ?assertEqual(SpaceId, S1),
                     ?assertEqual(EffSpaces, #{S1 => [{od_user, <<"self">>}]}),
                     ?assertEqual(EffProviders, #{P1 => [{od_space, S1}]})
@@ -357,7 +356,7 @@ get_test(Config) ->
                 <<"effectiveHandleServices">> => [],
                 <<"effectiveHandles">> => [],
                 <<"effectiveSpaces">> => [S1],
-                <<"emails">> => ExpEmailList,
+                <<"emails">> => ExpEmails,
                 <<"linkedAccounts">> => [],
                 <<"fullName">> => ExpFullName,
                 <<"username">> => ExpUsername,
@@ -371,7 +370,7 @@ get_test(Config) ->
                 <<"name">> => ExpFullName,
                 <<"login">> => ExpUsername,
                 <<"alias">> => ExpUsername,
-                <<"emailList">> => ExpEmailList
+                <<"emailList">> => ExpEmails
             })
         }
     },
@@ -395,40 +394,20 @@ get_test(Config) ->
             method = get,
             path = [<<"/users/">>, User],
             expected_code = ?HTTP_200_OK,
-            expected_body = ProtectedData#{
-                <<"userId">> => User,
-                <<"basicAuthEnabled">> => false,
-
-                % TODO VFS-4506 deprecated fields, included for backward compatibility
-                <<"name">> => ExpFullName,
-                <<"login">> => ExpUsername,
-                <<"alias">> => ExpUsername,
-                <<"emailList">> => ExpEmailList
-            }
+            expected_body = api_test_expect:protected_user(rest, User, ProtectedUserData)
         },
         logic_spec = LogicSpec = #logic_spec{
             module = user_logic,
             function = get_protected_data,
             args = [auth, User],
-            expected_result = ?OK_MAP_CONTAINS(ProtectedData)
+            expected_result = api_test_expect:protected_user(logic, User, ProtectedUserData)
         },
         gs_spec = GsSpec = #gs_spec{
             operation = get,
             gri = #gri{
                 type = od_user, id = User, aspect = instance, scope = protected
             },
-            expected_result = ?OK_MAP_CONTAINS(ProtectedData#{
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(Id, User)
-                end,
-
-                % TODO VFS-4506 deprecated fields, included for backward compatibility
-                <<"name">> => ExpFullName,
-                <<"login">> => ExpUsername,
-                <<"alias">> => ExpUsername,
-                <<"emailList">> => ExpEmailList
-            })
+            expected_result = api_test_expect:protected_user(gs, User, ProtectedUserData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
@@ -438,54 +417,31 @@ get_test(Config) ->
         rest_spec = undefined,
         logic_spec = LogicSpec#logic_spec{
             function = get_shared_data,
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"fullName">> => ExpFullName,
-                <<"username">> => ExpUsername
-            })
+            expected_result = api_test_expect:shared_user(logic, User, UserData)
         },
         gs_spec = GsSpec#gs_spec{
             gri = #gri{
                 type = od_user, id = User, aspect = instance, scope = shared
             },
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"fullName">> => ExpFullName,
-                <<"username">> => ExpUsername,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(Id, User)
-                end,
-
-                % TODO VFS-4506 deprecated fields, included for backward compatibility
-                <<"name">> => ExpFullName,
-                <<"login">> => ExpUsername,
-                <<"alias">> => ExpUsername
-            })
+            expected_result = api_test_expect:shared_user(gs, User, UserData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)).
 
 
 get_self_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #{
-        <<"fullName">> => ExpFullName = <<"FullName">>,
-        <<"username">> => ExpUsername = <<"Username">>
-    }),
-    ExpEmailList = [<<"em1@google.com">>, <<"em2@google.com">>],
+    UserData = #{
+        <<"fullName">> => <<"FullName">>,
+        <<"username">> => <<"Username">>
+    },
+    {ok, User} = oz_test_utils:create_user(Config, UserData),
+    ExpEmails = [<<"em1@google.com">>, <<"em2@google.com">>],
     oz_test_utils:call_oz(Config, od_user, update, [User, fun(UserRecord) ->
-        {ok, UserRecord#od_user{emails = ExpEmailList}}
+        {ok, UserRecord#od_user{emails = ExpEmails}}
     end]),
-
-    ProtectedData = #{
-        <<"fullName">> => ExpFullName,
-        <<"username">> => ExpUsername,
-        <<"emails">> => ExpEmailList,
-        <<"linkedAccounts">> => [],
-
-        % TODO VFS-4506 deprecated, included for backward compatibility
-        <<"name">> => ExpFullName,
-        <<"login">> => ExpUsername,
-        <<"alias">> => ExpUsername,
-        <<"emailList">> => ExpEmailList
+    ProtectedUserData = UserData#{
+        <<"emails">> => ExpEmails,
+        <<"basicAuthEnabled">> => false
     },
 
     ApiTestSpec = #api_test_spec{
@@ -494,10 +450,7 @@ get_self_test(Config) ->
             method = get,
             path = <<"/user">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = ProtectedData#{
-                <<"userId">> => User,
-                <<"basicAuthEnabled">> => false
-            }
+            expected_body = api_test_expect:protected_user(rest, User, ProtectedUserData)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -505,12 +458,7 @@ get_self_test(Config) ->
                 type = od_user, id = ?SELF,
                 aspect = instance, scope = protected
             },
-            expected_result = ?OK_MAP_CONTAINS(ProtectedData#{
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(Id, User)
-                end
-            })
+            expected_result = api_test_expect:protected_user(gs, User, ProtectedUserData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -1304,59 +1252,55 @@ get_eff_provider_test(Config) ->
         EffProviders, _Spaces, _Groups, {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_providers_env(Config),
 
-    lists:foreach(
-        fun({ProvId, ProvDetails}) ->
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        {user, U1},
-                        {user, U2}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [<<"/user/effective_providers/">>, ProvId],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = ProvDetails#{<<"providerId">> => ProvId}
-                }
+    lists:foreach(fun({ProvId, ProvDetails}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    {user, U1},
+                    {user, U2}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/user/effective_providers/">>, ProvId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_provider(rest, ProvId, ProvDetails)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-            % Check that regular client can't make request
-            % on behalf of other client
-            ApiTestSpec2 = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {admin, [?OZ_PROVIDERS_VIEW]},
-                        {user, U2}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, U1},
-                        {user, NonAdmin}
-                    ]
-                },
-                rest_spec = undefined,
-                logic_spec = #logic_spec{
-                    module = user_logic,
-                    function = get_eff_provider,
-                    args = [auth, U2, ProvId],
-                    expected_result = ?OK_MAP_CONTAINS(ProvDetails)
-                }
-                % @todo gs
-
+        % Check that regular client can't make request
+        % on behalf of other client
+        ApiTestSpec2 = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_PROVIDERS_VIEW]},
+                    {user, U2}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, U1},
+                    {user, NonAdmin}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
+            rest_spec = undefined,
+            logic_spec = #logic_spec{
+                module = user_logic,
+                function = get_eff_provider,
+                args = [auth, U2, ProvId],
+                expected_result = api_test_expect:protected_provider(logic, ProvId, ProvDetails)
+            }
+            % @todo gs
 
-        end, EffProviders
-    ).
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
+
+    end, EffProviders).
 
 
 get_spaces_in_eff_provider_test(Config) ->
-    {ok, {ProviderId, _}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_DETAILS(?UNIQUE_STRING)#{<<"subdomainDelegation">> => false}
-    ),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_DETAILS(?UNIQUE_STRING)),
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -1427,13 +1371,18 @@ get_spaces_in_eff_provider_test(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_time().

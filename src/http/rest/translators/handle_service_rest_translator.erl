@@ -67,13 +67,17 @@ get_response(#gri{id = HServiceId, aspect = instance, scope = protected}, HServi
     #{
         <<"name">> := Name,
         <<"proxyEndpoint">> := Proxy,
-        <<"serviceProperties">> := ServiceProps
+        <<"serviceProperties">> := ServiceProps,
+        <<"creator">> := Creator,
+        <<"creationTime">> := CreationTime
     } = HServiceData,
     rest_translator:ok_body_reply(#{
         <<"handleServiceId">> => HServiceId,
         <<"name">> => Name,
         <<"proxyEndpoint">> => Proxy,
-        <<"serviceProperties">> => ServiceProps
+        <<"serviceProperties">> => ServiceProps,
+        <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
+        <<"creationTime">> => CreationTime
     });
 
 get_response(#gri{aspect = users}, Users) ->

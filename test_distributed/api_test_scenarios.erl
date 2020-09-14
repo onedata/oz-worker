@@ -1252,17 +1252,16 @@ create_eff_providers_env(Config) ->
     %%      NonAdmin
 
     {
-        [{S1, _}, {S2, _}, {S3, _}, {S4, _}, {S5, _}] = Spaces, Groups, Users
+        [{S1, _}, {S2, _}, {S3, _}, {S4, _}, {S5, _}] = Spaces,
+        Groups,
+        {U1, _, _} = Users
     } = create_eff_spaces_env(Config),
 
     Providers = [{P1, _}, {P2, _}, {P3, _}, {P4, _}] = lists:map(
         fun(_) ->
-            ProviderName = ?UNIQUE_STRING,
-            ProvDetails = ?PROVIDER_DETAILS(ProviderName),
-            {ok, {ProvId, _}} = oz_test_utils:create_provider(
-                Config, ProvDetails#{<<"subdomainDelegation">> => false}
-            ),
-            {ProvId, maps:remove(<<"adminEmail">>, ProvDetails#{
+            ProviderData = ?PROVIDER_DETAILS(?UNIQUE_STRING),
+            {ok, {ProvId, _}} = oz_test_utils:create_provider(Config, U1, ProviderData),
+            {ProvId, maps:remove(<<"adminEmail">>, ProviderData#{
                 <<"online">> => false
             })}
         end, lists:seq(1, 4)
@@ -1299,12 +1298,13 @@ create_harvester_eff_providers_env(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     Providers = [{P1, _}, {P2, _}, {P3, _}] = lists:map(fun(_) ->
-        Name = ?UNIQUE_STRING,
-        {ok, {P, PToken}} = oz_test_utils:create_provider(Config, Name),
-        {P, #{
-            <<"name">> => Name,
+
+        ProviderData = ?PROVIDER_DETAILS(?UNIQUE_STRING),
+        {ok, {ProvId, PToken}} = oz_test_utils:create_provider(Config, U1, ProviderData),
+        {ProvId, maps:remove(<<"adminEmail">>, ProviderData#{
+            <<"online">> => false,
             <<"providerRootToken">> => PToken
-        }}
+        })}
     end, lists:seq(1, 3)),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
@@ -1470,7 +1470,7 @@ create_eff_harvesters_env(Config) ->
             {ok, HarvesterId} = oz_test_utils:group_create_harvester(
                 Config, GroupId, ?HARVESTER_CREATE_DATA(Name)
             ),
-            {HarvesterId, ?HARVESTER_PROTECTED_DATA(Name)}
+            {HarvesterId, ?HARVESTER_CREATE_DATA(Name)}
         end, [G1, G2, G4, G5, G5]
     ),
 

@@ -77,13 +77,15 @@ get_response(#gri{id = ProviderId, aspect = instance, scope = protected}, Provid
     #{
         <<"name">> := Name, <<"domain">> := Domain,
         <<"latitude">> := Latitude, <<"longitude">> := Longitude,
-        <<"online">> := Online
+        <<"online">> := Online, <<"creationTime">> := CreationTime
     } = ProviderData,
     rest_translator:ok_body_reply(#{
         <<"providerId">> => ProviderId,
+        <<"clusterId">> => ProviderId,
         <<"name">> => Name, <<"domain">> => Domain,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude,
-        <<"online">> => Online
+        <<"online">> => Online,
+        <<"creationTime">> => CreationTime
     });
 
 get_response(#gri{aspect = domain_config}, #{<<"ipList">> := IPList} = DomainConfig) ->

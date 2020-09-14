@@ -28,17 +28,17 @@
 
 -export([
     all/0,
-    init_per_testcase/2, end_per_testcase/2,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     join_harvester_test/1,
     remove_harvester_test/1,
     list_harvesters_test/1,
     get_harvester_test/1,
-    
+
     harvest_metadata_test/1,
-    
+
     harvester_index_empty_stats_test/1,
     harvester_remove_add_space_stats_test/1,
     harvester_index_nonempty_stats_test/1
@@ -52,7 +52,7 @@ all() ->
         get_harvester_test,
 
         harvest_metadata_test,
-        
+
         harvester_index_empty_stats_test,
         harvester_remove_add_space_stats_test,
         harvester_index_nonempty_stats_test
@@ -185,7 +185,7 @@ join_harvester_test(Config) ->
             correct_values = #{<<"token">> => [Serialized2]}
         }
     },
-    VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
+    VerifyEndFun1 = fun(_ShouldSucceed, _Env, _) ->
         oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token2#token.id)
     end,
     ?assert(api_test_utils:run_tests(
@@ -318,14 +318,10 @@ get_harvester_test(Config) ->
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     oz_test_utils:support_space_by_provider(Config, P1, S1),
 
-    {ok, H1} = oz_test_utils:create_harvester(
-        Config, ?ROOT, ?HARVESTER_CREATE_DATA(?HARVESTER_NAME2)
-    ),
+    HarvesterData = ?HARVESTER_CREATE_DATA(?HARVESTER_NAME2),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, HarvesterData),
     oz_test_utils:harvester_add_space(Config, H1, S1),
 
-
-    ExpData = ?HARVESTER_SHARED_DATA(?HARVESTER_NAME2),
-    
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -345,13 +341,13 @@ get_harvester_test(Config) ->
             method = get,
             path = [<<"/spaces/">>, S1, <<"/harvesters/">>, H1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpData#{<<"harvesterId">> => H1}
+            expected_body = api_test_expect:shared_or_public_harvester(rest, H1, HarvesterData)
         },
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_harvester,
             args = [auth, S1, H1],
-            expected_result = ?OK_MAP(ExpData)
+            expected_result = api_test_expect:shared_or_public_harvester(logic, H1, HarvesterData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -374,17 +370,17 @@ harvest_metadata_test(Config) ->
     oz_test_utils:harvester_add_space(Config, H2, S1),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    
+
     NotExistingHarvester = <<"not_existing_harvester">>,
     Destination = #{H1 => [Index1, Index2], H2 => [Index3, <<"not_existing_index">>], NotExistingHarvester => []},
-    Guid = file_id:pack_guid(<<"file_id">>, S1), 
+    Guid = file_id:pack_guid(<<"file_id">>, S1),
     {ok, FileId} = file_id:guid_to_objectid(Guid),
-    
+
     ExpectedResult = fun(Error) -> #{
-        H1 => #{Index2 => 1}, 
+        H1 => #{Index2 => 1},
         NotExistingHarvester => #{<<"error">> => Error}
     } end,
-    
+
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -428,10 +424,8 @@ harvest_metadata_test(Config) ->
 
 
 harvester_index_empty_stats_test(Config) ->
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT,
-        ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_BACKEND_BINARY)),
-    {ok, H2} = oz_test_utils:create_harvester(Config, ?ROOT,
-        ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_BACKEND_BINARY)),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
+    {ok, H2} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
 
     {ok, {P1, _M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, {P2, _M2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
@@ -463,16 +457,16 @@ harvester_index_empty_stats_test(Config) ->
     % adding space support results in provider appearing in indices stats in all harvesters of this space
     {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS}}}, 
+    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS}}},
         oz_test_utils:harvester_get_index_stats(Config, H1, Index1)),
-    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS}}}, 
+    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS}}},
         oz_test_utils:harvester_get_index_stats(Config, H1, Index2)),
-    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS}}}, 
+    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS}}},
         oz_test_utils:harvester_get_index_stats(Config, H2, Index3)),
 
     % index created in harvester with existing relations have adequate spaces and providers in stats
     {ok, Index4} = oz_test_utils:harvester_create_index(Config, H2, ?HARVESTER_INDEX_CREATE_DATA),
-    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS}}}, 
+    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS}}},
         oz_test_utils:harvester_get_index_stats(Config, H2, Index4)),
 
     % adding another space support results in provider appearing in indices stats in all harvesters of this space
@@ -484,7 +478,7 @@ harvester_index_empty_stats_test(Config) ->
         oz_test_utils:harvester_get_index_stats(Config, H1, Index2)),
     ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS, P2 => ?EMPTY_INDEX_STATS}}},
         oz_test_utils:harvester_get_index_stats(Config, H2, Index3)),
-    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS, P2 => ?EMPTY_INDEX_STATS}}}, 
+    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS, P2 => ?EMPTY_INDEX_STATS}}},
         oz_test_utils:harvester_get_index_stats(Config, H2, Index4)),
 
     % removing space support results in stats being marked archival for this provider in all harvesters of this space
@@ -496,9 +490,9 @@ harvester_index_empty_stats_test(Config) ->
         oz_test_utils:harvester_get_index_stats(Config, H1, Index2)),
     ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS}}},
         oz_test_utils:harvester_get_index_stats(Config, H2, Index3)),
-    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS}}}, 
+    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS}}},
         oz_test_utils:harvester_get_index_stats(Config, H2, Index4)),
-    
+
     % removing space from harvester marks all stats for this space in given harvester archival
     ok = oz_test_utils:harvester_remove_space(Config, H1, S1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -586,8 +580,7 @@ harvester_remove_add_space_stats_test(Config) ->
 harvester_index_nonempty_stats_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
 
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT,
-        ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_BACKEND_BINARY)),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
 
     {ok, {P1, _M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
@@ -604,7 +597,7 @@ harvester_index_nonempty_stats_test(Config) ->
 
     ?assertEqual({ok, ?NO_FAILED_INDICES}, oz_test_utils:space_harvest_metadata(
         Config, P1, S1, #{H1 => [Index1]}, 10, 10, ?HARVESTER_BATCH(FileId))),
-    
+
     {ok, #{S1 := #{P1 := Stats1}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),
     ?assertEqual(false, maps:get(<<"archival">>, Stats1)),
 
@@ -618,7 +611,7 @@ harvester_index_nonempty_stats_test(Config) ->
     {ok, #{S1 := #{P1 := Stats3}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),
     ?assertEqual(false, maps:get(<<"archival">>, Stats3)),
     assert_equal_stats_fields([<<"currentSeq">>, <<"maxSeq">>, <<"error">>, <<"lastUpdate">>], Stats1, Stats3),
-    
+
     oz_test_utils:unsupport_space(Config, St1, S1),
     {ok, #{S1 := #{P1 := Stats4}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),
     ?assertEqual(true, maps:get(<<"archival">>, Stats4)),
@@ -633,22 +626,23 @@ harvester_index_nonempty_stats_test(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
-init_per_testcase(_, Config) ->
-    oz_test_utils:mock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND).
-
-end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND).
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    ozt_mocks:mock_harvesting_backends(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_harvesting_backends(),
+    ozt_mocks:unmock_time().
 
 %%%===================================================================
 %%% Internal functions
@@ -656,6 +650,6 @@ end_per_suite(_Config) ->
 
 assert_equal_stats_fields(Fields, Stats1, Stats2) ->
     lists:foreach(fun(Field) ->
-        ?assertEqual(maps:get(Field, Stats1), maps:get(Field, Stats2)) 
+        ?assertEqual(maps:get(Field, Stats1), maps:get(Field, Stats2))
     end, Fields).
 

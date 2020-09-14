@@ -28,7 +28,8 @@
 
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     list_users_test/1,
@@ -154,14 +155,12 @@ create_user_invite_token_test(Config) ->
 
 
 get_user_details_test(Config) ->
-    {ok, Creator} = oz_test_utils:create_user(Config, #{
-        <<"fullName">> => <<"creator">>, <<"username">> => <<"creator">>}
-    ),
+    CreatorData = #{<<"fullName">> => <<"creator">>, <<"username">> => <<"creator">>},
+    {ok, Creator} = oz_test_utils:create_user(Config, CreatorData),
     {ok, MemberWithViewPrivs} = oz_test_utils:create_user(Config),
     {ok, MemberWithoutViewPrivs} = oz_test_utils:create_user(Config),
-    {ok, Member} = oz_test_utils:create_user(Config, #{
-        <<"fullName">> => <<"member">>, <<"username">> => <<"member">>}
-    ),
+    MemberData = #{<<"fullName">> => <<"member">>, <<"username">> => <<"member">>},
+    {ok, Member} = oz_test_utils:create_user(Config, MemberData),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(Creator), ?GROUP_NAME1),
@@ -177,11 +176,7 @@ get_user_details_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    lists:foreach(fun({SubjectUser, ExpFullName, ExpUsername}) ->
-        ExpDetails = #{
-            <<"username">> => ExpUsername,
-            <<"fullName">> => ExpFullName
-        },
+    lists:foreach(fun({SubjectUser, UserData}) ->
         ApiTestSpec = #api_test_spec{
             client_spec = #client_spec{
                 correct = [
@@ -206,20 +201,13 @@ get_user_details_test(Config) ->
                 method = get,
                 path = [<<"/groups/">>, Group, <<"/users/">>, SubjectUser],
                 expected_code = ?HTTP_200_OK,
-                expected_body = ExpDetails#{
-                    <<"userId">> => SubjectUser,
-
-                    % TODO VFS-4506 deprecated, included for backward compatibility
-                    <<"name">> => ExpFullName,
-                    <<"login">> => ExpUsername,
-                    <<"alias">> => ExpUsername
-                }
+                expected_body = api_test_expect:shared_user(rest, SubjectUser, UserData)
             },
             logic_spec = #logic_spec{
                 module = group_logic,
                 function = get_user,
                 args = [auth, Group, SubjectUser],
-                expected_result = ?OK_MAP_CONTAINS(ExpDetails)
+                expected_result = api_test_expect:shared_user(logic, SubjectUser, UserData)
             },
             gs_spec = #gs_spec{
                 operation = get,
@@ -227,23 +215,11 @@ get_user_details_test(Config) ->
                     type = od_user, id = SubjectUser, aspect = instance, scope = shared
                 },
                 auth_hint = ?THROUGH_GROUP(Group),
-                expected_result = ?OK_MAP_CONTAINS(ExpDetails#{
-                    <<"gri">> => fun(EncodedGri) ->
-                        ?assertMatch(
-                            #gri{id = SubjectUser},
-                            gri:deserialize(EncodedGri)
-                        )
-                    end,
-
-                    % TODO VFS-4506 deprecated, included for backward compatibility
-                    <<"name">> => ExpFullName,
-                    <<"login">> => ExpUsername,
-                    <<"alias">> => ExpUsername
-                })
+                expected_result = api_test_expect:shared_user(gs, SubjectUser, UserData)
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
-    end, [{Creator, <<"creator">>, <<"creator">>}, {Member, <<"member">>, <<"member">>}]).
+    end, [{Creator, CreatorData}, {Member, MemberData}]).
 
 
 add_user_test(Config) ->
@@ -660,67 +636,48 @@ get_eff_user_details_test(Config) ->
         [?GROUP_VIEW], AllGroupPrivs -- [?GROUP_VIEW]
     ),
 
-    lists:foreach(
-        fun({UserId, UserDetails}) ->
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = lists:usort([
-                        root,
-                        {admin, [?OZ_USERS_VIEW]},
-                        {user, U2}
-                    ]),
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, U1},
-                        {user, NonAdmin}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [
-                        <<"/groups/">>, G1, <<"/effective_users/">>, UserId
-                    ],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = UserDetails#{
-                        <<"userId">> => UserId,
-
-                        % TODO VFS-4506 deprecated, included for backward compatibility
-                        <<"name">> => maps:get(<<"fullName">>, UserDetails),
-                        <<"login">> => maps:get(<<"username">>, UserDetails),
-                        <<"alias">> => maps:get(<<"username">>, UserDetails)
-                    }
-                },
-                logic_spec = #logic_spec{
-                    module = group_logic,
-                    function = get_eff_user,
-                    args = [auth, G1, UserId],
-                    expected_result = ?OK_MAP_CONTAINS(UserDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_user, id = UserId,
-                        aspect = instance, scope = shared
-                    },
-                    auth_hint = ?THROUGH_GROUP(G1),
-                    expected_result = ?OK_MAP_CONTAINS(UserDetails#{
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = UId} = gri:deserialize(EncodedGri),
-                            ?assertEqual(UId, UserId)
-                        end,
-
-                        % TODO VFS-4506 deprecated, included for backward compatibility
-                        <<"name">> => maps:get(<<"fullName">>, UserDetails),
-                        <<"login">> => maps:get(<<"username">>, UserDetails),
-                        <<"alias">> => maps:get(<<"username">>, UserDetails)
-                    })
-                }
+    lists:foreach(fun({UserId, UserData}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = lists:usort([
+                    root,
+                    {admin, [?OZ_USERS_VIEW]},
+                    {user, U2}
+                ]),
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, U1},
+                    {user, NonAdmin}
+                ]
             },
+            rest_spec = #rest_spec{
+                method = get,
+                path = [
+                    <<"/groups/">>, G1, <<"/effective_users/">>, UserId
+                ],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:shared_user(rest, UserId, UserData)
+            },
+            logic_spec = #logic_spec{
+                module = group_logic,
+                function = get_eff_user,
+                args = [auth, G1, UserId],
+                expected_result = api_test_expect:shared_user(logic, UserId, UserData)
+            },
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{
+                    type = od_user, id = UserId,
+                    aspect = instance, scope = shared
+                },
+                auth_hint = ?THROUGH_GROUP(G1),
+                expected_result = api_test_expect:shared_user(gs, UserId, UserData)
+            }
+        },
 
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-        end, EffUsers
-    ).
+    end, EffUsers).
 
 
 list_eff_user_privileges_test(Config) ->
@@ -950,13 +907,18 @@ get_eff_user_membership_intermediaries(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_time().

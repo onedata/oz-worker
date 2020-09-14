@@ -21,7 +21,10 @@
 -include("api_test_utils.hrl").
 
 %% API
--export([all/0, init_per_suite/1, end_per_suite/1]).
+-export([
+    all/0,
+    init_per_suite/1, end_per_suite/1
+]).
 -export([
     multiple_connections_per_session/1,
     multiple_sessions_per_user/1,

@@ -210,8 +210,11 @@ get_protected_data(Auth, GroupId) ->
 -spec get_shared_data(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, #od_group{}} | errors:error().
 get_shared_data(Auth, GroupId) ->
-    % Currently, these two return the same data
-    get_protected_data(Auth, GroupId).
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared}
+    }).
 
 
 -spec get_name(aai:auth(), od_group:id()) ->

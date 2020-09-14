@@ -128,7 +128,7 @@
 -define(GROUP_DETAILS(GroupName),
     #{
         <<"name">> => GroupName,
-        <<"type">> => lists:nth(rand:uniform(4), ?GROUP_TYPES)
+        <<"type">> => lists:nth(length(?GROUP_TYPES), ?GROUP_TYPES)
     }
 ).
 
@@ -161,6 +161,7 @@
     #{
         <<"name">> => ProviderName,
         <<"adminEmail">> => <<"admin@onezone.example.com">>,
+        <<"subdomainDelegation">> => false,
         <<"domain">> => Domain,
         <<"latitude">> => rand:uniform() * 90,
         <<"longitude">> => rand:uniform() * 180
@@ -262,12 +263,9 @@
 -define(HARVESTER_NAME2, <<"harvester2">>).
 -define(HARVESTER_ENDPOINT1, <<"test.endpoint1:9200">>).
 -define(HARVESTER_ENDPOINT2, <<"test.endpoint2">>).
--define(HARVESTER_MOCK_BACKEND_BINARY, <<"harvester_mock_backend">>).
--define(HARVESTER_MOCK_BACKEND, binary_to_atom(?HARVESTER_MOCK_BACKEND_BINARY, utf8)).
--define(HARVESTER_MOCK_BACKEND2_BINARY, <<"harvester_mock_backend2">>).
--define(HARVESTER_MOCK_BACKEND2, binary_to_atom(?HARVESTER_MOCK_BACKEND2_BINARY, utf8)).
+-define(HARVESTER_MOCK_BACKEND, harvester_mock_backend).
+-define(HARVESTER_MOCK_BACKEND2, harvester_mock_backend2).
 -define(HARVESTER_BACKEND, elasticsearch_harvesting_backend).
--define(HARVESTER_BACKEND_BINARY, atom_to_binary(?HARVESTER_BACKEND, utf8)).
 -define(HARVESTER_GUI_PLUGIN_CONFIG, #{<<"a">>=><<"b">>}).
 
 -define(HARVESTER_INDEX_NAME, <<"index_name">>).
@@ -277,14 +275,6 @@
     <<"schema">> => ?HARVESTER_INDEX_SCHEMA
 }).
 -define(HARVESTER_INDEX_CREATE_DATA, ?HARVESTER_INDEX_CREATE_DATA(?HARVESTER_INDEX_NAME)).
-
--define(HARVESTER_PROTECTED_DATA(HarvesterName),
-    #{
-        <<"name">> => HarvesterName,
-        <<"harvestingBackendEndpoint">> => ?HARVESTER_ENDPOINT1,
-        <<"harvestingBackendType">> => ?HARVESTER_MOCK_BACKEND_BINARY,
-        <<"public">> => false
-    }).
 
 -define(HARVESTER_SHARED_DATA(HarvesterName),
     #{
@@ -298,8 +288,8 @@
         <<"harvestingBackendType">> => HarvestingBackend,
         <<"guiPluginConfig">> => ?HARVESTER_GUI_PLUGIN_CONFIG
     }).
--define(HARVESTER_CREATE_DATA(HarvesterName), ?HARVESTER_CREATE_DATA(HarvesterName, ?HARVESTER_MOCK_BACKEND_BINARY)).
--define(HARVESTER_CREATE_DATA, ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_BACKEND_BINARY)).
+-define(HARVESTER_CREATE_DATA(HarvesterName), ?HARVESTER_CREATE_DATA(HarvesterName, ?HARVESTER_MOCK_BACKEND)).
+-define(HARVESTER_CREATE_DATA, ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_BACKEND)).
 
 -define(HARVESTER_MOCKED_QUERY_DATA_MAP, #{<<"key">> => <<"mocked_query_data">>}).
 

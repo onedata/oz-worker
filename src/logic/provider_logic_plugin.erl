@@ -840,7 +840,8 @@ create_provider(Auth, Data, ProviderId, GRI) ->
             subdomain_delegation = SubdomainDelegation,
             domain = Domain, subdomain = Subdomain,
             latitude = Latitude, longitude = Longitude,
-            admin_email = AdminEmail
+            admin_email = AdminEmail,
+            creation_time = time_utils:cluster_time_seconds()
         },
 
         try

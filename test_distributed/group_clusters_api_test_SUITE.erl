@@ -28,7 +28,8 @@
 
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     list_clusters_test/1,
@@ -225,7 +226,7 @@ join_cluster_test(Config) ->
             correct_values = #{<<"token">> => [Serialized]}
         }
     },
-    VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
+    VerifyEndFun1 = fun(_ShouldSucceed, _Env, _) ->
         oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token#token.id)
     end,
     ?assert(api_test_utils:run_tests(
@@ -242,22 +243,10 @@ get_cluster_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
+    {ok, ProviderAdmin} = oz_test_utils:create_user(Config),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ProviderAdmin, ?PROVIDER_NAME1),
     ClusterId = ProviderId,
     {ok, G1} = oz_test_utils:cluster_add_group(Config, ClusterId, G1),
-
-    DefaultVersionInfo = #{
-        <<"release">> => ?DEFAULT_RELEASE_VERSION,
-        <<"build">> => ?DEFAULT_BUILD_VERSION,
-        <<"gui">> => ?EMPTY_GUI_HASH
-    },
-
-    ExpDetails = #{
-        <<"type">> => ?ONEPROVIDER,
-        <<"workerVersion">> => DefaultVersionInfo,
-        <<"onepanelVersion">> => DefaultVersionInfo,
-        <<"onepanelProxy">> => true
-    },
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -276,16 +265,13 @@ get_cluster_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/clusters/">>, ClusterId],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpDetails#{
-                <<"clusterId">> => ClusterId,
-                <<"type">> => <<"oneprovider">>
-            }
+            expected_body = api_test_expect:protected_cluster(rest, ClusterId, ?ONEPROVIDER, ?SUB(user, ProviderAdmin))
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_cluster,
             args = [auth, G1, ClusterId],
-            expected_result = ?OK_MAP_CONTAINS(ExpDetails)
+            expected_result = api_test_expect:protected_cluster(logic, ClusterId, ?ONEPROVIDER, ?SUB(user, ProviderAdmin))
         }
         % @todo gs
     },
@@ -422,86 +408,71 @@ get_eff_cluster_details_test(Config) ->
         {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_providers_env(Config),
 
-    EffClustersList = lists:map(fun({ProviderId, _}) ->
+    EffProviderClusters = lists:map(fun({ProviderId, _}) ->
         ClusterId = ProviderId,
         % G1 is a child of all groups, so it inherits effective memberships from them
         oz_test_utils:cluster_add_group(Config, ClusterId, lists_utils:random_element([G1, G2, G3, G4, G5])),
-
-        {ok, #od_cluster{
-            type = Type,
-            worker_version = {WRelease, WBuild, WGui},
-            onepanel_version = {ORelease, OBuild, OGui},
-            onepanel_proxy = OnepanelProxy
-        }} = oz_test_utils:get_cluster(Config, ClusterId),
-
-        {ClusterId, #{
-            <<"type">> => Type,
-            <<"workerVersion">> => #{
-                <<"release">> => WRelease,
-                <<"build">> => WBuild,
-                <<"gui">> => WGui
-            },
-            <<"onepanelVersion">> => #{
-                <<"release">> => ORelease,
-                <<"build">> => OBuild,
-                <<"gui">> => OGui
-            },
-            <<"onepanelProxy">> => OnepanelProxy
-        }}
+        {ClusterId, ?ONEPROVIDER}
     end, EffProvidersList),
+
+    oz_test_utils:cluster_add_group(Config, ?ONEZONE_CLUSTER_ID, lists_utils:random_element([G1, G2, G3, G4, G5])),
+    EffClustersList = [{?ONEZONE_CLUSTER_ID, ?ONEZONE} | EffProviderClusters],
+
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    lists:foreach(
-        fun({ClusterId, ClusterDetails}) ->
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {admin, [?OZ_CLUSTERS_VIEW]},
-                        {user, U1}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, U2},
-                        {user, NonAdmin}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [
-                        <<"/groups/">>, G1, <<"/effective_clusters/">>, ClusterId
-                    ],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = ClusterDetails#{
-                        <<"clusterId">> => ClusterId,
-                        <<"type">> => <<"oneprovider">>
-                    }
-                },
-                logic_spec = #logic_spec{
-                    module = group_logic,
-                    function = get_eff_cluster,
-                    args = [auth, G1, ClusterId],
-                    expected_result = ?OK_MAP_CONTAINS(ClusterDetails)
-                }
-                % @todo gs
+    lists:foreach(fun({ClusterId, Type}) ->
+        Creator = case Type of
+            ?ONEZONE -> ?SUB(nobody);
+            _ -> ?SUB(user, U1)
+        end,
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_CLUSTERS_VIEW]},
+                    {user, U1}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, U2},
+                    {user, NonAdmin}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/groups/">>, G1, <<"/effective_clusters/">>, ClusterId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_cluster(rest, ClusterId, Type, Creator)
+            },
+            logic_spec = #logic_spec{
+                module = group_logic,
+                function = get_eff_cluster,
+                args = [auth, G1, ClusterId],
+                expected_result = api_test_expect:protected_cluster(logic, ClusterId, Type, Creator)
+            }
+            % @todo gs
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-        end, EffClustersList
-    ).
+    end, EffClustersList).
 
 
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_time().

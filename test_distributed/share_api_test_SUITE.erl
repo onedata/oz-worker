@@ -255,25 +255,15 @@ get_test(Config, ShareId, FileType) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    Description = str_utils:rand_hex(rand:uniform(1000) - 1),
-    {ok, ShareId} = oz_test_utils:create_share(Config, ?ROOT, #{
+    ShareData = #{
         <<"shareId">> => ShareId,
         <<"spaceId">> => S1,
         <<"name">> => ?SHARE_NAME1,
-        <<"description">> => Description,
+        <<"description">> => str_utils:rand_hex(rand:uniform(1000) - 1),
         <<"rootFileId">> => ?ROOT_FILE_ID,
         <<"fileType">> => FileType
-    }),
-    SharePublicURL = oz_test_utils:get_share_public_url(Config, ShareId),
-    SharePublicDetails = #{
-        <<"name">> => ?SHARE_NAME1,
-        <<"description">> => Description,
-        <<"publicUrl">> => SharePublicURL,
-        <<"rootFileId">> => ?ROOT_FILE_ID,
-        <<"fileType">> => atom_to_binary(FileType, utf8),
-        <<"handleId">> => null
     },
-    SharePrivateDetails = SharePublicDetails#{<<"spaceId">> => S1},
+    {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(Owner), ShareData),
 
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
@@ -294,41 +284,18 @@ get_test(Config, ShareId, FileType) ->
             method = get,
             path = [<<"/shares/">>, ShareId],
             expected_code = ?HTTP_200_OK,
-            expected_body = SharePrivateDetails#{
-                <<"handleId">> => null,
-                % In REST, the rootFileId GUID is converted to ObjectID
-                <<"rootFileId">> => element(2, {ok, _} = file_id:guid_to_objectid(?ROOT_FILE_ID)),
-                <<"shareId">> => ShareId
-            }
+            expected_body = api_test_expect:private_share(rest, ShareId, ShareData, ?SUB(user, Owner))
         },
         logic_spec = #logic_spec{
             module = share_logic,
             function = get,
             args = [auth, ShareId],
-            expected_result = ?OK_TERM(
-                fun(#od_share{
-                    name = ShareName, public_url = PublicURL,
-                    space = Space, handle = undefined,
-                    root_file = RootFile, file_type = ReceivedFileType
-                }) ->
-                    ?assertEqual(?SHARE_NAME1, ShareName),
-                    ?assertEqual(?ROOT_FILE_ID, RootFile),
-                    ?assertEqual(FileType, ReceivedFileType),
-                    ?assertEqual(Space, S1),
-                    ?assertEqual(SharePublicURL, PublicURL)
-                end
-            )
+            expected_result = api_test_expect:private_share(logic, ShareId, ShareData, ?SUB(user, Owner))
         },
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_share, id = ShareId, aspect = instance},
-            expected_result = ?OK_MAP_CONTAINS(SharePrivateDetails#{
-                <<"handleId">> => null,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(ShareId, Id)
-                end
-            })
+            expected_result = api_test_expect:private_share(gs, ShareId, ShareData, ?SUB(user, Owner))
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
@@ -350,20 +317,12 @@ get_test(Config, ShareId, FileType) ->
             module = share_logic,
             function = get_public_data,
             args = [auth, ShareId],
-            expected_result = ?OK_MAP_CONTAINS(SharePublicDetails#{
-                <<"fileType">> => FileType % atom is expected
-            })
+            expected_result = api_test_expect:public_share(logic, ShareId, ShareData)
         },
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_share, id = ShareId, aspect = instance, scope = public},
-            expected_result = ?OK_MAP_CONTAINS(SharePublicDetails#{
-                <<"handleId">> => null,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(ShareId, Id)
-                end
-            })
+            expected_result = api_test_expect:public_share(gs, ShareId, ShareData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec)).
@@ -640,17 +599,14 @@ terminate_provider_graphsync_channel(Config, ProviderId, ClientPid) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
-
 
 init_per_testcase(choose_provider_for_public_view_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
@@ -658,14 +614,14 @@ init_per_testcase(choose_provider_for_public_view_test, Config) ->
     ok = test_utils:mock_expect(Nodes, oz_worker, get_release_version, fun() ->
         <<"19.09.3">>
     end),
-    Config;
+    init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
     Config.
-
 
 end_per_testcase(choose_provider_for_public_view_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, oz_worker);
+    test_utils:mock_unload(Nodes, oz_worker),
+    end_per_testcase(default, Config);
 end_per_testcase(_, _Config) ->
-    ok.
-
+    ozt_mocks:unmock_time().

@@ -1040,13 +1040,13 @@ create_space(Config, Client) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_space(Config :: term(), Client :: aai:auth(),
-    Name :: od_space:name()) -> {ok, od_space:id()}.
-create_space(Config, Client, Name) ->
+    Name :: od_space:name() | entity_logic:data()) -> {ok, od_space:id()}.
+create_space(Config, Client, NameOdData) ->
     Result = case Client of
         ?USER(UserId) ->
-            call_oz(Config, user_logic, create_space, [Client, UserId, Name]);
+            call_oz(Config, user_logic, create_space, [Client, UserId, NameOdData]);
         _ ->
-            call_oz(Config, space_logic, create, [Client, Name])
+            call_oz(Config, space_logic, create, [Client, NameOdData])
     end,
     ?assertMatch({ok, _}, Result).
 

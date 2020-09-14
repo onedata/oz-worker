@@ -98,13 +98,15 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
     #{
         <<"name">> := Name,
         <<"providers">> := Providers,
-        <<"creator">> := Creator
+        <<"creator">> := Creator,
+        <<"creationTime">> := CreationTime
     } = SpaceData,
     rest_translator:ok_body_reply(#{
         <<"spaceId">> => SpaceId,
         <<"name">> => Name,
         <<"providers">> => Providers,
-        <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody)))
+        <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
+        <<"creationTime">> => CreationTime
     });
 
 get_response(#gri{aspect = owners}, Users) ->

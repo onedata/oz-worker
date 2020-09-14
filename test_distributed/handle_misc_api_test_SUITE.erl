@@ -280,14 +280,14 @@ get_test(Config) ->
         Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
     ),
 
-    HandleDetails = #{
+    HandleData = #{
         <<"handleServiceId">> => HService,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ShareId,
         <<"metadata">> => ?DC_METADATA
     },
     {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
+        Config, ?USER(U1), HandleData
     ),
     oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, [], [
         ?HANDLE_VIEW
@@ -384,15 +384,13 @@ get_test(Config) ->
             method = get,
             path = [<<"/handles/">>, HandleId],
             expected_code = ?HTTP_200_OK,
-            expected_body = {contains, HandleDetails#{
-                <<"handleId">> => HandleId
-            }}
+            expected_body = api_test_expect:protected_handle(rest, HandleId, HandleData, ?SUB(user, U1))
         },
         logic_spec = #logic_spec{
             module = handle_logic,
             function = get_protected_data,
             args = [auth, HandleId],
-            expected_result = ?OK_MAP_CONTAINS(HandleDetails)
+            expected_result = api_test_expect:protected_handle(logic, HandleId, HandleData, ?SUB(user, U1))
         }
         % TODO gs
     },
@@ -558,23 +556,21 @@ delete_test(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
-
 init_per_testcase(_, Config) ->
-    oz_test_utils:mock_handle_proxy(Config),
+    ozt_mocks:mock_time(),
+    ozt_mocks:mock_handle_proxy(),
     Config.
 
-
-end_per_testcase(_, Config) ->
-    oz_test_utils:delete_all_entities(Config),
-    oz_test_utils:unmock_handle_proxy(Config).
+end_per_testcase(_, _Config) ->
+    ozt:delete_all_entities(),
+    ozt_mocks:unmock_handle_proxy(),
+    ozt_mocks:unmock_time().

@@ -28,8 +28,8 @@
 
 -export([
     all/0,
-    init_per_testcase/2, end_per_testcase/2,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     join_space_test/1,
@@ -187,7 +187,7 @@ join_space_test(Config) ->
             correct_values = #{<<"token">> => [Serialized2]}
         }
     },
-    VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
+    VerifyEndFun1 = fun(_ShouldSucceed, _Env, _) ->
         oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token2#token.id)
     end,
     ?assert(api_test_utils:run_tests(
@@ -428,9 +428,8 @@ get_space_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, S1} = oz_test_utils:create_space(
-        Config, ?ROOT, ?SPACE_NAME1
-    ),
+    SpaceData = #{<<"name">> => ?SPACE_NAME1},
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, SpaceData),
     oz_test_utils:harvester_add_space(Config, H1, S1),
 
     ApiTestSpec = #api_test_spec{
@@ -450,20 +449,13 @@ get_space_test(Config) ->
             method = get,
             path = [<<"/harvesters/">>, H1, <<"/spaces/">>, S1],
             expected_code = ?HTTP_200_OK,
-            expected_body = {contains, #{
-                <<"spaceId">> => S1,
-                <<"name">> => ?SPACE_NAME1,
-                <<"providers">> => #{}
-            }}
+            expected_body = api_test_expect:protected_space(rest, S1, SpaceData, ?SUB(nobody))
         },
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_space,
             args = [auth, H1, S1],
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?SPACE_NAME1,
-                <<"providers">> => #{}
-            })
+            expected_result = api_test_expect:protected_space(logic, S1, SpaceData, ?SUB(nobody))
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -471,14 +463,7 @@ get_space_test(Config) ->
                 type = od_space, id = S1, aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_HARVESTER(H1),
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?SPACE_NAME1,
-                <<"providers">> => #{},
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(Id, S1)
-                end
-            })
+            expected_result = api_test_expect:protected_space(gs, S1, SpaceData, ?SUB(nobody))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -529,7 +514,7 @@ get_eff_provider_test(Config) ->
     {H1, Providers, _Spaces, {U1, NonAdmin}} =
         api_test_scenarios:create_harvester_eff_providers_env(Config),
 
-    lists:foreach(fun({ProviderId, ProviderDetails}) ->
+    lists:foreach(fun({ProviderId, ProviderData}) ->
         ApiTestSpec = #api_test_spec{
             client_spec = #client_spec{
                 correct = [
@@ -546,9 +531,7 @@ get_eff_provider_test(Config) ->
                 module = harvester_logic,
                 function = get_eff_provider,
                 args = [auth, H1, ProviderId],
-                expected_result = ?OK_MAP(#{
-                    <<"name">> => maps:get(<<"name">>, ProviderDetails)
-                })
+                expected_result = api_test_expect:shared_provider(logic, ProviderId, ProviderData)
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
@@ -558,19 +541,20 @@ get_eff_provider_test(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
-init_per_testcase(_, Config) ->
-    oz_test_utils:mock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND).
-
-end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND).
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    ozt_mocks:mock_harvesting_backends(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_harvesting_backends(),
+    ozt_mocks:unmock_time().

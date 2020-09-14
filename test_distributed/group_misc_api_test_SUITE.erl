@@ -28,7 +28,8 @@
 
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     create_test/1,
@@ -227,9 +228,8 @@ get_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1),
-        #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
-    ),
+    GroupData = #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1},
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), GroupData),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, [], [
         ?GROUP_VIEW
     ]),
@@ -331,24 +331,14 @@ get_test(Config) ->
             module = group_logic,
             function = get_shared_data,
             args = [auth, G1],
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1
-            })
+            expected_result = api_test_expect:shared_group(logic, G1, GroupData)
         },
         gs_spec = GsSpec = #gs_spec{
             operation = get,
             gri = #gri{
                 type = od_group, id = G1, aspect = instance, scope = shared
             },
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1_BIN,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(G1, Id)
-                end
-            })
+            expected_result = api_test_expect:shared_group(gs, G1, GroupData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)),
@@ -359,19 +349,17 @@ get_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"groupId">> => G1,
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1_BIN
-            }
+            expected_body = api_test_expect:protected_group(rest, G1, GroupData, ?SUB(user, U1))
         },
         logic_spec = LogicSpec#logic_spec{
-            function = get_protected_data
+            function = get_protected_data,
+            expected_result = api_test_expect:protected_group(logic, G1, GroupData, ?SUB(user, U1))
         },
         gs_spec = GsSpec#gs_spec{
             gri = #gri{
                 type = od_group, id = G1, aspect = instance, scope = protected
-            }
+            },
+            expected_result = api_test_expect:protected_group(gs, G1, GroupData, ?SUB(user, U1))
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
@@ -815,48 +803,44 @@ get_eff_provider_test(Config) ->
         EffProvidersList, _Spaces, [{G1, _} | _Groups], {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_providers_env(Config),
 
-    lists:foreach(
-        fun({ProvId, ProvDetails}) ->
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {admin, [?OZ_PROVIDERS_VIEW]},
-                        {user, U1}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        % U2 does not have the GROUP_VIEW privilege
-                        {user, U2},
-                        {user, NonAdmin}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [
-                        <<"/groups/">>, G1, <<"/effective_providers/">>, ProvId
-                    ],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = ProvDetails#{<<"providerId">> => ProvId}
-                },
-                logic_spec = #logic_spec{
-                    module = group_logic,
-                    function = get_eff_provider,
-                    args = [auth, G1, ProvId],
-                    expected_result = ?OK_MAP_CONTAINS(ProvDetails)
-                }
-                % @todo gs
+    lists:foreach(fun({ProvId, ProviderData}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_PROVIDERS_VIEW]},
+                    {user, U1}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    % U2 does not have the GROUP_VIEW privilege
+                    {user, U2},
+                    {user, NonAdmin}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+            rest_spec = #rest_spec{
+                method = get,
+                path = [
+                    <<"/groups/">>, G1, <<"/effective_providers/">>, ProvId
+                ],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_provider(rest, ProvId, ProviderData)
+            },
+            logic_spec = #logic_spec{
+                module = group_logic,
+                function = get_eff_provider,
+                args = [auth, G1, ProvId],
+                expected_result = api_test_expect:protected_provider(logic, ProvId, ProviderData)
+            }
+            % @todo gs
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-        end, EffProvidersList
-    ).
+    end, EffProvidersList).
 
 
 get_spaces_in_eff_provider_test(Config) ->
-    {ok, {ProviderId, _}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_DETAILS(?UNIQUE_STRING)#{<<"subdomainDelegation">> => false}
-    ),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_DETAILS(?UNIQUE_STRING)),
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -919,13 +903,18 @@ get_spaces_in_eff_provider_test(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:mock_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_time().

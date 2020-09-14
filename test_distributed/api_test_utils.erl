@@ -47,6 +47,7 @@ default_verify_fun(_ShouldSucceed, _Env, _Data) -> ok.
 
 % Runs possible combinations of tests on a given endpoint (logic + REST + GS)
 run_tests(Config, ApiTestSpec) ->
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     run_tests(
         Config, ApiTestSpec,
         fun default_env_setup/0,
@@ -243,8 +244,8 @@ log_rest_test_result(RestSpec, Client, Data, Description,
     "Body: ~p~n"
     "Client: ~s~n"
     "Unmet expectation: ~p~n"
-    "Got: ~p~n"
     "Expected: ~p~n"
+    "Got:      ~p~n"
     "--------~n"
     "Full response: ~n"
     "   Code: ~p~n"
@@ -255,7 +256,7 @@ log_rest_test_result(RestSpec, Client, Data, Description,
         RestSpec#rest_spec.path,
         Data,
         aai:auth_to_printable(prepare_logic_auth(Client)),
-        UnmetExp, Got, Expected, Code, Headers, Body
+        UnmetExp, Expected, Got, Code, Headers, Body
     ]),
     throw(fail).
 
@@ -407,7 +408,7 @@ log_logic_test_result(LogicSpec, Client, Description, {result, Result}) ->
     "Args: ~p~n"
     "Client: ~s~n"
     "Expected: ~p~n"
-    "Got: ~p", [
+    "Got:      ~p", [
         Description,
         LogicSpec#logic_spec.module,
         LogicSpec#logic_spec.function,
@@ -579,7 +580,18 @@ check_gs_call(GsSpec, GsClient, Data) ->
     ),
 
     try
-        verify_gs_result(Result, ExpResult)
+        % make sure that every response with resource data format has a revision,
+        % but do not check the revision against expected value (it is hard to
+        % predict in tests)
+        ResultWithoutRevision = case Result of
+            {ok, #gs_resp_graph{data_format = resource, data = Map}} ->
+                {Revision, NewMap} = maps:take(<<"revision">>, Map),
+                ?assert(Revision >= 1),
+                {ok, #gs_resp_graph{data_format = resource, data = NewMap}};
+            Other ->
+                Other
+        end,
+        verify_gs_result(ResultWithoutRevision, ExpResult)
     of
         false ->
             {result, Result};
@@ -603,20 +615,20 @@ verify_gs_result({error, Error}, ?ERROR_REASON({error, Error})) ->
     true;
 verify_gs_result({ok, ?GS_RESP(Map)}, ?OK_MAP(ExpMap)) when is_map(Map) ->
     case maps:take(<<"gri">>, ExpMap) of
-        {GriVerifyFun, ExpMap2} ->
+        {GriVerifyFun, ExpMap2} when is_function(GriVerifyFun, 1) ->
             {Gri, Map2} = maps:take(<<"gri">>, Map),
             GriVerifyFun(Gri),
             Map2 =:= ExpMap2;
-        error ->
+        _ ->
             Map =:= ExpMap
     end;
 verify_gs_result({ok, ?GS_RESP(Map)}, ?OK_MAP_CONTAINS(ExpMap)) when is_map(Map) ->
     case maps:take(<<"gri">>, ExpMap) of
-        {GriVerifyFun, ExpMap2} ->
+        {GriVerifyFun, ExpMap2} when is_function(GriVerifyFun, 1) ->
             {Gri, Map2} = maps:take(<<"gri">>, Map),
             GriVerifyFun(Gri),
             rest_test_utils:contains_map(Map2, ExpMap2);
-        error ->
+        _ ->
             rest_test_utils:contains_map(Map, ExpMap)
     end;
 verify_gs_result({ok, ?GS_RESP(Result)}, ?OK_TERM(VerifyFun)) ->
@@ -637,7 +649,7 @@ log_gs_test_result(_, _, _, _, false = _Result) ->
 
 % Displays an error when a gs test fails
 log_gs_test_result(GsSpec, Client, Data, Description, {result, Result}) ->
-    ct:pal("API Gs test failed: ~s~n"
+    ct:pal("API GS test failed: ~s~n"
     "Client: ~p~n"
     "Operation: ~p~n"
     "Gri: ~p~n"
@@ -645,7 +657,7 @@ log_gs_test_result(GsSpec, Client, Data, Description, {result, Result}) ->
     "Subscribe: ~p~n"
     "Auth hint: ~p~n"
     "Expected: ~p~n"
-    "Got: ~p", [
+    "Got:      ~p", [
         Description,
         aai:auth_to_printable(prepare_logic_auth(Client)),
         GsSpec#gs_spec.operation,
