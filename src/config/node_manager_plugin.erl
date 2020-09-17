@@ -19,7 +19,7 @@
 
 %% node_manager_plugin_default callbacks
 -export([installed_cluster_generation/0]).
--export([oldest_known_cluster_generation/0]).
+-export([oldest_upgradable_cluster_generation/0]).
 -export([app_name/0, cm_nodes/0, db_nodes/0]).
 -export([before_init/0]).
 -export([before_cluster_upgrade/0]).
@@ -35,12 +35,16 @@
 
 -define(DNS_UPDATE_RETRY_INTERVAL, 5000).
 
+% List of all known cluster generations.
 % When cluster is not in newest generation it will be upgraded during initialization.
 % This can be used to e.g. move models between services.
-% Oldest known generation is the lowest one that can be directly upgraded to newest.
+% Oldest upgradable generation is the lowest one that can be directly upgraded to newest.
 % Human readable version is included to for logging purposes.
--define(INSTALLED_CLUSTER_GENERATION, 2).
--define(OLDEST_KNOWN_CLUSTER_GENERATION, {1, <<"19.02.*">>}).
+-define(CLUSTER_GENERATIONS, [
+    {1, <<"19.02.*">>},
+    {2, oz_worker:get_release_version()}
+]).
+-define(OLDEST_UPGRADABLE_CLUSTER_GENERATION, 1).
 
 %%%===================================================================
 %%% node_manager_plugin_default callbacks
@@ -53,18 +57,19 @@
 %%--------------------------------------------------------------------
 -spec installed_cluster_generation() -> node_manager:cluster_generation().
 installed_cluster_generation() ->
-    ?INSTALLED_CLUSTER_GENERATION.
-
+    {ClusterGeneration, _} = lists:last(?CLUSTER_GENERATIONS),
+    ClusterGeneration.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Overrides {@link node_manager_plugin_default:oldest_known_cluster_generation/0}.
+%% Overrides {@link node_manager_plugin_default:oldest_upgradable_cluster_generation/0}.
 %% @end
 %%--------------------------------------------------------------------
--spec oldest_known_cluster_generation() ->
+-spec oldest_upgradable_cluster_generation() ->
     {node_manager:cluster_generation(), HumanReadableVersion :: binary()}.
-oldest_known_cluster_generation() ->
-    ?OLDEST_KNOWN_CLUSTER_GENERATION.
+oldest_upgradable_cluster_generation() ->
+    Version = kv_utils:get(?OLDEST_UPGRADABLE_CLUSTER_GENERATION, ?CLUSTER_GENERATIONS),
+    {?OLDEST_UPGRADABLE_CLUSTER_GENERATION, Version}.
 
 
 %%--------------------------------------------------------------------
