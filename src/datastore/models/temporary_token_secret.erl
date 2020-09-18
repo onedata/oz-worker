@@ -54,14 +54,7 @@
 %%--------------------------------------------------------------------
 -spec get_for_subject(aai:subject()) -> {tokens:secret(), tokens:temporary_token_generation()}.
 get_for_subject(Subject) ->
-    Key = subject_to_key(Subject),
-    {ok, #document{value = Record}} = case datastore_model:get(?CTX, Key) of
-        {error, not_found} ->
-            init_secret_for_subject(Subject),
-            datastore_model:get(?CTX, Key);
-        OtherResult ->
-            OtherResult
-    end,
+    {true, {Record, _}} = fetch_entity(Subject),
     {Record#temporary_token_secret.secret, Record#temporary_token_secret.generation}.
 
 
@@ -167,18 +160,27 @@ is_subscribable(provider, shared) -> true;
 is_subscribable(_, _) -> false.
 
 
--spec fetch_entity(gri:gri()) ->
+-spec fetch_entity(gri:gri() | aai:subject()) ->
     {true, entity_logic:versioned_entity()} | false | errors:error().
-fetch_entity(#gri{id = SubjectId, aspect = Aspect, scope = shared}) ->
-    Subject = case Aspect of
-        user -> ?SUB(user, SubjectId);
-        provider -> ?SUB(?ONEPROVIDER, SubjectId)
+fetch_entity(#gri{id = SubjectId, aspect = user, scope = shared}) ->
+    fetch_entity(?SUB(user, SubjectId));
+fetch_entity(#gri{id = SubjectId, aspect = provider, scope = shared}) ->
+    fetch_entity(?SUB(?ONEPROVIDER, SubjectId));
+fetch_entity(Subject) ->
+    Key = subject_to_key(Subject),
+    FetchResult = case datastore_model:get(?CTX, Key) of
+        {error, not_found} ->
+            init_secret_for_subject(Subject),
+            datastore_model:get(?CTX, Key);
+        OtherResult ->
+            OtherResult
     end,
-    try
-        {_, Generation} = ?MODULE:get_for_subject(Subject),
-        {true, {Generation, Generation}}
-    catch _:_ ->
-        ?ERROR_NOT_FOUND
+    case FetchResult of
+        {ok, #document{value = Record, revs = [DbRev | _]}} ->
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
+            {true, {Record, Revision}};
+        _ ->
+            ?ERROR_NOT_FOUND
     end.
 
 
@@ -189,8 +191,8 @@ create(_) ->
 
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
-get(#el_req{gri = #gri{scope = shared}}, Generation) ->
-    {ok, Generation}.
+get(#el_req{gri = #gri{scope = shared}}, Record) ->
+    {ok, Record#temporary_token_secret.generation}.
 
 
 -spec update(entity_logic:req()) -> errors:error().
