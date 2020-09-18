@@ -116,9 +116,13 @@ ping(Endpoint) ->
 create_index(Endpoint, IndexId, IndexInfo, undefined) ->
     create_index(Endpoint, IndexId, IndexInfo, <<"{}">>);
 create_index(Endpoint, IndexId, IndexInfo, Schema) ->
-    ExtendedSchema = extend_schema(IndexInfo, json_utils:decode(Schema)),
-    ?EXTRACT_OK(do_request(
-        put, Endpoint, IndexId, <<>>, json_utils:encode(ExtendedSchema), [{200, 300}])).
+    try
+        ExtendedSchema = extend_schema(IndexInfo, json_utils:decode(Schema)),
+        ?EXTRACT_OK(do_request(
+            put, Endpoint, IndexId, <<>>, json_utils:encode(ExtendedSchema), [{200, 300}]))
+    catch _:invalid_json ->
+        ?ERROR_BAD_VALUE_JSON(<<"schema">>)
+    end.
 
 
 %%--------------------------------------------------------------------
