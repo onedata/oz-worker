@@ -16,6 +16,7 @@
 -include_lib("cluster_worker/include/elements/node_manager/node_manager.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
+-include_lib("ctool/include/onedata.hrl").
 
 %% node_manager_plugin_default callbacks
 -export([cluster_generations/0]).
@@ -41,7 +42,7 @@
 % Oldest upgradable generation is the lowest one that can be directly upgraded to newest.
 % Human readable version is included to for logging purposes.
 -define(CLUSTER_GENERATIONS, [
-    {1, <<"19.02.*">>},
+    {1, ?LINE_19_02},
     {2, oz_worker:get_release_version()}
 ]).
 -define(OLDEST_UPGRADABLE_CLUSTER_GENERATION, 1).
