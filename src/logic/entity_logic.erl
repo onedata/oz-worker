@@ -251,7 +251,7 @@ normalize_name(Name, DefaultName) ->
     MaxLength :: non_neg_integer(), DefaultName :: term()) -> term().
 normalize_name(Name, FirstRgx, FirstReplace, MiddleRgx, MiddleReplace, LastRgx, LastReplace, MaxLength, DefaultName) ->
     TrimmedLeft = re:replace(Name,
-        <<"^[^", FirstRgx/binary, "]*(?=[", FirstRgx/binary, "])">>, FirstReplace,
+        <<"^[^", FirstRgx/binary, "]*">>, FirstReplace,
         [{return, binary}, unicode, ucp, global]
     ),
     TrimmedMiddle = re:replace(TrimmedLeft,
@@ -261,7 +261,7 @@ normalize_name(Name, FirstRgx, FirstReplace, MiddleRgx, MiddleReplace, LastRgx, 
     % string module supports binaries in utf8
     Shortened = string:slice(TrimmedMiddle, 0, MaxLength),
     TrimmedRight = re:replace(Shortened,
-        <<"(?<=[", LastRgx/binary, "])[^", LastRgx/binary, "]*$">>, LastReplace,
+        <<"[^", LastRgx/binary, "]*$">>, LastReplace,
         [{return, binary}, unicode, ucp, global]
     ),
     case validate_name(TrimmedRight, FirstRgx, MiddleRgx, LastRgx, MaxLength) of
