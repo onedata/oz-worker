@@ -23,7 +23,7 @@
   0},
  {<<"cluster_worker">>,
   {git,"ssh://git@git.onedata.org:7999/vfs/cluster-worker.git",
-       {ref,"37a937f31b764da3c76d5458fa7047163bc23c3a"}},
+       {ref,"01d6db44d26c7bcca200ffe16cfad1587febb2da"}},
   0},
  {<<"compatibility_reference">>,
   {raw,{git,"ssh://git@git.onedata.org:7999/vfs/compatibility-reference.git",
