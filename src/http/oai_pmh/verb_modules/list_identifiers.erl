@@ -79,7 +79,9 @@ get_response(<<"header">>, Args) ->
     HarvestingFun = fun(Id, #od_handle{timestamp = Timestamp}) ->
         #oai_header{
             identifier = oai_utils:oai_identifier_encode(Id),
-            datestamp = oai_utils:datetime_to_oai_datestamp(Timestamp)
+            datestamp = oai_utils:datetime_to_oai_datestamp(
+                time_utils:seconds_to_datetime(Timestamp)
+            )
         }
     end,
     oai_utils:harvest(MetadataPrefix, From, Until, HarvestingFun).

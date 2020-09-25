@@ -124,7 +124,7 @@ get_earliest_datestamp() ->
     Ids = oai_utils:list_handles(),
     Datestamps = lists:map(fun(Id) ->
         #od_handle{timestamp = Timestamp} = oai_utils:get_handle(Id),
-        Timestamp
+        time_utils:seconds_to_datetime(Timestamp)
     end, Ids),
     case Datestamps of
         [] -> none;

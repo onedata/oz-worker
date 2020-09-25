@@ -80,7 +80,7 @@ get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleDa
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
-        <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp),
+        <<"timestamp">> => time_utils:seconds_to_iso8601(Timestamp),
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
         <<"creationTime">> => CreationTime
     });

@@ -46,7 +46,7 @@
 mock_time() ->
     set_mocked_time(?TIME_MOCK_STARTING_TIMESTAMP),
     ok = test_utils:mock_new(ozt:get_nodes(), time_utils, [passthrough]),
-    ok = test_utils:mock_expect(ozt:get_nodes(), time_utils, cluster_time_seconds, fun() ->
+    ok = test_utils:mock_expect(ozt:get_nodes(), time_utils, timestamp_seconds, fun() ->
         oz_worker:get_env(mocked_time)
     end).
 

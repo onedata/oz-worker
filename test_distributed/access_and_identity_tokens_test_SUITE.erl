@@ -959,7 +959,7 @@ randomize_request_context(Subject, Service, Consumer) ->
     #request_context{
         subject = Subject,
         token_type = access_token,
-        current_timestamp = ozt:cluster_time_seconds(),
+        current_timestamp = ozt:timestamp_seconds(),
         interface = lists_utils:random_element([undefined | EligibleInterfaces]),
         ip = IP,
         asn = Asn,

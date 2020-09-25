@@ -2391,7 +2391,7 @@ verify_provider_identity_test(Config) ->
     {ok, IdentityToken} = oz_test_utils:call_oz(Config, token_logic, create_provider_named_token, [
         ?PROVIDER(P1), P1, #{<<"name">> => datastore_key:new(), <<"type">> => ?IDENTITY_TOKEN}
     ]),
-    Timestamp = oz_test_utils:cluster_time_seconds(Config),
+    Timestamp = oz_test_utils:timestamp_seconds(Config),
     IdentityTokenNotExpired = tokens:confine(
         IdentityToken, #cv_time{valid_until = Timestamp + 1000}
     ),

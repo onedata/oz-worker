@@ -120,6 +120,8 @@
 
 -define(HANDLE_RESOURCE_TYPE, <<"Share">>).
 
+-define(CURRENT_DATETIME(), time_utils:seconds_to_datetime(time_utils:timestamp_seconds())).
+
 %%%===================================================================
 %%% API functions
 %%%===================================================================
@@ -454,7 +456,7 @@ identify_test_base(Config, Method) ->
         Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
     ),
     HSId = create_handle_service(Config, User),
-    Timestamp = erlang:universaltime(),
+    Timestamp = ?CURRENT_DATETIME(),
     create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
         ?DC_METADATA_XML, Timestamp),
 
@@ -480,7 +482,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     SpaceIds = create_spaces(Config, ?SPACE_NAMES(2), ?USER(User)),
     [ShareId1, ShareId2] = create_shares(Config, SpaceIds),
     HSId = create_handle_service(Config, User),
-    Timestamp1 = erlang:universaltime(),
+    Timestamp1 = ?CURRENT_DATETIME(),
     Timestamp2 = increase_timestamp(Timestamp1, 1),
     Timestamp3 = increase_timestamp(Timestamp2, 1),
     Identifier1 = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId1,
@@ -524,7 +526,7 @@ get_record_test_base(Config, Method) ->
         Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
     ),
     HSId = create_handle_service(Config, User),
-    Timestamp = erlang:universaltime(),
+    Timestamp = ?CURRENT_DATETIME(),
     Identifier = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
         ?DC_METADATA_XML, Timestamp),
 
@@ -573,7 +575,7 @@ get_record_with_bad_metadata_test_base(Config, Method) ->
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     HSId = create_handle_service(Config, User),
-    Timestamp = erlang:universaltime(),
+    Timestamp = ?CURRENT_DATETIME(),
 
     BadMetadataExamples = [
         <<"">>,
@@ -655,7 +657,7 @@ list_metadata_formats_test_base(Config, Method) ->
 
 list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
 
-    BeginTime = erlang:universaltime(),
+    BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
 
     Identifiers = setup_test_for_harvesting(
@@ -697,7 +699,7 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     %% IdentifiersToBeModified is number of identifiers that will be modified
     %% so that their timestamps will be set to Until + 1 (if Until is undefined
 
-    BeginTime = erlang:universaltime(),
+    BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
 
     Identifiers = setup_test_for_harvesting(
@@ -769,7 +771,7 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
 
 list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
 
-    BeginTime = erlang:universaltime(),
+    BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
 
     Identifiers =
@@ -826,7 +828,7 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     %% IdentifiersToBeModified is number of identifiers that will be modified
     %% so that their timestamps will be set to Until + 1 (if Until is undefined
 
-    BeginTime = erlang:universaltime(),
+    BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
 
     Identifiers =
@@ -998,7 +1000,7 @@ list_identifiers_empty_repository_error_test_base(Config, Method) ->
 
 list_identifiers_no_records_match_error_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
 
-    BeginTime = erlang:universaltime(),
+    BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
 
     setup_test_for_harvesting(Config, IdentifiersNum, BeginTime,
@@ -1140,7 +1142,7 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
         none -> Args;
         _ -> add_verb(Verb, Args)
     end,
-    ResponseDate = erlang:universaltime(),
+    ResponseDate = ?CURRENT_DATETIME(),
     ExpectedBody = expected_body(Config, ExpResponseContent, ResponseType, Args2, ResponseDate),
     QueryString = prepare_querystring(Args2),
     Nodes = ?config(oz_worker_nodes, Config),

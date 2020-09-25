@@ -1558,7 +1558,7 @@ check_token_caveats_handling(Tc = #testcase{token_type = TokenType}) ->
 
 
 gen_correct_caveats(Consumer) -> lists:flatten([
-    #cv_time{valid_until = ozt:cluster_time_seconds() + 10},
+    #cv_time{valid_until = ozt:timestamp_seconds() + 10},
     #cv_ip{whitelist = [?CORRECT_MASK_1]},
     #cv_ip{whitelist = [?CORRECT_MASK_2]},
     #cv_ip{whitelist = [{{0, 0, 0, 0}, 8}, ?CORRECT_MASK_1, ?CORRECT_MASK_2]},
@@ -1589,7 +1589,7 @@ gen_correct_caveats(Consumer) -> lists:flatten([
 
 
 gen_unverified_caveats(Consumer) -> lists:flatten([
-    #cv_time{valid_until = ozt:cluster_time_seconds() - 1},
+    #cv_time{valid_until = ozt:timestamp_seconds() - 1},
     #cv_ip{whitelist = [?INCORRECT_MASK_1]},
     #cv_ip{whitelist = [?INCORRECT_MASK_2]},
     #cv_asn{whitelist = [?INCORRECT_ASN]},

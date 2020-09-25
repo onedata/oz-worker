@@ -31,7 +31,7 @@
 -type resource_id() :: binary().
 -type public_handle() :: binary().
 -type metadata() :: binary().
--type timestamp() :: calendar:datetime().
+-type timestamp() :: time_utils:seconds().
 
 -export_type([id/0, record/0]).
 -export_type([resource_type/0, resource_id/0, public_handle/0, metadata/0,
@@ -124,12 +124,12 @@ entity_logic_plugin() ->
     handle_logic_plugin.
 
 %%--------------------------------------------------------------------
-%% @equiv time_utils:epoch_to_datetime(time_utils:cluster_time_seconds()).
+%% @equiv time_utils:timestamp_seconds().
 %% @end
 %%--------------------------------------------------------------------
 -spec actual_timestamp() -> timestamp().
 actual_timestamp() ->
-    time_utils:epoch_to_datetime(time_utils:cluster_time_seconds()).
+    time_utils:timestamp_seconds().
 
 %%%===================================================================
 %%% datastore_model callbacks
@@ -142,7 +142,7 @@ actual_timestamp() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    6.
+    7.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -251,6 +251,27 @@ get_record_struct(6) ->
         {creation_time, integer},
         % nested #subject{} record was extended and is now encoded as string
         % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(7) ->
+    % timestamp field - changed format from datetime to timestamp in seconds
+    {record, [
+        {public_handle, string},
+        {resource_type, string},
+        {metadata, string},
+        {timestamp, integer},  % changed field
+        {resource_id, string},
+
+        {handle_service, string},
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+
+        {creation_time, integer},
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
 
         {bottom_up_dirty, boolean}
@@ -363,7 +384,7 @@ upgrade_record(3, Handle) ->
         EffUsers,
         EffGroups,
 
-        time_utils:system_time_seconds(),
+        time_utils:timestamp_seconds(),
         undefined,
 
         BottomUpDirty
@@ -446,6 +467,46 @@ upgrade_record(5, Handle) ->
 
         creation_time = CreationTime,
         creator = upgrade_common:upgrade_subject_record(Creator),
+
+        bottom_up_dirty = BottomUpDirty
+    }};
+upgrade_record(6, Handle) ->
+    {
+        od_handle,
+        PublicHandle,
+        ResourceType,
+        Metadata,
+        Timestamp,
+
+        ResourceId,
+        HandleService,
+        Users,
+        Groups,
+
+        EffUsers,
+        EffGroups,
+
+        CreationTime,
+        Creator,
+
+        BottomUpDirty
+    } = Handle,
+    {7, #od_handle{
+        public_handle = PublicHandle,
+        resource_type = ResourceType,
+        metadata = Metadata,
+        timestamp = time_utils:datetime_to_seconds(Timestamp),
+
+        resource_id = ResourceId,
+        handle_service = HandleService,
+        users = Users,
+        groups = Groups,
+
+        eff_users = EffUsers,
+        eff_groups = EffGroups,
+
+        creation_time = CreationTime,
+        creator = Creator,
 
         bottom_up_dirty = BottomUpDirty
     }}.

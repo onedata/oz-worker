@@ -169,7 +169,7 @@ create(Req = #el_req{gri = #gri{id = ProposedGroupId, aspect = instance} = GRI, 
         name = Name,
         type = Type,
         creator = aai:normalize_subject(Auth#auth.subject),
-        creation_time = time_utils:cluster_time_seconds()
+        creation_time = time_utils:timestamp_seconds()
     }},
     case od_group:create(GroupDoc) of
         {error, already_exists} ->

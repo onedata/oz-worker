@@ -365,7 +365,7 @@ protected_handle(logic, Id, HandleData, Creator) ->
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
         <<"metadata">> => maps:get(<<"metadata">>, HandleData),
-        <<"timestamp">> => time_utils:epoch_to_datetime(ozt_mocks:get_mocked_time()),
+        <<"timestamp">> => ozt_mocks:get_mocked_time(),
         <<"creationTime">> => ozt_mocks:get_mocked_time(),
         <<"creator">> => Creator
     });
@@ -377,7 +377,7 @@ protected_handle(rest, Id, HandleData, Creator) ->
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
         <<"metadata">> => maps:get(<<"metadata">>, HandleData),
-        <<"timestamp">> => time_utils:datetime_to_datestamp(time_utils:epoch_to_datetime(ozt_mocks:get_mocked_time())),
+        <<"timestamp">> => time_utils:seconds_to_iso8601(ozt_mocks:get_mocked_time()),
         <<"creationTime">> => ozt_mocks:get_mocked_time(),
         <<"creator">> => aai:subject_to_json(Creator)
     }.

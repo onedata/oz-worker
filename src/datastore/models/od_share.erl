@@ -258,7 +258,7 @@ upgrade_record(2, Share) ->
         HandleId,
         RootFileId,
 
-        time_utils:system_time_seconds(),
+        time_utils:timestamp_seconds(),
         undefined
     }};
 upgrade_record(3, Share) ->

@@ -405,7 +405,7 @@ verify_token(Token = #token{type = TokenType}, AuthCtx, Secret) ->
         Srv -> Srv
     end,
     CoalescedAuthCtx = AuthCtx#auth_ctx{
-        current_timestamp = time_utils:cluster_time_seconds(),
+        current_timestamp = time_utils:timestamp_seconds(),
         service = Service,
         group_membership_checker = fun group_membership_checker/2
     },

@@ -64,7 +64,9 @@ build_oai_record(MetadataPrefix, OaiId, Handle) ->
     #oai_record{
         header = #oai_header{
             identifier = OaiId,
-            datestamp = oai_utils:datetime_to_oai_datestamp(Handle#od_handle.timestamp)
+            datestamp = datetime_to_oai_datestamp(
+                time_utils:seconds_to_datetime(Handle#od_handle.timestamp)
+            )
         },
         metadata = #oai_metadata{
             metadata_format = #oai_metadata_format{metadataPrefix = MetadataPrefix},
@@ -77,19 +79,25 @@ build_oai_record(MetadataPrefix, OaiId, Handle) ->
     }.
 
 %%%--------------------------------------------------------------------
-%%% @equiv time_utils:datetime_to_datestamp(DateTime).
+%%% @equiv time_utils:datetime_to_iso8601(DateTime).
 %%%--------------------------------------------------------------------
--spec datetime_to_oai_datestamp(DateTime :: calendar:datetime()) -> binary().
+-spec datetime_to_oai_datestamp(calendar:datetime()) -> binary().
 datetime_to_oai_datestamp(DateTime) ->
-    time_utils:datetime_to_datestamp(DateTime).
+    time_utils:datetime_to_iso8601(DateTime).
 
 %%%--------------------------------------------------------------------
-%%% @equiv time_utils:datestamp_to_datetime(Datestamp).
+%%% @equiv time_utils:iso8601_to_datetime(Datestamp).
 %%%--------------------------------------------------------------------
 -spec oai_datestamp_to_datetime(undefined | binary()) ->
-    maybe_invalid_datestamp() | {error, invalid_date_format}.
+    undefined | maybe_invalid_datestamp() | {error, invalid_date_format}.
+oai_datestamp_to_datetime(undefined) ->
+    undefined;
 oai_datestamp_to_datetime(Datestamp) ->
-    time_utils:datestamp_to_datetime(Datestamp).
+    try
+        time_utils:iso8601_to_datetime(Datestamp)
+    catch _:_ ->
+        {error, invalid_date_format}
+    end.
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -131,9 +139,9 @@ harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, HarvestingFun) ->
     binary(), #od_handle{}) -> boolean().
 should_be_harvested(_From, _Until, _MetadataPrefix, #od_handle{metadata = undefined}) ->
     false;
-should_be_harvested(From, Until, MetadataPrefix, #od_handle{timestamp = Datestamp}) ->
+should_be_harvested(From, Until, MetadataPrefix, #od_handle{timestamp = Timestamp}) ->
     MetadataFormats = metadata_formats:supported_formats(),
-    is_in_time_range(From, Until, Datestamp) and
+    is_in_time_range(From, Until, time_utils:seconds_to_datetime(Timestamp)) and
         lists:member(MetadataPrefix, MetadataFormats).
 
 %%%--------------------------------------------------------------------
