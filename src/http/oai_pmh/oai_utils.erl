@@ -17,7 +17,7 @@
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
--export([datetime_to_oai_datestamp/1, oai_datestamp_to_datetime/1,
+-export([serialize_datestamp/1, deserialize_datestamp/1,
     is_harvesting/1, verb_to_module/1, is_earlier_or_equal/2,
     dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/4,
     oai_identifier_encode/1, oai_identifier_decode/1, build_oai_record/3]).
@@ -64,7 +64,7 @@ build_oai_record(MetadataPrefix, OaiId, Handle) ->
     #oai_record{
         header = #oai_header{
             identifier = OaiId,
-            datestamp = datetime_to_oai_datestamp(
+            datestamp = serialize_datestamp(
                 time_utils:seconds_to_datetime(Handle#od_handle.timestamp)
             )
         },
@@ -81,20 +81,37 @@ build_oai_record(MetadataPrefix, OaiId, Handle) ->
 %%%--------------------------------------------------------------------
 %%% @equiv time_utils:datetime_to_iso8601(DateTime).
 %%%--------------------------------------------------------------------
--spec datetime_to_oai_datestamp(calendar:datetime()) -> binary().
-datetime_to_oai_datestamp(DateTime) ->
+-spec serialize_datestamp(calendar:datetime()) -> binary().
+serialize_datestamp(DateTime) ->
     time_utils:datetime_to_iso8601(DateTime).
 
 %%%--------------------------------------------------------------------
-%%% @equiv time_utils:iso8601_to_datetime(Datestamp).
+%%% @doc
+%%% Parses a datestamp into erlang's calendar:datetime() or calendar:date()
+%%% format, depending on the input granularity.
+%%%
+%%% Excerpt from the OAI PMH specification:
+%%% These arguments support the "Complete date" and the "Complete date plus hours,
+%%% minutes and seconds" granularities defined in ISO8601. The legitimate formats
+%%% are YYYY-MM-DD and YYYY-MM-DDThh:mm:ssZ. Both arguments must have the same
+%%% granularity.
+%%% @end
 %%%--------------------------------------------------------------------
--spec oai_datestamp_to_datetime(undefined | binary()) ->
+-spec deserialize_datestamp(undefined | binary()) ->
     undefined | maybe_invalid_datestamp() | {error, invalid_date_format}.
-oai_datestamp_to_datetime(undefined) ->
+deserialize_datestamp(undefined) ->
     undefined;
-oai_datestamp_to_datetime(Datestamp) ->
+deserialize_datestamp(Datestamp) ->
     try
-        time_utils:iso8601_to_datetime(Datestamp)
+        case byte_size(Datestamp) of
+            10 ->
+                {Date, _Time} = time_utils:iso8601_to_datetime(Datestamp),
+                Date;
+            20 ->
+                time_utils:iso8601_to_datetime(Datestamp);
+            _ ->
+                {error, invalid_date_format}
+        end
     catch _:_ ->
         {error, invalid_date_format}
     end.
@@ -111,8 +128,8 @@ oai_datestamp_to_datetime(Datestamp) ->
 %%%--------------------------------------------------------------------
 -spec harvest(binary(), binary(), binary(), function()) -> [term()].
 harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, HarvestingFun) ->
-    From = oai_datestamp_to_datetime(FromDatestamp),
-    Until = oai_datestamp_to_datetime(UntilDatestamp),
+    From = deserialize_datestamp(FromDatestamp),
+    Until = deserialize_datestamp(UntilDatestamp),
     Identifiers = list_handles(),
     HarvestedMetadata = lists:flatmap(fun(Identifier) ->
         Handle = get_handle(Identifier),
@@ -166,8 +183,7 @@ is_earlier_or_equal(_Date, undefined) -> true;
 is_earlier_or_equal(Date1, Date2) ->
     D1 = granularity_days_to_seconds({min, Date1}),
     D2 = granularity_days_to_seconds({max, Date2}),
-    calendar:datetime_to_gregorian_seconds(D1) =<
-        calendar:datetime_to_gregorian_seconds(D2).
+    time_utils:datetime_to_seconds(D1) =< time_utils:datetime_to_seconds(D2).
 
 %%%--------------------------------------------------------------------
 %%% @doc

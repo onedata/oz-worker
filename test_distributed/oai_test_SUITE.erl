@@ -464,7 +464,7 @@ identify_test_base(Config, Method) ->
         #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
-        #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp)}]},
+        #xmlElement{name = earliestDatestamp, content = [#xmlText{value = to_datestamp(Timestamp)}]},
         #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
         #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
     ] ++ [
@@ -494,7 +494,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
         #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
-        #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp1)}]},
+        #xmlElement{name = earliestDatestamp, content = [#xmlText{value = to_datestamp(Timestamp1)}]},
         #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
         #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
     ] ++ [
@@ -508,7 +508,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
         #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
-        #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp2)}]},
+        #xmlElement{name = earliestDatestamp, content = [#xmlText{value = to_datestamp(Timestamp2)}]},
         #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
         #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
     ] ++ [
@@ -551,7 +551,7 @@ get_record_test_base(Config, Method) ->
                     #xmlElement{
                         name = datestamp,
                         content = [#xmlText{
-                            value = convert(Timestamp)
+                            value = to_datestamp(Timestamp)
                         }]
                     }
                 ]
@@ -609,7 +609,7 @@ get_record_with_bad_metadata_test_base(Config, Method) ->
                         #xmlElement{
                             name = datestamp,
                             content = [#xmlText{
-                                value = convert(Timestamp)
+                                value = to_datestamp(Timestamp)
                             }]
                         }
                     ]
@@ -664,8 +664,8 @@ list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffs
         Config, IdentifiersNum, BeginTime, TimeOffsets, ?DC_METADATA_XML
     ),
 
-    From = convert(increase_timestamp(BeginTime, FromOffset)),
-    Until = convert(increase_timestamp(BeginTime, UntilOffset)),
+    From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
+    Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
     Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
 
     IdsAndTimestamps =
@@ -684,7 +684,7 @@ list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffs
                 #xmlElement{
                     name = datestamp,
                     content = [#xmlText{
-                        value = convert(increase_timestamp(BeginTime, TimeOffset))
+                        value = to_datestamp(increase_timestamp(BeginTime, TimeOffset))
                     }]
                 }
             ]
@@ -706,8 +706,8 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
         Config, IdentifiersNum, BeginTime, TimeOffsets, ?DC_METADATA_XML
     ),
 
-    From = convert(increase_timestamp(BeginTime, FromOffset)),
-    Until = convert(increase_timestamp(BeginTime, UntilOffset)),
+    From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
+    Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
     Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
 
     IdsAndTimestamps =
@@ -726,7 +726,7 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
                 #xmlElement{
                     name = datestamp,
                     content = [#xmlText{
-                        value = convert(increase_timestamp(BeginTime, TimeOffset))
+                        value = to_datestamp(increase_timestamp(BeginTime, TimeOffset))
                     }]
                 }
             ]
@@ -760,7 +760,7 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
                 #xmlElement{
                     name = datestamp,
                     content = [#xmlText{
-                        value = convert(increase_timestamp(BeginTime, TimeOffset))
+                        value = to_datestamp(increase_timestamp(BeginTime, TimeOffset))
                     }]
                 }
             ]
@@ -778,8 +778,8 @@ list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) 
         setup_test_for_harvesting(Config, IdentifiersNum, BeginTime, TimeOffsets,
             ?DC_METADATA_XML),
 
-    From = convert(increase_timestamp(BeginTime, FromOffset)),
-    Until = convert(increase_timestamp(BeginTime, UntilOffset)),
+    From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
+    Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
     Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
 
     IdsAndTimestamps =
@@ -802,7 +802,7 @@ list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) 
                         #xmlElement{
                             name = datestamp,
                             content = [#xmlText{
-                                value = convert(increase_timestamp(BeginTime, TimeOffset))
+                                value = to_datestamp(increase_timestamp(BeginTime, TimeOffset))
                             }]
                         }
                     ]
@@ -835,8 +835,8 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
         setup_test_for_harvesting(Config, IdentifiersNum, BeginTime, TimeOffsets,
             ?DC_METADATA_XML),
 
-    From = convert(increase_timestamp(BeginTime, FromOffset)),
-    Until = convert(increase_timestamp(BeginTime, UntilOffset)),
+    From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
+    Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
     Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
 
     IdsAndTimestamps =
@@ -859,7 +859,7 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
                         #xmlElement{
                             name = datestamp,
                             content = [#xmlText{
-                                value = convert(increase_timestamp(BeginTime, TimeOffset))
+                                value = to_datestamp(increase_timestamp(BeginTime, TimeOffset))
                             }]
                         }
                     ]
@@ -908,7 +908,7 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
                         #xmlElement{
                             name = datestamp,
                             content = [#xmlText{
-                                value = convert(increase_timestamp(BeginTime, TimeOffset))
+                                value = to_datestamp(increase_timestamp(BeginTime, TimeOffset))
                             }]
                         }
                     ]
@@ -1006,8 +1006,8 @@ list_identifiers_no_records_match_error_test_base(Config, Method, IdentifiersNum
     setup_test_for_harvesting(Config, IdentifiersNum, BeginTime,
         TimeOffsets, ?DC_METADATA_XML),
 
-    From = convert(increase_timestamp(BeginTime, FromOffset)),
-    Until = convert(increase_timestamp(BeginTime, UntilOffset)),
+    From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
+    Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
     Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
 
     ?assert(check_list_identifiers_no_records_match_error(200, Args, Method, [], Config)).
@@ -1149,7 +1149,7 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
     test_utils:mock_new(Nodes, oai_handler, [passthrough]),
     test_utils:mock_expect(Nodes, oai_handler, generate_response_date_element,
         fun() ->
-            {responseDate, list_to_binary(convert(ResponseDate))}
+            {responseDate, list_to_binary(to_datestamp(ResponseDate))}
         end
     ),
 
@@ -1242,7 +1242,7 @@ expected_body(Config, ExpectedResponse, ResponseType, Args, ResponseDate) ->
         content = [
             #xmlElement{
                 name = responseDate,
-                content = [#xmlText{value = convert(ResponseDate)}]
+                content = [#xmlText{value = to_datestamp(ResponseDate)}]
             },
             ExpectedRequestElement,
             ExpectedResponseElement]
@@ -1306,7 +1306,8 @@ modify_handle_with_mocked_timestamp(Config, HId, Metadata, Timestamp) ->
     Nodes = ?config(oz_worker_nodes, Config),
     ok = test_utils:mock_new(Nodes, od_handle, [passthrough]),
     ok = test_utils:mock_expect(Nodes, od_handle, actual_timestamp, fun() ->
-        Timestamp end),
+        time_utils:datetime_to_seconds(Timestamp)
+    end),
     ok = modify_handle(Config, HId, Metadata),
     ok = test_utils:mock_validate_and_unload(Nodes, od_handle).
 
@@ -1341,7 +1342,8 @@ create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId, M
     Nodes = ?config(oz_worker_nodes, Config),
     ok = test_utils:mock_new(Nodes, od_handle, [passthrough]),
     ok = test_utils:mock_expect(Nodes, od_handle, actual_timestamp, fun() ->
-        Timestamp end),
+        time_utils:datetime_to_seconds(Timestamp)
+    end),
     HId = create_handle(Config, User, HandleServiceId, ResourceId, Metadata),
     ok = test_utils:mock_validate_and_unload(Nodes, od_handle),
     HId.
@@ -1398,8 +1400,8 @@ increase_timestamp(Datetime, ExtraSeconds) ->
     Seconds = calendar:datetime_to_gregorian_seconds(Datetime),
     calendar:gregorian_seconds_to_datetime(Seconds + ExtraSeconds).
 
-convert(undefined) -> undefined;
-convert(DateTime) ->
+to_datestamp(undefined) -> undefined;
+to_datestamp(DateTime) ->
     {{Year, Month, Day}, {Hour, Minute, Second}} = DateTime,
     str_utils:format(
         "~4..0B-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ",
