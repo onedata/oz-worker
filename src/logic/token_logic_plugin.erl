@@ -681,5 +681,5 @@ infer_ttl(Caveats) ->
     end, undefined, caveats:filter([cv_time], Caveats)),
     case ValidUntil of
         undefined -> undefined;
-        _ -> ValidUntil - time_utils:cluster_time_seconds()
+        _ -> ValidUntil - time_utils:timestamp_seconds()
     end.

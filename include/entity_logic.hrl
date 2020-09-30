@@ -86,7 +86,7 @@
 %% @TODO VFS-5727 temporary solution
 -define(INVITE_TOKEN_NAME(TokenType), <<
     (atom_to_binary(TokenType, utf8))/binary, " ",
-    (binary:part(time_utils:epoch_to_iso8601(time_utils:cluster_time_seconds()), 0, 10))/binary, " ",
+    (binary:part(time_utils:seconds_to_iso8601(time_utils:timestamp_seconds()), 0, 10))/binary, " ",
     (str_utils:rand_hex(3))/binary
 >>).
 

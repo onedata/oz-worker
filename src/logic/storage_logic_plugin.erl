@@ -119,7 +119,7 @@ create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PRO
             readonly = Readonly,
             provider = ProviderId,
             creator = aai:normalize_subject(Auth#auth.subject),
-            creation_time = time_utils:cluster_time_seconds()
+            creation_time = time_utils:timestamp_seconds()
         }
     },
     case od_storage:create(StorageDoc) of

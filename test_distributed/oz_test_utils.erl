@@ -285,7 +285,7 @@
     unmock_harvesting_backends/2,
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
-    cluster_time_seconds/1,
+    timestamp_seconds/1,
     mock_time/1, unmock_time/1,
     get_mocked_time/1,
     simulate_time_passing/2,
@@ -641,7 +641,7 @@ create_temporary_provider_registration_token(Config, Client, UserId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, token_logic, create_user_temporary_token, [Client, UserId, #{
             <<"type">> => ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, UserId),
-            <<"caveats">> => [#cv_time{valid_until = cluster_time_seconds(Config) + 3600}]
+            <<"caveats">> => [#cv_time{valid_until = timestamp_seconds(Config) + 3600}]
         }]
     )).
 
@@ -2967,7 +2967,7 @@ authenticate_by_token(Config, Token, AuthCtx) ->
 -spec acquire_temporary_token(Config :: term(), aai:subject()) -> tokens:serialized().
 acquire_temporary_token(Config, Subject = ?SUB(SubType, SubId)) ->
     {ok, Cached} = simple_cache:get({temp_token, Subject}, fun() ->
-        Data = #{<<"caveats">> => [#cv_time{valid_until = cluster_time_seconds(Config) + 36000}]},
+        Data = #{<<"caveats">> => [#cv_time{valid_until = timestamp_seconds(Config) + 36000}]},
         Fun = case SubType of
             user -> create_user_temporary_token;
             ?ONEPROVIDER -> create_provider_temporary_token
@@ -3286,9 +3286,9 @@ unmock_handle_proxy(Config) ->
 %% Returns the current time.
 %% @end
 %%--------------------------------------------------------------------
--spec cluster_time_seconds(Config :: term()) -> time_utils:seconds().
-cluster_time_seconds(Config) ->
-    call_oz(Config, time_utils, cluster_time_seconds, []).
+-spec timestamp_seconds(Config :: term()) -> time_utils:seconds().
+timestamp_seconds(Config) ->
+    call_oz(Config, time_utils, timestamp_seconds, []).
 
 
 %%--------------------------------------------------------------------
@@ -3301,10 +3301,7 @@ cluster_time_seconds(Config) ->
 mock_time(Config) ->
     simulate_time_passing(Config, 0),
     ok = test_utils:mock_new(?OZ_NODES(Config), time_utils, [passthrough]),
-    ok = test_utils:mock_expect(?OZ_NODES(Config), time_utils, cluster_time_seconds, fun() ->
-        oz_worker:get_env(mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP)
-    end),
-    ok = test_utils:mock_expect(?OZ_NODES(Config), time_utils, system_time_seconds, fun() ->
+    ok = test_utils:mock_expect(?OZ_NODES(Config), time_utils, timestamp_seconds, fun() ->
         oz_worker:get_env(mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP)
     end).
 

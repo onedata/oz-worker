@@ -172,7 +172,7 @@ end).
     eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
     eff_clusters = #{} :: entity_graph:eff_relations(od_cluster:id()),
 
-    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creation_time = time_utils:timestamp_seconds() :: entity_logic:creation_time(),
     last_activity = 0 :: time_utils:seconds(),
 
     % Marks that the record's effective relations are not up to date.
@@ -214,7 +214,7 @@ end).
     eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
     eff_clusters = #{} :: entity_graph:eff_relations(od_cluster:id()),
 
-    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creation_time = time_utils:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.
@@ -252,7 +252,7 @@ end).
     support_parameters_per_provider = #{} :: support_parameters:per_provider(),
     support_stage_per_provider = #{} :: support_stage:per_provider(),
 
-    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creation_time = time_utils:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.
@@ -277,7 +277,7 @@ end).
     root_file = undefined :: undefined | binary(),
     file_type = dir :: file | dir,
 
-    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creation_time = time_utils:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject()
 }).
 
@@ -306,7 +306,7 @@ end).
     eff_spaces = #{} :: entity_graph:eff_relations_with_attrs(od_space:id(), Size :: pos_integer()),
     eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
 
-    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creation_time = time_utils:timestamp_seconds() :: entity_logic:creation_time(),
     connection_status = provider_connection_status:default() :: provider_connection_status:record(),
 
     % Marks that the record's effective relations are not up to date.
@@ -327,7 +327,7 @@ end).
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_service_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_service_privilege()]),
 
-    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creation_time = time_utils:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.
@@ -350,7 +350,7 @@ end).
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_privilege()]),
 
-    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creation_time = time_utils:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.
@@ -377,7 +377,7 @@ end).
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
 
-    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creation_time = time_utils:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.
@@ -395,7 +395,7 @@ end).
     % If enabled, onepanel is served on port 443 by oneprovider/onezone (rather than 9443)
     onepanel_proxy = true :: boolean(),
 
-    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creation_time = time_utils:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),
 
     % Direct relations to other entities
@@ -430,7 +430,7 @@ end).
     eff_providers = #{} :: entity_graph:eff_relations_with_attrs(od_provider:id(), Size :: pos_integer()),
     eff_spaces = #{} :: entity_graph:eff_relations_with_attrs(od_space:id(), Size :: pos_integer()),
 
-    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creation_time = time_utils:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.

@@ -39,7 +39,7 @@ provider_connection_status_test_() ->
 
 setup() ->
     meck:new(time_utils, [non_strict]),
-    meck:expect(time_utils, cluster_time_seconds, fun timestamp_mock/0),
+    meck:expect(time_utils, timestamp_seconds, fun timestamp_mock/0),
     meck:new(gs_ws_handler, [non_strict]),
     meck:expect(gs_ws_handler, keepalive_interval, fun() -> ?KEEPALIVE_INTERVAL end).
 
@@ -78,7 +78,7 @@ new_status_by_last_activity() ->
 
 connected_status() ->
     StatusAlpha = provider_connection_status:default(),
-    ConnectionTimestamp = time_utils:cluster_time_seconds(),
+    ConnectionTimestamp = time_utils:timestamp_seconds(),
     StatusBeta = provider_connection_status:report_connected(StatusAlpha),
     ?assertEqual({connected, ConnectionTimestamp}, provider_connection_status:inspect(StatusBeta)),
     % the "connected" status is considered up to date within the ?INACTIVITY_PERIOD
@@ -86,7 +86,7 @@ connected_status() ->
     ?assertEqual({connected, ConnectionTimestamp}, provider_connection_status:inspect(StatusBeta)),
     % consecutive heartbeat prolongs the connected status
     StatusGamma = provider_connection_status:report_heartbeat(StatusBeta),
-    HeartbeatTimestamp = time_utils:cluster_time_seconds(),
+    HeartbeatTimestamp = time_utils:timestamp_seconds(),
     simulate_time_passing(?INACTIVITY_PERIOD - 1),
     ?assertEqual({connected, ConnectionTimestamp}, provider_connection_status:inspect(StatusGamma)),
     % after the ?INACTIVITY_PERIOD without heartbeating, the provider is considered unresponsive
@@ -104,11 +104,11 @@ connected_status() ->
 
 disconnected_status() ->
     StatusAlpha = provider_connection_status:default(),
-    FirstTimestamp = time_utils:cluster_time_seconds(),
+    FirstTimestamp = time_utils:timestamp_seconds(),
     StatusBeta = provider_connection_status:report_disconnected(StatusAlpha),
     ?assertEqual({disconnected, FirstTimestamp}, provider_connection_status:inspect(StatusBeta)),
     simulate_time_passing(124151),
-    SecondTimestamp = time_utils:cluster_time_seconds(),
+    SecondTimestamp = time_utils:timestamp_seconds(),
     ?assertEqual({disconnected, FirstTimestamp}, provider_connection_status:inspect(StatusBeta)),
     StatusGamma = provider_connection_status:report_disconnected(StatusBeta),
     ?assertEqual({disconnected, SecondTimestamp}, provider_connection_status:inspect(StatusGamma)),

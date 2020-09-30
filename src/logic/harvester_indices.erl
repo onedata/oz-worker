@@ -158,7 +158,7 @@ update_seqs(Stats, SpaceId, ProviderId, NewSeq, NewMaxSeq, ErrorMsg) ->
             ProviderId => #index_stats{
                 current_seq = NewCurrentSeq,
                 max_seq = max(CurrentMaxSeq, NewMaxSeq),
-                last_update = time_utils:cluster_time_seconds(),
+                last_update = time_utils:timestamp_seconds(),
                 error = ErrorMsg
             }
         }

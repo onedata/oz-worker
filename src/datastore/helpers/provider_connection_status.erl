@@ -38,7 +38,7 @@
 -opaque record() :: #status{}.
 -export_type([record/0]).
 
--define(NOW(), time_utils:cluster_time_seconds()).
+-define(NOW(), time_utils:timestamp_seconds()).
 % Time after which a non-heartbeating connection is considered unresponsive
 -define(INACTIVITY_PERIOD, 2 * gs_ws_handler:keepalive_interval()).
 

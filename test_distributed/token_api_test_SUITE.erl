@@ -249,11 +249,11 @@ end_per_testcase(_, _Config) ->
 -define(CAVEATS_EXAMPLES_FOR_NAMED_TOKENS(), [
     [],
     ?CAVEATS_TO_JSON([
-        #cv_time{valid_until = ozt:cluster_time_seconds() + 130},
+        #cv_time{valid_until = ozt:timestamp_seconds() + 130},
         #cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)]}
     ]),
     ?CAVEATS_TO_JSON([
-        #cv_time{valid_until = ozt:cluster_time_seconds() + 560},
+        #cv_time{valid_until = ozt:timestamp_seconds() + 560},
         #cv_api{whitelist = [
             {?OZ_WORKER, all, ?GRI_PATTERN(od_user, <<"123">>, instance, private)}
         ]},
@@ -758,7 +758,7 @@ examine(_Config) ->
     Provider = ozt_providers:create_for_admin_user(ProviderAdmin),
     AllClients = [{user, User}, {provider, Provider}, {user, ProviderAdmin}],
 
-    TimeCaveat = #cv_time{valid_until = ozt:cluster_time_seconds() + 3600},
+    TimeCaveat = #cv_time{valid_until = ozt:timestamp_seconds() + 3600},
     TokenAlpha = create_user_temporary_token(User, ?ACCESS_TOKEN, [TimeCaveat]),
     examine_base(AllClients, TokenAlpha, #{
         <<"onezoneDomain">> => ozt:get_domain(),
@@ -838,7 +838,7 @@ confine(_Config) ->
     AllClients = [{user, User}, {provider, Provider}, {user, ProviderAdmin}],
 
     InitialCaveatsAlpha = [
-        #cv_time{valid_until = ozt:cluster_time_seconds() + 3600}
+        #cv_time{valid_until = ozt:timestamp_seconds() + 3600}
     ],
     TokenAlpha = create_user_temporary_token(User, ?ACCESS_TOKEN, InitialCaveatsAlpha),
     confine_combinations(AllClients, TokenAlpha, InitialCaveatsAlpha, [
@@ -852,7 +852,7 @@ confine(_Config) ->
     ]),
 
     InitialCaveatsBeta = [
-        #cv_time{valid_until = ozt:cluster_time_seconds() + 3600},
+        #cv_time{valid_until = ozt:timestamp_seconds() + 3600},
         #cv_ip{whitelist = [{{181, 115, 16, 8}, 32}, {{181, 115, 16, 9}, 32}]},
         #cv_country{type = blacklist, list = [<<"PL">>, <<"PT">>, <<"ES">>]},
         #cv_region{type = whitelist, list = [<<"EU">>]}
@@ -861,7 +861,7 @@ confine(_Config) ->
         Provider, ?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, Provider), InitialCaveatsBeta
     ),
     confine_combinations(AllClients, TokenBeta, InitialCaveatsBeta, [
-        #cv_time{valid_until = ozt:cluster_time_seconds() + 1800},
+        #cv_time{valid_until = ozt:timestamp_seconds() + 1800},
         #cv_consumer{whitelist = [?SUB(user, <<"123456789">>), ?SUB(group, <<"abderg">>)]},
         #cv_asn{whitelist = [854]}
     ]).
@@ -950,7 +950,7 @@ verify_access_token(_Config) ->
     ],
 
     TokenAlpha = create_user_temporary_token(User, ?ACCESS_TOKEN, [
-        #cv_time{valid_until = ozt:cluster_time_seconds() + 3600}
+        #cv_time{valid_until = ozt:timestamp_seconds() + 3600}
     ]),
     verify_access_token_base(
         AllClients, TokenAlpha, #access_token_ctx{},
@@ -963,7 +963,7 @@ verify_access_token(_Config) ->
 
     #named_token_data{token = TokenBeta} = create_provider_named_token(
         Provider, ?ACCESS_TOKEN, [
-            #cv_time{valid_until = ozt:cluster_time_seconds() + 2700}
+            #cv_time{valid_until = ozt:timestamp_seconds() + 2700}
         ]
     ),
     verify_access_token_base(
@@ -976,7 +976,7 @@ verify_access_token(_Config) ->
     ),
 
     TokenGamma = create_user_temporary_token(ProviderAdmin, ?ACCESS_TOKEN(SessionId), [
-        #cv_time{valid_until = ozt:cluster_time_seconds() + 1800},
+        #cv_time{valid_until = ozt:timestamp_seconds() + 1800},
         #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]}
     ]),
     verify_access_token_base(
@@ -994,19 +994,19 @@ verify_access_token(_Config) ->
 
     #named_token_data{token = TokenDelta} = create_user_named_token(
         User, ?ACCESS_TOKEN, [
-            #cv_time{valid_until = ozt:cluster_time_seconds() - 1}
+            #cv_time{valid_until = ozt:timestamp_seconds() - 1}
         ]
     ),
     verify_access_token_base(
         AllClients, TokenDelta, #access_token_ctx{interface = oneclient, allow_data_access_caveats = true},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
-            #cv_time{valid_until = ozt:cluster_time_seconds() - 1}
+            #cv_time{valid_until = ozt:timestamp_seconds() - 1}
         )
     ),
     verify_access_token_base(
         AllClients, TokenDelta, #access_token_ctx{interface = rest},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
-            #cv_time{valid_until = ozt:cluster_time_seconds() - 1}
+            #cv_time{valid_until = ozt:timestamp_seconds() - 1}
         )
     ),
 
@@ -1323,7 +1323,7 @@ verify_identity_token(_Config) ->
     ],
 
     TokenAlpha = create_user_temporary_token(User, ?IDENTITY_TOKEN, [
-        #cv_time{valid_until = ozt:cluster_time_seconds() + 3600}
+        #cv_time{valid_until = ozt:timestamp_seconds() + 3600}
     ]),
     verify_identity_token_base(
         AllClients, TokenAlpha, #identity_token_ctx{},
@@ -1336,7 +1336,7 @@ verify_identity_token(_Config) ->
 
     #named_token_data{token = TokenBeta} = create_provider_named_token(
         Provider, ?IDENTITY_TOKEN, [
-            #cv_time{valid_until = ozt:cluster_time_seconds() + 2700}
+            #cv_time{valid_until = ozt:timestamp_seconds() + 2700}
         ]
     ),
     verify_identity_token_base(
@@ -1349,7 +1349,7 @@ verify_identity_token(_Config) ->
     ),
 
     TokenGamma = create_user_temporary_token(ProviderAdmin, ?IDENTITY_TOKEN, [
-        #cv_time{valid_until = ozt:cluster_time_seconds() + 1800},
+        #cv_time{valid_until = ozt:timestamp_seconds() + 1800},
         #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]}
     ]),
     verify_identity_token_base(
@@ -1363,13 +1363,13 @@ verify_identity_token(_Config) ->
 
     #named_token_data{token = TokenDelta} = create_user_named_token(
         User, ?IDENTITY_TOKEN, [
-            #cv_time{valid_until = ozt:cluster_time_seconds() - 1}
+            #cv_time{valid_until = ozt:timestamp_seconds() - 1}
         ]
     ),
     verify_identity_token_base(
         AllClients, TokenDelta, #identity_token_ctx{interface = rest},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
-            #cv_time{valid_until = ozt:cluster_time_seconds() - 1}
+            #cv_time{valid_until = ozt:timestamp_seconds() - 1}
         )
     ),
 
@@ -1615,7 +1615,7 @@ verify_invite_token(_Config) ->
     ],
 
     TokenAlpha = create_user_temporary_token(User, ?INVITE_TOKEN(?USER_JOIN_SPACE, Space), [
-        #cv_time{valid_until = ozt:cluster_time_seconds() + 3600}
+        #cv_time{valid_until = ozt:timestamp_seconds() + 3600}
     ]),
     verify_invite_token_base(
         AllClients, TokenAlpha, any, undefined, any,
@@ -1632,7 +1632,7 @@ verify_invite_token(_Config) ->
 
     #named_token_data{token = TokenBeta} = create_provider_named_token(
         Provider, ?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, Provider), [
-            #cv_time{valid_until = ozt:cluster_time_seconds() + 2700}
+            #cv_time{valid_until = ozt:timestamp_seconds() + 2700}
         ]
     ),
     verify_invite_token_base(
@@ -1645,7 +1645,7 @@ verify_invite_token(_Config) ->
     ),
 
     TokenGamma = create_user_temporary_token(User, ?INVITE_TOKEN(?SUPPORT_SPACE, Space, ?SPACE_SUPPORT_PARAMS), [
-        #cv_time{valid_until = ozt:cluster_time_seconds() + 1200},
+        #cv_time{valid_until = ozt:timestamp_seconds() + 1200},
         #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]}
     ]),
     verify_invite_token_base(
@@ -1659,12 +1659,12 @@ verify_invite_token(_Config) ->
 
     #named_token_data{token = TokenDelta} = create_user_named_token(
         User, ?INVITE_TOKEN(?GROUP_JOIN_GROUP, Group), [
-            #cv_time{valid_until = ozt:cluster_time_seconds() - 1}
+            #cv_time{valid_until = ozt:timestamp_seconds() - 1}
         ]
     ),
     verify_invite_token_base(
         AllClients, TokenDelta, undefined, any, any,
-        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ozt:cluster_time_seconds() - 1})
+        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ozt:timestamp_seconds() - 1})
     ),
 
     TokenLambda = create_user_temporary_token(User, ?INVITE_TOKEN(?USER_JOIN_GROUP, Group), [
@@ -1985,7 +1985,7 @@ create_user_temporary_token(_Config) ->
     ozt_clusters:add_user(Cluster, User, privileges:cluster_admin()),
     ozt:reconcile_entity_graph(),
 
-    Now = ozt:cluster_time_seconds(),
+    Now = ozt:timestamp_seconds(),
     MaxTtl = ozt:get_env(max_temporary_token_ttl),
 
     VerifyFun = new_token_verify_fun(?SUB(user, User), temporary),
@@ -2059,7 +2059,7 @@ create_provider_temporary_token(_Config) ->
     Harvester = ozt_users:create_harvester_for(User),
     Cluster = Provider,
 
-    Now = ozt:cluster_time_seconds(),
+    Now = ozt:timestamp_seconds(),
     MaxTtl = ozt:get_env(max_temporary_token_ttl),
 
     VerifyFun = new_token_verify_fun(?SUB(?ONEPROVIDER, Provider), temporary),
@@ -2590,7 +2590,7 @@ verify_named_token_data(API, Result, TokenToCheck) when API == logic orelse API 
         end
     }),
     Metadata = maps:get(<<"metadata">>, Result),
-    Now = ozt:cluster_time_seconds(),
+    Now = ozt:timestamp_seconds(),
     case Type of
         ?INVITE_TOKEN ->
             ?assertMatch(#{

@@ -287,7 +287,7 @@ get(#el_req{gri = #gri{aspect = {check_my_ip, ClientIP}}}, _) ->
     {ok, ClientIP};
 
 get(#el_req{gri = #gri{aspect = current_time}}, _) ->
-    {ok, time_utils:cluster_time_millis()}.
+    {ok, time_utils:timestamp_millis()}.
 
 
 %%--------------------------------------------------------------------
@@ -842,7 +842,7 @@ create_provider(Auth, Data, ProviderId, GRI) ->
             domain = Domain, subdomain = Subdomain,
             latitude = Latitude, longitude = Longitude,
             admin_email = AdminEmail,
-            creation_time = time_utils:cluster_time_seconds()
+            creation_time = time_utils:timestamp_seconds()
         },
 
         try

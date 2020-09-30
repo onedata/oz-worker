@@ -72,7 +72,7 @@ init_per_suite(Config) ->
     Posthook = fun(NewConfig) ->
         Nodes = ?config(oz_worker_nodes, NewConfig),
         ok = test_utils:mock_new(Nodes, time_utils, [passthrough]),
-        ok = test_utils:mock_expect(Nodes, time_utils, system_time_seconds, fun() ->
+        ok = test_utils:mock_expect(Nodes, time_utils, timestamp_seconds, fun() ->
             ?DUMMY_TIMESTAMP
         end),
         NewConfig
@@ -2574,6 +2574,31 @@ get_record(od_handle, 6) -> #od_handle{
     resource_type = <<"Share">>,
     metadata = <<"<metadata_xml_string>">>,
     timestamp = {{2016, 4, 4}, {14, 56, 33}},
+
+    resource_id = <<"resource_id">>,
+    handle_service = <<"handle_service_id">>,
+
+    users = #{
+        <<"user1">> => [?HANDLE_VIEW, ?HANDLE_UPDATE],
+        <<"user2">> => [?HANDLE_VIEW, ?HANDLE_UPDATE, ?HANDLE_DELETE]
+    },
+    groups = #{
+        <<"group1">> => [?HANDLE_UPDATE],
+        <<"group2">> => [?HANDLE_DELETE]
+    },
+
+    eff_users = #{},
+    eff_groups = #{},
+
+    creation_time = ?DUMMY_TIMESTAMP,
+    creator = ?SUB(nobody),
+    bottom_up_dirty = true
+};
+get_record(od_handle, 7) -> #od_handle{
+    public_handle = <<"public_handle">>,
+    resource_type = <<"Share">>,
+    metadata = <<"<metadata_xml_string>">>,
+    timestamp = 1459781793,
 
     resource_id = <<"resource_id">>,
     handle_service = <<"handle_service_id">>,

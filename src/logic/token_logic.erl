@@ -163,7 +163,7 @@ create_access_token_for_gui(Auth, UserId, SessionId, Service) ->
     Result = create_user_temporary_token(Auth, UserId, #{
         <<"type">> => ?ACCESS_TOKEN(SessionId),
         <<"caveats">> => [
-            #cv_time{valid_until = time_utils:cluster_time_seconds() + Ttl},
+            #cv_time{valid_until = time_utils:timestamp_seconds() + Ttl},
             #cv_service{whitelist = [Service]}
             % @TODO VFS-5913 Add interface caveat when it is fully supported by Onepanel
         ]
@@ -363,14 +363,14 @@ create_legacy_client_token(Auth = ?USER(UserId)) ->
         <<"name">> => <<
             "access token ",
             (binary:replace(
-                time_utils:epoch_to_iso8601(time_utils:cluster_time_seconds()),
+                time_utils:seconds_to_iso8601(time_utils:timestamp_seconds()),
                 <<$:>>, <<$.>>, [global]
             ))/binary, " ",
             (str_utils:rand_hex(3))/binary
         >>,
         <<"type">> => ?ACCESS_TOKEN,
         <<"caveats">> => [
-            #cv_time{valid_until = time_utils:cluster_time_seconds() + 31536000}  % 1 year
+            #cv_time{valid_until = time_utils:timestamp_seconds() + 31536000}  % 1 year
         ]
     },
     create_user_named_token(Auth, UserId, Data).

@@ -28,7 +28,7 @@
 %% API
 -export([init_per_suite/1, get_test_config/0]).
 -export([rpc/3, rpc/4]).
--export([cluster_time_seconds/0]).
+-export([timestamp_seconds/0]).
 -export([reconcile_entity_graph/0]).
 -export([delete_all_entities/0]).
 -export([get_env/1, get_env/2, set_env/2, set_app_env/3]).
@@ -115,9 +115,9 @@ rpc(Node, Module, Function, Args) ->
     end.
 
 
--spec cluster_time_seconds() -> time_utils:seconds().
-cluster_time_seconds() ->
-    rpc(time_utils, cluster_time_seconds, []).
+-spec timestamp_seconds() -> time_utils:seconds().
+timestamp_seconds() ->
+    rpc(time_utils, timestamp_seconds, []).
 
 
 -spec reconcile_entity_graph() -> true.
