@@ -116,7 +116,7 @@ update(UserId, ConnectionsDiff) ->
         {ok, _} ->
             % update can fail, e.g. when the user has been deleted
             od_user:update(UserId, fun(User) ->
-                {ok, User#od_user{last_activity = time_utils:cluster_time_seconds()}}
+                {ok, User#od_user{last_activity = time_utils:timestamp_seconds()}}
             end),
             ok;
         {error, _} = Error ->

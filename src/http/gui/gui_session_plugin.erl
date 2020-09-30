@@ -87,9 +87,9 @@ delete(Id) ->
 %% {@link gui_session_plugin_behaviour} callback timestamp/0.
 %% @end
 %%--------------------------------------------------------------------
--spec timestamp() -> non_neg_integer().
+-spec timestamp() -> time_utils:seconds().
 timestamp() ->
-    time_utils:cluster_time_seconds().
+    time_utils:timestamp_seconds().
 
 
 %%--------------------------------------------------------------------

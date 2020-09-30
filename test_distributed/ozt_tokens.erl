@@ -157,7 +157,7 @@ revoke_all_temporary_tokens(?SUB(?ONEPROVIDER, PrId)) ->
 -spec ensure_time_caveat([caveats:caveat()]) -> [caveats:caveat()].
 ensure_time_caveat(Caveats) ->
     case caveats:find(cv_time, Caveats) of
-        false -> [#cv_time{valid_until = ozt:cluster_time_seconds() + ?DEFAULT_TEMP_CAVEAT_TTL} | Caveats];
+        false -> [#cv_time{valid_until = ozt:timestamp_seconds() + ?DEFAULT_TEMP_CAVEAT_TTL} | Caveats];
         {true, _} -> Caveats
     end.
 

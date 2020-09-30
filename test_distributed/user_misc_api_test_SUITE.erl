@@ -1136,7 +1136,7 @@ acquire_idp_access_token_test(Config) ->
 
     % Simulate user login
     DummyAccessToken = <<"abcdef">>,
-    Now = oz_test_utils:cluster_time_seconds(Config),
+    Now = oz_test_utils:timestamp_seconds(Config),
     oz_test_utils:call_oz(Config, linked_accounts, merge, [
         U1, #linked_account{
             idp = dummyIdP,

@@ -253,7 +253,7 @@ create_n_legacy_client_tokens(UserId, Count) ->
             value = #onedata_auth{secret = Secret, user_id = UserId}
         }]),
         TokenId = Doc#document.key,
-        ExpirationTime = ozt:cluster_time_seconds() + 31536000, % 1 year
+        ExpirationTime = ozt:timestamp_seconds() + 31536000, % 1 year
         Macaroon = macaroon:create(ozt:get_domain(), Secret, TokenId),
         Confined = macaroon:add_first_party_caveat(Macaroon, ["time < ", integer_to_binary(ExpirationTime)]),
         Token = #token{

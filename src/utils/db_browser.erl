@@ -848,14 +848,14 @@ format_value(admin_privileges, Privileges) ->
 %% @private
 -spec format_date(time_utils:seconds()) -> string().
 format_date(Timestamp) ->
-    {{Year, Month, Day}, _} = time_utils:epoch_to_datetime(Timestamp),
+    {{Year, Month, Day}, _} = time_utils:seconds_to_datetime(Timestamp),
     str_utils:format("~4..0B-~2..0B-~2..0B", [Year, Month, Day]).
 
 
 %% @private
 -spec format_time(time_utils:seconds(), hour_min) -> string().
 format_time(Timestamp, hour_min) ->
-    {_, {Hour, Minute, _}} = time_utils:epoch_to_datetime(Timestamp),
+    {_, {Hour, Minute, _}} = time_utils:seconds_to_datetime(Timestamp),
     str_utils:format("~2..0B:~2..0B", [Hour, Minute]).
 
 

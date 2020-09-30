@@ -89,7 +89,7 @@ get_response(<<"protocolVersion">>, _Args) ->
 get_response(<<"earliestDatestamp">>, _Args) ->
     case get_earliest_datestamp() of
         none -> <<"Repository is empty">>;
-        Datestamp -> oai_utils:datetime_to_oai_datestamp(Datestamp)
+        Datestamp -> oai_utils:serialize_datestamp(Datestamp)
     end;
 get_response(<<"deletedRecord">>, _Args) ->
     <<"no">>;
@@ -124,7 +124,7 @@ get_earliest_datestamp() ->
     Ids = oai_utils:list_handles(),
     Datestamps = lists:map(fun(Id) ->
         #od_handle{timestamp = Timestamp} = oai_utils:get_handle(Id),
-        Timestamp
+        time_utils:seconds_to_datetime(Timestamp)
     end, Ids),
     case Datestamps of
         [] -> none;

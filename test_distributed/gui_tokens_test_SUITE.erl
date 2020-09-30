@@ -280,7 +280,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     {ok, ProviderIdentityToken} = oz_test_utils:call_oz(Config, token_logic, create_provider_temporary_token, [
         ?ROOT, ProviderId, #{
             <<"type">> => ?IDENTITY_TOKEN,
-            <<"caveats">> => [#cv_time{valid_until = oz_test_utils:cluster_time_seconds(Config) + 36000}]
+            <<"caveats">> => [#cv_time{valid_until = oz_test_utils:timestamp_seconds(Config) + 36000}]
         }
     ]),
     {ok, SerializedProviderIdentityToken} = tokens:serialize(ProviderIdentityToken),

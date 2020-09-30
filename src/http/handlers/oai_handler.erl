@@ -238,7 +238,8 @@ insert_to_root_xml_element(Content) when is_list(Content) ->
 %%%--------------------------------------------------------------------
 -spec generate_response_date_element() -> {atom(), binary()}.
 generate_response_date_element() ->
-    {responseDate, oai_utils:datetime_to_oai_datestamp(erlang:universaltime())}.
+    DateTime = time_utils:seconds_to_datetime(time_utils:timestamp_seconds()),
+    {responseDate, oai_utils:serialize_datestamp(DateTime)}.
 
 %%%--------------------------------------------------------------------
 %%% @private

@@ -187,7 +187,7 @@ parse_harvesting_datestamps(ArgsList) ->
 -spec validate_and_convert_datestamp(undefined | binary()) -> supported_datestamp().
 validate_and_convert_datestamp(undefined) -> undefined;
 validate_and_convert_datestamp(Date) ->
-    case oai_utils:oai_datestamp_to_datetime(Date) of
+    case oai_utils:deserialize_datestamp(Date) of
         {error, invalid_date_format} ->
             throw({invalid_date_format, Date});
         ConvertedDate ->
