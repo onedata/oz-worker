@@ -2528,7 +2528,7 @@ connection_status_tracking(Config) ->
     ?awaitResult(0, GetLastActivity()),
 
     ClientPid1 = start_gs_connection(Config, ProviderToken),
-    TimestampAlpha = oz_test_utils:cluster_time_seconds(Config),
+    TimestampAlpha = oz_test_utils:timestamp_seconds(Config),
     ?awaitResult(true, IsOnline()),
     ?awaitResult({true, TimestampAlpha}, InspectStatus()),
     ?awaitResult(now, GetLastActivity()),
@@ -2560,7 +2560,7 @@ connection_status_tracking(Config) ->
     % if the provider has heartbeated within the last inactivity period,
     % it should be considered online - modify the WS keepalive interval to a low
     % value to check that
-    TimestampBeta = oz_test_utils:cluster_time_seconds(Config),
+    TimestampBeta = oz_test_utils:timestamp_seconds(Config),
     InactivityPeriod = SetWebsocketKeepalive(10),
     ClientPid4 = start_gs_connection(Config, ProviderToken),
     ClientPid5 = start_gs_connection(Config, ProviderToken),
@@ -2568,7 +2568,7 @@ connection_status_tracking(Config) ->
     oz_test_utils:simulate_time_passing(Config, 84928),
     % wait until a heartbeat is actually done by the client
     timer:sleep(timer:seconds(12)),
-    HeartbeatTimestamp = oz_test_utils:cluster_time_seconds(Config),
+    HeartbeatTimestamp = oz_test_utils:timestamp_seconds(Config),
     % the provider should appear as online since the connection time
     ?awaitResult(true, IsOnline()),
     ?awaitResult({true, TimestampBeta}, InspectStatus()),
@@ -2586,7 +2586,7 @@ connection_status_tracking(Config) ->
 
     % upon reconnection, the provider should become online again
     ClientPid6 = start_gs_connection(Config, ProviderToken),
-    TimestampGamma = oz_test_utils:cluster_time_seconds(Config),
+    TimestampGamma = oz_test_utils:timestamp_seconds(Config),
     ?awaitResult(true, IsOnline()),
     ?awaitResult({true, TimestampGamma}, InspectStatus()),
     ?awaitResult(now, GetLastActivity()),
@@ -2616,7 +2616,7 @@ connection_status_tracking(Config) ->
         end),
         % regardless of the order of operations, the provider should eventually
         % appear as online, because new connections have been established
-        TimestampDelta = oz_test_utils:cluster_time_seconds(Config),
+        TimestampDelta = oz_test_utils:timestamp_seconds(Config),
         ?awaitResult(true, IsOnline()),
         ?awaitResult({true, TimestampDelta}, InspectStatus()),
         ?awaitResult(now, GetLastActivity()),

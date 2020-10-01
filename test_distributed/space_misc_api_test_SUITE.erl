@@ -1118,7 +1118,7 @@ update_provider_sync_progress_test(Config) ->
 update_provider_sync_progress_test(Config, Space, SubjectProvider, SubjectProviderToken, AllClients) ->
     {ok, SpaceRecord} = oz_test_utils:get_space(Config, Space),
     SupportingProviders = maps:keys(SpaceRecord#od_space.eff_providers),
-    Now = oz_test_utils:cluster_time_seconds(Config),
+    Now = oz_test_utils:timestamp_seconds(Config),
     RandomizeSyncProgressPerProvider = fun() ->
         lists:foldl(fun(Provider, Acc) ->
             % Due to delays in GraphSync, providers might not know all the other

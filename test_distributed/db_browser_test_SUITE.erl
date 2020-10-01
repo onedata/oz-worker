@@ -283,7 +283,7 @@ set_up_provider_sync_progress(Environment = #environment{spaces = Spaces}) ->
                 lists:map(fun(OtherProvider) ->
                     {OtherProvider, #{
                         <<"seq">> => rand:uniform(10000),
-                        <<"timestamp">> => ozt:cluster_time_seconds() - rand:uniform(50000)
+                        <<"timestamp">> => ozt:timestamp_seconds() - rand:uniform(50000)
                     }}
                 end, EffProviders)
             )])),
