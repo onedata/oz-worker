@@ -97,7 +97,16 @@ authenticate_for_rest_interface(Req, Token) ->
             ?ERROR_UNAUTHORIZED(Error);
         {{ok, Service}, {ok, Consumer}} ->
             {PeerIp, _} = cowboy_req:peer(Req),
-            authenticate(Token, #auth_ctx{ip = PeerIp, interface = rest, service = Service, consumer = Consumer})
+            authenticate(Token, #auth_ctx{
+                ip = PeerIp,
+                interface = rest,
+                service = Service,
+                consumer = Consumer,
+                session_id = case gui_session:peek_session_id(Req) of
+                    {ok, S} -> S;
+                    _ -> undefined
+                end
+            })
     end.
 
 
@@ -123,7 +132,7 @@ verify_access_token(#token{type = ReceivedTokenType}, _AuthCtx) ->
 %%--------------------------------------------------------------------
 -spec verify_identity_token(tokens:token(), aai:auth_ctx()) ->
     {ok, {aai:subject(), [caveats:caveat()]}} | errors:error().
-verify_identity_token(#token{type = ?ACCESS_TOKEN = Type} = Token, AuthCtx) ->
+verify_identity_token(#token{type = ?ACCESS_TOKEN(undefined) = Type} = Token, AuthCtx) ->
     %% @todo VFS-6098 access tokens are still accepted as identity tokens
     %% for backward compatibility with legacy providers
     case verify_token(Token, AuthCtx#auth_ctx{scope = identity_token}) of

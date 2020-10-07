@@ -14,6 +14,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
@@ -115,8 +116,9 @@ session_cookie_refresh_and_grace_period(Config) ->
     }} = rpc:call(random_node(Config), gui_session_plugin, get, [SessionId]),
 
     oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_refresh_interval) + 1),
-    {ok, _, NewCookie, _} = ?assertMatch({ok, _, _, _}, validate_session(Config, Cookie)),
+    {ok, _, _, Req} = ?assertMatch({ok, UserId, SessionId, _}, validate_session(Config, Cookie)),
     % Cookie should have been refreshed
+    NewCookie = oz_test_utils:parse_resp_session_cookie(Req),
     ?assertNotEqual(Cookie, NewCookie),
 
     {ok, #gui_session{
@@ -368,7 +370,7 @@ start_gs_connection(Config, Cookie) ->
             rpc:multicall(Nodes, oz_worker, set_env, [mocked_pid, self()]),
             {ok, ClientPid, #gs_resp_handshake{identity = Identity}} = gs_client:start_link(
                 oz_test_utils:graph_sync_url(Config, gui),
-                {token, GuiToken},
+                {with_http_cookies, {token, GuiToken}, [{?SESSION_COOKIE_KEY, Cookie}]},
                 oz_test_utils:get_gs_supported_proto_versions(Config),
                 fun(_) -> ok end,
                 [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
@@ -386,7 +388,7 @@ start_gs_connection(Config, Cookie) ->
 validate_session(Config, Cookie) ->
     MockedReq = #{
         resp_headers => #{},
-        headers => #{<<"cookie">> => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
+        headers => #{?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
     },
     rpc:call(random_node(Config), gui_session, validate, [MockedReq]).
 
@@ -414,6 +416,7 @@ compare_connections_per_user(Config, UserId, Expected) ->
         end, Sessions)
     end,
     compare_lists(ListFun, Expected, 60).
+
 
 compare_lists(ListFun, Expected, Retries) ->
     Got = ListFun(),

@@ -348,6 +348,7 @@ check_bad_token_scenarios(RequestSpec) ->
     % The error depends on the request context, which is randomized with every request
     ?assert(lists:member(Error, [
         ?ERROR_FORBIDDEN,
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID),
         ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)]}))
     ])),
 

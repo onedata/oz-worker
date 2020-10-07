@@ -479,12 +479,12 @@ error_to_gs_expectations(Config, ErrorType) ->
 prepare_gs_client(Config, {user, UserId, _Token}) ->
     prepare_gs_client(Config, {user, UserId});
 prepare_gs_client(Config, {user, UserId}) ->
-    {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, UserId),
-    {ok, GuiToken} = oz_test_utils:request_gui_token(Config, CookieValue),
+    {ok, {_SessionId, SessionCookie}} = oz_test_utils:log_in(Config, UserId),
+    {ok, GuiToken} = oz_test_utils:request_gui_token(Config, SessionCookie),
     prepare_gs_client(
         Config,
         ?SUB(user, UserId),
-        {token, GuiToken},
+        {with_http_cookies, {token, GuiToken}, [{?SESSION_COOKIE_KEY, SessionCookie}]},
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
     );
 prepare_gs_client(_Config, nobody) ->
