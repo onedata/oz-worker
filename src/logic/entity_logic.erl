@@ -985,7 +985,7 @@ check_value(json, JsonValidator, Key, Map) when is_map(JsonValidator) ->
 
 check_value(json, qos_parameters, _Key, Map) ->
     case maps:fold(fun(K, V, Acc) -> 
-        Acc andalso is_binary(K) andalso (is_binary(V) or is_integer(V)) 
+        Acc andalso is_binary(K) andalso (is_binary(V) or is_number(V)) 
     end, true, Map) of
         true -> Map;
         false -> throw(?ERROR_BAD_VALUE_QOS_PARAMETERS)
