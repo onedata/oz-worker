@@ -102,9 +102,20 @@ authenticate_for_rest_interface(Req, Token) ->
                 interface = rest,
                 service = Service,
                 consumer = Consumer,
-                session_id = case gui_session:peek_session_id(Req) of
-                    {ok, S} -> S;
-                    _ -> undefined
+                % @TODO VFS-3817 Required until Onepanel uses GraphSync
+                % with auth override for authenticating its clients.
+                % Make sure to keep backward compatibility when it does!
+                session_id = case Service of
+                    % accept any session - op-worker and op-panel have no way of tracking
+                    % client's session as they are hosted on different domain than Onezone
+                    ?SERVICE(?OP_PANEL, _) ->
+                        any;
+                    _ ->
+                        case gui_session:peek_session_id(Req) of
+                            {ok, S} -> S;
+                            _ -> undefined
+
+                        end
                 end
             })
     end.
