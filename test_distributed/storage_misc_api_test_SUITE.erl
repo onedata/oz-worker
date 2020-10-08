@@ -154,8 +154,8 @@ create_test_base(Config, ReadonlyValue) ->
             optional = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
-                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}],
-                <<"qosParameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}],
+                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}, #{<<"key">> => 123.4}],
+                <<"qosParameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}, #{<<"key">> => 123.4}],
                 <<"imported">> => [true, false],
                 <<"readonly">> => [ReadonlyValue]
             },
@@ -384,8 +384,8 @@ update_test(Config, ReadonlyValue) ->
             required = [<<"imported">>, <<"readonly">>],
             at_least_one = [<<"qos_parameters">>, <<"qosParameters">>],
             correct_values = #{
-                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}],
-                <<"qosParameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}],
+                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}, #{<<"key">> => 123.4}],
+                <<"qosParameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}, #{<<"key">> => 123.4}],
                 <<"imported">> => [true, false],
                 <<"readonly">> => [ReadonlyValue]
             },
