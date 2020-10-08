@@ -19,10 +19,10 @@
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 -include("api_test_utils.hrl").
 
-%% API
 -export([
     all/0,
     init_per_suite/1, end_per_suite/1,
@@ -30,6 +30,7 @@
 ]).
 -export([
     gui_tokens_are_bound_to_specific_service/1,
+    gui_tokens_for_onezone_work_only_with_session_cookie/1,
     gui_tokens_have_limited_api_power/1,
     gui_tokens_can_be_created_via_endpoint/1,
     gui_tokens_are_accepted_from_legacy_providers/1,
@@ -43,6 +44,7 @@
 all() ->
     ?ALL([
         gui_tokens_are_bound_to_specific_service,
+        gui_tokens_for_onezone_work_only_with_session_cookie,
         gui_tokens_have_limited_api_power,
         gui_tokens_can_be_created_via_endpoint,
         gui_tokens_are_accepted_from_legacy_providers,
@@ -160,6 +162,29 @@ gui_tokens_are_bound_to_specific_service(Config) ->
     ?assertUnverifiedService(?OPP_SRV(OpClusterId), verify_token(Config, Token4, ?OZP_SRV(OzClusterId))),
     ?assertUnverifiedService(?OPP_SRV(OpClusterId), verify_token(Config, Token4, ?OPW_SRV(OpClusterId))),
     ?assertUnverifiedService(?OPP_SRV(OpClusterId), verify_token(Config, Token4, undefined)).
+
+
+gui_tokens_for_onezone_work_only_with_session_cookie(Config) ->
+    {ok, UserId} = oz_test_utils:create_user(Config),
+    {ok, {SessionId, Cookie}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {Token, _}} = create_access_token_for_gui(Config, UserId, SessionId, ?OZW_SRV(?ONEZONE_CLUSTER_ID)),
+    {ok, SerializedToken} = tokens:serialize(Token),
+
+    % GS or REST requests with the token should work only if the cookie is provided
+    ?assertEqual(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), connect_via_graph_sync(
+        Config, Token, []
+    )),
+    ?assertMatch({ok, _, #gs_resp_handshake{identity = ?SUB(user, UserId)}}, connect_via_graph_sync(
+        Config, Token, [{?SESSION_COOKIE_KEY, Cookie}]
+    )),
+
+    ?assertMatch({ok, 401, _, _}, get_user_info_via_rest(Config, #{
+        ?HDR_X_AUTH_TOKEN => SerializedToken
+    })),
+    ?assertMatch({ok, 200, _, _}, get_user_info_via_rest(Config, #{
+        ?HDR_X_AUTH_TOKEN => SerializedToken,
+        ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
+    })).
 
 
 gui_tokens_have_limited_api_power(Config) ->
@@ -284,21 +309,17 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
         }
     ]),
     {ok, SerializedProviderIdentityToken} = tokens:serialize(ProviderIdentityToken),
-    {ok, _, _, UserData} = ?assertMatch({ok, 200, _, _}, http_client:get(
-        ?URL(Config, [<<"/user">>]),
-        #{
-            ?HDR_X_AUTH_TOKEN => OpwTokenU1Serialized,
-            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, SerializedProviderIdentityToken)
-        },
-        <<"">>,
-        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
-    )),
+    {ok, _, _, UserData} = ?assertMatch({ok, 200, _, _}, get_user_info_via_rest(Config, #{
+        ?HDR_X_AUTH_TOKEN => OpwTokenU1Serialized,
+        ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, SerializedProviderIdentityToken),
+        ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", CookieU1/binary>>
+    })),
     ?assertMatch(#{<<"userId">> := User1}, json_utils:decode(UserData)).
 
 
 gui_tokens_are_accepted_from_legacy_providers(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config),
-    {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {SessionId, Cookie}} = oz_test_utils:log_in(Config, UserId),
     % The user will belong to the cluster as the provider admin
     {ok, {ProviderId, ProviderRootToken}} = oz_test_utils:create_provider(Config, UserId, ?UNIQUE_STRING),
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
@@ -315,49 +336,33 @@ gui_tokens_are_accepted_from_legacy_providers(Config) ->
     LegacyProviderToken = oz_test_utils:create_legacy_access_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
     LegacyProviderTokenAuthNone = oz_test_utils:confine_token_with_legacy_auth_none_caveat(LegacyProviderToken),
     {ok, SerializedLegacyAuthNone} = tokens:serialize(LegacyProviderTokenAuthNone),
-    {ok, _, _, UserData} = ?assertMatch({ok, 200, _, UserData}, http_client:get(
-        ?URL(Config, [<<"/user">>]),
-        #{
-            ?HDR_X_AUTH_TOKEN => OpwTokenSerialized,
-            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, SerializedLegacyAuthNone)
-        },
-        <<"">>,
-        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
-    )),
+    {ok, _, _, UserData} = ?assertMatch({ok, 200, _, _}, get_user_info_via_rest(Config, #{
+        ?HDR_X_AUTH_TOKEN => OpwTokenSerialized,
+        ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, SerializedLegacyAuthNone),
+        ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
+    })),
     ?assertMatch(#{<<"userId">> := UserId}, json_utils:decode(UserData)),
 
-    ?assertMatch({ok, 200, _, UserData}, http_client:get(
-        ?URL(Config, [<<"/user">>]),
-        #{
-            ?HDR_X_AUTH_TOKEN => OppTokenSerialized,
-            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_PANEL, SerializedLegacyAuthNone)
-        },
-        <<"">>,
-        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
-    )),
+    ?assertMatch({ok, 200, _, UserData}, get_user_info_via_rest(Config, #{
+        ?HDR_X_AUTH_TOKEN => OppTokenSerialized,
+        ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_PANEL, SerializedLegacyAuthNone),
+        ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
+    })),
 
     %% @todo VFS-6098 for backward compatibility - when a legacy provider is
     %% registered in a modern zone, it gets a modern token but uses it in legacy
     %% way (presenting the access token as its identity proof) - this should
     %% also be supported
-    ?assertMatch({ok, 200, _, UserData}, http_client:get(
-        ?URL(Config, [<<"/user">>]),
-        #{
-            ?HDR_X_AUTH_TOKEN => OpwTokenSerialized,
-            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, ProviderRootToken)
-        },
-        <<"">>,
-        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
-    )),
-    ?assertMatch({ok, 200, _, UserData}, http_client:get(
-        ?URL(Config, [<<"/user">>]),
-        #{
-            ?HDR_X_AUTH_TOKEN => OppTokenSerialized,
-            ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_PANEL, ProviderRootToken)
-        },
-        <<"">>,
-        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
-    )).
+    ?assertMatch({ok, 200, _, UserData}, get_user_info_via_rest(Config, #{
+        ?HDR_X_AUTH_TOKEN => OpwTokenSerialized,
+        ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_WORKER, ProviderRootToken),
+        ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
+    })),
+    ?assertMatch({ok, 200, _, UserData}, get_user_info_via_rest(Config, #{
+        ?HDR_X_AUTH_TOKEN => OppTokenSerialized,
+        ?HDR_X_ONEDATA_SERVICE_TOKEN => tokens:add_oneprovider_service_indication(?OP_PANEL, ProviderRootToken),
+        ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
+    })).
 
 
 gui_tokens_expire(Config) ->
@@ -560,9 +565,7 @@ init_per_testcase(_, Config) ->
 
 
 end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_time(Config),
-    ok.
-
+    oz_test_utils:unmock_time(Config).
 
 %%%===================================================================
 %%% Helper functions
@@ -574,8 +577,8 @@ create_access_token_for_gui(Config, UserId, SessionId, Service) ->
     ]).
 
 
-verify_token(Config, Token, Service) ->
-    oz_test_utils:authenticate_by_token(Config, Token, #auth_ctx{service = Service}).
+verify_token(Config, Token = #token{type = ?ACCESS_TOKEN(SessionId)}, Service) ->
+    oz_test_utils:authenticate_by_token(Config, Token, #auth_ctx{service = Service, session_id = SessionId}).
 
 
 create_provider_supporting_user(Config, UserId) ->
@@ -584,3 +587,24 @@ create_provider_supporting_user(Config, UserId) ->
     oz_test_utils:support_space_by_provider(Config, ProviderId, SpaceId),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     ProviderId.
+
+
+connect_via_graph_sync(Config, Token, Cookies) ->
+    Url = oz_test_utils:graph_sync_url(Config, gui),
+    {ok, SerializedToken} = tokens:serialize(Token),
+    gs_client:start_link(
+        Url,
+        {with_http_cookies, {token, SerializedToken}, Cookies},
+        ?SUPPORTED_PROTO_VERSIONS,
+        fun(_) -> ok end,
+        [{secure, only_verify_peercert}, {cacerts, oz_test_utils:gui_ca_certs(Config)}]
+    ).
+
+
+get_user_info_via_rest(Config, Headers) ->
+    http_client:get(
+        ?URL(Config, [<<"/user">>]),
+        Headers,
+        <<"">>,
+        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
+    ).

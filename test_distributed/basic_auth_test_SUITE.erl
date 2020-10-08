@@ -97,20 +97,11 @@ basic_auth_endpoint_test(Config) ->
     },
     Opts = [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}],
     Response = http_client:post(Endpoint, BasicAuthHeaders, [], Opts),
-    ?assertMatch({ok, 200, _, _}, Response),
-    {ok, 200, RespHeaders, _} = Response,
-    % Make sure response headers contain cookie with session id - which means
-    % that the user has logged in.
-    Cookie = maps:get(<<"set-cookie">>, RespHeaders, <<"">>),
-    % Cookie: SID=99e4557|4bec19d7; Version=1; Expires=Mon, 13-May-2019 07:46:05 GMT; ...
-    CookieKey = ?SESSION_COOKIE_KEY,
-    CookieLen = byte_size(?SESSION_COOKIE_KEY),
-    ?assertMatch(<<CookieKey:CookieLen/binary, "=", _/binary>>, Cookie),
-    [CookieKeyAndValue | _] = binary:split(Cookie, <<";">>),
-    % CookieKeyAndValue: SID=99e4557|4bec19d7
-    <<CookieKey:CookieLen/binary, "=", CookieValue/binary>> = CookieKeyAndValue,
-    % CookieValue: 99e4557|4bec19d7
-    SessionId = gui_session:get_session_id(CookieValue),
+    ?assertMatch({ok, 200, #{?HDR_SET_COOKIE := _}, _}, Response),
+    {ok, 200, #{?HDR_SET_COOKIE := SetCookieHeader}, _} = Response,
+    % make sure response headers contain cookie with session id - which means that the user has logged in
+    SessionCookie = oz_test_utils:parse_resp_session_cookie(SetCookieHeader),
+    {ok, SessionId} = ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, gui_session, peek_session_id, [SessionCookie])),
     ?assertMatch({ok, User}, oz_test_utils:call_oz(Config, session, get_user_id, [SessionId])),
 
     % If basic auth is disabled for given user, he should not be able to authenticate

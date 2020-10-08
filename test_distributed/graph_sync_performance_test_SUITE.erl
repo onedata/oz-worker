@@ -382,8 +382,8 @@ spawn_clients(Config, Type, Clients, RetryFlag, CallbackFunction, OnSuccessFun) 
     AuthsAndIdentities = lists:map(fun(Client) ->
         case Type of
             gui ->
-                {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, Client),
-                {ok, GuiToken} = oz_test_utils:request_gui_token(Config, CookieValue),
+                {ok, {_SessionId, SessionCookie}} = oz_test_utils:log_in(Config, Client),
+                {ok, GuiToken} = oz_test_utils:request_gui_token(Config, SessionCookie),
                 Auth = {token, GuiToken},
                 Identity = ?SUB(user, Client),
                 {Auth, Identity};

@@ -23,7 +23,7 @@
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 %% API
--export([verify_handshake_auth/2]).
+-export([verify_handshake_auth/3]).
 -export([client_connected/2, client_heartbeat/2, client_disconnected/2]).
 -export([verify_auth_override/2]).
 -export([is_authorized/5]).
@@ -38,17 +38,25 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link gs_logic_plugin_behaviour} callback verify_handshake_auth/2.
+%% {@link gs_logic_plugin_behaviour} callback verify_handshake_auth/3.
 %% @end
 %%--------------------------------------------------------------------
--spec verify_handshake_auth(gs_protocol:client_auth(), ip_utils:ip()) ->
+-spec verify_handshake_auth(gs_protocol:client_auth(), ip_utils:ip(), gs_protocol:cookies()) ->
     {ok, aai:auth()} | errors:error().
-verify_handshake_auth(undefined, PeerIp) ->
+verify_handshake_auth(undefined, PeerIp, _Cookies) ->
     {ok, #auth{subject = ?SUB(nobody), peer_ip = PeerIp}};
-verify_handshake_auth(nobody, PeerIp) ->
+verify_handshake_auth(nobody, PeerIp, _Cookies) ->
     {ok, #auth{subject = ?SUB(nobody), peer_ip = PeerIp}};
-verify_handshake_auth({token, Token}, PeerIp) ->
-    case token_auth:authenticate(Token, #auth_ctx{ip = PeerIp, interface = graphsync}) of
+verify_handshake_auth({token, Token}, PeerIp, Cookies) ->
+    AuthCtx = #auth_ctx{
+        ip = PeerIp,
+        interface = graphsync,
+        session_id = case gui_session:peek_session_id(Cookies) of
+            {ok, S} -> S;
+            _ -> undefined
+        end
+    },
+    case token_auth:authenticate(Token, AuthCtx) of
         {true, Auth} -> {ok, Auth};
         {error, _} = Error -> Error
     end.
@@ -90,7 +98,7 @@ client_connected(_, _) ->
 %%--------------------------------------------------------------------
 -spec client_heartbeat(aai:auth(), gs_server:conn_ref()) ->
     ok.
-client_heartbeat(Client, ConnectionRef) ->
+client_heartbeat(_Client, _ConnectionRef) ->
     ok.
 
 
@@ -170,8 +178,12 @@ verify_auth_override(?PROVIDER(ProviderId) = Auth, #auth_override{client_auth = 
     case ResolvedConsumer of
         {ok, Consumer} ->
             AuthCtx = #auth_ctx{
-                ip = PeerIp, interface = Interface, service = Service,
-                consumer = Consumer, data_access_caveats_policy = DataAccessCaveatsPolicy
+                ip = PeerIp, interface = Interface,
+                service = Service, consumer = Consumer,
+                data_access_caveats_policy = DataAccessCaveatsPolicy,
+                % accept any session - op-worker and op-panel have no way of tracking
+                % client's session as they are hosted on different domain than Onezone
+                session_id = any
             },
             case token_auth:authenticate(Token, AuthCtx) of
                 {true, ?USER = UserAuth} -> {ok, UserAuth};

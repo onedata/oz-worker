@@ -303,7 +303,7 @@
     copy_file_to_node/2
 ]).
 -export([
-    log_in/2, log_out/2,
+    log_in/2, log_out/2, parse_resp_session_cookie/1,
     graph_sync_url/2,
     get_gs_supported_proto_versions/1
 ]).
@@ -3516,15 +3516,10 @@ copy_file_to_node(Node, Path) ->
 -spec log_in(Config :: term(), UserId :: od_user:id()) -> {ok, {session:id(), Cookie :: binary()}}.
 log_in(Config, UserId) ->
     MockedReq = #{},
-    CookieKey = ?SESSION_COOKIE_KEY,
-    #{resp_cookies := #{CookieKey := CookieIoList}} = ?assertMatch(#{}, call_oz(
-        Config, gui_session, log_in, [UserId, MockedReq]
-    )),
-    Cookie = iolist_to_binary(CookieIoList),
-    CookieLen = byte_size(?SESSION_COOKIE_KEY),
-    [<<CookieKey:CookieLen/binary, "=", CookieVal/binary>> | _] = binary:split(Cookie, <<";">>, [global, trim_all]),
-    SessionId = call_oz(Config, gui_session, get_session_id, [CookieVal]),
-    {ok, {SessionId, CookieVal}}.
+    RespReq = ?assertMatch(#{}, call_oz(Config, gui_session, log_in, [UserId, MockedReq])),
+    SessionCookie = parse_resp_session_cookie(RespReq),
+    {ok, SessionId} = call_oz(Config, gui_session, peek_session_id, [SessionCookie]),
+    {ok, {SessionId, SessionCookie}}.
 
 
 %%--------------------------------------------------------------------
@@ -3538,10 +3533,25 @@ log_out(Config, Cookie) ->
         resp_headers => #{},
         headers => #{?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
     },
-    ?assertMatch(#{}, call_oz(
-        Config, gui_session, log_out, [MockedReq]
-    )),
+    ?assertMatch(#{}, call_oz(Config, gui_session, log_out, [MockedReq])),
     ok.
+
+
+-spec parse_resp_session_cookie(cowboy_req:req() | binary()) -> undefined | binary().
+parse_resp_session_cookie(SetCookieHeader) when is_binary(SetCookieHeader) ->
+    % SetCookieHeader: SID=99e4557|4bec19d7; Version=1; Expires=Mon, 13-May-2019 07:46:05 GMT; ...
+    Key = ?SESSION_COOKIE_KEY,
+    Len = byte_size(?SESSION_COOKIE_KEY),
+    [<<Key:Len/binary, "=", SessionCookie/binary>> | _] = binary:split(SetCookieHeader, <<";">>, [global, trim_all]),
+    SessionCookie;
+parse_resp_session_cookie(Req) ->
+    SessionCookieKey = ?SESSION_COOKIE_KEY,
+    case Req of
+        #{resp_cookies := #{SessionCookieKey := SetCookieHeader}} ->
+            parse_resp_session_cookie(iolist_to_binary(SetCookieHeader));
+        _ ->
+            undefined
+    end.
 
 
 %%--------------------------------------------------------------------

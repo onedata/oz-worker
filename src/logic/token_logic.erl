@@ -166,6 +166,10 @@ create_access_token_for_gui(Auth, UserId, SessionId, Service) ->
             #cv_time{valid_until = time_utils:timestamp_seconds() + Ttl},
             #cv_service{whitelist = [Service]}
             % @TODO VFS-5913 Add interface caveat when it is fully supported by Onepanel
+            % note that there are some problems with that:
+            % * the interface caveat will break harvester GUI uploads and file uploads in Oneprovider
+            % * due to the above, either the caveat must be added depending on the service version,
+            %   or it must be introduced gradually over 2 major releases to ensure backward compatibility
         ]
     }),
     case Result of

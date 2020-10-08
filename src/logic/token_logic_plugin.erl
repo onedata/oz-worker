@@ -154,7 +154,7 @@ create(#el_req{gri = #gri{id = undefined, aspect = confine}, data = Data}) ->
 
 create(#el_req{gri = #gri{id = undefined, aspect = verify_access_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
-    AuthCtx = build_auth_ctx(Data),
+    AuthCtx = build_token_verification_auth_ctx(Data),
     case token_auth:verify_access_token(Token, AuthCtx) of
         {ok, #auth{subject = Subject, caveats = Caveats}} ->
             {ok, value, #{
@@ -167,7 +167,7 @@ create(#el_req{gri = #gri{id = undefined, aspect = verify_access_token}, data = 
 
 create(#el_req{gri = #gri{id = undefined, aspect = verify_identity_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
-    AuthCtx = build_auth_ctx(Data),
+    AuthCtx = build_token_verification_auth_ctx(Data),
     case token_auth:verify_identity_token(Token, AuthCtx) of
         {ok, {Subject, Caveats}} ->
             {ok, value, #{
@@ -181,7 +181,7 @@ create(#el_req{gri = #gri{id = undefined, aspect = verify_identity_token}, data 
 create(#el_req{gri = #gri{id = undefined, aspect = verify_invite_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
     ExpType = maps:get(<<"expectedInviteType">>, Data, any),
-    AuthCtx = build_auth_ctx(Data),
+    AuthCtx = build_token_verification_auth_ctx(Data),
     case token_auth:verify_invite_token(Token, ExpType, AuthCtx) of
         {ok, #auth{subject = Subject, caveats = Caveats}} ->
             {ok, value, #{
@@ -194,8 +194,8 @@ create(#el_req{gri = #gri{id = undefined, aspect = verify_invite_token}, data = 
 
 
 %% @private
--spec build_auth_ctx(entity_logic:data()) -> aai:auth_ctx().
-build_auth_ctx(Data) ->
+-spec build_token_verification_auth_ctx(entity_logic:data()) -> aai:auth_ctx().
+build_token_verification_auth_ctx(Data) ->
     PeerIp = utils:null_to_undefined(maps:get(<<"peerIp">>, Data, undefined)),
     Interface = utils:null_to_undefined(maps:get(<<"interface">>, Data, undefined)),
     Service = case utils:null_to_undefined(maps:get(<<"serviceToken">>, Data, undefined)) of
@@ -222,7 +222,10 @@ build_auth_ctx(Data) ->
     end,
     #auth_ctx{
         ip = PeerIp, interface = Interface, service = Service,
-        consumer = Consumer, data_access_caveats_policy = DataAccessCaveatsPolicy
+        consumer = Consumer, data_access_caveats_policy = DataAccessCaveatsPolicy,
+        % allow any session when verifying tokens, the session is checked only if the token
+        % is used by a client to authenticate (then, a matching session cookie must be provided)
+        session_id = any
     }.
 
 
