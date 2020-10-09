@@ -103,7 +103,11 @@ get_name() ->
 %%--------------------------------------------------------------------
 -spec ping(od_harvester:endpoint()) -> ok | {error, term()}.
 ping(Endpoint) ->
-    ?EXTRACT_OK(do_request(get, Endpoint, <<>>, <<>>, <<>>, [200])).
+    try
+        ?EXTRACT_OK(do_request(get, Endpoint, <<>>, <<>>, <<>>, [200]))
+    catch _:_ ->
+        ?ERROR_BAD_DATA(<<"endpoint">>)
+    end.
 
 
 %%--------------------------------------------------------------------
