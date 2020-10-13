@@ -4,6 +4,22 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 20.02.2
+
+-   **VFS-6853** Matching session cookie is now required to verify a GUI
+    access tokens (they are used behind the scenes by the Onedata web
+    applications), which increases security.
+-   **VFS-6852** Fixed Oneprovider and Onezone services not showing in
+    tokens creator's service caveat list when user had no access to
+    service cluster.
+-   **VFS-6732** New JSON and RDF metadata editor based on Ace Editor.
+-   **VFS-6563** All entities avaliable in Onezone REST (users, group,
+    spaces, providers etc) now include the creator and creation time in
+    the returned details.
+-   **VFS-6456** Show more details about lack of privileges when trying
+    to perform various actions in GUI.
+
+
 ### 20.02.1
 
 -   **VFS-6645** Optimize changes querrying.
