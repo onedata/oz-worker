@@ -12,6 +12,9 @@ CHANGELOG
 -   **VFS-6852** Fixed Oneprovider and Onezone services not showing in
     tokens creator's service caveat list when user had no access to
     service cluster.
+-   **VFS-6845** Prevent application from stopping until all documents
+    are correctly persisted in order to improve resistance to temporary
+    database errors.
 -   **VFS-6732** New JSON and RDF metadata editor based on Ace Editor.
 -   **VFS-6563** All entities avaliable in Onezone REST (users, group,
     spaces, providers etc) now include the creator and creation time in
