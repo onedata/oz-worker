@@ -55,7 +55,7 @@
 %%--------------------------------------------------------------------
 -spec get_plugins(Type :: atom()) -> [module()].
 get_plugins(Type) ->
-    {ok, AllPlugins} = simple_cache:get(?PLUGINS_KEY),
+    {ok, AllPlugins} = node_cache:get(?PLUGINS_KEY),
     [P || P <- AllPlugins, P:type() =:= Type].
 
 
@@ -97,7 +97,7 @@ init() ->
         end
     end, PluginFiles),
 
-    simple_cache:put(?PLUGINS_KEY, [Plugin || {ok, Plugin} <- ValidationResults]),
+    node_cache:put(?PLUGINS_KEY, [Plugin || {ok, Plugin} <- ValidationResults]),
     lists:all(fun(Res) -> Res =/= error end, ValidationResults).
 
 %%%===================================================================

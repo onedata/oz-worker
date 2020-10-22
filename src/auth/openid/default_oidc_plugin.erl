@@ -317,7 +317,7 @@ resolve_endpoint(_IdP, Url) ->
 %% @private
 -spec get_xrds(auth_config:idp()) -> map().
 get_xrds(IdP) ->
-    {ok, Xrds} = simple_cache:get({cached_xrds, IdP}, fun() ->
+    {ok, Xrds} = node_cache:get({cached_xrds, IdP}, fun() ->
         {true, fetch_xrds(IdP), ?XRDS_CACHE_TTL}
     end),
     Xrds.

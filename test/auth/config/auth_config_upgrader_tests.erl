@@ -25,17 +25,19 @@
 -define(VERSIONS, lists:seq(1, ?CURRENT_CONFIG_VERSION)).
 
 idps_config_test_() ->
-    {foreach,
-        fun setup/0,
-        fun teardown/1,
-        lists:flatmap(fun({BasicAuthEnabled, OpenidEnabled, SamlEnabled}) ->
-            lists:map(fun(Version) ->
-                {
-                    label(Version, BasicAuthEnabled, OpenidEnabled, SamlEnabled),
-                    testcase(Version, BasicAuthEnabled, OpenidEnabled, SamlEnabled)
-                }
-            end, ?VERSIONS)
-        end, ?COMBINATIONS)
+    {setup, fun node_cache:init/0, fun(_) -> ets:delete(node_cache) end, 
+        {foreach,
+            fun setup/0,
+            fun teardown/1,
+            lists:flatmap(fun({BasicAuthEnabled, OpenidEnabled, SamlEnabled}) ->
+                lists:map(fun(Version) ->
+                    {
+                        label(Version, BasicAuthEnabled, OpenidEnabled, SamlEnabled),
+                        testcase(Version, BasicAuthEnabled, OpenidEnabled, SamlEnabled)
+                    }
+                end, ?VERSIONS)
+            end, ?COMBINATIONS)
+        }
     }.
 
 

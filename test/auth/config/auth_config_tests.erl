@@ -87,6 +87,7 @@ setup_test_auth_config() ->
 
 %% Type :: production | test
 setup(Type) ->
+    node_cache:init(),
     meck:new(file, [unstick, passthrough]),
     meck:expect(file, consult, fun
         (?DUMMY_AUTH_CONFIG_PATH) -> {ok, [get_mock_config_file()]};
@@ -140,6 +141,7 @@ setup(Type) ->
     oz_worker:set_env(http_domain, ?DUMMY_ONEZONE_DOMAIN).
 
 teardown(_) ->
+    ets:delete(node_cache),
     ?assert(meck:validate(file)),
     ok = meck:unload(file),
     ?assert(meck:validate(filelib)),

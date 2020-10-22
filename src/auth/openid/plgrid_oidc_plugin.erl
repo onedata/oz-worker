@@ -151,7 +151,7 @@ get_user_info(_IdP, _AccessToken) ->
 %%--------------------------------------------------------------------
 -spec plgrid_endpoint(auth_config:idp()) -> binary().
 plgrid_endpoint(IdP) ->
-    {ok, Endpoint} = simple_cache:get({cached_xrds, IdP}, fun() ->
+    {ok, Endpoint} = node_cache:get({cached_xrds, IdP}, fun() ->
         {true, discover_plgrid_endpoint(IdP), ?XRDS_CACHE_TTL}
     end),
     Endpoint.

@@ -239,7 +239,7 @@ group_join_group_token(_Config) ->
         eligible_consumer_types = [{user, fun(?SUB(user, UserId)) ->
             ChildGroupId = ozt_users:create_group_for(UserId),
             % Store the group in memory for use in different callbacks
-            simple_cache:put({user_group, UserId}, ChildGroupId)
+            node_cache:put({user_group, UserId}, ChildGroupId)
         end}],
         requires_privileges_to_consume = true,
         admin_privilege_to_consume = ?OZ_GROUPS_ADD_RELATIONSHIPS,
@@ -251,18 +251,18 @@ group_join_group_token(_Config) ->
                 {_, to_set_privs} ->
                     set_user_privs_in_group(ParentGroupId, UserId, Modification);
                 {_, to_consume} ->
-                    {ok, ChildGroupId} = simple_cache:get({user_group, UserId}),
+                    {ok, ChildGroupId} = node_cache:get({user_group, UserId}),
                     set_user_privs_in_group(ChildGroupId, UserId, Modification)
             end
         end,
         check_privileges_fun = fun(?SUB(user, UserId), ExpectedPrivileges) ->
-            {ok, ChildGroupId} = simple_cache:get({user_group, UserId}),
+            {ok, ChildGroupId} = node_cache:get({user_group, UserId}),
             ActualPrivileges = ozt_groups:get_child_privileges(ParentGroupId, ChildGroupId),
             lists:sort(ExpectedPrivileges) =:= lists:sort(ActualPrivileges)
         end,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, SubjectId)}, Token) ->
-            ChildGroupId = case simple_cache:get({user_group, SubjectId}) of
+            ChildGroupId = case node_cache:get({user_group, SubjectId}) of
                 {ok, GrId} ->
                     % Covers users that were set up according to eligible_consumer_types
                     GrId;
@@ -285,7 +285,7 @@ group_join_group_token(_Config) ->
             ozt_groups:delete(ParentGroupId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
-            {ok, ChildGroupId} = simple_cache:get({user_group, UserId}),
+            {ok, ChildGroupId} = node_cache:get({user_group, UserId}),
             ?ERROR_RELATION_ALREADY_EXISTS(od_group, ChildGroupId, od_group, ParentGroupId)
         end
     })).
@@ -366,7 +366,7 @@ group_join_space_token(_Config) ->
         eligible_consumer_types = [{user, fun(?SUB(user, UserId)) ->
             GroupId = ozt_users:create_group_for(UserId),
             % Store the group in memory for use in different callbacks
-            simple_cache:put({user_group, UserId}, GroupId)
+            node_cache:put({user_group, UserId}, GroupId)
         end}],
         requires_privileges_to_consume = true,
         admin_privilege_to_consume = ?OZ_GROUPS_ADD_RELATIONSHIPS,
@@ -378,18 +378,18 @@ group_join_space_token(_Config) ->
                 {_, to_set_privs} ->
                     set_user_privs_in_space(SpaceId, UserId, Modification);
                 {_, to_consume} ->
-                    {ok, GroupId} = simple_cache:get({user_group, UserId}),
+                    {ok, GroupId} = node_cache:get({user_group, UserId}),
                     set_user_privs_in_group(GroupId, UserId, Modification)
             end
         end,
         check_privileges_fun = fun(?SUB(user, UserId), ExpectedPrivileges) ->
-            {ok, GroupId} = simple_cache:get({user_group, UserId}),
+            {ok, GroupId} = node_cache:get({user_group, UserId}),
             ActualPrivileges = ozt_spaces:get_group_privileges(SpaceId, GroupId),
             lists:sort(ExpectedPrivileges) =:= lists:sort(ActualPrivileges)
         end,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, SubjectId)}, Token) ->
-            GroupId = case simple_cache:get({user_group, SubjectId}) of
+            GroupId = case node_cache:get({user_group, SubjectId}) of
                 {ok, GrId} ->
                     % Covers users that were set up according to eligible_consumer_types
                     GrId;
@@ -412,7 +412,7 @@ group_join_space_token(_Config) ->
             ozt_spaces:delete(SpaceId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
-            {ok, GroupId} = simple_cache:get({user_group, UserId}),
+            {ok, GroupId} = node_cache:get({user_group, UserId}),
             ?ERROR_RELATION_ALREADY_EXISTS(od_group, GroupId, od_space, SpaceId)
         end
     })).
@@ -511,7 +511,7 @@ harvester_join_space_token(_Config) ->
         eligible_consumer_types = [{user, fun(?SUB(user, UserId)) ->
             HarvesterId = ozt_users:create_harvester_for(UserId),
             % Store the harvester in memory for use in different callbacks
-            simple_cache:put({user_harvester, UserId}, HarvesterId)
+            node_cache:put({user_harvester, UserId}, HarvesterId)
         end}],
         requires_privileges_to_consume = true,
         admin_privilege_to_consume = ?OZ_HARVESTERS_ADD_RELATIONSHIPS,
@@ -523,14 +523,14 @@ harvester_join_space_token(_Config) ->
                 {_, to_set_privs} ->
                     set_user_privs_in_space(SpaceId, UserId, Modification);
                 {_, to_consume} ->
-                    {ok, HarvesterId} = simple_cache:get({user_harvester, UserId}),
+                    {ok, HarvesterId} = node_cache:get({user_harvester, UserId}),
                     set_user_privs_in_harvester(HarvesterId, UserId, Modification)
             end
         end,
         check_privileges_fun = undefined,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, SubjectId)}, Token) ->
-            HarvesterId = case simple_cache:get({user_harvester, SubjectId}) of
+            HarvesterId = case node_cache:get({user_harvester, SubjectId}) of
                 {ok, HrId} ->
                     % Covers users that were set up according to eligible_consumer_types
                     HrId;
@@ -553,7 +553,7 @@ harvester_join_space_token(_Config) ->
             ozt_spaces:delete(SpaceId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
-            {ok, HarvesterId} = simple_cache:get({user_harvester, UserId}),
+            {ok, HarvesterId} = node_cache:get({user_harvester, UserId}),
             ?ERROR_RELATION_ALREADY_EXISTS(od_harvester, HarvesterId, od_space, SpaceId)
         end
     })).
@@ -697,7 +697,7 @@ group_join_cluster_token(_Config) ->
         eligible_consumer_types = [{user, fun(?SUB(user, UserId)) ->
             GroupId = ozt_users:create_group_for(UserId),
             % Store the group in memory for use in different callbacks
-            simple_cache:put({user_group, UserId}, GroupId)
+            node_cache:put({user_group, UserId}, GroupId)
         end}],
         requires_privileges_to_consume = true,
         admin_privilege_to_consume = ?OZ_GROUPS_ADD_RELATIONSHIPS,
@@ -709,18 +709,18 @@ group_join_cluster_token(_Config) ->
                 {_, to_set_privs} ->
                     set_user_privs_in_cluster(ClusterId, UserId, Modification);
                 {_, to_consume} ->
-                    {ok, GroupId} = simple_cache:get({user_group, UserId}),
+                    {ok, GroupId} = node_cache:get({user_group, UserId}),
                     set_user_privs_in_group(GroupId, UserId, Modification)
             end
         end,
         check_privileges_fun = fun(?SUB(user, UserId), ExpectedPrivileges) ->
-            {ok, GroupId} = simple_cache:get({user_group, UserId}),
+            {ok, GroupId} = node_cache:get({user_group, UserId}),
             ActualPrivileges = ozt_clusters:get_group_privileges(ClusterId, GroupId),
             lists:sort(ExpectedPrivileges) =:= lists:sort(ActualPrivileges)
         end,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, SubjectId)}, Token) ->
-            GroupId = case simple_cache:get({user_group, SubjectId}) of
+            GroupId = case node_cache:get({user_group, SubjectId}) of
                 {ok, GrId} ->
                     % Covers users that were set up according to eligible_consumer_types
                     GrId;
@@ -744,7 +744,7 @@ group_join_cluster_token(_Config) ->
             ozt_providers:delete(ProviderId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
-            {ok, GroupId} = simple_cache:get({user_group, UserId}),
+            {ok, GroupId} = node_cache:get({user_group, UserId}),
             ?ERROR_RELATION_ALREADY_EXISTS(od_group, GroupId, od_cluster, ClusterId)
         end
     } end,
@@ -828,7 +828,7 @@ group_join_harvester_token(_Config) ->
         eligible_consumer_types = [{user, fun(?SUB(user, UserId)) ->
             GroupId = ozt_users:create_group_for(UserId),
             % Store the group in memory for use in different callbacks
-            simple_cache:put({user_group, UserId}, GroupId)
+            node_cache:put({user_group, UserId}, GroupId)
         end}],
         requires_privileges_to_consume = true,
         admin_privilege_to_consume = ?OZ_GROUPS_ADD_RELATIONSHIPS,
@@ -840,18 +840,18 @@ group_join_harvester_token(_Config) ->
                 {_, to_set_privs} ->
                     set_user_privs_in_harvester(HarvesterId, UserId, Modification);
                 {_, to_consume} ->
-                    {ok, GroupId} = simple_cache:get({user_group, UserId}),
+                    {ok, GroupId} = node_cache:get({user_group, UserId}),
                     set_user_privs_in_group(GroupId, UserId, Modification)
             end
         end,
         check_privileges_fun = fun(?SUB(user, UserId), ExpectedPrivileges) ->
-            {ok, GroupId} = simple_cache:get({user_group, UserId}),
+            {ok, GroupId} = node_cache:get({user_group, UserId}),
             ActualPrivileges = ozt_harvesters:get_group_privileges(HarvesterId, GroupId),
             lists:sort(ExpectedPrivileges) =:= lists:sort(ActualPrivileges)
         end,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, SubjectId)}, Token) ->
-            GroupId = case simple_cache:get({user_group, SubjectId}) of
+            GroupId = case node_cache:get({user_group, SubjectId}) of
                 {ok, GrId} ->
                     % Covers users that were set up according to eligible_consumer_types
                     GrId;
@@ -874,7 +874,7 @@ group_join_harvester_token(_Config) ->
             ozt_harvesters:delete(HarvesterId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
-            {ok, GroupId} = simple_cache:get({user_group, UserId}),
+            {ok, GroupId} = node_cache:get({user_group, UserId}),
             ?ERROR_RELATION_ALREADY_EXISTS(od_group, GroupId, od_harvester, HarvesterId)
         end
     })).
@@ -904,7 +904,7 @@ space_join_harvester_token(_Config) ->
             % correctly (owners effectively have all the privileges)
             ozt_spaces:add_user(SpaceId, UserId, privileges:space_admin()),
             % Store the space in memory for use in different callbacks
-            simple_cache:put({user_space, UserId}, SpaceId)
+            node_cache:put({user_space, UserId}, SpaceId)
         end}],
         requires_privileges_to_consume = true,
         admin_privilege_to_consume = ?OZ_SPACES_ADD_RELATIONSHIPS,
@@ -916,14 +916,14 @@ space_join_harvester_token(_Config) ->
                 {_, to_set_privs} ->
                     set_user_privs_in_harvester(HarvesterId, UserId, Modification);
                 {_, to_consume} ->
-                    {ok, SpaceId} = simple_cache:get({user_space, UserId}),
+                    {ok, SpaceId} = node_cache:get({user_space, UserId}),
                     set_user_privs_in_space(SpaceId, UserId, Modification)
             end
         end,
         check_privileges_fun = undefined,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, SubjectId)}, Token) ->
-            SpaceId = case simple_cache:get({user_space, SubjectId}) of
+            SpaceId = case node_cache:get({user_space, SubjectId}) of
                 {ok, SpId} ->
                     % Covers users that were set up according to eligible_consumer_types
                     SpId;
@@ -946,7 +946,7 @@ space_join_harvester_token(_Config) ->
             ozt_harvesters:delete(HarvesterId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
-            {ok, SpaceId} = simple_cache:get({user_space, UserId}),
+            {ok, SpaceId} = node_cache:get({user_space, UserId}),
             ?ERROR_RELATION_ALREADY_EXISTS(od_harvester, HarvesterId, od_space, SpaceId)
         end
     })).
