@@ -372,10 +372,10 @@ gui_tokens_expire(Config) ->
     ProviderId = create_provider_supporting_user(Config, UserId),
 
     {ok, {Token1, Ttl1}} = create_access_token_for_gui(Config, UserId, Session1, ?OZW_SRV(?ONEZONE_CLUSTER_ID)),
-    ValidUntil1 = oz_test_utils:get_mocked_time(Config) + Ttl1,
+    ValidUntil1 = oz_test_utils:get_frozen_time_seconds() + Ttl1,
     oz_test_utils:simulate_time_passing(Config, 10),
     {ok, {Token2, Ttl2}} = create_access_token_for_gui(Config, UserId, Session2, ?OPW_SRV(ProviderId)),
-    ValidUntil2 = oz_test_utils:get_mocked_time(Config) + Ttl2,
+    ValidUntil2 = oz_test_utils:get_frozen_time_seconds() + Ttl2,
 
     ?assertMatch(
         {true, ?EXP_AUTH(UserId, Session1)},
@@ -560,12 +560,12 @@ end_per_suite(_Config) ->
 
 
 init_per_testcase(_, Config) ->
-    oz_test_utils:mock_time(Config),
+    oz_test_utils:freeze_time(Config),
     Config.
 
 
 end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_time(Config).
+    oz_test_utils:unfreeze_time(Config).
 
 %%%===================================================================
 %%% Helper functions

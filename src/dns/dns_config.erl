@@ -139,7 +139,7 @@ get_soa_admin(OneZoneDomain) ->
 %%--------------------------------------------------------------------
 -spec generate_zone_serial() -> serial().
 generate_zone_serial() ->
-    wrap_like_signed_32bit(time_utils:timestamp_seconds()).
+    wrap_like_signed_32bit(clock:timestamp_seconds()).
 
 
 %%--------------------------------------------------------------------

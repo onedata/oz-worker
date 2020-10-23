@@ -2507,7 +2507,7 @@ last_activity_tracking(Config) ->
     exit(ClientPid1, kill),
     oz_test_utils:simulate_time_passing(Config, 54),
     exit(ClientPid2, kill),
-    TimestampAlpha = oz_test_utils:get_mocked_time(Config),
+    TimestampAlpha = oz_test_utils:get_frozen_time_seconds(),
     ?assertMatch(
         TimestampAlpha,
         oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId]),
@@ -2517,7 +2517,7 @@ last_activity_tracking(Config) ->
     ClientPid3 = start_gs_connection(Config, ProviderToken),
     ?assertEqual(now, oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId])),
     exit(ClientPid3, kill),
-    TimestampBeta = oz_test_utils:get_mocked_time(Config),
+    TimestampBeta = oz_test_utils:get_frozen_time_seconds(),
     ?assertMatch(
         TimestampBeta,
         oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId]),
@@ -2541,7 +2541,7 @@ init_per_testcase(list_eff_harvesters_test, Config) ->
     oz_test_utils:mock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND),
     init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
-    ozt_mocks:mock_time(),
+    ozt_mocks:freeze_time(),
     Config.
 
 end_per_testcase(list_eff_harvesters_test, Config) ->
@@ -2550,7 +2550,7 @@ end_per_testcase(list_eff_harvesters_test, Config) ->
 end_per_testcase(_, _Config) ->
     ozt:set_env(require_token_for_provider_registration, false),
     ozt:set_env(subdomain_delegation_supported, true),
-    ozt_mocks:unmock_time().
+    ozt_mocks:unfreeze_time().
 
 %%%===================================================================
 %%% Helper functions

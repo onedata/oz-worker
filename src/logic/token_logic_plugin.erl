@@ -676,7 +676,7 @@ to_token_data(TokenId, NamedToken) ->
     }.
 
 
--spec infer_ttl([caveats:caveat()]) -> undefined | time_utils:seconds().
+-spec infer_ttl([caveats:caveat()]) -> undefined | clock:seconds().
 infer_ttl(Caveats) ->
     ValidUntil = lists:foldl(fun
         (#cv_time{valid_until = ValidUntil}, undefined) -> ValidUntil;
@@ -684,5 +684,5 @@ infer_ttl(Caveats) ->
     end, undefined, caveats:filter([cv_time], Caveats)),
     case ValidUntil of
         undefined -> undefined;
-        _ -> ValidUntil - time_utils:timestamp_seconds()
+        _ -> ValidUntil - clock:timestamp_seconds()
     end.

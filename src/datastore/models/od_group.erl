@@ -646,7 +646,7 @@ upgrade_record(5, Group) ->
         #{},
         #{},
 
-        time_utils:timestamp_seconds(),
+        clock:timestamp_seconds(),
         undefined,
 
         TopDownDirty,

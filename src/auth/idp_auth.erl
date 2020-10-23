@@ -42,7 +42,7 @@
 
 -type protocol_handler() :: saml_protocol | openid_protocol.
 
--define(NOW(), time_utils:timestamp_seconds()).
+-define(NOW(), clock:timestamp_seconds()).
 -define(REFRESH_THRESHOLD, oz_worker:get_env(idp_access_token_refresh_threshold, 300)).
 
 %% API

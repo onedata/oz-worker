@@ -26,8 +26,6 @@
 -include_lib("ctool/include/logging.hrl").
 
 -define(OZ_NODES(Config), ?config(oz_worker_nodes, Config)).
--define(TIME_MOCK_STARTING_TIMESTAMP, 1500000000).
-
 
 %% API
 -export([
@@ -286,8 +284,8 @@
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
     timestamp_seconds/1,
-    mock_time/1, unmock_time/1,
-    get_mocked_time/1,
+    freeze_time/1, unfreeze_time/1,
+    get_frozen_time_seconds/0,
     simulate_time_passing/2,
     gui_ca_certs/1,
     ensure_entity_graph_is_up_to_date/1, ensure_entity_graph_is_up_to_date/2,
@@ -3264,6 +3262,7 @@ mock_handle_proxy(Config) ->
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, patch,
         fun(_, <<"/handle", _/binary>>, _, _) ->
             {ok, 204, #{}, <<"">>}
+
         end),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, delete,
         fun(_, <<"/handle", _/binary>>, _, _) ->
@@ -3286,54 +3285,34 @@ unmock_handle_proxy(Config) ->
 %% Returns the current time.
 %% @end
 %%--------------------------------------------------------------------
--spec timestamp_seconds(Config :: term()) -> time_utils:seconds().
+-spec timestamp_seconds(Config :: term()) -> clock:selis().
 timestamp_seconds(Config) ->
-    call_oz(Config, time_utils, timestamp_seconds, []).
+    call_oz(Config, clock, timestamp_seconds, []).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Mocks the time - stops the clock at one value and allows to manually
-%% simulate time passing.
+%% Stops the clock at one value and allows to manually simulate time passing.
 %% @end
 %%--------------------------------------------------------------------
--spec mock_time(Config :: term()) -> ok.
-mock_time(Config) ->
-    simulate_time_passing(Config, 0),
-    ok = test_utils:mock_new(?OZ_NODES(Config), time_utils, [passthrough]),
-    ok = test_utils:mock_expect(?OZ_NODES(Config), time_utils, timestamp_seconds, fun() ->
-        oz_worker:get_env(mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP)
-    end).
+-spec freeze_time(Config :: term()) -> ok.
+freeze_time(Config) ->
+    clock_freezer_mock:setup(?OZ_NODES(Config)).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Clears the time mock.
-%% @end
-%%--------------------------------------------------------------------
--spec unmock_time(Config :: term()) -> ok.
-unmock_time(Config) ->
-    ok = test_utils:mock_unload(?OZ_NODES(Config), time_utils).
+-spec unfreeze_time(Config :: term()) -> ok.
+unfreeze_time(Config) ->
+    clock_freezer_mock:teardown(?OZ_NODES(Config)).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns the current timestamp indicated by the mocked clock.
-%% @end
-%%--------------------------------------------------------------------
--spec get_mocked_time(Config :: term()) -> non_neg_integer().
-get_mocked_time(Config) ->
-    get_env(Config, mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP).
+-spec get_frozen_time_seconds() -> clock:seconds().
+get_frozen_time_seconds() ->
+    clock_freezer_mock:current_time_seconds().
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Modifies the value returned by time mock by given amount of seconds.
-%% @end
-%%--------------------------------------------------------------------
--spec simulate_time_passing(Config :: term(), Seconds :: non_neg_integer()) -> ok.
+-spec simulate_time_passing(Config :: term(), clock:seconds()) -> ok.
 simulate_time_passing(Config, Seconds) ->
-    set_env(Config, mocked_time, get_mocked_time(Config) + Seconds).
+    clock_freezer_mock:simulate_time_passing(?OZ_NODES(Config), Seconds * 1000).
 
 
 %%--------------------------------------------------------------------

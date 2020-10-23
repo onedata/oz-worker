@@ -153,7 +153,7 @@ last_activity_tracking(Config) ->
     exit(ClientPid2, kill),
     oz_test_utils:simulate_time_passing(Config, 54),
     exit(ClientPid3, kill),
-    TimestampAlpha = oz_test_utils:get_mocked_time(Config),
+    TimestampAlpha = oz_test_utils:get_frozen_time_seconds(),
     ?assertMatch(
         TimestampAlpha,
         oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId]),
@@ -163,7 +163,7 @@ last_activity_tracking(Config) ->
     {ClientPid4, _, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
     ?assertEqual(now, oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId])),
     exit(ClientPid4, kill),
-    TimestampBeta = oz_test_utils:get_mocked_time(Config),
+    TimestampBeta = oz_test_utils:get_frozen_time_seconds(),
     ?assertMatch(
         TimestampBeta,
         oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId]),
@@ -328,7 +328,7 @@ init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
     Posthook = fun(NewConfig) ->
-        oz_test_utils:mock_time(NewConfig),
+        oz_test_utils:freeze_time(NewConfig),
         mock_user_connected_callback(NewConfig),
         NewConfig
     end,
@@ -338,7 +338,7 @@ init_per_suite(Config) ->
 end_per_suite(Config) ->
     hackney:stop(),
     ssl:stop(),
-    oz_test_utils:unmock_time(Config),
+    oz_test_utils:unfreeze_time(Config),
     unmock_user_connected_callback(Config),
     ok.
 

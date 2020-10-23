@@ -196,7 +196,7 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
             backend = BackendType,
             gui_plugin_config = Config,
             creator = aai:normalize_subject(Auth#auth.subject),
-            creation_time = time_utils:timestamp_seconds()
+            creation_time = clock:timestamp_seconds()
         }
     }),
 
