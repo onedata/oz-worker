@@ -141,7 +141,7 @@ setup(Type) ->
     oz_worker:set_env(http_domain, ?DUMMY_ONEZONE_DOMAIN).
 
 teardown(_) ->
-    ets:delete(node_cache),
+    node_cache:destroy(),
     ?assert(meck:validate(file)),
     ok = meck:unload(file),
     ?assert(meck:validate(filelib)),

@@ -25,7 +25,7 @@
 -define(VERSIONS, lists:seq(1, ?CURRENT_CONFIG_VERSION)).
 
 idps_config_test_() ->
-    {setup, fun node_cache:init/0, fun(_) -> ets:delete(node_cache) end, 
+    {setup, fun node_cache:init/0, fun(_) -> node_cache:destroy() end, 
         {foreach,
             fun setup/0,
             fun teardown/1,
