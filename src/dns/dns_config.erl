@@ -402,7 +402,7 @@ build_record_txt(Domain, Value) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec build_record_txt(Domain :: domain(), Value :: binary() | string(),
-    TTL :: non_neg_integer()) -> #dns_rr{}.
+    TTL :: clock:seconds()) -> #dns_rr{}.
 build_record_txt(Domain, Value, TTL) when is_binary(Value) ->
     build_record_txt(Domain, binary:bin_to_list(Value), TTL);
 build_record_txt(Domain, Value, TTL) ->

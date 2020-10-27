@@ -107,7 +107,7 @@ delete(SessionId) ->
 %% period (delay before connections are terminated).
 %% @end
 %%--------------------------------------------------------------------
--spec delete(id(), GracePeriod :: undefined | non_neg_integer()) -> ok | {error, term()}.
+-spec delete(id(), GracePeriod :: undefined | clock:millis()) -> ok | {error, term()}.
 delete(SessionId, GracePeriod) ->
     delete(SessionId, GracePeriod, true).
 
@@ -118,7 +118,7 @@ delete(SessionId, GracePeriod) ->
 %% cleared.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(id(), GracePeriod :: undefined | non_neg_integer(),
+-spec delete(id(), GracePeriod :: undefined | clock:millis(),
     ClearExpiredUserSessions :: boolean()) -> ok | {error, term()}.
 delete(SessionId, GracePeriod, ClearExpiredUserSessions) ->
     case ?MODULE:get(SessionId) of

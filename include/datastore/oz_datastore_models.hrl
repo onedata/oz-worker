@@ -43,7 +43,7 @@ end).
     entitlements = [] :: [entitlement_mapping:raw_entitlement()],
     % Custom attributes received from the IdP, opaque to Onezone (used in LUMA).
     custom = #{} :: json_utils:json_term(),
-    access_token = {undefined, 0} :: {undefined | binary(), Expires :: non_neg_integer()},
+    access_token = {undefined, 0} :: {undefined | binary(), Expires :: clock:seconds()},
     refresh_token = undefined :: undefined | binary()
 }).
 
@@ -469,7 +469,7 @@ end).
 %% This record defines a GUI session
 -record(session, {
     user_id :: od_user:id(),
-    last_refresh = 0 :: non_neg_integer(),
+    last_refresh = 0 :: clock:seconds(),
     nonce = <<"">> :: binary(),
     previous_nonce = <<"">> :: binary()
 }).

@@ -28,7 +28,7 @@
 -type query_params() :: #{}.
 % OpenID access token, used to retrieve user info from an IdP
 -type access_token() :: binary().
--type access_token_ttl() :: non_neg_integer().
+-type access_token_ttl() :: clock:seconds().
 % Refresh token - used to refresh access tokens
 -type refresh_token() :: binary().
 -export_type([
