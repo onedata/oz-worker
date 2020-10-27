@@ -640,13 +640,13 @@ resolve_admin_group(IdP) ->
         undefined ->
             undefined;
         RawAdminGroup ->
-            {ok, GroupId} = node_cache:get({admin_group, {IdP, RawAdminGroup}}, fun() ->
+            {ok, GroupId} = node_cache:acquire({admin_group, {IdP, RawAdminGroup}}, fun() ->
                 case create_admin_group(IdP, RawAdminGroup) of
                     false ->
                         % Do not cache in case of failure to map the entitlement
-                        {false, undefined};
+                        {ok, undefined, 0};
                     {true, GroupId} ->
-                        {true, GroupId, ?ADMIN_GROUP_CACHE_TTL}
+                        {ok, GroupId, ?ADMIN_GROUP_CACHE_TTL}
                 end
             end),
             GroupId

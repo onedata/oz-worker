@@ -215,8 +215,8 @@ share_id_to_public_url(ShareId) ->
     {od_provider:id() | undefined, onedata:release_version() | undefined}.
 choose_provider_for_public_view(ShareId) ->
     {ok, SpaceId} = get_space(?ROOT, ShareId),
-    {ok, Result} = node_cache:get({chosen_provider_for_public_view, SpaceId}, fun() ->
-        {true, choose_provider_for_space(SpaceId), ?CHOSEN_PROVIDER_CACHE_TTL}
+    {ok, Result} = node_cache:acquire({chosen_provider_for_public_view, SpaceId}, fun() ->
+        {ok, choose_provider_for_space(SpaceId), ?CHOSEN_PROVIDER_CACHE_TTL}
     end),
     case Result of
         {undefined, undefined} ->

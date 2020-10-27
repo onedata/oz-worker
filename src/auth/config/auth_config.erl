@@ -590,8 +590,8 @@ format_for_configuration(IdP, IdPConfig) ->
 get_auth_config() ->
     case idp_auth_test_mode:process_is_test_mode_enabled() of
         false ->
-            {ok, Cfg} = node_cache:get(cached_auth_config, fun() ->
-                {true, fetch_auth_config(), ?CONFIG_CACHE_TTL}
+            {ok, Cfg} = node_cache:acquire(cached_auth_config, fun() ->
+                {ok, fetch_auth_config(), ?CONFIG_CACHE_TTL}
             end),
             Cfg;
         true ->
@@ -683,8 +683,8 @@ get_test_auth_config() ->
     config_v2_or_later().
 upgrade_auth_config(FromVersion, ToVersion) ->
     critical_section:run(auth_config_upgrade, fun() ->
-        {ok, {LastSeen, LastUpgradeResult}} = node_cache:get(
-            previous_auth_cfg_upgrade, fun() -> {false, {<<"">>, #{}}} end
+        {ok, {LastSeen, LastUpgradeResult}} = node_cache:acquire(
+            previous_auth_cfg_upgrade, fun() -> {ok, {<<"">>, #{}}, infinity} end
         ),
         case file_md5(?AUTH_CONFIG_FILE) of
             LastSeen ->

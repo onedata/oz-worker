@@ -55,7 +55,7 @@
 %%--------------------------------------------------------------------
 -spec get_plugins(Type :: atom()) -> [module()].
 get_plugins(Type) ->
-    {ok, AllPlugins} = node_cache:get(?PLUGINS_KEY),
+    AllPlugins = node_cache:get(?PLUGINS_KEY),
     [P || P <- AllPlugins, P:type() =:= Type].
 
 
