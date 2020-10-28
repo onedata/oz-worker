@@ -41,7 +41,7 @@
 ]).
 
 % Time for which a provider choice for public view is cached, per space.
--define(CHOSEN_PROVIDER_CACHE_TTL, timer:seconds(30)).
+-define(CHOSEN_PROVIDER_CACHE_TTL, 30).
 
 %%%===================================================================
 %%% API
