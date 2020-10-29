@@ -65,7 +65,7 @@ build_oai_record(MetadataPrefix, OaiId, Handle) ->
         header = #oai_header{
             identifier = OaiId,
             datestamp = serialize_datestamp(
-                time_utils:seconds_to_datetime(Handle#od_handle.timestamp)
+                time_format:seconds_to_datetime(Handle#od_handle.timestamp)
             )
         },
         metadata = #oai_metadata{
@@ -79,11 +79,11 @@ build_oai_record(MetadataPrefix, OaiId, Handle) ->
     }.
 
 %%%--------------------------------------------------------------------
-%%% @equiv time_utils:datetime_to_iso8601(DateTime).
+%%% @equiv time_format:datetime_to_iso8601(DateTime).
 %%%--------------------------------------------------------------------
 -spec serialize_datestamp(calendar:datetime()) -> binary().
 serialize_datestamp(DateTime) ->
-    time_utils:datetime_to_iso8601(DateTime).
+    time_format:datetime_to_iso8601(DateTime).
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -105,10 +105,10 @@ deserialize_datestamp(Datestamp) ->
     try
         case byte_size(Datestamp) of
             10 ->
-                {Date, _Time} = time_utils:iso8601_to_datetime(Datestamp),
+                {Date, _Time} = time_format:iso8601_to_datetime(Datestamp),
                 Date;
             20 ->
-                time_utils:iso8601_to_datetime(Datestamp);
+                time_format:iso8601_to_datetime(Datestamp);
             _ ->
                 {error, invalid_date_format}
         end
@@ -158,7 +158,7 @@ should_be_harvested(_From, _Until, _MetadataPrefix, #od_handle{metadata = undefi
     false;
 should_be_harvested(From, Until, MetadataPrefix, #od_handle{timestamp = Timestamp}) ->
     MetadataFormats = metadata_formats:supported_formats(),
-    is_in_time_range(From, Until, time_utils:seconds_to_datetime(Timestamp)) and
+    is_in_time_range(From, Until, time_format:seconds_to_datetime(Timestamp)) and
         lists:member(MetadataPrefix, MetadataFormats).
 
 %%%--------------------------------------------------------------------
@@ -183,7 +183,7 @@ is_earlier_or_equal(_Date, undefined) -> true;
 is_earlier_or_equal(Date1, Date2) ->
     D1 = granularity_days_to_seconds({min, Date1}),
     D2 = granularity_days_to_seconds({max, Date2}),
-    time_utils:datetime_to_seconds(D1) =< time_utils:datetime_to_seconds(D2).
+    time_format:datetime_to_seconds(D1) =< time_format:datetime_to_seconds(D2).
 
 %%%--------------------------------------------------------------------
 %%% @doc

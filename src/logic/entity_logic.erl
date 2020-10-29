@@ -83,7 +83,7 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
 }.
 
 % Common fields for all records
--type creation_time() :: non_neg_integer().  % UNIX timestamp in seconds
+-type creation_time() :: clock:seconds().
 
 -export_type([
     req/0,

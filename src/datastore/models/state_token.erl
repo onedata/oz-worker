@@ -62,7 +62,7 @@ create(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
     },
     {ok, #document{key = StateToken}} = datastore_model:create(?CTX, #document{
         value = #state_token{
-            timestamp = time_utils:timestamp_seconds(),
+            timestamp = clock:timestamp_seconds(),
             state_info = StateInfo
         }
     }),
@@ -84,7 +84,7 @@ lookup(StateToken) ->
             % The token is consumed immediately
             datastore_model:delete(?CTX, StateToken),
             % Check if the token is still valid
-            case time_utils:timestamp_seconds() - T =< ttl() of
+            case clock:timestamp_seconds() - T =< ttl() of
                 true -> {ok, Info};
                 false -> error
             end;

@@ -115,9 +115,9 @@ rpc(Node, Module, Function, Args) ->
     end.
 
 
--spec timestamp_seconds() -> time_utils:seconds().
+-spec timestamp_seconds() -> clock:seconds().
 timestamp_seconds() ->
-    rpc(time_utils, timestamp_seconds, []).
+    rpc(clock, timestamp_seconds, []).
 
 
 -spec reconcile_entity_graph() -> true.

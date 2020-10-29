@@ -527,8 +527,7 @@ revoke_support(Auth, ProviderId, SpaceId) ->
 %% Used to by providers to synchronize clocks with onezone (and thus each other).
 %% @end
 %%--------------------------------------------------------------------
--spec get_current_time(Auth :: aai:auth()) ->
-    {ok, non_neg_integer()} | errors:error().
+-spec get_current_time(Auth :: aai:auth()) -> {ok, clock:millis()} | errors:error().
 get_current_time(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,

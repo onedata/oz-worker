@@ -16,10 +16,8 @@
 
 -include("ozt.hrl").
 
--define(TIME_MOCK_STARTING_TIMESTAMP, 1500000000).
-
 %% API
--export([mock_time/0, unmock_time/0, get_mocked_time/0, simulate_time_passing/1]).
+-export([freeze_time/0, unfreeze_time/0, get_frozen_time_seconds/0, simulate_time_passing_seconds/1]).
 
 -export([mock_gui_static/0, unmock_gui_static/0]).
 
@@ -38,42 +36,27 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Mocks the time - stops the clock at one value and allows to manually
-%% simulate time passing.
+%% Stops the clock at one value and allows to manually simulate time passing.
 %% @end
 %%--------------------------------------------------------------------
--spec mock_time() -> ok.
-mock_time() ->
-    set_mocked_time(?TIME_MOCK_STARTING_TIMESTAMP),
-    ok = test_utils:mock_new(ozt:get_nodes(), time_utils, [passthrough]),
-    ok = test_utils:mock_expect(ozt:get_nodes(), time_utils, timestamp_seconds, fun() ->
-        oz_worker:get_env(mocked_time)
-    end).
+-spec freeze_time() -> ok.
+freeze_time() ->
+    clock_freezer_mock:setup(ozt:get_nodes()).
 
 
--spec unmock_time() -> ok.
-unmock_time() ->
-    set_mocked_time(undefined),
-    ok = test_utils:mock_unload(ozt:get_nodes(), time_utils).
+-spec unfreeze_time() -> ok.
+unfreeze_time() ->
+    clock_freezer_mock:teardown(ozt:get_nodes()).
 
 
-%% @private
--spec set_mocked_time(time_utils:seconds() | undefined) -> ok.
-set_mocked_time(Time) ->
-    ozt:set_env(mocked_time, Time).
+-spec get_frozen_time_seconds() -> clock:seconds() | no_return().
+get_frozen_time_seconds() ->
+    clock_freezer_mock:current_time_seconds().
 
 
--spec get_mocked_time() -> time_utils:seconds() | no_return().
-get_mocked_time() ->
-    case ozt:get_env(mocked_time, undefined) of
-        Time when is_integer(Time) -> Time;
-        undefined -> error("~p:mock_time/0 must be called first to use get_mocked_time/0", [?MODULE])
-    end.
-
-
--spec simulate_time_passing(time_utils:seconds()) -> ok.
-simulate_time_passing(Seconds) ->
-    set_mocked_time(get_mocked_time() + Seconds).
+-spec simulate_time_passing_seconds(clock:seconds()) -> ok.
+simulate_time_passing_seconds(Seconds) ->
+    clock_freezer_mock:simulate_time_passing(ozt:get_nodes(), Seconds * 1000).
 
 
 %%--------------------------------------------------------------------
