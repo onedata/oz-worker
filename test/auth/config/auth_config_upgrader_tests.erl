@@ -25,19 +25,17 @@
 -define(VERSIONS, lists:seq(1, ?CURRENT_CONFIG_VERSION)).
 
 idps_config_test_() ->
-    {setup, fun node_cache:init/0, fun(_) -> node_cache:destroy() end, 
-        {foreach,
-            fun setup/0,
-            fun teardown/1,
-            lists:flatmap(fun({BasicAuthEnabled, OpenidEnabled, SamlEnabled}) ->
-                lists:map(fun(Version) ->
-                    {
-                        label(Version, BasicAuthEnabled, OpenidEnabled, SamlEnabled),
-                        testcase(Version, BasicAuthEnabled, OpenidEnabled, SamlEnabled)
-                    }
-                end, ?VERSIONS)
-            end, ?COMBINATIONS)
-        }
+    {foreach,
+        fun setup/0,
+        fun teardown/1,
+        lists:flatmap(fun({BasicAuthEnabled, OpenidEnabled, SamlEnabled}) ->
+            lists:map(fun(Version) ->
+                {
+                    label(Version, BasicAuthEnabled, OpenidEnabled, SamlEnabled),
+                    testcase(Version, BasicAuthEnabled, OpenidEnabled, SamlEnabled)
+                }
+            end, ?VERSIONS)
+        end, ?COMBINATIONS)
     }.
 
 
@@ -46,6 +44,7 @@ idps_config_test_() ->
 %%%===================================================================
 
 setup() ->
+    node_cache:init/0,
     TempDir = mochitemp:mkdtemp(),
     oz_worker:set_env(test_tempdir, TempDir),
     AuthConfigPath = filename:join(TempDir, "auth.config"),
@@ -55,7 +54,8 @@ setup() ->
 
 teardown(_) ->
     TempDir = oz_worker:get_env(test_tempdir),
-    mochitemp:rmtempdir(TempDir).
+    mochitemp:rmtempdir(TempDir),
+    node_cache:destroy().
 
 label(Version, BasicAuthEnabled, OpenidEnabled, SamlEnabled) ->
     ToStr = fun

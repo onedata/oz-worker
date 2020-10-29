@@ -64,8 +64,8 @@ store_test_config(Config) ->
 
 -spec get_test_config() -> ct_test_config().
 get_test_config() ->
-    case node_cache:get(ct_test_config, ?ERROR_NOT_FOUND) of
-        ?ERROR_NOT_FOUND -> error(str_utils:format("Call ~s:init_per_suite/1 at the beggining of the test.", [?MODULE]));
+    case node_cache:get(ct_test_config, undefined) of
+        undefined -> error(str_utils:format("Call ~s:init_per_suite/1 at the beggining of the test.", [?MODULE]));
         Config -> Config
     end.
 

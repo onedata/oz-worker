@@ -262,8 +262,8 @@ group_join_group_token(_Config) ->
         end,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, SubjectId)}, Token) ->
-            ChildGroupId = case node_cache:get({user_group, SubjectId}, ?ERROR_NOT_FOUND) of
-                ?ERROR_NOT_FOUND ->
+            ChildGroupId = case node_cache:get({user_group, SubjectId}, undefined) of
+                undefined ->
                     % Covers users with no group and other consumer types.
                     % Other consumer than user does not make sense, but for the
                     % sake of checking if bad consumer is properly handled, try
@@ -389,8 +389,8 @@ group_join_space_token(_Config) ->
         end,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, SubjectId)}, Token) ->
-            GroupId = case node_cache:get({user_group, SubjectId}, ?ERROR_NOT_FOUND) of
-                ?ERROR_NOT_FOUND ->
+            GroupId = case node_cache:get({user_group, SubjectId}, undefined) of
+                undefined ->
                     % Covers users with no group and other consumer types.
                     % Other consumer than user does not make sense, but for the
                     % sake of checking if bad consumer is properly handled, try
@@ -530,8 +530,8 @@ harvester_join_space_token(_Config) ->
         check_privileges_fun = undefined,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, SubjectId)}, Token) ->
-            HarvesterId = case node_cache:get({user_harvester, SubjectId}, ?ERROR_NOT_FOUND) of
-                ?ERROR_NOT_FOUND ->
+            HarvesterId = case node_cache:get({user_harvester, SubjectId}, undefined) of
+                undefined ->
                     % Covers users with no harvester and other consumer types.
                     % Other consumer than user does not make sense, but for the
                     % sake of checking if bad consumer is properly handled, try
@@ -720,8 +720,8 @@ group_join_cluster_token(_Config) ->
         end,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, SubjectId)}, Token) ->
-            GroupId = case node_cache:get({user_group, SubjectId}, ?ERROR_NOT_FOUND) of
-                ?ERROR_NOT_FOUND ->
+            GroupId = case node_cache:get({user_group, SubjectId}, undefined) of
+                undefined ->
                     % Covers users with no group and other consumer types.
                     % Other consumer than user does not make sense, but for the
                     % sake of checking if bad consumer is properly handled, try
@@ -851,8 +851,8 @@ group_join_harvester_token(_Config) ->
         end,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, SubjectId)}, Token) ->
-            GroupId = case node_cache:get({user_group, SubjectId}, ?ERROR_NOT_FOUND) of
-                ?ERROR_NOT_FOUND ->
+            GroupId = case node_cache:get({user_group, SubjectId}, undefined) of
+                undefined ->
                     % Covers users with no group and other consumer types.
                     % Other consumer than user does not make sense, but for the
                     % sake of checking if bad consumer is properly handled, try
@@ -923,8 +923,8 @@ space_join_harvester_token(_Config) ->
         check_privileges_fun = undefined,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, SubjectId)}, Token) ->
-            SpaceId = case node_cache:get({user_space, SubjectId}, ?ERROR_NOT_FOUND) of
-                ?ERROR_NOT_FOUND ->
+            SpaceId = case node_cache:get({user_space, SubjectId}, undefined) of
+                undefined ->
                     % Covers users with no space and other consumer types.
                     % Other consumer than user does not make sense, but for the
                     % sake of checking if bad consumer is properly handled, try
