@@ -4,6 +4,8 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 19.02.5
+
 ### 19.02.4
 
 -   **VFS-6402** Disallowed creating more than one public handle for a
