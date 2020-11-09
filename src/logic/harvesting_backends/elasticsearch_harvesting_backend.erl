@@ -210,6 +210,8 @@ query_validator() -> #{
 %% @doc
 %% @equiv submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {[], <<>>}).
 %% @end
+-spec submit_to_index(od_harvester:endpoint(), od_harvester:index_id(), od_harvester:index(), 
+    od_harvester:batch()) -> od_harvester:index_submit_response().
 submit_to_index(Endpoint, IndexId, IndexInfo, Batch) ->
     submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {[], <<>>}).
 

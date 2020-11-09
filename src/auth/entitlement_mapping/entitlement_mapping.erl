@@ -341,7 +341,7 @@
 -type privileges() :: none | member | manager | admin.
 -export_type([raw_entitlement/0, idp_group/0, idp_entitlement/0, privileges/0]).
 
--define(ADMIN_GROUP_CACHE_TTL, oz_worker:get_env(auth_config_cache_ttl, 60)).
+-define(ADMIN_GROUP_CACHE_TTL, oz_worker:get_env(auth_config_cache_ttl_seconds, 60)).
 
 -define(DEFAULT_PARSER, flat_entitlement_parser).
 

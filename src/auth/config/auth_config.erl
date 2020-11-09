@@ -74,7 +74,7 @@
 
 -define(AUTH_CONFIG_FILE, oz_worker:get_env(auth_config_file)).
 -define(TEST_AUTH_CONFIG_FILE, oz_worker:get_env(test_auth_config_file)).
--define(CONFIG_CACHE_TTL, oz_worker:get_env(auth_config_cache_ttl, 60)). % 1 minute
+-define(CONFIG_CACHE_TTL, oz_worker:get_env(auth_config_cache_ttl_seconds, 60)). % 1 minute
 
 -define(LEGACY_SAML_CONFIG_NAME, "saml.config").
 -define(BACKUP_CFG_EXT(Version), str_utils:format(".v~B.bak", [Version])).
