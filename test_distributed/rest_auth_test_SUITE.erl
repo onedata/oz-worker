@@ -493,7 +493,7 @@ init_per_testcase(external_access_token_test, Config) ->
     ];
 
 init_per_testcase(gui_token_test, Config) ->
-    oz_test_utils:mock_time(Config),
+    oz_test_utils:freeze_time(Config),
     Config;
 
 init_per_testcase(_, Config) ->
@@ -505,7 +505,7 @@ end_per_testcase(external_access_token_test, Config) ->
     test_utils:mock_unload(Nodes, default_oidc_plugin);
 
 end_per_testcase(gui_token_test, Config) ->
-    oz_test_utils:unmock_time(Config);
+    oz_test_utils:unfreeze_time(Config);
 
 end_per_testcase(_, _) ->
     ok.

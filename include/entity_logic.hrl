@@ -83,15 +83,6 @@
 -define(LEGACY_CLIENT_TOKEN_NAME(Number), <<"legacy token ", (integer_to_binary(Number))/binary>>).
 
 
-%% @TODO VFS-5727 temporary solution
--define(INVITE_TOKEN_NAME(TokenType), <<
-    (atom_to_binary(TokenType, utf8))/binary, " ",
-    (binary:part(time_utils:epoch_to_iso8601(time_utils:cluster_time_seconds()), 0, 10))/binary, " ",
-    (str_utils:rand_hex(3))/binary
->>).
-
-
-
 %% @TODO VFS-5856 This is needed for providers in previous version, for which virtual
 %% storage record supporting all their spaces will be created. This storage record
 %% does not represent actual storage, it is provider that keeps knowledge of storages.

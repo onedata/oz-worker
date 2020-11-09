@@ -46,12 +46,12 @@ init_per_suite(Config) ->
 init_per_testcase(_, Config) ->
     ozt_mocks:mock_handle_proxy(),
     ozt_mocks:mock_harvesting_backends(),
-    ozt_mocks:mock_time(),
+    ozt_mocks:freeze_time(),
     Config.
 
 end_per_testcase(_, _Config) ->
     ozt_mocks:unmock_handle_proxy(),
-    ozt_mocks:unmock_time(),
+    ozt_mocks:unfreeze_time(),
     ozt_mocks:unmock_harvesting_backends().
 
 end_per_suite(_Config) ->
@@ -110,7 +110,7 @@ end_per_suite(_Config) ->
 
 
 simulate_random_delay() ->
-    ozt_mocks:simulate_time_passing(rand:uniform(2592000) * lists_utils:random_element([-1, 1])).
+    ozt_mocks:simulate_time_passing_seconds(rand:uniform(2592000) * lists_utils:random_element([-1, 1])).
 
 
 set_up_environment() ->

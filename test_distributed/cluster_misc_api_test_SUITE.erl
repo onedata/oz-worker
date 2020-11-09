@@ -560,12 +560,12 @@ end_per_suite(_Config) ->
     ssl:stop().
 
 init_per_testcase(_, Config) ->
-    ozt_mocks:mock_time(),
+    ozt_mocks:freeze_time(),
     Config.
 
 end_per_testcase(_, _Config) ->
     ozt:delete_all_entities(),
-    ozt_mocks:unmock_time().
+    ozt_mocks:unfreeze_time().
 
 %%%===================================================================
 %%% Helper functions

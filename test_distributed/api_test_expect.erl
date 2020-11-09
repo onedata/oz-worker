@@ -46,7 +46,7 @@ protected_user(logic, _Id, UserData) ->
         <<"username">> => maps:get(<<"username">>, UserData),
         <<"emails">> => maps:get(<<"emails">>, UserData, []),
         <<"linkedAccounts">> => [],
-        <<"creationTime">> => ozt_mocks:get_mocked_time()
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
     });
 protected_user(rest, Id, UserData) ->
     #{
@@ -56,7 +56,7 @@ protected_user(rest, Id, UserData) ->
         <<"username">> => maps:get(<<"username">>, UserData),
         <<"emails">> => maps:get(<<"emails">>, UserData, []),
         <<"linkedAccounts">> => [],
-        <<"creationTime">> => ozt_mocks:get_mocked_time(),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         % TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => maps:get(<<"fullName">>, UserData),
         <<"login">> => maps:get(<<"username">>, UserData),
@@ -84,14 +84,14 @@ shared_user(logic, _Id, UserData) ->
     ?OK_MAP(#{
         <<"fullName">> => maps:get(<<"fullName">>, UserData),
         <<"username">> => maps:get(<<"username">>, UserData),
-        <<"creationTime">> => ozt_mocks:get_mocked_time()
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
     });
 shared_user(rest, Id, UserData) ->
     #{
         <<"userId">> => Id,
         <<"fullName">> => maps:get(<<"fullName">>, UserData),
         <<"username">> => maps:get(<<"username">>, UserData),
-        <<"creationTime">> => ozt_mocks:get_mocked_time(),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         % TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => maps:get(<<"fullName">>, UserData),
         <<"login">> => maps:get(<<"username">>, UserData),
@@ -114,7 +114,7 @@ protected_group(logic, _Id, GroupData, Creator) ->
     ?OK_MAP(#{
         <<"name">> => maps:get(<<"name">>, GroupData),
         <<"type">> => maps:get(<<"type">>, GroupData),
-        <<"creationTime">> => ozt_mocks:get_mocked_time(),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => Creator
     });
 protected_group(rest, Id, GroupData, Creator) ->
@@ -122,7 +122,7 @@ protected_group(rest, Id, GroupData, Creator) ->
         <<"groupId">> => Id,
         <<"name">> => maps:get(<<"name">>, GroupData),
         <<"type">> => atom_to_binary(maps:get(<<"type">>, GroupData), utf8),
-        <<"creationTime">> => ozt_mocks:get_mocked_time(),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     };
 protected_group(gs, Id, GroupData, _Creator) ->
@@ -138,14 +138,14 @@ shared_group(logic, _Id, GroupData) ->
     ?OK_MAP(#{
         <<"name">> => maps:get(<<"name">>, GroupData),
         <<"type">> => maps:get(<<"type">>, GroupData),
-        <<"creationTime">> => ozt_mocks:get_mocked_time()
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
     });
 shared_group(rest, Id, GroupData) ->
     #{
         <<"groupId">> => Id,
         <<"name">> => maps:get(<<"name">>, GroupData),
         <<"type">> => atom_to_binary(maps:get(<<"type">>, GroupData), utf8),
-        <<"creationTime">> => ozt_mocks:get_mocked_time()
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
     };
 shared_group(gs, Id, GroupData) ->
     ?OK_MAP(#{
@@ -160,7 +160,7 @@ protected_space(logic, _Id, SpaceData, Creator) ->
     ?OK_MAP(#{
         <<"name">> => maps:get(<<"name">>, SpaceData),
         <<"providers">> => maps:get(<<"providers">>, SpaceData, #{}),
-        <<"creationTime">> => ozt_mocks:get_mocked_time(),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => Creator,
         <<"sharesCount">> => 0
     });
@@ -169,7 +169,7 @@ protected_space(rest, Id, SpaceData, Creator) ->
         <<"spaceId">> => Id,
         <<"name">> => maps:get(<<"name">>, SpaceData),
         <<"providers">> => maps:get(<<"providers">>, SpaceData, #{}),
-        <<"creationTime">> => ozt_mocks:get_mocked_time(),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     };
 protected_space(gs, Id, SpaceData, _Creator) ->
@@ -194,7 +194,7 @@ private_share(logic, Id, ShareData, Creator) ->
             root_file = maps:get(<<"rootFileId">>, ShareData),
             file_type = maps:get(<<"fileType">>, ShareData),
 
-            creation_time = ozt_mocks:get_mocked_time(),
+            creation_time = ozt_mocks:get_frozen_time_seconds(),
             creator = Creator
         })
     end);
@@ -208,7 +208,7 @@ private_share(rest, Id, ShareData, Creator) ->
         <<"fileType">> => atom_to_binary(maps:get(<<"fileType">>, ShareData), utf8),
         <<"handleId">> =>  utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
-        <<"creationTime">> => ozt_mocks:get_mocked_time(),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     };
 private_share(gs, Id, ShareData, _Creator) ->
@@ -233,7 +233,7 @@ public_share(logic, Id, ShareData) ->
         <<"fileType">> => maps:get(<<"fileType">>, ShareData),
         <<"handleId">> => maps:get(<<"handleId">>, ShareData, undefined),
         <<"publicUrl">> => expected_public_share_url(Id),
-        <<"creationTime">> => ozt_mocks:get_mocked_time()
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
     });
 public_share(rest, Id, ShareData) ->
     #{
@@ -244,7 +244,7 @@ public_share(rest, Id, ShareData) ->
         <<"fileType">> => atom_to_binary(maps:get(<<"fileType">>, ShareData), utf8),
         <<"handleId">> =>  utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
-        <<"creationTime">> => ozt_mocks:get_mocked_time()
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
     };
 public_share(gs, Id, ShareData) ->
     ?OK_MAP(#{
@@ -266,7 +266,7 @@ protected_provider(logic, _Id, ProviderData) ->
         <<"latitude">> => maps:get(<<"latitude">>, ProviderData, 0.0),
         <<"longitude">> => maps:get(<<"longitude">>, ProviderData, 0.0),
         <<"online">> => maps:get(<<"online">>, ProviderData, false),
-        <<"creationTime">> => ozt_mocks:get_mocked_time()
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
     });
 protected_provider(rest, Id, ProviderData) ->
     #{
@@ -277,7 +277,7 @@ protected_provider(rest, Id, ProviderData) ->
         <<"latitude">> => maps:get(<<"latitude">>, ProviderData),
         <<"longitude">> => maps:get(<<"longitude">>, ProviderData),
         <<"online">> => maps:get(<<"online">>, ProviderData, false),
-        <<"creationTime">> => ozt_mocks:get_mocked_time()
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
     };
 protected_provider(gs, Id, ProviderData) ->
     ?OK_MAP(#{
@@ -343,7 +343,7 @@ protected_hservice(logic, _Id, HServiceData, Creator) ->
         <<"name">> => maps:get(<<"name">>, HServiceData),
         <<"proxyEndpoint">> => maps:get(<<"proxyEndpoint">>, HServiceData),
         <<"serviceProperties">> => maps:get(<<"serviceProperties">>, HServiceData),
-        <<"creationTime">> => ozt_mocks:get_mocked_time(),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => Creator
     });
 protected_hservice(rest, Id, HServiceData, Creator) ->
@@ -352,7 +352,7 @@ protected_hservice(rest, Id, HServiceData, Creator) ->
         <<"name">> => maps:get(<<"name">>, HServiceData),
         <<"proxyEndpoint">> => maps:get(<<"proxyEndpoint">>, HServiceData),
         <<"serviceProperties">> => maps:get(<<"serviceProperties">>, HServiceData),
-        <<"creationTime">> => ozt_mocks:get_mocked_time(),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     }.
 
@@ -365,8 +365,8 @@ protected_handle(logic, Id, HandleData, Creator) ->
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
         <<"metadata">> => maps:get(<<"metadata">>, HandleData),
-        <<"timestamp">> => ozt_mocks:get_mocked_time(),
-        <<"creationTime">> => ozt_mocks:get_mocked_time(),
+        <<"timestamp">> => ozt_mocks:get_frozen_time_seconds(),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => Creator
     });
 protected_handle(rest, Id, HandleData, Creator) ->
@@ -377,8 +377,8 @@ protected_handle(rest, Id, HandleData, Creator) ->
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
         <<"metadata">> => maps:get(<<"metadata">>, HandleData),
-        <<"timestamp">> => time_utils:seconds_to_iso8601(ozt_mocks:get_mocked_time()),
-        <<"creationTime">> => ozt_mocks:get_mocked_time(),
+        <<"timestamp">> => time_format:seconds_to_iso8601(ozt_mocks:get_frozen_time_seconds()),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     }.
 
@@ -390,7 +390,7 @@ protected_harvester(logic, _Id, HarvesterData, Creator) ->
         <<"public">> => maps:get(<<"public">>, HarvesterData, false),
         <<"harvestingBackendEndpoint">> => maps:get(<<"harvestingBackendEndpoint">>, HarvesterData),
         <<"harvestingBackendType">> => maps:get(<<"harvestingBackendType">>, HarvesterData),
-        <<"creationTime">> => ozt_mocks:get_mocked_time(),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => Creator
     });
 protected_harvester(rest, Id, HarvesterData, Creator) ->
@@ -400,7 +400,7 @@ protected_harvester(rest, Id, HarvesterData, Creator) ->
         <<"public">> => maps:get(<<"public">>, HarvesterData, false),
         <<"harvestingBackendEndpoint">> => maps:get(<<"harvestingBackendEndpoint">>, HarvesterData),
         <<"harvestingBackendType">> => atom_to_binary(maps:get(<<"harvestingBackendType">>, HarvesterData), utf8),
-        <<"creationTime">> => ozt_mocks:get_mocked_time(),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     }.
 
@@ -477,5 +477,5 @@ expected_cluster_creation_time(?ONEZONE) ->
     }}} = ?assertMatch({ok, _}, ozt:rpc(od_cluster, get, [?ONEZONE_CLUSTER_ID])),
     CreationTime;
 expected_cluster_creation_time(?ONEPROVIDER) ->
-    ozt_mocks:get_mocked_time().
+    ozt_mocks:get_frozen_time_seconds().
 

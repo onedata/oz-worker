@@ -28,7 +28,7 @@
 -type query_params() :: #{}.
 % OpenID access token, used to retrieve user info from an IdP
 -type access_token() :: binary().
--type access_token_ttl() :: non_neg_integer().
+-type access_token_ttl() :: clock:seconds().
 % Refresh token - used to refresh access tokens
 -type refresh_token() :: binary().
 -export_type([
@@ -42,7 +42,7 @@
 
 -type protocol_handler() :: saml_protocol | openid_protocol.
 
--define(NOW(), time_utils:timestamp_seconds()).
+-define(NOW(), clock:timestamp_seconds()).
 -define(REFRESH_THRESHOLD, oz_worker:get_env(idp_access_token_refresh_threshold, 300)).
 
 %% API

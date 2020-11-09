@@ -120,7 +120,7 @@
 
 -define(HANDLE_RESOURCE_TYPE, <<"Share">>).
 
--define(CURRENT_DATETIME(), time_utils:seconds_to_datetime(time_utils:timestamp_seconds())).
+-define(CURRENT_DATETIME(), time_format:seconds_to_datetime(clock:timestamp_seconds())).
 
 %%%===================================================================
 %%% API functions
@@ -1306,7 +1306,7 @@ modify_handle_with_mocked_timestamp(Config, HId, Metadata, Timestamp) ->
     Nodes = ?config(oz_worker_nodes, Config),
     ok = test_utils:mock_new(Nodes, od_handle, [passthrough]),
     ok = test_utils:mock_expect(Nodes, od_handle, actual_timestamp, fun() ->
-        time_utils:datetime_to_seconds(Timestamp)
+        time_format:datetime_to_seconds(Timestamp)
     end),
     ok = modify_handle(Config, HId, Metadata),
     ok = test_utils:mock_validate_and_unload(Nodes, od_handle).
@@ -1342,7 +1342,7 @@ create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId, M
     Nodes = ?config(oz_worker_nodes, Config),
     ok = test_utils:mock_new(Nodes, od_handle, [passthrough]),
     ok = test_utils:mock_expect(Nodes, od_handle, actual_timestamp, fun() ->
-        time_utils:datetime_to_seconds(Timestamp)
+        time_format:datetime_to_seconds(Timestamp)
     end),
     HId = create_handle(Config, User, HandleServiceId, ResourceId, Metadata),
     ok = test_utils:mock_validate_and_unload(Nodes, od_handle),

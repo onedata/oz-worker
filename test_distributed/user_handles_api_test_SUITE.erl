@@ -553,10 +553,10 @@ end_per_suite(_Config) ->
     ssl:stop().
 
 init_per_testcase(_, Config) ->
-    ozt_mocks:mock_time(),
+    ozt_mocks:freeze_time(),
     ozt_mocks:mock_handle_proxy(),
     Config.
 
 end_per_testcase(_, _Config) ->
     ozt_mocks:unmock_handle_proxy(),
-    ozt_mocks:unmock_time().
+    ozt_mocks:unfreeze_time().
