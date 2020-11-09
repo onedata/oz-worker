@@ -29,6 +29,10 @@
 %%%
 %%%     /ozw/74afc09f584276186894b82caf466886/i  ->
 %%%         /ozw/74afc09f584276186894b82caf466886/index.html
+%%%
+%%% Unused GUI packages are cleaned periodically to avoid taking up too much
+%%% storage space (each GUI can take up even 15MB, and there are 5 GUI types
+%%% uploaded per every system upgrade).
 %%% @end
 %%%--------------------------------------------------------------------
 -module(gui_static).
@@ -72,6 +76,9 @@
 -define(CRITICAL_SECTION(LockId, Fun), critical_section:run({gui_static, LockId}, Fun)).
 
 -define(DEFAULT_HARVESTER_GUI_HASH, <<"default">>).
+
+% packages (by hash) which are exempt from periodic cleaning
+-define(NON_CLEANED_PACKAGES, [?EMPTY_GUI_HASH, ?DEFAULT_HARVESTER_GUI_HASH]).
 
 -define(CACHE_DISABLING_HEADERS, #{
     ?HDR_CACHE_CONTROL => <<"max-age=0, no-cache, no-store, must-revalidate">>,
@@ -174,7 +181,7 @@ ensure_package(GuiType, PackageBin, GuiHash) ->
     onedata:gui_hash()) -> ok.
 put_package(on_cluster, GuiType, PackageBin, GuiHash) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, put_package, [on_node, GuiType, PackageBin, GuiHash])
+        ok = rpc:call(Node, ?MODULE, ?FUNCTION_NAME, [on_node, GuiType, PackageBin, GuiHash])
     end, ?CLUSTER_NODES);
 
 put_package(on_node, GuiType, PackageBin, GuiHash) ->
@@ -224,7 +231,7 @@ link_default_harvester_gui(HarvesterId) ->
     onedata:gui_hash()) -> ok.
 link_gui(on_cluster, GuiType, GuiId, GuiHash) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, link_gui, [on_node, GuiType, GuiId, GuiHash])
+        ok = rpc:call(Node, ?MODULE, ?FUNCTION_NAME, [on_node, GuiType, GuiId, GuiHash])
     end, ?CLUSTER_NODES);
 
 link_gui(on_node, GuiType, GuiId, GuiHash) ->
@@ -264,7 +271,7 @@ unlink_gui(GuiType, GuiId) ->
 -spec unlink_gui(on_cluster | on_node, onedata:gui(), gui_id()) -> ok.
 unlink_gui(on_cluster, GuiType, GuiId) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, unlink_gui, [on_node, GuiType, GuiId])
+        ok = rpc:call(Node, ?MODULE, ?FUNCTION_NAME, [on_node, GuiType, GuiId])
     end, ?CLUSTER_NODES);
 
 unlink_gui(on_node, GuiType, GuiId) ->
@@ -300,7 +307,7 @@ remove_unused_packages(GuiType) ->
 -spec remove_unused_packages(on_cluster | on_node, onedata:gui()) -> ok.
 remove_unused_packages(on_cluster, GuiType) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, remove_unused_packages, [on_node, GuiType])
+        ok = rpc:call(Node, ?MODULE, ?FUNCTION_NAME, [on_node, GuiType])
     end, ?CLUSTER_NODES);
 
 remove_unused_packages(on_node, GuiType) ->
@@ -315,19 +322,22 @@ remove_unused_packages(on_node, GuiType) ->
         end
     end, {[], []}, Files),
 
+    UnusedPackages = lists_utils:subtract(AllPackages, UsedPackages),
 
-    UnusedPackages = (AllPackages -- UsedPackages) -- [binary_to_list(?EMPTY_GUI_HASH)],
+    PackagesToBeRemoved = lists:filter(fun(PackageHash) ->
+        not lists:member(list_to_binary(PackageHash), ?NON_CLEANED_PACKAGES)
+    end, UnusedPackages),
 
-    lists:foreach(fun(UnusedPkg) ->
-        UnusedPkgPath = filename:join(StaticRoot, UnusedPkg),
-        case file_utils:seconds_since_modification(UnusedPkgPath) of
+    lists:foreach(fun(PackageHash) ->
+        PackagePath = filename:join(StaticRoot, PackageHash),
+        case file_utils:seconds_since_modification(PackagePath) of
             {ok, Seconds} when Seconds > ?CLEANING_AGE_THRESHOLD ->
-                ?debug("Removing unused GUI package: ~s/~s", [GuiPrefix, UnusedPkg]),
-                ok = file_utils:recursive_del(UnusedPkgPath);
+                ?info("Removing unused GUI package: ~s/~s", [GuiPrefix, PackageHash]),
+                ok = file_utils:recursive_del(PackagePath);
             _ ->
                 ok
         end
-    end, UnusedPackages).
+    end, PackagesToBeRemoved).
 
 
 %%--------------------------------------------------------------------

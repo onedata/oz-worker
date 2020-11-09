@@ -664,7 +664,14 @@ unused_packages_are_cleaned(Config) ->
     ?assert(static_directory_exists(true, Config, [<<"./hrv/">>, HashOmega])),
     UnlinkGui(?HARVESTER_GUI, <<"hrv2">>),
     % But now it should be cleaned
-    ?assert(static_directory_exists(false, 60, Config, [<<"./hrv/">>, HashOmega])).
+    ?assert(static_directory_exists(false, 60, Config, [<<"./hrv/">>, HashOmega])),
+
+    % Empty GUI placeholders and default harvester GUI should be exempt from
+    % periodic cleaning and still be around, despite nothing being linked to them
+    ?assert(static_directory_exists(true, Config, [<<"./ozw/">>, ?EMPTY_GUI_HASH])),
+    ?assert(static_directory_exists(true, Config, [<<"./opw/">>, ?EMPTY_GUI_HASH])),
+    ?assert(static_directory_exists(true, Config, [<<"./onp/">>, ?EMPTY_GUI_HASH])),
+    ?assert(static_directory_exists(true, Config, [<<"./hrv/">>, <<"default">>])).
 
 
 empty_gui_is_linked_after_failed_op_worker_version_update(Config) ->
