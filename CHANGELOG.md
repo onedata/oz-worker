@@ -4,6 +4,8 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 20.02.3
+
 ### 20.02.2
 
 -   **VFS-6853** Matching session cookie is now required to verify a GUI
