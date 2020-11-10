@@ -683,9 +683,7 @@ get_test_auth_config() ->
     config_v2_or_later().
 upgrade_auth_config(FromVersion, ToVersion) ->
     critical_section:run(auth_config_upgrade, fun() ->
-        {ok, {LastSeen, LastUpgradeResult}} = node_cache:get(
-            previous_auth_cfg_upgrade, {<<"">>, #{}}
-        ),
+        {LastSeen, LastUpgradeResult} = node_cache:get(previous_auth_cfg_upgrade, {<<"">>, #{}}),
         case file_md5(?AUTH_CONFIG_FILE) of
             LastSeen ->
                 % Do not attempt upgrade of the same file multiple times

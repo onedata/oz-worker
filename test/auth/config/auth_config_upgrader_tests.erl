@@ -44,7 +44,7 @@ idps_config_test_() ->
 %%%===================================================================
 
 setup() ->
-    node_cache:init/0,
+    node_cache:init(),
     TempDir = mochitemp:mkdtemp(),
     oz_worker:set_env(test_tempdir, TempDir),
     AuthConfigPath = filename:join(TempDir, "auth.config"),
