@@ -279,6 +279,8 @@ get_test(Config) ->
             function = get_shared_data,
             args = [auth, St1, S],
             expected_result = ?OK_MAP_CONTAINS(#{
+                <<"provider">> => P1,
+                <<"name">> => ?STORAGE_NAME1,
                 <<"qosParameters">> => ExpectedQosParameters
             })
         },
@@ -288,6 +290,7 @@ get_test(Config) ->
             auth_hint = ?THROUGH_SPACE(S),
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"provider">> => P1,
+                <<"name">> => ?STORAGE_NAME1,
                 <<"qosParameters">> => ExpectedQosParameters,
                 <<"qos_parameters">> => ExpectedQosParameters,
                 <<"gri">> => fun(EncodedGri) ->
