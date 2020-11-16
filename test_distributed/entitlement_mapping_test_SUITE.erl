@@ -1265,7 +1265,7 @@ overwrite_config(IdP, Enabled, Parser, Opts) ->
 
     % Clear the admin group cache on all nodes, otherwise testcases might depend on each other
     OzNodes = ?config(oz_worker_nodes, Config),
-    rpc:multicall(OzNodes, simple_cache, clear, [{admin_group, {IdP, str_utils:to_binary(AdminGroup)}}]),
+    rpc:multicall(OzNodes, node_cache, clear, [{admin_group, {IdP, str_utils:to_binary(AdminGroup)}}]),
     ok.
 
 

@@ -108,7 +108,7 @@ mock_request_idp(Method, ExpCode, Endpoint, Headers, Parameters) ->
     http_client:headers(), idp_auth:query_params(), http_client:opts()) ->
     {ResultHeaders :: http_client:headers(), ResultBody :: binary()}.
 mock_request_idp(Method, ExpCode, Endpoint, Headers, Parameters, _Opts) ->
-    {ok, OidcSpec} = onezone_get_saved(mock_spec),
+    OidcSpec = onezone_get_saved(mock_spec),
     EndpointId = lookup_endpoint(Endpoint, OidcSpec),
     AccessTokenAcquireMethod = OidcSpec#oidc_spec.accessTokenAcquireMethod,
     {RespCode, RespHeaders, RespBody} = try
@@ -138,21 +138,21 @@ mock_xrds_endpoint(OidcSpec) ->
 mock_access_token_endpoint(OidcSpec, Headers, #{<<"grant_type">> := <<"authorization_code">>} = Parameters) ->
     AuthCode = maps:get(<<"code">>, Parameters),
     RedirectUri = maps:get(<<"redirect_uri">>, Parameters),
-    {ok, {ExpRedirectUri, Token, RefreshToken}} = onezone_get_saved({auth, AuthCode}),
+    {ExpRedirectUri, Token, RefreshToken} = onezone_get_saved({auth, AuthCode}),
     RedirectUri = ExpRedirectUri,
     mock_access_token_endpoint(OidcSpec, Headers, Parameters, Token, RefreshToken);
 
 mock_access_token_endpoint(OidcSpec, Headers, #{<<"grant_type">> := <<"refresh_token">>} = Parameters) ->
     RefreshToken = maps:get(<<"refresh_token">>, Parameters),
-    case onezone_get_saved({refresh_token, RefreshToken}) of
-        {ok, UserAttributesByEndpoint} ->
+    case onezone_get_saved({refresh_token, RefreshToken}, undefined) of
+        undefined ->
+            {403, #{}, <<"">>};
+        UserAttributesByEndpoint ->
             Token = datastore_key:new(),
             NewRefreshToken = datastore_key:new(),
             onezone_save_everywhere({refresh_token, RefreshToken}, UserAttributesByEndpoint),
             onezone_save_everywhere({token, Token}, UserAttributesByEndpoint),
-            mock_access_token_endpoint(OidcSpec, Headers, Parameters, Token, NewRefreshToken);
-        _ ->
-            {403, #{}, <<"">>}
+            mock_access_token_endpoint(OidcSpec, Headers, Parameters, Token, NewRefreshToken)
     end.
 
 mock_access_token_endpoint(OidcSpec, Headers, Parameters, Token, RefreshToken) ->
@@ -209,10 +209,10 @@ mock_userinfo_endpoint(OidcSpec, Headers, Parameters) ->
         urlencoded ->
             maps:get(<<"access_token">>, Parameters, <<"">>)
     end,
-    case onezone_get_saved({token, Token}) of
-        {error, not_found} ->
+    case onezone_get_saved({token, Token}, undefined) of
+        undefined ->
             {403, #{}, <<"">>};
-        {ok, UserAttributesByEndpoint} ->
+        UserAttributesByEndpoint ->
             ExpCustomData = maps:get(userInfo, OidcSpec#oidc_spec.customData, #{}),
             case custom_data_valid(ExpCustomData, Headers, Parameters) of
                 true ->
@@ -283,15 +283,19 @@ resolve_endpoint(LiteralUrl) ->
 
 testmaster_save_everywhere(Config, Key, Value) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    rpc:multicall(Nodes, simple_cache, put, [Key, Value]),
+    rpc:multicall(Nodes, node_cache, put, [Key, Value]),
     ok.
 
 
 onezone_save_everywhere(Key, Value) ->
-    rpc:multicall(consistent_hashing:get_all_nodes(), simple_cache, put, [Key, Value]),
+    rpc:multicall(consistent_hashing:get_all_nodes(), node_cache, put, [Key, Value]),
     ok.
 
 
 onezone_get_saved(Key) ->
-    simple_cache:get(Key).
+    node_cache:get(Key).
+
+
+onezone_get_saved(Key, Default) ->
+    node_cache:get(Key, Default).
 

@@ -2964,7 +2964,7 @@ authenticate_by_token(Config, Token, AuthCtx) ->
 
 -spec acquire_temporary_token(Config :: term(), aai:subject()) -> tokens:serialized().
 acquire_temporary_token(Config, Subject = ?SUB(SubType, SubId)) ->
-    {ok, Cached} = simple_cache:get({temp_token, Subject}, fun() ->
+    {ok, Cached} = node_cache:acquire({temp_token, Subject}, fun() ->
         Data = #{<<"caveats">> => [#cv_time{valid_until = timestamp_seconds(Config) + 36000}]},
         Fun = case SubType of
             user -> create_user_temporary_token;
@@ -2972,7 +2972,7 @@ acquire_temporary_token(Config, Subject = ?SUB(SubType, SubId)) ->
         end,
         {ok, Token} = call_oz(Config, token_logic, Fun, [?ROOT, SubId, Data]),
         {ok, Serialized} = tokens:serialize(Token),
-        {true, Serialized}
+        {ok, Serialized, infinity}
     end),
     Cached.
 

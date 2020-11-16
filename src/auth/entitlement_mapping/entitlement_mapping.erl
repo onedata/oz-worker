@@ -341,7 +341,7 @@
 -type privileges() :: none | member | manager | admin.
 -export_type([raw_entitlement/0, idp_group/0, idp_entitlement/0, privileges/0]).
 
--define(ADMIN_GROUP_CACHE_TTL, oz_worker:get_env(auth_config_cache_ttl, timer:minutes(1))).
+-define(ADMIN_GROUP_CACHE_TTL, oz_worker:get_env(auth_config_cache_ttl_seconds, 60)).
 
 -define(DEFAULT_PARSER, flat_entitlement_parser).
 
@@ -640,13 +640,13 @@ resolve_admin_group(IdP) ->
         undefined ->
             undefined;
         RawAdminGroup ->
-            {ok, GroupId} = simple_cache:get({admin_group, {IdP, RawAdminGroup}}, fun() ->
+            {ok, GroupId} = node_cache:acquire({admin_group, {IdP, RawAdminGroup}}, fun() ->
                 case create_admin_group(IdP, RawAdminGroup) of
                     false ->
                         % Do not cache in case of failure to map the entitlement
-                        {false, undefined};
+                        {ok, undefined, 0};
                     {true, GroupId} ->
-                        {true, GroupId, ?ADMIN_GROUP_CACHE_TTL}
+                        {ok, GroupId, ?ADMIN_GROUP_CACHE_TTL}
                 end
             end),
             GroupId

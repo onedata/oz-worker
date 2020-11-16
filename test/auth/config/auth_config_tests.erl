@@ -87,6 +87,7 @@ setup_test_auth_config() ->
 
 %% Type :: production | test
 setup(Type) ->
+    node_cache:init(),
     meck:new(file, [unstick, passthrough]),
     meck:expect(file, consult, fun
         (?DUMMY_AUTH_CONFIG_PATH) -> {ok, [get_mock_config_file()]};
@@ -136,10 +137,11 @@ setup(Type) ->
             oz_worker:set_env(test_auth_config_file, ?DUMMY_AUTH_CONFIG_PATH),
             idp_auth_test_mode:process_enable_test_mode()
     end,
-    oz_worker:set_env(auth_config_cache_ttl, -1),
+    oz_worker:set_env(auth_config_cache_ttl_seconds, -1),
     oz_worker:set_env(http_domain, ?DUMMY_ONEZONE_DOMAIN).
 
 teardown(_) ->
+    node_cache:destroy(),
     ?assert(meck:validate(file)),
     ok = meck:unload(file),
     ?assert(meck:validate(filelib)),

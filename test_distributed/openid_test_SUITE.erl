@@ -110,7 +110,7 @@ init_per_testcase(offline_access_internals, Config) ->
     init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
     oz_test_utils:delete_all_entities(Config),
-    oz_test_utils:set_env(Config, openid_xrds_cache_ttl, -1),
+    oz_test_utils:set_env(Config, openid_xrds_cache_ttl_seconds, -1),
     oz_test_utils:freeze_time(Config),
     Config.
 

@@ -18,7 +18,7 @@
 
 -define(CURRENT_CONFIG_VERSION, 3).
 
--define(XRDS_CACHE_TTL, oz_worker:get_env(openid_xrds_cache_ttl, timer:hours(1))).
+-define(XRDS_CACHE_TTL, oz_worker:get_env(openid_xrds_cache_ttl_seconds, 3600)). % 1 hour
 
 -define(bin(Term), auth_config:ensure_bin(Term)).
 -define(str(Term), auth_config:ensure_str(Term)).

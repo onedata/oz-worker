@@ -44,6 +44,7 @@ idps_config_test_() ->
 %%%===================================================================
 
 setup() ->
+    node_cache:init(),
     TempDir = mochitemp:mkdtemp(),
     oz_worker:set_env(test_tempdir, TempDir),
     AuthConfigPath = filename:join(TempDir, "auth.config"),
@@ -53,7 +54,8 @@ setup() ->
 
 teardown(_) ->
     TempDir = oz_worker:get_env(test_tempdir),
-    mochitemp:rmtempdir(TempDir).
+    mochitemp:rmtempdir(TempDir),
+    node_cache:destroy().
 
 label(Version, BasicAuthEnabled, OpenidEnabled, SamlEnabled) ->
     ToStr = fun
