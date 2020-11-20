@@ -176,6 +176,8 @@ CHANGELOG
 
 -   VFS-6129 Increased timeout in elasticsearch plugin
 
+### 19.02.5
+
 ### 19.02.4
 
 -   **VFS-6402** Disallowed creating more than one public handle for a
