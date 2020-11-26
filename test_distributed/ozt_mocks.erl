@@ -17,7 +17,7 @@
 -include("ozt.hrl").
 
 %% API
--export([freeze_time/0, unfreeze_time/0, get_frozen_time_seconds/0, simulate_time_passing_seconds/1]).
+-export([freeze_time/0, unfreeze_time/0, get_frozen_time_seconds/0, simulate_seconds_passing/1]).
 
 -export([mock_gui_static/0, unmock_gui_static/0]).
 
@@ -41,22 +41,22 @@
 %%--------------------------------------------------------------------
 -spec freeze_time() -> ok.
 freeze_time() ->
-    clock_freezer_mock:setup(ozt:get_nodes()).
+    clock_freezer_mock:setup_on_nodes(ozt:get_nodes(), [global_clock]).
 
 
 -spec unfreeze_time() -> ok.
 unfreeze_time() ->
-    clock_freezer_mock:teardown(ozt:get_nodes()).
+    clock_freezer_mock:teardown_on_nodes(ozt:get_nodes()).
 
 
--spec get_frozen_time_seconds() -> clock:seconds() | no_return().
+-spec get_frozen_time_seconds() -> time:seconds() | no_return().
 get_frozen_time_seconds() ->
     clock_freezer_mock:current_time_seconds().
 
 
--spec simulate_time_passing_seconds(clock:seconds()) -> ok.
-simulate_time_passing_seconds(Seconds) ->
-    clock_freezer_mock:simulate_time_passing(ozt:get_nodes(), Seconds * 1000).
+-spec simulate_seconds_passing(time:seconds()) -> ok.
+simulate_seconds_passing(Seconds) ->
+    clock_freezer_mock:simulate_seconds_passing(Seconds).
 
 
 %%--------------------------------------------------------------------

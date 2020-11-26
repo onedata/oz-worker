@@ -2505,7 +2505,7 @@ last_activity_tracking(Config) ->
     ClientPid2 = start_gs_connection(Config, ProviderToken),
     ?assertEqual(now, oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId])),
     exit(ClientPid1, kill),
-    oz_test_utils:simulate_time_passing(Config, 54),
+    oz_test_utils:simulate_seconds_passing(54),
     exit(ClientPid2, kill),
     TimestampAlpha = oz_test_utils:get_frozen_time_seconds(),
     ?assertMatch(
@@ -2513,7 +2513,7 @@ last_activity_tracking(Config) ->
         oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId]),
         60
     ),
-    oz_test_utils:simulate_time_passing(Config, 22),
+    oz_test_utils:simulate_seconds_passing(22),
     ClientPid3 = start_gs_connection(Config, ProviderToken),
     ?assertEqual(now, oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId])),
     exit(ClientPid3, kill),

@@ -1839,7 +1839,7 @@ ensure_predefined_group(GroupId, Name, Privileges) ->
     NormalizedName = entity_logic:normalize_name(Name, ?UNKNOWN_ENTITY_NAME),
     case exists(GroupId) of
         true ->
-            ?info("Predefined group '~ts' already exists, refreshing name and privileges.", [
+            ?info("Predefined group '~ts' already exists, refreshing name and privileges", [
                 NormalizedName
             ]),
             ok = update(?ROOT, GroupId, #{<<"name">> => NormalizedName});

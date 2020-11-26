@@ -412,7 +412,7 @@ verify_token(Token = #token{persistence = named}, AuthCtx) ->
                     % The subjects are different - the token is invalid
                     ?ERROR_TOKEN_INVALID
             end;
-        _ ->
+        {error, not_found} ->
             ?ERROR_TOKEN_INVALID
     end.
 
@@ -425,7 +425,7 @@ verify_token(Token = #token{type = TokenType}, AuthCtx, Secret) ->
         Srv -> Srv
     end,
     CoalescedAuthCtx = AuthCtx#auth_ctx{
-        current_timestamp = clock:timestamp_seconds(),
+        current_timestamp = global_clock:timestamp_seconds(),
         service = Service,
         group_membership_checker = fun group_membership_checker/2
     },

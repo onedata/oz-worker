@@ -286,7 +286,7 @@
     timestamp_seconds/1,
     freeze_time/1, unfreeze_time/1,
     get_frozen_time_seconds/0,
-    simulate_time_passing/2,
+    simulate_seconds_passing/1,
     gui_ca_certs/1,
     ensure_entity_graph_is_up_to_date/1, ensure_entity_graph_is_up_to_date/2,
     toggle_basic_auth/2,
@@ -3285,9 +3285,9 @@ unmock_handle_proxy(Config) ->
 %% Returns the current time.
 %% @end
 %%--------------------------------------------------------------------
--spec timestamp_seconds(Config :: term()) -> clock:selis().
+-spec timestamp_seconds(Config :: term()) -> time:seconds().
 timestamp_seconds(Config) ->
-    call_oz(Config, clock, timestamp_seconds, []).
+    call_oz(Config, global_clock, timestamp_seconds, []).
 
 
 %%--------------------------------------------------------------------
@@ -3297,22 +3297,22 @@ timestamp_seconds(Config) ->
 %%--------------------------------------------------------------------
 -spec freeze_time(Config :: term()) -> ok.
 freeze_time(Config) ->
-    clock_freezer_mock:setup(?OZ_NODES(Config)).
+    clock_freezer_mock:setup_on_nodes(?OZ_NODES(Config), [global_clock]).
 
 
 -spec unfreeze_time(Config :: term()) -> ok.
 unfreeze_time(Config) ->
-    clock_freezer_mock:teardown(?OZ_NODES(Config)).
+    clock_freezer_mock:teardown_on_nodes(?OZ_NODES(Config)).
 
 
--spec get_frozen_time_seconds() -> clock:seconds().
+-spec get_frozen_time_seconds() -> time:seconds().
 get_frozen_time_seconds() ->
     clock_freezer_mock:current_time_seconds().
 
 
--spec simulate_time_passing(Config :: term(), clock:seconds()) -> ok.
-simulate_time_passing(Config, Seconds) ->
-    clock_freezer_mock:simulate_time_passing(?OZ_NODES(Config), Seconds * 1000).
+-spec simulate_seconds_passing(time:seconds()) -> ok.
+simulate_seconds_passing(Seconds) ->
+    clock_freezer_mock:simulate_seconds_passing(Seconds).
 
 
 %%--------------------------------------------------------------------
