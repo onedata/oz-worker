@@ -238,7 +238,7 @@ insert_to_root_xml_element(Content) when is_list(Content) ->
 %%%--------------------------------------------------------------------
 -spec generate_response_date_element() -> {atom(), binary()}.
 generate_response_date_element() ->
-    DateTime = time_format:seconds_to_datetime(clock:timestamp_seconds()),
+    DateTime = time:seconds_to_datetime(global_clock:timestamp_seconds()),
     {responseDate, oai_utils:serialize_datestamp(DateTime)}.
 
 %%%--------------------------------------------------------------------

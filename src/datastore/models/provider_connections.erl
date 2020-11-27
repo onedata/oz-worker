@@ -63,7 +63,7 @@ get_all(ProviderId) ->
     end.
 
 
--spec get_last_activity(od_provider:id()) -> now | clock:seconds().
+-spec get_last_activity(od_provider:id()) -> now | time:seconds().
 get_last_activity(ProviderId) ->
     case is_online(ProviderId) of
         true ->
@@ -113,7 +113,7 @@ update(ProviderId, ConnectionsDiff) ->
         {ok, #document{value = #provider_connections{connections = Connections}}} ->
             % update can fail, e.g. when the provider has been deregistered
             od_provider:update(ProviderId, fun(Provider) ->
-                {ok, Provider#od_provider{last_activity = clock:timestamp_seconds()}}
+                {ok, Provider#od_provider{last_activity = global_clock:timestamp_seconds()}}
             end),
             {ok, length(Connections)};
         {error, _} = Error ->

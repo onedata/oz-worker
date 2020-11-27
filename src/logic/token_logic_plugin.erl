@@ -159,7 +159,7 @@ create(#el_req{gri = #gri{id = undefined, aspect = verify_access_token}, data = 
         {ok, #auth{subject = Subject, caveats = Caveats}} ->
             {ok, value, #{
                 <<"subject">> => Subject,
-                <<"ttl">> => infer_ttl(Caveats)
+                <<"ttl">> => caveats:infer_ttl(Caveats)
             }};
         {error, _} = Error ->
             Error
@@ -172,7 +172,7 @@ create(#el_req{gri = #gri{id = undefined, aspect = verify_identity_token}, data 
         {ok, {Subject, Caveats}} ->
             {ok, value, #{
                 <<"subject">> => Subject,
-                <<"ttl">> => infer_ttl(Caveats)
+                <<"ttl">> => caveats:infer_ttl(Caveats)
             }};
         {error, _} = Error ->
             Error
@@ -186,7 +186,7 @@ create(#el_req{gri = #gri{id = undefined, aspect = verify_invite_token}, data = 
         {ok, #auth{subject = Subject, caveats = Caveats}} ->
             {ok, value, #{
                 <<"subject">> => Subject,
-                <<"ttl">> => infer_ttl(Caveats)
+                <<"ttl">> => caveats:infer_ttl(Caveats)
             }};
         {error, _} = Error ->
             Error
@@ -611,7 +611,7 @@ create_temporary_token(Subject, Data) ->
     validate_subject_and_service(Type, Subject, Caveats),
 
     MaxTTL = ?MAX_TEMPORARY_TOKEN_TTL,
-    IsTtlAllowed = case infer_ttl(Caveats) of
+    IsTtlAllowed = case caveats:infer_ttl(Caveats) of
         undefined -> false;
         TTL -> TTL =< MaxTTL
     end,
@@ -674,15 +674,3 @@ to_token_data(TokenId, NamedToken) ->
         <<"revoked">> => NamedToken#od_token.revoked,
         <<"token">> => od_token:named_token_to_token(TokenId, NamedToken)
     }.
-
-
--spec infer_ttl([caveats:caveat()]) -> undefined | clock:seconds().
-infer_ttl(Caveats) ->
-    ValidUntil = lists:foldl(fun
-        (#cv_time{valid_until = ValidUntil}, undefined) -> ValidUntil;
-        (#cv_time{valid_until = ValidUntil}, Acc) -> min(ValidUntil, Acc)
-    end, undefined, caveats:filter([cv_time], Caveats)),
-    case ValidUntil of
-        undefined -> undefined;
-        _ -> ValidUntil - clock:timestamp_seconds()
-    end.

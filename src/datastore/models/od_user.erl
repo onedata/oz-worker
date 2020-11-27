@@ -17,7 +17,7 @@
 -include_lib("ctool/include/errors.hrl").
 
 %% API
--export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, get_full_name/1, exists/1, update/2, force_delete/1, list/0]).
 -export([get_by_username/1, get_by_linked_account/1]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
@@ -73,6 +73,15 @@ create(Doc) ->
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(UserId) ->
     datastore_model:get(?CTX, UserId).
+
+
+-spec get_full_name(id()) -> {ok, full_name()} | errors:error().
+get_full_name(UserId) ->
+    case datastore_model:get(?CTX, UserId) of
+        {ok, #document{value = #od_user{full_name = FullName}}} -> {ok, FullName};
+        {error, _} = Error -> Error
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -1348,7 +1357,7 @@ upgrade_record(9, User) ->
         #{},
         #{},
 
-        clock:timestamp_seconds(),
+        global_clock:timestamp_seconds(),
 
         TopDownDirty
     }};

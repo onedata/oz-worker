@@ -339,6 +339,7 @@ the_only_space_owner_can_be_removed_from_a_space_with_no_indirect_users_being_th
     ?assertEqual(ok, ozt:rpc(space_logic, remove_user, [?ROOT, Space, FirstOwner])),
     SecondOwner = ozt_users:create(),
     ozt_spaces:add_user(Space, SecondOwner),
+    ozt:reconcile_entity_graph(),
     ?assertEqual(ok, ozt:rpc(user_logic, leave_space, [?ROOT, SecondOwner, Space])),
 
     OwnerAlpha = ozt_users:create(),
@@ -346,6 +347,7 @@ the_only_space_owner_can_be_removed_from_a_space_with_no_indirect_users_being_th
     ?assertEqual(ok, ozt:rpc(user_logic, leave_space, [?ROOT, OwnerAlpha, AnotherSpace])),
     OwnerBeta = ozt_users:create(),
     ozt_spaces:add_user(AnotherSpace, OwnerBeta),
+    ozt:reconcile_entity_graph(),
     ?assertEqual(ok, ozt:rpc(space_logic, remove_user, [?ROOT, AnotherSpace, OwnerBeta])).
 
 

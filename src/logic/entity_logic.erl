@@ -83,7 +83,7 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
 }.
 
 % Common fields for all records
--type creation_time() :: clock:seconds().
+-type creation_time() :: time:seconds().
 
 -export_type([
     req/0,

@@ -423,7 +423,7 @@ upgrade_record(4, Provider) ->
         EffGroups,
         #{},
 
-        clock:timestamp_seconds(),
+        global_clock:timestamp_seconds(),
 
         BottomUpDirty
     }};

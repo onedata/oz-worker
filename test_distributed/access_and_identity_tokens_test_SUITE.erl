@@ -75,7 +75,7 @@
 -record(request_context, {
     subject :: aai:subject(),
     token_type :: access_token | identity_token,
-    current_timestamp :: clock:seconds(),
+    current_timestamp :: time:seconds(),
     interface :: undefined | cv_interface:interface(),
     ip :: undefined | ip_utils:ip(),
     asn :: undefined | ip_utils:asn(),

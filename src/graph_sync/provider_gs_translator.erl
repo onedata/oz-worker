@@ -359,7 +359,7 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
-        <<"timestamp">> => time_format:seconds_to_iso8601(Timestamp),  % @TODO VFS-6309 to be removed in 21.02
+        <<"timestamp">> => time:seconds_to_iso8601(Timestamp),  % @TODO VFS-6309 to be removed in 21.02
         <<"handleServiceId">> => HandleServiceId,
 
         <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Handle),
@@ -375,7 +375,7 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public},
     #{
         <<"publicHandle">> => PublicHandle,
         <<"metadata">> => Metadata,
-        <<"timestamp">> => time_format:seconds_to_iso8601(Timestamp)  % @TODO VFS-6309 to be removed in 21.02
+        <<"timestamp">> => time:seconds_to_iso8601(Timestamp)  % @TODO VFS-6309 to be removed in 21.02
     };
 
 translate_resource(_, #gri{type = od_harvester, aspect = instance, scope = private}, Harvester) ->

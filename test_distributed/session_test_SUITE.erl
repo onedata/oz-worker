@@ -115,7 +115,7 @@ session_cookie_refresh_and_grace_period(Config) ->
         nonce = OldNonce
     }} = rpc:call(random_node(Config), gui_session_plugin, get, [SessionId]),
 
-    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_refresh_interval) + 1),
+    oz_test_utils:simulate_seconds_passing(get_gui_config(Config, session_cookie_refresh_interval) + 1),
     {ok, _, _, Req} = ?assertMatch({ok, UserId, SessionId, _}, validate_session(Config, Cookie)),
     % Cookie should have been refreshed
     NewCookie = oz_test_utils:parse_resp_session_cookie(Req),
@@ -130,7 +130,7 @@ session_cookie_refresh_and_grace_period(Config) ->
     ?assertMatch(OldNonce, PrevNonce),
 
     % After the grace period, the old cookie should stop working
-    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_grace_period) + 1),
+    oz_test_utils:simulate_seconds_passing(get_gui_config(Config, session_cookie_grace_period) + 1),
 
     ?assertMatch({error, invalid}, validate_session(Config, Cookie)),
     ?assertMatch(?ERROR_UNAUTHORIZED, start_gs_connection(Config, Cookie)),
@@ -151,7 +151,7 @@ last_activity_tracking(Config) ->
     ?assertEqual(now, oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId])),
     exit(ClientPid1, kill),
     exit(ClientPid2, kill),
-    oz_test_utils:simulate_time_passing(Config, 54),
+    oz_test_utils:simulate_seconds_passing(54),
     exit(ClientPid3, kill),
     TimestampAlpha = oz_test_utils:get_frozen_time_seconds(),
     ?assertMatch(
@@ -159,7 +159,7 @@ last_activity_tracking(Config) ->
         oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId]),
         60
     ),
-    oz_test_utils:simulate_time_passing(Config, 22),
+    oz_test_utils:simulate_seconds_passing(22),
     {ClientPid4, _, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
     ?assertEqual(now, oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId])),
     exit(ClientPid4, kill),
@@ -178,7 +178,7 @@ cleanup_on_session_expiry(Config) ->
     {ClientPid2, _ServerPid2, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
     {ClientPid3, _ServerPid3, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
 
-    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
+    oz_test_utils:simulate_seconds_passing(get_gui_config(Config, session_cookie_ttl) + 1),
 
     ?assertMatch(?ERROR_UNAUTHORIZED, start_gs_connection(Config, Cookie)),
 
@@ -243,7 +243,7 @@ cleanup_of_expired_sessions_upon_other_session_expiry(Config) ->
     {ClientPid1, ServerPid1, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie1),
     {ClientPid2, ServerPid2, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie2),
 
-    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
+    oz_test_utils:simulate_seconds_passing(get_gui_config(Config, session_cookie_ttl) + 1),
 
     {ok, {Session3, Cookie3}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid3, ServerPid3, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie3),
@@ -257,7 +257,7 @@ cleanup_of_expired_sessions_upon_other_session_expiry(Config) ->
     ?assert(is_process_alive(ClientPid2)),
     ?assert(is_process_alive(ClientPid3)),
 
-    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
+    oz_test_utils:simulate_seconds_passing(get_gui_config(Config, session_cookie_ttl) + 1),
 
     % The only session that is still valid, it should not be cleared
     {ok, {Session4, Cookie4}} = oz_test_utils:log_in(Config, UserId),
@@ -286,7 +286,7 @@ cleanup_of_expired_sessions_upon_other_session_delete(Config) ->
     {ClientPid1, ServerPid1, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie1),
     {ClientPid2, ServerPid2, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie2),
 
-    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
+    oz_test_utils:simulate_seconds_passing(get_gui_config(Config, session_cookie_ttl) + 1),
 
     {ok, {Session3, Cookie3}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid3, ServerPid3, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie3),

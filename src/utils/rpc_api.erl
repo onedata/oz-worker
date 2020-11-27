@@ -204,7 +204,7 @@ cluster_logic_create_invite_token_for_admin(Auth, ClusterId) ->
     ProviderId = ClusterId,
     TokenName = <<
         "admin invite to cluster ",
-        (binary:part(time_format:seconds_to_iso8601(clock:timestamp_seconds()), 0, 10))/binary, " ",
+        (binary:part(time:seconds_to_iso8601(global_clock:timestamp_seconds()), 0, 10))/binary, " ",
         (str_utils:rand_hex(3))/binary
     >>,
     token_logic:create_provider_named_token(Auth, ProviderId, #{

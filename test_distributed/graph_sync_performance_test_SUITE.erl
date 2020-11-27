@@ -344,11 +344,11 @@ concurrent_active_clients_spawning_performance_base(Config) ->
                             type = od_user, id = ?SELF, aspect = instance
                         }, get)
                     ),
-                    erlang:send_after(round(timer:seconds(RequestInterval)), self(), perform_request),
+                    erlang:send_after(timer:seconds(RequestInterval), self(), perform_request),
                     Loop()
             end
         end),
-        erlang:send_after(rand:uniform(round(timer:seconds(RequestInterval))), Pid, perform_request)
+        erlang:send_after(rand:uniform(timer:seconds(RequestInterval)), Pid, perform_request)
     end,
 
 
@@ -384,7 +384,7 @@ spawn_clients(Config, Type, Clients, RetryFlag, CallbackFunction, OnSuccessFun) 
             gui ->
                 {ok, {_SessionId, SessionCookie}} = oz_test_utils:log_in(Config, Client),
                 {ok, GuiToken} = oz_test_utils:request_gui_token(Config, SessionCookie),
-                Auth = {token, GuiToken},
+                Auth = {with_http_cookies, {token, GuiToken}, [{?SESSION_COOKIE_KEY, SessionCookie}]},
                 Identity = ?SUB(user, Client),
                 {Auth, Identity};
             provider ->

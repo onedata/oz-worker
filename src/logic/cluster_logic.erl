@@ -102,7 +102,7 @@ create_oneprovider_cluster(CreatorUserId, ProviderId) ->
             undefined -> ?SUB(nobody);
             _ -> ?SUB(user, CreatorUserId)
         end,
-        creation_time = clock:timestamp_seconds()
+        creation_time = global_clock:timestamp_seconds()
     }}),
 
     CreatorUserId /= undefined andalso
