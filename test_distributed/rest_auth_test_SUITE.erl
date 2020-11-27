@@ -352,7 +352,7 @@ gui_token_test(Config) ->
         }
     })),
 
-    oz_test_utils:simulate_time_passing(Config, Ttl + 1),
+    oz_test_utils:simulate_seconds_passing(Ttl + 1),
 
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{

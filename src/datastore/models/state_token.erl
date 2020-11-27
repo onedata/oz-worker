@@ -35,6 +35,8 @@
     disc_driver => undefined
 }).
 
+-define(NOW(), global_clock:timestamp_seconds()).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -62,7 +64,7 @@ create(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
     },
     {ok, #document{key = StateToken}} = datastore_model:create(?CTX, #document{
         value = #state_token{
-            timestamp = clock:timestamp_seconds(),
+            timestamp = ?NOW(),
             state_info = StateInfo
         }
     }),
@@ -80,11 +82,11 @@ create(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
 -spec lookup(state_token()) -> {ok, state_info()} | error.
 lookup(StateToken) ->
     case datastore_model:get(?CTX, StateToken) of
-        {ok, #document{value = #state_token{timestamp = T, state_info = Info}}} ->
+        {ok, #document{value = #state_token{timestamp = Timestamp, state_info = Info}}} ->
             % The token is consumed immediately
             datastore_model:delete(?CTX, StateToken),
             % Check if the token is still valid
-            case clock:timestamp_seconds() - T =< ttl() of
+            case ?NOW() - Timestamp =< ttl() of
                 true -> {ok, Info};
                 false -> error
             end;

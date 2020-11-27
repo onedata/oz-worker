@@ -460,12 +460,12 @@ offline_access(Config) ->
 
     % The same access token should be reused if possible (unless it reaches refresh threshold)
     RefreshThreshold = oz_test_utils:get_env(Config, idp_access_token_refresh_threshold),
-    oz_test_utils:simulate_time_passing(Config, ?MOCK_ACCESS_TOKEN_TTL - RefreshThreshold - 1),
+    oz_test_utils:simulate_seconds_passing(?MOCK_ACCESS_TOKEN_TTL - RefreshThreshold - 1),
     NewTtl = RefreshThreshold + 1,
     ?assertMatch({ok, {AccessToken, NewTtl}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % expired access token should be refreshed when refresh threshold is reached
-    oz_test_utils:simulate_time_passing(Config, 2),
+    oz_test_utils:simulate_seconds_passing(2),
     {ok, {NewAccessToken, _}} =
         ?assertMatch({ok, {_, ?MOCK_ACCESS_TOKEN_TTL}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
     ?assertNotMatch(NewAccessToken, AccessToken),
@@ -499,9 +499,9 @@ offline_access_internals(Config) ->
 
     % Access token should be refreshed only when the RefreshThreshold is reached
     Ttl1 = RefreshThreshold + 1,
-    oz_test_utils:simulate_time_passing(Config, 1000 - Ttl1),
+    oz_test_utils:simulate_seconds_passing(1000 - Ttl1),
     ?assertMatch({ok, {<<"at1">>, Ttl1}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
-    oz_test_utils:simulate_time_passing(Config, 2),
+    oz_test_utils:simulate_seconds_passing(2),
     mock_refresh_endpoint_response(Config, fun(?DUMMY_IDP, <<"rt1">>) ->
         {ok, #{
             <<"sub">> => SubjectId,
@@ -516,7 +516,7 @@ offline_access_internals(Config) ->
     ),
 
     % Refresh token should not be overwritten if a new one does not come in the refresh response
-    oz_test_utils:simulate_time_passing(Config, 1200),
+    oz_test_utils:simulate_seconds_passing(1200),
     mock_refresh_endpoint_response(Config, fun(?DUMMY_IDP, <<"rt2">>) ->
         {ok, #{
             <<"sub">> => SubjectId,
@@ -544,10 +544,10 @@ offline_access_internals(Config) ->
         ])
     ),
     Ttl4 = RefreshThreshold - 100,
-    oz_test_utils:simulate_time_passing(Config, 1000 - Ttl4),
+    oz_test_utils:simulate_seconds_passing(1000 - Ttl4),
     ?assertMatch({ok, {<<"at4">>, Ttl4}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
     % Though when the expiration time is reached, the token should no longer be served
-    oz_test_utils:simulate_time_passing(Config, Ttl4 + 1),
+    oz_test_utils:simulate_seconds_passing(Ttl4 + 1),
     ?assertMatch(?ERROR_NOT_FOUND, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % Refreshing the token should also fetch user data and refresh it
@@ -568,7 +568,7 @@ offline_access_internals(Config) ->
         }]}},
         oz_test_utils:get_user(Config, UserId)
     ),
-    oz_test_utils:simulate_time_passing(Config, 1001),
+    oz_test_utils:simulate_seconds_passing(1001),
     mock_refresh_endpoint_response(Config, fun(?DUMMY_IDP, <<"rt5">>) ->
         {ok, #{
             <<"sub">> => SubjectId,

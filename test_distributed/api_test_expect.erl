@@ -377,7 +377,7 @@ protected_handle(rest, Id, HandleData, Creator) ->
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
         <<"metadata">> => maps:get(<<"metadata">>, HandleData),
-        <<"timestamp">> => time_format:seconds_to_iso8601(ozt_mocks:get_frozen_time_seconds()),
+        <<"timestamp">> => time:seconds_to_iso8601(ozt_mocks:get_frozen_time_seconds()),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     }.

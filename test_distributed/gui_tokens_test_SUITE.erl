@@ -373,7 +373,7 @@ gui_tokens_expire(Config) ->
 
     {ok, {Token1, Ttl1}} = create_access_token_for_gui(Config, UserId, Session1, ?OZW_SRV(?ONEZONE_CLUSTER_ID)),
     ValidUntil1 = oz_test_utils:get_frozen_time_seconds() + Ttl1,
-    oz_test_utils:simulate_time_passing(Config, 10),
+    oz_test_utils:simulate_seconds_passing(10),
     {ok, {Token2, Ttl2}} = create_access_token_for_gui(Config, UserId, Session2, ?OPW_SRV(ProviderId)),
     ValidUntil2 = oz_test_utils:get_frozen_time_seconds() + Ttl2,
 
@@ -386,7 +386,7 @@ gui_tokens_expire(Config) ->
         verify_token(Config, Token2, ?OPW_SRV(ProviderId))
     ),
 
-    oz_test_utils:simulate_time_passing(Config, Ttl1 - 10 + 1),
+    oz_test_utils:simulate_seconds_passing(Ttl1 - 10 + 1),
 
     ?assertEqual(
         ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil1})),
@@ -397,7 +397,7 @@ gui_tokens_expire(Config) ->
         verify_token(Config, Token2, ?OPW_SRV(ProviderId))
     ),
 
-    oz_test_utils:simulate_time_passing(Config, 10),
+    oz_test_utils:simulate_seconds_passing(10),
     ?assertEqual(
         ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil1})),
         verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))

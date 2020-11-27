@@ -80,7 +80,7 @@ get_response(<<"header">>, Args) ->
         #oai_header{
             identifier = oai_utils:oai_identifier_encode(Id),
             datestamp = oai_utils:serialize_datestamp(
-                time_format:seconds_to_datetime(Timestamp)
+                time:seconds_to_datetime(Timestamp)
             )
         }
     end,

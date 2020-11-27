@@ -328,7 +328,7 @@ upgrade_record(3, HandleService) ->
         EffUsers,
         EffGroups,
 
-        clock:timestamp_seconds(),
+        global_clock:timestamp_seconds(),
         undefined,
 
         BottomUpDirty
