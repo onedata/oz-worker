@@ -177,6 +177,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Storage) ->
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Storage) ->
     #od_storage{
         provider = Provider,
+        name = Name,
         qos_parameters = QosParameters,
         creation_time = CreationTime,
         creator = Creator,
@@ -184,6 +185,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Storage) ->
     } = Storage,
     {ok, #{
         <<"provider">> => Provider,
+        <<"name">> => Name, %% @TODO VFS-6520 Check if still needed after storage api is implemented
         <<"qosParameters">> => QosParameters,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator,

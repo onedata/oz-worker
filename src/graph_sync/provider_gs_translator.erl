@@ -408,11 +408,13 @@ translate_resource(_, #gri{type = od_storage, aspect = instance, scope = private
 translate_resource(_, #gri{type = od_storage, aspect = instance, scope = shared}, StorageDetails) ->
     #{
         <<"provider">> := Provider,
+        <<"name">> := Name,
         <<"qosParameters">> := QosParams,
         <<"readonly">> := Readonly
     } = StorageDetails,
     #{
         <<"provider">> => Provider,
+        <<"name">> => Name,
         <<"qosParameters">> => QosParams,
         <<"readonly">> => Readonly,
         %% @TODO VFS-5856 deprecated, included for compatibility with 20.02.0-beta3
