@@ -4,6 +4,17 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 20.02.4
+
+-   **VFS-6958** Added new endpoint that checks correctness of a QoS
+    expression and returns the list of storages that match the
+    expression.
+-   **VFS-6841** Introduce unified time management in all Onedata
+    components - all clusters now regularly synchronize their clocks
+    with the Onezone service, the process is managed by Onepanel's
+    master node.
+
+
 ### 20.02.3
 
 ### 20.02.2
