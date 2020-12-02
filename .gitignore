@@ -16,6 +16,7 @@ erl_crash.dump
 /_build
 
 rel/vars.config
+rel/files/vm.args
 
 /test/eunit_results
 /test_distributed/logs
