@@ -20,12 +20,13 @@
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 
--define(DUMMY_TIMESTAMP, 1539770225).
 -define(OZ_NODES(Config), ?config(oz_worker_nodes, Config)).
 
 %% API
 -export([
-    all/0, init_per_suite/1, end_per_suite/1
+    all/0,
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     user_upgrade_test/1,
@@ -69,21 +70,17 @@ all() -> ?ALL([
 %%%===================================================================
 
 init_per_suite(Config) ->
-    Posthook = fun(NewConfig) ->
-        Nodes = ?config(oz_worker_nodes, NewConfig),
-        ok = test_utils:mock_new(Nodes, time_utils, [passthrough]),
-        ok = test_utils:mock_expect(Nodes, time_utils, timestamp_seconds, fun() ->
-            ?DUMMY_TIMESTAMP
-        end),
-        NewConfig
-    end,
-    [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]} | Config].
+    ozt:init_per_suite(Config).
 
-end_per_suite(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_unload(Nodes, [time_utils]),
+end_per_suite(_Config) ->
     ok.
 
+init_per_testcase(_, Config) ->
+    ozt_mocks:freeze_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unfreeze_time().
 
 %%%===================================================================
 %%% Tests
@@ -755,7 +752,7 @@ get_record(od_user, 10) -> {
         #{},
         #{},
 
-        ?DUMMY_TIMESTAMP,
+        ozt_mocks:get_frozen_time_seconds(),
 
         true
     },
@@ -827,7 +824,7 @@ get_record(od_user, 10) -> {
         #{},
         #{},
 
-        ?DUMMY_TIMESTAMP,
+        ozt_mocks:get_frozen_time_seconds(),
 
         true
     }
@@ -900,7 +897,7 @@ get_record(od_user, 11) -> {od_user,
     #{},
     #{},
 
-    ?DUMMY_TIMESTAMP,
+    ozt_mocks:get_frozen_time_seconds(),
 
     true
 };
@@ -969,7 +966,7 @@ get_record(od_user, 12) -> {od_user,
     #{},
     #{},
 
-    ?DUMMY_TIMESTAMP,
+    ozt_mocks:get_frozen_time_seconds(),
 
     true
 };
@@ -1038,7 +1035,7 @@ get_record(od_user, 13) -> #od_user{
     eff_harvesters = #{},
     eff_clusters = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     last_activity = 0,
 
     top_down_dirty = true
@@ -1199,7 +1196,7 @@ get_record(od_group, 6) -> {
         eff_harvesters = #{},
         eff_clusters = #{},
 
-        creation_time = ?DUMMY_TIMESTAMP,
+        creation_time = ozt_mocks:get_frozen_time_seconds(),
         creator = undefined,
 
         top_down_dirty = true,
@@ -1244,7 +1241,7 @@ get_record(od_group, 6) -> {
         eff_harvesters = #{},
         eff_clusters = #{},
 
-        creation_time = ?DUMMY_TIMESTAMP,
+        creation_time = ozt_mocks:get_frozen_time_seconds(),
         creator = {client, user, <<"userId123">>},
 
         top_down_dirty = true,
@@ -1290,7 +1287,7 @@ get_record(od_group, 7) -> #od_group{
     eff_harvesters = #{},
     eff_clusters = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = {subject, user, <<"userId123">>},
 
     top_down_dirty = true,
@@ -1335,7 +1332,7 @@ get_record(od_group, 8) -> #od_group{
     eff_harvesters = #{},
     eff_clusters = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(user, <<"userId123">>),
 
     top_down_dirty = true,
@@ -1448,7 +1445,7 @@ get_record(od_space, 4) -> {od_space,
     #{}, % effective_providers
     #{}, % effective_harvesters
 
-    ?DUMMY_TIMESTAMP,
+    ozt_mocks:get_frozen_time_seconds(),
     undefined,
 
     true,
@@ -1497,7 +1494,7 @@ get_record(od_space, 5) -> {
         #{}, % effective_providers
         #{}, % effective_harvesters
 
-        ?DUMMY_TIMESTAMP,
+        ozt_mocks:get_frozen_time_seconds(),
         undefined,
 
         true,
@@ -1543,7 +1540,7 @@ get_record(od_space, 5) -> {
         #{}, % effective_harvesters
 
 
-        ?DUMMY_TIMESTAMP,
+        ozt_mocks:get_frozen_time_seconds(),
         {client, nobody, <<"">>},
 
         true,
@@ -1589,7 +1586,7 @@ get_record(od_space, 6) -> {od_space,
     #{}, % effective_providers
     #{}, % effective_harvesters
 
-    ?DUMMY_TIMESTAMP,
+    ozt_mocks:get_frozen_time_seconds(),
     {subject, nobody, undefined},
 
     true,
@@ -1634,7 +1631,7 @@ get_record(od_space, 7) -> {
         #{},
         #{},
 
-        ?DUMMY_TIMESTAMP,
+        ozt_mocks:get_frozen_time_seconds(),
         ?SUB(nobody),
 
         true,
@@ -1709,7 +1706,7 @@ get_record(od_space, 7) -> {
         #{},
         #{},
 
-        ?DUMMY_TIMESTAMP,
+        ozt_mocks:get_frozen_time_seconds(),
         ?SUB(nobody),
 
         true,
@@ -1784,7 +1781,7 @@ get_record(od_space, 8) -> {od_space,
     #{},
     #{},
 
-    ?DUMMY_TIMESTAMP,
+    ozt_mocks:get_frozen_time_seconds(),
     ?SUB(nobody),
 
     true,
@@ -1863,7 +1860,7 @@ get_record(od_space, 9) -> {od_space,
     #{},
     #{},
 
-    ?DUMMY_TIMESTAMP,
+    ozt_mocks:get_frozen_time_seconds(),
     ?SUB(nobody),
 
     true,
@@ -1946,7 +1943,7 @@ get_record(od_space, 10) -> #od_space{
     support_parameters_per_provider = #{},
     support_stage_per_provider = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(nobody),
 
     top_down_dirty = true,
@@ -1982,7 +1979,7 @@ get_record(od_share, 3) -> {
         <<"handle_id">>,
         <<"root_file_id">>,
 
-        ?DUMMY_TIMESTAMP,
+        ozt_mocks:get_frozen_time_seconds(),
         undefined
     },
     {od_share,
@@ -1992,7 +1989,7 @@ get_record(od_share, 3) -> {
         <<"handle_id">>,
         <<"root_file_id">>,
 
-        ?DUMMY_TIMESTAMP,
+        ozt_mocks:get_frozen_time_seconds(),
         {client, root, <<"">>}
     }
 };
@@ -2003,7 +2000,7 @@ get_record(od_share, 4) -> {od_share,
     <<"handle_id">>,
     <<"root_file_id">>,
 
-    ?DUMMY_TIMESTAMP,
+    ozt_mocks:get_frozen_time_seconds(),
     {subject, nobody, undefined}
 };
 get_record(od_share, 5) -> {od_share,
@@ -2016,7 +2013,7 @@ get_record(od_share, 5) -> {od_share,
     <<"root_file_id">>,
     dir,
 
-    ?DUMMY_TIMESTAMP,
+    ozt_mocks:get_frozen_time_seconds(),
     ?SUB(nobody)
 };
 get_record(od_share, 6) -> #od_share{
@@ -2030,7 +2027,7 @@ get_record(od_share, 6) -> #od_share{
     root_file = <<"root_file_id">>,
     file_type = dir,
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(nobody)
 };
 
@@ -2139,7 +2136,7 @@ get_record(od_provider, 5) -> {od_provider,
     #{},
     #{},
 
-    ?DUMMY_TIMESTAMP,
+    ozt_mocks:get_frozen_time_seconds(),
 
     true
 };
@@ -2166,7 +2163,7 @@ get_record(od_provider, 6) -> {od_provider,
     #{},
     #{},
 
-    ?DUMMY_TIMESTAMP,
+    ozt_mocks:get_frozen_time_seconds(),
     0,
 
     true
@@ -2196,7 +2193,7 @@ get_record(od_provider, 7) -> {od_provider,
     #{},
     #{},
 
-    ?DUMMY_TIMESTAMP,
+    ozt_mocks:get_frozen_time_seconds(),
     0,
 
     true
@@ -2226,7 +2223,7 @@ get_record(od_provider, 8) -> #od_provider{
     eff_spaces = #{},
     eff_harvesters = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     connection_status = provider_connection_status:new_by_last_activity(0),
 
     bottom_up_dirty = true
@@ -2329,7 +2326,7 @@ get_record(od_handle_service, 4) -> {
         eff_users = #{},
         eff_groups = #{},
 
-        creation_time = ?DUMMY_TIMESTAMP,
+        creation_time = ozt_mocks:get_frozen_time_seconds(),
         creator = undefined,
 
         bottom_up_dirty = true
@@ -2357,7 +2354,7 @@ get_record(od_handle_service, 4) -> {
         eff_users = #{},
         eff_groups = #{},
 
-        creation_time = ?DUMMY_TIMESTAMP,
+        creation_time = ozt_mocks:get_frozen_time_seconds(),
         creator = {client, provider, <<"123123">>},
 
         bottom_up_dirty = true
@@ -2386,7 +2383,7 @@ get_record(od_handle_service, 5) -> #od_handle_service{
     eff_users = #{},
     eff_groups = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = {subject, ?ONEPROVIDER, <<"123123">>},
 
     bottom_up_dirty = true
@@ -2414,7 +2411,7 @@ get_record(od_handle_service, 6) -> #od_handle_service{
     eff_users = #{},
     eff_groups = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(?ONEPROVIDER, <<"123123">>),
 
     bottom_up_dirty = true
@@ -2511,7 +2508,7 @@ get_record(od_handle, 4) -> {
         eff_users = #{},
         eff_groups = #{},
 
-        creation_time = ?DUMMY_TIMESTAMP,
+        creation_time = ozt_mocks:get_frozen_time_seconds(),
         creator = undefined,
 
         bottom_up_dirty = true
@@ -2537,7 +2534,7 @@ get_record(od_handle, 4) -> {
         eff_users = #{},
         eff_groups = #{},
 
-        creation_time = ?DUMMY_TIMESTAMP,
+        creation_time = ozt_mocks:get_frozen_time_seconds(),
         creator = {client, provider, <<"">>},
 
         bottom_up_dirty = true
@@ -2564,7 +2561,7 @@ get_record(od_handle, 5) -> #od_handle{
     eff_users = #{},
     eff_groups = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = {subject, nobody, undefined},
 
     bottom_up_dirty = true
@@ -2590,7 +2587,7 @@ get_record(od_handle, 6) -> #od_handle{
     eff_users = #{},
     eff_groups = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(nobody),
     bottom_up_dirty = true
 };
@@ -2615,7 +2612,7 @@ get_record(od_handle, 7) -> #od_handle{
     eff_users = #{},
     eff_groups = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(nobody),
     bottom_up_dirty = true
 };
@@ -2642,7 +2639,7 @@ get_record(od_harvester, 1) -> #od_harvester{
                     <<"providerA">> => #index_stats{
                         current_seq = 5,
                         max_seq = 17,
-                        last_update = ?DUMMY_TIMESTAMP + 18,
+                        last_update = ozt_mocks:get_frozen_time_seconds() + 18,
                         error = <<"temp-error">>,
                         archival = false
                     }
@@ -2651,7 +2648,7 @@ get_record(od_harvester, 1) -> #od_harvester{
                     <<"providerB">> => #index_stats{
                         current_seq = 1423,
                         max_seq = 1423,
-                        last_update = ?DUMMY_TIMESTAMP + 892,
+                        last_update = ozt_mocks:get_frozen_time_seconds() + 892,
                         error = undefined,
                         archival = true
                     }
@@ -2675,7 +2672,7 @@ get_record(od_harvester, 1) -> #od_harvester{
     eff_groups = #{},
     eff_providers = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = {client, root, <<"">>},
 
     bottom_up_dirty = true,
@@ -2702,7 +2699,7 @@ get_record(od_harvester, 2) -> #od_harvester{
                     <<"providerA">> => #index_stats{
                         current_seq = 5,
                         max_seq = 17,
-                        last_update = ?DUMMY_TIMESTAMP + 18,
+                        last_update = ozt_mocks:get_frozen_time_seconds() + 18,
                         error = <<"temp-error">>,
                         archival = false
                     }
@@ -2711,7 +2708,7 @@ get_record(od_harvester, 2) -> #od_harvester{
                     <<"providerB">> => #index_stats{
                         current_seq = 1423,
                         max_seq = 1423,
-                        last_update = ?DUMMY_TIMESTAMP + 892,
+                        last_update = ozt_mocks:get_frozen_time_seconds() + 892,
                         error = undefined,
                         archival = true
                     }
@@ -2735,7 +2732,7 @@ get_record(od_harvester, 2) -> #od_harvester{
     eff_groups = #{},
     eff_providers = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = {subject, nobody, undefined},
 
     bottom_up_dirty = true,
@@ -2762,7 +2759,7 @@ get_record(od_harvester, 3) -> #od_harvester{
                     <<"providerA">> => #index_stats{
                         current_seq = 5,
                         max_seq = 17,
-                        last_update = ?DUMMY_TIMESTAMP + 18,
+                        last_update = ozt_mocks:get_frozen_time_seconds() + 18,
                         error = <<"temp-error">>,
                         archival = false
                     }
@@ -2771,7 +2768,7 @@ get_record(od_harvester, 3) -> #od_harvester{
                     <<"providerB">> => #index_stats{
                         current_seq = 1423,
                         max_seq = 1423,
-                        last_update = ?DUMMY_TIMESTAMP + 892,
+                        last_update = ozt_mocks:get_frozen_time_seconds() + 892,
                         error = undefined,
                         archival = true
                     }
@@ -2795,7 +2792,7 @@ get_record(od_harvester, 3) -> #od_harvester{
     eff_groups = #{},
     eff_providers = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(nobody),
 
     bottom_up_dirty = true,
@@ -2826,7 +2823,7 @@ get_record(od_harvester, 4) -> #od_harvester{
                     <<"providerA">> => #index_stats{
                         current_seq = 5,
                         max_seq = 17,
-                        last_update = ?DUMMY_TIMESTAMP + 18,
+                        last_update = ozt_mocks:get_frozen_time_seconds() + 18,
                         error = <<"temp-error">>,
                         archival = false
                     }
@@ -2835,7 +2832,7 @@ get_record(od_harvester, 4) -> #od_harvester{
                     <<"providerB">> => #index_stats{
                         current_seq = 1423,
                         max_seq = 1423,
-                        last_update = ?DUMMY_TIMESTAMP + 892,
+                        last_update = ozt_mocks:get_frozen_time_seconds() + 892,
                         error = undefined,
                         archival = true
                     }
@@ -2859,7 +2856,7 @@ get_record(od_harvester, 4) -> #od_harvester{
     eff_groups = #{},
     eff_providers = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(nobody),
 
     bottom_up_dirty = true,
@@ -2874,7 +2871,7 @@ get_record(od_cluster, 1) -> #od_cluster{
     onepanel_version = {<<"19.02.0-beta1">>, <<"d92db7611a-115">>, <<"882856e9067e6c1d6b29416b66154a9">>},
     onepanel_proxy = true,
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = {client, user, <<"cluster-admin">>},
 
 
@@ -2899,7 +2896,7 @@ get_record(od_cluster, 2) -> #od_cluster{
     onepanel_version = {<<"19.02.0-beta1">>, <<"d92db7611a-115">>, <<"882856e9067e6c1d6b29416b66154a9">>},
     onepanel_proxy = true,
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = {subject, user, <<"cluster-admin">>},
 
 
@@ -2924,7 +2921,7 @@ get_record(od_cluster, 3) -> #od_cluster{
     onepanel_version = {<<"19.02.0-beta1">>, <<"d92db7611a-115">>, <<"882856e9067e6c1d6b29416b66154a9">>},
     onepanel_proxy = true,
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(user, <<"cluster-admin">>),
 
 
@@ -2958,7 +2955,7 @@ get_record(od_storage, 1) -> {od_storage,
     #{},
 
 
-    ?DUMMY_TIMESTAMP,
+    ozt_mocks:get_frozen_time_seconds(),
     ?SUB(user, <<"userId123">>),
 
     true,
@@ -2980,7 +2977,7 @@ get_record(od_storage, 2) -> {
         #{},
         #{},
 
-        ?DUMMY_TIMESTAMP,
+        ozt_mocks:get_frozen_time_seconds(),
         ?SUB(user, <<"userId123">>),
 
         true,
@@ -3001,7 +2998,7 @@ get_record(od_storage, 2) -> {
         #{},
         #{},
 
-        ?DUMMY_TIMESTAMP,
+        ozt_mocks:get_frozen_time_seconds(),
         ?SUB(user, <<"userId123">>),
 
         true,
@@ -3024,7 +3021,7 @@ get_record(od_storage, 3) -> #od_storage{
     eff_providers = #{},
     eff_spaces = #{},
 
-    creation_time = ?DUMMY_TIMESTAMP,
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(user, <<"userId123">>),
 
     top_down_dirty = true,

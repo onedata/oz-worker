@@ -154,12 +154,12 @@ create(#el_req{gri = #gri{id = undefined, aspect = confine}, data = Data}) ->
 
 create(#el_req{gri = #gri{id = undefined, aspect = verify_access_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
-    AuthCtx = build_auth_ctx(Data),
+    AuthCtx = build_token_verification_auth_ctx(Data),
     case token_auth:verify_access_token(Token, AuthCtx) of
         {ok, #auth{subject = Subject, caveats = Caveats}} ->
             {ok, value, #{
                 <<"subject">> => Subject,
-                <<"ttl">> => infer_ttl(Caveats)
+                <<"ttl">> => caveats:infer_ttl(Caveats)
             }};
         {error, _} = Error ->
             Error
@@ -167,12 +167,12 @@ create(#el_req{gri = #gri{id = undefined, aspect = verify_access_token}, data = 
 
 create(#el_req{gri = #gri{id = undefined, aspect = verify_identity_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
-    AuthCtx = build_auth_ctx(Data),
+    AuthCtx = build_token_verification_auth_ctx(Data),
     case token_auth:verify_identity_token(Token, AuthCtx) of
         {ok, {Subject, Caveats}} ->
             {ok, value, #{
                 <<"subject">> => Subject,
-                <<"ttl">> => infer_ttl(Caveats)
+                <<"ttl">> => caveats:infer_ttl(Caveats)
             }};
         {error, _} = Error ->
             Error
@@ -181,12 +181,12 @@ create(#el_req{gri = #gri{id = undefined, aspect = verify_identity_token}, data 
 create(#el_req{gri = #gri{id = undefined, aspect = verify_invite_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
     ExpType = maps:get(<<"expectedInviteType">>, Data, any),
-    AuthCtx = build_auth_ctx(Data),
+    AuthCtx = build_token_verification_auth_ctx(Data),
     case token_auth:verify_invite_token(Token, ExpType, AuthCtx) of
         {ok, #auth{subject = Subject, caveats = Caveats}} ->
             {ok, value, #{
                 <<"subject">> => Subject,
-                <<"ttl">> => infer_ttl(Caveats)
+                <<"ttl">> => caveats:infer_ttl(Caveats)
             }};
         {error, _} = Error ->
             Error
@@ -194,8 +194,8 @@ create(#el_req{gri = #gri{id = undefined, aspect = verify_invite_token}, data = 
 
 
 %% @private
--spec build_auth_ctx(entity_logic:data()) -> aai:auth_ctx().
-build_auth_ctx(Data) ->
+-spec build_token_verification_auth_ctx(entity_logic:data()) -> aai:auth_ctx().
+build_token_verification_auth_ctx(Data) ->
     PeerIp = utils:null_to_undefined(maps:get(<<"peerIp">>, Data, undefined)),
     Interface = utils:null_to_undefined(maps:get(<<"interface">>, Data, undefined)),
     Service = case utils:null_to_undefined(maps:get(<<"serviceToken">>, Data, undefined)) of
@@ -222,7 +222,10 @@ build_auth_ctx(Data) ->
     end,
     #auth_ctx{
         ip = PeerIp, interface = Interface, service = Service,
-        consumer = Consumer, data_access_caveats_policy = DataAccessCaveatsPolicy
+        consumer = Consumer, data_access_caveats_policy = DataAccessCaveatsPolicy,
+        % allow any session when verifying tokens, the session is checked only if the token
+        % is used by a client to authenticate (then, a matching session cookie must be provided)
+        session_id = any
     }.
 
 
@@ -608,7 +611,7 @@ create_temporary_token(Subject, Data) ->
     validate_subject_and_service(Type, Subject, Caveats),
 
     MaxTTL = ?MAX_TEMPORARY_TOKEN_TTL,
-    IsTtlAllowed = case infer_ttl(Caveats) of
+    IsTtlAllowed = case caveats:infer_ttl(Caveats) of
         undefined -> false;
         TTL -> TTL =< MaxTTL
     end,
@@ -671,15 +674,3 @@ to_token_data(TokenId, NamedToken) ->
         <<"revoked">> => NamedToken#od_token.revoked,
         <<"token">> => od_token:named_token_to_token(TokenId, NamedToken)
     }.
-
-
--spec infer_ttl([caveats:caveat()]) -> undefined | time_utils:seconds().
-infer_ttl(Caveats) ->
-    ValidUntil = lists:foldl(fun
-        (#cv_time{valid_until = ValidUntil}, undefined) -> ValidUntil;
-        (#cv_time{valid_until = ValidUntil}, Acc) -> min(ValidUntil, Acc)
-    end, undefined, caveats:filter([cv_time], Caveats)),
-    case ValidUntil of
-        undefined -> undefined;
-        _ -> ValidUntil - time_utils:timestamp_seconds()
-    end.

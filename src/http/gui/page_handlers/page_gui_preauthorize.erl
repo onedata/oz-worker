@@ -48,7 +48,7 @@ handle(<<"POST">>, Req) ->
             ?ERROR_REPLY(?ERROR_UNAUTHORIZED, Req);
         {error, invalid} ->
             ?ERROR_REPLY(?ERROR_UNAUTHORIZED, Req);
-        {ok, _, Cookie, Req2} ->
+        {ok, _, SessionId, Req2} ->
             try
                 GuiPrefix = cowboy_req:binding(gui_prefix, Req2),
                 ClusterId = cowboy_req:binding(gui_id, Req2),
@@ -65,7 +65,6 @@ handle(<<"POST">>, Req) ->
                     _ -> throw(?ERROR_NOT_FOUND)
                 end,
 
-                SessionId = gui_session:get_session_id(Cookie),
                 cowboy_req:reply(
                     ?HTTP_200_OK,
                     #{?HDR_CONTENT_TYPE => <<"application/json">>},

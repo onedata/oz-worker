@@ -476,7 +476,7 @@ upgrade_record(3, Space) ->
         EffProviders,
         #{},
 
-        time_utils:timestamp_seconds(),
+        global_clock:timestamp_seconds(),
         undefined,
 
         true,

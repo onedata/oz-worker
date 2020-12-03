@@ -257,7 +257,7 @@ gui_token_test(Config) ->
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
     oz_test_utils:support_space_by_provider(Config, Provider1, SpaceId),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {SessionId, Cookie}} = oz_test_utils:log_in(Config, UserId),
 
     {ok, {GuiToken1, Ttl}} = oz_test_utils:call_oz(Config, token_logic, create_access_token_for_gui, [
         ?USER(UserId), UserId, SessionId, ?SERVICE(?OP_WORKER, Provider1)
@@ -284,6 +284,7 @@ gui_token_test(Config) ->
             path => <<"/user">>,
             headers => #{
                 ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+                ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
                 ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
             }
         },
@@ -298,7 +299,22 @@ gui_token_test(Config) ->
             method => get,
             path => <<"/user">>,
             headers => #{
+                ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
+            }
+        },
+        expect => #{
+            code => 401 % no session cookie
+        }
+    })),
+
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => #{
                 ?HDR_AUTHORIZATION => <<"Bearer ", SerializedGuiToken2/binary>>,
+                ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
                 ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider2ServiceToken
             }
         },
@@ -313,6 +329,7 @@ gui_token_test(Config) ->
             path => <<"/user">>,
             headers => #{
                 ?HDR_AUTHORIZATION => <<"Bearer ", SerializedGuiToken2/binary>>,
+                ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
                 ?HDR_X_ONEDATA_SERVICE_TOKEN => SerializedGuiToken1
             }
         },
@@ -326,7 +343,8 @@ gui_token_test(Config) ->
             method => get,
             path => <<"/user">>,
             headers => #{
-                ?HDR_X_AUTH_TOKEN => SerializedGuiToken1
+                ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+                ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
             }
         },
         expect => #{
@@ -334,7 +352,7 @@ gui_token_test(Config) ->
         }
     })),
 
-    oz_test_utils:simulate_time_passing(Config, Ttl + 1),
+    oz_test_utils:simulate_seconds_passing(Ttl + 1),
 
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{
@@ -342,6 +360,7 @@ gui_token_test(Config) ->
             path => <<"/user">>,
             headers => #{
                 ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+                ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
                 ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
             }
         },
@@ -474,7 +493,7 @@ init_per_testcase(external_access_token_test, Config) ->
     ];
 
 init_per_testcase(gui_token_test, Config) ->
-    oz_test_utils:mock_time(Config),
+    oz_test_utils:freeze_time(Config),
     Config;
 
 init_per_testcase(_, Config) ->
@@ -486,7 +505,7 @@ end_per_testcase(external_access_token_test, Config) ->
     test_utils:mock_unload(Nodes, default_oidc_plugin);
 
 end_per_testcase(gui_token_test, Config) ->
-    oz_test_utils:unmock_time(Config);
+    oz_test_utils:unfreeze_time(Config);
 
 end_per_testcase(_, _) ->
     ok.

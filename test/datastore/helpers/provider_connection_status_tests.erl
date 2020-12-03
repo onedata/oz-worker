@@ -38,25 +38,16 @@ provider_connection_status_test_() ->
 
 
 setup() ->
-    meck:new(time_utils, [non_strict]),
-    meck:expect(time_utils, timestamp_seconds, fun timestamp_mock/0),
+    node_cache:init(),
+    clock_freezer_mock:setup_locally([provider_connection_status]),
     meck:new(gs_ws_handler, [non_strict]),
     meck:expect(gs_ws_handler, keepalive_interval, fun() -> ?KEEPALIVE_INTERVAL end).
 
 teardown(_) ->
-    ?assert(meck:validate([time_utils])),
-    meck:unload(time_utils),
+    clock_freezer_mock:teardown_locally(),
+    node_cache:destroy(),
     ?assert(meck:validate([gs_ws_handler])),
     meck:unload(gs_ws_handler).
-
-timestamp_mock() ->
-    case get(mocked_time) of
-        undefined -> 1500000000; % starting timestamp
-        Val -> Val
-    end.
-
-simulate_time_passing(Seconds) ->
-    put(mocked_time, timestamp_mock() + Seconds).
 
 %%%===================================================================
 %%% Tests functions
@@ -78,19 +69,19 @@ new_status_by_last_activity() ->
 
 connected_status() ->
     StatusAlpha = provider_connection_status:default(),
-    ConnectionTimestamp = time_utils:timestamp_seconds(),
+    ConnectionTimestamp = clock_freezer_mock:current_time_seconds(),
     StatusBeta = provider_connection_status:report_connected(StatusAlpha),
     ?assertEqual({connected, ConnectionTimestamp}, provider_connection_status:inspect(StatusBeta)),
     % the "connected" status is considered up to date within the ?INACTIVITY_PERIOD
-    simulate_time_passing(?INACTIVITY_PERIOD - 1),
+    clock_freezer_mock:simulate_seconds_passing(?INACTIVITY_PERIOD - 1),
     ?assertEqual({connected, ConnectionTimestamp}, provider_connection_status:inspect(StatusBeta)),
     % consecutive heartbeat prolongs the connected status
     StatusGamma = provider_connection_status:report_heartbeat(StatusBeta),
-    HeartbeatTimestamp = time_utils:timestamp_seconds(),
-    simulate_time_passing(?INACTIVITY_PERIOD - 1),
+    HeartbeatTimestamp = clock_freezer_mock:current_time_seconds(),
+    clock_freezer_mock:simulate_seconds_passing(?INACTIVITY_PERIOD - 1),
     ?assertEqual({connected, ConnectionTimestamp}, provider_connection_status:inspect(StatusGamma)),
     % after the ?INACTIVITY_PERIOD without heartbeating, the provider is considered unresponsive
-    simulate_time_passing(2),
+    clock_freezer_mock:simulate_seconds_passing(2),
     ?assertEqual({unresponsive, HeartbeatTimestamp}, provider_connection_status:inspect(StatusGamma)),
     % consecutive heartbeat prolongs the connected status, even in case of temporary instabilities
     StatusDelta = provider_connection_status:report_heartbeat(StatusGamma),
@@ -104,11 +95,11 @@ connected_status() ->
 
 disconnected_status() ->
     StatusAlpha = provider_connection_status:default(),
-    FirstTimestamp = time_utils:timestamp_seconds(),
+    FirstTimestamp = clock_freezer_mock:current_time_seconds(),
     StatusBeta = provider_connection_status:report_disconnected(StatusAlpha),
     ?assertEqual({disconnected, FirstTimestamp}, provider_connection_status:inspect(StatusBeta)),
-    simulate_time_passing(124151),
-    SecondTimestamp = time_utils:timestamp_seconds(),
+    clock_freezer_mock:simulate_seconds_passing(124151),
+    SecondTimestamp = clock_freezer_mock:current_time_seconds(),
     ?assertEqual({disconnected, FirstTimestamp}, provider_connection_status:inspect(StatusBeta)),
     StatusGamma = provider_connection_status:report_disconnected(StatusBeta),
     ?assertEqual({disconnected, SecondTimestamp}, provider_connection_status:inspect(StatusGamma)),

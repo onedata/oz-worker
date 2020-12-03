@@ -74,7 +74,7 @@
 
 -define(AUTH_CONFIG_FILE, oz_worker:get_env(auth_config_file)).
 -define(TEST_AUTH_CONFIG_FILE, oz_worker:get_env(test_auth_config_file)).
--define(CONFIG_CACHE_TTL, oz_worker:get_env(auth_config_cache_ttl, timer:minutes(1))).
+-define(CONFIG_CACHE_TTL, oz_worker:get_env(auth_config_cache_ttl_seconds, 60)). % 1 minute
 
 -define(LEGACY_SAML_CONFIG_NAME, "saml.config").
 -define(BACKUP_CFG_EXT(Version), str_utils:format(".v~B.bak", [Version])).
@@ -527,7 +527,7 @@ get_saml_idp_config(IdP) ->
 
 -spec force_auth_config_reload() -> ok.
 force_auth_config_reload() ->
-    simple_cache:clear(cached_auth_config),
+    node_cache:clear(cached_auth_config),
     get_auth_config(),
     ok.
 
@@ -590,8 +590,8 @@ format_for_configuration(IdP, IdPConfig) ->
 get_auth_config() ->
     case idp_auth_test_mode:process_is_test_mode_enabled() of
         false ->
-            {ok, Cfg} = simple_cache:get(cached_auth_config, fun() ->
-                {true, fetch_auth_config(), ?CONFIG_CACHE_TTL}
+            {ok, Cfg} = node_cache:acquire(cached_auth_config, fun() ->
+                {ok, fetch_auth_config(), ?CONFIG_CACHE_TTL}
             end),
             Cfg;
         true ->
@@ -610,7 +610,7 @@ get_auth_config() ->
 fetch_auth_config() ->
     case file:consult(?AUTH_CONFIG_FILE) of
         {ok, [Cfg = #{version := ?CURRENT_CONFIG_VERSION}]} ->
-            simple_cache:put(cached_auth_config, Cfg, ?CONFIG_CACHE_TTL),
+            node_cache:put(cached_auth_config, Cfg, ?CONFIG_CACHE_TTL),
             Cfg;
         {ok, [OlderConfig]} ->
             FoundVersion = case OlderConfig of
@@ -619,7 +619,7 @@ fetch_auth_config() ->
             end,
             try
                 UpgradedCfg = upgrade_auth_config(FoundVersion, ?CURRENT_CONFIG_VERSION),
-                simple_cache:put(cached_auth_config, UpgradedCfg, ?CONFIG_CACHE_TTL),
+                node_cache:put(cached_auth_config, UpgradedCfg, ?CONFIG_CACHE_TTL),
                 UpgradedCfg
             catch Type:Reason ->
                 ?alert_stacktrace("Failed to upgrade auth.config / saml.config, the "
@@ -683,9 +683,7 @@ get_test_auth_config() ->
     config_v2_or_later().
 upgrade_auth_config(FromVersion, ToVersion) ->
     critical_section:run(auth_config_upgrade, fun() ->
-        {ok, {LastSeen, LastUpgradeResult}} = simple_cache:get(
-            previous_auth_cfg_upgrade, fun() -> {false, {<<"">>, #{}}} end
-        ),
+        {LastSeen, LastUpgradeResult} = node_cache:get(previous_auth_cfg_upgrade, {<<"">>, #{}}),
         case file_md5(?AUTH_CONFIG_FILE) of
             LastSeen ->
                 % Do not attempt upgrade of the same file multiple times
@@ -693,13 +691,13 @@ upgrade_auth_config(FromVersion, ToVersion) ->
             _ ->
                 % Save empty upgrade result, which will be overwritten by actual
                 % result upon success, or will stay empty upon failure
-                simple_cache:put(
+                node_cache:put(
                     previous_auth_cfg_upgrade, {file_md5(?AUTH_CONFIG_FILE), #{}}
                 ),
                 {ok, [OldAuthCfg]} = file:consult(?AUTH_CONFIG_FILE),
                 UpgradedCfg = upgrade_auth_config(OldAuthCfg, FromVersion, ToVersion),
                 % Success - overwrite empty result
-                simple_cache:put(
+                node_cache:put(
                     previous_auth_cfg_upgrade, {file_md5(?AUTH_CONFIG_FILE), UpgradedCfg}
                 ),
                 UpgradedCfg

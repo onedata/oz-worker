@@ -46,12 +46,12 @@ init_per_suite(Config) ->
 init_per_testcase(_, Config) ->
     ozt_mocks:mock_handle_proxy(),
     ozt_mocks:mock_harvesting_backends(),
-    ozt_mocks:mock_time(),
+    ozt_mocks:freeze_time(),
     Config.
 
 end_per_testcase(_, _Config) ->
     ozt_mocks:unmock_handle_proxy(),
-    ozt_mocks:unmock_time(),
+    ozt_mocks:unfreeze_time(),
     ozt_mocks:unmock_harvesting_backends().
 
 end_per_suite(_Config) ->
@@ -110,7 +110,7 @@ end_per_suite(_Config) ->
 
 
 simulate_random_delay() ->
-    ozt_mocks:simulate_time_passing(rand:uniform(2592000) * lists_utils:random_element([-1, 1])).
+    ozt_mocks:simulate_seconds_passing(rand:uniform(2592000) * lists_utils:random_element([-1, 1])).
 
 
 set_up_environment() ->
@@ -224,7 +224,14 @@ set_up_spaces_and_shares(Environment = #environment{users = Users, groups = Grou
 
 set_up_providers_and_clusters(Environment = #environment{users = Users, groups = Groups}) ->
     Providers = lists:map(fun(_) ->
-        Provider = ozt_providers:create_for_admin_user(lists_utils:random_element(Users), ?GEN_NAME()),
+        Admin = lists_utils:random_element(Users),
+        {ok, AdminName} = ozt:rpc(od_user, get_full_name, [Admin]),
+        AdminEmail = str_utils:format_bin("~s@~s", [
+            string:replace(string:lowercase(AdminName), " ", ".", all),
+            lists_utils:random_element(?EMAIL_DOMAINS)
+        ]),
+        Provider = ozt_providers:create_for_admin_user(Admin, ?GEN_NAME()),
+        ozt:rpc(od_provider, update, [Provider, fun(P) -> {ok, P#od_provider{admin_email = AdminEmail}} end]),
         simulate_random_delay(),
         Cluster = Provider,
         generate_members(od_cluster, Cluster, od_user, Users),

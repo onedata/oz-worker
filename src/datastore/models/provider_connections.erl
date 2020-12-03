@@ -98,7 +98,7 @@ is_online(ProviderId, ProviderRecord) ->
 
 
 -spec inspect_status(od_provider:id(), od_provider:record()) ->
-    {online(), Since :: time_utils:seconds()}.
+    {online(), Since :: time:seconds()}.
 inspect_status(ProviderId, #od_provider{connection_status = Status}) ->
     case provider_connection_status:inspect(Status) of
         {connected, Since} ->
@@ -111,7 +111,7 @@ inspect_status(ProviderId, #od_provider{connection_status = Status}) ->
     end.
 
 
--spec get_last_activity(od_provider:doc()) -> now | time_utils:seconds().
+-spec get_last_activity(od_provider:doc()) -> now | time:seconds().
 get_last_activity(#document{key = ProviderId, value = ProviderRecord}) ->
     case inspect_status(ProviderId, ProviderRecord) of
         {true, _} -> now;

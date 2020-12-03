@@ -34,14 +34,10 @@
 -spec simulate_login(od_user:id()) -> session:id().
 simulate_login(UserId) ->
     MockedReq = #{},
-    CookieKey = ?SESSION_COOKIE_KEY,
-    #{resp_cookies := #{CookieKey := CookieIoList}} = ?assertMatch(#{}, ozt:rpc(
-        gui_session, log_in, [UserId, MockedReq]
-    )),
-    Cookie = iolist_to_binary(CookieIoList),
-    CookieLen = byte_size(?SESSION_COOKIE_KEY),
-    [<<CookieKey:CookieLen/binary, "=", CookieVal/binary>> | _] = binary:split(Cookie, <<";">>, [global, trim_all]),
-    ozt:rpc(gui_session, get_session_id, [CookieVal]).
+    RespReq = ?assertMatch(#{}, ozt:rpc(gui_session, log_in, [UserId, MockedReq])),
+    SessionCookie = oz_test_utils:parse_resp_session_cookie(RespReq),
+    {ok, SessionId} = ?assertMatch({ok, _}, ozt:rpc(gui_session, peek_session_id, [SessionCookie])),
+    SessionId.
 
 
 -spec rest_call(gs_protocol:client_auth(), http_client:method(), urn_tokens()) ->

@@ -31,7 +31,7 @@
 -type resource_id() :: binary().
 -type public_handle() :: binary().
 -type metadata() :: binary().
--type timestamp() :: time_utils:seconds().
+-type timestamp() :: time:seconds().
 
 -export_type([id/0, record/0]).
 -export_type([resource_type/0, resource_id/0, public_handle/0, metadata/0,
@@ -124,12 +124,12 @@ entity_logic_plugin() ->
     handle_logic_plugin.
 
 %%--------------------------------------------------------------------
-%% @equiv time_utils:timestamp_seconds().
+%% @equiv global_clock:timestamp_seconds().
 %% @end
 %%--------------------------------------------------------------------
 -spec actual_timestamp() -> timestamp().
 actual_timestamp() ->
-    time_utils:timestamp_seconds().
+    global_clock:timestamp_seconds().
 
 %%%===================================================================
 %%% datastore_model callbacks
@@ -384,7 +384,7 @@ upgrade_record(3, Handle) ->
         EffUsers,
         EffGroups,
 
-        time_utils:timestamp_seconds(),
+        global_clock:timestamp_seconds(),
         undefined,
 
         BottomUpDirty
@@ -495,7 +495,7 @@ upgrade_record(6, Handle) ->
         public_handle = PublicHandle,
         resource_type = ResourceType,
         metadata = Metadata,
-        timestamp = time_utils:datetime_to_seconds(Timestamp),
+        timestamp = time:datetime_to_seconds(Timestamp),
 
         resource_id = ResourceId,
         handle_service = HandleService,

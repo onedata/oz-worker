@@ -157,7 +157,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         value = #od_space{
             name = Name,
             creator = aai:normalize_subject(Auth#auth.subject),
-            creation_time = time_utils:timestamp_seconds()
+            creation_time = global_clock:timestamp_seconds()
         }
     }),
     case Req#el_req.auth_hint of

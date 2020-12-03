@@ -139,7 +139,7 @@ get_soa_admin(OneZoneDomain) ->
 %%--------------------------------------------------------------------
 -spec generate_zone_serial() -> serial().
 generate_zone_serial() ->
-    wrap_like_signed_32bit(time_utils:timestamp_seconds()).
+    wrap_like_signed_32bit(global_clock:timestamp_seconds()).
 
 
 %%--------------------------------------------------------------------
@@ -402,7 +402,7 @@ build_record_txt(Domain, Value) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec build_record_txt(Domain :: domain(), Value :: binary() | string(),
-    TTL :: non_neg_integer()) -> #dns_rr{}.
+    TTL :: time:seconds()) -> #dns_rr{}.
 build_record_txt(Domain, Value, TTL) when is_binary(Value) ->
     build_record_txt(Domain, binary:bin_to_list(Value), TTL);
 build_record_txt(Domain, Value, TTL) ->

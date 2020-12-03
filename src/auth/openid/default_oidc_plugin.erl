@@ -239,7 +239,7 @@ acquire_access_token(IdP, Parameters) ->
             AccessToken = maps:get(<<"access_token">>, Response, undefined),
             ExpiresIn = maps:get(<<"expires_in">>, Response, ?ASSUMED_TOKEN_LIFESPAN),
             RefreshToken = maps:get(<<"refresh_token">>, Response, undefined),
-            {AccessToken, time_utils:timestamp_seconds() + ExpiresIn, RefreshToken};
+            {AccessToken, global_clock:timestamp_seconds() + ExpiresIn, RefreshToken};
         _ ->
             Response = cow_qs:parse_qs(RespBinary),
             AccessToken = proplists:get_value(<<"access_token">>, Response, undefined),
@@ -248,7 +248,7 @@ acquire_access_token(IdP, Parameters) ->
                 ValueBin -> binary_to_integer(ValueBin)
             end,
             RefreshToken = proplists:get_value(<<"refresh_token">>, Response, undefined),
-            {AccessToken, time_utils:timestamp_seconds() + ExpiresIn, RefreshToken}
+            {AccessToken, global_clock:timestamp_seconds() + ExpiresIn, RefreshToken}
     end.
 
 
@@ -317,8 +317,8 @@ resolve_endpoint(_IdP, Url) ->
 %% @private
 -spec get_xrds(auth_config:idp()) -> map().
 get_xrds(IdP) ->
-    {ok, Xrds} = simple_cache:get({cached_xrds, IdP}, fun() ->
-        {true, fetch_xrds(IdP), ?XRDS_CACHE_TTL}
+    {ok, Xrds} = node_cache:acquire({cached_xrds, IdP}, fun() ->
+        {ok, fetch_xrds(IdP), ?XRDS_CACHE_TTL}
     end),
     Xrds.
 

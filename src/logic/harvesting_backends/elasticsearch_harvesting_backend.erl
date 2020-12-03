@@ -103,7 +103,11 @@ get_name() ->
 %%--------------------------------------------------------------------
 -spec ping(od_harvester:endpoint()) -> ok | {error, term()}.
 ping(Endpoint) ->
-    ?EXTRACT_OK(do_request(get, Endpoint, <<>>, <<>>, <<>>, [200])).
+    try
+        ?EXTRACT_OK(do_request(get, Endpoint, <<>>, <<>>, <<>>, [200]))
+    catch _:_ ->
+        ?ERROR_BAD_DATA(<<"endpoint">>)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -206,6 +210,8 @@ query_validator() -> #{
 %% @doc
 %% @equiv submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {[], <<>>}).
 %% @end
+-spec submit_to_index(od_harvester:endpoint(), od_harvester:index_id(), od_harvester:index(), 
+    od_harvester:batch()) -> od_harvester:index_submit_response().
 submit_to_index(Endpoint, IndexId, IndexInfo, Batch) ->
     submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {[], <<>>}).
 

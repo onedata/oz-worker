@@ -75,7 +75,7 @@
 -record(request_context, {
     subject :: aai:subject(),
     token_type :: access_token | identity_token,
-    current_timestamp :: time_utils:seconds(),
+    current_timestamp :: time:seconds(),
     interface :: undefined | cv_interface:interface(),
     ip :: undefined | ip_utils:ip(),
     asn :: undefined | ip_utils:asn(),
@@ -128,13 +128,13 @@ init_per_suite(Config) ->
     ozt:init_per_suite(Config).
 
 init_per_testcase(_, Config) ->
-    ozt_mocks:mock_time(),
+    ozt_mocks:freeze_time(),
     ozt_mocks:mock_gui_static(),
     ozt_mocks:mock_peer_ip_of_all_connections(?PEER_IP),
     Config.
 
 end_per_testcase(_, _Config) ->
-    ozt_mocks:unmock_time(),
+    ozt_mocks:unfreeze_time(),
     ozt_mocks:unmock_gui_static(),
     ozt_mocks:unmock_peer_ip_of_all_connections(),
     ok.
@@ -348,6 +348,7 @@ check_bad_token_scenarios(RequestSpec) ->
     % The error depends on the request context, which is randomized with every request
     ?assert(lists:member(Error, [
         ?ERROR_FORBIDDEN,
+        ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID),
         ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)]}))
     ])),
 

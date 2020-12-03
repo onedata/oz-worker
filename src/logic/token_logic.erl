@@ -157,15 +157,19 @@ create_provider_temporary_token(Auth, ProviderId, Data) ->
 
 
 -spec create_access_token_for_gui(aai:auth(), od_user:id(), session:id(), aai:service_spec()) ->
-    {ok, {tokens:token(), time_utils:seconds()}} | errors:error().
+    {ok, {tokens:token(), time:seconds()}} | errors:error().
 create_access_token_for_gui(Auth, UserId, SessionId, Service) ->
     Ttl = ?GUI_TOKEN_TTL,
     Result = create_user_temporary_token(Auth, UserId, #{
         <<"type">> => ?ACCESS_TOKEN(SessionId),
         <<"caveats">> => [
-            #cv_time{valid_until = time_utils:timestamp_seconds() + Ttl},
+            #cv_time{valid_until = global_clock:timestamp_seconds() + Ttl},
             #cv_service{whitelist = [Service]}
             % @TODO VFS-5913 Add interface caveat when it is fully supported by Onepanel
+            % note that there are some problems with that:
+            % * the interface caveat will break harvester GUI uploads and file uploads in Oneprovider
+            % * due to the above, either the caveat must be added depending on the service version,
+            %   or it must be introduced gradually over 2 major releases to ensure backward compatibility
         ]
     }),
     case Result of
@@ -363,14 +367,14 @@ create_legacy_client_token(Auth = ?USER(UserId)) ->
         <<"name">> => <<
             "access token ",
             (binary:replace(
-                time_utils:seconds_to_iso8601(time_utils:timestamp_seconds()),
+                time:seconds_to_iso8601(global_clock:timestamp_seconds()),
                 <<$:>>, <<$.>>, [global]
             ))/binary, " ",
             (str_utils:rand_hex(3))/binary
         >>,
         <<"type">> => ?ACCESS_TOKEN,
         <<"caveats">> => [
-            #cv_time{valid_until = time_utils:timestamp_seconds() + 31536000}  % 1 year
+            #cv_time{valid_until = global_clock:timestamp_seconds() + 31536000}  % 1 year
         ]
     },
     create_user_named_token(Auth, UserId, Data).

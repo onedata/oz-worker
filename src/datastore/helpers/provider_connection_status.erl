@@ -15,7 +15,7 @@
 -author("Lukasz Opiola").
 
 -type summary() :: connected | disconnected | unresponsive.
--type timestamp() :: time_utils:seconds().
+-type timestamp() :: time:seconds().
 -export_type([summary/0]).
 
 %% Holds information required to track provider's connection status. The status
@@ -38,7 +38,7 @@
 -opaque record() :: #status{}.
 -export_type([record/0]).
 
--define(NOW(), time_utils:timestamp_seconds()).
+-define(NOW(), global_clock:timestamp_seconds()).
 % Time after which a non-heartbeating connection is considered unresponsive
 -define(INACTIVITY_PERIOD, 2 * gs_ws_handler:keepalive_interval()).
 

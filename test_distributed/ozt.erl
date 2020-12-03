@@ -59,14 +59,14 @@ init_per_suite(Config) ->
 
 -spec store_test_config(ct_test_config()) -> ok.
 store_test_config(Config) ->
-    simple_cache:put(ct_test_config, Config).
+    node_cache:put(ct_test_config, Config).
 
 
 -spec get_test_config() -> ct_test_config().
 get_test_config() ->
-    case simple_cache:get(ct_test_config) of
-        {ok, Config} -> Config;
-        _ -> error(str_utils:format("Call ~s:init_per_suite/1 at the beggining of the test.", [?MODULE]))
+    case node_cache:get(ct_test_config, undefined) of
+        undefined -> error(str_utils:format("Call ~s:init_per_suite/1 at the beggining of the test.", [?MODULE]));
+        Config -> Config
     end.
 
 
@@ -115,9 +115,9 @@ rpc(Node, Module, Function, Args) ->
     end.
 
 
--spec timestamp_seconds() -> time_utils:seconds().
+-spec timestamp_seconds() -> time:seconds().
 timestamp_seconds() ->
-    rpc(time_utils, timestamp_seconds, []).
+    rpc(global_clock, timestamp_seconds, []).
 
 
 -spec reconcile_entity_graph() -> true.

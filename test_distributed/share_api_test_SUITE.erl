@@ -614,14 +614,14 @@ init_per_testcase(choose_provider_for_public_view_test, Config) ->
     ok = test_utils:mock_expect(Nodes, oz_worker, get_release_version, fun() ->
         <<"19.09.3">>
     end),
-    init_per_testcase(default, Config);
+    % do not freeze time in this testcase as the logic uses an expiring cache
+    Config;
 init_per_testcase(_, Config) ->
-    ozt_mocks:mock_time(),
+    ozt_mocks:freeze_time(),
     Config.
 
 end_per_testcase(choose_provider_for_public_view_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, oz_worker),
-    end_per_testcase(default, Config);
+    test_utils:mock_unload(Nodes, oz_worker);
 end_per_testcase(_, _Config) ->
-    ozt_mocks:unmock_time().
+    ozt_mocks:unfreeze_time().

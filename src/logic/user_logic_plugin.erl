@@ -164,7 +164,7 @@ create(#el_req{gri = GRI = #gri{id = ProposedUserId, aspect = instance}, data = 
     BasicUserRecord = #od_user{
         full_name = FullName,
         username = Username,
-        creation_time = time_utils:timestamp_seconds()
+        creation_time = global_clock:timestamp_seconds()
     },
 
     UserRecord = case maps:find(<<"password">>, Data) of

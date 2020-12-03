@@ -154,8 +154,8 @@ create_test_base(Config, ReadonlyValue) ->
             optional = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
-                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}],
-                <<"qosParameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}],
+                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}, #{<<"key">> => 123.4}],
+                <<"qosParameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}, #{<<"key">> => 123.4}],
                 <<"imported">> => [true, false],
                 <<"readonly">> => [ReadonlyValue]
             },
@@ -279,6 +279,8 @@ get_test(Config) ->
             function = get_shared_data,
             args = [auth, St1, S],
             expected_result = ?OK_MAP_CONTAINS(#{
+                <<"provider">> => P1,
+                <<"name">> => ?STORAGE_NAME1,
                 <<"qosParameters">> => ExpectedQosParameters
             })
         },
@@ -288,6 +290,7 @@ get_test(Config) ->
             auth_hint = ?THROUGH_SPACE(S),
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"provider">> => P1,
+                <<"name">> => ?STORAGE_NAME1,
                 <<"qosParameters">> => ExpectedQosParameters,
                 <<"qos_parameters">> => ExpectedQosParameters,
                 <<"gri">> => fun(EncodedGri) ->
@@ -384,8 +387,8 @@ update_test(Config, ReadonlyValue) ->
             required = [<<"imported">>, <<"readonly">>],
             at_least_one = [<<"qos_parameters">>, <<"qosParameters">>],
             correct_values = #{
-                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}],
-                <<"qosParameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}],
+                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}, #{<<"key">> => 123.4}],
+                <<"qosParameters">> => [#{<<"key">> => <<"value">>}, #{<<"key">> => 1}, #{<<"key">> => 123.4}],
                 <<"imported">> => [true, false],
                 <<"readonly">> => [ReadonlyValue]
             },

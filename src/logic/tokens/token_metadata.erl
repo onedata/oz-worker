@@ -102,7 +102,7 @@ build(?INVITE_TOKEN(InviteType, _), CustomMetadata, Data) ->
 -spec basic_metadata(custom_metadata()) -> metadata().
 basic_metadata(CustomMetadata) ->
     #{
-        ?CREATION_TIME_KEY => time_utils:timestamp_seconds(),
+        ?CREATION_TIME_KEY => global_clock:timestamp_seconds(),
         ?CUSTOM_KEY => CustomMetadata
     }.
 

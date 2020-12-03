@@ -1330,7 +1330,7 @@ upgrade_record(9, User) ->
         #{},
         #{},
 
-        time_utils:timestamp_seconds(),
+        global_clock:timestamp_seconds(),
 
         TopDownDirty
     }};

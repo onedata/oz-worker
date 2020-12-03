@@ -137,7 +137,7 @@ oz_panel_gui_setup_works(Config) ->
 default_harvester_gui_is_automatically_linked(Config) ->
     HarvesterId = ozt_harvesters:create(),
     HrvIndexContent = read_content(Config, [<<"./hrv/default/index.html">>]),
-    
+
     ?assert(static_directory_exists(Config, [<<"./hrv/default">>])),
     ?assert(link_exists(Config, <<"./hrv/", HarvesterId/binary>>, <<"default">>)),
     ?assert(file_is_served(Config, HrvIndexContent, [<<"/hrv/">>, HarvesterId, <<"/i">>])),
@@ -147,7 +147,7 @@ default_harvester_gui_is_automatically_linked(Config) ->
 default_harvester_gui_is_updated_on_deployment(Config) ->
     {TmpPath, NewHrvIndexContent} = oz_test_utils:create_dummy_gui_package(),
     ?assertNotEqual(NewHrvIndexContent, read_content(Config, [<<"./hrv/default/index.html">>])),
-    
+
     % replace harvester gui package on all nodes
     Path = oz_test_utils:get_env(Config, default_hrv_gui_package_path),
     AbsPath = oz_test_utils:call_oz(Config, filename, absname, [Path]),
@@ -157,7 +157,7 @@ default_harvester_gui_is_updated_on_deployment(Config) ->
         ok = rpc:call(Node, filelib, ensure_dir, [AbsPath]),
         ok = rpc:call(Node, file, write_file, [AbsPath, Package])
     end, Nodes),
-    
+
     oz_test_utils:call_oz(Config, harvester_logic, deploy_default_gui_package, []),
     ?assertEqual(NewHrvIndexContent, read_content(Config, [<<"./hrv/default/index.html">>])).
 
@@ -360,8 +360,8 @@ gui_upload_with_confined_or_no_token_returns_proper_error(Config) ->
     {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
     oz_test_utils:harvester_add_user(Config, HarvesterId, U1),
     oz_test_utils:harvester_set_user_privileges(Config, HarvesterId, U1, [?HARVESTER_UPDATE], []),
-    {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, U1),
-    {ok, GuiToken} = oz_test_utils:request_gui_token(Config, CookieValue),
+    {ok, {_SessionId, SessionCookie}} = oz_test_utils:log_in(Config, U1),
+    {ok, GuiToken} = oz_test_utils:request_gui_token(Config, SessionCookie),
     {HrvGuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
 
     UserCaveat = #cv_data_path{whitelist = [<<"/abc">>]},
@@ -458,8 +458,8 @@ gui_upload_page_deploys_harvester_gui_on_all_nodes(Config) ->
     oz_test_utils:harvester_add_user(Config, HarvesterId, U1),
     oz_test_utils:harvester_set_user_privileges(Config, HarvesterId, U1, [?HARVESTER_UPDATE], []),
 
-    {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, U1),
-    {ok, GuiToken} = oz_test_utils:request_gui_token(Config, CookieValue),
+    {ok, {_SessionId, SessionCookie}} = oz_test_utils:log_in(Config, U1),
+    {ok, GuiToken} = oz_test_utils:request_gui_token(Config, SessionCookie),
 
     {HrvGuiPackage, HrvIndexContent} = oz_test_utils:create_dummy_gui_package(),
     {ok, HrvGuiHash} = gui:package_hash(HrvGuiPackage),
@@ -467,6 +467,13 @@ gui_upload_page_deploys_harvester_gui_on_all_nodes(Config) ->
     ?assertNot(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?HARVESTER_GUI, HrvGuiHash])),
 
     ?assertMatch(ok, perform_upload(
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage, #{
+            ?HDR_X_AUTH_TOKEN => GuiToken, ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", SessionCookie/binary>>
+        }
+    )),
+
+    % without the session cookie, upload fails (as the GUI token is bound to the cookie)
+    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), perform_upload(
         Config, <<"hrv">>, HarvesterId, HrvGuiPackage, #{?HDR_X_AUTH_TOKEN => GuiToken}
     )),
 
@@ -531,15 +538,17 @@ gui_package_verification_works(Config) ->
     {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
     oz_test_utils:harvester_add_user(Config, HarvesterId, U1),
     oz_test_utils:harvester_set_user_privileges(Config, HarvesterId, U1, [?HARVESTER_UPDATE], []),
-    {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, U1),
-    {ok, GuiToken} = oz_test_utils:request_gui_token(Config, CookieValue),
+    {ok, {_SessionId, SessionCookie}} = oz_test_utils:log_in(Config, U1),
+    {ok, GuiToken} = oz_test_utils:request_gui_token(Config, SessionCookie),
 
     {HrvGuiPackage1, _HrvIndexContent1} = oz_test_utils:create_dummy_gui_package(),
     {ok, HrvGuiHash1} = gui:package_hash(HrvGuiPackage1),
 
     % GUI hash is not whitelisted
     ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED(HrvGuiHash1), perform_upload(
-        Config, <<"hrv">>, HarvesterId, HrvGuiPackage1, #{?HDR_X_AUTH_TOKEN => GuiToken}
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage1, #{
+            ?HDR_X_AUTH_TOKEN => GuiToken, ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", SessionCookie/binary>>
+        }
     )),
 
     % Whitelist the GUI hash:
@@ -555,7 +564,9 @@ gui_package_verification_works(Config) ->
         }
     }),
     ?assertMatch(ok, perform_upload(
-        Config, <<"hrv">>, HarvesterId, HrvGuiPackage1, #{?HDR_X_AUTH_TOKEN => GuiToken}
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage1, #{
+            ?HDR_X_AUTH_TOKEN => GuiToken, ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", SessionCookie/binary>>
+        }
     )),
 
     % Unknown hash should not be accepted
@@ -563,13 +574,17 @@ gui_package_verification_works(Config) ->
     {ok, HrvGuiHash2} = gui:package_hash(HrvGuiPackage2),
 
     ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED(HrvGuiHash2), perform_upload(
-        Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{?HDR_X_AUTH_TOKEN => GuiToken}
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{
+            ?HDR_X_AUTH_TOKEN => GuiToken, ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", SessionCookie/binary>>
+        }
     )),
 
     % Disable GUI package verification for harvesters only
     oz_test_utils:set_env(Config, harvester_gui_package_verification, false),
     ?assertMatch(ok, perform_upload(
-        Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{?HDR_X_AUTH_TOKEN => GuiToken}
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{
+            ?HDR_X_AUTH_TOKEN => GuiToken, ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", SessionCookie/binary>>
+        }
     )),
 
     % It should not work for other services
@@ -585,7 +600,9 @@ gui_package_verification_works(Config) ->
 
     {HrvGuiPackage3, _HrvIndexContent3} = oz_test_utils:create_dummy_gui_package(),
     ?assertMatch(ok, perform_upload(
-        Config, <<"hrv">>, HarvesterId, HrvGuiPackage3, #{?HDR_X_AUTH_TOKEN => GuiToken}
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage3, #{
+            ?HDR_X_AUTH_TOKEN => GuiToken, ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", SessionCookie/binary>>
+        }
     )).
 
 
@@ -647,7 +664,14 @@ unused_packages_are_cleaned(Config) ->
     ?assert(static_directory_exists(true, Config, [<<"./hrv/">>, HashOmega])),
     UnlinkGui(?HARVESTER_GUI, <<"hrv2">>),
     % But now it should be cleaned
-    ?assert(static_directory_exists(false, 60, Config, [<<"./hrv/">>, HashOmega])).
+    ?assert(static_directory_exists(false, 60, Config, [<<"./hrv/">>, HashOmega])),
+
+    % Empty GUI placeholders and default harvester GUI should be exempt from
+    % periodic cleaning and still be around, despite nothing being linked to them
+    ?assert(static_directory_exists(true, Config, [<<"./ozw/">>, ?EMPTY_GUI_HASH])),
+    ?assert(static_directory_exists(true, Config, [<<"./opw/">>, ?EMPTY_GUI_HASH])),
+    ?assert(static_directory_exists(true, Config, [<<"./onp/">>, ?EMPTY_GUI_HASH])),
+    ?assert(static_directory_exists(true, Config, [<<"./hrv/">>, <<"default">>])).
 
 
 empty_gui_is_linked_after_failed_op_worker_version_update(Config) ->

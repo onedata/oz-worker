@@ -26,8 +26,6 @@
 -include_lib("ctool/include/logging.hrl").
 
 -define(OZ_NODES(Config), ?config(oz_worker_nodes, Config)).
--define(TIME_MOCK_STARTING_TIMESTAMP, 1500000000).
-
 
 %% API
 -export([
@@ -286,9 +284,9 @@
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
     timestamp_seconds/1,
-    mock_time/1, unmock_time/1,
-    get_mocked_time/1,
-    simulate_time_passing/2,
+    freeze_time/1, unfreeze_time/1,
+    get_frozen_time_seconds/0,
+    simulate_seconds_passing/1,
     gui_ca_certs/1,
     ensure_entity_graph_is_up_to_date/1, ensure_entity_graph_is_up_to_date/2,
     toggle_basic_auth/2,
@@ -303,7 +301,7 @@
     copy_file_to_node/2
 ]).
 -export([
-    log_in/2, log_out/2,
+    log_in/2, log_out/2, parse_resp_session_cookie/1,
     graph_sync_url/2,
     get_gs_supported_proto_versions/1
 ]).
@@ -2966,7 +2964,7 @@ authenticate_by_token(Config, Token, AuthCtx) ->
 
 -spec acquire_temporary_token(Config :: term(), aai:subject()) -> tokens:serialized().
 acquire_temporary_token(Config, Subject = ?SUB(SubType, SubId)) ->
-    {ok, Cached} = simple_cache:get({temp_token, Subject}, fun() ->
+    {ok, Cached} = node_cache:acquire({temp_token, Subject}, fun() ->
         Data = #{<<"caveats">> => [#cv_time{valid_until = timestamp_seconds(Config) + 36000}]},
         Fun = case SubType of
             user -> create_user_temporary_token;
@@ -2974,7 +2972,7 @@ acquire_temporary_token(Config, Subject = ?SUB(SubType, SubId)) ->
         end,
         {ok, Token} = call_oz(Config, token_logic, Fun, [?ROOT, SubId, Data]),
         {ok, Serialized} = tokens:serialize(Token),
-        {true, Serialized}
+        {ok, Serialized, infinity}
     end),
     Cached.
 
@@ -3264,6 +3262,7 @@ mock_handle_proxy(Config) ->
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, patch,
         fun(_, <<"/handle", _/binary>>, _, _) ->
             {ok, 204, #{}, <<"">>}
+
         end),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, delete,
         fun(_, <<"/handle", _/binary>>, _, _) ->
@@ -3286,54 +3285,34 @@ unmock_handle_proxy(Config) ->
 %% Returns the current time.
 %% @end
 %%--------------------------------------------------------------------
--spec timestamp_seconds(Config :: term()) -> time_utils:seconds().
+-spec timestamp_seconds(Config :: term()) -> time:seconds().
 timestamp_seconds(Config) ->
-    call_oz(Config, time_utils, timestamp_seconds, []).
+    call_oz(Config, global_clock, timestamp_seconds, []).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Mocks the time - stops the clock at one value and allows to manually
-%% simulate time passing.
+%% Stops the clock at one value and allows to manually simulate time passing.
 %% @end
 %%--------------------------------------------------------------------
--spec mock_time(Config :: term()) -> ok.
-mock_time(Config) ->
-    simulate_time_passing(Config, 0),
-    ok = test_utils:mock_new(?OZ_NODES(Config), time_utils, [passthrough]),
-    ok = test_utils:mock_expect(?OZ_NODES(Config), time_utils, timestamp_seconds, fun() ->
-        oz_worker:get_env(mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP)
-    end).
+-spec freeze_time(Config :: term()) -> ok.
+freeze_time(Config) ->
+    clock_freezer_mock:setup_on_nodes(?OZ_NODES(Config), [global_clock]).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Clears the time mock.
-%% @end
-%%--------------------------------------------------------------------
--spec unmock_time(Config :: term()) -> ok.
-unmock_time(Config) ->
-    ok = test_utils:mock_unload(?OZ_NODES(Config), time_utils).
+-spec unfreeze_time(Config :: term()) -> ok.
+unfreeze_time(Config) ->
+    clock_freezer_mock:teardown_on_nodes(?OZ_NODES(Config)).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns the current timestamp indicated by the mocked clock.
-%% @end
-%%--------------------------------------------------------------------
--spec get_mocked_time(Config :: term()) -> non_neg_integer().
-get_mocked_time(Config) ->
-    get_env(Config, mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP).
+-spec get_frozen_time_seconds() -> time:seconds().
+get_frozen_time_seconds() ->
+    clock_freezer_mock:current_time_seconds().
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Modifies the value returned by time mock by given amount of seconds.
-%% @end
-%%--------------------------------------------------------------------
--spec simulate_time_passing(Config :: term(), Seconds :: non_neg_integer()) -> ok.
-simulate_time_passing(Config, Seconds) ->
-    set_env(Config, mocked_time, get_mocked_time(Config) + Seconds).
+-spec simulate_seconds_passing(time:seconds()) -> ok.
+simulate_seconds_passing(Seconds) ->
+    clock_freezer_mock:simulate_seconds_passing(Seconds).
 
 
 %%--------------------------------------------------------------------
@@ -3516,15 +3495,10 @@ copy_file_to_node(Node, Path) ->
 -spec log_in(Config :: term(), UserId :: od_user:id()) -> {ok, {session:id(), Cookie :: binary()}}.
 log_in(Config, UserId) ->
     MockedReq = #{},
-    CookieKey = ?SESSION_COOKIE_KEY,
-    #{resp_cookies := #{CookieKey := CookieIoList}} = ?assertMatch(#{}, call_oz(
-        Config, gui_session, log_in, [UserId, MockedReq]
-    )),
-    Cookie = iolist_to_binary(CookieIoList),
-    CookieLen = byte_size(?SESSION_COOKIE_KEY),
-    [<<CookieKey:CookieLen/binary, "=", CookieVal/binary>> | _] = binary:split(Cookie, <<";">>, [global, trim_all]),
-    SessionId = call_oz(Config, gui_session, get_session_id, [CookieVal]),
-    {ok, {SessionId, CookieVal}}.
+    RespReq = ?assertMatch(#{}, call_oz(Config, gui_session, log_in, [UserId, MockedReq])),
+    SessionCookie = parse_resp_session_cookie(RespReq),
+    {ok, SessionId} = call_oz(Config, gui_session, peek_session_id, [SessionCookie]),
+    {ok, {SessionId, SessionCookie}}.
 
 
 %%--------------------------------------------------------------------
@@ -3538,10 +3512,25 @@ log_out(Config, Cookie) ->
         resp_headers => #{},
         headers => #{?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
     },
-    ?assertMatch(#{}, call_oz(
-        Config, gui_session, log_out, [MockedReq]
-    )),
+    ?assertMatch(#{}, call_oz(Config, gui_session, log_out, [MockedReq])),
     ok.
+
+
+-spec parse_resp_session_cookie(cowboy_req:req() | binary()) -> undefined | binary().
+parse_resp_session_cookie(SetCookieHeader) when is_binary(SetCookieHeader) ->
+    % SetCookieHeader: SID=99e4557|4bec19d7; Version=1; Expires=Mon, 13-May-2019 07:46:05 GMT; ...
+    Key = ?SESSION_COOKIE_KEY,
+    Len = byte_size(?SESSION_COOKIE_KEY),
+    [<<Key:Len/binary, "=", SessionCookie/binary>> | _] = binary:split(SetCookieHeader, <<";">>, [global, trim_all]),
+    SessionCookie;
+parse_resp_session_cookie(Req) ->
+    SessionCookieKey = ?SESSION_COOKIE_KEY,
+    case Req of
+        #{resp_cookies := #{SessionCookieKey := SetCookieHeader}} ->
+            parse_resp_session_cookie(iolist_to_binary(SetCookieHeader));
+        _ ->
+            undefined
+    end.
 
 
 %%--------------------------------------------------------------------

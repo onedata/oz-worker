@@ -412,7 +412,7 @@ format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
 
             {ok, ProviderSyncProgress} = provider_sync_progress:lookup_by_provider(SyncProgressPerProvider, ProvId),
             {_, LastUpdate} = maps:get(ProvId, ProviderSyncProgress),
-            TodayDate = format_date(time_utils:timestamp_seconds()),
+            TodayDate = format_date(global_clock:timestamp_seconds()),
             LastUpdateStr = case format_date(LastUpdate) of
                 TodayDate -> format_time(LastUpdate, hour_min_sec);
                 OtherDate -> OtherDate
@@ -706,6 +706,7 @@ field_specs(providers) -> [
     end},
     {name, text, 28, fun(Doc) -> Doc#document.value#od_provider.name end},
     {domain, text, 40, fun(Doc) -> Doc#document.value#od_provider.domain end},
+    {admin_email, text, 40, fun(Doc) -> Doc#document.value#od_provider.admin_email end},
     {spaces, integer, 6, fun(Doc) -> maps:size(Doc#document.value#od_provider.eff_spaces) end},
     {support, byte_size, 11, fun(#document{value = #od_provider{eff_spaces = EffSpaces}}) ->
         lists:foldl(fun({Support, _}, AccSum) -> AccSum + Support end, 0, maps:values(EffSpaces))
@@ -888,19 +889,19 @@ format_value(admin_privileges, Privileges) ->
 
 
 %% @private
--spec format_date(time_utils:seconds()) -> string().
+-spec format_date(time:seconds()) -> string().
 format_date(Timestamp) ->
-    {{Year, Month, Day}, _} = time_utils:seconds_to_datetime(Timestamp),
+    {{Year, Month, Day}, _} = time:seconds_to_datetime(Timestamp),
     str_utils:format("~4..0B-~2..0B-~2..0B", [Year, Month, Day]).
 
 
 %% @private
--spec format_time(time_utils:seconds(), hour_min | hour_min_sec) -> string().
+-spec format_time(time:seconds(), hour_min | hour_min_sec) -> string().
 format_time(Timestamp, hour_min) ->
-    {_, {Hour, Minute, _}} = time_utils:seconds_to_datetime(Timestamp),
+    {_, {Hour, Minute, _}} = time:seconds_to_datetime(Timestamp),
     str_utils:format("~2..0B:~2..0B", [Hour, Minute]);
 format_time(Timestamp, hour_min_sec) ->
-    {_, {Hour, Minute, Second}} = time_utils:seconds_to_datetime(Timestamp),
+    {_, {Hour, Minute, Second}} = time:seconds_to_datetime(Timestamp),
     str_utils:format("~2..0B:~2..0B:~2..0B", [Hour, Minute, Second]).
 
 

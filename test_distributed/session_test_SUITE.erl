@@ -14,6 +14,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
@@ -114,9 +115,10 @@ session_cookie_refresh_and_grace_period(Config) ->
         nonce = OldNonce
     }} = rpc:call(random_node(Config), gui_session_plugin, get, [SessionId]),
 
-    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_refresh_interval) + 1),
-    {ok, _, NewCookie, _} = ?assertMatch({ok, _, _, _}, validate_session(Config, Cookie)),
+    oz_test_utils:simulate_seconds_passing(get_gui_config(Config, session_cookie_refresh_interval) + 1),
+    {ok, _, _, Req} = ?assertMatch({ok, UserId, SessionId, _}, validate_session(Config, Cookie)),
     % Cookie should have been refreshed
+    NewCookie = oz_test_utils:parse_resp_session_cookie(Req),
     ?assertNotEqual(Cookie, NewCookie),
 
     {ok, #gui_session{
@@ -128,7 +130,7 @@ session_cookie_refresh_and_grace_period(Config) ->
     ?assertMatch(OldNonce, PrevNonce),
 
     % After the grace period, the old cookie should stop working
-    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_grace_period) + 1),
+    oz_test_utils:simulate_seconds_passing(get_gui_config(Config, session_cookie_grace_period) + 1),
 
     ?assertMatch({error, invalid}, validate_session(Config, Cookie)),
     ?assertMatch(?ERROR_UNAUTHORIZED, start_gs_connection(Config, Cookie)),
@@ -149,19 +151,19 @@ last_activity_tracking(Config) ->
     ?assertEqual(now, oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId])),
     exit(ClientPid1, kill),
     exit(ClientPid2, kill),
-    oz_test_utils:simulate_time_passing(Config, 54),
+    oz_test_utils:simulate_seconds_passing(54),
     exit(ClientPid3, kill),
-    TimestampAlpha = oz_test_utils:get_mocked_time(Config),
+    TimestampAlpha = oz_test_utils:get_frozen_time_seconds(),
     ?assertMatch(
         TimestampAlpha,
         oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId]),
         60
     ),
-    oz_test_utils:simulate_time_passing(Config, 22),
+    oz_test_utils:simulate_seconds_passing(22),
     {ClientPid4, _, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
     ?assertEqual(now, oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId])),
     exit(ClientPid4, kill),
-    TimestampBeta = oz_test_utils:get_mocked_time(Config),
+    TimestampBeta = oz_test_utils:get_frozen_time_seconds(),
     ?assertMatch(
         TimestampBeta,
         oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId]),
@@ -176,7 +178,7 @@ cleanup_on_session_expiry(Config) ->
     {ClientPid2, _ServerPid2, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
     {ClientPid3, _ServerPid3, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
 
-    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
+    oz_test_utils:simulate_seconds_passing(get_gui_config(Config, session_cookie_ttl) + 1),
 
     ?assertMatch(?ERROR_UNAUTHORIZED, start_gs_connection(Config, Cookie)),
 
@@ -241,7 +243,7 @@ cleanup_of_expired_sessions_upon_other_session_expiry(Config) ->
     {ClientPid1, ServerPid1, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie1),
     {ClientPid2, ServerPid2, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie2),
 
-    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
+    oz_test_utils:simulate_seconds_passing(get_gui_config(Config, session_cookie_ttl) + 1),
 
     {ok, {Session3, Cookie3}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid3, ServerPid3, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie3),
@@ -255,7 +257,7 @@ cleanup_of_expired_sessions_upon_other_session_expiry(Config) ->
     ?assert(is_process_alive(ClientPid2)),
     ?assert(is_process_alive(ClientPid3)),
 
-    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
+    oz_test_utils:simulate_seconds_passing(get_gui_config(Config, session_cookie_ttl) + 1),
 
     % The only session that is still valid, it should not be cleared
     {ok, {Session4, Cookie4}} = oz_test_utils:log_in(Config, UserId),
@@ -284,7 +286,7 @@ cleanup_of_expired_sessions_upon_other_session_delete(Config) ->
     {ClientPid1, ServerPid1, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie1),
     {ClientPid2, ServerPid2, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie2),
 
-    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
+    oz_test_utils:simulate_seconds_passing(get_gui_config(Config, session_cookie_ttl) + 1),
 
     {ok, {Session3, Cookie3}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid3, ServerPid3, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie3),
@@ -326,7 +328,7 @@ init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
     Posthook = fun(NewConfig) ->
-        oz_test_utils:mock_time(NewConfig),
+        oz_test_utils:freeze_time(NewConfig),
         mock_user_connected_callback(NewConfig),
         NewConfig
     end,
@@ -336,7 +338,7 @@ init_per_suite(Config) ->
 end_per_suite(Config) ->
     hackney:stop(),
     ssl:stop(),
-    oz_test_utils:unmock_time(Config),
+    oz_test_utils:unfreeze_time(Config),
     unmock_user_connected_callback(Config),
     ok.
 
@@ -368,7 +370,7 @@ start_gs_connection(Config, Cookie) ->
             rpc:multicall(Nodes, oz_worker, set_env, [mocked_pid, self()]),
             {ok, ClientPid, #gs_resp_handshake{identity = Identity}} = gs_client:start_link(
                 oz_test_utils:graph_sync_url(Config, gui),
-                {token, GuiToken},
+                {with_http_cookies, {token, GuiToken}, [{?SESSION_COOKIE_KEY, Cookie}]},
                 oz_test_utils:get_gs_supported_proto_versions(Config),
                 fun(_) -> ok end,
                 [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
@@ -386,7 +388,7 @@ start_gs_connection(Config, Cookie) ->
 validate_session(Config, Cookie) ->
     MockedReq = #{
         resp_headers => #{},
-        headers => #{<<"cookie">> => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
+        headers => #{?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
     },
     rpc:call(random_node(Config), gui_session, validate, [MockedReq]).
 
@@ -414,6 +416,7 @@ compare_connections_per_user(Config, UserId, Expected) ->
         end, Sessions)
     end,
     compare_lists(ListFun, Expected, 60).
+
 
 compare_lists(ListFun, Expected, Retries) ->
     Got = ListFun(),

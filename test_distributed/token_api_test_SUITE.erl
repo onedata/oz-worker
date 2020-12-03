@@ -104,13 +104,13 @@ end_per_suite(_Config) ->
 
 
 init_per_testcase(_, Config) ->
-    ozt_mocks:mock_time(),
+    ozt_mocks:freeze_time(),
     ozt_mocks:mock_harvesting_backends(),
     Config.
 
 
 end_per_testcase(_, _Config) ->
-    ozt_mocks:unmock_time(),
+    ozt_mocks:unfreeze_time(),
     ozt_mocks:unmock_harvesting_backends(),
     ok.
 
@@ -388,7 +388,7 @@ new_token_verify_fun(Subject, Persistence, Service) ->
             case Token#token.type of
                 ?ACCESS_TOKEN ->
                     ?assertMatch({true, #auth{subject = Subject}}, ozt_tokens:authenticate(Token, #auth_ctx{
-                        service = Service, data_access_caveats_policy = allow_data_access_caveats
+                        service = Service, data_access_caveats_policy = allow_data_access_caveats, session_id = any
                     }));
                 _ ->
                     % IDENTITY_TOKEN, INVITE_TOKEN
@@ -2954,7 +2954,7 @@ revoke_all_user_temporary_tokens(BasicEnv, UserIdBinding) ->
 
     VerifyEndFun = fun(ShouldSucceed, #{userTokens := UserTokens}, _Data) ->
         lists:foreach(fun(Token) ->
-            assert_temporary_revoked(ShouldSucceed, Token)
+            assert_temporary_token_revoked(ShouldSucceed, Token)
         end, UserTokens)
     end,
 
@@ -3017,7 +3017,7 @@ revoke_all_provider_temporary_tokens(BasicEnv, ProviderIdBinding, CorrectClients
 
     VerifyEndFun = fun(ShouldSucceed, #{providerTokens := ProviderTokens}, _Data) ->
         lists:foreach(fun(Token) ->
-            assert_temporary_revoked(ShouldSucceed, Token)
+            assert_temporary_token_revoked(ShouldSucceed, Token)
         end, ProviderTokens)
     end,
 
@@ -3070,7 +3070,7 @@ replace_temporary_tokens_with_named_for_clients(Clients) ->
     end, Clients).
 
 
-assert_temporary_revoked(IsRevoked, Token = #token{subject = Subject}) ->
+assert_temporary_token_revoked(IsRevoked, Token = #token{subject = Subject}) ->
     VerificationResult = ozt_tokens:verify(Token),
     case IsRevoked of
         false -> ?assertMatch({ok, #{<<"subject">> := Subject}}, VerificationResult);

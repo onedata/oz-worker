@@ -2528,7 +2528,7 @@ connection_status_tracking(Config) ->
     ?awaitResult(0, GetLastActivity()),
 
     ClientPid1 = start_gs_connection(Config, ProviderToken),
-    TimestampAlpha = oz_test_utils:timestamp_seconds(Config),
+    TimestampAlpha = oz_test_utils:get_frozen_time_seconds(),
     ?awaitResult(true, IsOnline()),
     ?awaitResult({true, TimestampAlpha}, InspectStatus()),
     ?awaitResult(now, GetLastActivity()),
@@ -2543,13 +2543,13 @@ connection_status_tracking(Config) ->
     ?awaitResult({true, TimestampAlpha}, InspectStatus()),
     ?awaitResult(now, GetLastActivity()),
 
-    oz_test_utils:simulate_time_passing(Config, 14),
+    oz_test_utils:simulate_seconds_passing(14),
     exit(ClientPid2, kill),
     ?awaitResult(false, IsOnline()),
     ?awaitResult({false, TimestampAlpha + 14}, InspectStatus()),
     ?awaitResult(TimestampAlpha + 14, GetLastActivity()),
 
-    oz_test_utils:simulate_time_passing(Config, 22),
+    oz_test_utils:simulate_seconds_passing(22),
     ClientPid3 = start_gs_connection(Config, ProviderToken),
     ?awaitResult(true, IsOnline()),
     ?awaitResult({true, TimestampAlpha + 36}, InspectStatus()),
@@ -2560,15 +2560,15 @@ connection_status_tracking(Config) ->
     % if the provider has heartbeated within the last inactivity period,
     % it should be considered online - modify the WS keepalive interval to a low
     % value to check that
-    TimestampBeta = oz_test_utils:timestamp_seconds(Config),
+    TimestampBeta = oz_test_utils:get_frozen_time_seconds(),
     InactivityPeriod = SetWebsocketKeepalive(10),
     ClientPid4 = start_gs_connection(Config, ProviderToken),
     ClientPid5 = start_gs_connection(Config, ProviderToken),
     % simulate a long time passing since the connection was established
-    oz_test_utils:simulate_time_passing(Config, 84928),
+    oz_test_utils:simulate_seconds_passing(84928),
     % wait until a heartbeat is actually done by the client
     timer:sleep(timer:seconds(12)),
-    HeartbeatTimestamp = oz_test_utils:timestamp_seconds(Config),
+    HeartbeatTimestamp = oz_test_utils:get_frozen_time_seconds(),
     % the provider should appear as online since the connection time
     ?awaitResult(true, IsOnline()),
     ?awaitResult({true, TimestampBeta}, InspectStatus()),
@@ -2576,7 +2576,7 @@ connection_status_tracking(Config) ->
 
     % however, after the inactivity period without heartbeating, the provider
     % should be considered unresponsive and its connections should be purged
-    oz_test_utils:simulate_time_passing(Config, InactivityPeriod + 1),
+    oz_test_utils:simulate_seconds_passing(InactivityPeriod + 1),
     ?awaitResult(false, IsOnline()),
     % the last activity should point at the time of the last heartbeat
     ?awaitResult({false, HeartbeatTimestamp}, InspectStatus()),
@@ -2586,7 +2586,7 @@ connection_status_tracking(Config) ->
 
     % upon reconnection, the provider should become online again
     ClientPid6 = start_gs_connection(Config, ProviderToken),
-    TimestampGamma = oz_test_utils:timestamp_seconds(Config),
+    TimestampGamma = oz_test_utils:get_frozen_time_seconds(),
     ?awaitResult(true, IsOnline()),
     ?awaitResult({true, TimestampGamma}, InspectStatus()),
     ?awaitResult(now, GetLastActivity()),
@@ -2600,7 +2600,7 @@ connection_status_tracking(Config) ->
     CheckDelayMS = 100,
     lists:foreach(fun(_) ->
         start_gs_connection(Config, ProviderToken),
-        oz_test_utils:simulate_time_passing(Config, InactivityPeriod + rand:uniform(500)),
+        oz_test_utils:simulate_seconds_passing(InactivityPeriod + rand:uniform(500)),
         % as InactivityPeriod has passed, any status check should trigger purge now
         spawn(fun() ->
             timer:sleep(rand:uniform(CheckDelayMS)),
@@ -2616,12 +2616,12 @@ connection_status_tracking(Config) ->
         end),
         % regardless of the order of operations, the provider should eventually
         % appear as online, because new connections have been established
-        TimestampDelta = oz_test_utils:timestamp_seconds(Config),
+        TimestampDelta = oz_test_utils:get_frozen_time_seconds(),
         ?awaitResult(true, IsOnline()),
         ?awaitResult({true, TimestampDelta}, InspectStatus()),
         ?awaitResult(now, GetLastActivity()),
         % clean up after this iteration by forcing a purge
-        oz_test_utils:simulate_time_passing(Config, InactivityPeriod + rand:uniform(500)),
+        oz_test_utils:simulate_seconds_passing(InactivityPeriod + rand:uniform(500)),
         ?awaitResult(false, IsOnline())
     end, lists:seq(1, 20)).
 
@@ -2643,7 +2643,7 @@ init_per_testcase(list_eff_harvesters_test, Config) ->
     oz_test_utils:mock_harvesting_backends(Config, ?HARVESTER_MOCK_BACKEND),
     init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
-    ozt_mocks:mock_time(),
+    ozt_mocks:freeze_time(),
     Config.
 
 end_per_testcase(list_eff_harvesters_test, Config) ->
@@ -2652,7 +2652,7 @@ end_per_testcase(list_eff_harvesters_test, Config) ->
 end_per_testcase(_, _Config) ->
     ozt:set_env(require_token_for_provider_registration, false),
     ozt:set_env(subdomain_delegation_supported, true),
-    ozt_mocks:unmock_time().
+    ozt_mocks:unfreeze_time().
 
 %%%===================================================================
 %%% Helper functions
