@@ -29,7 +29,7 @@
 -export([protected_group/4, shared_group/3]).
 -export([protected_space/4]).
 -export([private_share/4, public_share/3]).
--export([protected_provider/3, shared_provider/3]).
+-export([protected_provider/4, shared_provider/3]).
 -export([protected_cluster/4, public_cluster/3]).
 -export([protected_hservice/4]).
 -export([protected_handle/4]).
@@ -162,8 +162,8 @@ protected_space(logic, _Id, SpaceData, Creator) ->
     ?OK_MAP(#{
         <<"name">> => maps:get(<<"name">>, SpaceData),
         <<"providers">> => expected_provider_support_sizes(Providers),
-        <<"supportParametersPerProvider">> => expected_support_parameters_per_provider(Providers, term),
-        <<"supportStagePerProvider">> => expected_support_stage_per_provider(Providers, term),
+        <<"supportParametersRegistry">> => expected_support_parameters_per_provider(Providers, term),
+        <<"supportStageRegistry">> => expected_support_stage_per_provider(Providers, term),
         <<"sharesCount">> => 0,
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => Creator
@@ -174,8 +174,8 @@ protected_space(rest, Id, SpaceData, Creator) ->
         <<"spaceId">> => Id,
         <<"name">> => maps:get(<<"name">>, SpaceData),
         <<"providers">> => expected_provider_support_sizes(Providers),
-        <<"supportParametersPerProvider">> => expected_support_parameters_per_provider(Providers, json),
-        <<"supportStagePerProvider">> => expected_support_stage_per_provider(Providers, json),
+        <<"supportParametersRegistry">> => expected_support_parameters_per_provider(Providers, json),
+        <<"supportStageRegistry">> => expected_support_stage_per_provider(Providers, json),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     };
@@ -185,8 +185,8 @@ protected_space(gs, Id, SpaceData, _Creator) ->
         <<"gri">> => gri:serialize(?GRI(od_space, Id, instance, protected)),
         <<"name">> => maps:get(<<"name">>, SpaceData),
         <<"providers">> => expected_provider_support_sizes(Providers),
-        <<"supportParametersPerProvider">> => expected_support_parameters_per_provider(Providers, json),
-        <<"supportStagePerProvider">> => expected_support_stage_per_provider(Providers, json)
+        <<"supportParametersRegistry">> => expected_support_parameters_per_provider(Providers, json),
+        <<"supportStageRegistry">> => expected_support_stage_per_provider(Providers, json)
     }).
 
 
@@ -268,17 +268,23 @@ public_share(gs, Id, ShareData) ->
     }).
 
 
--spec protected_provider(interface(), od_provider:id(), map()) -> expectation().
-protected_provider(logic, _Id, ProviderData) ->
+-spec protected_provider(interface(), od_provider:id(), map(), online | offline) -> expectation().
+protected_provider(logic, _Id, ProviderData, ConnectionStatus) ->
     ?OK_MAP(#{
         <<"name">> => maps:get(<<"name">>, ProviderData),
         <<"domain">> => maps:get(<<"domain">>, ProviderData),
         <<"latitude">> => maps:get(<<"latitude">>, ProviderData, 0.0),
         <<"longitude">> => maps:get(<<"longitude">>, ProviderData, 0.0),
-        <<"online">> => maps:get(<<"online">>, ProviderData, false),
+        <<"connectionStatus">> => #{
+            <<"online">> => ConnectionStatus =:= online,
+            <<"since">> => case ConnectionStatus of
+                online -> ozt_mocks:get_frozen_time_seconds();
+                offline -> 0
+            end
+        },
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
     });
-protected_provider(rest, Id, ProviderData) ->
+protected_provider(rest, Id, ProviderData, ConnectionStatus) ->
     #{
         <<"providerId">> => Id,
         <<"clusterId">> => Id,
@@ -286,17 +292,17 @@ protected_provider(rest, Id, ProviderData) ->
         <<"domain">> => maps:get(<<"domain">>, ProviderData),
         <<"latitude">> => maps:get(<<"latitude">>, ProviderData),
         <<"longitude">> => maps:get(<<"longitude">>, ProviderData),
-        <<"online">> => maps:get(<<"online">>, ProviderData, false),
+        <<"online">> => ConnectionStatus =:= online,
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
     };
-protected_provider(gs, Id, ProviderData) ->
+protected_provider(gs, Id, ProviderData, ConnectionStatus) ->
     ?OK_MAP(#{
         <<"gri">> => gri:serialize(?GRI(od_provider, Id, instance, protected)),
         <<"name">> => maps:get(<<"name">>, ProviderData),
         <<"domain">> => maps:get(<<"domain">>, ProviderData),
         <<"latitude">> => maps:get(<<"latitude">>, ProviderData),
         <<"longitude">> => maps:get(<<"longitude">>, ProviderData),
-        <<"online">> => maps:get(<<"online">>, ProviderData, false)
+        <<"online">> => ConnectionStatus =:= online
     }).
 
 
@@ -449,7 +455,7 @@ expected_support_parameters_per_provider(ProviderSupports, Format) ->
     end, ProviderSupports),
     case Format of
         term -> Result;
-        json -> support_parameters:per_provider_to_json(Result)
+        json -> support_parameters:registry_to_json(Result)
     end.
 
 
@@ -467,7 +473,7 @@ expected_support_stage_per_provider(ProviderSupports, Format) ->
     end, ProviderSupports),
     case Format of
         term -> Result;
-        json -> support_stage:per_provider_to_json(Result)
+        json -> support_stage:registry_to_json(Result)
     end.
 
 
@@ -499,13 +505,14 @@ expected_public_handle(HandleId) ->
 %% @private
 expected_cluster_worker_version_info(?ONEZONE) ->
     #{
-        <<"release">> => ozt:rpc(oz_worker, get_release_version, []),
-        <<"build">> => ozt:rpc(oz_worker, get_build_version, []),
+        <<"release">> => ozt:get_release_version(),
+        <<"build">> => ozt:get_build_version(),
         <<"gui">> => element(2, {ok, _} = ozt:rpc(gui, package_hash, [ozt:get_env(ozw_gui_package_path)]))
     };
 expected_cluster_worker_version_info(?ONEPROVIDER) ->
     #{
-        <<"release">> => ?DEFAULT_RELEASE_VERSION,
+        % Oneproviders created for tests are marked as having the same release version as Onezone (?WORKER only)
+        <<"release">> => ozt:get_release_version(),
         <<"build">> => ?DEFAULT_BUILD_VERSION,
         <<"gui">> => ?EMPTY_GUI_HASH
     }.

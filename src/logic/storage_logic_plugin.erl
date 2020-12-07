@@ -66,6 +66,14 @@ fetch_entity(#gri{id = StorageId}) ->
 operation_supported(create, instance, private) -> true;
 operation_supported(create, support, private) -> true;
 operation_supported(create, {upgrade_legacy_support, _}, private) -> true;
+operation_supported(create, {upgrade_support_to_21_02, _}, private) -> true;
+
+operation_supported(create, init_support, private) -> true;
+
+operation_supported(create, {init_unsupport, _}, private) -> true;
+operation_supported(create, {complete_unsupport_resize, _}, private) -> true;
+operation_supported(create, {complete_unsupport_purge, _}, private) -> true;
+operation_supported(create, {finalize_unsupport, _}, private) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, shared) -> true;
@@ -101,7 +109,7 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PROVIDER(ProviderId) = Auth, data = Data}) ->
     Name = maps:get(<<"name">>, Data),
-    QosParameters = get_qos_parameters(Data, #{}),
+    QosParameters = maps:get(<<"qosParameters">>, Data, #{}),
     % Only legacy providers do not send imported value
     % set it to `unknown` so provider could change it during its upgrade procedure
     ImportedStorage = maps:get(<<"imported">>, Data, unknown),
@@ -134,33 +142,51 @@ create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PRO
             {ok, resource, {GRI#gri{id = StorageId}, {Storage, Rev}}}
     end;
 
-create(#el_req{auth = Auth, gri = #gri{id = StorageId, aspect = support}, data = Data}) ->
-    fun(#od_storage{provider = ProviderId}) ->
-        SupportSize = maps:get(<<"size">>, Data),
-        Token = maps:get(<<"token">>, Data),
-
-        invite_tokens:consume(Auth, Token, ?SUPPORT_SPACE, fun(SpaceId, TokenParameters, _) ->
-            support_space(ProviderId, SpaceId, StorageId, SupportSize, TokenParameters)
-        end)
-    end;
-
 % This endpoint is dedicated for providers upgrading from version 19.02.* to 20.02.*.
 create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_legacy_support, SpaceId}}}) ->
     fun(#od_storage{provider = ProviderId}) ->
-        ?info("Processing request to upgrade legacy support of space '~s' by provider '~s'...", [SpaceId, ProviderId]),
-        {true, {VirtualStorage, _}} = fetch_entity(#gri{id = ProviderId}),
-        SupportSize = entity_graph:get_relation_attrs(direct, bottom_up, od_space, SpaceId, VirtualStorage),
-        try
-            support_space(ProviderId, SpaceId, StorageId, SupportSize, support_parameters:build(global, eager))
-        catch
-            _:(?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _)) -> ok
-        end,
-        try
-            entity_graph:remove_relation(od_space, SpaceId, od_storage, ProviderId)
-        catch
-            _:(?ERROR_RELATION_DOES_NOT_EXIST(_, _, _, _)) -> ok
-        end,
-        ?notice("Successfully upgraded legacy support of space '~s' by provider '~s'", [SpaceId, ProviderId])
+        space_support:upgrade_support_to_20_02(ProviderId, StorageId, SpaceId)
+    end;
+
+% This endpoint is dedicated for providers upgrading from version 20.02.* to 21.02.*.
+create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_support_to_21_02, SpaceId}}}) ->
+    fun(#od_storage{provider = ProviderId}) ->
+        space_support:upgrade_support_to_21_02(ProviderId, StorageId, SpaceId)
+    end;
+
+% @TODO VFS-6977 The 'support' procedure is deprecated and used by legacy providers (<= 20.02).
+% This is an alias for the modern procedure, which internally checks the version and
+% properly handles supports of legacy providers.
+create(Req = #el_req{gri = GRI = #gri{aspect = support}}) ->
+    create(Req#el_req{gri = GRI#gri{aspect = init_support}});
+
+create(#el_req{auth = Auth, gri = #gri{id = StorageId, aspect = init_support}, data = Data}) ->
+    fun(#od_storage{provider = ProviderId}) ->
+        SupportSize = maps:get(<<"size">>, Data),
+        Token = maps:get(<<"token">>, Data),
+        invite_tokens:consume(Auth, Token, ?SUPPORT_SPACE, fun(SpaceId, TokenParameters, _) ->
+            space_support:init_support(ProviderId, StorageId, SpaceId, SupportSize, TokenParameters)
+        end)
+    end;
+
+create(#el_req{gri = #gri{id = StorageId, aspect = {init_unsupport, SpaceId}}}) ->
+    fun(#od_storage{provider = ProviderId}) ->
+        space_support:init_unsupport(ProviderId, StorageId, SpaceId)
+    end;
+
+create(#el_req{gri = #gri{id = StorageId, aspect = {complete_unsupport_resize, SpaceId}}}) ->
+    fun(#od_storage{provider = ProviderId}) ->
+        space_support:complete_unsupport_resize(ProviderId, StorageId, SpaceId)
+    end;
+
+create(#el_req{gri = #gri{id = StorageId, aspect = {complete_unsupport_purge, SpaceId}}}) ->
+    fun(#od_storage{provider = ProviderId}) ->
+        space_support:complete_unsupport_purge(ProviderId, StorageId, SpaceId)
+    end;
+
+create(#el_req{gri = #gri{id = StorageId, aspect = {finalize_unsupport, SpaceId}}}) ->
+    fun(#od_storage{provider = ProviderId}) ->
+        space_support:finalize_unsupport(ProviderId, StorageId, SpaceId)
     end.
 
 
@@ -192,8 +218,8 @@ get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Storage) ->
         <<"readonly">> => Readonly
     }};
 
-get(#el_req{gri = #gri{aspect = spaces}}, Storage) ->
-    {ok, get_spaces(Storage)}.
+get(#el_req{gri = #gri{aspect = spaces}}, #od_storage{spaces = Spaces}) ->
+    {ok, maps:keys(Spaces)}.
 
 
 %%--------------------------------------------------------------------
@@ -203,52 +229,11 @@ get(#el_req{gri = #gri{aspect = spaces}}, Storage) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = StorageId, aspect = instance}, data = Data}) ->
-    % critical section to avoid race condition with space support
-    lock_on_storage(StorageId, fun() ->
-        SupportsAnySpace = supports_any_space(StorageId),
-        Res = od_storage:update(StorageId, fun(Storage) ->
-            #od_storage{
-                name = Name,
-                qos_parameters = QosParameters,
-                imported = ImportedStorage,
-                readonly = Readonly
-            } = Storage,
-
-            NewName = maps:get(<<"name">>, Data, Name),
-            NewQosParameters = get_qos_parameters(Data, QosParameters),
-            NewImportedStorage = maps:get(<<"imported">>, Data, ImportedStorage),
-            NewReadonly = maps:get(<<"readonly">>, Data, Readonly),
-            % Modification of imported value should be blocked if storage supports any space
-            % unless it was previously `unknown` meaning that storage was created by legacy provider.
-            ShouldBlock = (ImportedStorage /= unknown) and
-                (ImportedStorage /= NewImportedStorage) and SupportsAnySpace,
-            case ShouldBlock of
-                true -> ?ERROR_STORAGE_IN_USE;
-                false ->
-                    case NewReadonly andalso NewImportedStorage =:= false of
-                        true ->
-                            ?ERROR_REQUIRES_IMPORTED_STORAGE(StorageId);
-                        false ->
-                            {ok, Storage#od_storage{
-                                name = NewName,
-                                qos_parameters = NewQosParameters,
-                                imported = NewImportedStorage,
-                                readonly = NewReadonly
-                            }}
-                    end
-            end
-        end),
-        case Res of
-            {ok, _} -> ok;
-            Error -> Error
-        end
-    end);
+    space_support:update_storage(StorageId, Data);
 
 update(Req = #el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
     NewSupportSize = maps:get(<<"size">>, Req#el_req.data),
-    entity_graph:update_relation(
-        od_space, SpaceId, od_storage, StorageId, NewSupportSize
-    ).
+    space_support:resize(StorageId, SpaceId, NewSupportSize).
 
 
 %%--------------------------------------------------------------------
@@ -262,57 +247,8 @@ delete(#el_req{gri = #gri{id = StorageId, aspect = instance}}) ->
 
 delete(#el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
     fun(#od_storage{provider = ProviderId}) ->
-        entity_graph:remove_relation(
-            od_space, SpaceId,
-            od_storage, StorageId
-        ),
-        {true, {#od_space{
-            storages = StoragesLeft,
-            harvesters = Harvesters
-        }, _}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
-        {true, {#od_provider{
-            storages = ProviderStorages
-        }, _}} = provider_logic_plugin:fetch_entity(#gri{id = ProviderId}),
-        case lists_utils:intersect(maps:keys(StoragesLeft), ProviderStorages) of
-            [_ | _] ->
-                % The provider still supports the space with another storage
-                ok;
-            [] ->
-                % The space is no longer supported by the provider
-                %% @TODO VFS-6329 decide if archival sync progress should be deleted or retained
-                {ok, _} = od_space:update(SpaceId, fun(Space) ->
-                    #od_space{
-                        support_parameters_per_provider = ParametersPerProvider,
-                        support_stage_per_provider = SupportStagePerProvider
-                    } = Space,
-
-                    NewSupportStagePerProvider = case StorageId =:= ProviderId of
-                        true ->
-                            support_stage:mark_legacy_support_revocation(SupportStagePerProvider, ProviderId);
-                        false ->
-                            % @todo VFS-6311 implement proper support stage management
-                            {ok, Remodelling} = support_stage:init_unsupport(SupportStagePerProvider, ProviderId, StorageId),
-                            {ok, PurgingStorages} = support_stage:complete_unsupport_resize(Remodelling, ProviderId, StorageId),
-                            {ok, PurgingDatabase} = support_stage:complete_unsupport_purge(PurgingStorages, ProviderId, StorageId),
-                            {ok, Retired} = support_stage:finalize_unsupport(PurgingDatabase, ProviderId, StorageId),
-                            Retired
-                    end,
-
-                    {ok, Space#od_space{
-                        support_parameters_per_provider = support_parameters:remove_for_provider(
-                            ParametersPerProvider, ProviderId
-                        ),
-                        support_stage_per_provider = NewSupportStagePerProvider
-                    }}
-                end)
-        end,
-
-        lists:foreach(fun(HarvesterId) ->
-            harvester_indices:update_stats(HarvesterId, all,
-                fun(ExistingStats) ->
-                    harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
-                end)
-        end, Harvesters)
+        space_support:force_unsupport(ProviderId, StorageId, SpaceId),
+        ok
     end.
 
 
@@ -344,41 +280,56 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) -
         _ -> false
     end;
 
-authorize(#el_req{operation = create, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = support}}, Storage) ->
-    storage_logic:belongs_to_provider(Storage, ProviderId);
+authorize(#el_req{operation = create, auth = ?PROVIDER(PrId), gri = #gri{aspect = support}}, Storage) ->
+    storage_logic:belongs_to_provider(Storage, PrId);
 
-authorize(#el_req{operation = create, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {upgrade_legacy_support, SpaceId}}}, Storage) ->
-    storage_logic:belongs_to_provider(Storage, ProviderId)
-    %% Check whether given space is supported by provider virtual storage (with id equal to providers)
-        andalso storage_logic:supports_space(ProviderId, SpaceId);
+authorize(#el_req{operation = create, auth = ?PROVIDER(PrId), gri = #gri{aspect = init_support}}, Storage) ->
+    storage_logic:belongs_to_provider(Storage, PrId);
 
-authorize(#el_req{operation = get, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = instance, scope = private}}, Storage) ->
-    storage_logic:belongs_to_provider(Storage, ProviderId);
+authorize(#el_req{operation = create, auth = ?PROVIDER(PrId), gri = #gri{aspect = {init_unsupport, SpaceId}}}, Storage) ->
+    auth_by_support(PrId, Storage, SpaceId);
+authorize(#el_req{operation = create, auth = ?PROVIDER(PrId), gri = #gri{aspect = {complete_unsupport_resize, SpaceId}}}, Storage) ->
+    auth_by_support(PrId, Storage, SpaceId);
+authorize(#el_req{operation = create, auth = ?PROVIDER(PrId), gri = #gri{aspect = {complete_unsupport_purge, SpaceId}}}, Storage) ->
+    auth_by_support(PrId, Storage, SpaceId);
+authorize(#el_req{operation = create, auth = ?PROVIDER(PrId), gri = #gri{aspect = {finalize_unsupport, SpaceId}}}, Storage) ->
+    auth_by_support(PrId, Storage, SpaceId);
 
-authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, id = StorageId, scope = shared}}, Storage) ->
+authorize(#el_req{operation = create, auth = ?PROVIDER(PrId), gri = #gri{aspect = {upgrade_legacy_support, SpaceId}}}, Storage) ->
+    % to ensure this operation is idempotent, check if the provider supports the space with any
+    % storage (not necessarily the virtual storage)
+    storage_logic:belongs_to_provider(Storage, PrId) andalso
+        provider_logic:supports_space(PrId, SpaceId);
+authorize(#el_req{operation = create, auth = ?PROVIDER(PrId), gri = #gri{aspect = {upgrade_support_to_21_02, SpaceId}}}, Storage) ->
+    auth_by_support(PrId, Storage, SpaceId);
+
+authorize(#el_req{operation = get, auth = ?PROVIDER(PrId), gri = #gri{aspect = instance, scope = private}}, Storage) ->
+    storage_logic:belongs_to_provider(Storage, PrId);
+
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = shared}}, Storage) ->
     case {Req#el_req.auth, Req#el_req.auth_hint} of
-        {?PROVIDER(ProviderId), ?THROUGH_SPACE(SpaceId)} ->
-            storage_logic:supports_space(StorageId, SpaceId)
-                andalso provider_logic:supports_space(ProviderId, SpaceId);
+        {?PROVIDER(PrId), ?THROUGH_SPACE(SpaceId)} ->
+            storage_logic:supports_space(Storage, SpaceId) andalso
+                provider_logic:supports_space(PrId, SpaceId);
         _ ->
             % Access to private data also allows access to shared data
             authorize(Req#el_req{gri = GRI#gri{scope = private}}, Storage)
     end;
 
-authorize(#el_req{operation = get, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = spaces}}, Storage) ->
-    storage_logic:belongs_to_provider(Storage, ProviderId);
+authorize(#el_req{operation = get, auth = ?PROVIDER(PrId), gri = #gri{aspect = spaces}}, Storage) ->
+    storage_logic:belongs_to_provider(Storage, PrId);
 
-authorize(#el_req{operation = update, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = instance}}, Storage) ->
-    storage_logic:belongs_to_provider(Storage, ProviderId);
+authorize(#el_req{operation = update, auth = ?PROVIDER(PrId), gri = #gri{aspect = instance}}, Storage) ->
+    storage_logic:belongs_to_provider(Storage, PrId);
 
-authorize(#el_req{operation = update, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {space, _}}}, Storage) ->
-    storage_logic:belongs_to_provider(Storage, ProviderId);
+authorize(#el_req{operation = update, auth = ?PROVIDER(PrId), gri = #gri{aspect = {space, _}}}, Storage) ->
+    storage_logic:belongs_to_provider(Storage, PrId);
 
-authorize(#el_req{operation = delete, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = instance}}, Storage) ->
-    storage_logic:belongs_to_provider(Storage, ProviderId);
+authorize(#el_req{operation = delete, auth = ?PROVIDER(PrId), gri = #gri{aspect = instance}}, Storage) ->
+    storage_logic:belongs_to_provider(Storage, PrId);
 
-authorize(#el_req{operation = delete, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {space, _}}}, Storage) ->
-    storage_logic:belongs_to_provider(Storage, ProviderId);
+authorize(#el_req{operation = delete, auth = ?PROVIDER(PrId), gri = #gri{aspect = {space, _}}}, Storage) ->
+    storage_logic:belongs_to_provider(Storage, PrId);
 
 authorize(_, _) ->
     false.
@@ -407,7 +358,6 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"name">> => {binary, name}
     },
     optional => #{
-        <<"qos_parameters">> => {json, qos_parameters},
         <<"qosParameters">> => {json, qos_parameters},
         <<"imported">> => {boolean, any},
         <<"readonly">> => {boolean, any}
@@ -421,13 +371,30 @@ validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     }
 };
 
-validate(#el_req{operation = create, gri = #gri{aspect = {upgrade_legacy_support, _}}}) ->
-    #{};
+validate(#el_req{operation = create, gri = #gri{aspect = init_support}}) -> #{
+    required => #{
+        <<"token">> => {invite_token, ?SUPPORT_SPACE},
+        <<"size">> => {integer, {not_lower_than, ?MINIMUM_SUPPORT_SIZE}}
+    }
+};
+
+validate(#el_req{operation = create, gri = #gri{aspect = {init_unsupport, _}}}) -> #{
+};
+validate(#el_req{operation = create, gri = #gri{aspect = {complete_unsupport_resize, _}}}) -> #{
+};
+validate(#el_req{operation = create, gri = #gri{aspect = {complete_unsupport_purge, _}}}) -> #{
+};
+validate(#el_req{operation = create, gri = #gri{aspect = {finalize_unsupport, _}}}) -> #{
+};
+
+validate(#el_req{operation = create, gri = #gri{aspect = {upgrade_legacy_support, _}}}) -> #{
+};
+validate(#el_req{operation = create, gri = #gri{aspect = {upgrade_support_to_21_02, _}}}) -> #{
+};
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"qos_parameters">> => {json, qos_parameters},
         <<"qosParameters">> => {json, qos_parameters},
         <<"imported">> => {boolean, any},
         <<"readonly">> => {boolean, any}
@@ -441,153 +408,12 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
 }.
 
 %%%===================================================================
-%%% Internal functions
+%%% API
 %%%===================================================================
 
 %% @private
--spec support_space(od_provider:id(), od_space:id(), od_storage:id(),
-    od_space:support_size(), support_parameters:parameters()) -> entity_logic:create_result().
-support_space(ProviderId, SpaceId, StorageId, SupportSize, ProposedParameters) ->
-    % critical section to avoid race condition with storage modification
-    lock_on_storage(StorageId, fun() ->
-        % critical section to avoid simultaneous supports by 2 providers with imported storage
-        lock_on_space_support(SpaceId, fun() ->
-            support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize, ProposedParameters)
-        end)
-    end).
-
-
-%% @private
--spec support_space_insecure(od_provider:id(), od_space:id(), od_storage:id(),
-    od_space:support_size(), support_parameters:parameters()) -> entity_logic:create_result().
-support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize, ProposedParameters) ->
-    {true, {Storage, _}} = fetch_entity(#gri{id = StorageId}),
-
-    case is_imported_storage(Storage) of
-        true ->
-            ensure_storage_not_supporting_any_space(Storage),
-            ensure_space_not_supported_by_imported_storage(SpaceId);
-        _ -> ok
-    end,
-
-    entity_graph:add_relation(
-        od_space, SpaceId,
-        od_storage, StorageId,
-        SupportSize
-    ),
-
-    {ok, #document{value = #od_space{storages = Storages}}} = od_space:update(SpaceId, fun(Space) ->
-        #od_space{
-            support_parameters_per_provider = ParametersPerProvider,
-            support_stage_per_provider = SupportStagePerProvider
-        } = Space,
-        SpaceSupportParameters = case support_parameters:lookup_by_provider(ParametersPerProvider, ProviderId) of
-            % If the space is already supported by the provider, the parameters are inherited
-            % from previous supports (and token parameters are ignored in such case)
-            {ok, Existing} -> Existing;
-            error -> ProposedParameters
-        end,
-        % perform support stage transitions, but only if this is not a legacy support
-        % (for legacy providers, a virtual storage with id equal to provider id is used)
-        NewSupportStagePerProvider = case StorageId =:= ProviderId of
-            true ->
-                support_stage:insert_legacy_support_entry(SupportStagePerProvider, ProviderId);
-            false ->
-                % @todo VFS-6311 implement proper support stage management
-                {ok, SupportInitialized} = support_stage:init_support(SupportStagePerProvider, ProviderId, StorageId),
-                {ok, SupportFinalized} = support_stage:finalize_support(SupportInitialized, ProviderId, StorageId),
-                SupportFinalized
-        end,
-        {ok, Space#od_space{
-            support_parameters_per_provider = support_parameters:update_for_provider(
-                ParametersPerProvider, ProviderId, SpaceSupportParameters
-            ),
-            support_stage_per_provider = NewSupportStagePerProvider
-        }}
-    end),
-
-    % Calculate all supporting providers - effective providers might not
-    % be calculated yet, so a slower but deterministic approach is used.
-    EffectiveProviders = lists:usort(lists:map(fun(StId) ->
-        {ok, #document{value = #od_storage{provider = PrId}}} = od_storage:get(StId),
-        PrId
-    end, maps:keys(Storages))),
-    space_stats:coalesce_providers(SpaceId, EffectiveProviders),
-
-    NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
-    {true, {Space, Rev}} = space_logic_plugin:fetch_entity(NewGRI),
-
-    lists:foreach(fun(HarvesterId) ->
-        harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
-            harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, false)
-        end)
-    end, Space#od_space.harvesters),
-
-    {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
-    {ok, resource, {NewGRI, {SpaceData, Rev}}}.
-
-
-%% @private
--spec ensure_space_not_supported_by_imported_storage(od_space:id()) -> ok | no_return().
-ensure_space_not_supported_by_imported_storage(SpaceId) ->
-    {true, {#od_space{storages = StorageIds}, _}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
-    lists:foreach(fun (StorageId) ->
-        is_imported_storage(StorageId)
-            andalso throw(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(SpaceId, StorageId))
-    end, maps:keys(StorageIds)).
-
-
-%% @private
--spec ensure_storage_not_supporting_any_space(od_storage:record()) -> false | no_return().
-ensure_storage_not_supporting_any_space(Storage) ->
-    supports_any_space(Storage) andalso throw(?ERROR_STORAGE_IN_USE).
-
-
-%% @private
--spec is_imported_storage(od_storage:id() | od_storage:record()) -> boolean() | no_return().
-is_imported_storage(#od_storage{imported = ImportedStorage}) ->
-    ImportedStorage == true;
-is_imported_storage(StorageId) ->
-    {true, {Storage, _}} = fetch_entity(#gri{id = StorageId}),
-    is_imported_storage(Storage).
-
-
-%% @private
--spec lock_on_storage(od_storage:id(), fun(() -> Term)) -> Term.
-lock_on_storage(StorageId, Fun) ->
-    critical_section:run({storage_lock, StorageId}, Fun).
-
-
-%% @private
--spec lock_on_space_support(od_space:id(), fun(() -> Term)) -> Term.
-lock_on_space_support(SpaceId, Fun) ->
-    critical_section:run({space_support, SpaceId}, Fun).
-
-
-%% @private
--spec get_spaces(od_storage:record() | od_storage:id()) -> [od_space:id()].
-get_spaces(#od_storage{} = Storage) ->
-    entity_graph:get_relations(direct, bottom_up, od_space, Storage);
-get_spaces(StorageId) when is_binary(StorageId) ->
-    {true, {Storage, _}} = fetch_entity(#gri{id = StorageId}),
-    get_spaces(Storage).
-
-
-%% @private
--spec supports_any_space(od_storage:record() | od_storage:id()) -> boolean().
-supports_any_space(Storage) ->
-    case get_spaces(Storage) of
-        [] -> false;
-        [_|_] -> true
-    end.
-
-
-%% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility
-%% @private
--spec get_qos_parameters(entity_logic:data(), od_storage:qos_parameters()) ->
-    od_storage:qos_parameters().
-get_qos_parameters(Data, Default) ->
-    case maps:get(<<"qosParameters">>, Data, undefined) of
-        undefined -> maps:get(<<"qos_parameters">>, Data, Default);
-        Parameters -> Parameters
-    end.
+-spec auth_by_support(od_provider:id(), od_storage:record() | od_storage:id(), od_space:id()) ->
+    boolean().
+auth_by_support(ProviderId, StorageOrId, SpaceId) ->
+    storage_logic:belongs_to_provider(StorageOrId, ProviderId) andalso
+        storage_logic:supports_space(StorageOrId, SpaceId).

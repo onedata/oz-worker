@@ -824,13 +824,13 @@ get_eff_provider_test(Config) ->
                     <<"/groups/">>, G1, <<"/effective_providers/">>, ProvId
                 ],
                 expected_code = ?HTTP_200_OK,
-                expected_body = api_test_expect:protected_provider(rest, ProvId, ProviderData)
+                expected_body = api_test_expect:protected_provider(rest, ProvId, ProviderData, offline)
             },
             logic_spec = #logic_spec{
                 module = group_logic,
                 function = get_eff_provider,
                 args = [auth, G1, ProvId],
-                expected_result = api_test_expect:protected_provider(logic, ProvId, ProviderData)
+                expected_result = api_test_expect:protected_provider(logic, ProvId, ProviderData, offline)
             }
             % @todo gs
         },

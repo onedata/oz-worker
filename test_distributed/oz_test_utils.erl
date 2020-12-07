@@ -34,6 +34,7 @@
     set_env/3,
     set_app_env/4,
     oz_domain/1,
+    oz_release_version/1, oz_build_version/1,
     oz_url/2, oz_url/3,
     oz_rest_url/2,
     all_oz_privileges/1
@@ -150,12 +151,13 @@
 ]).
 -export([
     create_provider/1, create_provider/2, create_provider/3,
+    simulate_provider_version/3,
     get_provider/2,
     list_providers/1,
     delete_provider/2,
     support_space_by_provider/3,
     support_space/4, support_space/5, support_space_using_token/5,
-    support_space_by_legacy_storage/3,
+    simulate_preexisting_19_02_space_support/3,
     unsupport_space/3,
     enable_subdomain_delegation/4,
     set_provider_domain/3
@@ -254,8 +256,7 @@
     cluster_get_group_privileges/3
 ]).
 -export([
-    create_storage/3,
-    create_storage/4,
+    create_storage/2, create_storage/3, create_storage/4,
     create_imported_storage/3,
     get_storage/2,
     update_storage/3,
@@ -1500,8 +1501,24 @@ create_provider(Config, CreatorUserId, Data) ->
             ?USER(CreatorUserId), Data#{<<"token">> => RegistrationToken}
         ]
     )),
+    % providers created for tests are marked as having the same release version as Onezone (?WORKER only)
+    % to make the Onezone perceive the Oneprovider as up-to-date and conforming to new space support mechanisms
+    simulate_provider_version(Config, ProviderId, oz_release_version(Config)),
     {ok, SerializedRootToken} = tokens:serialize(RootToken),
     {ok, {ProviderId, SerializedRootToken}}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Marks Oneprovider as having a certain version (as seen by Onezone).
+%% @end
+%%--------------------------------------------------------------------
+-spec simulate_provider_version(Config :: term(), od_provider:id(), onedata:release_version()) -> ok.
+simulate_provider_version(Config, ProviderId, ReleaseVersion) ->
+    call_oz(Config, cluster_logic, update_version_info, [
+        ?PROVIDER(ProviderId), ProviderId, ?WORKER,
+        {ReleaseVersion, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH}
+    ]).
 
 
 %%--------------------------------------------------------------------
@@ -1597,21 +1614,27 @@ support_space_using_token(Config, Client, StorageId, Token, Size) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Supports a space by a provider based on space id
-%% (with default support size and virtual storage with id equal to providers).
+%% Supports a space by a provider based on space id, simulating the legacy
+%% procedure for Oneproviders in version 19.02 - using the virtual storage id
+%% (equal to provider id). The result is as if the Oneprovider had supported the
+%% space before Onezone's upgrade to current version and then the Onezone has
+%% been upgraded (which has upgraded the support to the current model).
+%%
+%% Note that it is not possible for Oneprovider in version 19.02 to connect to
+%% Onezone in current version, and the original support procedure simulated here
+%% is no longer available.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space_by_legacy_storage(Config :: term(), ProviderId :: od_provider:id(),
+-spec simulate_preexisting_19_02_space_support(Config :: term(), ProviderId :: od_provider:id(),
     SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
-support_space_by_legacy_storage(Config, ProviderId, SpaceId) ->
-    case call_oz(Config, provider_logic, has_storage, [ProviderId, ProviderId]) of
+simulate_preexisting_19_02_space_support(Config, ProviderId, SpaceId) ->
+    StorageId = ProviderId,
+    case call_oz(Config, provider_logic, has_storage, [ProviderId, StorageId]) of
         true -> ok;
-        false ->
-            ?assertMatch({ok, _}, create_storage(
-                Config, ?PROVIDER(ProviderId), ProviderId, ?STORAGE_NAME1)
-            )
+        false -> create_storage(Config, ?PROVIDER(ProviderId), StorageId, ?STORAGE_NAME1)
     end,
-    support_space(Config, ?PROVIDER(ProviderId), ProviderId, SpaceId, minimum_support_size(Config)).
+    support_space(Config, ?PROVIDER(ProviderId), StorageId, SpaceId, minimum_support_size(Config)).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -2838,11 +2861,11 @@ group_invite_user_token(Config, Client, GroupId) -> ?assertMatch({ok, _}, call_o
 )).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates a storage in onezone.
-%% @end
-%%--------------------------------------------------------------------
+-spec create_storage(Config :: term(), Client :: aai:auth()) -> {ok, od_storage:id()}.
+create_storage(Config, Client) ->
+    create_storage(Config, Client, ?UNIQUE_STRING).
+
+
 -spec create_storage(Config :: term(), Client :: aai:auth(),
     Name :: od_storage:name()) -> {ok, od_storage:id()}.
 create_storage(Config, Client, Name) ->
@@ -2853,7 +2876,7 @@ create_storage(Config, Client, Name) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a storage in onezone with given id.
+%% Creates a storage with given id.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_storage(Config :: term(), Client :: aai:auth(),
@@ -3586,14 +3609,19 @@ set_app_env(Config, App, Name, Value) ->
     ok.
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Get zone domain.
-%% @end
-%%--------------------------------------------------------------------
 -spec oz_domain(Config :: term()) -> binary().
 oz_domain(Config) ->
     call_oz(Config, oz_worker, get_domain, []).
+
+
+-spec oz_release_version(Config :: term()) -> binary().
+oz_release_version(Config) ->
+    call_oz(Config, oz_worker, get_release_version, []).
+
+
+-spec oz_build_version(Config :: term()) -> binary().
+oz_build_version(Config) ->
+    call_oz(Config, oz_worker, get_build_version, []).
 
 
 %%--------------------------------------------------------------------

@@ -100,7 +100,8 @@ all() ->
         get_own_space_test,
         legacy_support_space_test,
         legacy_update_support_size_test,
-        legacy_revoke_support_test,
+        % @TODO VFS-5856 soon to be removed
+        % legacy_revoke_support_test,
 
         check_my_ip_test,
         map_user_test,
@@ -419,14 +420,14 @@ get_test(Config) ->
             method = get,
             path = [<<"/providers/">>, P1],
             expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:protected_provider(rest, P1, ProviderData#{<<"online">> => true})
+            expected_body = api_test_expect:protected_provider(rest, P1, ProviderData, online)
         },
         logic_spec = #logic_spec{
             operation = get,
             module = provider_logic,
             function = get_protected_data,
             args = [auth, P1],
-            expected_result = api_test_expect:protected_provider(logic, P1, ProviderData#{<<"online">> => true})
+            expected_result = api_test_expect:protected_provider(logic, P1, ProviderData, online)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -434,7 +435,7 @@ get_test(Config) ->
                 type = od_provider, id = P1,
                 aspect = instance, scope = protected
             },
-            expected_result = api_test_expect:protected_provider(gs, P1, ProviderData#{<<"online">> => true})
+            expected_result = api_test_expect:protected_provider(gs, P1, ProviderData, online)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
@@ -451,7 +452,7 @@ get_self_test(Config) ->
             method = get,
             path = <<"/provider">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:protected_provider(rest, P1, ProviderData)
+            expected_body = api_test_expect:protected_provider(rest, P1, ProviderData, offline)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -459,7 +460,7 @@ get_self_test(Config) ->
                 type = od_provider, id = ?SELF,
                 aspect = instance, scope = protected
             },
-            expected_result = api_test_expect:protected_provider(gs, P1, ProviderData#{<<"online">> => true})
+            expected_result = api_test_expect:protected_provider(gs, P1, ProviderData, online)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -1637,8 +1638,8 @@ legacy_update_support_size_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-        {ok, S1} = oz_test_utils:support_space_by_legacy_storage(Config, P1, S1),
-        {ok, S1} = oz_test_utils:support_space_by_legacy_storage(Config, P2, S1),
+        {ok, S1} = oz_test_utils:simulate_preexisting_19_02_space_support(Config, P1, S1),
+        {ok, S1} = oz_test_utils:simulate_preexisting_19_02_space_support(Config, P2, S1),
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
         #{spaceId => S1}
     end,
@@ -1721,8 +1722,8 @@ legacy_revoke_support_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-        {ok, S1} = oz_test_utils:support_space_by_legacy_storage(Config, P1, S1),
-        {ok, S1} = oz_test_utils:support_space_by_legacy_storage(Config, P2, S1),
+        {ok, S1} = oz_test_utils:simulate_preexisting_19_02_space_support(Config, P1, S1),
+        {ok, S1} = oz_test_utils:simulate_preexisting_19_02_space_support(Config, P2, S1),
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
         % run the same procedures as during Onezone upgrade
         ?assertEqual(ok, oz_test_utils:call_oz(Config, storage_logic, migrate_legacy_supports, [])),
@@ -2567,7 +2568,7 @@ connection_status_tracking(Config) ->
     % simulate a long time passing since the connection was established
     oz_test_utils:simulate_seconds_passing(84928),
     % wait until a heartbeat is actually done by the client
-    timer:sleep(timer:seconds(12)),
+    timer:sleep(timer:seconds(15)),
     HeartbeatTimestamp = oz_test_utils:get_frozen_time_seconds(),
     % the provider should appear as online since the connection time
     ?awaitResult(true, IsOnline()),

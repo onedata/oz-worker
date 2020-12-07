@@ -33,6 +33,7 @@
 -export([delete_all_entities/0]).
 -export([get_env/1, get_env/2, set_env/2, set_app_env/3]).
 -export([get_domain/0, get_nodes/0]).
+-export([get_release_version/0, get_build_version/0]).
 -export([run_async/1, await_async/1]).
 -export([pforeach/2, pmap/2]).
 
@@ -160,6 +161,16 @@ get_domain() ->
 -spec get_nodes() -> [node()].
 get_nodes() ->
     ?config(oz_worker_nodes, get_test_config()).
+
+
+-spec get_release_version() -> onedata:release_version().
+get_release_version() ->
+    ozt:rpc(oz_worker, get_release_version, []).
+
+
+-spec get_build_version() -> binary().
+get_build_version() ->
+    ozt:rpc(oz_worker, get_build_version, []).
 
 
 %%--------------------------------------------------------------------

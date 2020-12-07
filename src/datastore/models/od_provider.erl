@@ -16,7 +16,8 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, get/1, get_name/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([get_name/1, is_in_older_major_version_than_onezone/1, is_in_older_major_version/2]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([get_ctx/0]).
@@ -55,14 +56,6 @@ get(ProviderId) ->
     datastore_model:get(?CTX, ProviderId).
 
 
--spec get_name(id()) -> {ok, name()} | {error, term()}.
-get_name(ProviderId) ->
-    case datastore_model:get(?CTX, ProviderId) of
-        {ok, #document{value = #od_provider{name = Name}}} -> {ok, Name};
-        {error, _} = Error -> Error
-    end.
-
-
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(ProviderId) ->
     datastore_model:exists(?CTX, ProviderId).
@@ -89,6 +82,25 @@ force_delete(ProviderId) ->
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
+
+-spec get_name(id()) -> {ok, name()} | {error, term()}.
+get_name(ProviderId) ->
+    case datastore_model:get(?CTX, ProviderId) of
+        {ok, #document{value = #od_provider{name = Name}}} -> {ok, Name};
+        {error, _} = Error -> Error
+    end.
+
+
+-spec is_in_older_major_version_than_onezone(od_provider:id()) -> boolean().
+is_in_older_major_version_than_onezone(ProviderId) ->
+    is_in_older_major_version(ProviderId, oz_worker:get_release_version()).
+
+
+-spec is_in_older_major_version(od_provider:id(), onedata:release_version()) -> boolean().
+is_in_older_major_version(ProviderId, ReferenceVersion) ->
+    {ok, OpWorkerVersion} = od_cluster:get_worker_version(ProviderId),
+    lower =:= onedata:compare_major_versions(OpWorkerVersion, ReferenceVersion).
 
 
 %%--------------------------------------------------------------------

@@ -79,7 +79,7 @@ routes() -> [
     {<<"/spaces/:id/stats">>, #rest_req{
         method = 'GET',
         produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = stats, scope = private}
+        b_gri = #b_gri{type = space_stats, id = ?BINDING(id), aspect = instance, scope = private}
     }},
     %% List space users
     %% This operation requires one of the following privileges:

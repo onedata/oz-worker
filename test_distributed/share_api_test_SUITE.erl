@@ -473,7 +473,6 @@ delete_test(Config) ->
 % The SUITE is run on a single node cluster to test caching of chosen providers
 % (the cache is local for each node).
 choose_provider_for_public_view_test(Config) ->
-    % Onezone version is mocked in init_per_testcase to <<"19.09.3">>
     {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId)),
 
@@ -484,14 +483,16 @@ choose_provider_for_public_view_test(Config) ->
     {ok, {SigmaUpToDate, SigmaToken}} = oz_test_utils:create_provider(Config),
     {ok, {OmegaUpToDate, OmegaToken}} = oz_test_utils:create_provider(Config),
 
+    <<OzMajorVersion:5/binary, _/binary>> = oz_test_utils:oz_release_version(Config),
+
     ProviderVersion = fun(PrId) ->
         case PrId of
             AlphaOffline -> <<"19.09.1">>;
             BetaOffline -> <<"18.02.3">>;
             GammaLegacy -> <<"19.02.1">>;
-            DeltaLegacy -> <<"19.02.0-rc1">>;
-            SigmaUpToDate -> <<"19.09.0-rc1">>;
-            OmegaUpToDate -> <<"19.09.2">>
+            DeltaLegacy -> <<"20.02.0-rc1">>;
+            SigmaUpToDate -> <<OzMajorVersion/binary, ".1">>;
+            OmegaUpToDate -> <<OzMajorVersion/binary, ".0-beta3">>
         end
     end,
 
@@ -608,20 +609,9 @@ end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
-init_per_testcase(choose_provider_for_public_view_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, oz_worker, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, oz_worker, get_release_version, fun() ->
-        <<"19.09.3">>
-    end),
-    % do not freeze time in this testcase as the logic uses an expiring cache
-    Config;
 init_per_testcase(_, Config) ->
     ozt_mocks:freeze_time(),
     Config.
 
-end_per_testcase(choose_provider_for_public_view_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, oz_worker);
 end_per_testcase(_, _Config) ->
     ozt_mocks:unfreeze_time().

@@ -93,7 +93,6 @@
     has_harvester/2,
     is_supported_by_storage/2
 ]).
--export([initialize_support_info/0]).
 
 %%%===================================================================
 %%% API
@@ -876,16 +875,16 @@ update_support_parameters(Auth, SpaceId, ProviderId, Data) ->
 
 
 -spec update_provider_sync_progress(aai:auth(), od_space:id(), od_provider:id(),
-    entity_logic:data() | provider_sync_progress:stats()) -> ok | errors:error().
-update_provider_sync_progress(Auth, SpaceId, ProviderId, Data = #{<<"providerSyncProgress">> := _}) ->
+    entity_logic:data() | provider_sync_progress:collective_report()) -> ok | errors:error().
+update_provider_sync_progress(Auth, SpaceId, ProviderId, Data = #{<<"providerSyncProgressReport">> := _}) ->
     entity_logic:handle(#el_req{
         operation = update,
         auth = Auth,
         gri = #gri{type = space_stats, id = SpaceId, aspect = {provider_sync_progress, ProviderId}},
         data = Data
     });
-update_provider_sync_progress(Auth, SpaceId, ProviderId, ProviderSyncProgress) ->
-    update_provider_sync_progress(Auth, SpaceId, ProviderId, #{<<"providerSyncProgress">> => ProviderSyncProgress}).
+update_provider_sync_progress(Auth, SpaceId, ProviderId, Report) ->
+    update_provider_sync_progress(Auth, SpaceId, ProviderId, #{<<"providerSyncProgressReport">> => Report}).
 
 
 %%--------------------------------------------------------------------
@@ -1085,37 +1084,3 @@ is_supported_by_storage(SpaceId, StorageId) when is_binary(SpaceId) ->
     entity_graph:has_relation(direct, top_down, od_storage, StorageId, od_space, SpaceId);
 is_supported_by_storage(Space, StorageId) ->
     entity_graph:has_relation(direct, top_down, od_storage, StorageId, Space).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Initializes new fields related to space support in all space documents with
-%% default values.
-%% Dedicated for upgrading Onezone from 20.02.0-beta3 to 20.02.*.
-%% @end
-%%--------------------------------------------------------------------
--spec initialize_support_info() -> ok.
-initialize_support_info() ->
-    entity_graph:ensure_up_to_date(),
-    ?info("Initializing space support info..."),
-    {ok, Spaces} = od_space:list(),
-    DefaultSupportParameters = support_parameters:build(global, eager),
-    lists:foreach(fun(#document{key = SpaceId, value = #od_space{name = Name} = SpaceRecord}) ->
-        EffProviders = maps:keys(SpaceRecord#od_space.eff_providers),
-        {ok, _} = od_space:update(SpaceId, fun(Space) ->
-            {ok, lists:foldl(fun(ProviderId, SpaceAcc) ->
-                SpaceAcc#od_space{
-                    support_parameters_per_provider = support_parameters:update_for_provider(
-                        SpaceAcc#od_space.support_parameters_per_provider, ProviderId, DefaultSupportParameters
-                    ),
-                    support_stage_per_provider = support_stage:insert_legacy_support_entry(
-                        SpaceAcc#od_space.support_stage_per_provider, ProviderId
-                    )
-                }
-            end, Space, EffProviders)}
-        end),
-        space_stats:init_for_space(SpaceId),
-        space_stats:coalesce_providers(SpaceId, EffProviders),
-        ?info("  * space '~ts' (~ts) ok, ~B providers", [Name, SpaceId, length(EffProviders)])
-    end, Spaces),
-    ?notice("Successfully initialized space support info").

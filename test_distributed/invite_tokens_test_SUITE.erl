@@ -491,8 +491,8 @@ support_space_token(_Config) ->
                 false ->
                     false;
                 true ->
-                    #od_space{support_parameters_per_provider = CurrentParamsPerProvider} = ozt_spaces:get(SpaceId),
-                    case support_parameters:lookup_by_provider(CurrentParamsPerProvider, ProviderId) of
+                    #od_space{support_parameters_registry = CurrentParamsRegistry} = ozt_spaces:get(SpaceId),
+                    case support_parameters:lookup_by_provider(CurrentParamsRegistry, ProviderId) of
                         {ok, Params} -> {true, Params};
                         error -> false
                     end
@@ -506,11 +506,11 @@ support_space_token(_Config) ->
                 <<"size">> => ozt_spaces:minimum_support_size()
             },
             #consume_request{
-                logic_call_args = {storage_logic, support_space, [Auth, StorageId, Data]},
+                logic_call_args = {storage_logic, init_support, [Auth, StorageId, Data]},
                 rest_call_args = not_available,
-                graph_sync_args = {?GRI(od_storage, StorageId, support, private), undefined, Data},
+                graph_sync_args = {?GRI(od_storage, StorageId, init_support, private), undefined, Data},
                 validate_result_fun = fun() ->
-                    #od_space{support_parameters_per_provider = SupportParameters} = ozt_spaces:get(SpaceId),
+                    #od_space{support_parameters_registry = SupportParameters} = ozt_spaces:get(SpaceId),
                     % If the space was already supported, support parameters should be inherited
                     % regardless of the parameters in the token. Otherwise, token parameters
                     % are taken.
@@ -1395,7 +1395,7 @@ check_multi_use_named_token(Tc = #testcase{token_type = TokenType}) ->
     }),
     ConsumersOfInfiniteUseToken = lists:map(fun(_) ->
         create_consumer_with_privs_to_consume(Tc, random_eligible)
-    end, lists:seq(1, 50)),
+    end, lists:seq(1, 30)),
     lists_utils:pforeach(fun(Consumer) ->
         ?assertMatch({ok, _}, consume_token(Tc, Consumer, InfiniteUseToken))
     end, ConsumersOfInfiniteUseToken).

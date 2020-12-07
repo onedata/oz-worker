@@ -1940,8 +1940,8 @@ get_record(od_space, 10) -> #od_space{
     eff_harvesters = #{},
 
     %% Support related info is initialized during cluster upgrade procedure
-    support_parameters_per_provider = #{},
-    support_stage_per_provider = #{},
+    support_parameters_registry = #{},
+    support_stage_registry = #{},
 
     creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(nobody),

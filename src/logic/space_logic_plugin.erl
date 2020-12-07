@@ -387,16 +387,16 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{
         name = Name,
         shares = Shares,
-        support_parameters_per_provider = SupportParametersPerProvider,
-        support_stage_per_provider = SupportStagePerProvider,
+        support_parameters_registry = SupportParametersRegistry,
+        support_stage_registry = SupportStageRegistry,
         creation_time = CreationTime,
         creator = Creator
     } = Space,
     {ok, #{
         <<"name">> => Name,
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
-        <<"supportParametersPerProvider">> => SupportParametersPerProvider,
-        <<"supportStagePerProvider">> => SupportStagePerProvider,
+        <<"supportParametersRegistry">> => SupportParametersRegistry,
+        <<"supportStageRegistry">> => SupportStageRegistry,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator,
         <<"sharesCount">> => length(Shares)
@@ -469,10 +469,10 @@ update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {group_privileges, GroupI
     );
 
 update(#el_req{gri = #gri{id = SpaceId, aspect = {support_parameters, ProviderId}}, data = Data}) ->
-    {ok, _} = od_space:update(SpaceId, fun(Space = #od_space{support_parameters_per_provider = ParametersPerProvider}) ->
-        {ok, PreviousForProvider} = support_parameters:lookup_by_provider(ParametersPerProvider, ProviderId),
-        {ok, Space#od_space{support_parameters_per_provider = support_parameters:update_for_provider(
-            ParametersPerProvider, ProviderId, support_parameters:build(
+    {ok, _} = od_space:update(SpaceId, fun(Space = #od_space{support_parameters_registry = ParametersRegistry}) ->
+        {ok, PreviousForProvider} = support_parameters:lookup_by_provider(ParametersRegistry, ProviderId),
+        {ok, Space#od_space{support_parameters_registry = support_parameters:update_for_provider(
+            ParametersRegistry, ProviderId, support_parameters:build(
                 maps:get(<<"dataWrite">>, Data, support_parameters:get_data_write(PreviousForProvider)),
                 maps:get(<<"metadataReplication">>, Data, support_parameters:get_metadata_replication(PreviousForProvider))
             )
@@ -549,26 +549,16 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {storage, StorageId}}}) ->
         )
     end;
 
+%% @TODO VFS-5856 deprecated, included for backward compatibility
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
-    fun(#od_space{harvesters = Harvesters, storages = Storages}) ->
-        lists:foreach(fun(HarvesterId) ->
-            harvester_indices:update_stats(HarvesterId, all,
-                fun(ExistingStats) ->
-                    harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
-                end)
-        end, Harvesters),
-
+    {true, {
+        #od_provider{storages = ProviderStorages}, _
+    }} = provider_logic_plugin:fetch_entity(#gri{id = ProviderId}),
+    fun(#od_space{storages = SupportingStorages}) ->
+        ProviderStoragesSupportingSpace = lists_utils:intersect(maps:keys(SupportingStorages), ProviderStorages),
         lists:foreach(fun(StorageId) ->
-            case storage_logic_plugin:fetch_entity(#gri{id = StorageId}) of
-                {true, {#od_storage{provider = ProviderId}, _Rev}} ->
-                    entity_graph:remove_relation(
-                        od_space, SpaceId,
-                        od_storage, StorageId
-                    );
-                _ ->
-                    ok
-            end
-        end, maps:keys(Storages))
+            space_support:force_unsupport(ProviderId, StorageId, SpaceId)
+        end, ProviderStoragesSupportingSpace)
     end;
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {harvester, HarvesterId}}}) ->

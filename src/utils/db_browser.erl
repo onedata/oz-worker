@@ -16,6 +16,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/space_support/support_stage.hrl").
+-include_lib("ctool/include/space_support/provider_sync_progress.hrl").
 
 % Denotes certain collection, e.g. 'users' or {'space_groups', <<"space_id">>}
 -type collection() :: atom() | {atom(), binary()}.
@@ -372,11 +373,11 @@ format_collection({space_shares, SpaceId}, SortBy, SortOrder) ->
 format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_space{
         eff_providers = EffProviders,
-        support_parameters_per_provider = ParametersPerProvider,
-        support_stage_per_provider = SupportStagePerProvider
+        support_parameters_registry = ParametersRegistry,
+        support_stage_registry = SupportStageRegistry
     }}} = od_space:get(SpaceId),
     {ok, #space_stats{
-        sync_progress_per_provider = SyncProgressPerProvider
+        sync_progress_registry = SyncProgressRegistry
     }} = space_logic:get_stats(?ROOT, SpaceId),
     format_table(providers, maps:keys(EffProviders), SortBy, SortOrder, [id, last_activity, version, name, domain], [
         {support, byte_size, 11, fun(Doc) ->
@@ -384,40 +385,44 @@ format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
             Support
         end},
         {dwrite_mrepl, text, 12, fun(#document{key = ProvId}) ->
-            {ok, Parameters} = support_parameters:lookup_by_provider(ParametersPerProvider, ProvId),
+            {ok, Parameters} = support_parameters:lookup_by_provider(ParametersRegistry, ProvId),
             str_utils:format("~s,~s", [
                 support_parameters:get_data_write(Parameters),
                 support_parameters:get_metadata_replication(Parameters)
             ])
         end},
         {support_stage, text, 13, fun(#document{key = ProvId}) ->
-            {ok, #support_stage_details{
-                provider_stage = SupportStage
-            }} = support_stage:lookup_details_by_provider(SupportStagePerProvider, ProvId),
-            SupportStage
+            case support_stage:lookup_details(SupportStageRegistry, ProvId) of
+                ?LEGACY_SUPPORT -> <<"*legacy*">>;
+                {ok, #support_stage_details{provider_stage = SupportStage}} -> SupportStage
+            end
         end},
         {sync_progress, text, 41, fun(#document{key = ProvId}) ->
-            {KnownSeqs, AllSeqs} = lists:foldl(fun(OtherProvider, {AccKnown, AccAll}) ->
+            {ok, #provider_summary{
+                desync = Desync, per_peer = PerPeer
+            }} = provider_sync_progress:lookup(SyncProgressRegistry, ProvId),
+
+            {KnownSeqs, AllSeqs} = lists:foldl(fun(Peer, {AccKnown, AccAll}) ->
                 {Known, Latest} = try
-                    provider_sync_progress:inspect_progress_between(SyncProgressPerProvider, ProvId, OtherProvider)
+                    #peer_summary{seen_seq = SeenSeq, diff = Diff} = maps:get(Peer, PerPeer),
+                    {SeenSeq, SeenSeq + Diff}
                 catch _:_ ->
                     {0, 0}
                 end,
                 {AccKnown + Known, AccAll + Latest}
-            end, {0, 0}, maps:keys(EffProviders)),
+            end, {0, 0}, maps:keys(EffProviders) -- [ProvId]),
+
             KnownPerCent = case AllSeqs of
                 0 -> 100;
                 _ -> KnownSeqs * 100 div AllSeqs
             end,
 
-            {ok, ProviderSyncProgress} = provider_sync_progress:lookup_by_provider(SyncProgressPerProvider, ProvId),
-            {_, LastUpdate} = maps:get(ProvId, ProviderSyncProgress),
-            TodayDate = format_date(global_clock:timestamp_seconds()),
-            LastUpdateStr = case format_date(LastUpdate) of
-                TodayDate -> format_time(LastUpdate, hour_min_sec);
-                OtherDate -> OtherDate
+            SummaryStr = case Desync of
+                true -> "[DESYNC]";
+                false -> "[OK]"
             end,
-            str_utils:format("~B/~B (~B%) @ ~s", [KnownSeqs, AllSeqs, KnownPerCent, LastUpdateStr])
+
+            str_utils:format("~B/~B (~B%) ~s", [KnownSeqs, AllSeqs, KnownPerCent, SummaryStr])
         end}
     ]);
 
@@ -701,7 +706,7 @@ field_specs(providers) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
     {last_activity, last_activity, 16, fun(Doc) -> provider_connections:get_last_activity(Doc) end},
     {version, text, 14, fun(Doc) ->
-        {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, Doc#document.key),
+        {ok, Version} = od_cluster:get_worker_version(Doc#document.key),
         Version
     end},
     {name, text, 28, fun(Doc) -> Doc#document.value#od_provider.name end},
@@ -868,7 +873,7 @@ format_value(last_activity, now) ->
 format_value(last_activity, 0) ->
     str_utils:format("~ts", [<<"✕ unknown"/utf8>>]);
 format_value(last_activity, Timestamp) ->
-    str_utils:format("~s ~s", [format_date(Timestamp), format_time(Timestamp, hour_min)]);
+    str_utils:format("~s ~s", [format_date(Timestamp), format_time(Timestamp)]);
 format_value(byte_size, Value) ->
     str_utils:format_byte_size(Value);
 format_value(direct_and_eff, {Direct, Effective}) ->
@@ -896,13 +901,10 @@ format_date(Timestamp) ->
 
 
 %% @private
--spec format_time(time:seconds(), hour_min | hour_min_sec) -> string().
-format_time(Timestamp, hour_min) ->
+-spec format_time(time:seconds()) -> string().
+format_time(Timestamp) ->
     {_, {Hour, Minute, _}} = time:seconds_to_datetime(Timestamp),
-    str_utils:format("~2..0B:~2..0B", [Hour, Minute]);
-format_time(Timestamp, hour_min_sec) ->
-    {_, {Hour, Minute, Second}} = time:seconds_to_datetime(Timestamp),
-    str_utils:format("~2..0B:~2..0B:~2..0B", [Hour, Minute, Second]).
+    str_utils:format("~2..0B:~2..0B", [Hour, Minute]).
 
 
 %% @private

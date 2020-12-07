@@ -32,9 +32,16 @@
 ]).
 -export([
     support_space/4, support_space/3,
+    init_support/4, init_support/3,
+    init_unsupport/3,
+    complete_unsupport_resize/3,
+    complete_unsupport_purge/3,
+    finalize_unsupport/3,
     update_support_size/4,
     revoke_support/3,
-    get_spaces/2
+    get_spaces/2,
+    upgrade_support_to_20_02/3,
+    upgrade_support_to_21_02/3
 ]).
 -export([
     exists/1,
@@ -42,9 +49,6 @@
     has_eff_group/2,
     belongs_to_provider/2,
     supports_space/2
-]).
--export([
-    migrate_legacy_supports/0
 ]).
 
 %%%===================================================================
@@ -76,33 +80,72 @@ create(Auth, Id, Data) ->
     })).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Supports a space based on support_space_token and support size.
-%% @end
-%%--------------------------------------------------------------------
+%% @TODO VFS-6977 deprecated - to be removed in the future, currently an alias for init_support
 -spec support_space(aai:auth(), od_storage:id(), tokens:token(), od_space:support_size()) ->
     {ok, od_space:id()} | errors:error().
 support_space(Auth, StorageId, Token, SupportSize) ->
-    support_space(Auth, StorageId, #{
+    init_support(Auth, StorageId, Token, SupportSize).
+
+
+%% @TODO VFS-6977 deprecated - to be removed in the future, currently an alias for init_support
+-spec support_space(aai:auth(), od_storage:id(), Data :: map()) ->
+    {ok, od_space:id()} | errors:error().
+support_space(Auth, StorageId, Data) ->
+    init_support(Auth, StorageId, Data).
+
+
+-spec init_support(aai:auth(), od_storage:id(), tokens:token(), od_space:support_size()) ->
+    {ok, od_space:id()} | errors:error().
+init_support(Auth, StorageId, Token, SupportSize) ->
+    init_support(Auth, StorageId, #{
         <<"token">> => Token, <<"size">> => SupportSize
     }).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Supports a space. Token (support_space_token) and SupportSize
-%% are provided in a proper Data object.
-%% @end
-%%--------------------------------------------------------------------
--spec support_space(aai:auth(), od_storage:id(), Data :: map()) ->
+-spec init_support(aai:auth(), od_storage:id(), Data :: map()) ->
     {ok, od_space:id()} | errors:error().
-support_space(Auth, StorageId, Data) ->
+init_support(Auth, StorageId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
         auth = Auth,
-        gri = #gri{type = od_storage, id = StorageId, aspect = support},
+        gri = #gri{type = od_storage, id = StorageId, aspect = init_support},
         data = Data
+    })).
+
+
+-spec init_unsupport(aai:auth(), od_storage:id(), od_space:id()) -> ok | errors:error().
+init_unsupport(Auth, StorageId, SpaceId) ->
+    ?CREATE_RETURN_OK(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_storage, id = StorageId, aspect = {init_unsupport, SpaceId}}
+    })).
+
+
+-spec complete_unsupport_resize(aai:auth(), od_storage:id(), od_space:id()) -> ok | errors:error().
+complete_unsupport_resize(Auth, StorageId, SpaceId) ->
+    ?CREATE_RETURN_OK(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_storage, id = StorageId, aspect = {complete_unsupport_resize, SpaceId}}
+    })).
+
+
+-spec complete_unsupport_purge(aai:auth(), od_storage:id(), od_space:id()) -> ok | errors:error().
+complete_unsupport_purge(Auth, StorageId, SpaceId) ->
+    ?CREATE_RETURN_OK(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_storage, id = StorageId, aspect = {complete_unsupport_purge, SpaceId}}
+    })).
+
+
+-spec finalize_unsupport(aai:auth(), od_storage:id(), od_space:id()) -> ok | errors:error().
+finalize_unsupport(Auth, StorageId, SpaceId) ->
+    ?CREATE_RETURN_OK(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_storage, id = StorageId, aspect = {finalize_unsupport, SpaceId}}
     })).
 
 
@@ -128,11 +171,7 @@ update_support_size(Auth, StorageId, SpaceId, Data) ->
     }).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Revokes support for specified space on behalf of given storage.
-%% @end
-%%--------------------------------------------------------------------
+%% @TODO VFS-6977 deprecated - to be removed in the future - forcefully removes the support
 -spec revoke_support(aai:auth(), od_storage:id(), od_space:id()) ->
     ok | errors:error().
 revoke_support(Auth, StorageId, SpaceId) ->
@@ -217,6 +256,26 @@ get_spaces(Auth, StorageId) ->
     }).
 
 
+-spec upgrade_support_to_20_02(aai:auth(), od_storage:id(), od_space:id()) ->
+    {ok, od_space:id()} | errors:error().
+upgrade_support_to_20_02(Auth, StorageId, SpaceId) ->
+    entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_storage, id = StorageId, aspect = {upgrade_legacy_support, SpaceId}}
+    }).
+
+
+-spec upgrade_support_to_21_02(aai:auth(), od_storage:id(), od_space:id()) ->
+    {ok, od_space:id()} | errors:error().
+upgrade_support_to_21_02(Auth, StorageId, SpaceId) ->
+    entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_storage, id = StorageId, aspect = {upgrade_support_to_21_02, SpaceId}}
+    }).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns whether a storage exists.
@@ -275,41 +334,3 @@ supports_space(StorageId, SpaceId) when is_binary(StorageId) ->
     entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, od_storage, StorageId);
 supports_space(Storage, SpaceId) ->
     entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, Storage).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Migrates legacy space supports to new model with storages.
-%% This is done by creating virtual storage record for each provider
-%% and supporting space with this storage.
-%% This storage record does not represent actual storage, it is provider
-%% that keeps knowledge of storages as long as it is in previous version.
-%% Provider removes this virtual storage record during its upgrade procedure.
-%%
-%% Dedicated for upgrading Onezone from 19.02.* to 20.02.*.
-%% @end
-%%--------------------------------------------------------------------
--spec migrate_legacy_supports() -> ok.
-migrate_legacy_supports() ->
-    entity_graph:init_state(),
-    ?info("Creating virtual storages for providers..."),
-    {ok, Providers} = od_provider:list(),
-    lists:foreach(fun(#document{key = ProviderId} = Provider) ->
-        case provider_logic:has_storage(ProviderId, ProviderId) of
-            true -> ok;
-            false ->
-                create(?PROVIDER(ProviderId), ProviderId, ?STORAGE_DEFAULT_NAME)
-        end,
-        {ok, Spaces} = provider_logic:get_legacy_spaces(Provider),
-        ?info("  * Migrating space supports for provider: ~s", [ProviderId]),
-        maps:map(fun(SpaceId, SupportSize) ->
-            try
-                entity_graph:add_relation(od_space, SpaceId, od_storage, ProviderId, SupportSize)
-            catch
-                _:(?ERROR_RELATION_ALREADY_EXISTS(_,_,_,_)) -> ok
-            end,
-            {ok, _} = provider_logic:remove_legacy_space(ProviderId, SpaceId)
-        end, Spaces),
-        ?notice("    Successfully migrated space supports for provider: ~s", [ProviderId])
-    end, Providers),
-    ?notice("Successfully migrated legacy supports").
