@@ -275,8 +275,10 @@ validate(#el_req{operation = update, gri = #gri{aspect = {provider_sync_progress
 %%%===================================================================
 
 %% @private
--spec update_sync_progress_registry(od_space:id(),
-    fun((provider_sync_progress:registry()) -> provider_sync_progress:registry_update_result())) ->
+-spec update_sync_progress_registry(
+    od_space:id(),
+    fun((provider_sync_progress:registry()) -> provider_sync_progress:registry_update_result())
+) ->
     ok | no_return().
 update_sync_progress_registry(SpaceId, RegistryUpdateFun) ->
     Diff = fun(SpaceStats) ->

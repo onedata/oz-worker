@@ -1227,13 +1227,14 @@ get_stats_test(Config) ->
         Config, ?SPACE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
-    {ok, {P1, _}} = oz_test_utils:create_provider(Config),
-    {ok, {P2, _}} = oz_test_utils:create_provider(Config),
-    {ok, {P3, _}} = oz_test_utils:create_provider(Config),
+    {ok, {ModernProvA, _}} = oz_test_utils:create_provider(Config),
+    {ok, {ModernProvB, _}} = oz_test_utils:create_provider(Config),
+    {ok, {LegacyProv, _}} = oz_test_utils:create_provider(Config),
+    oz_test_utils:simulate_provider_version(Config, LegacyProv, ?LINE_20_02(<<"1">>)),
     {ok, {NonSupporter, _}} = oz_test_utils:create_provider(Config),
-    oz_test_utils:support_space_by_provider(Config, P1, Space),
-    oz_test_utils:support_space_by_provider(Config, P2, Space),
-    oz_test_utils:support_space_by_provider(Config, P3, Space),
+    oz_test_utils:support_space_by_provider(Config, ModernProvA, Space),
+    oz_test_utils:support_space_by_provider(Config, ModernProvB, Space),
+    oz_test_utils:support_space_by_provider(Config, LegacyProv, Space),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     TimeZero = oz_test_utils:get_frozen_time_seconds(),
@@ -1242,59 +1243,56 @@ get_stats_test(Config) ->
         oz_test_utils:simulate_seconds_passing(rand:uniform(5000)),
         ?assertEqual(ok, oz_test_utils:call_oz(Config, space_logic, update_provider_sync_progress, [
             ?PROVIDER(Provider), Space, Provider, provider_sync_progress:collective_report_to_json(
-                provider_sync_progress:build_collective_report([P1, P2, P3], BuildReportFun)
+                provider_sync_progress:build_collective_report([ModernProvA, ModernProvB, LegacyProv], BuildReportFun)
             )
         ])),
         oz_test_utils:get_frozen_time_seconds()
     end,
 
-    P1LastUpdate = UpdateSyncProgress(P1, fun
-        (P) when P == P1 -> {1, TimeZero + 1};
-        (P) when P == P2 -> {2, TimeZero + 2};
-        (P) when P == P3 -> {3, TimeZero + 3}
+    ModernProvALastUpdate = UpdateSyncProgress(ModernProvA, fun
+        (P) when P == ModernProvA -> {10, TimeZero + 10};
+        (P) when P == ModernProvB -> {20, TimeZero + 20};
+        (P) when P == LegacyProv -> {1, TimeZero}
     end),
-    P2LastUpdate = UpdateSyncProgress(P2, fun
-        (P) when P == P1 -> {1, TimeZero + 1};
-        (P) when P == P2 -> {200, TimeZero + 200};
-        (P) when P == P3 -> {300, TimeZero + 300}
+    ModernProvBLastUpdate = UpdateSyncProgress(ModernProvB, fun
+        (P) when P == ModernProvA -> {8, TimeZero + 8};
+        (P) when P == ModernProvB -> {400, TimeZero + 400};
+        (P) when P == LegacyProv -> {1, TimeZero}
     end),
-    P3LastUpdate = UpdateSyncProgress(P3, fun
-        (P) when P == P1 -> {1, TimeZero + 1};
-        (P) when P == P2 -> {200, TimeZero + 200};
-        (P) when P == P3 -> {3000, TimeZero + 3000}
-    end),
+    % legacy providers do not report the progress and their lastReport is set to 0
+    LegacyProvLastUpdate = 0,
 
     ExpectedProvSyncProgressRegistry = #{
-        P1 => #provider_summary{legacy = false, joining = false, archival = false, desync = true,
-            last_report = P1LastUpdate,
+        ModernProvA => #provider_summary{legacy = false, joining = false, archival = false, desync = true,
+            last_report = ModernProvALastUpdate,
             per_peer = #{
-                P1 => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero + 1,
+                ModernProvA => #peer_summary{seen_seq = 10, seq_timestamp = TimeZero + 10,
                     diff = 0, delay = 0, desync = false},
-                P2 => #peer_summary{seen_seq = 2, seq_timestamp = TimeZero + 2,
-                    diff = 198, delay = 198, desync = false},
-                P3 => #peer_summary{seen_seq = 3, seq_timestamp = TimeZero + 3,
-                    diff = 2997, delay = 2997, desync = true}
+                ModernProvB => #peer_summary{seen_seq = 20, seq_timestamp = TimeZero + 20,
+                    diff = 380, delay = 380, desync = true},
+                LegacyProv => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
+                    diff = 0, delay = 0, desync = false}
             }
         },
-        P2 => #provider_summary{legacy = false, joining = false, archival = false, desync = true,
-            last_report = P2LastUpdate,
+        ModernProvB => #provider_summary{legacy = false, joining = false, archival = false, desync = false,
+            last_report = ModernProvBLastUpdate,
             per_peer = #{
-                P1 => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero + 1,
+                ModernProvA => #peer_summary{seen_seq = 8, seq_timestamp = TimeZero + 8,
+                    diff = 2, delay = 2, desync = false},
+                ModernProvB => #peer_summary{seen_seq = 400, seq_timestamp = TimeZero + 400,
                     diff = 0, delay = 0, desync = false},
-                P2 => #peer_summary{seen_seq = 200, seq_timestamp = TimeZero + 200,
-                    diff = 0, delay = 0, desync = false},
-                P3 => #peer_summary{seen_seq = 300, seq_timestamp = TimeZero + 300,
-                    diff = 2700, delay = 2700, desync = true}
+                LegacyProv => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
+                    diff = 0, delay = 0, desync = false}
             }
         },
-        P3 => #provider_summary{legacy = false, joining = false, archival = false, desync = false,
-            last_report = P3LastUpdate,
+        LegacyProv => #provider_summary{legacy = true, joining = true, archival = false, desync = true,
+            last_report = LegacyProvLastUpdate,
             per_peer = #{
-                P1 => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero + 1,
-                    diff = 0, delay = 0, desync = false},
-                P2 => #peer_summary{seen_seq = 200, seq_timestamp = TimeZero + 200,
-                    diff = 0, delay = 0, desync = false},
-                P3 => #peer_summary{seen_seq = 3000, seq_timestamp = TimeZero + 3000,
+                ModernProvA => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
+                    diff = 9, delay = 10, desync = false},
+                ModernProvB => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
+                    diff = 399, delay = 400, desync = true},
+                LegacyProv => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
                     diff = 0, delay = 0, desync = false}
             }
         }
@@ -1310,9 +1308,9 @@ get_stats_test(Config) ->
                 {admin, [?OZ_SPACES_VIEW]},
                 {user, Owner},
                 {user, UserWithViewPrivs},
-                {provider, P1},
-                {provider, P2},
-                {provider, P3}
+                {provider, ModernProvA},
+                {provider, ModernProvB},
+                {provider, LegacyProv}
             ],
             unauthorized = [nobody],
             forbidden = [
