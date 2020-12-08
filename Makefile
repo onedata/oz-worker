@@ -17,6 +17,7 @@ LIB_DIR          = _build/default/lib
 REL_DIRS         = _build/default/rel
 PKG_VARS_CONFIG  = pkg.vars.config
 OVERLAY_VARS    ?= --overlay_vars=rel/vars.config
+TEMPLATE_SCRIPT := ./rel/overlay.escript
 
 DOCKER_REG_USER        ?= ""
 DOCKER_REG_PASSWORD    ?= ""
@@ -63,6 +64,7 @@ distclean: clean
 
 template:
 	sed "s/{build_version, \".*\"}/{build_version, \"${BUILD_VERSION}\"}/" ./rel/vars.config.template > ./rel/vars.config
+	$(TEMPLATE_SCRIPT) rel/vars.config ./rel/files/vm.args.template
 
 ##
 ## Submodules
