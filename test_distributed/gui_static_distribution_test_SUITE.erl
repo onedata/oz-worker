@@ -94,6 +94,10 @@ all() ->
     Config, [<<"./">>, onedata:gui_prefix(GuiType), <<"/empty">>, <<"/i">>]
 )).
 
+
+% providers created for tests are marked as having the same release version as Onezone (?WORKER only)
+-define(STARTING_OPW_VERSION(Config), oz_test_utils:oz_release_version(Config)).
+
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
@@ -101,8 +105,8 @@ all() ->
 oz_worker_gui_is_set_up_after_startup(Config) ->
     GuiPackagePath = oz_test_utils:get_env(Config, ozw_gui_package_path),
     {ok, GuiHash} = oz_test_utils:call_oz(Config, gui, package_hash, [GuiPackagePath]),
-    Release = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
-    Build = oz_test_utils:call_oz(Config, oz_worker, get_build_version, []),
+    Release = oz_test_utils:oz_release_version(Config),
+    Build = oz_test_utils:oz_build_version(Config),
 
     OzIndexContent = read_content(Config, [<<"./ozw/">>, GuiHash, <<"/index.html">>]),
 
@@ -119,7 +123,7 @@ oz_panel_gui_setup_works(Config) ->
     Build = <<"mock-build">>,
     {GuiPackage, IndexContent} = oz_test_utils:create_dummy_gui_package(),
     oz_test_utils:copy_file_to_onezone_nodes(Config, GuiPackage),
-    ReleaseVersion = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
+    ReleaseVersion = oz_test_utils:oz_release_version(Config),
 
     {ok, GuiHash} = oz_test_utils:call_oz(Config, gui_static, deploy_package, [
         ?ONEPANEL_GUI, ReleaseVersion, GuiPackage
@@ -170,7 +174,7 @@ empty_gui_is_linked_after_provider_registration(Config) ->
     ?assert(link_exists(Config, [<<"./opw/">>, ClusterId], <<"empty">>)),
     ?assert(file_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_WORKER_GUI), [<<"/opw/">>, ClusterId, <<"/i">>])),
     ?assert(file_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_WORKER_GUI), [<<"/opw/">>, ClusterId, <<"/index.html">>])),
-    ?assert(version_info_is_set(Config, ClusterId, ?WORKER, {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH})),
+    ?assert(version_info_is_set(Config, ClusterId, ?WORKER, {?STARTING_OPW_VERSION(Config), ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH})),
 
     ?assert(static_directory_exists(Config, [<<"./onp/">>, <<"empty">>])),
     ?assert(link_exists(Config, [<<"./onp/">>, ClusterId], <<"empty">>)),
@@ -488,7 +492,7 @@ gui_upload_page_deploys_harvester_gui_on_all_nodes(Config) ->
 gui_package_verification_works(Config) ->
     oz_test_utils:set_env(Config, gui_package_verification, true),
     oz_test_utils:set_app_env(Config, ctool, compatibility_registry_mirrors, []),
-    OnezoneVersion = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
+    OnezoneVersion = oz_test_utils:oz_release_version(Config),
 
     {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config),
     ClusterId = ProviderId,
@@ -506,7 +510,7 @@ gui_package_verification_works(Config) ->
         <<"revision">> => 2019010100,
         <<"gui-sha256">> => #{
             <<"op-worker">> => #{
-                ?DEFAULT_RELEASE_VERSION => [OpGuiHash]
+                ?STARTING_OPW_VERSION(Config) => [OpGuiHash]
             }
         }
     }),

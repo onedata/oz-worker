@@ -611,15 +611,25 @@ has_eff_group(Provider, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether specified space is an effective space of given provider.
+%% Predicate saying whether specified space is supported by given provider.
+%% @TODO VFS-6780 rework calculation of effective supports to eliminate risk of non-recalculated graph
+%% Does not use the entity graph as it is asynchronously recalculated.
 %% @end
 %%--------------------------------------------------------------------
--spec supports_space(ProviderOrId :: od_provider:id() | #od_provider{},
-    SpaceId :: od_provider:id()) -> boolean().
-supports_space(ProviderId, SpaceId) when is_binary(ProviderId) ->
-    entity_graph:has_relation(effective, bottom_up, od_space, SpaceId, od_provider, ProviderId);
-supports_space(Provider, SpaceId) ->
-    entity_graph:has_relation(effective, bottom_up, od_space, SpaceId, Provider).
+-spec supports_space(ProviderOrId :: od_provider:id() | od_provider:record(),
+    SpaceOrId :: od_space:id() | od_space:record()) -> boolean().
+supports_space(ProviderId, SpaceOrId) when is_binary(ProviderId) ->
+    case get(?ROOT, ProviderId) of
+        {ok, Provider} -> supports_space(Provider, SpaceOrId);
+        {error, not_found} -> false
+    end;
+supports_space(Provider, SpaceId) when is_binary(SpaceId) ->
+    case space_logic:get(?ROOT, SpaceId) of
+        {ok, Space} -> supports_space(Provider, Space);
+        {error, not_found} -> false
+    end;
+supports_space(#od_provider{storages = ProviderStorages}, #od_space{storages = SpaceStorages}) ->
+    length(lists_utils:intersect(maps:keys(SpaceStorages), ProviderStorages)) > 0.
 
 
 %%--------------------------------------------------------------------

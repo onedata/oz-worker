@@ -49,6 +49,7 @@ handshake_attributes(_Client) ->
         <<"serviceVersion">> => oz_worker:get_release_version(),
         <<"serviceBuildVersion">> => oz_worker:get_build_version(),
         <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle),
+        <<"zoneTimeSeconds">> => global_clock:timestamp_seconds(),
         <<"maxTemporaryTokenTtl">> => oz_worker:get_env(max_temporary_token_ttl, 604800), % 1 week
         <<"defaultHarvestingBackendType">> => utils:undefined_to_null(DefaultHarvestingBackendType),
         <<"defaultHarvestingBackendEndpoint">> => utils:undefined_to_null(DefaultHarvestingBackendEndpoint)
@@ -152,6 +153,8 @@ translate_resource(_, GRI = #gri{type = od_group}, Data) ->
     translate_group(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_space}, Data) ->
     translate_space(GRI, Data);
+translate_resource(_, GRI = #gri{type = space_stats}, Data) ->
+    translate_space_stats(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_share}, Data) ->
     translate_share(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_provider}, Data) ->
@@ -447,6 +450,9 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
         <<"supportSizes">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_providers}),
         <<"harvesterList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = harvesters}),
+        <<"supportParametersRegistry">> => support_parameters:registry_to_json(Space#od_space.support_parameters_registry),
+        <<"supportStageRegistry">> => support_stage:registry_to_json(Space#od_space.support_stage_registry),
+        <<"spaceStats">> => gri:serialize(#gri{type = space_stats, id = SpaceId, aspect = instance}),
         <<"info">> => maps:merge(translate_creator(Space#od_space.creator), #{
             <<"creationTime">> => Space#od_space.creation_time,
             <<"sharesCount">> => length(Shares)
@@ -459,7 +465,9 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"providers">> := SupportSizes,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator,
-        <<"sharesCount">> := SharesCount
+        <<"sharesCount">> := SharesCount,
+        <<"supportParametersRegistry">> := SupportParametersRegistry,
+        <<"supportStageRegistry">> := SupportStageRegistry
     } = SpaceData,
     {ok, #document{value = Space}} = od_space:get(SpaceId),
     fun(?USER(UserId)) -> #{
@@ -470,6 +478,9 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"currentUserEffPrivileges">> => entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Space),
         <<"supportSizes">> => SupportSizes,
         <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_providers}),
+        <<"supportParametersRegistry">> => support_parameters:registry_to_json(SupportParametersRegistry),
+        <<"supportStageRegistry">> => support_stage:registry_to_json(SupportStageRegistry),
+        <<"spaceStats">> => gri:serialize(#gri{type = space_stats, id = SpaceId, aspect = instance}),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime,
             <<"sharesCount">> => SharesCount
@@ -568,6 +579,14 @@ translate_space(#gri{aspect = harvesters}, Harvesters) ->
     }.
 
 
+translate_space_stats(#gri{aspect = instance}, SpaceStats) ->
+    #{
+        <<"syncProgressRegistry">> => provider_sync_progress:registry_to_json(
+            SpaceStats#space_stats.sync_progress_registry
+        )
+    }.
+
+
 %% @private
 -spec translate_share(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
@@ -605,7 +624,7 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Prov
         creation_time = CreationTime
     } = Provider,
 
-    {Online, _} = provider_connections:inspect_status(Id, Provider),
+    {Online, Since} = provider_connections:inspect_status(Id, Provider),
     ClusterId = Id,
     fun(?USER(UserId)) -> #{
         <<"scope">> => <<"private">>,
@@ -616,8 +635,11 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Prov
         <<"cluster">> => gri:serialize(#gri{
             type = od_cluster, id = ClusterId, aspect = instance, scope = auto
         }),
-        <<"online">> => Online,
         <<"spaceList">> => gri:serialize(GRI#gri{aspect = {user_spaces, UserId}, scope = private}),
+        <<"connectionStatus">> => #{
+            <<"online">> => Online,
+            <<"since">> => Since
+        },
         <<"info">> => #{
             <<"creationTime">> => CreationTime
         }
@@ -627,7 +649,7 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = protected}, Pr
     #{
         <<"name">> := Name, <<"domain">> := Domain,
         <<"latitude">> := Latitude, <<"longitude">> := Longitude,
-        <<"online">> := Online,
+        <<"connectionStatus">> := ConnectionStatus,
         <<"creationTime">> := CreationTime
     } = Provider,
 
@@ -641,8 +663,8 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = protected}, Pr
         <<"cluster">> => gri:serialize(#gri{
             type = od_cluster, id = ClusterId, aspect = instance, scope = auto
         }),
-        <<"online">> => Online,
         <<"spaceList">> => gri:serialize(GRI#gri{aspect = {user_spaces, UserId}, scope = private}),
+        <<"connectionStatus">> => ConnectionStatus,
         <<"info">> => #{
             <<"creationTime">> => CreationTime
         }

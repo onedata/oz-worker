@@ -19,6 +19,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/space_support/support_stage.hrl").
+-include_lib("ctool/include/space_support/provider_sync_progress.hrl").
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
@@ -52,7 +53,9 @@
     get_eff_provider_test/1,
 
     update_support_parameters_test/1,
-    update_provider_sync_progress_test/1
+    update_provider_sync_progress_test/1,
+
+    get_stats_test/1
 ]).
 
 all() ->
@@ -76,7 +79,9 @@ all() ->
         get_eff_provider_test,
 
         update_support_parameters_test,
-        update_provider_sync_progress_test
+        update_provider_sync_progress_test,
+
+        get_stats_test
     ]).
 
 
@@ -242,20 +247,20 @@ get_test(Config) ->
 
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
-    ExpSupportParametersPerProvider = #{
+    ExpSupportParametersRegistry = #{
         P1 => support_parameters:build(global, eager)
     },
-    ExpSupportParametersPerProviderJson = #{
+    ExpSupportParametersRegistryJson = #{
         P1 => #{<<"dataWrite">> => <<"global">>, <<"metadataReplication">> => <<"eager">>}
     },
-    ExpSupportStagePerProvider = #{
+    ExpSupportStageRegistry = #{
         P1 => #support_stage_details{
             provider_stage = active,
             per_storage = #{
                 St1 => active
             }
         }},
-    ExpSupportStagePerProviderJson = #{
+    ExpSupportStageRegistryJson = #{
         P1 => #{
             <<"providerStage">> => <<"active">>,
             <<"perStorage">> => #{
@@ -291,8 +296,8 @@ get_test(Config) ->
                     harvesters = [],
                     eff_users = EffUsers, eff_groups = #{},
                     eff_providers = EffProviders,
-                    support_parameters_per_provider = SupportParameters,
-                    support_stage_per_provider = SupportStage,
+                    support_parameters_registry = SupportParameters,
+                    support_stage_registry = SupportStage,
                     top_down_dirty = false, bottom_up_dirty = false
                 }) ->
                     ?assertEqual(?SPACE_NAME1, Name),
@@ -308,8 +313,8 @@ get_test(Config) ->
                     }),
                     ?assertEqual(Storages, #{St1 => SupportSize}),
                     ?assertEqual(EffProviders, #{P1 => {SupportSize, [{od_storage, St1}]}}),
-                    ?assertEqual(SupportParameters, ExpSupportParametersPerProvider),
-                    ?assertEqual(SupportStage, ExpSupportStagePerProvider)
+                    ?assertEqual(SupportParameters, ExpSupportParametersRegistry),
+                    ?assertEqual(SupportStage, ExpSupportStageRegistry)
                 end
             )
         },
@@ -334,8 +339,8 @@ get_test(Config) ->
                     U2 => [<<"space_view">>]
                 },
                 <<"effectiveGroups">> => #{},
-                <<"supportParametersPerProvider">> => ExpSupportParametersPerProviderJson,
-                <<"supportStagePerProvider">> => ExpSupportStagePerProviderJson,
+                <<"supportParametersRegistry">> => ExpSupportParametersRegistryJson,
+                <<"supportStageRegistry">> => ExpSupportStageRegistryJson,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(S1, Id)
@@ -784,37 +789,51 @@ remove_storage_test(Config) ->
 
 
 remove_provider_test(Config) ->
-    % create space with 3 users:
+    % for each test run, a space with 3 users is created:
     %   Owner effectively has all the privileges
-    %   U2 gets the SPACE_REMOVE_SUPPORT privilege
-    %   U1 gets all remaining privileges
-    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
-        Config, ?SPACE_REMOVE_SUPPORT
-    ),
+    %   UserWithRemovePrivs gets the SPACE_REMOVE_SUPPORT privilege
+    %   UserWithoutRemovePrivs gets all remaining privileges
+    {ok, Owner} = oz_test_utils:create_user(Config),
+    {ok, UserWithRemovePrivs} = oz_test_utils:create_user(Config),
+    {ok, UserWithoutRemovePrivs} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
-    {ok, {P1, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    {ok, {P2, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    {ok, St3} = oz_test_utils:create_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
-    {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P2), St3, S1),
+
+    {ok, {SubjectProvider, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {OtherProvider, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, OtherStorage} = oz_test_utils:create_storage(Config, ?PROVIDER(OtherProvider), ?STORAGE_NAME1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
-        {ok, St2} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
-        {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1),
-        {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St2, S1),
+        {ok, Space} = oz_test_utils:create_space(Config, ?USER(Owner)),
+        {ok, SubjectStorage1} = oz_test_utils:create_storage(Config, ?PROVIDER(SubjectProvider), ?STORAGE_NAME1),
+        {ok, SubjectStorage2} = oz_test_utils:create_storage(Config, ?PROVIDER(SubjectProvider), ?STORAGE_NAME1),
+        oz_test_utils:support_space(Config, ?PROVIDER(SubjectProvider), SubjectStorage1, Space),
+        oz_test_utils:support_space(Config, ?PROVIDER(SubjectProvider), SubjectStorage2, Space),
+
+        oz_test_utils:support_space(Config, ?PROVIDER(OtherProvider), OtherStorage, Space),
+
+        oz_test_utils:space_add_user(Config, Space, UserWithRemovePrivs),
+        oz_test_utils:space_add_user(Config, Space, UserWithoutRemovePrivs),
+        AllPrivs = privileges:space_privileges(),
+        oz_test_utils:space_set_user_privileges(
+            Config, Space, UserWithRemovePrivs, [?SPACE_REMOVE_SUPPORT], AllPrivs -- [?SPACE_REMOVE_SUPPORT]
+        ),
+        oz_test_utils:space_set_user_privileges(
+            Config, Space, UserWithoutRemovePrivs, AllPrivs -- [?SPACE_REMOVE_SUPPORT], [?SPACE_REMOVE_SUPPORT]
+        ),
+
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-        #{storageId1 => St1, storageId2 => St2}
+        #{spaceId => Space, storageId1 => SubjectStorage1, storageId2 => SubjectStorage2}
     end,
-    DeleteEntityFun = fun(_Env) ->
-        oz_test_utils:space_remove_provider(Config, S1, P1),
+    DeleteEntityFun = fun(#{spaceId := Space}) ->
+        oz_test_utils:space_remove_provider(Config, Space, SubjectProvider),
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{storageId1 := St1, storageId2 := St2} = _Env, _) ->
-        {ok, Storages} = oz_test_utils:space_get_storages(Config, S1),
+    VerifyEndFun = fun(ShouldSucceed, #{spaceId := Space, storageId1 := St1, storageId2 := St2} = _Env, _) ->
+        {ok, Storages} = oz_test_utils:space_get_storages(Config, Space),
         ?assertEqual(lists:member(St1, Storages), not ShouldSucceed),
         ?assertEqual(lists:member(St2, Storages), not ShouldSucceed),
-        ?assertEqual(lists:member(St3, Storages), true)
+        ?assertEqual(lists:member(OtherStorage, Storages), true)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -823,23 +842,23 @@ remove_provider_test(Config) ->
                 root,
                 {admin, [?OZ_SPACES_REMOVE_RELATIONSHIPS]},
                 {user, Owner},
-                {user, U2}
+                {user, UserWithRemovePrivs}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, U1},
+                {user, UserWithoutRemovePrivs},
                 {user, NonAdmin}
             ]
         },
         rest_spec = #rest_spec{
             method = delete,
-            path = [<<"/spaces/">>, S1, <<"/providers/">>, P1],
+            path = [<<"/spaces/">>, spaceId, <<"/providers/">>, SubjectProvider],
             expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = space_logic,
             function = remove_provider,
-            args = [auth, S1, P1],
+            args = [auth, spaceId, SubjectProvider],
             expected_result = ?OK_RES
         }
         % TODO gs
@@ -956,13 +975,13 @@ get_eff_provider_test(Config) ->
             method = get,
             path = [<<"/spaces/">>, S1, <<"/providers/">>, P1],
             expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:protected_provider(rest, P1, ProviderDetails)
+            expected_body = api_test_expect:protected_provider(rest, P1, ProviderDetails, offline)
         },
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_provider,
             args = [auth, S1, P1],
-            expected_result = api_test_expect:protected_provider(logic, P1, ProviderDetails)
+            expected_result = api_test_expect:protected_provider(logic, P1, ProviderDetails, offline)
         },
         gs_spec = GsSpec = #gs_spec{
             operation = get,
@@ -971,7 +990,7 @@ get_eff_provider_test(Config) ->
                 aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_SPACE(S1),
-            expected_result = api_test_expect:protected_provider(gs, P1, ProviderDetails)
+            expected_result = api_test_expect:protected_provider(gs, P1, ProviderDetails, offline)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -982,7 +1001,7 @@ get_eff_provider_test(Config) ->
             correct = [{provider, P1, P1Token}]
         },
         gs_spec = GsSpec#gs_spec{
-            expected_result = api_test_expect:protected_provider(gs, P1, ProviderDetails#{<<"online">> => true})
+            expected_result = api_test_expect:protected_provider(gs, P1, ProviderDetails, online)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
@@ -1013,12 +1032,12 @@ update_support_parameters_test(Config) ->
 
 update_support_parameters_test(Config, SpaceAdmin, Space, Provider, ForbiddenClients) ->
     EnvSetUpFun = fun() ->
-        {ok, #od_space{support_parameters_per_provider = SupportParameters}} = oz_test_utils:get_space(Config, Space),
+        {ok, #od_space{support_parameters_registry = SupportParameters}} = oz_test_utils:get_space(Config, Space),
         #{previous => SupportParameters}
     end,
 
     VerifyEndFun = fun(ShouldSucceed, #{previous := PreviousSupportParameters}, Data) ->
-        {ok, #od_space{support_parameters_per_provider = SupportParameters}} = oz_test_utils:get_space(Config, Space),
+        {ok, #od_space{support_parameters_registry = SupportParameters}} = oz_test_utils:get_space(Config, Space),
         case ShouldSucceed of
             false ->
                 ?assertEqual(SupportParameters, PreviousSupportParameters);
@@ -1110,45 +1129,61 @@ update_provider_sync_progress_test(Config) ->
         {provider, P3, P3Token},
         {provider, NonSupporter, NonSupporterToken}
     ],
-    update_provider_sync_progress_test(Config, Space, P1, P1Token, AllClients),
-    update_provider_sync_progress_test(Config, Space, P2, P2Token, AllClients),
-    update_provider_sync_progress_test(Config, Space, P3, P3Token, AllClients).
+    update_provider_sync_progress_test_base(Config, Space, P1, P1Token, AllClients),
+    update_provider_sync_progress_test_base(Config, Space, P2, P2Token, AllClients),
+    update_provider_sync_progress_test_base(Config, Space, P3, P3Token, AllClients).
 
 
-update_provider_sync_progress_test(Config, Space, SubjectProvider, SubjectProviderToken, AllClients) ->
+%% @private
+update_provider_sync_progress_test_base(Config, Space, SubjectProvider, SubjectProviderToken, AllClients) ->
     {ok, SpaceRecord} = oz_test_utils:get_space(Config, Space),
     SupportingProviders = maps:keys(SpaceRecord#od_space.eff_providers),
-    Now = oz_test_utils:timestamp_seconds(Config),
-    RandomizeSyncProgressPerProvider = fun() ->
+    oz_test_utils:simulate_seconds_passing(50000 + rand:uniform(50000)),
+    Now = oz_test_utils:get_frozen_time_seconds(),
+    RandomizeSyncProgressReport = fun() ->
         lists:foldl(fun(Provider, Acc) ->
             % Due to delays in GraphSync, providers might not know all the other
             % providers for a while after a new support - simulate by randomly
             % dropping them out of the sequence map. They should default to
-            % seq=1 and timestamp=0.
-            case rand:uniform(3) of
-                1 -> Acc;
-                _ -> Acc#{Provider => #{<<"seq">> => rand:uniform(1000), <<"timestamp">> => Now - rand:uniform(50000)}}
+            % seq=1 and timestamp=0. However, the reporting provider must always
+            % be in the report.
+            case SubjectProvider /= Provider andalso rand:uniform(3) == 1 of
+                true ->
+                    Acc;
+                false ->
+                    Acc#{Provider => #{<<"seenSeq">> => rand:uniform(1000), <<"seqTimestamp">> => Now - rand:uniform(50000)}}
             end
         end, #{}, SupportingProviders)
     end,
 
     EnvSetUpFun = fun() ->
-        #{previous => get_sync_progress_per_provider(Config, Space)}
+        oz_test_utils:simulate_seconds_passing(rand:uniform(100)),
+        #{previousRegistry => get_sync_progress_registry(Config, Space)}
     end,
 
-    VerifyEndFun = fun(ShouldSucceed, #{previous := PreviousSyncProgressPerProvider}, Data) ->
-        SyncProgressPerProvider = get_sync_progress_per_provider(Config, Space),
+    VerifyEndFun = fun(ShouldSucceed, #{previousRegistry := PreviousRegistry}, Data) ->
+        CurrentRegistry = get_sync_progress_registry(Config, Space),
         case ShouldSucceed of
             false ->
-                ?assertEqual(SyncProgressPerProvider, PreviousSyncProgressPerProvider);
+                ?assertEqual(CurrentRegistry, PreviousRegistry);
             true ->
-                ProviderSyncProgressDecoded = provider_sync_progress:from_json(maps:get(<<"providerSyncProgress">>, Data)),
-                ExpProviderSyncProgress = lists:foldl(fun(Provider, Acc) ->
-                    Acc#{Provider => maps:get(Provider, ProviderSyncProgressDecoded, {1, 0})}
-                end, #{}, SupportingProviders),
-                ?assertEqual(SyncProgressPerProvider, PreviousSyncProgressPerProvider#{
-                    SubjectProvider => ExpProviderSyncProgress
-                })
+                {ok, CurrentProviderSummary} = provider_sync_progress:lookup(CurrentRegistry, SubjectProvider),
+                ?assertEqual(oz_test_utils:get_frozen_time_seconds(), CurrentProviderSummary#provider_summary.last_report),
+                {ok, PreviousProviderSummary} = provider_sync_progress:lookup(PreviousRegistry, SubjectProvider),
+                Report = maps:get(<<"providerSyncProgressReport">>, Data),
+                lists:foreach(fun(PeerId) ->
+                    CurrentPeerSummary = maps:get(PeerId, CurrentProviderSummary#provider_summary.per_peer),
+                    PreviousPeerSummary = maps:get(PeerId, PreviousProviderSummary#provider_summary.per_peer),
+                    ReportForPeer = maps:get(PeerId, Report, #{}),
+                    ?assertEqual(
+                        CurrentPeerSummary#peer_summary.seen_seq,
+                        maps:get(<<"seenSeq">>, ReportForPeer, PreviousPeerSummary#peer_summary.seen_seq)
+                    ),
+                    ?assertEqual(
+                        CurrentPeerSummary#peer_summary.seq_timestamp,
+                        maps:get(<<"seqTimestamp">>, ReportForPeer, PreviousPeerSummary#peer_summary.seq_timestamp)
+                    )
+                end, SupportingProviders)
         end
     end,
 
@@ -1173,12 +1208,12 @@ update_provider_sync_progress_test(Config, Space, SubjectProvider, SubjectProvid
             expected_result = ?OK_RES
         },
         data_spec = #data_spec{
-            required = [<<"providerSyncProgress">>],
-            correct_values = #{<<"providerSyncProgress">> => [RandomizeSyncProgressPerProvider]},
+            required = [<<"providerSyncProgressReport">>],
+            correct_values = #{<<"providerSyncProgressReport">> => [RandomizeSyncProgressReport]},
             bad_values = [
-                {<<"providerSyncProgress">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"providerSyncProgress">>)},
-                {<<"providerSyncProgress">>, 1234, ?ERROR_BAD_VALUE_JSON(<<"providerSyncProgress">>)},
-                {<<"providerSyncProgress">>, #{<<"providerid">> => [123, <<"value">>]}, ?ERROR_BAD_DATA(<<"providerSyncProgress">>)}
+                {<<"providerSyncProgressReport">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"providerSyncProgressReport">>)},
+                {<<"providerSyncProgressReport">>, 1234, ?ERROR_BAD_VALUE_JSON(<<"providerSyncProgressReport">>)},
+                {<<"providerSyncProgressReport">>, #{<<"providerid">> => [123, <<"value">>]}, ?ERROR_BAD_DATA(<<"providerSyncProgressReport">>)}
             ]
         }
     },
@@ -1186,15 +1221,137 @@ update_provider_sync_progress_test(Config, Space, SubjectProvider, SubjectProvid
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )).
 
+
+get_stats_test(Config) ->
+    {Space, Owner, UserWithoutViewPrivs, UserWithViewPrivs} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_VIEW
+    ),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, {ModernProvA, _}} = oz_test_utils:create_provider(Config),
+    {ok, {ModernProvB, _}} = oz_test_utils:create_provider(Config),
+    {ok, {LegacyProv, _}} = oz_test_utils:create_provider(Config),
+    oz_test_utils:simulate_provider_version(Config, LegacyProv, ?LINE_20_02(<<"1">>)),
+    {ok, {NonSupporter, _}} = oz_test_utils:create_provider(Config),
+    oz_test_utils:support_space_by_provider(Config, ModernProvA, Space),
+    oz_test_utils:support_space_by_provider(Config, ModernProvB, Space),
+    oz_test_utils:support_space_by_provider(Config, LegacyProv, Space),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    TimeZero = oz_test_utils:get_frozen_time_seconds(),
+    oz_test_utils:simulate_seconds_passing(5000),
+    UpdateSyncProgress = fun(Provider, BuildReportFun) ->
+        oz_test_utils:simulate_seconds_passing(rand:uniform(5000)),
+        ?assertEqual(ok, oz_test_utils:call_oz(Config, space_logic, update_provider_sync_progress, [
+            ?PROVIDER(Provider), Space, Provider, provider_sync_progress:collective_report_to_json(
+                provider_sync_progress:build_collective_report([ModernProvA, ModernProvB, LegacyProv], BuildReportFun)
+            )
+        ])),
+        oz_test_utils:get_frozen_time_seconds()
+    end,
+
+    ModernProvALastUpdate = UpdateSyncProgress(ModernProvA, fun
+        (P) when P == ModernProvA -> {10, TimeZero + 10};
+        (P) when P == ModernProvB -> {20, TimeZero + 20};
+        (P) when P == LegacyProv -> {1, TimeZero}
+    end),
+    ModernProvBLastUpdate = UpdateSyncProgress(ModernProvB, fun
+        (P) when P == ModernProvA -> {8, TimeZero + 8};
+        (P) when P == ModernProvB -> {400, TimeZero + 400};
+        (P) when P == LegacyProv -> {1, TimeZero}
+    end),
+    % legacy providers do not report the progress and their lastReport is set to 0
+    LegacyProvLastUpdate = 0,
+
+    ExpectedProvSyncProgressRegistry = #{
+        ModernProvA => #provider_summary{legacy = false, joining = false, archival = false, desync = true,
+            last_report = ModernProvALastUpdate,
+            per_peer = #{
+                ModernProvA => #peer_summary{seen_seq = 10, seq_timestamp = TimeZero + 10,
+                    diff = 0, delay = 0, desync = false},
+                ModernProvB => #peer_summary{seen_seq = 20, seq_timestamp = TimeZero + 20,
+                    diff = 380, delay = 380, desync = true},
+                LegacyProv => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
+                    diff = 0, delay = 0, desync = false}
+            }
+        },
+        ModernProvB => #provider_summary{legacy = false, joining = false, archival = false, desync = false,
+            last_report = ModernProvBLastUpdate,
+            per_peer = #{
+                ModernProvA => #peer_summary{seen_seq = 8, seq_timestamp = TimeZero + 8,
+                    diff = 2, delay = 2, desync = false},
+                ModernProvB => #peer_summary{seen_seq = 400, seq_timestamp = TimeZero + 400,
+                    diff = 0, delay = 0, desync = false},
+                LegacyProv => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
+                    diff = 0, delay = 0, desync = false}
+            }
+        },
+        LegacyProv => #provider_summary{legacy = true, joining = true, archival = false, desync = true,
+            last_report = LegacyProvLastUpdate,
+            per_peer = #{
+                ModernProvA => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
+                    diff = 9, delay = 10, desync = false},
+                ModernProvB => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
+                    diff = 399, delay = 400, desync = true},
+                LegacyProv => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
+                    diff = 0, delay = 0, desync = false}
+            }
+        }
+    },
+    ExpectedStatsJson = #{
+        <<"syncProgressRegistry">> => provider_sync_progress:registry_to_json(ExpectedProvSyncProgressRegistry)
+    },
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_SPACES_VIEW]},
+                {user, Owner},
+                {user, UserWithViewPrivs},
+                {provider, ModernProvA},
+                {provider, ModernProvB},
+                {provider, LegacyProv}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, UserWithoutViewPrivs},
+                {user, NonAdmin},
+                {provider, NonSupporter}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/spaces/">>, Space, <<"/stats">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = ExpectedStatsJson
+        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = get_stats,
+            args = [auth, Space],
+            expected_result = ?OK_TERM(fun(SpaceStats) ->
+                ?assertEqual(ExpectedProvSyncProgressRegistry, SpaceStats#space_stats.sync_progress_registry)
+            end)
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = space_stats, id = Space, aspect = instance, scope = private},
+            expected_result = ?OK_MAP(ExpectedStatsJson#{
+                <<"gri">> => gri:serialize(?GRI(space_stats, Space, instance, private))
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
-get_sync_progress_per_provider(Config, SpaceId) ->
-    {ok, #space_stats{sync_progress_per_provider = PerProvider}} = oz_test_utils:call_oz(
+get_sync_progress_registry(Config, SpaceId) ->
+    {ok, #space_stats{sync_progress_registry = Registry}} = oz_test_utils:call_oz(
         Config, space_logic, get_stats, [?ROOT, SpaceId]
     ),
-    PerProvider.
+    Registry.
 
 %%%===================================================================
 %%% Setup/teardown functions

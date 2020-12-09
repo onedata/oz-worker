@@ -217,12 +217,15 @@ get(#el_req{gri = #gri{id = Id, aspect = instance, scope = protected}}, Provider
         latitude = Latitude, longitude = Longitude,
         creation_time = CreationTime
     } = Provider,
-    {Online, _Since} = provider_connections:inspect_status(Id, Provider),
+    {Online, Since} = provider_connections:inspect_status(Id, Provider),
     {ok, #{
         <<"name">> => Name, <<"domain">> => Domain,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude,
-        <<"creationTime">> => CreationTime,
-        <<"online">> => Online
+        <<"connectionStatus">> => #{
+            <<"online">> => Online,
+            <<"since">> => Since
+        },
+        <<"creationTime">> => CreationTime
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Provider) ->
     #od_provider{name = Name} = Provider,
@@ -334,12 +337,15 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
-    ok = dns_state:remove_delegation_config(ProviderId),
     {true, {#od_provider{
         name = Name,
-        eff_spaces = Spaces,
-        eff_harvesters = Harvesters
+        storages = Storages,
+        eff_spaces = EffSpaces,
+        eff_harvesters = EffHarvesters
     }, _}} = fetch_entity(#gri{aspect = instance, id = ProviderId}),
+
+    ?info("Deregistering provider '~ts' (~s)...", [Name, ProviderId]),
+    ok = dns_state:remove_delegation_config(ProviderId),
 
     % Invalidate client tokens
     temporary_token_secret:delete_for_subject(?SUB(?ONEPROVIDER, ProviderId)),
@@ -348,19 +354,36 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     lists:foreach(fun(HarvesterId) ->
         harvester_indices:update_stats(HarvesterId, all,
             fun(ExistingStats) ->
-                harvester_indices:coalesce_index_stats(ExistingStats, maps:keys(Spaces), ProviderId, true)
+                harvester_indices:coalesce_index_stats(ExistingStats, maps:keys(EffSpaces), ProviderId, true)
             end)
-    end, maps:keys(Harvesters)),
+    end, maps:keys(EffHarvesters)),
+
+    Supports = lists:flatmap(fun(StorageId) ->
+        {ok, Spaces} = storage_logic:get_spaces(?ROOT, StorageId),
+        lists:map(fun(SpaceId) ->
+            {StorageId, SpaceId}
+        end, Spaces)
+    end, Storages),
+    case Supports of
+        [] ->
+            ?info("Provider '~ts' had no supports to remove (~s)", [Name, ProviderId]);
+        _ ->
+            ?info("Removing ~B supports of provider '~ts' (~s)...", [length(Supports), Name, ProviderId]),
+            lists:foreach(fun({StorageId, SpaceId}) ->
+                space_support:force_unsupport(ProviderId, StorageId, SpaceId),
+                ?info("  * removed support for space ~s by storage ~s", [SpaceId, StorageId])
+            end, Supports)
+    end,
 
     ClusterId = ProviderId,
     entity_graph:remove_all_relations(od_cluster, ClusterId),
     entity_graph:delete_with_relations(od_provider, ProviderId),
     cluster_logic:delete_oneprovider_cluster(ClusterId),
 
-    ?info("Provider '~ts' has been deregistered (~s)", [Name, ProviderId]),
+    ?notice("Provider '~ts' has been successfully deregistered (~s)", [Name, ProviderId]),
 
     % Force disconnect the provider (if connected), but with a delay to allow
-    % some time for the provider to receive the response to deletion request.
+    % some time for the provider to receive the response to the deletion request.
     timer:apply_after(10000, provider_connections, close_all, [ProviderId]),
     ok;
 

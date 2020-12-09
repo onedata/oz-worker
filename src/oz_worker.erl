@@ -124,7 +124,7 @@ get_rest_uri(PathWithSlash) when is_list(PathWithSlash) ->
 %% Returns Onezone release version.
 %% @end
 %%--------------------------------------------------------------------
--spec get_release_version() -> binary().
+-spec get_release_version() -> onedata:release_version().
 get_release_version() ->
     {_AppId, _AppName, AppVersion} = lists:keyfind(
         ?APP_NAME, 1, application:loaded_applications()
@@ -137,7 +137,7 @@ get_release_version() ->
 %% Returns Onezone build version.
 %% @end
 %%--------------------------------------------------------------------
--spec get_build_version() -> undefined | binary().
+-spec get_build_version() -> binary().
 get_build_version() ->
     case get_env(build_version, "unknown") of
         "" -> <<"unknown">>;

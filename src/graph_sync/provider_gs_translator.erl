@@ -217,8 +217,8 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
         shares = Shares,
         harvesters = Harvesters,
 
-        support_parameters_per_provider = SupportParametersPerProvider,
-        support_stage_per_provider = SupportStagePerProvider
+        support_parameters_registry = SupportParametersRegistry,
+        support_stage_registry = SupportStageRegistry
     } = Space,
     #{
         <<"name">> => Name,
@@ -236,21 +236,28 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
         <<"shares">> => Shares,
         <<"harvesters">> => Harvesters,
 
-        <<"supportParametersPerProvider">> => support_parameters:per_provider_to_json(SupportParametersPerProvider),
-        <<"supportStagePerProvider">> => support_stage:per_provider_to_json(SupportStagePerProvider)
+        <<"supportParametersRegistry">> => support_parameters:registry_to_json(SupportParametersRegistry),
+        <<"supportStageRegistry">> => support_stage:registry_to_json(SupportStageRegistry)
     };
 translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected}, SpaceData) ->
     #{
         <<"name">> := Name,
         <<"providers">> := Providers,
-        <<"supportParametersPerProvider">> := SupportParametersPerProvider,
-        <<"supportStagePerProvider">> := SupportStagePerProvider
+        <<"supportParametersRegistry">> := SupportParametersRegistry,
+        <<"supportStageRegistry">> := SupportStageRegistry
     } = SpaceData,
     #{
         <<"name">> => Name,
         <<"providers">> => Providers,
-        <<"supportParametersPerProvider">> => support_parameters:per_provider_to_json(SupportParametersPerProvider),
-        <<"supportStagePerProvider">> => support_stage:per_provider_to_json(SupportStagePerProvider)
+        <<"supportParametersRegistry">> => support_parameters:registry_to_json(SupportParametersRegistry),
+        <<"supportStageRegistry">> => support_stage:registry_to_json(SupportStageRegistry)
+    };
+
+translate_resource(_, #gri{type = space_stats, aspect = instance, scope = private}, SpaceStats) ->
+    #{
+        <<"syncProgressRegistry">> => provider_sync_progress:registry_to_json(
+            SpaceStats#space_stats.sync_progress_registry
+        )
     };
 
 translate_resource(_, #gri{type = od_share, aspect = instance, scope = private}, Share) ->
@@ -330,7 +337,7 @@ translate_resource(_, #gri{type = od_provider, aspect = instance, scope = protec
     #{
         <<"name">> := Name, <<"domain">> := Domain,
         <<"latitude">> := Latitude, <<"longitude">> := Longitude,
-        <<"online">> := Online
+        <<"connectionStatus">> := #{<<"online">> := Online}
 
     } = ProviderData,
     #{
@@ -370,7 +377,7 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
-        <<"timestamp">> => time:seconds_to_iso8601(Timestamp),  % @TODO VFS-6309 to be removed in 21.02
+        <<"timestamp">> => time:seconds_to_iso8601(Timestamp),  % NOTE: unused by Oneproviders since 20.02.2
         <<"handleServiceId">> => HandleServiceId,
 
         <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Handle),
@@ -386,7 +393,7 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public},
     #{
         <<"publicHandle">> => PublicHandle,
         <<"metadata">> => Metadata,
-        <<"timestamp">> => time:seconds_to_iso8601(Timestamp)  % @TODO VFS-6309 to be removed in 21.02
+        <<"timestamp">> => time:seconds_to_iso8601(Timestamp)  % NOTE: unused by Oneproviders since 20.02.2
     };
 
 translate_resource(_, #gri{type = od_harvester, aspect = instance, scope = private}, Harvester) ->
@@ -410,8 +417,6 @@ translate_resource(_, #gri{type = od_storage, aspect = instance, scope = private
         <<"provider">> => Provider,
         <<"spaces">> => maps:keys(Spaces),
         <<"qosParameters">> => QosParams,
-        %% @TODO VFS-5856 deprecated, included for compatibility with 20.02.0-beta3
-        <<"qos_parameters">> => QosParams,
         <<"imported">> => ImportedStorage,
         <<"readonly">> => Readonly
     };
@@ -427,9 +432,7 @@ translate_resource(_, #gri{type = od_storage, aspect = instance, scope = shared}
         <<"provider">> => Provider,
         <<"name">> => Name,
         <<"qosParameters">> => QosParams,
-        <<"readonly">> => Readonly,
-        %% @TODO VFS-5856 deprecated, included for compatibility with 20.02.0-beta3
-        <<"qos_parameters">> => QosParams
+        <<"readonly">> => Readonly
     };
 
 translate_resource(_, #gri{type = od_token, aspect = instance, scope = shared}, #{<<"revoked">> := Revoked}) ->

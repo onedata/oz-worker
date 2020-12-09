@@ -18,7 +18,8 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, get/1, get_name/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([get_name/1, get_worker_version/1]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([ensure_onezone_cluster/0]).
@@ -71,13 +72,6 @@ get(ClusterId) ->
     end.
 
 
--spec get_name(id()) -> {ok, binary()} | {error, term()}.
-get_name(?ONEZONE_CLUSTER_ID) ->
-    {ok, <<"Onezone">>};
-get_name(ClusterId) ->
-    od_provider:get_name(ClusterId).
-
-
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(ClusterId) ->
     case datastore_model:exists(?CTX, ClusterId) of
@@ -117,6 +111,23 @@ force_delete(ClusterId) ->
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
+
+-spec get_name(id()) -> {ok, binary()} | {error, term()}.
+get_name(?ONEZONE_CLUSTER_ID) ->
+    {ok, <<"Onezone">>};
+get_name(ClusterId) ->
+    od_provider:get_name(ClusterId).
+
+
+-spec get_worker_version(od_cluster:id()) -> {ok, onedata:release_version()} | {error, term()}.
+get_worker_version(ClusterId) ->
+    case datastore_model:get(?CTX, ClusterId) of
+        {ok, #document{value = #od_cluster{worker_version = {WorkerReleaseVersion, _, _}}}} ->
+            {ok, WorkerReleaseVersion};
+        {error, _} = Error ->
+            Error
+    end.
 
 
 %%--------------------------------------------------------------------

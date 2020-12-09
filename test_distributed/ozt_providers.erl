@@ -31,12 +31,13 @@
 -export([create_for_admin_user/1, create_for_admin_user/2]).
 -export([create_as_support_for_user/1]).
 -export([create_as_support_for_space/1]).
+-export([simulate_version/2]).
 -export([set_up_support_for_user/2]).
 -export([get_root_token/1]).
 -export([create_storage/1, create_storage/3, ensure_storage/2]).
 -export([support_space/2, support_space/3, support_space/4]).
 -export([support_space_using_token/3, support_space_using_token/4]).
--export([support_space_with_legacy_storage/2]).
+-export([simulate_preexisting_19_02_space_support/2]).
 -export([delete/1]).
 
 %%%===================================================================
@@ -60,6 +61,10 @@ create_for_admin_user(UserId, Name) ->
     {ok, {ProviderId, _}} = ?assertMatch({ok, _}, ozt:rpc(provider_logic, create, [
         ?NOBODY, ?PROVIDER_DATA(Name, RegToken)
     ])),
+    % make the Onezone perceive the Oneprovider as up-to-date and conforming to new space support mechanisms
+    ozt:rpc(cluster_logic, update_version_info, [
+        ?PROVIDER(ProviderId), ProviderId, ?WORKER, {<<"21.02.1">>, <<"build">>, ?EMPTY_GUI_HASH}
+    ]),
     ProviderId.
 
 
@@ -78,6 +83,16 @@ create_as_support_for_space(SpaceId) ->
     support_space(ProviderId, SpaceId),
     ozt:reconcile_entity_graph(),
     ProviderId.
+
+
+-spec simulate_version(od_provider:id(), onedata:release_version()) -> ok.
+simulate_version(ProviderId, ReleaseVersion) ->
+    % this should finish with an error (bad GUI hash was given), but nevertheless set the release version
+    ?assertMatch(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"workerVersion.gui">>), ozt:rpc(cluster_logic, update_version_info, [
+        ?PROVIDER(ProviderId), ProviderId, ?WORKER,
+        {ReleaseVersion, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH}
+    ])),
+    ok.
 
 
 -spec set_up_support_for_user(od_provider:id(), od_user:id()) -> ok.
@@ -102,7 +117,7 @@ create_storage(ProviderId) ->
 -spec create_storage(od_provider:id(), od_storage:name(), od_storage:qos_parameters()) -> od_storage:id().
 create_storage(ProviderId, Name, QosParameters) ->
     {ok, StorageId} = ?assertMatch({ok, _}, ozt:rpc(storage_logic, create, [
-        ?PROVIDER(ProviderId), datastore_key:new(), #{<<"name">> => Name, <<"qos_parameters">> => QosParameters}
+        ?PROVIDER(ProviderId), datastore_key:new(), #{<<"name">> => Name, <<"qosParameters">> => QosParameters}
     ])),
     StorageId.
 
@@ -150,12 +165,15 @@ support_space_using_token(ProviderId, StorageId, Token, Size) ->
     ok.
 
 
--spec support_space_with_legacy_storage(od_provider:id(), od_space:id()) -> ok.
-support_space_with_legacy_storage(ProviderId, SpaceId) ->
-    % legacy storage is a virtual storage with the same id as the provider
-    StorageId = ProviderId,
-    ensure_storage(ProviderId, StorageId),
-    support_space(ProviderId, StorageId, SpaceId).
+-spec simulate_preexisting_19_02_space_support(od_provider:id(), od_space:id()) -> ok.
+simulate_preexisting_19_02_space_support(ProviderId, SpaceId) ->
+    % Providers in 19.02 did not have storages in Onezone, but a virtual storage
+    % the same id as the provider was created for them upon Onezone's upgrade to
+    % 20.02 and all the supports were transferred there. After Onezone's upgrade
+    % to 21.02
+    VirtualStorageId = ProviderId,
+    ensure_storage(ProviderId, VirtualStorageId),
+    support_space(ProviderId, VirtualStorageId, SpaceId).
 
 
 -spec delete(od_provider:id()) -> ok.

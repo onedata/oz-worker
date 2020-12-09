@@ -237,25 +237,25 @@ choose_provider_for_public_view(ShareId) ->
     {od_provider:id() | undefined, onedata:release_version() | undefined}.
 choose_provider_for_space(SpaceId) ->
     {ok, Providers} = space_logic:get_eff_providers(?ROOT, SpaceId),
-    <<OzWorkerMajorVersion:6/binary, _/binary>> = oz_worker:get_release_version(),
-    EligibleProviders = lists:filtermap(fun(ProviderId) ->
+    OnlineProvidersWithVersions = lists:filtermap(fun(ProviderId) ->
         case provider_connections:is_online(ProviderId) of
             false ->
                 false;
             true ->
-                {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, ProviderId),
-                VersionClassification = case Version of
-                    <<OzWorkerMajorVersion:6/binary, _/binary>> -> up_to_date;
-                    _ -> legacy
-                end,
-                {true, {ProviderId, Version, VersionClassification}}
+                {ok, OpVersion} = od_cluster:get_worker_version(ProviderId),
+                {true, {ProviderId, OpVersion}}
         end
     end, Providers),
-    UpToDateProviders = [UpToDateProv || UpToDateProv = {_, _, up_to_date} <- EligibleProviders],
 
-    {ChosenProviderId, ChosenProviderVersion, _} = case {EligibleProviders, UpToDateProviders} of
-        {[], _} -> {undefined, undefined, undefined};
-        {_, []} -> lists_utils:random_element(EligibleProviders);
-        {_, _} -> lists_utils:random_element(UpToDateProviders)
+    OzVersion = oz_worker:get_release_version(),
+    SplitUponVersion = fun({_, OpVersion}) ->
+        case onedata:compare_major_versions(OpVersion, OzVersion) of
+            lower -> false;
+            _ -> true
+        end
     end,
-    {ChosenProviderId, ChosenProviderVersion}.
+    case lists:partition(SplitUponVersion, OnlineProvidersWithVersions) of
+        {[], []} -> {undefined, undefined};
+        {[], OlderProviders} -> lists_utils:random_element(OlderProviders);
+        {UpToDateProviders, _} -> lists_utils:random_element(UpToDateProviders)
+    end.

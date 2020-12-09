@@ -15,6 +15,8 @@
 -author("Lukasz Opiola").
 
 -include("ozt.hrl").
+-include_lib("ctool/include/space_support/support_stage.hrl").
+-include_lib("ctool/include/space_support/provider_sync_progress.hrl").
 
 %% API
 -export([create/0, create/1]).
@@ -31,7 +33,11 @@
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([set_user_privileges/3]).
 -export([delete/1]).
+-export([extract_sync_progress_registry_matrix/1]).
+-export([get_support_stage_registry/1]).
 -export([minimum_support_size/0]).
+
+-compile([{no_auto_import, [get/1]}]).
 
 %%%===================================================================
 %%% API
@@ -149,6 +155,30 @@ set_user_privileges(SpaceId, UserId, Privileges) ->
 -spec delete(od_space:id()) -> ok.
 delete(SpaceId) ->
     ?assertMatch(ok, ozt:rpc(space_logic, delete, [?ROOT, SpaceId])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Extracts only the information about seen seqs and timestamps from the space's
+%% provider sync progress registry, returns a map of maps with the values as
+%% tuples containing the seen seq and timestamp.
+%% @end
+%%--------------------------------------------------------------------
+-spec extract_sync_progress_registry_matrix(od_space:id()) ->
+    #{od_provider:id() => #{od_provider:id() => {provider_sync_progress:seen_seq(), provider_sync_progress:seq_timestamp()}}}.
+extract_sync_progress_registry_matrix(SpaceId) ->
+    {ok, SpaceStats} = ozt:rpc(space_logic, get_stats, [?ROOT, SpaceId]),
+    maps:map(fun(_ProviderId, #provider_summary{per_peer = PerPeer}) ->
+        maps:map(fun(_PeerId, #peer_summary{seen_seq = SeenSeq, seq_timestamp = SeqTimestamp}) ->
+            {SeenSeq, SeqTimestamp}
+        end, PerPeer)
+    end, SpaceStats#space_stats.sync_progress_registry).
+
+
+-spec get_support_stage_registry(od_space:id()) -> support_stage:registry().
+get_support_stage_registry(SpaceId) ->
+    Space = get(SpaceId),
+    Space#od_space.support_stage_registry.
 
 
 -spec minimum_support_size() -> od_space:support_size().

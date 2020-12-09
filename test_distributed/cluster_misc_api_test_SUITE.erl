@@ -143,8 +143,8 @@ get_onezone_cluster_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
     GuiPackagePath = oz_test_utils:get_env(Config, ozw_gui_package_path),
     {ok, GuiHash} = oz_test_utils:call_oz(Config, gui, package_hash, [GuiPackagePath]),
-    Release = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
-    Build = oz_test_utils:call_oz(Config, oz_worker, get_build_version, []),
+    Release = oz_test_utils:oz_release_version(Config),
+    Build = oz_test_utils:oz_build_version(Config),
     VersionInfo = {Release, Build, GuiHash},
 
     get_private_data_test_base(
@@ -174,7 +174,9 @@ get_oneprovider_cluster_test(Config) ->
     {ok, EffUserOfProvider} = oz_test_utils:create_user(Config),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(EffUserOfProvider), ?UNIQUE_STRING),
     oz_test_utils:support_space_by_provider(Config, ProviderId, Space),
-    VersionInfo = {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH},
+    % providers created for tests are marked as having the same release version as Onezone (?WORKER only)
+    OzReleaseVersion = oz_test_utils:oz_release_version(Config),
+    VersionInfo = {OzReleaseVersion, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH},
 
     get_private_data_test_base(
         Config, ClusterId, ?ONEPROVIDER, VersionInfo,

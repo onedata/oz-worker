@@ -22,8 +22,8 @@
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
--export([encode_support_parameters_per_provider/1, decode_support_parameters_per_provider/1]).
--export([encode_support_stage_per_provider/1, decode_support_stage_per_provider/1]).
+-export([encode_support_parameters_registry/1, decode_support_parameters_registry/1]).
+-export([encode_support_stage_registry/1, decode_support_stage_registry/1]).
 
 -type id() :: binary().
 -type record() :: #od_space{}.
@@ -294,8 +294,8 @@ get_record_struct(9) ->
         {bottom_up_dirty, boolean}
     ]};
 get_record_struct(10) ->
-    % * new field - support_parameters_per_provider
-    % * new field - support_stage_per_provider
+    % * new field - support_parameters_registry
+    % * new field - support_stage_registry
     {record, [
         {name, string},
 
@@ -312,11 +312,11 @@ get_record_struct(10) ->
         {eff_providers, #{string => {integer, [{atom, string}]}}},
         {eff_harvesters, #{string => [{atom, string}]}},
 
-        {support_parameters_per_provider, {custom, json, {
-            ?MODULE, encode_support_parameters_per_provider, decode_support_parameters_per_provider
+        {support_parameters_registry, {custom, json, {
+            ?MODULE, encode_support_parameters_registry, decode_support_parameters_registry
         }}}, % New field
-        {support_stage_per_provider, {custom, json, {
-            ?MODULE, encode_support_stage_per_provider, decode_support_stage_per_provider
+        {support_stage_registry, {custom, json, {
+            ?MODULE, encode_support_stage_registry, decode_support_stage_registry
         }}}, % New field
 
         {creation_time, integer},
@@ -328,25 +328,25 @@ get_record_struct(10) ->
 
 
 %% @private
--spec encode_support_parameters_per_provider(support_parameters:per_provider()) -> binary().
-encode_support_parameters_per_provider(Value) ->
-    json_utils:encode(support_parameters:per_provider_to_json(Value)).
+-spec encode_support_parameters_registry(support_parameters:registry()) -> binary().
+encode_support_parameters_registry(Value) ->
+    json_utils:encode(support_parameters:registry_to_json(Value)).
 
 %% @private
--spec decode_support_parameters_per_provider(binary()) -> support_parameters:per_provider().
-decode_support_parameters_per_provider(Value) ->
-    support_parameters:per_provider_from_json(json_utils:decode(Value)).
+-spec decode_support_parameters_registry(binary()) -> support_parameters:registry().
+decode_support_parameters_registry(Value) ->
+    support_parameters:registry_from_json(json_utils:decode(Value)).
 
 
 %% @private
--spec encode_support_stage_per_provider(support_stage:per_provider()) -> binary().
-encode_support_stage_per_provider(Value) ->
-    json_utils:encode(support_stage:per_provider_to_json(Value)).
+-spec encode_support_stage_registry(support_stage:registry()) -> binary().
+encode_support_stage_registry(Value) ->
+    json_utils:encode(support_stage:registry_to_json(Value)).
 
 %% @private
--spec decode_support_stage_per_provider(binary()) -> support_stage:per_provider().
-decode_support_stage_per_provider(Value) ->
-    support_stage:per_provider_from_json(json_utils:decode(Value)).
+-spec decode_support_stage_registry(binary()) -> support_stage:registry().
+decode_support_stage_registry(Value) ->
+    support_stage:registry_from_json(json_utils:decode(Value)).
 
 
 %%--------------------------------------------------------------------
@@ -818,8 +818,8 @@ upgrade_record(9, Space) ->
         eff_harvesters = EffHarvesters,
 
         %% Support related info is initialized during cluster upgrade procedure
-        support_parameters_per_provider = #{},
-        support_stage_per_provider = #{},
+        support_parameters_registry = #{},
+        support_stage_registry = #{},
 
         creation_time = CreationTime,
         creator = Creator,

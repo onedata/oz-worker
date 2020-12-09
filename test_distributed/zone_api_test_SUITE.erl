@@ -256,7 +256,7 @@ expected_configuration(Config) ->
         OZNameString -> list_to_binary(OZNameString)
     end,
 
-    OZVersion = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
+    OZVersion = oz_test_utils:oz_release_version(Config),
 
     OZBuild = case oz_test_utils:get_env(Config, build_version) of
         "" -> <<"unknown">>;

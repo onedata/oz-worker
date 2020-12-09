@@ -232,6 +232,11 @@ set_up_providers_and_clusters(Environment = #environment{users = Users, groups =
         ]),
         Provider = ozt_providers:create_for_admin_user(Admin, ?GEN_NAME()),
         ozt:rpc(od_provider, update, [Provider, fun(P) -> {ok, P#od_provider{admin_email = AdminEmail}} end]),
+        MinorVersion = integer_to_binary(rand:uniform(6) - 1),
+        ozt_providers:simulate_version(Provider, lists_utils:random_element([
+            ?LINE_20_02(MinorVersion),
+            ?LINE_21_02(MinorVersion)
+        ])),
         simulate_random_delay(),
         Cluster = Provider,
         generate_members(od_cluster, Cluster, od_user, Users),
@@ -286,15 +291,23 @@ set_up_provider_sync_progress(Environment = #environment{spaces = Spaces}) ->
     lists:foreach(fun(Space) ->
         EffProviders = maps:keys((ozt_spaces:get(Space))#od_space.eff_providers),
         lists:foreach(fun(Provider) ->
-            ?assertEqual(ok, ozt:rpc(space_logic, update_provider_sync_progress, [?ROOT, Space, Provider, maps:from_list(
-                lists:map(fun(OtherProvider) ->
-                    {OtherProvider, #{
-                        <<"seq">> => rand:uniform(10000),
-                        <<"timestamp">> => ozt:timestamp_seconds() - rand:uniform(50000)
-                    }}
-                end, EffProviders)
-            )])),
-            simulate_random_delay()
+            % generate some sync progress but only for up-to-date providers
+            case ozt:rpc(od_provider, is_in_older_major_version_than_onezone, [Provider]) of
+                true ->
+                    ok;
+                false ->
+                    ?assertEqual(ok, ozt:rpc(space_logic, update_provider_sync_progress, [
+                        ?ROOT, Space, Provider, maps:from_list(
+                            lists:map(fun(OtherProvider) ->
+                                {OtherProvider, #{
+                                    <<"seenSeq">> => rand:uniform(10000),
+                                    <<"seqTimestamp">> => ozt:timestamp_seconds() - rand:uniform(50000)
+                                }}
+                            end, EffProviders)
+                        )]
+                    )),
+                    simulate_random_delay()
+            end
         end, EffProviders)
     end, Spaces),
     Environment.

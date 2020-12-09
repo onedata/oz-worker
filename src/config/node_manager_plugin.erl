@@ -37,16 +37,18 @@
 -define(DNS_UPDATE_RETRY_INTERVAL, 5000).
 
 % List of all known cluster generations.
-% When cluster is not in newest generation it will be upgraded during initialization.
-% This can be used to e.g. move models between services.
-% Oldest upgradable generation is the lowest one that can be directly upgraded to newest.
-% Human readable version is included to for logging purposes.
+% If the cluster is not in the newest generation, it will be upgraded during initialization.
+% This can be used to e.g. interactively upgrade the database or move models between services.
+% Oldest upgradable generation is the lowest one that can be directly upgraded to
+% the newest (current one) - if the cluster is in lower version, it will have to
+% be first upgraded to an intermediate version.
+% Human readable version is included for easier maintenance and logging purposes.
 -define(CLUSTER_GENERATIONS, [
     {1, ?LINE_19_02},
     {2, ?LINE_20_02},
     {3, oz_worker:get_release_version()}
 ]).
--define(OLDEST_UPGRADABLE_CLUSTER_GENERATION, 1).
+-define(OLDEST_UPGRADABLE_CLUSTER_GENERATION, 2).
 
 %%%===================================================================
 %%% node_manager_plugin_default callbacks
@@ -135,12 +137,8 @@ before_cluster_upgrade() -> ok.
 %%--------------------------------------------------------------------
 -spec upgrade_cluster(node_manager:cluster_generation()) ->
     {ok, node_manager:cluster_generation()}.
-upgrade_cluster(1) ->
-    token_logic:migrate_deprecated_tokens(),
-    storage_logic:migrate_legacy_supports(),
-    {ok, 2};
 upgrade_cluster(2) ->
-    space_logic:initialize_support_info(),
+    space_support:migrate_all_supports_to_21_02_model(),
     {ok, 3}.
 
 %%--------------------------------------------------------------------

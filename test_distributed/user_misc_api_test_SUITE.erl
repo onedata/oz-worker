@@ -1264,7 +1264,7 @@ get_eff_provider_test(Config) ->
                 method = get,
                 path = [<<"/user/effective_providers/">>, ProvId],
                 expected_code = ?HTTP_200_OK,
-                expected_body = api_test_expect:protected_provider(rest, ProvId, ProvDetails)
+                expected_body = api_test_expect:protected_provider(rest, ProvId, ProvDetails, offline)
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -1289,7 +1289,7 @@ get_eff_provider_test(Config) ->
                 module = user_logic,
                 function = get_eff_provider,
                 args = [auth, U2, ProvId],
-                expected_result = api_test_expect:protected_provider(logic, ProvId, ProvDetails)
+                expected_result = api_test_expect:protected_provider(logic, ProvId, ProvDetails, offline)
             }
             % @todo gs
 

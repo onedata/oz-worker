@@ -77,7 +77,8 @@ get_response(#gri{id = ProviderId, aspect = instance, scope = protected}, Provid
     #{
         <<"name">> := Name, <<"domain">> := Domain,
         <<"latitude">> := Latitude, <<"longitude">> := Longitude,
-        <<"online">> := Online, <<"creationTime">> := CreationTime
+        <<"connectionStatus">> := #{<<"online">> := Online},
+        <<"creationTime">> := CreationTime
     } = ProviderData,
     rest_translator:ok_body_reply(#{
         <<"providerId">> => ProviderId,

@@ -25,7 +25,6 @@
     get/2,
     get_protected_data/2,
     get_public_data/2,
-    get_worker_release_version/2,
     list/1,
     list_privileges/0
 ]).
@@ -177,22 +176,6 @@ get_public_data(Auth, ClusterId) ->
         auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = instance, scope = public}
     }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves the release version of the worker service in given cluster.
-%% @end
-%%--------------------------------------------------------------------
--spec get_worker_release_version(aai:auth(), od_cluster:id()) ->
-    {ok, onedata:release_version()} | errors:error().
-get_worker_release_version(Auth, ClusterId) ->
-    case get_public_data(Auth, ClusterId) of
-        {ok, #{<<"workerVersion">> := #{<<"release">> := ReleaseVersion}}} ->
-            {ok, ReleaseVersion};
-        {error, _} = Error ->
-            Error
-    end.
 
 
 %%--------------------------------------------------------------------

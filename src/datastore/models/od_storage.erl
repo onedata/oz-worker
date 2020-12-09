@@ -17,6 +17,7 @@
 
 %% API
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([get_name/1]).
 -export([to_string/1, print_summary/0, print_summary/1]).
 -export([entity_logic_plugin/0]).
 
@@ -100,6 +101,15 @@ force_delete(SpaceId) ->
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
+
+-spec get_name(id()) -> {ok, name()} | {error, term()}.
+get_name(StorageId) ->
+    case datastore_model:get(?CTX, StorageId) of
+        {ok, #document{value = #od_storage{name = Name}}} -> {ok, Name};
+        {error, _} = Error -> Error
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc
