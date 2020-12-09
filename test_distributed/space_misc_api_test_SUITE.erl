@@ -54,6 +54,7 @@
 
     update_support_parameters_test/1,
     update_provider_sync_progress_test/1,
+    get_latest_emitted_seq_test/1,
 
     get_stats_test/1
 ]).
@@ -80,6 +81,7 @@ all() ->
 
         update_support_parameters_test,
         update_provider_sync_progress_test,
+        get_latest_emitted_seq_test,
 
         get_stats_test
     ]).
@@ -1220,6 +1222,66 @@ update_provider_sync_progress_test_base(Config, Space, SubjectProvider, SubjectP
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )).
+
+
+get_latest_emitted_seq_test(Config) ->
+    {Space, Owner, UserWithoutViewPrivs, UserWithViewPrivs} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_VIEW
+    ),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, {SubjectProvider, _}} = oz_test_utils:create_provider(Config),
+    {ok, {OtherProvider, _}} = oz_test_utils:create_provider(Config),
+    {ok, {NonSupporter, _}} = oz_test_utils:create_provider(Config),
+    oz_test_utils:support_space_by_provider(Config, SubjectProvider, Space),
+    oz_test_utils:support_space_by_provider(Config, OtherProvider, Space),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    Now = oz_test_utils:get_frozen_time_seconds(),
+    ExpLatestEmittedSeq = rand:uniform(500000),
+    ?assertEqual(ok, oz_test_utils:call_oz(Config, space_logic, update_provider_sync_progress, [
+        ?PROVIDER(SubjectProvider), Space, SubjectProvider, provider_sync_progress:collective_report_to_json(
+            provider_sync_progress:build_collective_report([SubjectProvider, OtherProvider], fun
+                (P) when P == SubjectProvider -> {ExpLatestEmittedSeq, Now - 15};
+                (P) when P == OtherProvider -> {1, Now - 500}
+            end)
+        )
+    ])),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_SPACES_VIEW]},
+                {user, Owner},
+                {user, UserWithViewPrivs},
+                {provider, SubjectProvider},
+                {provider, OtherProvider}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, UserWithoutViewPrivs},
+                {user, NonAdmin},
+                {provider, NonSupporter}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = get_latest_emitted_seq,
+            args = [auth, Space, SubjectProvider],
+            expected_result = ?OK_TERM(fun(LatestEmittedSeq) ->
+                ?assertEqual(LatestEmittedSeq, ExpLatestEmittedSeq)
+            end)
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = space_stats, id = Space, aspect = {latest_emitted_seq, SubjectProvider}, scope = private},
+            expected_result = ?OK_MAP(#{
+                <<"gri">> => gri:serialize(?GRI(space_stats, Space, {latest_emitted_seq, SubjectProvider}, private)),
+                <<"seq">> => ExpLatestEmittedSeq
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 get_stats_test(Config) ->

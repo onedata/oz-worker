@@ -259,6 +259,8 @@ translate_resource(_, #gri{type = space_stats, aspect = instance, scope = privat
             SpaceStats#space_stats.sync_progress_registry
         )
     };
+translate_resource(_, #gri{type = space_stats, aspect = {latest_emitted_seq, _}, scope = private}, Seq) ->
+    #{<<"seq">> => Seq};
 
 translate_resource(_, #gri{type = od_share, aspect = instance, scope = private}, Share) ->
     #od_share{
