@@ -183,6 +183,7 @@ entity_logic_plugin() ->
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
 operation_supported(get, instance, private) -> true;
+operation_supported(get, {latest_emitted_seq, _ProviderId}, private) -> true;
 operation_supported(update, {provider_sync_progress, _ProviderId}, private) -> true;
 operation_supported(_, _, _) -> false.
 
@@ -213,7 +214,14 @@ create(_) ->
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = instance, scope = private}}, SpaceStats) ->
-    {ok, SpaceStats}.
+    {ok, SpaceStats};
+get(#el_req{gri = #gri{aspect = {latest_emitted_seq, ProviderId}, scope = private}}, SpaceStats) ->
+    case provider_sync_progress:lookup(SpaceStats#space_stats.sync_progress_registry, ProviderId) of
+        error ->
+            ?ERROR_NOT_FOUND;
+        {ok, #provider_summary{per_peer = #{ProviderId := #peer_summary{seen_seq = LatestEmittedSeq}}}} ->
+            {ok, LatestEmittedSeq}
+    end.
 
 
 -spec update(entity_logic:req()) -> entity_logic:update_result().
@@ -237,19 +245,19 @@ exists(_, _) ->
 
 
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-authorize(#el_req{auth = Auth, operation = get, gri = #gri{id = SpaceId, aspect = instance}}, _) ->
-    case Auth of
-        ?USER(UserId) ->
-            space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_VIEW);
-        ?PROVIDER(ProviderId) ->
-            space_logic:is_supported_by_provider(SpaceId, ProviderId)
-    end;
+% all aspects can be fetched by supporting providers and users with view privilege
+authorize(#el_req{auth = ?USER(UserId), operation = get, gri = #gri{id = SpaceId, aspect = _}}, _) ->
+    space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_VIEW);
+authorize(#el_req{auth = ?PROVIDER(ProviderId), operation = get, gri = #gri{id = SpaceId, aspect = _}}, _) ->
+    space_logic:is_supported_by_provider(SpaceId, ProviderId);
 authorize(#el_req{auth = ?PROVIDER(PrId), operation = update, gri = #gri{id = SpaceId, aspect = {provider_sync_progress, PrId}}}, _) ->
     space_logic:is_supported_by_provider(SpaceId, PrId).
 
 
 -spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = private}}) ->
+    [?OZ_SPACES_VIEW];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {latest_emitted_seq, _}, scope = private}}) ->
     [?OZ_SPACES_VIEW];
 required_admin_privileges(_) ->
     forbidden.

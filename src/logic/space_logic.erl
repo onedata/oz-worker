@@ -68,6 +68,7 @@
     get_storages/2,
 
     get_stats/2,
+    get_latest_emitted_seq/3,
 
     update_user_privileges/5, update_user_privileges/4,
     update_group_privileges/5, update_group_privileges/4,
@@ -794,6 +795,16 @@ get_stats(Auth, SpaceId) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = space_stats, id = SpaceId, aspect = instance}
+    }).
+
+
+-spec get_latest_emitted_seq(aai:auth(), od_space:id(), od_provider:id()) ->
+    {ok, provider_sync_progress:seen_seq()} | errors:error().
+get_latest_emitted_seq(Auth, SpaceId, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = space_stats, id = SpaceId, aspect = {latest_emitted_seq, ProviderId}}
     }).
 
 

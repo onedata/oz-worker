@@ -318,8 +318,8 @@ handle_unsafe(State = #state{req = #el_req{operation = get}}) ->
                 auto -> {ok, NewState#state.req#el_req.gri, GetResult};
                 _ -> {ok, GetResult}
             end;
-        Other ->
-            Other
+        OtherResult ->
+            OtherResult
     end;
 
 
@@ -984,8 +984,8 @@ check_value(json, JsonValidator, Key, Map) when is_map(JsonValidator) ->
     end, JsonValidator);
 
 check_value(json, qos_parameters, _Key, Map) ->
-    case maps:fold(fun(K, V, Acc) -> 
-        Acc andalso is_binary(K) andalso (is_binary(V) or is_number(V)) 
+    case maps:fold(fun(K, V, Acc) ->
+        Acc andalso is_binary(K) andalso (is_binary(V) or is_number(V))
     end, true, Map) of
         true -> Map;
         false -> throw(?ERROR_BAD_VALUE_QOS_PARAMETERS)
