@@ -291,7 +291,6 @@ prepare_data_test() ->
         )
     ),
     
-    
     ?assertEqual(
         #{},
         elasticsearch_harvesting_backend:prepare_data(#{
@@ -305,6 +304,145 @@ prepare_data_test() ->
             #harvester_index{include_metadata = [json], include_rejection_reason = false},
             {all, <<"Rejection reason">>}
         )
+    ),
+    
+    ?assertEqual(
+        #{
+            <<"__onedata">> => #{
+                <<"__rejectionReason">> => <<"Provided JSON is not harvestable - only JSON objects are accepted">>,
+                <<"fileName">> => <<"fileName">>,
+                <<"jsonMetadataExists">> => true,
+                <<"spaceId">> => <<"spaceId">>,
+                <<"rdfMetadataExists">> => true,
+                <<"rdf">> => <<"some rdf">>,
+                <<"xattrsMetadataExists">> => true,
+                <<"xattrs">> => #{<<"x">> => #{<<"__value">> => <<"y">>}}
+            },
+            <<"__onedata.__rejected">> => <<"[{\"a\":\"B\"}]">>
+        },
+        elasticsearch_harvesting_backend:prepare_data(#{
+            <<"fileId">> => <<"fileId">>,
+            <<"fileName">> => <<"fileName">>,
+            <<"payload">> => #{
+                <<"json">> => <<"[{\"a\":\"B\"}]">>,
+                <<"xattrs">> => #{<<"x">> => <<"y">>},
+                <<"rdf">> => <<"some rdf">>
+            },
+            <<"spaceId">> => <<"spaceId">>
+        }, IndexInfo, {[], <<>>})
+    ),
+    
+    ?assertEqual(
+        #{
+            <<"__onedata">> => #{
+                <<"__rejectionReason">> => <<"Provided JSON is not harvestable - only JSON objects are accepted">>,
+                <<"fileName">> => <<"fileName">>,
+                <<"jsonMetadataExists">> => true,
+                <<"spaceId">> => <<"spaceId">>,
+                <<"rdfMetadataExists">> => true,
+                <<"rdf">> => <<"some rdf">>,
+                <<"xattrsMetadataExists">> => true,
+                <<"xattrs">> => #{<<"x">> => #{<<"__value">> => <<"y">>}}
+            },
+            <<"__onedata.__rejected">> => <<"[{\"a\":\"B\"}]">>
+        },
+        elasticsearch_harvesting_backend:prepare_data(#{
+            <<"fileId">> => <<"fileId">>,
+            <<"fileName">> => <<"fileName">>,
+            <<"payload">> => #{
+                <<"json">> => [#{<<"a">> => <<"B">>}],
+                <<"xattrs">> => #{<<"x">> => <<"y">>},
+                <<"rdf">> => <<"some rdf">>
+            },
+            <<"spaceId">> => <<"spaceId">>
+        }, IndexInfo, {[], <<>>})
+    ),
+    
+    
+    ?assertEqual(
+        #{
+            <<"__onedata">> => #{
+                <<"__rejectionReason">> => <<"Provided JSON is not harvestable - only JSON objects are accepted">>,
+                <<"fileName">> => <<"fileName">>,
+                <<"jsonMetadataExists">> => true,
+                <<"spaceId">> => <<"spaceId">>,
+                <<"rdfMetadataExists">> => true,
+                <<"rdf">> => <<"some rdf">>,
+                <<"xattrsMetadataExists">> => true,
+                <<"xattrs">> => #{<<"x">> => #{<<"__value">> => <<"y">>}}
+            },
+            <<"__onedata.__rejected">> => <<"[{\"a\":\"B\"}]">>
+        },
+        elasticsearch_harvesting_backend:prepare_data(#{
+            <<"fileId">> => <<"fileId">>,
+            <<"fileName">> => <<"fileName">>,
+            <<"payload">> => #{
+                <<"json">> => [#{<<"a">> => <<"B">>}],
+                <<"xattrs">> => #{<<"x">> => <<"y">>},
+                <<"rdf">> => <<"some rdf">>
+            },
+            <<"spaceId">> => <<"spaceId">>
+        }, IndexInfo, {[<<"__onedata.xattrs.z">>], <<"Some reason">>})
+    ),
+    
+    ?assertEqual(
+        #{
+            <<"__onedata">> => #{
+                <<"__rejectionReason">> => <<"Provided JSON is not harvestable - only JSON objects are accepted">>,
+                <<"fileName">> => <<"fileName">>,
+                <<"jsonMetadataExists">> => true,
+                <<"spaceId">> => <<"spaceId">>,
+                <<"rdfMetadataExists">> => false,
+                <<"xattrsMetadataExists">> => false
+            },
+            <<"__onedata.__rejected">> => <<"[]">>
+        },
+        elasticsearch_harvesting_backend:prepare_data(#{
+            <<"fileId">> => <<"fileId">>,
+            <<"fileName">> => <<"fileName">>,
+            <<"payload">> => #{<<"json">> => []},
+            <<"spaceId">> => <<"spaceId">>
+        }, IndexInfo, {[], <<>>})
+    ),
+    
+    ?assertEqual(
+        #{
+            <<"__onedata">> => #{
+                <<"__rejectionReason">> => <<"Provided JSON is not harvestable - only JSON objects are accepted">>,
+                <<"fileName">> => <<"fileName">>,
+                <<"jsonMetadataExists">> => true,
+                <<"spaceId">> => <<"spaceId">>,
+                <<"rdfMetadataExists">> => false,
+                <<"xattrsMetadataExists">> => false
+            },
+            <<"__onedata.__rejected">> => <<"\"string_json\"">>
+        },
+        elasticsearch_harvesting_backend:prepare_data(#{
+            <<"fileId">> => <<"fileId">>,
+            <<"fileName">> => <<"fileName">>,
+            <<"payload">> => #{<<"json">> => <<"string_json">>},
+            <<"spaceId">> => <<"spaceId">>
+        }, IndexInfo, {[], <<>>})
+    ),
+    
+    ?assertEqual(
+        #{
+            <<"__onedata">> => #{
+                <<"__rejectionReason">> => <<"Provided JSON is not harvestable - only JSON objects are accepted">>,
+                <<"fileName">> => <<"fileName">>,
+                <<"jsonMetadataExists">> => true,
+                <<"spaceId">> => <<"spaceId">>,
+                <<"rdfMetadataExists">> => false,
+                <<"xattrsMetadataExists">> => false
+            },
+            <<"__onedata.__rejected">> => <<"8">>
+        },
+        elasticsearch_harvesting_backend:prepare_data(#{
+            <<"fileId">> => <<"fileId">>,
+            <<"fileName">> => <<"fileName">>,
+            <<"payload">> => #{<<"json">> => 8},
+            <<"spaceId">> => <<"spaceId">>
+        }, IndexInfo, {[], <<>>})
     ),
     ok.
 
@@ -516,7 +654,8 @@ prepare_internal_fields_schema_test() ->
 
 unexpected_submit_failure_test() ->
     mock_do_submit_request(fun(_, _, _) -> error(unexpected_error) end),
-    ?assertThrow(?ERROR_TEMPORARY_FAILURE, elasticsearch_harvesting_backend:submit_batch(
+    ?assertEqual({ok, [{<<"indexId">>, undefined, 8, <<"internal server error - consult oz-worker logs">>}]}, 
+        elasticsearch_harvesting_backend:submit_batch(
         <<"endpoint">>,
         <<"harvester_id">>,
         #{<<"indexId">> =>
