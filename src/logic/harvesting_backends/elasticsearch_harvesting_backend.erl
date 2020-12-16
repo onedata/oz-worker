@@ -154,7 +154,9 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
     catch error:{parallel_call_failed, {failed_processes, Errors}} ->
         ?error_stacktrace(?prepare_log("Submit batch in harvester ~p failed due to: ~p",
             [HarvesterId, Errors])),
-        throw(?ERROR_TEMPORARY_FAILURE)
+        {ok, lists:map(fun(IndexId) -> 
+            {IndexId, undefined, map_entry_num_to_seq(1, Batch), <<"internal server error - consult oz-worker logs">>} 
+        end, maps:keys(Indices))}
     end.
 
 
@@ -421,27 +423,42 @@ prepare_elasticsearch_batch(Batch, IndexInfo, RejectionInfo) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec prepare_data(od_harvester:batch_entry(), od_harvester:index(), rejection_info()) -> map().
-prepare_data(BatchEntry, IndexInfo, {RejectedFields, RejectionReason}) ->
+prepare_data(BatchEntry, IndexInfo, {RejectedFields, _RejectionReason} = RI) ->
     MetadataTypesToInclude = atoms_to_binaries(IndexInfo#harvester_index.include_metadata),
     FileDetailsToInclude = atoms_to_binaries(IndexInfo#harvester_index.include_file_details),
     
     InternalParams = maps:with(FileDetailsToInclude, BatchEntry),
     Payload = maps:with(MetadataTypesToInclude, maps:get(<<"payload">>, BatchEntry, #{})),
-    JsonMetadata = case maps:get(<<"json">>, Payload, <<"{}">>) of
-        Map when is_map(Map) -> Map;
-        String when is_binary(String) -> json_utils:decode(String)
-    end,
+    {IsJsonHarvestable, JsonMetadata} = normalize_json_metadata(maps:get(<<"json">>, Payload, #{})),
     InternalParams1 = lists:foldl(fun(MetadataTypeBinary, PartialInternalParams) ->
         add_to_internal_params(
             MetadataTypeBinary, IndexInfo, Payload, RejectedFields, PartialInternalParams)
     end, InternalParams, MetadataTypesToInclude),
+    {RejectedFields1, RejectionReason1} = case IsJsonHarvestable of
+        true -> RI;
+        false -> {all, <<"Provided JSON is not harvestable - only JSON objects are accepted">>}
+    end,
     InternalParams2 = maybe_add_rejection_info(
-        InternalParams1, RejectedFields, RejectionReason, IndexInfo),
-    ResultJson = prepare_json(JsonMetadata, RejectedFields),
+        InternalParams1, RejectedFields1, RejectionReason1, IndexInfo),
+    ResultJson = prepare_json(JsonMetadata, RejectedFields1),
     case maps:size(InternalParams2) == 0 of
         true -> ResultJson;
         false -> ResultJson#{?INTERNAL_METADATA_KEY => InternalParams2}
     end.
+
+
+-spec normalize_json_metadata(map() | binary() | any()) -> {boolean(), map() | binary()}.
+normalize_json_metadata(JsonMap) when is_map(JsonMap) ->
+    {true, JsonMap};
+normalize_json_metadata(String) when is_binary(String) ->
+    try 
+        DecodedJson = json_utils:decode(String),
+        normalize_json_metadata(DecodedJson)
+    catch _:invalid_json ->
+        {false, String}
+    end;
+normalize_json_metadata(Other) ->
+    {false, Other}.
 
 
 %% @private
