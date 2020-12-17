@@ -189,7 +189,11 @@ get_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    ExpectedQosParameters = #{<<"key">> => <<"value">>},
+    ExpectedQosParameters = #{
+        <<"key">> => <<"value">>,
+        <<"storageId">> => St1,
+        <<"providerId">> => P1
+    },
     ExpectedImported = false,
     ExpectedReadonly = false,
     oz_test_utils:update_storage(Config, St1, #{<<"qosParameters">> => ExpectedQosParameters}),
@@ -318,15 +322,20 @@ update_test(Config, ReadonlyValue) ->
         #{storageId => S1}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{storageId := StorageId} = _Env, Data) ->
-        {ok, Storage} = oz_test_utils:get_storage(Config, StorageId),
+        {ok, #od_storage{provider = ProviderId} = Storage} = oz_test_utils:get_storage(Config, StorageId),
         case ShouldSucceed of
             false -> #{};
             true ->
-                ExpQosParams =
+                QosParams =
                     case maps:get(<<"qosParameters">>, Data, undefined) of
                         undefined -> maps:get(<<"qos_parameters">>, Data, #{});
                         Parameters -> Parameters
                     end,
+                ExpectedQosParams = QosParams#{
+                    <<"storageId">> => StorageId,
+                    <<"providerId">> => ProviderId
+                },
+                ExistingQosParams = Storage#od_storage.qos_parameters,
                 ExpImportedStorage = maps:get(<<"imported">>, Data, false),
                 ExpReadonly = maps:get(<<"readonly">>, Data, false),
                 case ExpReadonly andalso ExpImportedStorage =:= false of
@@ -335,7 +344,7 @@ update_test(Config, ReadonlyValue) ->
                     false ->
                         ?assertEqual(ExpImportedStorage, Storage#od_storage.imported),
                         ?assertEqual(ExpReadonly, Storage#od_storage.readonly),
-                        ?assertEqual(ExpQosParams, Storage#od_storage.qos_parameters)
+                        ?assertMatch(ExpectedQosParams, ExistingQosParams)
                 end
         end
     end,
@@ -398,6 +407,12 @@ update_test(Config, ReadonlyValue) ->
                 {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"qosParameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qosParameters">>)},
                 {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"qosParameters">>, #{<<"providerId">> => <<"not_correct_provider_id">>}, 
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.providerId">>, [P1])},
+                {<<"qosParameters">>, #{<<"storageId">> => <<"not_correct_storage_id">>},
+                    fun(#{storageId := StorageId}) -> 
+                        ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.storageId">>, [StorageId])
+                    end},
                 {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)},
                 {<<"readonly">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"readonly">>)}
             ]
@@ -971,11 +986,12 @@ modify_imported_storage_test(Config) ->
                 expected_result = ?OK
             },
             data_spec = #data_spec{
-                at_least_one = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>],
+                at_least_one = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>, <<"name">>],
                 correct_values = #{
                     %% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
                     <<"qos_parameters">> => [#{<<"key">> => <<"value">>}],
                     <<"qosParameters">> => [#{<<"key">> => <<"value">>}],
+                    <<"name">> => [<<"some_other_name">>],
                     <<"imported">> => [IsImported]
                 }
             }
@@ -987,7 +1003,7 @@ modify_imported_storage_test(Config) ->
     % check that imported value can be changed, if previously was set to unknown
     EnvSetUpFun = fun() ->
         oz_test_utils:call_oz(Config, od_storage, update, 
-            [Storage, fun(Storage) -> {ok, Storage#od_storage{imported = unknown}} end]),
+            [Storage, fun(St) -> {ok, St#od_storage{imported = unknown}} end]),
         #{}        
     end,
     VerifyEndFun = fun(ShouldSucceed, _Env, Data) ->
