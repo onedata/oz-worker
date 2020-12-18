@@ -110,11 +110,13 @@ create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PRO
         true -> throw(?ERROR_REQUIRES_IMPORTED_STORAGE(<<"'newly created storage'">>));
         _ -> ok
     end,
+    StorageId = ensure_id(ProposedId),
+    ExtendedQosParameters = add_implicit_qos_parameters(StorageId, ProviderId, QosParameters),
     StorageDoc = #document{
-        key = ProposedId,
+        key = StorageId,
         value = #od_storage{
             name = Name,
-            qos_parameters = QosParameters,
+            qos_parameters = ExtendedQosParameters,
             imported = ImportedStorage,
             readonly = Readonly,
             provider = ProviderId,
@@ -397,6 +399,12 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
 %%%===================================================================
 
 %% @private
+-spec ensure_id(undefined | od_storage:id()) -> od_storage:id().
+ensure_id(undefined) -> datastore_key:new();
+ensure_id(StorageId) -> StorageId.
+
+
+%% @private
 -spec support_space(od_provider:id(), od_space:id(), od_storage:id(),
     od_space:support_size()) -> entity_logic:create_result().
 support_space(ProviderId, SpaceId, StorageId, SupportSize) ->
@@ -510,8 +518,8 @@ get_qos_parameters(Data, Default) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% @private
-% Modification of imported value should be blocked if storage supports any space
-% unless it was previously `unknown` meaning that storage was created by legacy provider.
+%% Modification of imported value should be blocked if storage supports any space
+%% unless it was previously `unknown` meaning that storage was created by legacy provider.
 %% @end
 %%--------------------------------------------------------------------
 -spec check_imported_storage_value(PreviousValue :: boolean() | unknown, NewValue :: boolean(), 

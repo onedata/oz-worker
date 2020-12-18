@@ -92,6 +92,12 @@ create_test_base(Config, ReadonlyValue) ->
         ?assertEqual(ExpectedReadonly, Storage#od_storage.readonly),
         true
     end,
+    ExpectedQosParams = fun(StorageId, QosParams) -> 
+        QosParams#{
+            <<"storageId">> => StorageId,
+            <<"providerId">> => P1
+        }
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -108,7 +114,7 @@ create_test_base(Config, ReadonlyValue) ->
             function = create,
             args = [auth, data],
             expected_result = ?OK_ENV(fun(_, DataSet) ->
-                ExpectedQosParams =
+                QosParams =
                     case maps:get(<<"qosParameters">>, DataSet, undefined) of
                         undefined -> maps:get(<<"qos_parameters">>, DataSet, #{});
                         Parameters -> Parameters
@@ -120,7 +126,7 @@ create_test_base(Config, ReadonlyValue) ->
                         ?ERROR_REASON(?ERROR_REQUIRES_IMPORTED_STORAGE(<<"'newly created storage'">>));
                     false ->
                         ?OK_TERM(fun(StorageId) ->
-                            VerifyFun(StorageId, ExpectedQosParams, ExpectedImported, ExpectedReadonly)
+                            VerifyFun(StorageId, ExpectedQosParams(StorageId, QosParams), ExpectedImported, ExpectedReadonly)
                         end)
                 end
             end)
@@ -129,7 +135,7 @@ create_test_base(Config, ReadonlyValue) ->
             operation = create,
             gri = #gri{type = od_storage, aspect = instance},
             expected_result = ?OK_ENV(fun(_, DataSet) ->
-                ExpectedQosParams =
+                QosParams =
                     case maps:get(<<"qosParameters">>, DataSet, undefined) of
                         undefined -> maps:get(<<"qos_parameters">>, DataSet, #{});
                         Parameters -> Parameters
@@ -144,7 +150,7 @@ create_test_base(Config, ReadonlyValue) ->
                             <<"provider">> => P1,
                             <<"gri">> => fun(EncodedGri) ->
                                 #gri{id = StorageId} = gri:deserialize(EncodedGri),
-                                VerifyFun(StorageId, ExpectedQosParams, ExpectedImported, ExpectedReadonly)
+                                VerifyFun(StorageId, ExpectedQosParams(StorageId, QosParams), ExpectedImported, ExpectedReadonly)
                             end})
                 end
             end)
@@ -165,6 +171,8 @@ create_test_base(Config, ReadonlyValue) ->
                 {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"qosParameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qosParameters">>)},
                 {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"qosParameters">>, #{<<"providerId">> => <<"not_correct_provider_id">>},
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.providerId">>, [P1])},
                 {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)},
                 {<<"readonly">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"readonly">>)}
             ] ++ ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
