@@ -4,6 +4,14 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 20.02.5
+
+-   **VFS-6999** Improve error reporting in entrypoints of
+    oneprovider/onezone dockers, always dump application logs to stdout
+    in case of failures during batch deployment.
+-   **VFS-6745** Added new view with token templates in tokens creator
+    GUI.
+
 ### 20.02.4
 
 -   **VFS-6958** Added new endpoint that checks correctness of a QoS
