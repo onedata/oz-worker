@@ -685,18 +685,19 @@ run_test_combinations(
     CorrectClients = ClientSpec#client_spec.correct,
     UnauthorizedClients = ClientSpec#client_spec.unauthorized,
     ForbiddenClients = ClientSpec#client_spec.forbidden,
+    
+    Environment = EnvSetUpFun(),
 
     % Get list of various combinations of data regardless of operation.
     % In case of operations that do not require nor expect any data
     % (DataSpec == undefined) such as get or delete [?NO_DATA] is prepared
     RequiredDataSets = required_data_sets(DataSpec),
     CorrectDataSets = correct_data_sets(DataSpec),
-    BadDataSets = bad_data_sets(DataSpec),
+    BadDataSets = bad_data_sets(DataSpec, Environment),
 
     % assert that unauthorized and forbidden clients with required data sets,
     % along with correct clients with bad/malformed data sets,
     % fails with an appropriate error
-    Environment = EnvSetUpFun(),
     lists:foreach(
         fun({Clients, DataSets, DescFmt, Error}) ->
             lists:foreach(
@@ -892,9 +893,9 @@ correct_data_sets(DataSpec) ->
 
 % Generates all combinations of bad data sets by adding wrong values to
 % correct data sets.
-bad_data_sets(undefined) ->
+bad_data_sets(undefined, _) ->
     [?NO_DATA];
-bad_data_sets(DataSpec) ->
+bad_data_sets(DataSpec, Env) ->
     #data_spec{
         required = Required,
         at_least_one = AtLeastOne,
@@ -905,9 +906,13 @@ bad_data_sets(DataSpec) ->
         {Key, hd(get_correct_value(Key, DataSpec))}
     end, Required ++ AtLeastOne ++ Optional)),
     lists:map(
-        fun({Key, Value, ErrorType}) ->
-            Data = AllCorrect#{Key => Value},
-            {Data, Key, ErrorType}
+        fun
+            ({Key, Value, ErrorTypeFun}) when is_function(ErrorTypeFun, 1) ->
+                Data = AllCorrect#{Key => Value},
+                {Data, Key, ErrorTypeFun(Env)};
+            ({Key, Value, ErrorType}) ->
+                Data = AllCorrect#{Key => Value},
+                {Data, Key, ErrorType}
         end, BadValues).
 
 
