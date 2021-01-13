@@ -95,16 +95,18 @@ create(_Req) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = configuration}}, _) ->
     Version = oz_worker:get_release_version(),
-    {ok, CompatibleOpVersions} = compatibility:get_compatible_versions(?ONEZONE, Version, ?ONEPROVIDER),
     SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
+    CompatibilityRegistryRevision = query_compatibility_registry(peek_current_registry_revision, []),
+    CompatibleOpVersions = query_compatibility_registry(get_compatible_versions, [?ONEZONE, Version, ?ONEPROVIDER]),
     {ok, #{
-        name => utils:undefined_to_null(oz_worker:get_name()),
-        version => Version,
-        build => oz_worker:get_build_version(),
-        domain => oz_worker:get_domain(),
-        compatibleOneproviderVersions => CompatibleOpVersions,
-        subdomainDelegationSupported => SubdomainDelegationSupported,
-        supportedIdPs => auth_config:get_supported_idps_in_configuration_format()
+        <<"name">> => utils:undefined_to_null(oz_worker:get_name()),
+        <<"version">> => Version,
+        <<"build">> => oz_worker:get_build_version(),
+        <<"domain">> => oz_worker:get_domain(),
+        <<"subdomainDelegationSupported">> => SubdomainDelegationSupported,
+        <<"supportedIdPs">> => auth_config:get_supported_idps_in_configuration_format(),
+        <<"compatibilityRegistryRevision">> => CompatibilityRegistryRevision,
+        <<"compatibleOneproviderVersions">> => CompatibleOpVersions
     }};
 
 get(#el_req{gri = #gri{aspect = test_image}}, _) ->
@@ -225,3 +227,18 @@ validate(#el_req{operation = update, gri = #gri{aspect = {gui_message, _}}}) ->
             <<"body">> => {binary, any}
         }
     }.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%% @private
+-spec query_compatibility_registry(Fun :: atom(), Args :: [term()]) -> term().
+query_compatibility_registry(Fun, Args) ->
+    case apply(compatibility, Fun, Args) of
+        {ok, SuccessfulResult} ->
+            SuccessfulResult;
+        {error, _} = Error->
+            ?debug("Error querying registry - ~w:~w(~p) -> ~p", [compatibility, Fun, Args, Error]),
+            <<"unknown">>
+    end.

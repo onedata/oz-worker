@@ -19,6 +19,9 @@
 % Endpoint for nagios healthcheck
 -define(NAGIOS_PATH, "/nagios").
 
+% Endpoint to get the current compatibility registry
+-define(COMPATIBILITY_REG_PATH, "/compatibility.json").
+
 % Endpoint for viewing public shares
 -define(SHARE_ID_BINDING, share_id).
 -define(PUBLIC_SHARE_COWBOY_ROUTE, "/share/:share_id").

@@ -118,11 +118,13 @@ create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PRO
         true -> throw(?ERROR_REQUIRES_IMPORTED_STORAGE(<<"'newly created storage'">>));
         _ -> ok
     end,
+    StorageId = ensure_id(ProposedId),
+    ExtendedQosParameters = add_implicit_qos_parameters(StorageId, ProviderId, QosParameters),
     StorageDoc = #document{
-        key = ProposedId,
+        key = StorageId,
         value = #od_storage{
             name = Name,
-            qos_parameters = QosParameters,
+            qos_parameters = ExtendedQosParameters,
             imported = ImportedStorage,
             readonly = Readonly,
             provider = ProviderId,
@@ -229,7 +231,38 @@ get(#el_req{gri = #gri{aspect = spaces}}, #od_storage{spaces = Spaces}) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = StorageId, aspect = instance}, data = Data}) ->
-    space_support:update_storage(StorageId, Data);
+    % critical section to avoid race condition with space support
+    space_support:lock_on_storage(StorageId, fun() ->
+        SupportsAnySpace = supports_any_space(StorageId),
+        ?extract_ok(od_storage:update(StorageId, fun(Storage) ->
+            #od_storage{
+                name = Name,
+                provider = ProviderId,
+                qos_parameters = QosParameters,
+                imported = ImportedStorage,
+                readonly = Readonly
+            } = Storage,
+
+            NewName = maps:get(<<"name">>, Data, Name),
+            NewQosParameters = maps:get(<<"qosParameters">>, Data, QosParameters),
+            NewImportedStorage = maps:get(<<"imported">>, Data, ImportedStorage),
+            NewReadonly = maps:get(<<"readonly">>, Data, Readonly),
+            try
+                check_imported_storage_value(ImportedStorage, NewImportedStorage, SupportsAnySpace),
+                check_readonly_value(NewReadonly, NewImportedStorage, StorageId),
+                ExtendedNewQosParameters = add_implicit_qos_parameters(StorageId, ProviderId, NewQosParameters),
+                {ok, Storage#od_storage{
+                    name = NewName,
+                    qos_parameters = ExtendedNewQosParameters,
+                    imported = NewImportedStorage,
+                    readonly = NewReadonly
+                }}
+            catch
+                throw:{error, Error} ->
+                    {error, Error}
+            end
+        end))
+    end);
 
 update(Req = #el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
     NewSupportSize = maps:get(<<"size">>, Req#el_req.data),
@@ -408,8 +441,20 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
 }.
 
 %%%===================================================================
-%%% API
+%%% Internal functions
 %%%===================================================================
+
+%% @private
+-spec ensure_id(undefined | od_storage:id()) -> od_storage:id().
+ensure_id(undefined) -> datastore_key:new();
+ensure_id(StorageId) -> StorageId.
+
+
+%% @private
+-spec supports_any_space(od_storage:record() | od_storage:id()) -> boolean().
+supports_any_space(#od_storage{spaces = Spaces}) ->
+    map_size(Spaces) > 0.
+
 
 %% @private
 -spec auth_by_support(od_provider:id(), od_storage:record() | od_storage:id(), od_space:id()) ->
@@ -417,3 +462,40 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
 auth_by_support(ProviderId, StorageOrId, SpaceId) ->
     storage_logic:belongs_to_provider(StorageOrId, ProviderId) andalso
         storage_logic:supports_space(StorageOrId, SpaceId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @private
+%% Modification of imported value should be blocked if storage supports any space
+%% unless it was previously `unknown` meaning that storage was created by legacy provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec check_imported_storage_value(PreviousValue :: boolean() | unknown, NewValue :: boolean(),
+    SupportsAnySpace :: boolean()) -> ok | no_return().
+check_imported_storage_value(unknown = _PreviousValue, _NewValue, _SupportsAnySpace) -> ok;
+check_imported_storage_value(_PreviousValue, _NewValue, false = _SupportsAnySpace) -> ok;
+check_imported_storage_value(PreviousValue, PreviousValue = _NewValue, _SupportsAnySpace) -> ok;
+check_imported_storage_value(_PreviousValue, _NewValue, _SupportsAnySpace) -> throw(?ERROR_STORAGE_IN_USE).
+
+
+%% @private
+-spec check_readonly_value(ReadonlyValue :: boolean(), IsImportedStorage :: boolean(), od_storage:id()) ->
+    ok | no_return().
+check_readonly_value(true = _ReadonlyValue, false = _IsImportedStorage, StorageId) ->
+    throw(?ERROR_REQUIRES_IMPORTED_STORAGE(StorageId));
+check_readonly_value(_ReadonlyValue, _IsImportedStorage, _StorageId) -> ok.
+
+
+%% @private
+-spec add_implicit_qos_parameters(od_storage:id(), od_provider:id(), od_storage:qos_parameters()) ->
+    od_storage:qos_parameters() | no_return().
+add_implicit_qos_parameters(_StorageId, ProviderId, #{<<"providerId">> := OtherProvider}) when ProviderId =/= OtherProvider ->
+    throw(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.providerId">>, [ProviderId]));
+add_implicit_qos_parameters(StorageId, _ProviderId, #{<<"storageId">> := OtherStorage}) when StorageId =/= OtherStorage ->
+    throw(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.storageId">>, [StorageId]));
+add_implicit_qos_parameters(StorageId, ProviderId, QosParameters) ->
+    QosParameters#{
+        <<"storageId">> => StorageId,
+        <<"providerId">> => ProviderId
+    }.

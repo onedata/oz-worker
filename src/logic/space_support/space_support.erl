@@ -95,11 +95,11 @@
 
 -export([force_unsupport/3]).
 
--export([update_storage/2]).
-
 -export([upgrade_support_to_20_02/3]).
 -export([upgrade_support_to_21_02/3]).
 -export([migrate_all_supports_to_21_02_model/0]).
+
+-export([lock_on_storage/2, lock_on_space_support/3]).
 
 -define(CHECK_TRANSITION(Term), case Term of
     {ok, __NewRegistry} -> __NewRegistry;
@@ -338,42 +338,6 @@ force_unsupport(ProviderId, StorageId, SpaceId) ->
     finalize_unsupport(ProviderId, StorageId, SpaceId).
 
 
--spec update_storage(od_storage:id(), entity_logic:data()) -> ok | errors:error().
-update_storage(StorageId, Data) ->
-    lock_on_storage(StorageId, fun() ->
-        ?extract_ok(od_storage:update(StorageId, fun(Storage) ->
-            #od_storage{
-                name = Name,
-                qos_parameters = QosParameters,
-                imported = Imported,
-                readonly = Readonly
-            } = Storage,
-            NewName = maps:get(<<"name">>, Data, Name),
-            NewQosParameters = maps:get(<<"qosParameters">>, Data, QosParameters),
-            NewImported = maps:get(<<"imported">>, Data, Imported),
-            NewReadonly = maps:get(<<"readonly">>, Data, Readonly),
-            % Modification of imported value should be blocked if storage supports any space,
-            % unless it was previously `unknown` meaning that the storage was created by a legacy provider.
-            case (Imported /= unknown) and (Imported /= NewImported) and supports_any_space(Storage) of
-                true ->
-                    ?ERROR_STORAGE_IN_USE;
-                false ->
-                    case NewReadonly andalso NewImported =:= false of
-                        true ->
-                            ?ERROR_REQUIRES_IMPORTED_STORAGE(StorageId);
-                        false ->
-                            {ok, Storage#od_storage{
-                                name = NewName,
-                                qos_parameters = NewQosParameters,
-                                imported = NewImported,
-                                readonly = NewReadonly
-                            }}
-                    end
-            end
-        end))
-    end).
-
-
 %%--------------------------------------------------------------------
 %% @doc
 %% Providers that are upgraded from version 19.02 to 20.02 call this operation
@@ -483,6 +447,31 @@ migrate_all_supports_to_21_02_model() ->
     end, Spaces),
     ?notice("Successfully migrated space supports").
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Used to avoid race conditions between added/removed supported spaces
+%% and storage modification.
+%% @end
+%%--------------------------------------------------------------------
+-spec lock_on_storage(od_storage:id(), fun(() -> Term)) -> Term.
+lock_on_storage(StorageId, Fun) ->
+    critical_section:run({storage_lock, StorageId}, Fun).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Used to avoid race conditions when adding/removing relations between spaces/storages
+%% and to avoid simultaneous supports by 2 providers with imported storage.
+%% @end
+%%--------------------------------------------------------------------
+-spec lock_on_space_support(od_storage:id(), od_space:id(), fun(() -> Term)) -> Term.
+lock_on_space_support(StorageId, SpaceId, Fun) ->
+    lock_on_storage(StorageId, fun() ->
+        critical_section:run({space_support, SpaceId}, Fun)
+    end).
+
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -575,12 +564,6 @@ apply_transition_within_space(SpaceId, Space, ProviderId, RegistryTransitionFun)
 
 
 %% @private
--spec supports_any_space(od_storage:record() | od_storage:id()) -> boolean().
-supports_any_space(#od_storage{spaces = Spaces}) ->
-    map_size(Spaces) > 0.
-
-
-%% @private
 -spec is_imported_storage(od_storage:id() | od_storage:record()) -> boolean() | no_return().
 is_imported_storage(#od_storage{imported = ImportedStorage}) ->
     ImportedStorage == true;
@@ -603,20 +586,3 @@ ensure_space_not_supported_by_imported_storage(SpaceId) ->
 -spec ensure_storage_not_supporting_any_space(od_storage:record()) -> false | no_return().
 ensure_storage_not_supporting_any_space(Storage) ->
     supports_any_space(Storage) andalso throw(?ERROR_STORAGE_IN_USE).
-
-
-%% @private
-%% @doc used to avoid race conditions between added/removed supported spaces and storage modification
--spec lock_on_storage(od_storage:id(), fun(() -> Term)) -> Term.
-lock_on_storage(StorageId, Fun) ->
-    critical_section:run({storage_lock, StorageId}, Fun).
-
-
-%% @private
-%% @doc used to avoid race conditions between added/removed relations between spaces/storages
-%%      and avoid simultaneous supports by 2 providers with imported storage
--spec lock_on_space_support(od_storage:id(), od_space:id(), fun(() -> Term)) -> Term.
-lock_on_space_support(StorageId, SpaceId, Fun) ->
-    lock_on_storage(StorageId, fun() ->
-        critical_section:run({space_support, SpaceId}, Fun)
-    end).
