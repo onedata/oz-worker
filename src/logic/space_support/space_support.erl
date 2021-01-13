@@ -583,6 +583,8 @@ ensure_space_not_supported_by_imported_storage(SpaceId) ->
 
 
 %% @private
--spec ensure_storage_not_supporting_any_space(od_storage:record()) -> false | no_return().
-ensure_storage_not_supporting_any_space(Storage) ->
-    supports_any_space(Storage) andalso throw(?ERROR_STORAGE_IN_USE).
+-spec ensure_storage_not_supporting_any_space(od_storage:record()) -> ok | no_return().
+ensure_storage_not_supporting_any_space(#od_storage{spaces = Spaces}) when map_size(Spaces) =:= 0 ->
+    ok;
+ensure_storage_not_supporting_any_space(_) ->
+    throw(?ERROR_STORAGE_IN_USE).
