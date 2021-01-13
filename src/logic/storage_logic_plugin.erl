@@ -233,7 +233,6 @@ get(#el_req{gri = #gri{aspect = spaces}}, #od_storage{spaces = Spaces}) ->
 update(#el_req{gri = #gri{id = StorageId, aspect = instance}, data = Data}) ->
     % critical section to avoid race condition with space support
     space_support:lock_on_storage(StorageId, fun() ->
-        SupportsAnySpace = supports_any_space(StorageId),
         ?extract_ok(od_storage:update(StorageId, fun(Storage) ->
             #od_storage{
                 name = Name,
@@ -248,6 +247,7 @@ update(#el_req{gri = #gri{id = StorageId, aspect = instance}, data = Data}) ->
             NewImportedStorage = maps:get(<<"imported">>, Data, ImportedStorage),
             NewReadonly = maps:get(<<"readonly">>, Data, Readonly),
             try
+                SupportsAnySpace = supports_any_space(Storage),
                 check_imported_storage_value(ImportedStorage, NewImportedStorage, SupportsAnySpace),
                 check_readonly_value(NewReadonly, NewImportedStorage, StorageId),
                 ExtendedNewQosParameters = add_implicit_qos_parameters(StorageId, ProviderId, NewQosParameters),
