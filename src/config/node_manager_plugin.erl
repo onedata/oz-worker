@@ -124,10 +124,16 @@ before_init() ->
 %% @doc
 %% Callback executed before cluster upgrade so that any required preparation
 %% can be done.
+%% This callback is executed on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
 -spec before_cluster_upgrade() -> ok.
-before_cluster_upgrade() -> ok.
+before_cluster_upgrade() ->
+    % logic that should be run on a single node
+    case is_dedicated_node(cluster_setup) of
+        true -> entity_graph:init_state();
+        false -> ok
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -161,17 +167,16 @@ custom_workers() ->
 -spec on_db_and_workers_ready() -> ok | {error, Reason :: term()}.
 on_db_and_workers_ready() ->
     try
-        % Logic that should be run on every node of the cluster
+        % logic that should be run on every node of the cluster
         onezone_plugins:init(),
 
-        % Logic that should be run on a single node
+        % logic that should be run on a single node
         case is_dedicated_node(cluster_setup) of
             false ->
                 ok;
             true ->
                 cluster_logic:set_up_oz_worker_service(),
                 harvester_logic:deploy_default_gui_package(),
-                entity_graph:init_state(),
                 broadcast_dns_config(),
                 group_logic:ensure_predefined_groups()
         end
