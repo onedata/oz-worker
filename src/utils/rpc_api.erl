@@ -15,25 +15,21 @@
 -include("entity_logic.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/errors.hrl").
--include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/oz/oz_users.hrl").
 
 -export([apply/2]).
 -export([
-    get_zone_configuration/0, get_env/1,
     authenticate_by_token/2,
     get_protected_provider_data/2, deploy_static_gui_package/4,
-    update_cluster_version_info/4, set_user_password/3, create_user/1, create_user/2,
-    create_group/2, add_user_to_group/3, get_group_users/2, list_users/1, user_exists/1, username_exists/1,
-    get_user_details/1, get_user_details/2, get_user_protected_data/2, authenticate/2, migrate_onepanel_user_to_onezone/4,
+    update_cluster_version_info/4, set_user_password/3, create_user/2,
+    add_user_to_group/3, list_users/1, user_exists/1, username_exists/1,
+    get_user_details/1, get_user_details/2, migrate_onepanel_user_to_onezone/4,
     cluster_get_eff_user_privileges/3, get_protected_cluster_data/2,
     get_eff_clusters_by_user_auth/1, cluster_logic_get_users/2,
     cluster_logic_get_eff_users/2, cluster_logic_get_groups/2,
     cluster_logic_get_eff_groups/2, cluster_logic_create_invite_token_for_admin/2,
     reconcile_dns_config/0, dns_config_get_ns_hosts/0,
-    gui_message_exists/1, get_gui_message_as_map/1, update_gui_message/3,
-    create_space/3, create_space_support_token/2, list_spaces/1, delete_space/2,
-    get_token_logic_required_admin_priviliges/1
+    gui_message_exists/1, get_gui_message_as_map/1, update_gui_message/3
 ]).
 
 
@@ -63,15 +59,6 @@ apply(Function, Args) ->
 %%%===================================================================
 %%% Exposed functions
 %%%===================================================================
--spec get_zone_configuration() -> {ok, #{atom() := term()}} | {error, Reason :: term()}.
-get_zone_configuration() ->
-    zone_logic:get_configuration().
-
-
--spec get_env(Key :: atom()) -> term() | no_return().
-get_env(Env) ->
-    oz_worker:get_env(Env).
-
 
 -spec authenticate_by_token(tokens:serialized() | tokens:token(), aai:auth_ctx()) ->
     {true, aai:auth()} | {error, term()}.
@@ -106,34 +93,16 @@ set_user_password(Auth, UserId, NewPassword) ->
     user_logic:set_password(Auth, UserId, NewPassword).
 
 
--spec create_user(aai:auth()) ->
-    {ok, od_user:id()} | errors:error().
-create_user(Auth) ->
-    user_logic:create(Auth).
-
-
 -spec create_user(aai:auth(), Data :: map()) ->
     {ok, od_user:id()} | errors:error().
 create_user(Auth, Data) ->
     user_logic:create(Auth, Data).
 
 
--spec create_group(Auth :: aai:auth(), Data :: map()) ->
-    {ok, od_user:id()} | errors:error().
-create_group(Auth, GroupName) ->
-    group_logic:create(Auth, GroupName).
-
-
 -spec add_user_to_group(aai:auth(), od_group:id(), od_user:id()) ->
     {ok, od_user:id()} | {error, term()}.
 add_user_to_group(Auth, GroupId, UserId) ->
     group_logic:add_user(Auth, GroupId, UserId).
-
-
--spec get_group_users(Auth :: aai:auth(), GroupId :: od_group:id()) ->
-    {ok, [od_user:id()]} | errors:error().
-get_group_users(Auth, GroupId) ->
-    group_logic:get_users(Auth, GroupId).
 
 
 -spec list_users(aai:auth()) -> {ok, [od_user:id()]} | {error, term()}.
@@ -158,13 +127,6 @@ username_exists(Username) ->
 get_user_details(#auth{subject = ?SUB(user, UserId)} = Auth) ->
     get_user_details(Auth, UserId).
 
-
--spec authenticate(od_user:username(), binary()) ->
-    {true, aai:auth()} | errors:unauthorized_error().
-authenticate(UserName, Password) ->
-    basic_auth:authenticate(UserName, Password).
-
-
 -spec get_user_details(aai:auth(), od_user:id()) ->
     {ok, #user_details{}} | {error, term()}.
 get_user_details(Auth, UserId) ->
@@ -184,12 +146,6 @@ get_user_details(Auth, UserId) ->
         {error, _} = Error ->
             Error
     end.
-
-
--spec get_user_protected_data(aai:auth(), od_user:id()) ->
-    {ok, map()} | {error, term()}.
-get_user_protected_data(Auth, UserId) ->
-    user_logic:get_protected_data(Auth, UserId).
 
 
 -spec migrate_onepanel_user_to_onezone(OnepanelUserId :: binary(),
@@ -284,33 +240,3 @@ get_gui_message_as_map(MessageId) ->
     ok | {error, term()}.
 update_gui_message(Auth, MessageId, Data) ->
     zone_logic:update_gui_message(Auth, MessageId, Data).
-
-
--spec create_space(Auth :: aai:auth(), UserId :: od_user:id(),
-    NameOrData :: binary() | #{}) -> {ok, od_space:id()} | errors:error().
-create_space(Config, UserId, NameOrData) ->
-    user_logic:create_space(Config, UserId, NameOrData).
-
-
--spec create_space_support_token(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, tokens:token()} | errors:error().
-create_space_support_token(Auth, SpaceId) ->
-    space_logic:create_space_support_token(Auth, SpaceId).
-
-
--spec list_spaces(Auth :: aai:auth()) ->
-    {ok, [od_space:id()]} | errors:error().
-list_spaces(Auth) ->
-    space_logic:list(Auth).
-
-
--spec delete_space(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    ok | errors:error().
-delete_space(Auth, SpaceId) ->
-    space_logic:delete(Auth, SpaceId).
-
-
--spec get_token_logic_required_admin_priviliges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
-get_token_logic_required_admin_priviliges(Arg) ->
-    token_logic_plugin:required_admin_privileges(Arg).
-
