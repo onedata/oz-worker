@@ -507,6 +507,7 @@ upgrade_record(6, Provider) ->
         Name,
         AdminEmail,
         RootMacaroon,
+
         SubdomainDelegation,
         Domain,
         Subdomain,
@@ -530,6 +531,7 @@ upgrade_record(6, Provider) ->
         Name,
         AdminEmail,
         RootMacaroon,
+
         SubdomainDelegation,
         Domain,
         Subdomain,
@@ -566,8 +568,8 @@ upgrade_record(7, Provider) ->
 
         EffUsers,
         EffGroups,
-        EffHarvesters,
         EffSpaces,
+        EffHarvesters,
 
         CreationTime,
         LastActivity,
@@ -590,8 +592,8 @@ upgrade_record(7, Provider) ->
 
         eff_users = EffUsers,
         eff_groups = EffGroups,
-        eff_harvesters = EffHarvesters,
         eff_spaces = EffSpaces,
+        eff_harvesters = EffHarvesters,
 
         creation_time = CreationTime,
         connection_status = provider_connection_status:new_by_last_activity(LastActivity),
