@@ -55,7 +55,16 @@ handle(<<"GET">>, Req) ->
         end,
 
         ServiceType = onedata:service_type(Service),
-        {ok, Domain} = cluster_logic:get_domain(ClusterId),
+
+        % in case of Onezone, use the same host as requested by the client
+        % (i.e. the same address that the client visited in his web browser)
+        Domain = case ClusterId of
+            ?ONEZONE_CLUSTER_ID ->
+                cowboy_req:host(Req);
+            _ ->
+                {ok, ServiceDomain} = cluster_logic:get_domain(ClusterId),
+                ServiceDomain
+        end,
         ApiOrigin = case {ServiceType, OnepanelProxy} of
             {?WORKER, _} -> Domain;
             {?ONEPANEL, true} -> Domain;
