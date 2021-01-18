@@ -60,6 +60,57 @@ port() ->
 %%--------------------------------------------------------------------
 -spec start() -> ok | {error, Reason :: term()}.
 start() ->
+    gui:start(gui_config()).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link listener_behaviour} callback stop/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec stop() -> ok | {error, Reason :: term()}.
+stop() ->
+    gui:stop().
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link listener_behaviour} callback restart_and_reload_web_certs/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec restart_and_reload_web_certs() -> ok | {error, term()}.
+restart_and_reload_web_certs() ->
+    gui:restart_and_reload_web_certs(gui_config()).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link listener_behaviour} callback healthcheck/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec healthcheck() -> ok | {error, server_not_responding}.
+healthcheck() ->
+    gui:healthcheck().
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns intermediate CA chain in PEM format for gui web cert.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_cert_chain_pems() -> [public_key:der_encoded()].
+get_cert_chain_pems() ->
+    gui:get_cert_chain_pems().
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+
+%% @private
+-spec gui_config() -> gui:gui_config().
+gui_config() ->
     % Get certs
     KeyFile = oz_worker:get_env(web_key_file),
     CertFile = oz_worker:get_env(web_cert_file),
@@ -95,7 +146,7 @@ start() ->
         {?VALIDATE_DEV_LOGIN_PATH, [<<"GET">>], page_validate_dev_login}
     ],
 
-    gui:start(#gui_config{
+    #gui_config{
         port = port(),
         key_file = KeyFile,
         cert_file = CertFile,
@@ -106,50 +157,4 @@ start() ->
         dynamic_pages = DynamicPageRoutes,
         custom_cowboy_routes = CustomCowboyRoutes,
         custom_response_headers = fun gui_static:maybe_add_cache_control_headers/1
-    }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link listener_behaviour} callback stop/0.
-%% @end
-%%--------------------------------------------------------------------
--spec stop() -> ok | {error, Reason :: term()}.
-stop() ->
-    gui:stop().
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link listener_behaviour} callback restart_and_reload_web_certs/0.
-%% @end
-%%--------------------------------------------------------------------
--spec restart_and_reload_web_certs() -> ok | {error, term()}.
-restart_and_reload_web_certs() ->
-    case stop() of
-        ok ->
-            ssl:clear_pem_cache(),
-            start();
-        {error, _} = Error ->
-            Error
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link listener_behaviour} callback healthcheck/0.
-%% @end
-%%--------------------------------------------------------------------
--spec healthcheck() -> ok | {error, server_not_responding}.
-healthcheck() ->
-    gui:healthcheck().
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns intermediate CA chain in PEM format for gui web cert.
-%% @end
-%%--------------------------------------------------------------------
--spec get_cert_chain_pems() -> [public_key:der_encoded()].
-get_cert_chain_pems() ->
-    gui:get_cert_chain_pems().
+    }.

@@ -36,7 +36,7 @@
 )).
 
 %% listener_behaviour callbacks
--export([port/0, start/0, stop/0, healthcheck/0]).
+-export([port/0, start/0, stop/0, restart_and_reload_web_certs/0, healthcheck/0]).
 -export([set_response_to_letsencrypt_challenge/2]).
 
 %%%===================================================================
@@ -100,6 +100,17 @@ stop() ->
                 [?HTTP_LISTENER, Error]),
             {error, redirector_stop_error}
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link listener_behaviour} callback restart_and_reload_web_certs/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec restart_and_reload_web_certs() -> ok | {error, term()}.
+restart_and_reload_web_certs() ->
+    stop(),
+    start().
 
 
 %%--------------------------------------------------------------------
