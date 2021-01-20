@@ -187,11 +187,10 @@ verify_invite_token(Token = #token{type = ReceivedType}, ExpectedType, AuthCtx) 
 %%--------------------------------------------------------------------
 %% @doc
 %% Verifies a service token and returns the service upon success.
-%% The service token is a regular access token put in a proper header and sent
-%% along with the subject's access token, however it allows less caveats than
-%% a typical access token. It is used to prove the identity of token bearer,
-%% which may be required to satisfy a service caveat of the subject's access
-%% token.
+%% Service token is an identity token put in a proper header and sent
+%% along with the subject's access token. It is used to prove the identity
+%% of token bearer, which may be required to satisfy a service caveat
+%% of the subject's access token.
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_service_token(tokens:token() | tokens:serialized(), aai:auth_ctx()) ->
@@ -230,11 +229,10 @@ verify_service_token(ServiceToken, AuthCtx) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Verifies a consumer token and returns the consumer upon success.
-%% The consumer token is a regular access token put in a proper header and sent
-%% along with the subject's access token, however it allows less caveats than
-%% a typical access token. It is used to prove the identity of token bearer,
-%% which may be required to satisfy a consumer caveat of the subject's access
-%% token.
+%% Consumer token is an identity token put in a proper header and sent
+%% along with the subject's access token. It is used to prove the identity
+%% of token bearer, which may be required to satisfy a consumer caveat
+%% of the subject's access token.
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_consumer_token(tokens:token() | tokens:serialized(), aai:auth_ctx()) ->

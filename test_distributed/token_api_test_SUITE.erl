@@ -42,6 +42,7 @@
     create_user_temporary_token/1,
     create_provider_temporary_token/1,
     create_access_token_for_gui/1,
+    create_offline_user_access_token/1,
     list/1,
     list_user_named_tokens/1,
     list_provider_named_tokens/1,
@@ -71,6 +72,7 @@ all() ->
         create_user_temporary_token,
         create_provider_temporary_token,
         create_access_token_for_gui,
+        create_offline_user_access_token,
         list,
         list_user_named_tokens,
         list_provider_named_tokens,
@@ -931,6 +933,146 @@ confine_base(AllClients, Token, InitialCaveats, CaveatsToAdd) ->
     consumer = any :: any | undefined | aai:consumer_spec(),
     allow_data_access_caveats = any :: any | undefined | boolean()
 }).
+
+access_token_verification_data_spec(Token, AccessTokenCtx) ->
+    #access_token_ctx{
+        peer_ip = PeerIp,
+        interface = Interface,
+        service = Service,
+        consumer = Consumer,
+        allow_data_access_caveats = AllowDataAccessCaveats
+    } = AccessTokenCtx,
+
+    ConsumerToken = case Consumer of
+        any ->
+            User = ozt_users:create(),
+            ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, ?SUB(user, User), ?IDENTITY_TOKEN));
+        undefined ->
+            undefined;
+        _ ->
+            ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, Consumer, ?IDENTITY_TOKEN))
+    end,
+
+    ServiceToken = case Service of
+        any ->
+            case Token#token.subject of
+                ?SUB(user, UserId) ->
+                    ProvId = ozt_providers:create_as_support_for_user(UserId),
+                    ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, ProvId), ?IDENTITY_TOKEN));
+                ?SUB(?ONEPROVIDER) ->
+                    undefined
+            end;
+        ?SERVICE(OpService, ProvId) when OpService == ?OP_WORKER orelse OpService == ?OP_PANEL ->
+            tokens:add_oneprovider_service_indication(
+                OpService,
+                ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, ProvId), ?IDENTITY_TOKEN))
+            );
+        _ ->
+            undefined
+    end,
+    #data_spec{
+        % Peer IP, interface, service, consumer and allowDataAccessCaveats
+        % flag can be required to verify a token, but generally they are
+        % optional in the API.
+        required = lists:flatten([
+            <<"token">>,
+            case PeerIp of
+                any -> [];
+                undefined -> [];
+                _ -> [<<"peerIp">>]
+            end,
+            case Interface of
+                any -> [];
+                undefined -> [];
+                _ -> [<<"interface">>]
+            end,
+            case ServiceToken of
+                undefined -> [];
+                _ -> [<<"serviceToken">>]
+            end,
+            case ConsumerToken of
+                undefined -> [];
+                _ -> [<<"consumerToken">>]
+            end,
+            case AllowDataAccessCaveats of
+                any -> [];
+                undefined -> [];
+                _ -> [<<"allowDataAccessCaveats">>]
+            end
+        ]),
+        optional = lists:flatten([
+            case PeerIp of
+                any -> [<<"peerIp">>];
+                undefined -> [];
+                _ -> []
+            end,
+            case Interface of
+                any -> [<<"interface">>];
+                undefined -> [];
+                _ -> []
+            end,
+            case {Service, ServiceToken} of
+                {any, undefined} -> [];
+                {any, _} -> [<<"serviceToken">>];
+                _ -> []
+            end,
+            case Consumer of
+                any -> [<<"consumerToken">>];
+                _ -> []
+            end,
+            case AllowDataAccessCaveats of
+                any -> [<<"allowDataAccessCaveats">>];
+                undefined -> [];
+                _ -> []
+            end
+        ]),
+        correct_values = #{
+            <<"token">> => [ozt_tokens:ensure_serialized(Token)],
+            <<"peerIp">> => case PeerIp of
+                any -> [<<"1.2.3.4">>, <<"5.6.7.8">>];
+                undefined -> [];
+                _ -> [utils:undefined_to_null(PeerIp)]
+            end,
+            <<"interface">> => case Interface of
+                any -> cv_interface:valid_interfaces();
+                undefined -> [];
+                _ -> [Interface]
+            end,
+            <<"serviceToken">> => case ServiceToken of
+                undefined -> [];
+                _ -> [ServiceToken]
+            end,
+            <<"consumerToken">> => case ConsumerToken of
+                undefined -> [];
+                _ -> [ConsumerToken]
+            end,
+            <<"allowDataAccessCaveats">> => case AllowDataAccessCaveats of
+                any -> [true, false];
+                undefined -> [];
+                _ -> [AllowDataAccessCaveats]
+            end
+        },
+        bad_values = lists:flatten([
+            {<<"token">>, <<"1234">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
+            {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
+            {<<"token">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
+            {<<"peerIp">>, <<"1234.6.78.19">>, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
+            {<<"peerIp">>, 1234, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
+            {<<"peerIp">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
+            {<<"interface">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_ATOM(<<"interface">>)},
+            {<<"interface">>, <<"graphSync">>,
+                ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"interface">>, cv_interface:valid_interfaces())},
+            {<<"serviceToken">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_TOKEN(<<"serviceToken">>, ?ERROR_BAD_TOKEN)},
+            {<<"serviceToken">>, <<"graphSync">>, ?ERROR_BAD_VALUE_TOKEN(<<"serviceToken">>, ?ERROR_BAD_TOKEN)},
+            {<<"consumerToken">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_TOKEN(<<"consumerToken">>, ?ERROR_BAD_TOKEN)},
+            {<<"consumerToken">>, <<"graphSync">>, ?ERROR_BAD_VALUE_TOKEN(<<"consumerToken">>, ?ERROR_BAD_TOKEN)},
+            {<<"allowDataAccessCaveats">>, <<"1234">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"allowDataAccessCaveats">>)},
+            {<<"allowDataAccessCaveats">>, 1234, ?ERROR_BAD_VALUE_BOOLEAN(<<"allowDataAccessCaveats">>)},
+            {<<"allowDataAccessCaveats">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_BOOLEAN(<<"allowDataAccessCaveats">>)}
+        ])
+    }.
+
+
 verify_access_token(_Config) ->
     User = ozt_users:create(),
     ProviderAdmin = ozt_users:create(),
@@ -1113,42 +1255,6 @@ verify_access_token(_Config) ->
 
 
 verify_access_token_base(AllClients, Token, AccessTokenCtx, ShouldSucceed, ExpResult) ->
-    #access_token_ctx{
-        peer_ip = PeerIp,
-        interface = Interface,
-        service = Service,
-        consumer = Consumer,
-        allow_data_access_caveats = AllowDataAccessCaveats
-    } = AccessTokenCtx,
-
-    ConsumerToken = case Consumer of
-        any ->
-            User = ozt_users:create(),
-            ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, ?SUB(user, User), ?IDENTITY_TOKEN));
-        undefined ->
-            undefined;
-        _ ->
-            ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, Consumer, ?IDENTITY_TOKEN))
-    end,
-
-    ServiceToken = case Service of
-        any ->
-            case Token#token.subject of
-                ?SUB(user, UserId) ->
-                    ProvId = ozt_providers:create_as_support_for_user(UserId),
-                    ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, ProvId), ?IDENTITY_TOKEN));
-                ?SUB(?ONEPROVIDER) ->
-                    undefined
-            end;
-        ?SERVICE(OpService, ProvId) when OpService == ?OP_WORKER orelse OpService == ?OP_PANEL ->
-            tokens:add_oneprovider_service_indication(
-                OpService,
-                ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, ProvId), ?IDENTITY_TOKEN))
-            );
-        _ ->
-            undefined
-    end,
-
     ?assert(api_test_utils:run_tests(ozt:get_test_config(), #api_test_spec{
         client_spec = #client_spec{
             correct = AllClients,
@@ -1190,107 +1296,7 @@ verify_access_token_base(AllClients, Token, AccessTokenCtx, ShouldSucceed, ExpRe
                     undefined
             end
         },
-        data_spec = #data_spec{
-            % Peer IP, interface, service, consumer and allowDataAccessCaveats
-            % flag can be required to verify a token, but generally they are
-            % optional in the API.
-            required = lists:flatten([
-                <<"token">>,
-                case PeerIp of
-                    any -> [];
-                    undefined -> [];
-                    _ -> [<<"peerIp">>]
-                end,
-                case Interface of
-                    any -> [];
-                    undefined -> [];
-                    _ -> [<<"interface">>]
-                end,
-                case ServiceToken of
-                    undefined -> [];
-                    _ -> [<<"serviceToken">>]
-                end,
-                case ConsumerToken of
-                    undefined -> [];
-                    _ -> [<<"consumerToken">>]
-                end,
-                case AllowDataAccessCaveats of
-                    any -> [];
-                    undefined -> [];
-                    _ -> [<<"allowDataAccessCaveats">>]
-                end
-            ]),
-            optional = lists:flatten([
-                case PeerIp of
-                    any -> [<<"peerIp">>];
-                    undefined -> [];
-                    _ -> []
-                end,
-                case Interface of
-                    any -> [<<"interface">>];
-                    undefined -> [];
-                    _ -> []
-                end,
-                case {Service, ServiceToken} of
-                    {any, undefined} -> [];
-                    {any, _} -> [<<"serviceToken">>];
-                    _ -> []
-                end,
-                case Consumer of
-                    any -> [<<"consumerToken">>];
-                    _ -> []
-                end,
-                case AllowDataAccessCaveats of
-                    any -> [<<"allowDataAccessCaveats">>];
-                    undefined -> [];
-                    _ -> []
-                end
-            ]),
-            correct_values = #{
-                <<"token">> => [ozt_tokens:ensure_serialized(Token)],
-                <<"peerIp">> => case PeerIp of
-                    any -> [<<"1.2.3.4">>, <<"5.6.7.8">>];
-                    undefined -> [];
-                    _ -> [utils:undefined_to_null(PeerIp)]
-                end,
-                <<"interface">> => case Interface of
-                    any -> cv_interface:valid_interfaces();
-                    undefined -> [];
-                    _ -> [Interface]
-                end,
-                <<"serviceToken">> => case ServiceToken of
-                    undefined -> [];
-                    _ -> [ServiceToken]
-                end,
-                <<"consumerToken">> => case ConsumerToken of
-                    undefined -> [];
-                    _ -> [ConsumerToken]
-                end,
-                <<"allowDataAccessCaveats">> => case AllowDataAccessCaveats of
-                    any -> [true, false];
-                    undefined -> [];
-                    _ -> [AllowDataAccessCaveats]
-                end
-            },
-            bad_values = lists:flatten([
-                {<<"token">>, <<"1234">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                {<<"token">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                {<<"peerIp">>, <<"1234.6.78.19">>, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
-                {<<"peerIp">>, 1234, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
-                {<<"peerIp">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
-                {<<"interface">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_ATOM(<<"interface">>)},
-                {<<"interface">>, <<"graphSync">>,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"interface">>, cv_interface:valid_interfaces())},
-                {<<"serviceToken">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_TOKEN(<<"serviceToken">>, ?ERROR_BAD_TOKEN)},
-                {<<"serviceToken">>, <<"graphSync">>, ?ERROR_BAD_VALUE_TOKEN(<<"serviceToken">>, ?ERROR_BAD_TOKEN)},
-                {<<"consumerToken">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_TOKEN(<<"consumerToken">>, ?ERROR_BAD_TOKEN)},
-                {<<"consumerToken">>, <<"graphSync">>, ?ERROR_BAD_VALUE_TOKEN(<<"consumerToken">>, ?ERROR_BAD_TOKEN)},
-                {<<"allowDataAccessCaveats">>, <<"1234">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"allowDataAccessCaveats">>)},
-                {<<"allowDataAccessCaveats">>, 1234, ?ERROR_BAD_VALUE_BOOLEAN(<<"allowDataAccessCaveats">>)},
-                {<<"allowDataAccessCaveats">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_BOOLEAN(<<"allowDataAccessCaveats">>)}
-            ])
-        }
+        data_spec = access_token_verification_data_spec(Token, AccessTokenCtx)
     })).
 
 
@@ -2187,6 +2193,183 @@ create_access_token_for_gui(_Config) ->
             }
         }))
     end, Testcases).
+
+
+create_offline_user_access_token(_Config) ->
+    SubjectUser = ozt_users:create(),
+    SessionId = ozt_http:simulate_login(SubjectUser),
+    RequestingProvider = ozt_providers:create(),
+    Space = ozt_users:create_space_for(SubjectUser),
+    ozt_providers:support_space(RequestingProvider, Space),
+
+    AnotherUser = ozt_users:create(),
+    AnotherProvider = ozt_providers:create(),
+
+    TokenAlpha = create_user_temporary_token(SubjectUser, ?ACCESS_TOKEN, [
+        #cv_time{valid_until = ozt:timestamp_seconds() + 36000}
+    ]),
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenAlpha, #access_token_ctx{},
+        ok
+    ),
+
+    TokenBeta = create_user_temporary_token(SubjectUser, ?ACCESS_TOKEN(SessionId), [
+        #cv_time{valid_until = ozt:timestamp_seconds() + 18000},
+        #cv_consumer{whitelist = [?SUB(user, AnotherUser)]}
+    ]),
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenBeta, #access_token_ctx{},
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_consumer{whitelist = [?SUB(user, AnotherUser)]})
+    ),
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenBeta, #access_token_ctx{consumer = ?SUB(user, AnotherUser)},
+        ok
+    ),
+
+    #named_token_data{token = TokenGamma} = create_provider_named_token(
+        AnotherProvider, ?ACCESS_TOKEN, [
+            #cv_time{valid_until = ozt:timestamp_seconds() + 27000}
+        ]
+    ),
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenGamma, #access_token_ctx{},
+        ?ERROR_TOKEN_SUBJECT_INVALID
+    ),
+
+    TokenDelta = create_user_temporary_token(AnotherUser, ?ACCESS_TOKEN, [
+        #cv_time{valid_until = ozt:timestamp_seconds() + 36000}
+    ]),
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenDelta, #access_token_ctx{},
+        % the subject of provided token must match the user for whom offline access is requested
+        ?ERROR_TOKEN_SUBJECT_INVALID
+    ),
+
+    #named_token_data{token = TokenKappa} = create_user_named_token(
+        SubjectUser, ?ACCESS_TOKEN, [
+            #cv_ip{whitelist = [{{146, 193, 14, 0}, 24}]}
+        ]
+    ),
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenKappa, #access_token_ctx{},
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_ip{whitelist = [{{146, 193, 14, 0}, 24}]})
+    ),
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenKappa, #access_token_ctx{peer_ip = <<"146.193.14.86">>},
+        ok
+    ),
+
+    #named_token_data{token = TokenOmega} = create_user_named_token(
+        SubjectUser, ?ACCESS_TOKEN, [
+            #cv_interface{interface = rest},
+            #cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID), ?SERVICE(?OP_WORKER, RequestingProvider)]},
+            #cv_data_readonly{}
+        ]
+    ),
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenOmega, #access_token_ctx{
+            interface = undefined, service = ?SERVICE(?OP_WORKER, RequestingProvider), allow_data_access_caveats = true
+        },
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_interface{interface = rest})
+    ),
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenOmega, #access_token_ctx{
+            interface = rest, allow_data_access_caveats = true
+        },
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [
+            ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID), ?SERVICE(?OP_WORKER, RequestingProvider)
+        ]})
+    ),
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenOmega, #access_token_ctx{
+            interface = rest, service = ?SERVICE(?OP_WORKER, RequestingProvider), allow_data_access_caveats = undefined
+        },
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_data_readonly{})
+    ),
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenOmega, #access_token_ctx{
+            interface = rest, service = ?SERVICE(?OP_WORKER, RequestingProvider), allow_data_access_caveats = true
+        },
+        ok
+    ).
+
+
+create_offline_user_access_token_base(RequestingProvider, SubjectUser, Token, AccessTokenCtx, ExpectedResult) ->
+    ProviderAdmin = ozt_users:create(),
+    ozt_clusters:add_user(RequestingProvider, ProviderAdmin, privileges:cluster_admin()),
+    ozt_clusters:add_user(?ONEZONE_CLUSTER_ID, ProviderAdmin),
+    AnotherProvider = ozt_providers:create(),
+    ozt:reconcile_entity_graph(),
+
+    ExpectedTtl = ozt:get_env(offline_access_token_ttl),
+
+    ProviderIdentityToken = tokens:add_oneprovider_service_indication(
+        ?OP_WORKER,
+        ozt_tokens:ensure_serialized(ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, RequestingProvider), ?IDENTITY_TOKEN))
+    ),
+
+    VerifyFun = fun(OfflineAccessToken) ->
+        DeserializedToken = ozt_tokens:ensure_deserialized(OfflineAccessToken),
+        % use RPC as binary_to_existing_atom may fail on the testmaster during gri decoding
+        Caveats = ozt:rpc(tokens, get_caveats, [DeserializedToken]),
+        OfflineAuthContextWithoutInterface = #{
+            <<"token">> => OfflineAccessToken,
+            <<"serviceToken">> => ProviderIdentityToken,
+            <<"consumerToken">> => ProviderIdentityToken,
+            <<"allowDataAccessCaveats">> => case AccessTokenCtx#access_token_ctx.allow_data_access_caveats of
+                Bool when is_boolean(Bool) -> Bool;
+                _ -> false
+            end
+        },
+        OfflineAuthContext = maps_utils:put_if_defined(
+            OfflineAuthContextWithoutInterface, <<"interface">>, caveats:infer_interface(Caveats)
+        ),
+        ?assertEqual({ok, #{<<"subject">> => ?SUB(user, SubjectUser), <<"ttl">> => ExpectedTtl}}, ozt:rpc(
+            token_logic, verify_access_token, [?NOBODY, OfflineAuthContext#{<<"token">> => OfflineAccessToken}]
+        )),
+        % create another offline access token based off this token and check it too
+        ozt_mocks:simulate_seconds_passing(100),
+        {ok, ConsecutiveToken} = ?assertMatch({ok, _}, ozt:rpc(
+            token_logic, create_offline_user_access_token, [
+                ?PROVIDER(RequestingProvider), SubjectUser, OfflineAuthContext#{<<"token">> => OfflineAccessToken}
+            ])
+        ),
+        ?assertEqual({ok, #{<<"subject">> => ?SUB(user, SubjectUser), <<"ttl">> => ExpectedTtl}}, ozt:rpc(
+            token_logic, verify_access_token, [?NOBODY, OfflineAuthContext#{<<"token">> => ConsecutiveToken}]
+        ))
+    end,
+
+    ?assert(api_test_utils:run_tests(ozt:get_test_config(), #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {provider, RequestingProvider}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, ProviderAdmin},
+                {user, SubjectUser},
+                {provider, AnotherProvider}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = token_logic,
+            function = create_offline_user_access_token,
+            args = [auth, SubjectUser, data],
+            expected_result = case ExpectedResult of
+                ok -> ?OK_TERM(VerifyFun);
+                {error, _} = Error -> ?ERROR_REASON(Error)
+            end
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_token, id = undefined, aspect = {offline_user_access_token, SubjectUser}},
+            expected_result = case ExpectedResult of
+                ok -> ?OK_TERM(VerifyFun);
+                {error, _} = Error -> ?ERROR_REASON(Error)
+            end
+        },
+        data_spec = access_token_verification_data_spec(Token, AccessTokenCtx)
+    })).
 
 
 list(_Config) ->
