@@ -33,6 +33,7 @@
 -export([
     get_configuration_test/1,
     get_old_configuration_endpoint_test/1,
+    broken_compatibility_file_test/1,
     list_privileges_test/1,
     default_gui_messages_are_empty_or_migrated/1,
     unknown_gui_messages_are_not_found/1,
@@ -43,6 +44,7 @@ all() ->
     ?ALL([
         get_configuration_test,
         get_old_configuration_endpoint_test,
+        broken_compatibility_file_test,
         list_privileges_test,
         default_gui_messages_are_empty_or_migrated,
         unknown_gui_messages_are_not_found,
@@ -56,7 +58,7 @@ all() ->
 %%%===================================================================
 
 get_configuration_test(Config) ->
-    ApiTestSpec = #api_test_spec{
+    ?assert(api_test_utils:run_tests(Config, #api_test_spec{
         client_spec = #client_spec{
             correct = [root, nobody]
         },
@@ -66,14 +68,12 @@ get_configuration_test(Config) ->
             expected_code = ?HTTP_200_OK,
             expected_body = expected_configuration(Config)
         }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    })).
 
 
 %% Legacy endpoint should be available on path without the API prefix
 get_old_configuration_endpoint_test(Config) ->
     Domain = oz_test_utils:get_env(Config, http_domain),
-
     RestSpec = #{
         request => #{
             url => str_utils:format_bin("https://~s", [Domain]),
@@ -84,8 +84,41 @@ get_old_configuration_endpoint_test(Config) ->
             body => expected_configuration(Config)
         }
     },
-
     ?assert(rest_test_utils:check_rest_call(Config, RestSpec)).
+
+
+broken_compatibility_file_test(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    % prevent replacing the current compatibility registry during the tests
+    test_utils:set_env(Nodes, ctool, compatibility_registry_mirrors, []),
+    test_utils:set_env(Nodes, ctool, default_compatibility_registry_file, "not-a-valid-file-path.xxx"),
+
+    CurrentRegistryPath = rpc:call(hd(Nodes), ctool, get_env, [current_compatibility_registry_file]),
+
+    rpc:multicall(Nodes, file, delete, [CurrentRegistryPath]),
+    rpc:multicall(Nodes, compatibility, clear_registry_cache, []),
+    broken_compatibility_file_test_base(Config),
+
+    rpc:multicall(Nodes, file, write_file, [CurrentRegistryPath, <<"bad content">>]),
+    rpc:multicall(Nodes, compatibility, clear_registry_cache, []),
+    broken_compatibility_file_test_base(Config).
+
+
+broken_compatibility_file_test_base(Config) ->
+    ?assert(api_test_utils:run_tests(Config, #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, nobody]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/configuration">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = {contains, #{
+                <<"compatibilityRegistryRevision">> => <<"unknown">>,
+                <<"compatibleOneproviderVersions">> => <<"unknown">>
+            }}
+        }
+    })).
 
 
 list_privileges_test(Config) ->
@@ -217,7 +250,6 @@ gui_message_is_updated(Config) ->
         ApiTestSpec, undefined, undefined, VerifyFun)).
 
 
-
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
@@ -226,6 +258,7 @@ init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
+
 
 
 end_per_suite(_Config) ->
@@ -293,12 +326,13 @@ expected_configuration(Config) ->
         ]
     }),
 
-    MockedCompatibleVersions = [<<"18.02.0-rc13">>, <<"18.02.1">>, <<"18.02.2">>],
+    MockedCompatRevision = 2099123199,  % use a future revision to ensure registry is not updated
+    MockedCompatOpVersions = [<<"18.02.0-rc13">>, <<"18.02.1">>, <<"18.02.2">>],
     oz_test_utils:overwrite_compatibility_registry(Config, #{
-        <<"revision">> => 1,
+        <<"revision">> => MockedCompatRevision,
         <<"compatibility">> => #{
             <<"onezone:oneprovider">> => #{
-                OZVersion => MockedCompatibleVersions
+                OZVersion => MockedCompatOpVersions
             }
         }
     }),
@@ -308,9 +342,10 @@ expected_configuration(Config) ->
         <<"domain">> => OZDomain,
         <<"version">> => OZVersion,
         <<"build">> => OZBuild,
-        <<"compatibleOneproviderVersions">> => MockedCompatibleVersions,
         <<"subdomainDelegationSupported">> => SubdomainDelegationSupported,
-        <<"supportedIdPs">> => MockedSupportedIdPs
+        <<"supportedIdPs">> => MockedSupportedIdPs,
+        <<"compatibilityRegistryRevision">> => MockedCompatRevision,
+        <<"compatibleOneproviderVersions">> => MockedCompatOpVersions
     }.
 
 
