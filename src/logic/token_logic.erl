@@ -27,6 +27,7 @@
 -export([create_user_named_token/3, create_provider_named_token/3]).
 -export([create_user_temporary_token/3, create_provider_temporary_token/3]).
 -export([create_access_token_for_gui/4]).
+-export([create_offline_user_access_token/3]).
 -export([list/1]).
 -export([list_user_named_tokens/2, list_provider_named_tokens/2]).
 -export([get_named_token/2]).
@@ -176,6 +177,17 @@ create_access_token_for_gui(Auth, UserId, SessionId, Service) ->
         {ok, Token} -> {ok, {Token, Ttl}};
         {error, _} = Error -> Error
     end.
+
+
+-spec create_offline_user_access_token(aai:auth(), od_user:id(), entity_logic:data()) ->
+    {ok, tokens:token()} | errors:error().
+create_offline_user_access_token(Auth, UserId, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_token, id = undefined, aspect = {offline_user_access_token, UserId}},
+        data = Data
+    })).
 
 
 -spec list(aai:auth()) -> {ok, [tokens:id()]} | errors:error().

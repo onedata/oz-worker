@@ -25,6 +25,10 @@
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
 -define(MAX_TEMPORARY_TOKEN_TTL, oz_worker:get_env(max_temporary_token_ttl, 604800)). % 1 week
+-define(OFFLINE_ACCESS_TOKEN_TTL, min(
+    ?MAX_TEMPORARY_TOKEN_TTL,
+    oz_worker:get_env(offline_access_token_ttl, 604800) % 1 week
+)).
 
 %%%===================================================================
 %%% API
@@ -76,6 +80,7 @@ operation_supported(create, {user_named_token, _}, private) -> true;
 operation_supported(create, {provider_named_token, _}, private) -> true;
 operation_supported(create, {user_temporary_token, _}, private) -> true;
 operation_supported(create, {provider_temporary_token, _}, private) -> true;
+operation_supported(create, {offline_user_access_token, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
 operation_supported(get, {user_named_tokens, _}, private) -> true;
@@ -116,18 +121,6 @@ is_subscribable(_, _) -> false.
 %% Creates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
-create(#el_req{gri = #gri{id = undefined, aspect = {user_named_token, UserId}}, data = Data}) ->
-    create_named_token(?SUB(user, UserId), Data);
-
-create(#el_req{gri = #gri{id = undefined, aspect = {provider_named_token, ProviderId}}, data = Data}) ->
-    create_named_token(?SUB(?ONEPROVIDER, ProviderId), Data);
-
-create(#el_req{gri = #gri{id = undefined, aspect = {user_temporary_token, UserId}}, data = Data}) ->
-    create_temporary_token(?SUB(user, UserId), Data);
-
-create(#el_req{gri = #gri{id = undefined, aspect = {provider_temporary_token, ProviderId}}, data = Data}) ->
-    create_temporary_token(?SUB(?ONEPROVIDER, ProviderId), Data);
-
 create(#el_req{gri = #gri{id = undefined, aspect = examine}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
     #token{
@@ -190,43 +183,36 @@ create(#el_req{gri = #gri{id = undefined, aspect = verify_invite_token}, data = 
             }};
         {error, _} = Error ->
             Error
+    end;
+
+create(#el_req{gri = #gri{id = undefined, aspect = {user_named_token, UserId}}, data = Data}) ->
+    create_named_token(?SUB(user, UserId), Data);
+
+create(#el_req{gri = #gri{id = undefined, aspect = {provider_named_token, ProviderId}}, data = Data}) ->
+    create_named_token(?SUB(?ONEPROVIDER, ProviderId), Data);
+
+create(#el_req{gri = #gri{id = undefined, aspect = {user_temporary_token, UserId}}, data = Data}) ->
+    create_temporary_token(?SUB(user, UserId), Data);
+
+create(#el_req{gri = #gri{id = undefined, aspect = {provider_temporary_token, ProviderId}}, data = Data}) ->
+    create_temporary_token(?SUB(?ONEPROVIDER, ProviderId), Data);
+
+create(#el_req{auth = ?PROVIDER(ProviderId), gri = #gri{id = undefined, aspect = {offline_user_access_token, UserId}}, data = Data}) ->
+    Token = maps:get(<<"token">>, Data),
+    AuthCtx = build_token_verification_auth_ctx(Data),
+    case token_auth:verify_access_token(Token, AuthCtx) of
+        {ok, #auth{subject = ?SUB(user, UserId), caveats = OriginalCaveats}} ->
+            create_temporary_token(?SUB(user, UserId), #{
+                <<"type">> => ?ACCESS_TOKEN,
+                <<"caveats">> => provider_offline_access:build_token_caveats(
+                    OriginalCaveats, ProviderId, ?OFFLINE_ACCESS_TOKEN_TTL
+                )
+            });
+        {ok, #auth{}} ->
+            ?ERROR_TOKEN_SUBJECT_INVALID;
+        {error, _} = Error ->
+            Error
     end.
-
-
-%% @private
--spec build_token_verification_auth_ctx(entity_logic:data()) -> aai:auth_ctx().
-build_token_verification_auth_ctx(Data) ->
-    PeerIp = utils:null_to_undefined(maps:get(<<"peerIp">>, Data, undefined)),
-    Interface = utils:null_to_undefined(maps:get(<<"interface">>, Data, undefined)),
-    Service = case utils:null_to_undefined(maps:get(<<"serviceToken">>, Data, undefined)) of
-        undefined ->
-            undefined;
-        ServiceToken ->
-            case token_auth:verify_service_token(ServiceToken, #auth_ctx{ip = PeerIp, interface = Interface}) of
-                {ok, Srv} -> Srv;
-                {error, _} = Error1 -> throw(Error1)
-            end
-    end,
-    Consumer = case utils:null_to_undefined(maps:get(<<"consumerToken">>, Data, undefined)) of
-        undefined ->
-            undefined;
-        ConsumerToken ->
-            case token_auth:verify_consumer_token(ConsumerToken, #auth_ctx{ip = PeerIp, interface = Interface}) of
-                {ok, Csm} -> Csm;
-                {error, _} = Error2 -> throw(Error2)
-            end
-    end,
-    DataAccessCaveatsPolicy = case maps:get(<<"allowDataAccessCaveats">>, Data, false) of
-        true -> allow_data_access_caveats;
-        false -> disallow_data_access_caveats
-    end,
-    #auth_ctx{
-        ip = PeerIp, interface = Interface, service = Service,
-        consumer = Consumer, data_access_caveats_policy = DataAccessCaveatsPolicy,
-        % allow any session when verifying tokens, the session is checked only if the token
-        % is used by a client to authenticate (then, a matching session cookie must be provided)
-        session_id = any
-    }.
 
 
 %%--------------------------------------------------------------------
@@ -381,6 +367,8 @@ authorize(#el_req{auth = ?PROVIDER(PrId), gri = #gri{aspect = {provider_temporar
     true;
 authorize(#el_req{auth = ?PROVIDER(PrId), gri = #gri{aspect = {provider_temporary_tokens, PrId}}}, _) ->
     true;
+authorize(#el_req{auth = ?PROVIDER(PrId), gri = #gri{aspect = {offline_user_access_token, UserId}}}, _) ->
+    provider_logic:has_eff_user(PrId, UserId);
 
 % Provider's admin with CLUSTER_UPDATE is allowed to manage its tokens
 authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {provider_named_tokens, PrId}}}, _) ->
@@ -480,6 +468,10 @@ validate(#el_req{operation = create, gri = #gri{aspect = {user_temporary_token, 
 validate(#el_req{operation = create, gri = #gri{aspect = {provider_temporary_token, ProviderId}}, data = Data}) ->
     validate_create_operation(temporary, ?SUB(?ONEPROVIDER, ProviderId), Data);
 
+validate(Req = #el_req{operation = create, gri = #gri{aspect = {offline_user_access_token, _}}}) ->
+    % the data spec is the same for these two operations
+    validate(Req#el_req{gri = #gri{aspect = verify_access_token}});
+
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
@@ -568,6 +560,42 @@ validate_type(Subject, Persistence, ?INVITE_TOKEN(InviteType, EntityId), Data) -
 
 validate_type(_, _, _, _) ->
     false.
+
+
+%% @private
+-spec build_token_verification_auth_ctx(entity_logic:data()) -> aai:auth_ctx().
+build_token_verification_auth_ctx(Data) ->
+    PeerIp = utils:null_to_undefined(maps:get(<<"peerIp">>, Data, undefined)),
+    Interface = utils:null_to_undefined(maps:get(<<"interface">>, Data, undefined)),
+    Service = case utils:null_to_undefined(maps:get(<<"serviceToken">>, Data, undefined)) of
+        undefined ->
+            undefined;
+        ServiceToken ->
+            case token_auth:verify_service_token(ServiceToken, #auth_ctx{ip = PeerIp, interface = Interface}) of
+                {ok, Srv} -> Srv;
+                {error, _} = Error1 -> throw(Error1)
+            end
+    end,
+    Consumer = case utils:null_to_undefined(maps:get(<<"consumerToken">>, Data, undefined)) of
+        undefined ->
+            undefined;
+        ConsumerToken ->
+            case token_auth:verify_consumer_token(ConsumerToken, #auth_ctx{ip = PeerIp, interface = Interface}) of
+                {ok, Csm} -> Csm;
+                {error, _} = Error2 -> throw(Error2)
+            end
+    end,
+    DataAccessCaveatsPolicy = case maps:get(<<"allowDataAccessCaveats">>, Data, false) of
+        true -> allow_data_access_caveats;
+        false -> disallow_data_access_caveats
+    end,
+    #auth_ctx{
+        ip = PeerIp, interface = Interface, service = Service,
+        consumer = Consumer, data_access_caveats_policy = DataAccessCaveatsPolicy,
+        % allow any session when verifying tokens, the session is checked only if the token
+        % is used by a client to authenticate (then, a matching session cookie must be provided)
+        session_id = any
+    }.
 
 
 %% @private
