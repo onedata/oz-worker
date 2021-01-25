@@ -1,8 +1,11 @@
-Release notes for project oz-worker
-===================================
+# Release notes for project oz-worker
 
-CHANGELOG
----------
+## CHANGELOG
+
+### 20.02.6
+
+-   **VFS-6802** Added visual QoS expression editor with live matching
+    storages evaluation.
 
 ### 20.02.5
 
