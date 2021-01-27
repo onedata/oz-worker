@@ -168,7 +168,7 @@ list_test(Config) ->
         },
         logic_spec = #logic_spec{
             module = space_logic,
-            function = list,
+            function = get_spaces,
             args = [auth],
             expected_result = ?OK_LIST(ExpSpaces)
         }

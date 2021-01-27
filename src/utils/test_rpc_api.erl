@@ -16,7 +16,6 @@
 -include_lib("ctool/include/errors.hrl").
 
 -export([
-    get_configuration/0,
     timestamp_seconds/0,
     get_env/1,
 
@@ -41,11 +40,6 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
-
-
--spec get_configuration() -> {ok, #{atom() := term()}} | {error, Reason :: term()}.
-get_configuration() ->
-    zone_logic:get_configuration().
 
 
 -spec timestamp_seconds() -> time:seconds().

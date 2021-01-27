@@ -3068,11 +3068,11 @@ delete_all_entities(Config) ->
 delete_all_entities(Config, RemovePredefinedGroups) ->
     {ok, Providers} = list_providers(Config),
     {ok, Shares} = list_shares(Config),
-    {ok, Spaces} = list_spaces(Config),
+    {ok, Spaces} = get_spaces(Config),
     {ok, Handles} = list_handles(Config),
     {ok, HServices} = list_handle_services(Config),
     {ok, Groups} = list_groups(Config),
-    {ok, Users} = list_users(Config),
+    {ok, Users} = get_users(Config),
     {ok, Harvesters} = list_harvesters(Config),
     lists_utils:pforeach(fun(PId) -> delete_provider(Config, PId) end, Providers),
     lists_utils:pforeach(fun(HId) -> delete_handle(Config, HId) end, Handles),

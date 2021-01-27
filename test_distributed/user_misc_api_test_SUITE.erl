@@ -258,7 +258,7 @@ list_test(Config) ->
         logic_spec = #logic_spec{
             operation = get,
             module = user_logic,
-            function = list,
+            function = get_users,
             args = [auth],
             expected_result = ?OK_LIST(ExpUsers)
         }
