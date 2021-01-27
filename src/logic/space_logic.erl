@@ -23,7 +23,7 @@
     get/2,
     get_protected_data/2,
     get_name/2,
-    list/1,
+    get_spaces/1,
     list_privileges/0
 ]).
 -export([
@@ -155,12 +155,12 @@ get_name(Auth, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Lists all spaces (their ids) in database.
+%% Get all spaces (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
--spec list(Auth :: aai:auth()) ->
+-spec get_spaces(Auth :: aai:auth()) ->
     {ok, [od_space:id()]} | errors:error().
-list(Auth) ->
+get_spaces(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
         auth = Auth,

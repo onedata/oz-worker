@@ -22,7 +22,7 @@
     authenticate_by_token/2,
     get_protected_provider_data/2, deploy_static_gui_package/4,
     update_cluster_version_info/4, set_user_password/3, create_user/2,
-    add_user_to_group/3, list_users/1, user_exists/1, username_exists/1,
+    add_user_to_group/3, get_users/1, user_exists/1, username_exists/1,
     get_user_details/1, get_user_details/2, migrate_onepanel_user_to_onezone/4,
     cluster_get_eff_user_privileges/3, get_protected_cluster_data/2,
     get_eff_clusters_by_user_auth/1, cluster_logic_get_users/2,
@@ -105,9 +105,9 @@ add_user_to_group(Auth, GroupId, UserId) ->
     group_logic:add_user(Auth, GroupId, UserId).
 
 
--spec list_users(aai:auth()) -> {ok, [od_user:id()]} | {error, term()}.
-list_users(Auth) ->
-    user_logic:list(Auth).
+-spec get_users(aai:auth()) -> {ok, [od_user:id()]} | {error, term()}.
+get_users(Auth) ->
+    user_logic:get_users(Auth).
 
 
 -spec user_exists(od_user:id()) -> boolean().

@@ -36,7 +36,7 @@ handle(<<"GET">>, Req) ->
         false ->
             cowboy_req:reply(?HTTP_404_NOT_FOUND, Req);
         true ->
-            {ok, UserIds} = user_logic:list(?ROOT),
+            {ok, UserIds} = user_logic:get_users(?ROOT),
             Buttons = lists:map(
                 fun(UserId) ->
                     Path = str_utils:format_bin("/validate_dev_login?user=~s",

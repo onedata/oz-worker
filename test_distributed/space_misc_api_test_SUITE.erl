@@ -442,7 +442,7 @@ delete_test(Config) ->
         oz_test_utils:delete_space(Config, SpaceId)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _) ->
-        {ok, Spaces} = oz_test_utils:list_spaces(Config),
+        {ok, Spaces} = oz_test_utils:get_spaces(Config),
         ?assertEqual(lists:member(SpaceId, Spaces), not ShouldSucceed)
     end,
 

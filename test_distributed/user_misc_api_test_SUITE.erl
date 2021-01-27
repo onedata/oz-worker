@@ -834,7 +834,7 @@ delete_test(Config) ->
         oz_test_utils:delete_user(Config, UserId)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{userId := UserId} = _Env, _) ->
-        {ok, Users} = oz_test_utils:list_users(Config),
+        {ok, Users} = oz_test_utils:get_users(Config),
         ?assertEqual(lists:member(UserId, Users), not ShouldSucceed)
     end,
 
@@ -885,7 +885,7 @@ delete_self_test(Config) ->
         #{userId => UserId}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{userId := UserId} = _Env, _) ->
-        {ok, Users} = oz_test_utils:list_users(Config),
+        {ok, Users} = oz_test_utils:get_users(Config),
         ?assertEqual(lists:member(UserId, Users), not ShouldSucceed)
     end,
 

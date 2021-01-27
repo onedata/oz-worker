@@ -35,7 +35,7 @@
     create_client_token/2
 ]).
 -export([
-    list/1,
+    get_users/1,
     get/2,
     get_protected_data/2, get_protected_data/3,
     get_shared_data/2, get_shared_data/3,
@@ -183,9 +183,9 @@ create_client_token(Auth, UserId) ->
 %% Lists all users (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
--spec list(Auth :: aai:auth()) ->
+-spec get_users(Auth :: aai:auth()) ->
     {ok, [od_user:id()]} | errors:error().
-list(Auth) ->
+get_users(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
         auth = Auth,

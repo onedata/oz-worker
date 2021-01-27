@@ -13,26 +13,26 @@
 -author("Piotr Duleba").
 
 -include("entity_logic.hrl").
--include_lib("ctool/include/oz/oz_users.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([
     get_configuration/0,
     timestamp_seconds/0,
     get_env/1,
 
-    list_users/1,
+    get_users/1,
     create_user/1,
     create_user/2,
     get_user_protected_data/2,
     create_user_temporary_token/3,
-    authenticate/2,
+    are_basic_credentials_valid/2,
 
     create_group/2,
     get_group_users/2,
 
+    get_spaces/1,
     create_space/3,
     create_space_support_token/2,
-    list_spaces/1,
     get_space_protected_data/2,
     delete_space/2
 ]).
@@ -58,9 +58,9 @@ get_env(Env) ->
     oz_worker:get_env(Env).
 
 
--spec list_users(aai:auth()) -> {ok, [od_user:id()]} | {error, term()}.
-list_users(Auth) ->
-    rpc_api:list_users(Auth).
+-spec get_users(aai:auth()) -> {ok, [od_user:id()]} | {error, term()}.
+get_users(Auth) ->
+    rpc_api:get_users(Auth).
 
 
 -spec create_user(aai:auth()) -> {ok, od_user:id()} | errors:error().
@@ -73,7 +73,7 @@ create_user(Auth, Data) ->
     rpc_api:create_user(Auth, Data).
 
 
--spec get_user_protected_data(aai:auth(), od_user:id()) -> {ok, #user_details{}} | {error, term()}.
+-spec get_user_protected_data(aai:auth(), od_user:id()) -> {ok, map()} | {error, term()}.
 get_user_protected_data(Auth, UserId) ->
     user_logic:get_protected_data(Auth, UserId).
 
@@ -84,10 +84,12 @@ create_user_temporary_token(Auth, UserId, Data) ->
     token_logic:create_user_temporary_token(Auth, UserId, Data).
 
 
--spec authenticate(od_user:username(), binary()) ->
-    {true, aai:auth()} | errors:unauthorized_error().
-authenticate(UserName, Password) ->
-    basic_auth:authenticate(UserName, Password).
+-spec are_basic_credentials_valid(od_user:username(), binary()) -> boolean().
+are_basic_credentials_valid(UserName, Password) ->
+    case basic_auth:authenticate(UserName, Password) of
+        {true, _} -> true;
+        ?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS) -> false
+    end.
 
 
 -spec create_group(aai:auth(), Data :: map()) -> {ok, od_user:id()} | errors:error().
@@ -113,10 +115,10 @@ create_space_support_token(Auth, SpaceId) ->
     space_logic:create_space_support_token(Auth, SpaceId).
 
 
--spec list_spaces(aai:auth()) ->
+-spec get_spaces(aai:auth()) ->
     {ok, [od_space:id()]} | errors:error().
-list_spaces(Auth) ->
-    space_logic:list(Auth).
+get_spaces(Auth) ->
+    space_logic:get_spaces(Auth).
 
 
 -spec get_space_protected_data(aai:auth(), od_space:id()) -> {ok, map()} | no_return().

@@ -40,7 +40,7 @@
 ]).
 % Operations corresponding to logic modules
 -export([
-    list_users/1,
+    get_users/1,
     create_user/1, create_user/2,
     get_user/2,
     delete_user/2,
@@ -109,7 +109,7 @@
 -export([
     create_space/2, create_space/3,
     get_space/2,
-    list_spaces/1,
+    get_spaces/1,
     update_space/3,
     delete_space/2,
 
@@ -506,10 +506,10 @@ user_get_clusters(Config, UserId) ->
 %% Returns list of all users in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec list_users(Config :: term()) -> {ok, [od_user:id()]}.
-list_users(Config) ->
+-spec get_users(Config :: term()) -> {ok, [od_user:id()]}.
+get_users(Config) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, user_logic, list, [?ROOT]
+        Config, user_logic, get_users, [?ROOT]
     )).
 
 
@@ -1067,9 +1067,9 @@ get_space(Config, SpaceId) ->
 %% Returns list of all spaces in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec list_spaces(Config :: term()) -> {ok, [od_space:id()]}.
-list_spaces(Config) ->
-    ?assertMatch({ok, _}, call_oz(Config, space_logic, list, [?ROOT])).
+-spec get_spaces(Config :: term()) -> {ok, [od_space:id()]}.
+get_spaces(Config) ->
+    ?assertMatch({ok, _}, call_oz(Config, space_logic, get_spaces, [?ROOT])).
 
 
 %%--------------------------------------------------------------------
