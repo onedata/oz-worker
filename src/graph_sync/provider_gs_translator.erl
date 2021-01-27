@@ -85,6 +85,9 @@ translate_value(_, #gri{type = od_token, aspect = verify_identity_token}, #{<<"s
 translate_value(_, #gri{type = od_token, id = undefined, aspect = {provider_temporary_token, _}}, Token) ->
     {ok, Serialized} = tokens:serialize(Token),
     Serialized;
+translate_value(_, #gri{type = od_token, id = undefined, aspect = {offline_user_access_token, _}}, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    Serialized;
 
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n
