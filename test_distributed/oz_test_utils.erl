@@ -40,7 +40,7 @@
 ]).
 % Operations corresponding to logic modules
 -export([
-    get_users/1,
+    list_users/1,
     create_user/1, create_user/2,
     get_user/2,
     delete_user/2,
@@ -109,7 +109,7 @@
 -export([
     create_space/2, create_space/3,
     get_space/2,
-    get_spaces/1,
+    list_spaces/1,
     update_space/3,
     delete_space/2,
 
@@ -506,10 +506,10 @@ user_get_clusters(Config, UserId) ->
 %% Returns list of all users in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec get_users(Config :: term()) -> {ok, [od_user:id()]}.
-get_users(Config) ->
+-spec list_users(Config :: term()) -> {ok, [od_user:id()]}.
+list_users(Config) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, user_logic, get_users, [?ROOT]
+        Config, user_logic, list, [?ROOT]
     )).
 
 
@@ -1067,9 +1067,9 @@ get_space(Config, SpaceId) ->
 %% Returns list of all spaces in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec get_spaces(Config :: term()) -> {ok, [od_space:id()]}.
-get_spaces(Config) ->
-    ?assertMatch({ok, _}, call_oz(Config, space_logic, get_spaces, [?ROOT])).
+-spec list_spaces(Config :: term()) -> {ok, [od_space:id()]}.
+list_spaces(Config) ->
+    ?assertMatch({ok, _}, call_oz(Config, space_logic, list, [?ROOT])).
 
 
 %%--------------------------------------------------------------------
@@ -3068,11 +3068,11 @@ delete_all_entities(Config) ->
 delete_all_entities(Config, RemovePredefinedGroups) ->
     {ok, Providers} = list_providers(Config),
     {ok, Shares} = list_shares(Config),
-    {ok, Spaces} = get_spaces(Config),
+    {ok, Spaces} = list_spaces(Config),
     {ok, Handles} = list_handles(Config),
     {ok, HServices} = list_handle_services(Config),
     {ok, Groups} = list_groups(Config),
-    {ok, Users} = get_users(Config),
+    {ok, Users} = list_users(Config),
     {ok, Harvesters} = list_harvesters(Config),
     lists_utils:pforeach(fun(PId) -> delete_provider(Config, PId) end, Providers),
     lists_utils:pforeach(fun(HId) -> delete_handle(Config, HId) end, Handles),

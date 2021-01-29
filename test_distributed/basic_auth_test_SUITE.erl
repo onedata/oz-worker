@@ -238,7 +238,7 @@ migrate_onepanel_user_to_onezone(Config) ->
         str_utils:rand_hex(16), <<"admin">>, onedata_passwords:create_hash(<<"1234">>), admin
     ]),
 
-    {ok, AllUsers} = oz_test_utils:get_users(Config),
+    {ok, AllUsers} = oz_test_utils:list_users(Config),
     ?assertEqual(lists:sort([ConflictingUser, AdminUserId]), lists:sort(AllUsers)),
 
     ?assertMatch(

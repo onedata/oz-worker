@@ -19,7 +19,7 @@
     timestamp_seconds/0,
     get_env/1,
 
-    get_users/1,
+    list_users/1,
     create_user/1,
     create_user/2,
     get_user_protected_data/2,
@@ -29,7 +29,7 @@
     create_group/2,
     get_group_users/2,
 
-    get_spaces/1,
+    list_spaces/1,
     create_space/3,
     create_space_support_token/2,
     get_space_protected_data/2,
@@ -52,9 +52,9 @@ get_env(Env) ->
     oz_worker:get_env(Env).
 
 
--spec get_users(aai:auth()) -> {ok, [od_user:id()]} | {error, term()}.
-get_users(Auth) ->
-    rpc_api:get_users(Auth).
+-spec list_users(aai:auth()) -> {ok, [od_user:id()]} | {error, term()}.
+list_users(Auth) ->
+    rpc_api:list_users(Auth).
 
 
 -spec create_user(aai:auth()) -> {ok, od_user:id()} | errors:error().
@@ -109,10 +109,10 @@ create_space_support_token(Auth, SpaceId) ->
     space_logic:create_space_support_token(Auth, SpaceId).
 
 
--spec get_spaces(aai:auth()) ->
+-spec list_spaces(aai:auth()) ->
     {ok, [od_space:id()]} | errors:error().
-get_spaces(Auth) ->
-    space_logic:get_spaces(Auth).
+list_spaces(Auth) ->
+    space_logic:list(Auth).
 
 
 -spec get_space_protected_data(aai:auth(), od_space:id()) -> {ok, map()} | no_return().
