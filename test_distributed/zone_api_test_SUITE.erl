@@ -34,6 +34,7 @@
     get_configuration_test/1,
     get_old_configuration_endpoint_test/1,
     broken_compatibility_file_test/1,
+    multinode_compatibility_registry_unification_test/1,
     list_privileges_test/1,
     default_gui_messages_are_empty_or_migrated/1,
     unknown_gui_messages_are_not_found/1,
@@ -45,6 +46,7 @@ all() ->
         get_configuration_test,
         get_old_configuration_endpoint_test,
         broken_compatibility_file_test,
+        multinode_compatibility_registry_unification_test,
         list_privileges_test,
         default_gui_messages_are_empty_or_migrated,
         unknown_gui_messages_are_not_found,
@@ -119,6 +121,70 @@ broken_compatibility_file_test_base(Config) ->
             }}
         }
     })).
+
+
+multinode_compatibility_registry_unification_test(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    OZVersion = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
+    CurrentRegistryPath = oz_test_utils:call_oz(Config, ctool, get_env, [current_compatibility_registry_file]),
+    DefaultRegistryPath = oz_test_utils:call_oz(Config, ctool, get_env, [default_compatibility_registry_file]),
+
+    InitialRegistry = #{
+        <<"revision">> => 2019010100,
+        <<"compatibility">> => #{
+            <<"onezone:oneprovider">> => #{
+                OZVersion => [<<"18.02.0-rc13">>, <<"18.02.1">>, <<"18.02.2">>]
+            }
+        }
+    },
+
+    NewerRegistry = #{
+        <<"revision">> => 2027010100,
+        <<"compatibility">> => #{
+            <<"onezone:oneprovider">> => #{
+                OZVersion => [<<"19.02.1">>, <<"19.02.2">>]
+            }
+        }
+    },
+
+    % write the initial registry as default and current on all nodes
+    rpc:multicall(Nodes, file, write_file, [CurrentRegistryPath, json_utils:encode(InitialRegistry)]),
+    rpc:multicall(Nodes, file, write_file, [DefaultRegistryPath, json_utils:encode(InitialRegistry)]),
+    rpc:multicall(Nodes, compatibility, clear_registry_cache, []),
+
+    % write the newer registry as default on one of the nodes
+    ChosenNode = lists_utils:random_element(Nodes),
+    rpc:call(ChosenNode, file, write_file, [DefaultRegistryPath, json_utils:encode(NewerRegistry)]),
+
+    % other nodes should still return the old registry
+    lists:foreach(fun(Node) ->
+        ?assertMatch(
+            {ok, #{
+                <<"compatibilityRegistryRevision">> := 2019010100,
+                <<"compatibleOneproviderVersions">> := [<<"18.02.0-rc13">>, <<"18.02.1">>, <<"18.02.2">>]
+            }},
+            rpc:call(Node, zone_logic, get_configuration, [])
+        )
+    end, Nodes -- [ChosenNode]),
+
+    % querying the registry on chosen node should cause it to take the default
+    % registry as newer and propagate it to all cluster nodes
+    ?assertMatch(
+        {ok, #{
+            <<"compatibilityRegistryRevision">> := 2027010100,
+            <<"compatibleOneproviderVersions">> := [<<"19.02.1">>, <<"19.02.2">>]
+        }},
+        rpc:call(ChosenNode, zone_logic, get_configuration, [])
+    ),
+    lists:foreach(fun(Node) ->
+        ?assertMatch(
+            {ok, #{
+                <<"compatibilityRegistryRevision">> := 2027010100,
+                <<"compatibleOneproviderVersions">> := [<<"19.02.1">>, <<"19.02.2">>]
+            }},
+            rpc:call(Node, zone_logic, get_configuration, [])
+        )
+    end, Nodes -- [ChosenNode]).
 
 
 list_privileges_test(Config) ->
