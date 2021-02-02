@@ -15,6 +15,8 @@
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/http/headers.hrl").
+-include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -type public_url() :: binary().
 
@@ -54,17 +56,27 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
             DoiId = ?RANDOM_ID(),
             DoiHandle = <<Prefix/binary, "/", DoiId/binary>>,
             DoiHandleEncoded = http_utils:url_encode(DoiHandle),
-            {ok, 201, _, _} = handle_proxy_client:put(
-                ProxyEndpoint, <<"/handle?hndl=", DoiHandleEncoded/binary>>, Headers, Body
-            ),
-            {ok, ?DOI_DC_IDENTIFIER(DoiHandle)};
+            case handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", DoiHandleEncoded/binary>>, Headers, Body) of
+                {ok, 201, _, _} ->
+                    {ok, ?DOI_DC_IDENTIFIER(DoiHandle)};
+                Other ->
+                    ?error("Error registering a ~s handle, handle proxy at ~s returned:~n~p", [
+                        Type, ProxyEndpoint, Other
+                    ]),
+                    throw(?ERROR_TEMPORARY_FAILURE)
+            end;
         _ -> % <<"PID">> and other types
             DoiId = ?RANDOM_ID(),
-            {ok, 201, _, RespJSON} = handle_proxy_client:put(
-                ProxyEndpoint, <<"/handle?hndl=", DoiId/binary>>, Headers, Body
-            ),
-            PidHandle = maps:get(<<"handle">>, json_utils:decode(RespJSON)),
-            {ok, PidHandle}
+            case handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", DoiId/binary>>, Headers, Body) of
+                {ok, 201, _, RespJSON} ->
+                    PidHandle = maps:get(<<"handle">>, json_utils:decode(RespJSON)),
+                    {ok, PidHandle};
+                Other ->
+                    ?error("Error registering a ~s handle, handle proxy at ~s returned:~n~p", [
+                        Type, ProxyEndpoint, Other
+                    ]),
+                    throw(?ERROR_TEMPORARY_FAILURE)
+            end
     end.
 
 %%--------------------------------------------------------------------
