@@ -26,7 +26,7 @@
 -define(ONEPANEL_CONNECT_OPTS, [
     {recv_timeout, 10000}, {ssl_options, [
         {secure, only_verify_peercert},
-        {cacerts, https_listener:get_cert_chain_pems()}
+        {cacerts, https_listener:get_cert_chain_ders()}
     ]}
 ]).
 
