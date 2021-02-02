@@ -30,13 +30,13 @@
     {recv_timeout, timer:seconds(oz_worker:get_env(onepanel_proxy_recv_timeout_sec, 30))},
     {ssl_options, [
         {secure, only_verify_peercert},
-        {cacerts, get_cert_chain_pems()}
+        {cacerts, get_cert_chain_ders()}
     ]}
 ] end).
 
 %% listener_behaviour callbacks
--export([port/0, start/0, stop/0, healthcheck/0]).
--export([get_cert_chain_pems/0]).
+-export([port/0, start/0, stop/0, reload_web_certs/0, healthcheck/0]).
+-export([get_cert_chain_ders/0]).
 
 
 %%%===================================================================
@@ -60,6 +60,57 @@ port() ->
 %%--------------------------------------------------------------------
 -spec start() -> ok | {error, Reason :: term()}.
 start() ->
+    gui:start(gui_config()).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link listener_behaviour} callback stop/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec stop() -> ok | {error, Reason :: term()}.
+stop() ->
+    gui:stop().
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link listener_behaviour} callback reload_web_certs/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec reload_web_certs() -> ok | {error, term()}.
+reload_web_certs() ->
+    gui:reload_web_certs(gui_config()).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link listener_behaviour} callback healthcheck/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec healthcheck() -> ok | {error, server_not_responding}.
+healthcheck() ->
+    gui:healthcheck().
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns intermediate CA chain in DER format for gui web cert.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_cert_chain_ders() -> [public_key:der_encoded()].
+get_cert_chain_ders() ->
+    gui:get_cert_chain_ders().
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+
+%% @private
+-spec gui_config() -> gui:gui_config().
+gui_config() ->
     % Get certs
     KeyFile = oz_worker:get_env(web_key_file),
     CertFile = oz_worker:get_env(web_cert_file),
@@ -95,7 +146,7 @@ start() ->
         {?VALIDATE_DEV_LOGIN_PATH, [<<"GET">>], page_validate_dev_login}
     ],
 
-    gui:start(#gui_config{
+    #gui_config{
         port = port(),
         key_file = KeyFile,
         cert_file = CertFile,
@@ -106,34 +157,4 @@ start() ->
         dynamic_pages = DynamicPageRoutes,
         custom_cowboy_routes = CustomCowboyRoutes,
         custom_response_headers = fun gui_static:maybe_add_cache_control_headers/1
-    }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link listener_behaviour} callback stop/0.
-%% @end
-%%--------------------------------------------------------------------
--spec stop() -> ok | {error, Reason :: term()}.
-stop() ->
-    gui:stop().
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link listener_behaviour} callback healthcheck/0.
-%% @end
-%%--------------------------------------------------------------------
--spec healthcheck() -> ok | {error, server_not_responding}.
-healthcheck() ->
-    gui:healthcheck().
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns intermediate CA chain in PEM format for gui web cert.
-%% @end
-%%--------------------------------------------------------------------
--spec get_cert_chain_pems() -> [public_key:der_encoded()].
-get_cert_chain_pems() ->
-    gui:get_cert_chain_pems().
+    }.
