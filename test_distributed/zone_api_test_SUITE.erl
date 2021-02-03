@@ -97,12 +97,12 @@ broken_compatibility_file_test(Config) ->
 
     CurrentRegistryPath = rpc:call(hd(Nodes), ctool, get_env, [current_compatibility_registry_file]),
 
-    rpc:multicall(Nodes, file, delete, [CurrentRegistryPath]),
-    rpc:multicall(Nodes, compatibility, clear_registry_cache, []),
+    {_, []} = rpc:multicall(Nodes, file, delete, [CurrentRegistryPath]),
+    {_, []} = rpc:multicall(Nodes, compatibility, clear_registry_cache, []),
     broken_compatibility_file_test_base(Config),
 
-    rpc:multicall(Nodes, file, write_file, [CurrentRegistryPath, <<"bad content">>]),
-    rpc:multicall(Nodes, compatibility, clear_registry_cache, []),
+    {_, []} = rpc:multicall(Nodes, file, write_file, [CurrentRegistryPath, <<"bad content">>]),
+    {_, []} = rpc:multicall(Nodes, compatibility, clear_registry_cache, []),
     broken_compatibility_file_test_base(Config).
 
 
@@ -148,13 +148,13 @@ multinode_compatibility_registry_unification_test(Config) ->
     },
 
     % write the initial registry as default and current on all nodes
-    rpc:multicall(Nodes, file, write_file, [CurrentRegistryPath, json_utils:encode(InitialRegistry)]),
-    rpc:multicall(Nodes, file, write_file, [DefaultRegistryPath, json_utils:encode(InitialRegistry)]),
-    rpc:multicall(Nodes, compatibility, clear_registry_cache, []),
+    {_, []} = rpc:multicall(Nodes, file, write_file, [CurrentRegistryPath, json_utils:encode(InitialRegistry)]),
+    {_, []} = rpc:multicall(Nodes, file, write_file, [DefaultRegistryPath, json_utils:encode(InitialRegistry)]),
+    {_, []} = rpc:multicall(Nodes, compatibility, clear_registry_cache, []),
 
     % write the newer registry as default on one of the nodes
     ChosenNode = lists_utils:random_element(Nodes),
-    rpc:call(ChosenNode, file, write_file, [DefaultRegistryPath, json_utils:encode(NewerRegistry)]),
+    ok = rpc:call(ChosenNode, file, write_file, [DefaultRegistryPath, json_utils:encode(NewerRegistry)]),
 
     % other nodes should still return the old registry
     lists:foreach(fun(Node) ->
