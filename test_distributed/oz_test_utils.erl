@@ -3445,8 +3445,8 @@ overwrite_test_auth_config(TestConfig, AuthConfigData) ->
 %% @end
 %%--------------------------------------------------------------------
 overwrite_compatibility_registry(TestConfig, Registry) ->
-    {ok, CurrentRegistryPath} = call_oz(TestConfig, application, get_env, [ctool, current_compatibility_registry_file]),
-    {ok, DefaultRegistryPath} = call_oz(TestConfig, application, get_env, [ctool, default_compatibility_registry_file]),
+    CurrentRegistryPath = call_oz(TestConfig, ctool, get_env, [current_compatibility_registry_file]),
+    DefaultRegistryPath = call_oz(TestConfig, ctool, get_env, [default_compatibility_registry_file]),
     rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [CurrentRegistryPath, json_utils:encode(Registry)]),
     rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [DefaultRegistryPath, json_utils:encode(Registry)]),
     rpc:multicall(?OZ_NODES(TestConfig), compatibility, clear_registry_cache, []),
