@@ -3345,7 +3345,7 @@ simulate_seconds_passing(Seconds) ->
 %%--------------------------------------------------------------------
 -spec gui_ca_certs(Config :: term()) -> [public_key:der_encoded()].
 gui_ca_certs(Config) ->
-    call_oz(Config, https_listener, get_cert_chain_pems, []).
+    call_oz(Config, https_listener, get_cert_chain_ders, []).
 
 
 %%--------------------------------------------------------------------
