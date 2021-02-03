@@ -457,7 +457,8 @@ verify_gui_hash(GuiType, ReleaseVersion, GuiHash) ->
             true;
 
         {_, _, _} ->
-            case compatibility:verify_gui_hash(GuiType, ReleaseVersion, GuiHash) of
+            Resolver = compatibility:build_resolver(consistent_hashing:get_all_nodes(), []),
+            case compatibility:verify_gui_hash(Resolver, GuiType, ReleaseVersion, GuiHash) of
                 true ->
                     true;
                 {false, CorrectHashes} ->
