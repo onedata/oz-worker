@@ -123,4 +123,4 @@ ssl_opts() ->
 
 -spec get_ca_certs() -> [public_key:der_encoded()].
 get_ca_certs() ->
-    ozt:rpc(https_listener, get_cert_chain_pems, []).
+    ozt:rpc(https_listener, get_cert_chain_ders, []).
