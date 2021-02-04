@@ -2309,9 +2309,6 @@ create_offline_user_access_token_base(RequestingProvider, SubjectUser, Token, Ac
     ),
 
     VerifyFun = fun(OfflineAccessToken) ->
-        DeserializedToken = ozt_tokens:ensure_deserialized(OfflineAccessToken),
-        % use RPC as binary_to_existing_atom may fail on the testmaster during gri decoding
-        Caveats = ozt:rpc(tokens, get_caveats, [DeserializedToken]),
         OfflineAuthContextWithoutInterface = #{
             <<"token">> => OfflineAccessToken,
             <<"serviceToken">> => ProviderIdentityToken,
@@ -2322,7 +2319,12 @@ create_offline_user_access_token_base(RequestingProvider, SubjectUser, Token, Ac
             end
         },
         OfflineAuthContext = maps_utils:put_if_defined(
-            OfflineAuthContextWithoutInterface, <<"interface">>, caveats:infer_interface(Caveats)
+            OfflineAuthContextWithoutInterface,
+            <<"interface">>,
+            case AccessTokenCtx#access_token_ctx.interface of
+                any -> lists_utils:random_element([undefined | cv_interface:valid_interfaces()]);
+                Other -> Other
+            end
         ),
         ?assertEqual({ok, #{<<"subject">> => ?SUB(user, SubjectUser), <<"ttl">> => ExpectedTtl}}, ozt:rpc(
             token_logic, verify_access_token, [?NOBODY, OfflineAuthContext#{<<"token">> => OfflineAccessToken}]
