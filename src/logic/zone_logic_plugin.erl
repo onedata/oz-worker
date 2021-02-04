@@ -95,9 +95,10 @@ create(_Req) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = configuration}}, _) ->
     Version = oz_worker:get_release_version(),
+    Resolver = compatibility:build_resolver(consistent_hashing:get_all_nodes(), []),
     SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
-    CompatibilityRegistryRevision = query_compatibility_registry(peek_current_registry_revision, []),
-    CompatibleOpVersions = query_compatibility_registry(get_compatible_versions, [?ONEZONE, Version, ?ONEPROVIDER]),
+    CompatibilityRegistryRevision = query_compatibility_registry(peek_current_registry_revision, [Resolver]),
+    CompatibleOpVersions = query_compatibility_registry(get_compatible_versions, [Resolver, ?ONEZONE, Version, ?ONEPROVIDER]),
     {ok, #{
         <<"name">> => utils:undefined_to_null(oz_worker:get_name()),
         <<"version">> => Version,
@@ -235,10 +236,11 @@ validate(#el_req{operation = update, gri = #gri{aspect = {gui_message, _}}}) ->
 %% @private
 -spec query_compatibility_registry(Fun :: atom(), Args :: [term()]) -> term().
 query_compatibility_registry(Fun, Args) ->
-    case apply(compatibility, Fun, Args) of
+    Module = compatibility,
+    case apply(Module, Fun, Args) of
         {ok, SuccessfulResult} ->
             SuccessfulResult;
-        {error, _} = Error->
-            ?debug("Error querying registry - ~w:~w(~p) -> ~p", [compatibility, Fun, Args, Error]),
+        {error, _} = Error ->
+            ?debug("Error querying registry - ~w:~w(~w)~nError was: ~p", [Module, Fun, Args, Error]),
             <<"unknown">>
     end.

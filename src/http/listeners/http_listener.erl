@@ -36,7 +36,7 @@
 )).
 
 %% listener_behaviour callbacks
--export([port/0, start/0, stop/0, healthcheck/0]).
+-export([port/0, start/0, stop/0, reload_web_certs/0, healthcheck/0]).
 -export([set_response_to_letsencrypt_challenge/2]).
 
 %%%===================================================================
@@ -60,6 +60,8 @@ port() ->
 %%--------------------------------------------------------------------
 -spec start() -> ok | {error, Reason :: term()}.
 start() ->
+    ?info("Starting '~p' server...", [?HTTP_LISTENER]),
+
     OAI_PMH_PATH = oz_worker:get_env(oai_pmh_api_prefix),
 
     Dispatch = cowboy_router:compile([
@@ -80,8 +82,11 @@ start() ->
             request_timeout => ?REQUEST_TIMEOUT
         }),
     case Result of
-        {ok, _} -> ok;
-        _ -> Result
+        {ok, _} ->
+            ?info("Server '~p' started successfully", [?HTTP_LISTENER]);
+        _ ->
+            ?error("Could not start server '~p' - ~p", [?HTTP_LISTENER, Result]),
+            Result
     end.
 
 
@@ -92,14 +97,25 @@ start() ->
 %%--------------------------------------------------------------------
 -spec stop() -> ok | {error, Reason :: term()}.
 stop() ->
+    ?info("Stopping '~p' server...", [?HTTP_LISTENER]),
+
     case cowboy:stop_listener(?HTTP_LISTENER) of
         ok ->
-            ok;
+            ?info("Server '~p' stopped", [?HTTP_LISTENER]);
         {error, Error} ->
-            ?error("Error on stopping listener ~p: ~p",
-                [?HTTP_LISTENER, Error]),
+            ?error("Error on stopping server ~p: ~p", [?HTTP_LISTENER, Error]),
             {error, redirector_stop_error}
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link listener_behaviour} callback reload_web_certs/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec reload_web_certs() -> ok.
+reload_web_certs() ->
+    ok.
 
 
 %%--------------------------------------------------------------------
