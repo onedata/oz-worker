@@ -16,6 +16,7 @@
 -include_lib("ctool/include/errors.hrl").
 
 -export([
+    simulate_downtime/1,
     timestamp_seconds/0,
     get_env/1,
 
@@ -40,6 +41,13 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
+
+
+-spec simulate_downtime(time:seconds()) -> ok | {error, term()}.
+simulate_downtime(Seconds) ->
+    https_listener:stop(),
+    timer:sleep(timer:seconds(Seconds)),
+    https_listener:start().
 
 
 -spec timestamp_seconds() -> time:seconds().
