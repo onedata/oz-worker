@@ -31,7 +31,7 @@
 %% endpoint.
 %% @end
 %%--------------------------------------------------------------------
--spec get_configuration() -> {ok, #{atom() := term()}} | {error, Reason :: term()}.
+-spec get_configuration() -> {ok, #{binary() := term()}} | {error, Reason :: term()}.
 get_configuration() ->
     entity_logic:handle(#el_req{
         operation = get,
