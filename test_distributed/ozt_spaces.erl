@@ -17,6 +17,7 @@
 -include("ozt.hrl").
 -include_lib("ctool/include/space_support/support_stage.hrl").
 -include_lib("ctool/include/space_support/provider_sync_progress.hrl").
+-include_lib("ctool/include/space_support/provider_capacity_usage.hrl").
 
 %% API
 -export([create/0, create/1]).
@@ -33,9 +34,13 @@
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([set_user_privileges/3]).
 -export([delete/1]).
--export([extract_sync_progress_registry_matrix/1]).
+-export([get_support_parameters_registry/1]).
 -export([get_support_stage_registry/1]).
+-export([get_capacity_usage_registry/1]).
+-export([extract_sync_progress_registry_matrix/1]).
 -export([minimum_support_size/0]).
+-export([has_default_support_parameters/2, has_legacy_support_stages/2]).
+-export([has_initial_capacity_usage/3, has_initial_sync_progress/3]).
 
 -compile([{no_auto_import, [get/1]}]).
 
@@ -157,6 +162,24 @@ delete(SpaceId) ->
     ?assertMatch(ok, ozt:rpc(space_logic, delete, [?ROOT, SpaceId])).
 
 
+-spec get_support_parameters_registry(od_space:id()) -> support_parameters:registry().
+get_support_parameters_registry(SpaceId) ->
+    Space = get(SpaceId),
+    Space#od_space.support_parameters_registry.
+
+
+-spec get_support_stage_registry(od_space:id()) -> support_stage:registry().
+get_support_stage_registry(SpaceId) ->
+    Space = get(SpaceId),
+    Space#od_space.support_stage_registry.
+
+
+-spec get_capacity_usage_registry(od_space:id()) -> provider_capacity_usage:registry().
+get_capacity_usage_registry(SpaceId) ->
+    {ok, SpaceStats} = ozt:rpc(space_logic, get_stats, [?ROOT, SpaceId]),
+    SpaceStats#space_stats.capacity_usage_registry.
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Extracts only the information about seen seqs and timestamps from the space's
@@ -168,19 +191,60 @@ delete(SpaceId) ->
     #{od_provider:id() => #{od_provider:id() => {provider_sync_progress:seen_seq(), provider_sync_progress:seq_timestamp()}}}.
 extract_sync_progress_registry_matrix(SpaceId) ->
     {ok, SpaceStats} = ozt:rpc(space_logic, get_stats, [?ROOT, SpaceId]),
-    maps:map(fun(_ProviderId, #provider_summary{per_peer = PerPeer}) ->
-        maps:map(fun(_PeerId, #peer_summary{seen_seq = SeenSeq, seq_timestamp = SeqTimestamp}) ->
+    Registry = SpaceStats#space_stats.sync_progress_registry#sync_progress_registry.per_provider,
+    maps:map(fun(_ProviderId, #provider_sync_progress{per_peer = PerPeer}) ->
+        maps:map(fun(_PeerId, #sync_progress_with_peer{seen_seq = SeenSeq, seq_timestamp = SeqTimestamp}) ->
             {SeenSeq, SeqTimestamp}
         end, PerPeer)
-    end, SpaceStats#space_stats.sync_progress_registry).
-
-
--spec get_support_stage_registry(od_space:id()) -> support_stage:registry().
-get_support_stage_registry(SpaceId) ->
-    Space = get(SpaceId),
-    Space#od_space.support_stage_registry.
+    end, Registry).
 
 
 -spec minimum_support_size() -> od_space:support_size().
 minimum_support_size() ->
     ozt:get_env(minimum_space_support_size).
+
+
+%% @doc Support stages that should be set for legacy supports
+-spec has_default_support_parameters(od_space:id(), [od_provider:id()]) -> boolean().
+has_default_support_parameters(SpaceId, Providers) ->
+    ExpectedRegistry =  maps:from_list(lists:map(fun(ProviderId) ->
+        {ProviderId, support_parameters:build(global, eager)}
+    end, Providers)),
+    ExpectedRegistry =:= get_support_parameters_registry(SpaceId).
+
+
+%% @doc Support stages that should be set for legacy supports
+-spec has_legacy_support_stages(od_space:id(), #{od_provider:id() => [od_storage:id()]}) -> boolean().
+has_legacy_support_stages(SpaceId, StoragesPerProvider) ->
+    ExpectedRegistry = maps:map(fun(_ProviderId, Storages) ->
+        #support_stage_details{provider_stage = legacy, per_storage = maps:from_list(lists:map(fun(StorageId) ->
+            {StorageId, legacy}
+        end, Storages))}
+    end, StoragesPerProvider),
+    ExpectedRegistry =:= get_support_stage_registry(SpaceId).
+
+
+%% @doc Initial capacity usage that should be set for new supports or legacy supports after Onezone upgrade.
+-spec has_initial_capacity_usage(od_space:id(), od_space:support_size(), #{od_provider:id() => [od_storage:id()]}) ->
+    boolean().
+has_initial_capacity_usage(SpaceId, SupportSize, StoragesPerProvider) ->
+    ExpectedRegistry = maps:map(fun(_ProviderId, Storages) ->
+        #provider_capacity_usage{overfull = false, per_storage = maps:from_list(lists:map(fun(StorageId) ->
+            {StorageId, #storage_capacity_usage{
+                overfull = false, used = ?UNKNOWN_USAGE_VALUE, total = SupportSize
+            }}
+        end, Storages))}
+    end, StoragesPerProvider),
+    ExpectedRegistry =:= get_capacity_usage_registry(SpaceId).
+
+
+%% @doc Initial sync progress that should be set for new supports or legacy supports after Onezone upgrade.
+-spec has_initial_sync_progress(od_space:id(), time:seconds(), [od_provider:id()]) -> boolean().
+has_initial_sync_progress(SpaceId, SpaceCreationTime, Providers) ->
+    PerPeer = maps:from_list(lists:map(fun(ProviderId) ->
+        {ProviderId, {1, SpaceCreationTime}}
+    end, Providers)),
+    ExpectedRegistry = maps:from_list(lists:map(fun(ProviderId) ->
+        {ProviderId, PerPeer}
+    end, Providers)),
+    ExpectedRegistry =:= extract_sync_progress_registry_matrix(SpaceId).

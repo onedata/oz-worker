@@ -39,7 +39,7 @@ get_env(Key) ->
     end.
 
 
--spec get_env(Key :: atom(), Default :: term()) -> term().
+-spec get_env(Key :: atom(), Default) -> term() | Default.
 get_env(Key, Default) ->
     application:get_env(?APP_NAME, Key, Default).
 

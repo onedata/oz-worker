@@ -1559,13 +1559,12 @@ delete_provider(Config, ProviderId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Supports a space by a provider based on space id
-%% (with default support size and new dummy storage).
+%% (with default support size and new storage).
 %% @end
 %%--------------------------------------------------------------------
 -spec support_space_by_provider(Config :: term(), ProviderId :: od_provider:id(),
     SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
 support_space_by_provider(Config, ProviderId, SpaceId) ->
-    % Create dummy storage
     {ok, StorageId} = ?assertMatch({ok, _}, create_storage(
         Config, ?PROVIDER(ProviderId), ?STORAGE_NAME1)
     ),

@@ -144,7 +144,7 @@ before_cluster_upgrade() ->
 -spec upgrade_cluster(node_manager:cluster_generation()) ->
     {ok, node_manager:cluster_generation()}.
 upgrade_cluster(2) ->
-    space_support:migrate_all_supports_to_21_02_model(),
+    space_support:migrate_all_supports_to_22_02_model(),
     {ok, 3}.
 
 %%--------------------------------------------------------------------

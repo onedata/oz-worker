@@ -63,7 +63,7 @@ create_for_admin_user(UserId, Name) ->
     ])),
     % make the Onezone perceive the Oneprovider as up-to-date and conforming to new space support mechanisms
     ozt:rpc(cluster_logic, update_version_info, [
-        ?PROVIDER(ProviderId), ProviderId, ?WORKER, {<<"21.02.1">>, <<"build">>, ?EMPTY_GUI_HASH}
+        ?PROVIDER(ProviderId), ProviderId, ?WORKER, {?LINE_22_02(<<"1">>), <<"build">>, ?EMPTY_GUI_HASH}
     ]),
     ProviderId.
 
@@ -148,6 +148,7 @@ support_space(ProviderId, StorageId, SpaceId, Size) ->
     ozt_spaces:add_user(SpaceId, TmpUser, [?SPACE_ADD_SUPPORT]),
     Token = ozt_spaces:create_support_token(SpaceId, TmpUser),
     support_space_using_token(ProviderId, StorageId, Token, Size),
+    ozt:reconcile_entity_graph(),
     ozt_users:delete(TmpUser).
 
 
@@ -165,12 +166,13 @@ support_space_using_token(ProviderId, StorageId, Token, Size) ->
     ok.
 
 
+%% @TODO VFS-5856 remove deprecated space support functionalities
 -spec simulate_preexisting_19_02_space_support(od_provider:id(), od_space:id()) -> ok.
 simulate_preexisting_19_02_space_support(ProviderId, SpaceId) ->
     % Providers in 19.02 did not have storages in Onezone, but a virtual storage
     % the same id as the provider was created for them upon Onezone's upgrade to
     % 20.02 and all the supports were transferred there. After Onezone's upgrade
-    % to 21.02
+    % to 22.02, such supports must have been upgraded to conform to the modern models
     VirtualStorageId = ProviderId,
     ensure_storage(ProviderId, VirtualStorageId),
     support_space(ProviderId, VirtualStorageId, SpaceId).

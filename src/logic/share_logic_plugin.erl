@@ -263,6 +263,8 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instan
 
 required_admin_privileges(_) ->
     forbidden.
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns validity verificators for given request.

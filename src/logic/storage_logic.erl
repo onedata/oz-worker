@@ -41,7 +41,7 @@
     revoke_support/3,
     get_spaces/2,
     upgrade_support_to_20_02/3,
-    upgrade_support_to_21_02/3
+    upgrade_support_to_22_02/3
 ]).
 -export([
     exists/1,
@@ -266,13 +266,13 @@ upgrade_support_to_20_02(Auth, StorageId, SpaceId) ->
     }).
 
 
--spec upgrade_support_to_21_02(aai:auth(), od_storage:id(), od_space:id()) ->
+-spec upgrade_support_to_22_02(aai:auth(), od_storage:id(), od_space:id()) ->
     {ok, od_space:id()} | errors:error().
-upgrade_support_to_21_02(Auth, StorageId, SpaceId) ->
+upgrade_support_to_22_02(Auth, StorageId, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = create,
         auth = Auth,
-        gri = #gri{type = od_storage, id = StorageId, aspect = {upgrade_support_to_21_02, SpaceId}}
+        gri = #gri{type = od_storage, id = StorageId, aspect = {upgrade_support_to_22_02, SpaceId}}
     }).
 
 

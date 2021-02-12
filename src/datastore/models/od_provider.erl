@@ -17,7 +17,7 @@
 
 %% API
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
--export([get_name/1, is_in_older_major_version_than_onezone/1, is_in_older_major_version/2]).
+-export([get_name/1, check_support_model/1]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([get_ctx/0]).
@@ -92,15 +92,14 @@ get_name(ProviderId) ->
     end.
 
 
--spec is_in_older_major_version_than_onezone(od_provider:id()) -> boolean().
-is_in_older_major_version_than_onezone(ProviderId) ->
-    is_in_older_major_version(ProviderId, oz_worker:get_release_version()).
-
-
--spec is_in_older_major_version(od_provider:id(), onedata:release_version()) -> boolean().
-is_in_older_major_version(ProviderId, ReferenceVersion) ->
+-spec check_support_model(od_provider:id() | onedata:release_version()) -> support_stage:support_model().
+check_support_model(ProviderId) ->
+    OzWorkerVersion = oz_worker:get_release_version(),
     {ok, OpWorkerVersion} = od_cluster:get_worker_version(ProviderId),
-    lower =:= onedata:compare_major_versions(OpWorkerVersion, ReferenceVersion).
+    case onedata:compare_release_line(OpWorkerVersion, OzWorkerVersion) of
+        lower -> legacy;
+        _ -> modern
+    end.
 
 
 %%--------------------------------------------------------------------

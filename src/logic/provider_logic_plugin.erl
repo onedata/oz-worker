@@ -403,14 +403,14 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
-exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Provider) ->
+exists(Req = #el_req{gri = #gri{id = ProviderId, aspect = instance, scope = protected}}, Provider) ->
     case Req#el_req.auth_hint of
         ?THROUGH_USER(UserId) ->
             provider_logic:has_eff_user(Provider, UserId);
         ?THROUGH_GROUP(GroupId) ->
             provider_logic:has_eff_group(Provider, GroupId);
         ?THROUGH_SPACE(SpaceId) ->
-            provider_logic:supports_space(Provider, SpaceId);
+            provider_logic:supports_space(ProviderId, SpaceId);
         undefined ->
             true
     end;

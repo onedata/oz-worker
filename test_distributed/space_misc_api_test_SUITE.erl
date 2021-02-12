@@ -20,6 +20,7 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/space_support/support_stage.hrl").
 -include_lib("ctool/include/space_support/provider_sync_progress.hrl").
+-include_lib("ctool/include/space_support/provider_capacity_usage.hrl").
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
@@ -53,6 +54,7 @@
     get_eff_provider_test/1,
 
     update_support_parameters_test/1,
+    update_provider_capacity_usage_test/1,
     update_provider_sync_progress_test/1,
     get_latest_emitted_seq_test/1,
 
@@ -80,6 +82,7 @@ all() ->
         get_eff_provider_test,
 
         update_support_parameters_test,
+        update_provider_capacity_usage_test,
         update_provider_sync_progress_test,
         get_latest_emitted_seq_test,
 
@@ -1109,6 +1112,128 @@ update_support_parameters_test(Config, SpaceAdmin, Space, Provider, ForbiddenCli
     )).
 
 
+update_provider_capacity_usage_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config),
+    {ok, {P2, P2Token}} = oz_test_utils:create_provider(Config),
+    {ok, {P3, P3Token}} = oz_test_utils:create_provider(Config),
+    {ok, {NonSupporter, NonSupporterToken}} = oz_test_utils:create_provider(Config),
+    % P1 supports the space with two storages
+    oz_test_utils:support_space_by_provider(Config, P1, Space),
+    oz_test_utils:support_space_by_provider(Config, P1, Space),
+    oz_test_utils:support_space_by_provider(Config, P2, Space),
+    oz_test_utils:support_space_by_provider(Config, P3, Space),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    AllClients = [
+        {admin, privileges:oz_privileges()},
+        {user, U1},
+        {user, NonAdmin},
+        {provider, P1, P1Token},
+        {provider, P2, P2Token},
+        {provider, P3, P3Token},
+        {provider, NonSupporter, NonSupporterToken}
+    ],
+    update_provider_capacity_usage_test_base(Config, Space, P1, P1Token, AllClients),
+    update_provider_capacity_usage_test_base(Config, Space, P2, P2Token, AllClients),
+    update_provider_capacity_usage_test_base(Config, Space, P3, P3Token, AllClients).
+
+
+%% @private
+update_provider_capacity_usage_test_base(Config, Space, SubjectProvider, SubjectProviderToken, AllClients) ->
+    {ok, SpaceRecord} = oz_test_utils:get_space(Config, Space),
+    SpaceStorages = SpaceRecord#od_space.storages,
+    {ok, #od_provider{storages = ProviderStorages}} = oz_test_utils:get_provider(Config, SubjectProvider),
+    SupportingStorages = lists_utils:intersect(ProviderStorages, maps:keys(SpaceStorages)),
+    RandomizeCapacityUsageReport = fun() ->
+        lists:foldl(fun(StorageId, Acc) ->
+            SupportSize = maps:get(StorageId, SpaceStorages),
+            case rand:uniform(3) of
+                1 ->
+                    % incomplete report
+                    Acc;
+                2 ->
+                    % overfull storage
+                    Acc#{StorageId => SupportSize - 1000 + rand:uniform(2000)};
+                3 ->
+                    % random usage
+                    Acc#{StorageId => rand:uniform(SupportSize)}
+            end
+        end, #{}, SupportingStorages)
+    end,
+
+    EnvSetUpFun = fun() ->
+        #{previousRegistry => get_capacity_usage_registry(Config, Space)}
+    end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{previousRegistry := PreviousRegistry}, Data) ->
+        CurrentRegistry = get_capacity_usage_registry(Config, Space),
+        case ShouldSucceed of
+            false ->
+                ?assertEqual(CurrentRegistry, PreviousRegistry);
+            true ->
+                {ok, CurrentProviderUsage} = provider_capacity_usage:lookup_by_provider(CurrentRegistry, SubjectProvider),
+                {ok, PreviousProviderUsage} = provider_capacity_usage:lookup_by_provider(PreviousRegistry, SubjectProvider),
+                Report = maps:get(<<"providerCapacityUsageReport">>, Data),
+                ExpectedProviderOverfull = lists:foldl(fun(StorageId, Acc) ->
+                    CurrentStorageUsage = maps:get(StorageId, CurrentProviderUsage#provider_capacity_usage.per_storage),
+                    PreviousStorageUsage = maps:get(StorageId, PreviousProviderUsage#provider_capacity_usage.per_storage),
+                    SupportSize = maps:get(StorageId, SpaceStorages),
+                    ?assertEqual(SupportSize, CurrentStorageUsage#storage_capacity_usage.total),
+
+                    ExpectedUsed = maps:get(StorageId, Report, PreviousStorageUsage#storage_capacity_usage.used),
+                    ?assertEqual(CurrentStorageUsage#storage_capacity_usage.used, ExpectedUsed),
+
+                    OverfullThreshold = oz_test_utils:call_oz(Config, ctool, get_env, [
+                        provider_capacity_usage_overfull_threshold_percent, 98
+                    ]),
+                    ?assertEqual(
+                        CurrentStorageUsage#storage_capacity_usage.overfull,
+                        ExpectedUsed * 100 / SupportSize > OverfullThreshold
+                    ),
+                    Acc orelse CurrentStorageUsage#storage_capacity_usage.overfull
+                end, false, SupportingStorages),
+                ?assertEqual(CurrentProviderUsage#provider_capacity_usage.overfull, ExpectedProviderOverfull)
+        end
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {provider, SubjectProvider, SubjectProviderToken}
+            ],
+            unauthorized = [nobody],
+            forbidden = AllClients -- [{provider, SubjectProvider, SubjectProviderToken}]
+        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = update_provider_capacity_usage,
+            args = [auth, Space, SubjectProvider, data],
+            expected_result = ?OK_RES
+        },
+        gs_spec = #gs_spec{
+            operation = update,
+            gri = #gri{type = space_stats, id = Space, aspect = {provider_capacity_usage, SubjectProvider}},
+            expected_result = ?OK_RES
+        },
+        data_spec = #data_spec{
+            required = [<<"providerCapacityUsageReport">>],
+            correct_values = #{<<"providerCapacityUsageReport">> => [RandomizeCapacityUsageReport]},
+            bad_values = [
+                {<<"providerCapacityUsageReport">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"providerCapacityUsageReport">>)},
+                {<<"providerCapacityUsageReport">>, 1234, ?ERROR_BAD_VALUE_JSON(<<"providerCapacityUsageReport">>)},
+                {<<"providerCapacityUsageReport">>, #{<<"providerid">> => [123, <<"value">>]}, ?ERROR_BAD_DATA(<<"providerCapacityUsageReport">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+    )).
+
+
 update_provider_sync_progress_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -1170,20 +1295,20 @@ update_provider_sync_progress_test_base(Config, Space, SubjectProvider, SubjectP
                 ?assertEqual(CurrentRegistry, PreviousRegistry);
             true ->
                 {ok, CurrentProviderSummary} = provider_sync_progress:lookup(CurrentRegistry, SubjectProvider),
-                ?assertEqual(oz_test_utils:get_frozen_time_seconds(), CurrentProviderSummary#provider_summary.last_report),
+                ?assertEqual(oz_test_utils:get_frozen_time_seconds(), CurrentProviderSummary#provider_sync_progress.last_report),
                 {ok, PreviousProviderSummary} = provider_sync_progress:lookup(PreviousRegistry, SubjectProvider),
                 Report = maps:get(<<"providerSyncProgressReport">>, Data),
                 lists:foreach(fun(PeerId) ->
-                    CurrentPeerSummary = maps:get(PeerId, CurrentProviderSummary#provider_summary.per_peer),
-                    PreviousPeerSummary = maps:get(PeerId, PreviousProviderSummary#provider_summary.per_peer),
+                    CurrentPeerSummary = maps:get(PeerId, CurrentProviderSummary#provider_sync_progress.per_peer),
+                    PreviousPeerSummary = maps:get(PeerId, PreviousProviderSummary#provider_sync_progress.per_peer),
                     ReportForPeer = maps:get(PeerId, Report, #{}),
                     ?assertEqual(
-                        CurrentPeerSummary#peer_summary.seen_seq,
-                        maps:get(<<"seenSeq">>, ReportForPeer, PreviousPeerSummary#peer_summary.seen_seq)
+                        CurrentPeerSummary#sync_progress_with_peer.seen_seq,
+                        maps:get(<<"seenSeq">>, ReportForPeer, PreviousPeerSummary#sync_progress_with_peer.seen_seq)
                     ),
                     ?assertEqual(
-                        CurrentPeerSummary#peer_summary.seq_timestamp,
-                        maps:get(<<"seqTimestamp">>, ReportForPeer, PreviousPeerSummary#peer_summary.seq_timestamp)
+                        CurrentPeerSummary#sync_progress_with_peer.seq_timestamp,
+                        maps:get(<<"seqTimestamp">>, ReportForPeer, PreviousPeerSummary#sync_progress_with_peer.seq_timestamp)
                     )
                 end, SupportingProviders)
         end
@@ -1236,12 +1361,15 @@ get_latest_emitted_seq_test(Config) ->
     oz_test_utils:support_space_by_provider(Config, OtherProvider, Space),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
+    % simulate some time passing after the space is created
+    oz_test_utils:simulate_seconds_passing(1000),
     Now = oz_test_utils:get_frozen_time_seconds(),
     ExpLatestEmittedSeq = rand:uniform(500000),
+    ExpLatestEmittedSeqTimestamp = Now - 15,
     ?assertEqual(ok, oz_test_utils:call_oz(Config, space_logic, update_provider_sync_progress, [
         ?PROVIDER(SubjectProvider), Space, SubjectProvider, provider_sync_progress:collective_report_to_json(
             provider_sync_progress:build_collective_report([SubjectProvider, OtherProvider], fun
-                (P) when P == SubjectProvider -> {ExpLatestEmittedSeq, Now - 15};
+                (P) when P == SubjectProvider -> {ExpLatestEmittedSeq, ExpLatestEmittedSeqTimestamp};
                 (P) when P == OtherProvider -> {1, Now - 500}
             end)
         )
@@ -1268,16 +1396,17 @@ get_latest_emitted_seq_test(Config) ->
             module = space_logic,
             function = get_latest_emitted_seq,
             args = [auth, Space, SubjectProvider],
-            expected_result = ?OK_TERM(fun(LatestEmittedSeq) ->
-                ?assertEqual(LatestEmittedSeq, ExpLatestEmittedSeq)
+            expected_result = ?OK_TERM(fun({LatestEmittedSeq, LatestEmittedSeqTimestamp}) ->
+                ?assertEqual(LatestEmittedSeq, ExpLatestEmittedSeq),
+                ?assertEqual(LatestEmittedSeqTimestamp, ExpLatestEmittedSeqTimestamp)
             end)
         },
         gs_spec = #gs_spec{
-            operation = get,
+            operation = create,
             gri = #gri{type = space_stats, id = Space, aspect = {latest_emitted_seq, SubjectProvider}, scope = private},
             expected_result = ?OK_MAP(#{
-                <<"gri">> => gri:serialize(?GRI(space_stats, Space, {latest_emitted_seq, SubjectProvider}, private)),
-                <<"seq">> => ExpLatestEmittedSeq
+                <<"seq">> => ExpLatestEmittedSeq,
+                <<"seqTimestamp">> => ExpLatestEmittedSeqTimestamp
             })
         }
     },
@@ -1290,13 +1419,31 @@ get_stats_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
     {ok, {ModernProvA, _}} = oz_test_utils:create_provider(Config),
+    {ok, ModernProvAStorage} = oz_test_utils:create_storage(Config, ?PROVIDER(ModernProvA)),
     {ok, {ModernProvB, _}} = oz_test_utils:create_provider(Config),
+    {ok, ModernProvBStoragePrim} = oz_test_utils:create_storage(Config, ?PROVIDER(ModernProvB)),
+    {ok, ModernProvBStorageBis} = oz_test_utils:create_storage(Config, ?PROVIDER(ModernProvB)),
     {ok, {LegacyProv, _}} = oz_test_utils:create_provider(Config),
+    {ok, LegacyProvStorage} = oz_test_utils:create_storage(Config, ?PROVIDER(LegacyProv)),
     oz_test_utils:simulate_provider_version(Config, LegacyProv, ?LINE_20_02(<<"1">>)),
     {ok, {NonSupporter, _}} = oz_test_utils:create_provider(Config),
-    oz_test_utils:support_space_by_provider(Config, ModernProvA, Space),
-    oz_test_utils:support_space_by_provider(Config, ModernProvB, Space),
-    oz_test_utils:support_space_by_provider(Config, LegacyProv, Space),
+
+    GenTotalSize = fun
+        (S) when S == ModernProvAStorage -> 1234567890;
+        (S) when S == ModernProvBStoragePrim -> 999999999;
+        (S) when S == ModernProvBStorageBis -> 50000000000;
+        (S) when S == LegacyProvStorage -> 3456128978
+    end,
+    GenExpUsedSize = fun
+        (S) when S == ModernProvAStorage -> 987654321;
+        (S) when S == ModernProvBStoragePrim -> 999999998;
+        (S) when S == ModernProvBStorageBis -> 0;
+        (S) when S == LegacyProvStorage -> -1  % the value of -1 is used when there has been no report
+    end,
+    oz_test_utils:support_space(Config, ?PROVIDER(ModernProvA), ModernProvAStorage, Space, GenTotalSize(ModernProvAStorage)),
+    oz_test_utils:support_space(Config, ?PROVIDER(ModernProvB), ModernProvBStoragePrim, Space, GenTotalSize(ModernProvBStoragePrim)),
+    oz_test_utils:support_space(Config, ?PROVIDER(ModernProvB), ModernProvBStorageBis, Space, GenTotalSize(ModernProvBStorageBis)),
+    oz_test_utils:support_space(Config, ?PROVIDER(LegacyProv), LegacyProvStorage, Space, GenTotalSize(LegacyProvStorage)),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     TimeZero = oz_test_utils:get_frozen_time_seconds(),
@@ -1321,45 +1468,86 @@ get_stats_test(Config) ->
         (P) when P == ModernProvB -> {400, TimeZero + 400};
         (P) when P == LegacyProv -> {1, TimeZero}
     end),
-    % legacy providers do not report the progress and their lastReport is set to 0
-    LegacyProvLastUpdate = 0,
 
-    ExpectedProvSyncProgressRegistry = #{
-        ModernProvA => #provider_summary{legacy = false, joining = false, archival = false, desync = true,
+    ExpectedProvSyncProgressRegistry = #sync_progress_registry{space_creation_time = TimeZero, per_provider = #{
+        ModernProvA => #provider_sync_progress{legacy = false, joining = false, archival = false, desync = true,
             last_report = ModernProvALastUpdate,
             per_peer = #{
-                ModernProvA => #peer_summary{seen_seq = 10, seq_timestamp = TimeZero + 10,
+                ModernProvA => #sync_progress_with_peer{seen_seq = 10, seq_timestamp = TimeZero + 10,
                     diff = 0, delay = 0, desync = false},
-                ModernProvB => #peer_summary{seen_seq = 20, seq_timestamp = TimeZero + 20,
+                ModernProvB => #sync_progress_with_peer{seen_seq = 20, seq_timestamp = TimeZero + 20,
                     diff = 380, delay = 380, desync = true},
-                LegacyProv => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
+                LegacyProv => #sync_progress_with_peer{seen_seq = 1, seq_timestamp = TimeZero,
                     diff = 0, delay = 0, desync = false}
             }
         },
-        ModernProvB => #provider_summary{legacy = false, joining = false, archival = false, desync = false,
+        ModernProvB => #provider_sync_progress{legacy = false, joining = false, archival = false, desync = false,
             last_report = ModernProvBLastUpdate,
             per_peer = #{
-                ModernProvA => #peer_summary{seen_seq = 8, seq_timestamp = TimeZero + 8,
+                ModernProvA => #sync_progress_with_peer{seen_seq = 8, seq_timestamp = TimeZero + 8,
                     diff = 2, delay = 2, desync = false},
-                ModernProvB => #peer_summary{seen_seq = 400, seq_timestamp = TimeZero + 400,
+                ModernProvB => #sync_progress_with_peer{seen_seq = 400, seq_timestamp = TimeZero + 400,
                     diff = 0, delay = 0, desync = false},
-                LegacyProv => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
+                LegacyProv => #sync_progress_with_peer{seen_seq = 1, seq_timestamp = TimeZero,
                     diff = 0, delay = 0, desync = false}
             }
         },
-        LegacyProv => #provider_summary{legacy = true, joining = true, archival = false, desync = true,
-            last_report = LegacyProvLastUpdate,
+        LegacyProv => #provider_sync_progress{legacy = true, joining = true, archival = false, desync = true,
+            % legacy providers do not report the progress and their lastReport is always set to -1
+            last_report = -1,
             per_peer = #{
-                ModernProvA => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
+                ModernProvA => #sync_progress_with_peer{seen_seq = 1, seq_timestamp = TimeZero,
                     diff = 9, delay = 10, desync = false},
-                ModernProvB => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
+                ModernProvB => #sync_progress_with_peer{seen_seq = 1, seq_timestamp = TimeZero,
                     diff = 399, delay = 400, desync = true},
-                LegacyProv => #peer_summary{seen_seq = 1, seq_timestamp = TimeZero,
+                LegacyProv => #sync_progress_with_peer{seen_seq = 1, seq_timestamp = TimeZero,
                     diff = 0, delay = 0, desync = false}
             }
         }
+    }},
+
+    UpdateCapacityUsage = fun(Provider, Storages) ->
+        ?assertEqual(ok, oz_test_utils:call_oz(Config, space_logic, update_provider_capacity_usage, [
+            ?PROVIDER(Provider), Space, Provider, provider_capacity_usage:report_to_json(
+                provider_capacity_usage:build_report(Storages, GenExpUsedSize)
+            )
+        ])),
+        oz_test_utils:get_frozen_time_seconds()
+    end,
+    UpdateCapacityUsage(ModernProvA, [ModernProvAStorage]),
+    UpdateCapacityUsage(ModernProvB, [ModernProvBStoragePrim, ModernProvBStorageBis]),
+
+    ExpectedProvCapacityUsageRegistry = #{
+        ModernProvA => #provider_capacity_usage{overfull = false, per_storage = #{
+            ModernProvAStorage => #storage_capacity_usage{
+                used = GenExpUsedSize(ModernProvAStorage),
+                total = GenTotalSize(ModernProvAStorage),
+                overfull = false
+            }
+        }},
+        ModernProvB => #provider_capacity_usage{overfull = true, per_storage = #{
+            ModernProvBStoragePrim => #storage_capacity_usage{
+                used = GenExpUsedSize(ModernProvBStoragePrim),
+                total = GenTotalSize(ModernProvBStoragePrim),
+                overfull = true
+            },
+            ModernProvBStorageBis => #storage_capacity_usage{
+                used = GenExpUsedSize(ModernProvBStorageBis),
+                total = GenTotalSize(ModernProvBStorageBis),
+                overfull = false
+            }
+        }},
+        LegacyProv => #provider_capacity_usage{overfull = false, per_storage = #{
+            LegacyProvStorage => #storage_capacity_usage{
+                used = GenExpUsedSize(LegacyProvStorage),
+                total = GenTotalSize(LegacyProvStorage),
+                overfull = false
+            }
+        }}
     },
+
     ExpectedStatsJson = #{
+        <<"capacityUsageRegistry">> => provider_capacity_usage:registry_to_json(ExpectedProvCapacityUsageRegistry),
         <<"syncProgressRegistry">> => provider_sync_progress:registry_to_json(ExpectedProvSyncProgressRegistry)
     },
 
@@ -1392,6 +1580,7 @@ get_stats_test(Config) ->
             function = get_stats,
             args = [auth, Space],
             expected_result = ?OK_TERM(fun(SpaceStats) ->
+                ?assertEqual(ExpectedProvCapacityUsageRegistry, SpaceStats#space_stats.capacity_usage_registry),
                 ?assertEqual(ExpectedProvSyncProgressRegistry, SpaceStats#space_stats.sync_progress_registry)
             end)
         },
@@ -1411,6 +1600,13 @@ get_stats_test(Config) ->
 
 get_sync_progress_registry(Config, SpaceId) ->
     {ok, #space_stats{sync_progress_registry = Registry}} = oz_test_utils:call_oz(
+        Config, space_logic, get_stats, [?ROOT, SpaceId]
+    ),
+    Registry.
+
+
+get_capacity_usage_registry(Config, SpaceId) ->
+    {ok, #space_stats{capacity_usage_registry = Registry}} = oz_test_utils:call_oz(
         Config, space_logic, get_stats, [?ROOT, SpaceId]
     ),
     Registry.
