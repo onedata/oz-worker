@@ -48,6 +48,7 @@
     update_full_name/3, update_username/3, update/3,
     change_password/3, change_password/4,
     toggle_basic_auth/3, set_password/3, update_basic_auth_config/3,
+    toggle_access_block/3,
     update_oz_privileges/4, update_oz_privileges/3,
     set_space_alias/4
 ]).
@@ -427,6 +428,18 @@ update_basic_auth_config(Auth, UserId, Data) ->
         operation = update,
         auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = basic_auth},
+        data = Data
+    }).
+
+
+-spec toggle_access_block(aai:auth(), od_user:id(), boolean() | entity_logic:data()) -> ok | errors:error().
+toggle_access_block(Auth, UserId, Blocked) when is_boolean(Blocked) ->
+    toggle_access_block(Auth, UserId, #{<<"blocked">> => Blocked});
+toggle_access_block(Auth, UserId, Data) ->
+    entity_logic:handle(#el_req{
+        operation = update,
+        auth = Auth,
+        gri = #gri{type = od_user, id = UserId, aspect = access_block},
         data = Data
     }).
 

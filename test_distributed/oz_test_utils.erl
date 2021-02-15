@@ -64,6 +64,8 @@
     user_leave_harvester/3,
     user_leave_cluster/3,
 
+    toggle_user_access_block/3,
+
     create_provider_registration_token/3,
     create_temporary_provider_registration_token/3
 ]).
@@ -613,6 +615,11 @@ user_leave_cluster(Config, UserId, ClusterId) ->
     ?assertMatch(ok, call_oz(
         Config, user_logic, leave_cluster, [?ROOT, UserId, ClusterId]
     )).
+
+
+-spec toggle_user_access_block(Config :: term(), UserId :: od_user:id(), Blocked :: boolean()) -> ok.
+toggle_user_access_block(Config, UserId, Blocked) ->
+    ?assertMatch(ok, call_oz(Config, user_logic, toggle_access_block, [?ROOT, UserId, Blocked])).
 
 
 %%--------------------------------------------------------------------

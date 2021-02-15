@@ -135,9 +135,11 @@ validate_login(Method, Req) ->
 %% Can return ?ERROR_INTERNAL_SERVER_ERROR in case token refresh goes wrong.
 %% @end
 %%--------------------------------------------------------------------
--spec acquire_idp_access_token([od_user:linked_account()], auth_config:idp()) ->
+-spec acquire_idp_access_token(od_user:record(), auth_config:idp()) ->
     {ok, {access_token(), access_token_ttl()}} | {error, term()}.
-acquire_idp_access_token(LinkedAccounts, IdP) ->
+acquire_idp_access_token(#od_user{blocked = true}, _) ->
+    ?ERROR_USER_BLOCKED;
+acquire_idp_access_token(#od_user{linked_accounts = LinkedAccounts}, IdP) ->
     lists:foldl(fun
         (_LinkedAccount, {ok, Result}) ->
             {ok, Result};
@@ -173,14 +175,19 @@ acquire_idp_access_token(#linked_account{idp = IdP, access_token = {AccessToken,
 %% @end
 %%--------------------------------------------------------------------
 -spec refresh_idp_access_token(auth_config:idp(), refresh_token()) ->
-    {ok, {idp_auth:access_token(), idp_auth:access_token_ttl()}} | {error, term()}.
+    {ok, {idp_auth:access_token(), idp_auth:access_token_ttl()}} | errors:error().
 refresh_idp_access_token(IdP, RefreshToken) ->
     try
         {ok, Attributes} = openid_protocol:refresh_idp_access_token(IdP, RefreshToken),
         LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
-        {ok, _} = linked_accounts:acquire_user(LinkedAccount),
-        #linked_account{access_token = {AccessToken, Expires}} = LinkedAccount,
-        {ok, {AccessToken, Expires - ?NOW()}}
+        case linked_accounts:acquire_user(LinkedAccount) of
+            ?ERROR_USER_BLOCKED ->
+                log_error(?ERROR_USER_BLOCKED, IdP, <<"refresh_token_flow">>, []),
+                ?ERROR_USER_BLOCKED;
+            {ok, _} ->
+                #linked_account{access_token = {AccessToken, Expires}} = LinkedAccount,
+                {ok, {AccessToken, Expires - ?NOW()}}
+        end
     catch
         throw:Error ->
             log_error(Error, IdP, <<"refresh_token_flow">>, erlang:get_stacktrace()),
@@ -235,11 +242,13 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
 -spec validate_login_by_linked_account(od_user:linked_account()) ->
     {ok, od_user:id()}.
 validate_login_by_linked_account(LinkedAccount) ->
-    {ok, #document{key = UserId, value = #od_user{
-        full_name = FullName
-    }}} = linked_accounts:acquire_user(LinkedAccount),
-    ?info("User '~ts' has logged in (~s)", [FullName, UserId]),
-    {ok, UserId}.
+    case linked_accounts:acquire_user(LinkedAccount) of
+        ?ERROR_USER_BLOCKED ->
+            ?ERROR_USER_BLOCKED;
+        {ok, #document{key = UserId, value = #od_user{full_name = FullName}}} ->
+            ?info("User '~ts' has logged in (~s)", [FullName, UserId]),
+            {ok, UserId}
+    end.
 
 
 %% @private
@@ -337,6 +346,11 @@ log_error(?ERROR_INVALID_AUTH_REQUEST, IdP, StateToken, Stacktrace) ->
     ?auth_debug(
         "Cannot validate login request for IdP '~p' (state: ~s) - invalid auth request~n"
         "Stacktrace: ~s", [IdP, StateToken, iolist_to_binary(lager:pr_stacktrace(Stacktrace))]
+    );
+log_error(?ERROR_USER_BLOCKED, IdP, StateToken, _) ->
+    ?auth_debug(
+        "Declining login request for IdP '~p' (state: ~s) - the user is blocked",
+        [IdP, StateToken]
     );
 log_error(?ERROR_IDP_UNREACHABLE(Reason), IdP, StateToken, _) ->
     ?auth_warning(
