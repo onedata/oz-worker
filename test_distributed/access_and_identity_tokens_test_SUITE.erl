@@ -304,6 +304,7 @@ run_test_repeat(RequestSpec, RepeatNum) ->
         check_forbidden_service_when_consuming_scenarios(RequestSpec),
         check_unauthorized_scenarios(RequestSpec),
         check_authorized_scenarios(RequestSpec),
+        check_user_blocking(RequestSpec),
         check_temporary_token_revocation(RequestSpec),
         check_named_token_revocation(RequestSpec),
         check_token_caveats_handling(RequestSpec),
@@ -459,6 +460,30 @@ check_authorized_scenarios(RequestSpec) ->
         lists:foreach(fun(EligibleSubject) ->
             ClientAuth = gen_client_auth(EligibleSubject, Persistence),
             ?assertMatch(ok, make_request_with_random_context(RequestSpec, EligibleSubject, ClientAuth))
+        end, RequestSpec#request_spec.eligible_subjects)
+    end, [named, temporary]).
+
+
+check_user_blocking(RequestSpec) ->
+    lists:foreach(fun(Persistence) ->
+        lists:foreach(fun(EligibleSubject) ->
+            case EligibleSubject of
+                ?SUB(user, UserId) ->
+                    ClientAuth = gen_client_auth(EligibleSubject, Persistence),
+                    % context must be randomized before blocking access as it
+                    % may need to create some invitations on user's behalf
+                    % (which is not possible when the user is blocked)
+                    RequestContext = randomize_request_context(EligibleSubject),
+                    ozt_users:toggle_access_block(UserId, true),
+                    ?assertMatch(
+                        ?ERROR_UNAUTHORIZED(?ERROR_USER_BLOCKED),
+                        make_request(RequestSpec, RequestContext, ClientAuth)
+                    ),
+                    ozt_users:toggle_access_block(UserId, false),
+                    ?assertMatch(ok, make_request(RequestSpec, RequestContext, ClientAuth));
+                _ ->
+                    ok
+            end
         end, RequestSpec#request_spec.eligible_subjects)
     end, [named, temporary]).
 

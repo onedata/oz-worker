@@ -148,6 +148,8 @@ end).
     linked_accounts = [] :: [od_user:linked_account()],
     entitlements = [] :: od_user:entitlements(),
 
+    blocked = false :: boolean(),
+
     active_sessions = [] :: [session:id()],
 
     % List of user's client tokens

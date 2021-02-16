@@ -76,6 +76,8 @@ format_error_reason(?ERROR_INVALID_STATE) ->
     <<"invalid_state:", (integer_to_binary(state_token:ttl()))/binary>>;
 format_error_reason(?ERROR_INVALID_AUTH_REQUEST) ->
     <<"invalid_auth_request">>;
+format_error_reason(?ERROR_USER_BLOCKED) ->
+    <<"user_blocked">>;
 format_error_reason(?ERROR_IDP_UNREACHABLE(_)) ->
     <<"idp_unreachable">>;
 format_error_reason(?ERROR_BAD_IDP_RESPONSE(_, _, _, _)) ->

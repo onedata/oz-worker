@@ -52,10 +52,15 @@
 %% Retrieves the shared token secret for given subject.
 %% @end
 %%--------------------------------------------------------------------
--spec get_for_subject(aai:subject()) -> {tokens:secret(), tokens:temporary_token_generation()}.
+-spec get_for_subject(aai:subject()) ->
+    {ok, {tokens:secret(), tokens:temporary_token_generation()}} | ?ERROR_NOT_FOUND.
 get_for_subject(Subject) ->
-    {true, {Record, _}} = fetch_entity(Subject),
-    {Record#temporary_token_secret.secret, Record#temporary_token_secret.generation}.
+    case fetch_entity(Subject) of
+        ?ERROR_NOT_FOUND ->
+            ?ERROR_NOT_FOUND;
+        {true, {#temporary_token_secret{secret = Secret, generation = Generation}, _}} ->
+            {ok, {Secret, Generation}}
+    end.
 
 
 %%--------------------------------------------------------------------
