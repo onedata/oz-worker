@@ -20,6 +20,8 @@
     timestamp_seconds/0,
     get_env/1,
 
+    add_user_to_cluster/4,
+
     list_users/1,
     create_user/1,
     create_user/2,
@@ -58,6 +60,11 @@ timestamp_seconds() ->
 -spec get_env(Key :: atom()) -> term() | no_return().
 get_env(Env) ->
     oz_worker:get_env(Env).
+
+
+-spec add_user_to_cluster(aai:auth(), od_cluster:id(), od_user:id(), [privileges:cluster_privilege()]) -> {ok, od_user:id()} | errors:error().
+add_user_to_cluster(Auth, ClusterId, UserId, Privileges) ->
+    cluster_logic:add_user(Auth, ClusterId, UserId, Privileges).
 
 
 -spec list_users(aai:auth()) -> {ok, [od_user:id()]} | {error, term()}.
