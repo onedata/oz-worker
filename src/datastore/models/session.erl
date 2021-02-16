@@ -188,7 +188,7 @@ delete_user_session(SessionId, UserId, GracePeriod, true = _ClearExpiredUserSess
 -spec clear_expired_sessions(od_user:id(), GracePeriod :: undefined | time:millis()) ->
     ok | {error, term()}.
 clear_expired_sessions(UserId, GracePeriod) ->
-    {ok, ActiveUserSessions} = od_user:get_all_sessions(UserId),
+    ActiveUserSessions = od_user:get_all_sessions(UserId),
     lists:foreach(fun(UserSessionId) ->
         case ?MODULE:get(UserSessionId) of
             {ok, #document{value = #session{last_refresh = LastRefresh}}} ->
