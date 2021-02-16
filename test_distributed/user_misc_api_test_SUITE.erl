@@ -292,12 +292,10 @@ get_test(Config) ->
     oz_test_utils:call_oz(Config, od_user, update, [User, fun(UserRecord) ->
         {ok, UserRecord#od_user{emails = ExpEmails}}
     end]),
-    ExpBlocked = lists_utils:random_element([true, false]),
-    oz_test_utils:toggle_user_access_block(Config, User, ExpBlocked),
     ProtectedUserData = UserData#{
         <<"emails">> => ExpEmails,
         <<"basicAuthEnabled">> => false,
-        <<"blocked">> => ExpBlocked
+        <<"blocked">> => false
     },
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -395,7 +393,7 @@ get_test(Config) ->
                 {provider, P1, P1Token}
             ]
         },
-        rest_spec = #rest_spec{
+        rest_spec = RestSpec = #rest_spec{
             method = get,
             path = [<<"/users/">>, User],
             expected_code = ?HTTP_200_OK,
@@ -431,7 +429,29 @@ get_test(Config) ->
             expected_result = api_test_expect:shared_user(gs, User, UserData)
         }
     },
-    ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)),
+
+    % block the user and check if the blocked flag is set
+    % omit the subject user from client_spec as they cannot make requests due to the block
+    oz_test_utils:toggle_user_access_block(Config, User, true),
+    BlockedUserData = ProtectedUserData#{<<"blocked">> => true},
+    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_USERS_VIEW]}
+            ]
+        },
+        rest_spec = RestSpec#rest_spec{
+            expected_body = api_test_expect:protected_user(rest, User, BlockedUserData)
+        },
+        logic_spec = LogicSpec#logic_spec{
+            expected_result = api_test_expect:protected_user(logic, User, BlockedUserData)
+        },
+        gs_spec = GsSpec#gs_spec{
+            expected_result = api_test_expect:protected_user(gs, User, BlockedUserData)
+        }
+    })).
 
 
 get_self_test(Config) ->

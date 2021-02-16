@@ -64,7 +64,8 @@ routes() -> [
         b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = basic_auth}
     }},
     %% Block or unblock user access
-    %% This operation does not require any specific privileges.
+    %% This operation requires one of the following privileges:
+    %% - oz_users_update
     {<<"/users/:id/access_block">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = access_block}
