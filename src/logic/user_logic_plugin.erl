@@ -407,11 +407,16 @@ update(#el_req{gri = #gri{id = UserId, aspect = basic_auth}, data = Data}) ->
     end));
 
 update(#el_req{gri = #gri{id = UserId, aspect = access_block}, data = #{<<"blocked">> := Blocked}}) ->
-    ?extract_ok(od_user:update(UserId, fun(User) ->
+    Result = ?extract_ok(od_user:update(UserId, fun(User) ->
         {ok, User#od_user{
             blocked = Blocked
         }}
-    end));
+    end)),
+    case {Result, Blocked} of
+        {ok, true} -> od_user:delete_all_sessions(UserId);
+        _ -> ok
+    end,
+    Result;
 
 update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = Data}) ->
     PrivsToGrant = maps:get(<<"grant">>, Data, []),
