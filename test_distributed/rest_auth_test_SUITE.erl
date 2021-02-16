@@ -247,28 +247,6 @@ gui_token_test(Config) ->
         {ok, #{<<"fullName">> => <<"U1">>}}
     )),
 
-    % check if user blocking works as expected
-    oz_test_utils:toggle_user_access_block(Config, UserId, true),
-    ?assert(check_rest_call(Config,
-        #{
-            ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
-            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
-            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
-        },
-        ?ERROR_USER_BLOCKED
-    )),
-
-    % after unblocking, authentication should work again
-    oz_test_utils:toggle_user_access_block(Config, UserId, false),
-    ?assert(check_rest_call(Config,
-        #{
-            ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
-            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
-            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
-        },
-        {ok, #{<<"fullName">> => <<"U1">>}}
-    )),
-
     % no session cookie
     ?assert(check_rest_call(Config,
         #{
@@ -307,12 +285,61 @@ gui_token_test(Config) ->
         ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [?SERVICE(?OP_WORKER, Provider1)]})
     )),
 
+    % check if user blocking works as expected
+    oz_test_utils:toggle_user_access_block(Config, UserId, true),
+    ?assert(check_rest_call(Config,
+        #{
+            ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
+        },
+        ?ERROR_USER_BLOCKED
+    )),
+
+    % blocking the user causes the session to be deleted - despite unblocking,
+    % the token should no longer work
+    oz_test_utils:toggle_user_access_block(Config, UserId, false),
+    ?assert(check_rest_call(Config,
+        #{
+            ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
+        },
+        ?ERROR_TOKEN_SESSION_INVALID
+    )),
+
+    % after unblocking and with a new session and token, authentication should work again
+    {ok, {NewSessionId, NewCookie}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {GuiToken3, Ttl}} = oz_test_utils:call_oz(Config, token_logic, create_access_token_for_gui, [
+        ?USER(UserId), UserId, NewSessionId, ?SERVICE(?OP_WORKER, Provider1)
+    ]),
+    {ok, SerializedGuiToken3} = tokens:serialize(GuiToken3),
+    ?assert(check_rest_call(Config,
+        #{
+            ?HDR_X_AUTH_TOKEN => SerializedGuiToken3,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", NewCookie/binary>>,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
+        },
+        {ok, #{<<"fullName">> => <<"U1">>}}
+    )),
+
+    % non-matching session cookie
+    ?assert(check_rest_call(Config,
+        #{
+            ?HDR_X_AUTH_TOKEN => SerializedGuiToken3,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,  % old cookie
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
+        },
+        ?ERROR_TOKEN_SESSION_INVALID
+    )),
+
     % expired token
     oz_test_utils:simulate_seconds_passing(Ttl + 1),
     ?assert(check_rest_call(Config,
         #{
-            ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
-            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
+            ?HDR_X_AUTH_TOKEN => SerializedGuiToken3,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
         },
         ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = oz_test_utils:timestamp_seconds(Config) - 1})
     )).
