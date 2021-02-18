@@ -22,7 +22,7 @@
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([get_ctx/0]).
--export([add_session/2, remove_session/2, get_all_sessions/1, delete_all_sessions/1]).
+-export([add_session/2, remove_session/2, get_all_sessions/1]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -41,9 +41,6 @@
 % the group. The privileges are persisted to be able to detect later changes.
 -type entitlements() :: [{od_group:id(), entitlement_mapping:privileges()}].
 -export_type([full_name/0, username/0, email/0, linked_account/0, entitlements/0]).
-
-% Delay before all session connections are terminated when user is deleted.
--define(SESSION_CLEANUP_GRACE_PERIOD, 3000).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -111,7 +108,6 @@ update(UserId, Diff) ->
 %%--------------------------------------------------------------------
 -spec force_delete(id()) -> ok | {error, term()}.
 force_delete(UserId) ->
-    delete_all_sessions(UserId),
     datastore_model:delete(?CTX, UserId).
 
 %%--------------------------------------------------------------------
@@ -223,12 +219,6 @@ get_all_sessions(UserId) ->
         {error, not_found} ->
             []
     end.
-
--spec delete_all_sessions(id()) -> ok.
-delete_all_sessions(UserId) ->
-    lists:foreach(fun(SessionId) ->
-        session:delete(SessionId, ?SESSION_CLEANUP_GRACE_PERIOD, false)
-    end, get_all_sessions(UserId)).
 
 %%%===================================================================
 %%% datastore_model callbacks

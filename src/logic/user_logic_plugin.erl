@@ -413,7 +413,7 @@ update(#el_req{gri = #gri{id = UserId, aspect = access_block}, data = #{<<"block
         }}
     end)),
     case {Result, Blocked} of
-        {ok, true} -> od_user:delete_all_sessions(UserId);
+        {ok, true} -> session:delete_all_user_sessions(UserId);
         _ -> ok
     end,
     Result;
@@ -431,6 +431,7 @@ update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = Data}) ->
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = UserId, aspect = instance}}) ->
+    session:delete_all_user_sessions(UserId),
     % Invalidate client tokens
     temporary_token_secret:delete_for_subject(?SUB(user, UserId)),
     token_logic:delete_all_user_named_tokens(?USER(UserId), UserId),

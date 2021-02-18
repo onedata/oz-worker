@@ -17,8 +17,8 @@
 
 %% API
 -export([
-    add/3,
-    remove/3,
+    report_connected/2,
+    report_disconnected/2,
     get_all/2,
     get_last_activity/1,
     close_all/2
@@ -36,8 +36,9 @@
 %%% API
 %%%===================================================================
 
--spec add(od_user:id(), session:id(), gs_server:conn_ref()) -> ok | {error, term()}.
-add(UserId, SessionId, ConnectionRef) ->
+-spec report_connected(aai:auth(), gs_server:conn_ref()) -> ok | {error, term()}.
+report_connected(UserAuth, ConnectionRef) ->
+    {UserId, SessionId} = auth_to_user_and_session(UserAuth),
     update(UserId, fun(ConnectionsPerSession) ->
         Connections = maps:get(SessionId, ConnectionsPerSession, []),
         ConnectionsPerSession#{
@@ -46,8 +47,9 @@ add(UserId, SessionId, ConnectionRef) ->
     end).
 
 
--spec remove(od_user:id(), session:id(), gs_server:conn_ref()) -> ok | {error, term()}.
-remove(UserId, SessionId, ConnectionRef) ->
+-spec report_disconnected(aai:auth(), gs_server:conn_ref()) -> ok | {error, term()}.
+report_disconnected(UserAuth, ConnectionRef) ->
+    {UserId, SessionId} = auth_to_user_and_session(UserAuth),
     update(UserId, fun(ConnectionsPerSession) ->
         Connections = maps:get(SessionId, ConnectionsPerSession, []),
         case lists:delete(ConnectionRef, Connections) of
@@ -122,6 +124,17 @@ update(UserId, ConnectionsDiff) ->
         {error, _} = Error ->
             Error
     end.
+
+%% @private
+-spec auth_to_user_and_session(aai:auth()) -> {od_user:id(), session:id()}.
+auth_to_user_and_session(?USER(UserId, AuthSessionId)) ->
+    % connections unrelated to any session are associated with the default
+    % user session (see the session module)
+    SessionId = case AuthSessionId of
+        undefined -> session:default_user_session(UserId);
+        Id when is_binary(Id) -> Id
+    end,
+    {UserId, SessionId}.
 
 %%%===================================================================
 %%% datastore_model callbacks

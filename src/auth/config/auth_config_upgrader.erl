@@ -574,7 +574,7 @@ icon_background(elixir) -> "#FF7A04";
 icon_background(indigo) -> "#341246";
 icon_background(facebook) -> "#5B87C5";
 icon_background(github) -> "#1E2325";
-icon_background(google) -> "#F1514F";
+icon_background(google) -> "#FFFFFF";
 icon_background(onepanel) -> "#4BD187";
 icon_background(plgrid) -> "#026381";
 icon_background(rhea) -> "#B51017";

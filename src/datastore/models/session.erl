@@ -6,7 +6,16 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% API for session record - used to store session details.
+%%% API for session record - used to store session details. Typical session is
+%%% created when a user signs in to Onezone. During GUI usage, access
+%%% tokens that are created for use in GS channel are bound to the session.
+%%% Beside standard sessions, each user has a virtual session, called default
+%%% user session. It is used to keep track of connections that are not related
+%%% to a GUI session - which happens when a standard access token is used for
+%%% a GS connection. The standard and the virtual (default) user sessions
+%%% together allow tracking all user connections and terminating them when a
+%%% session is destroyed or the user looses access to the service. See the
+%%% user_connections module for connection tracking per session id.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(session).
@@ -18,11 +27,13 @@
 
 %% API
 -export([
+    default_user_session/1,
     create/2,
     get/1,
     get_user_id/1, belongs_to_user/2,
     update/2,
     delete/1, delete/2, delete/3,
+    delete_all_user_sessions/1,
     list/0
 ]).
 
@@ -42,9 +53,18 @@
 }).
 
 
+% Delay before all session connections are terminated when all user sessions are deleted.
+-define(USER_SESSIONS_CLEANUP_GRACE_PERIOD, 3000).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
+
+%% @doc See the module's doc.
+-spec default_user_session(od_user:id()) -> id().
+default_user_session(UserId) ->
+    <<"user-default-", UserId/binary>>.
+
 
 -spec create(id(), record()) -> ok | {error, term()}.
 create(SessionId, Session) ->
@@ -129,6 +149,15 @@ delete(SessionId, GracePeriod, ClearExpiredUserSessions) ->
             Error
     end.
 
+
+-spec delete_all_user_sessions(od_user:id()) -> ok.
+delete_all_user_sessions(UserId) ->
+    lists:foreach(fun(SessionId) ->
+        delete(SessionId, ?USER_SESSIONS_CLEANUP_GRACE_PERIOD, false),
+        timer:apply_after(?USER_SESSIONS_CLEANUP_GRACE_PERIOD, user_connections, close_all, [
+            UserId, default_user_session(UserId)
+        ])
+    end, od_user:get_all_sessions(UserId)).
 
 %%--------------------------------------------------------------------
 %% @doc
