@@ -1182,7 +1182,7 @@ update_provider_capacity_usage_test_base(Config, Space, SubjectProvider, Subject
                     CurrentStorageUsage = maps:get(StorageId, CurrentProviderUsage#provider_capacity_usage.per_storage),
                     PreviousStorageUsage = maps:get(StorageId, PreviousProviderUsage#provider_capacity_usage.per_storage),
                     SupportSize = maps:get(StorageId, SpaceStorages),
-                    ?assertEqual(SupportSize, CurrentStorageUsage#storage_capacity_usage.total),
+                    ?assertEqual(SupportSize, CurrentStorageUsage#storage_capacity_usage.granted),
 
                     ExpectedUsed = maps:get(StorageId, Report, PreviousStorageUsage#storage_capacity_usage.used),
                     ?assertEqual(CurrentStorageUsage#storage_capacity_usage.used, ExpectedUsed),
@@ -1522,26 +1522,26 @@ get_stats_test(Config) ->
         ModernProvA => #provider_capacity_usage{overfull = false, per_storage = #{
             ModernProvAStorage => #storage_capacity_usage{
                 used = GenExpUsedSize(ModernProvAStorage),
-                total = GenTotalSize(ModernProvAStorage),
+                granted = GenTotalSize(ModernProvAStorage),
                 overfull = false
             }
         }},
         ModernProvB => #provider_capacity_usage{overfull = true, per_storage = #{
             ModernProvBStoragePrim => #storage_capacity_usage{
                 used = GenExpUsedSize(ModernProvBStoragePrim),
-                total = GenTotalSize(ModernProvBStoragePrim),
+                granted = GenTotalSize(ModernProvBStoragePrim),
                 overfull = true
             },
             ModernProvBStorageBis => #storage_capacity_usage{
                 used = GenExpUsedSize(ModernProvBStorageBis),
-                total = GenTotalSize(ModernProvBStorageBis),
+                granted = GenTotalSize(ModernProvBStorageBis),
                 overfull = false
             }
         }},
         LegacyProv => #provider_capacity_usage{overfull = false, per_storage = #{
             LegacyProvStorage => #storage_capacity_usage{
                 used = GenExpUsedSize(LegacyProvStorage),
-                total = GenTotalSize(LegacyProvStorage),
+                granted = GenTotalSize(LegacyProvStorage),
                 overfull = false
             }
         }}
