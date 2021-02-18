@@ -92,6 +92,9 @@ get_response(#gri{type = space_stats, aspect = instance}, SpaceStats) ->
     rest_translator:ok_body_reply(#{
         <<"syncProgressRegistry">> => provider_sync_progress:registry_to_json(
             SpaceStats#space_stats.sync_progress_registry
+        ),
+        <<"capacityUsageRegistry">> => provider_capacity_usage:registry_to_json(
+            SpaceStats#space_stats.capacity_usage_registry
         )
     });
 

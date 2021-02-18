@@ -11,47 +11,47 @@
 %%% It is used by the entity_logic layer and assumes that validity or
 %%% authorization checks have already been applied.
 %%%
-%%% Supported Oneprovider versions:
+%%% Compatiblity with given Oneprovider versions:
 %%%
-%%% 19.02 - Oneproviders in this version won't connect to Onezone as the compa-
-%%%         tibility reference prevents that, but they can be upgraded to 20.02:
-%%%         * Onezone has already run the migration procedures (when it was
-%%%           upgraded to 20.02) and the Oneprovider has a virtual storage
-%%%           (storageId == providerId) that supports its spaces.
-%%%         * Oneprovider will upgrade its cluster and migrate its storages to
-%%%           Onezone, and then call the 'upgrade_support_to_20_02' operation
-%%%           for each support to switch to the new storages and get rid of the
-%%%           virtual storage.
-%%%         * Oneprovider will update its version info and mark itself as 20.02.
+%%% 19.02 - Oneproviders in this version can be no longer upgraded, as it is
+%%%         possible to upgrade only to 20.02, which is too old to communicate
+%%%         with Onezone. After Onezone is upgraded to 22.02, such providers
+%%%         are effectively lost.
 %%%
-%%% 20.02 - Oneproviders in this version are supported, but treated as legacy.
+%%% 20.02 - Oneproviders in this version won't connect to Onezone as the compa-
+%%%         tibility reference prevents that, but they can be upgraded to 21.02.
+%%%         It is required that such Oneprovider had successfully upgraded to
+%%%         20.02 in the past and it uses the modern concept of storages held
+%%%         in Onezone.
+%%%
+%%% 21.02 - Oneproviders in this version are supported, but treated as legacy.
 %%%         Their supports do not conform to the new mechanisms introduced in
-%%%         21.02 - space parameters, support stages or provider sync progress.
+%%%         22.02 - space parameters, support stages or provider sync progress.
 %%%         Such providers will remain operational and marked as having the
 %%%         default support parameters, legacy support stage and initial
 %%%         sync progress (seq = 1). They will be able to operate with other
-%%%         providers in 20.02, but not with the modern ones. The next upgrade
+%%%         providers in 21.02, but not with the modern ones. The next upgrade
 %%%         is needed to move on:
 %%%         * Onezone has already initialized the new support info for all
-%%%           spaces during its upgrade to 21.02, by calling the
-%%%           'migrate_all_supports_to_21_02_model' procedure - all providers
+%%%           spaces during its upgrade to 22.02, by calling the
+%%%           'migrate_all_supports_to_22_02_model' procedure - all providers
 %%%           have default parameters, legacy support and initial sync progress.
 %%%         * Oneprovider will upgrade its cluster and switch to the new support
-%%%           stage handling by calling the 'upgrade_support_to_21_02'
+%%%           stage handling by calling the 'upgrade_support_to_22_02'
 %%%           operation, which will set its stage to joining.
-%%%         * Oneprovider will update its version info and mark itself as 21.02.
+%%%         * Oneprovider will update its version info and mark itself as 22.02.
 %%%         * Oneprovider will start reporting its sync progress, which will
 %%%           populate the space_stats record and cause support stage transition
 %%%           to active when it has caught up with other providers.
 %%%         * Peer Oneproviders within the supported space that do not make the
 %%%           upgrade will shortly be marked as desync and will not be able to
-%%%           communicate with the 21.02 Oneproviders, nevertheless they will be
+%%%           communicate with the 22.02 Oneproviders, nevertheless they will be
 %%%           able to communicate with other un-upgraded Oneproviders. Until all
 %%%           supporting Oneproviders unify their versions, there will be a
 %%%           growing desync state of the their databases
 %%%           (stored data, transfers, QoS etc).
 %%%
-%%% 21.02 - Oneproviders in this version are treated as up-to-date and use all
+%%% 22.02 - Oneproviders in this version are treated as up-to-date and use all
 %%%         mechanisms related to space support.
 %%%
 %%%
@@ -61,13 +61,16 @@
 %%%         nor change any of their support state. The 19.02 provider API
 %%%         related to space support has been completely removed. @TODO VFS-5856
 %%%
-%%% 20.02 - Oneproviders in this version still use the legacy support API, made
+%%% 20.02 - Oneproviders in this version are not allowed to connect to Onezone
+%%%         nor change any of their support state.
+%%%
+%%% 21.02 - Oneproviders in this version still use the legacy support API, made
 %%%         up of 3 operations: create/update/delete support. These API calls
 %%%         are emulated using the new support mechanisms - the legacy logic is
 %%%         reflected in the new space support model, leading to the same state
-%%%         as after upgrading Onezone to 21.02.
+%%%         as after upgrading Onezone to 22.02.
 %%%
-%%% 21.02 - Oneproviders in this version use the API that corresponds to the
+%%% 22.02 - Oneproviders in this version use the API that corresponds to the
 %%%         support stage transitions, e.g. init_support, init_unsupport,
 %%%         complete_unsupport_resize etc.
 %%%
@@ -96,8 +99,8 @@
 -export([force_unsupport/3]).
 
 -export([upgrade_support_to_20_02/3]).
--export([upgrade_support_to_21_02/3]).
--export([migrate_all_supports_to_21_02_model/0]).
+-export([upgrade_support_to_22_02/3]).
+-export([migrate_all_supports_to_22_02_model/0]).
 
 -export([lock_on_storage/2, lock_on_space_support/3]).
 
@@ -137,37 +140,31 @@ init_support_insecure(ProviderId, StorageId, SpaceId, SupportSize, ProposedParam
             ok
     end,
 
-    WasSpaceAlreadySupportedByProvider = provider_logic:supports_space(ProviderId, SpaceId),
-
     entity_graph:add_relation(
         od_space, SpaceId,
         od_storage, StorageId,
         SupportSize
     ),
 
-    IsLegacyProvider = od_provider:is_in_older_major_version_than_onezone(ProviderId),
+    SupportModel = od_provider:check_support_model(ProviderId),
 
     RegistryTransitionFun = fun(Registry) ->
-        case IsLegacyProvider of
-            true ->
-                support_stage:insert_legacy_support_entry(Registry, ProviderId);
+        % if the provider has already supported the space and it is in a stage later
+        % than 'joining', the new support should be immediately marked as 'active'
+        % (the provider is already synced as it has finished joining at least once).
+        ShouldTransitionToActive = case support_stage:lookup_details(Registry, ProviderId) of
+            {ok, #support_stage_details{provider_stage = legacy}} -> false;
+            {ok, #support_stage_details{provider_stage = joining}} -> false;
+            {ok, #support_stage_details{provider_stage = retired}} -> false;
+            {ok, #support_stage_details{provider_stage = _}} -> true;
+            error -> false
+        end,
+        case ShouldTransitionToActive of
             false ->
-                % if the provider has already supported the space and it is in a stage later
-                % than 'joining', the new support should be immediately marked as 'active'
-                % (the provider is already synced as it has finished joining at least once).
-                ShouldTransitionToActive = case support_stage:lookup_details(Registry, ProviderId) of
-                    {ok, #support_stage_details{provider_stage = retired}} -> false;
-                    {ok, #support_stage_details{provider_stage = joining}} -> false;
-                    {ok, #support_stage_details{provider_stage = _}} -> true;
-                    error -> false
-                end,
-                case ShouldTransitionToActive of
-                    false ->
-                        support_stage:init_support(Registry, ProviderId, StorageId);
-                    true ->
-                        NewRegistry = ?CHECK_TRANSITION(support_stage:init_support(Registry, ProviderId, StorageId)),
-                        support_stage:finalize_support(NewRegistry, ProviderId, StorageId)
-                end
+                support_stage:init_support(Registry, SupportModel, ProviderId, StorageId);
+            true ->
+                NewRegistry = ?CHECK_TRANSITION(support_stage:init_support(Registry, SupportModel, ProviderId, StorageId)),
+                support_stage:finalize_support(NewRegistry, ProviderId, StorageId)
         end
     end,
     SpaceDiff = fun(#od_space{support_parameters_registry = ParametersRegistry} = Space) ->
@@ -183,24 +180,17 @@ init_support_insecure(ProviderId, StorageId, SpaceId, SupportSize, ProposedParam
             )
         }
     end,
-    #od_space{creation_time = CreationTime} = update_space_with_transition(
+    update_space_with_transition(
         SpaceId, ProviderId, SpaceDiff, RegistryTransitionFun
     ),
 
-    case WasSpaceAlreadySupportedByProvider of
-        true ->
-            ok;
-        false ->
-            case IsLegacyProvider of
-                true -> space_stats:register_legacy_support(SpaceId, ProviderId, CreationTime);
-                false -> space_stats:register_support(SpaceId, ProviderId, CreationTime)
-            end
-    end,
+    space_stats:register_support(SupportModel, SpaceId, StorageId, ProviderId, SupportSize),
 
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {true, {Space, Rev}} = space_logic_plugin:fetch_entity(NewGRI),
 
-    lists:foreach(fun(HarvesterId) ->
+    IsFirstSupportOfProvider = length(od_space:get_supporting_storages_of_provider(Space, ProviderId)) =:= 1,
+    IsFirstSupportOfProvider andalso lists:foreach(fun(HarvesterId) ->
         harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
             harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, false)
         end)
@@ -283,41 +273,37 @@ finalize_unsupport_insecure(ProviderId, StorageId, SpaceId) ->
         od_space, SpaceId,
         od_storage, StorageId
     ),
-    case provider_logic:supports_space(ProviderId, SpaceId) of
-        true ->
-            % The provider still supports the space with another storage
-            ok;
+
+    SupportModel = od_provider:check_support_model(ProviderId),
+
+    space_stats:register_unsupport(SupportModel, SpaceId, StorageId, ProviderId),
+
+    RegistryTransitionFun = fun(Registry) ->
+        support_stage:finalize_unsupport(Registry, ProviderId, StorageId)
+    end,
+    SpaceDiff = fun(#od_space{support_parameters_registry = ParametersRegistry} = Space) ->
+        Space#od_space{
+            % support parameters are removed in case of the last support
+            support_parameters_registry = case space_logic:is_supported_by_provider(Space, ProviderId) of
+                true -> ParametersRegistry;
+                false -> support_parameters:remove_for_provider(ParametersRegistry, ProviderId)
+            end
+        }
+    end,
+    UpdatedSpace = update_space_with_transition(
+        SpaceId, ProviderId, SpaceDiff, RegistryTransitionFun
+    ),
+
+    WasLastSupportSupportOfProvider = not space_logic:is_supported_by_provider(UpdatedSpace, ProviderId),
+    case WasLastSupportSupportOfProvider of
         false ->
-            % The space is no longer supported by the provider
-            IsLegacyProvider = od_provider:is_in_older_major_version_than_onezone(ProviderId),
-            %% @TODO VFS-6329 decide if archival sync progress should be deleted or retained
-            RegistryTransitionFun = fun(Registry) ->
-                case IsLegacyProvider of
-                    true -> support_stage:mark_legacy_support_revocation(Registry, ProviderId);
-                    false -> support_stage:finalize_unsupport(Registry, ProviderId, StorageId)
-                end
-            end,
-            SpaceDiff = fun(#od_space{support_parameters_registry = ParametersRegistry} = Space) ->
-                Space#od_space{
-                    support_parameters_registry = support_parameters:remove_for_provider(
-                        ParametersRegistry, ProviderId
-                    )
-                }
-            end,
-            #od_space{harvesters = Harvesters} = update_space_with_transition(
-                SpaceId, ProviderId, SpaceDiff, RegistryTransitionFun
-            ),
-
-            case IsLegacyProvider of
-                true -> space_stats:register_legacy_unsupport(SpaceId, ProviderId);
-                false -> space_stats:register_unsupport(SpaceId, ProviderId)
-            end,
-
+            ok;
+        true ->
             lists:foreach(fun(HarvesterId) ->
                 harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
                     harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
                 end)
-            end, Harvesters)
+            end, UpdatedSpace#od_space.harvesters)
     end.
 
 
@@ -325,12 +311,12 @@ finalize_unsupport_insecure(ProviderId, StorageId, SpaceId) ->
 %% handled in different way to allow providers to clean up afterwards (mark them as force-retired)
 -spec force_unsupport(od_provider:id(), od_storage:id(), od_space:id()) -> ok | no_return().
 force_unsupport(ProviderId, StorageId, SpaceId) ->
-    % run step-by-step unsupport only for up-to-date providers as legacy
+    % run step-by-step unsupport only for modern providers as legacy
     % providers cannot change their support stage
-    case od_provider:is_in_older_major_version_than_onezone(ProviderId) of
-        true ->
+    case od_provider:check_support_model(ProviderId) of
+        legacy ->
             ok;
-        false ->
+        modern ->
             init_unsupport(ProviderId, StorageId, SpaceId),
             complete_unsupport_resize(ProviderId, StorageId, SpaceId),
             complete_unsupport_purge(ProviderId, StorageId, SpaceId)
@@ -347,6 +333,7 @@ force_unsupport(ProviderId, StorageId, SpaceId) ->
 %% or restart during the cluster upgrade.
 %% @end
 %%--------------------------------------------------------------------
+%% @TODO VFS-5856 remove deprecated space support functionalities
 -spec upgrade_support_to_20_02(od_provider:id(), od_storage:id(), od_space:id()) -> ok.
 upgrade_support_to_20_02(ProviderId, StorageId, SpaceId) ->
     VirtualStorageId = ProviderId,
@@ -377,72 +364,92 @@ upgrade_support_to_20_02(ProviderId, StorageId, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Providers that are upgraded from version 20.02 to 21.02 call this operation
+%% Providers that are upgraded from version 21.02 to 22.02 call this operation
 %% during the cluster upgrade procedure to migrate their supports to the new model.
 %% The procedure is idempotent in case a provider calls it twice due to a crash
 %% or restart during the cluster upgrade.
 %% @end
 %%--------------------------------------------------------------------
--spec upgrade_support_to_21_02(od_provider:id(), od_storage:id(), od_space:id()) -> ok.
-upgrade_support_to_21_02(ProviderId, StorageId, SpaceId) ->
+-spec upgrade_support_to_22_02(od_provider:id(), od_storage:id(), od_space:id()) -> ok.
+upgrade_support_to_22_02(ProviderId, StorageId, SpaceId) ->
     ?info("Processing request to upgrade legacy support of space '~s' by provider '~s' to ~s model...", [
-        SpaceId, ProviderId, ?LINE_21_02
+        SpaceId, ProviderId, ?LINE_22_02
     ]),
-    update_space_with_transition(SpaceId, ProviderId, fun(Registry) ->
+    UpdatedSpace = update_space_with_transition(SpaceId, ProviderId, fun(Registry) ->
         case support_stage:lookup_details(Registry, ProviderId) of
-            % after the upgrade, the provider will appear as joining until it catches up with others
-            ?LEGACY_SUPPORT -> support_stage:init_support(Registry, ProviderId, StorageId);
-            % the upgrade has already been done
-            {ok, _} -> {ok, Registry};
-            % the provider does not support the space
-            error -> ?ERROR_FORBIDDEN
+            {ok, #support_stage_details{per_storage = #{StorageId := legacy}}} ->
+                support_stage:upgrade_support(Registry, ProviderId, StorageId);
+            {ok, _} ->
+                % the upgrade has already been done
+                {ok, Registry};
+            error ->
+                % the provider does not support the space
+                ?ERROR_FORBIDDEN
         end
     end),
     try
-        space_stats:register_upgrade_of_legacy_support(SpaceId, ProviderId)
+        case support_stage:lookup_details(UpdatedSpace#od_space.support_stage_registry, ProviderId) of
+            {ok, #support_stage_details{provider_stage = joining}} ->
+                % the support is considered upgraded when all storages have been upgraded
+                % (which causes provider stage transition to joining)
+                space_stats:register_upgrade_of_legacy_support(SpaceId, ProviderId);
+            _ ->
+                ok
+        end
     catch error:{not_a_legacy_provider, ProviderId} ->
         ok
     end,
     ?notice("Successfully upgraded legacy support of space '~s' by provider '~s' to ~s model", [
-        SpaceId, ProviderId, ?LINE_21_02
+        SpaceId, ProviderId, ?LINE_22_02
     ]).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Initializes new models related to space support with default values.
-%% Dedicated for upgrading Onezone from 20.02.* to 21.02.*.
+%% Dedicated for upgrading Onezone from 21.02.* to 22.02.*.
 %% The procedure is idempotent in case Onezone crashes during execution.
 %% @end
 %%--------------------------------------------------------------------
--spec migrate_all_supports_to_21_02_model() -> ok.
-migrate_all_supports_to_21_02_model() ->
+-spec migrate_all_supports_to_22_02_model() -> ok.
+migrate_all_supports_to_22_02_model() ->
     entity_graph:ensure_up_to_date(),
-    ?info("Migrating space supports to the new model (~s)...", [?LINE_21_02]),
+    ?info("Migrating space supports to the new model (~s)...", [?LINE_22_02]),
     {ok, Spaces} = od_space:list(),
     lists:foreach(fun(#document{key = SpaceId, value = SpaceRecord}) ->
         % @TODO VFS-6780 rework calculation of effective supports to eliminate risk of non-recalculated graph
         EffProviders = maps:keys(SpaceRecord#od_space.eff_providers),
-        #od_space{name = Name, creation_time = CreationTime} = update_space(SpaceId, fun(Space) ->
+        SupportingStorages = maps:keys(SpaceRecord#od_space.storages),
+        UpdatedSpace = update_space(SpaceId, fun(Space) ->
             lists:foldl(fun(ProvId, SpaceAcc) ->
                 SpaceAccWithParameters = SpaceAcc#od_space{
                     support_parameters_registry = support_parameters:update_for_provider(
                         SpaceAcc#od_space.support_parameters_registry, ProvId, support_parameters:build(global, eager)
                     )
                 },
-                apply_transition_within_space(SpaceId, SpaceAccWithParameters, ProvId, fun(Registry) ->
-                    support_stage:insert_legacy_support_entry(Registry, ProvId)
-                end)
+                {ok, #od_provider{storages = ProviderStorages}} = provider_logic:get(?ROOT, ProvId),
+                SupportingProviderStorages = lists_utils:intersect(ProviderStorages, SupportingStorages),
+                lists:foldl(fun(StorageId, SpaceAccWithNewSupport) ->
+                    apply_transition_within_space(SpaceId, SpaceAccWithNewSupport, ProvId, fun(Registry) ->
+                        support_stage:init_support(Registry, legacy, ProvId, StorageId)
+                    end)
+                end, SpaceAccWithParameters, SupportingProviderStorages)
             end, Space, EffProviders)
         end),
-        space_stats:init_for_space(SpaceId),
-        lists:foreach(fun(ProviderId) ->
+        #od_space{
+            name = Name,
+            creation_time = CreationTime,
+            storages = SpaceStorages
+        } = UpdatedSpace,
+        space_stats:init_for_space(SpaceId, CreationTime),
+        maps:map(fun(StorageId, SupportSize) ->
+            {ok, #od_storage{provider = ProviderId}} = storage_logic:get(?ROOT, StorageId),
             try
-                space_stats:register_legacy_support(SpaceId, ProviderId, CreationTime)
+                space_stats:register_support(legacy, SpaceId, StorageId, ProviderId, SupportSize)
             catch error:{support_already_registered, ProviderId} ->
                 ok
             end
-        end, EffProviders),
+        end, SpaceStorages),
         ?info("  * space '~ts' (~ts) OK, ~B providers", [Name, SpaceId, length(EffProviders)])
     end, Spaces),
     ?notice("Successfully migrated space supports").
@@ -486,14 +493,14 @@ get_storage(StorageId) ->
 %% @private
 -spec update_space(od_space:id(), space_update_fun()) -> od_space:record() | no_return().
 update_space(SpaceId, Diff) ->
-    Wrapper = fun(Space) ->
+    ErrorHandlingWrapper = fun(Space) ->
         try
             {ok, Diff(Space)}
         catch throw:{error, _} = Error ->
             {error, {thrown, Error}}
         end
     end,
-    case od_space:update(SpaceId, Wrapper) of
+    case od_space:update(SpaceId, ErrorHandlingWrapper) of
         {ok, #document{value = SpaceRecord}} -> SpaceRecord;
         % re-throw only explicitly thrown (expected) errors, otherwise just crash
         {error, {thrown, Error}} -> throw(Error)
@@ -529,14 +536,6 @@ apply_transition_within_space(SpaceId, Space, ProviderId, RegistryTransitionFun)
             ?info(
                 "Support changed for space '~ts' (~s):~n"
                 "  * Legacy provider '~ts' has ceased support for the space (~s)", [
-                    Space#od_space.name, SpaceId,
-                    ProviderName, ProviderId
-                ]
-            );
-        ?LEGACY_SUPPORT ->
-            ?info(
-                "Support changed for space '~ts' (~s):~n"
-                "  * Provider '~ts' has been marked as legacy (~s)", [
                     Space#od_space.name, SpaceId,
                     ProviderName, ProviderId
                 ]

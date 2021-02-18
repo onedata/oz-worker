@@ -249,8 +249,8 @@ end).
     % track changes in spaces and propagate them bottom-up.
     eff_harvesters = #{} :: entity_graph:eff_relations(od_provider:id()),
 
-    support_parameters_registry = #{} :: support_parameters:registry(),
-    support_stage_registry = #{} :: support_stage:registry(),
+    support_parameters_registry = support_parameters:new_registry() :: support_parameters:registry(),
+    support_stage_registry = support_stage:new_registry() :: support_stage:registry(),
 
     creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),
@@ -263,7 +263,8 @@ end).
 
 %% Record that stores space statistics.
 -record(space_stats, {
-    sync_progress_registry = #{} :: provider_sync_progress:registry(),
+    sync_progress_registry :: provider_sync_progress:registry(),
+    capacity_usage_registry :: provider_capacity_usage:registry(),
     % providers that have transitioned from the joining state, removed from the
     % list when this event has been successfully processed
     transitioned_from_joining = [] :: [od_provider:id()]

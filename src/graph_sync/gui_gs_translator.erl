@@ -307,9 +307,10 @@ translate_group(#gri{id = GroupId, aspect = instance, scope = private}, Group) -
         <<"effUserList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = eff_users}),
         <<"spaceList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = spaces}),
         <<"harvesterList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = eff_harvesters}),
-        <<"info">> => maps:merge(translate_creator(Group#od_group.creator), #{
+        <<"info">> => #{
+            <<"creator">> => aai:subject_to_json(Group#od_group.creator),
             <<"creationTime">> => Group#od_group.creation_time
-        })
+        }
     } end;
 
 translate_group(#gri{id = GroupId, aspect = instance, scope = protected}, Group) ->
@@ -322,9 +323,10 @@ translate_group(#gri{id = GroupId, aspect = instance, scope = protected}, Group)
     fun(?USER(UserId)) -> #{
         <<"name">> => Name,
         <<"type">> => Type,
-        <<"info">> => maps:merge(translate_creator(Creator), #{
+        <<"info">> => #{
+            <<"creator">> => aai:subject_to_json(Creator),
             <<"creationTime">> => CreationTime
-        }),
+        },
         <<"scope">> => <<"protected">>,
         <<"directMembership">> => group_logic:has_direct_user(GroupId, UserId)
     } end;
@@ -453,10 +455,11 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
         <<"supportParametersRegistry">> => support_parameters:registry_to_json(Space#od_space.support_parameters_registry),
         <<"supportStageRegistry">> => support_stage:registry_to_json(Space#od_space.support_stage_registry),
         <<"spaceStats">> => gri:serialize(#gri{type = space_stats, id = SpaceId, aspect = instance}),
-        <<"info">> => maps:merge(translate_creator(Space#od_space.creator), #{
+        <<"info">> => #{
+            <<"creator">> => aai:subject_to_json(Space#od_space.creator),
             <<"creationTime">> => Space#od_space.creation_time,
             <<"sharesCount">> => length(Shares)
-        })
+        }
     } end;
 
 translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
@@ -481,11 +484,11 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"supportParametersRegistry">> => support_parameters:registry_to_json(SupportParametersRegistry),
         <<"supportStageRegistry">> => support_stage:registry_to_json(SupportStageRegistry),
         <<"spaceStats">> => gri:serialize(#gri{type = space_stats, id = SpaceId, aspect = instance}),
-        <<"info">> => maps:merge(translate_creator(Creator), #{
+        <<"info">> => #{
+            <<"creator">> => aai:subject_to_json(Creator),
             <<"creationTime">> => CreationTime,
             <<"sharesCount">> => SharesCount
-        })
-
+        }
     } end;
 
 translate_space(#gri{aspect = owners}, Users) ->
@@ -583,6 +586,9 @@ translate_space_stats(#gri{aspect = instance}, SpaceStats) ->
     #{
         <<"syncProgressRegistry">> => provider_sync_progress:registry_to_json(
             SpaceStats#space_stats.sync_progress_registry
+        ),
+        <<"capacityUsageRegistry">> => provider_capacity_usage:registry_to_json(
+            SpaceStats#space_stats.capacity_usage_registry
         )
     }.
 
@@ -764,9 +770,10 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, 
         <<"effGroupList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = eff_groups}),
         <<"spaceList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = spaces}),
         <<"effProviderList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = eff_providers}),
-        <<"info">> => maps:merge(translate_creator(Harvester#od_harvester.creator), #{
+        <<"info">> => #{
+            <<"creator">> => aai:subject_to_json(Harvester#od_harvester.creator),
             <<"creationTime">> => Harvester#od_harvester.creation_time
-        })
+        }
     } end;
 
 translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}, HarvesterData) ->
@@ -785,9 +792,10 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
         <<"harvestingBackendType">> => HarvestingBackendType,
         <<"harvestingBackendEndpoint">> => Endpoint,
         <<"directMembership">> => harvester_logic:has_direct_user(HarvesterId, UserId),
-        <<"info">> => maps:merge(translate_creator(Creator), #{
+        <<"info">> => #{
+            <<"creator">> => aai:subject_to_json(Creator),
             <<"creationTime">> => CreationTime
-        })},
+        }},
         case Public of
             true ->
                 ProtectedData#{
@@ -974,9 +982,10 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Clus
         <<"workerVersion">> => cluster_logic:version_info_to_json(WorkerVersion),
         <<"onepanelVersion">> => cluster_logic:version_info_to_json(OnepanelVersion),
         <<"onepanelProxy">> => OnepanelProxy,
-        <<"info">> => maps:merge(translate_creator(Creator), #{
+        <<"info">> => #{
+            <<"creator">> => aai:subject_to_json(Creator),
             <<"creationTime">> => CreationTime
-        }),
+        },
         <<"userList">> => gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = users}),
         <<"effUserList">> => gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = eff_users}),
         <<"groupList">> => gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = groups}),
@@ -1009,9 +1018,10 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cl
         <<"workerVersion">> => WorkerVersion,
         <<"onepanelVersion">> => OnepanelVersion,
         <<"onepanelProxy">> => OnepanelProxy,
-        <<"info">> => maps:merge(translate_creator(Creator), #{
+        <<"info">> => #{
+            <<"creator">> => aai:subject_to_json(Creator),
             <<"creationTime">> => CreationTime
-        })
+        }
     } end;
 
 translate_cluster(#gri{id = ClusterId, aspect = instance, scope = public}, Cluster) ->
@@ -1128,19 +1138,6 @@ format_intermediaries(Intermediaries) ->
         <<"intermediaries">> => GRIs,
         <<"directMembership">> => DirectMembership
     }.
-
-
-%% @private
--spec translate_creator(undefined | aai:subject()) ->
-    #{binary() => null | binary()}.
-translate_creator(undefined) -> #{
-    <<"creatorType">> => null,
-    <<"creatorId">> => null
-};
-translate_creator(?SUB(Type, Id)) -> #{
-    <<"creatorType">> => atom_to_binary(Type, utf8),
-    <<"creatorId">> => utils:undefined_to_null(Id)
-}.
 
 
 %% @private

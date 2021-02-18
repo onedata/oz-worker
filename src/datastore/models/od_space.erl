@@ -14,9 +14,11 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("ctool/include/space_support/support_stage.hrl").
 
 %% API
 -export([create/1, get/1, get_name/1, exists/1, update/2, force_delete/1, list/0]).
+-export([get_supporting_storages_of_provider/2]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -41,6 +43,8 @@
     sync_enabled => true,
     memory_copies => all
 }).
+
+-compile([{no_auto_import, [get/1]}]).
 
 %%%===================================================================
 %%% API
@@ -92,6 +96,26 @@ force_delete(SpaceId) ->
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
+
+-spec get_supporting_storages_of_provider(od_space:id() | od_space:record(), od_provider:id()) ->
+    [od_storage:id()].
+get_supporting_storages_of_provider(SpaceId, ProviderId) when is_binary(SpaceId) ->
+    case get(SpaceId) of
+        {ok, #document{value = Space}} -> get_supporting_storages_of_provider(Space, ProviderId);
+        {error, not_found} -> []
+    end;
+get_supporting_storages_of_provider(#od_space{support_stage_registry = SupportStageRegistry}, ProviderId) ->
+    case support_stage:lookup_details(SupportStageRegistry, ProviderId) of
+        error ->
+            [];
+        {ok, #support_stage_details{provider_stage = retired}} ->
+            [];
+        {ok, #support_stage_details{per_storage = PerStorage}} ->
+            maps:keys(maps:filter(fun(_StorageId, StorageStage) ->
+                StorageStage =/= retired
+            end, PerStorage))
+    end.
 
 
 %%--------------------------------------------------------------------

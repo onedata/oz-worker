@@ -249,7 +249,7 @@ choose_provider_for_space(SpaceId) ->
 
     OzVersion = oz_worker:get_release_version(),
     SplitUponVersion = fun({_, OpVersion}) ->
-        case onedata:compare_major_versions(OpVersion, OzVersion) of
+        case onedata:compare_release_line(OpVersion, OzVersion) of
             lower -> false;
             _ -> true
         end

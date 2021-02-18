@@ -17,6 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/space_support/support_stage.hrl").
 -include_lib("ctool/include/space_support/provider_sync_progress.hrl").
+-include_lib("ctool/include/space_support/provider_capacity_usage.hrl").
 
 % Denotes certain collection, e.g. 'users' or {'space_groups', <<"space_id">>}
 -type collection() :: atom() | {atom(), binary()}.
@@ -376,9 +377,7 @@ format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
         support_parameters_registry = ParametersRegistry,
         support_stage_registry = SupportStageRegistry
     }}} = od_space:get(SpaceId),
-    {ok, #space_stats{
-        sync_progress_registry = SyncProgressRegistry
-    }} = space_logic:get_stats(?ROOT, SpaceId),
+    {ok, #space_stats{sync_progress_registry = SyncProgressRegistry}} = space_logic:get_stats(?ROOT, SpaceId),
     format_table(providers, maps:keys(EffProviders), SortBy, SortOrder, [id, last_activity, version, name, domain], [
         {support, byte_size, 11, fun(Doc) ->
             {Support, _} = maps:get(SpaceId, Doc#document.value#od_provider.eff_spaces),
@@ -392,19 +391,19 @@ format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
             ])
         end},
         {support_stage, text, 13, fun(#document{key = ProvId}) ->
-            case support_stage:lookup_details(SupportStageRegistry, ProvId) of
-                ?LEGACY_SUPPORT -> <<"*legacy*">>;
-                {ok, #support_stage_details{provider_stage = SupportStage}} -> SupportStage
-            end
+            {ok, #support_stage_details{
+                provider_stage = SupportStage
+            }} = support_stage:lookup_details(SupportStageRegistry, ProvId),
+            SupportStage
         end},
         {sync_progress, text, 41, fun(#document{key = ProvId}) ->
-            {ok, #provider_summary{
+            {ok, #provider_sync_progress{
                 desync = Desync, per_peer = PerPeer
             }} = provider_sync_progress:lookup(SyncProgressRegistry, ProvId),
 
             {KnownSeqs, AllSeqs} = lists:foldl(fun(Peer, {AccKnown, AccAll}) ->
                 {Known, Latest} = try
-                    #peer_summary{seen_seq = SeenSeq, diff = Diff} = maps:get(Peer, PerPeer),
+                    #sync_progress_with_peer{seen_seq = SeenSeq, diff = Diff} = maps:get(Peer, PerPeer),
                     {SeenSeq, SeenSeq + Diff}
                 catch _:_ ->
                     {0, 0}
@@ -423,6 +422,16 @@ format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
             end,
 
             str_utils:format("~B/~B (~B%) ~s", [KnownSeqs, AllSeqs, KnownPerCent, SummaryStr])
+        end},
+        {capacity_usage, text, 14, fun(#document{key = ProviderId}) ->
+            #provider_capacity_usage{
+                overfull = Overfull,
+                per_storage = PerStorage
+            } = get_provider_capacity_usage(SpaceId, ProviderId),
+            {Used, Granted} = maps:fold(fun(_StId, #storage_capacity_usage{used = SU, granted = SG}, {AccU, AccG}) ->
+                {AccU + SU, AccG + SG}
+            end, {0, 0}, PerStorage),
+            format_capacity_usage(Used, Granted, Overfull)
         end}
     ]);
 
@@ -433,7 +442,15 @@ format_collection({space_harvesters, SpaceId}, SortBy, SortOrder) ->
 format_collection({space_storages, SpaceId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_space{storages = Storages}}} = od_space:get(SpaceId),
     format_table(storages, maps:keys(Storages), SortBy, SortOrder, all, [
-        {support, byte_size, 11, fun(Doc) -> maps:get(SpaceId, Doc#document.value#od_storage.spaces) end}
+        {granted_support, byte_size, 15, fun(Doc) -> maps:get(SpaceId, Doc#document.value#od_storage.spaces) end},
+        {capacity_usage, text, 14, fun(#document{key = StorageId, value = #od_storage{provider = ProviderId}}) ->
+            #provider_capacity_usage{per_storage = #{StorageId := #storage_capacity_usage{
+                granted = Granted,
+                used = Used,
+                overfull = Overfull
+            }}} = get_provider_capacity_usage(SpaceId, ProviderId),
+            format_capacity_usage(Used, Granted, Overfull)
+        end}
     ]);
 
 
@@ -790,9 +807,10 @@ field_specs(storages) -> [
     {eff_groups, integer, 10, fun(Doc) -> maps:size(Doc#document.value#od_storage.eff_groups) end},
     {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_storage.creation_time end},
     {qos_params, text, 55, fun(#document{value = #od_storage{qos_parameters = QosParameters}}) ->
+        CustomQosParameters = maps:without([<<"storageId">>, <<"providerId">>], QosParameters),
         KeyValuePairs = lists:map(fun({Key, Value}) ->
             str_utils:format_bin("~ts=~ts", [Key, Value])
-        end, maps:to_list(QosParameters)),
+        end, lists:sort(maps:to_list(CustomQosParameters))),
         str_utils:join_binary(KeyValuePairs, <<", ">>)
     end}
 ].
@@ -970,3 +988,30 @@ module(handle_services) -> od_handle_service;
 module(handles) -> od_handle;
 module(harvesters) -> od_harvester;
 module(storages) -> od_storage.
+
+
+%% @private
+-spec get_provider_capacity_usage(od_space:id(), od_provider:id()) ->
+    provider_capacity_usage:provider_capacity_usage().
+get_provider_capacity_usage(SpaceId, ProviderId) ->
+    {ok, #space_stats{capacity_usage_registry = CapacityUsageRegistry}} = space_logic:get_stats(?ROOT, SpaceId),
+    {ok, ProviderCapacityUsage} = provider_capacity_usage:lookup_by_provider(CapacityUsageRegistry, ProviderId),
+    ProviderCapacityUsage.
+
+
+%% @private
+-spec format_capacity_usage(
+    provider_capacity_usage:bytes(),
+    provider_capacity_usage:bytes(),
+    provider_capacity_usage:overfull()
+) -> binary().
+format_capacity_usage(Used, Granted, Overfull) ->
+    case Used < 0 of
+        true ->
+            <<"[UNKNOWN]">>;
+        false ->
+            str_utils:format("~B% ~s", [Used * 100 div Granted, case Overfull of
+                true -> "[FULL]";
+                false -> ""
+            end])
+    end.

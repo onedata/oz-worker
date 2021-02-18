@@ -153,11 +153,12 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     #{<<"name">> := Name} = Req#el_req.data,
+    CreationTime = global_clock:timestamp_seconds(),
     {ok, #document{key = SpaceId}} = od_space:create(#document{
         value = #od_space{
             name = Name,
             creator = aai:normalize_subject(Auth#auth.subject),
-            creation_time = global_clock:timestamp_seconds()
+            creation_time = CreationTime
         }
     }),
     case Req#el_req.auth_hint of
@@ -189,7 +190,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             ok
     end,
 
-    space_stats:init_for_space(SpaceId),
+    space_stats:init_for_space(SpaceId, CreationTime),
 
     {true, {Space, Rev}} = fetch_entity(#gri{aspect = instance, id = SpaceId}),
     {ok, resource, {GRI#gri{id = SpaceId}, {Space, Rev}}};
@@ -551,14 +552,11 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {storage, StorageId}}}) ->
 
 %% @TODO VFS-5856 deprecated, included for backward compatibility
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
-    {true, {
-        #od_provider{storages = ProviderStorages}, _
-    }} = provider_logic_plugin:fetch_entity(#gri{id = ProviderId}),
-    fun(#od_space{storages = SupportingStorages}) ->
-        ProviderStoragesSupportingSpace = lists_utils:intersect(maps:keys(SupportingStorages), ProviderStorages),
+    fun(Space) ->
+        SupportingStorages = od_space:get_supporting_storages_of_provider(Space, ProviderId),
         lists:foreach(fun(StorageId) ->
             space_support:force_unsupport(ProviderId, StorageId, SpaceId)
-        end, ProviderStoragesSupportingSpace)
+        end, SupportingStorages)
     end;
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {harvester, HarvesterId}}}) ->

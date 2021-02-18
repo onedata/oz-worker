@@ -52,7 +52,7 @@
     list_spaces_test/1,
 
     upgrade_support_to_20_02_test/1,
-    upgrade_support_to_21_02_test/1,
+    upgrade_support_to_22_02_test/1,
 
     support_with_imported_storage_test/1,
     modify_imported_storage_test/1
@@ -79,7 +79,7 @@ all() ->
         list_spaces_test,
 
         upgrade_support_to_20_02_test,
-        upgrade_support_to_21_02_test,
+        upgrade_support_to_22_02_test,
 
         support_with_imported_storage_test,
         modify_imported_storage_test
@@ -931,7 +931,7 @@ upgrade_support_to_20_02_test(Config) ->
     ?assertEqual(true, oz_test_utils:call_oz(Config, storage_logic, supports_space, [SupporterStorage, Space])).
 
 
-upgrade_support_to_21_02_test(Config) ->
+upgrade_support_to_22_02_test(Config) ->
     {ok, {SupporterProvider, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, {UnrelatedProvider, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     oz_test_utils:simulate_provider_version(Config, SupporterProvider, ?LINE_20_02(<<"1">>)),
@@ -961,13 +961,13 @@ upgrade_support_to_21_02_test(Config) ->
                 },
                 logic_spec = #logic_spec{
                     module = storage_logic,
-                    function = upgrade_support_to_21_02,
+                    function = upgrade_support_to_22_02,
                     args = [auth, StorageId, Space],
                     expected_result = ?OK
                 },
                 gs_spec = #gs_spec{
                     operation = create,
-                    gri = #gri{type = od_storage, id = StorageId, aspect = {upgrade_support_to_21_02, Space}},
+                    gri = #gri{type = od_storage, id = StorageId, aspect = {upgrade_support_to_22_02, Space}},
                     expected_result = ?OK
                 }
             }

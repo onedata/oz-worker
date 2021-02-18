@@ -66,7 +66,7 @@ fetch_entity(#gri{id = StorageId}) ->
 operation_supported(create, instance, private) -> true;
 operation_supported(create, support, private) -> true;
 operation_supported(create, {upgrade_legacy_support, _}, private) -> true;
-operation_supported(create, {upgrade_support_to_21_02, _}, private) -> true;
+operation_supported(create, {upgrade_support_to_22_02, _}, private) -> true;
 
 operation_supported(create, init_support, private) -> true;
 
@@ -145,15 +145,16 @@ create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PRO
     end;
 
 % This endpoint is dedicated for providers upgrading from version 19.02.* to 20.02.*.
+%% @TODO VFS-5856 remove deprecated space support functionalities
 create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_legacy_support, SpaceId}}}) ->
     fun(#od_storage{provider = ProviderId}) ->
         space_support:upgrade_support_to_20_02(ProviderId, StorageId, SpaceId)
     end;
 
-% This endpoint is dedicated for providers upgrading from version 20.02.* to 21.02.*.
-create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_support_to_21_02, SpaceId}}}) ->
+% This endpoint is dedicated for providers upgrading from version 21.02.* to 22.02.*.
+create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_support_to_22_02, SpaceId}}}) ->
     fun(#od_storage{provider = ProviderId}) ->
-        space_support:upgrade_support_to_21_02(ProviderId, StorageId, SpaceId)
+        space_support:upgrade_support_to_22_02(ProviderId, StorageId, SpaceId)
     end;
 
 % @TODO VFS-6977 The 'support' procedure is deprecated and used by legacy providers (<= 20.02).
@@ -333,7 +334,7 @@ authorize(#el_req{operation = create, auth = ?PROVIDER(PrId), gri = #gri{aspect 
     % storage (not necessarily the virtual storage)
     storage_logic:belongs_to_provider(Storage, PrId) andalso
         provider_logic:supports_space(PrId, SpaceId);
-authorize(#el_req{operation = create, auth = ?PROVIDER(PrId), gri = #gri{aspect = {upgrade_support_to_21_02, SpaceId}}}, Storage) ->
+authorize(#el_req{operation = create, auth = ?PROVIDER(PrId), gri = #gri{aspect = {upgrade_support_to_22_02, SpaceId}}}, Storage) ->
     auth_by_support(PrId, Storage, SpaceId);
 
 authorize(#el_req{operation = get, auth = ?PROVIDER(PrId), gri = #gri{aspect = instance, scope = private}}, Storage) ->
@@ -422,7 +423,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {finalize_unsupport, _}
 
 validate(#el_req{operation = create, gri = #gri{aspect = {upgrade_legacy_support, _}}}) -> #{
 };
-validate(#el_req{operation = create, gri = #gri{aspect = {upgrade_support_to_21_02, _}}}) -> #{
+validate(#el_req{operation = create, gri = #gri{aspect = {upgrade_support_to_22_02, _}}}) -> #{
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{

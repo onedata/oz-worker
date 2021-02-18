@@ -75,6 +75,7 @@
 
     update_support_parameters/4,
     update_provider_sync_progress/4,
+    update_provider_capacity_usage/4,
 
     remove_storage/3,
     remove_provider/3,
@@ -799,13 +800,13 @@ get_stats(Auth, SpaceId) ->
 
 
 -spec get_latest_emitted_seq(aai:auth(), od_space:id(), od_provider:id()) ->
-    {ok, provider_sync_progress:seen_seq()} | errors:error().
+    {ok, {provider_sync_progress:seq(), provider_sync_progress:seq_timestamp()}} | errors:error().
 get_latest_emitted_seq(Auth, SpaceId, ProviderId) ->
-    entity_logic:handle(#el_req{
-        operation = get,
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
         auth = Auth,
         gri = #gri{type = space_stats, id = SpaceId, aspect = {latest_emitted_seq, ProviderId}}
-    }).
+    })).
 
 
 %%--------------------------------------------------------------------
@@ -896,6 +897,19 @@ update_provider_sync_progress(Auth, SpaceId, ProviderId, Data = #{<<"providerSyn
     });
 update_provider_sync_progress(Auth, SpaceId, ProviderId, Report) ->
     update_provider_sync_progress(Auth, SpaceId, ProviderId, #{<<"providerSyncProgressReport">> => Report}).
+
+
+-spec update_provider_capacity_usage(aai:auth(), od_space:id(), od_provider:id(),
+    entity_logic:data() | provider_capacity_usage:report()) -> ok | errors:error().
+update_provider_capacity_usage(Auth, SpaceId, ProviderId, Data = #{<<"providerCapacityUsageReport">> := _}) ->
+    entity_logic:handle(#el_req{
+        operation = update,
+        auth = Auth,
+        gri = #gri{type = space_stats, id = SpaceId, aspect = {provider_capacity_usage, ProviderId}},
+        data = Data
+    });
+update_provider_capacity_usage(Auth, SpaceId, ProviderId, Report) ->
+    update_provider_capacity_usage(Auth, SpaceId, ProviderId, #{<<"providerCapacityUsageReport">> => Report}).
 
 
 %%--------------------------------------------------------------------
@@ -1061,14 +1075,13 @@ has_eff_group(Space, GroupId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Predicate saying whether specified provider supports given space.
+%% @TODO VFS-6780 rework calculation of effective supports to eliminate risk of non-recalculated graph
 %% @end
 %%--------------------------------------------------------------------
 -spec is_supported_by_provider(SpaceOrId :: od_space:id() | #od_space{},
     ProviderId :: od_provider:id()) -> boolean().
-is_supported_by_provider(SpaceId, ProviderId) when is_binary(SpaceId) ->
-    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, od_space, SpaceId);
-is_supported_by_provider(Space, ProviderId) ->
-    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Space).
+is_supported_by_provider(SpaceOrId, ProviderId) ->
+    length(od_space:get_supporting_storages_of_provider(SpaceOrId, ProviderId)) > 0.
 
 
 %%--------------------------------------------------------------------

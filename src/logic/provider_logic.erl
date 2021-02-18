@@ -616,20 +616,9 @@ has_eff_group(Provider, GroupId) ->
 %% Does not use the entity graph as it is asynchronously recalculated.
 %% @end
 %%--------------------------------------------------------------------
--spec supports_space(ProviderOrId :: od_provider:id() | od_provider:record(),
-    SpaceOrId :: od_space:id() | od_space:record()) -> boolean().
-supports_space(ProviderId, SpaceOrId) when is_binary(ProviderId) ->
-    case get(?ROOT, ProviderId) of
-        {ok, Provider} -> supports_space(Provider, SpaceOrId);
-        {error, not_found} -> false
-    end;
-supports_space(Provider, SpaceId) when is_binary(SpaceId) ->
-    case space_logic:get(?ROOT, SpaceId) of
-        {ok, Space} -> supports_space(Provider, Space);
-        {error, not_found} -> false
-    end;
-supports_space(#od_provider{storages = ProviderStorages}, #od_space{storages = SpaceStorages}) ->
-    length(lists_utils:intersect(maps:keys(SpaceStorages), ProviderStorages)) > 0.
+-spec supports_space(od_provider:id(), od_space:id() | od_space:record()) -> boolean().
+supports_space(ProviderId, SpaceOrId) ->
+    length(od_space:get_supporting_storages_of_provider(SpaceOrId, ProviderId)) > 0.
 
 
 %%--------------------------------------------------------------------

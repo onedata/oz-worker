@@ -67,6 +67,9 @@ translate_value(_, #gri{type = od_space, aspect = harvest_metadata}, Result) ->
             end, #{}, Result)
     end;
 
+translate_value(_, #gri{type = space_stats, aspect = {latest_emitted_seq, _}, scope = private}, {Seq, Timestamp}) ->
+    #{<<"seq">> => Seq, <<"seqTimestamp">> => Timestamp};
+
 translate_value(_, #gri{type = od_harvester, aspect = {submit_entry, _}}, FailedIndices) ->
     FailedIndices;
 translate_value(_, #gri{type = od_harvester, aspect = {delete_entry, _}}, FailedIndices) ->
@@ -260,10 +263,11 @@ translate_resource(_, #gri{type = space_stats, aspect = instance, scope = privat
     #{
         <<"syncProgressRegistry">> => provider_sync_progress:registry_to_json(
             SpaceStats#space_stats.sync_progress_registry
+        ),
+        <<"capacityUsageRegistry">> => provider_capacity_usage:registry_to_json(
+            SpaceStats#space_stats.capacity_usage_registry
         )
     };
-translate_resource(_, #gri{type = space_stats, aspect = {latest_emitted_seq, _}, scope = private}, Seq) ->
-    #{<<"seq">> => Seq};
 
 translate_resource(_, #gri{type = od_share, aspect = instance, scope = private}, Share) ->
     #od_share{

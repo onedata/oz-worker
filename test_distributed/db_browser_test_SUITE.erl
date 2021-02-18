@@ -234,8 +234,8 @@ set_up_providers_and_clusters(Environment = #environment{users = Users, groups =
         ozt:rpc(od_provider, update, [Provider, fun(P) -> {ok, P#od_provider{admin_email = AdminEmail}} end]),
         MinorVersion = integer_to_binary(rand:uniform(6) - 1),
         ozt_providers:simulate_version(Provider, lists_utils:random_element([
-            ?LINE_20_02(MinorVersion),
-            ?LINE_21_02(MinorVersion)
+            ?LINE_21_02(MinorVersion),
+            ?LINE_22_02(MinorVersion)
         ])),
         simulate_random_delay(),
         Cluster = Provider,
@@ -279,7 +279,16 @@ set_up_storages(Environment = #environment{providers = Providers, spaces = Space
                     2 -> rand:uniform(10000000000);
                     3 -> rand:uniform(10000000)
                 end,
-                ozt_providers:support_space(Provider, lists_utils:random_element(Storages), Space, SupportSize)
+                Storage = lists_utils:random_element(Storages),
+                ozt_providers:support_space(Provider, Storage, Space, SupportSize),
+                StorageUsage = case rand:uniform(3) of
+                    % simulate overfull storage
+                    1 -> round(SupportSize / 100 * (98 + 4 * rand:uniform()));
+                    _ -> rand:uniform(SupportSize)
+                end,
+                ozt:rpc(space_logic, update_provider_capacity_usage, [
+                    ?ROOT, Space, Provider, #{Storage => StorageUsage}
+                ])
             end, ?RAND_SUBLIST(Spaces, ?MEMBERS_COUNT)),
             Storages
         end, Providers)
@@ -291,11 +300,11 @@ set_up_provider_sync_progress(Environment = #environment{spaces = Spaces}) ->
     lists:foreach(fun(Space) ->
         EffProviders = maps:keys((ozt_spaces:get(Space))#od_space.eff_providers),
         lists:foreach(fun(Provider) ->
-            % generate some sync progress but only for up-to-date providers
-            case ozt:rpc(od_provider, is_in_older_major_version_than_onezone, [Provider]) of
-                true ->
+            % generate some sync progress but only for modern providers
+            case ozt:rpc(od_provider, check_support_model, [Provider]) of
+                legacy ->
                     ok;
-                false ->
+                modern ->
                     ?assertEqual(ok, ozt:rpc(space_logic, update_provider_sync_progress, [
                         ?ROOT, Space, Provider, maps:from_list(
                             lists:map(fun(OtherProvider) ->
