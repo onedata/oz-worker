@@ -424,23 +424,14 @@ format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
             str_utils:format("~B/~B (~B%) ~s", [KnownSeqs, AllSeqs, KnownPerCent, SummaryStr])
         end},
         {capacity_usage, text, 14, fun(#document{key = ProviderId}) ->
-            {ok, #space_stats{capacity_usage_registry = CapacityUsageRegistry}} = space_logic:get_stats(?ROOT, SpaceId),
-            {ok, #provider_capacity_usage{
+            #provider_capacity_usage{
                 overfull = Overfull,
                 per_storage = PerStorage
-            }} = provider_capacity_usage:lookup_by_provider(CapacityUsageRegistry, ProviderId),
-            {Used, Total} = maps:fold(fun(_StorageId, #storage_capacity_usage{used = SU, total = ST}, {AccU, AccT}) ->
-                {AccU + SU, AccT + ST}
+            } = get_provider_capacity_usage(SpaceId, ProviderId),
+            {Used, Granted} = maps:fold(fun(_StId, #storage_capacity_usage{used = SU, granted = SG}, {AccU, AccG}) ->
+                {AccU + SU, AccG + SG}
             end, {0, 0}, PerStorage),
-            case Used < 0 of
-                true ->
-                    <<"[UNKNOWN]">>;
-                false ->
-                    str_utils:format("~B% ~s", [Used * 100 div Total, case Overfull of
-                        true -> "[FULL]";
-                        false -> ""
-                    end])
-            end
+            format_capacity_usage(Used, Granted, Overfull)
         end}
     ]);
 
@@ -453,21 +444,12 @@ format_collection({space_storages, SpaceId}, SortBy, SortOrder) ->
     format_table(storages, maps:keys(Storages), SortBy, SortOrder, all, [
         {granted_support, byte_size, 15, fun(Doc) -> maps:get(SpaceId, Doc#document.value#od_storage.spaces) end},
         {capacity_usage, text, 14, fun(#document{key = StorageId, value = #od_storage{provider = ProviderId}}) ->
-            {ok, #space_stats{capacity_usage_registry = CapacityUsageRegistry}} = space_logic:get_stats(?ROOT, SpaceId),
-            {ok, #provider_capacity_usage{per_storage = #{StorageId := #storage_capacity_usage{
-                total = Total,
+            #provider_capacity_usage{per_storage = #{StorageId := #storage_capacity_usage{
+                granted = Granted,
                 used = Used,
                 overfull = Overfull
-            }}}} = provider_capacity_usage:lookup_by_provider(CapacityUsageRegistry, ProviderId),
-            case Used of
-                ?UNKNOWN_USAGE_VALUE ->
-                    <<"[UNKNOWN]">>;
-                _ ->
-                    str_utils:format("~B% ~s", [Used * 100 div Total, case Overfull of
-                        true -> "[FULL]";
-                        false -> ""
-                    end])
-            end
+            }}} = get_provider_capacity_usage(SpaceId, ProviderId),
+            format_capacity_usage(Used, Granted, Overfull)
         end}
     ]);
 
@@ -1006,3 +988,30 @@ module(handle_services) -> od_handle_service;
 module(handles) -> od_handle;
 module(harvesters) -> od_harvester;
 module(storages) -> od_storage.
+
+
+%% @private
+-spec get_provider_capacity_usage(od_space:id(), od_provider:id()) ->
+    provider_capacity_usage:provider_capacity_usage().
+get_provider_capacity_usage(SpaceId, ProviderId) ->
+    {ok, #space_stats{capacity_usage_registry = CapacityUsageRegistry}} = space_logic:get_stats(?ROOT, SpaceId),
+    {ok, ProviderCapacityUsage} = provider_capacity_usage:lookup_by_provider(CapacityUsageRegistry, ProviderId),
+    ProviderCapacityUsage.
+
+
+%% @private
+-spec format_capacity_usage(
+    provider_capacity_usage:bytes(),
+    provider_capacity_usage:bytes(),
+    provider_capacity_usage:overfull()
+) -> binary().
+format_capacity_usage(Used, Granted, Overfull) ->
+    case Used < 0 of
+        true ->
+            <<"[UNKNOWN]">>;
+        false ->
+            str_utils:format("~B% ~s", [Used * 100 div Granted, case Overfull of
+                true -> "[FULL]";
+                false -> ""
+            end])
+    end.

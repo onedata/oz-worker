@@ -1155,7 +1155,8 @@ update_provider_capacity_usage_test_base(Config, Space, SubjectProvider, Subject
                     % incomplete report
                     Acc;
                 2 ->
-                    % overfull storage
+                    % overfull storage; (SupportSize - 1000) will always be more
+                    % than 98% usage and the flag will be set
                     Acc#{StorageId => SupportSize - 1000 + rand:uniform(2000)};
                 3 ->
                     % random usage

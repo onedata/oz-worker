@@ -231,7 +231,7 @@ has_initial_capacity_usage(SpaceId, SupportSize, StoragesPerProvider) ->
     ExpectedRegistry = maps:map(fun(_ProviderId, Storages) ->
         #provider_capacity_usage{overfull = false, per_storage = maps:from_list(lists:map(fun(StorageId) ->
             {StorageId, #storage_capacity_usage{
-                overfull = false, used = ?UNKNOWN_USAGE_VALUE, total = SupportSize
+                overfull = false, used = ?UNKNOWN_USAGE_VALUE, granted = SupportSize
             }}
         end, Storages))}
     end, StoragesPerProvider),

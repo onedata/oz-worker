@@ -20,7 +20,7 @@
 %%%
 %%% 20.02 - Oneproviders in this version won't connect to Onezone as the compa-
 %%%         tibility reference prevents that, but they can be upgraded to 21.02.
-%%%         It is requires that such Oneprovider had successfully upgraded to
+%%%         It is required that such Oneprovider had successfully upgraded to
 %%%         20.02 in the past and it uses the modern concept of storages held
 %%%         in Onezone.
 %%%

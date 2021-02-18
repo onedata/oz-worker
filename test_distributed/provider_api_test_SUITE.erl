@@ -2568,7 +2568,7 @@ connection_status_tracking(Config) ->
     % simulate a long time passing since the connection was established
     oz_test_utils:simulate_seconds_passing(84928),
     % wait until a heartbeat is actually done by the client
-    timer:sleep(timer:seconds(15)),
+    timer:sleep(timer:seconds(InactivityPeriod + 1)),
     HeartbeatTimestamp = oz_test_utils:get_frozen_time_seconds(),
     % the provider should appear as online since the connection time
     ?awaitResult(true, IsOnline()),
