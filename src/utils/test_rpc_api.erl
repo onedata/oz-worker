@@ -35,7 +35,7 @@
     create_space/3,
     create_space_support_token/2,
     get_space_protected_data/2,
-    space_set_user_privileges/5,
+    space_set_user_privileges/4,
     delete_space/2
 ]).
 
@@ -136,14 +136,12 @@ get_space_protected_data(Auth, SpaceId) ->
 
 
 -spec space_set_user_privileges(
-    aai:auth(), od_space:id(), od_user:id(),
-    [privileges:space_privilege()],
-    [privileges:space_privilege()]
+    aai:auth(), od_space:id(), od_user:id(), [privileges:space_privilege()]
 ) ->
     ok | errors:error().
-space_set_user_privileges(Auth, SpaceId, UserId, PrivsToGrant, PrivsToRevoke) ->
+space_set_user_privileges(Auth, SpaceId, UserId, Privileges) ->
     space_logic:update_user_privileges(
-        Auth, SpaceId, UserId, PrivsToGrant, PrivsToRevoke
+        Auth, SpaceId, UserId, Privileges, lists_utils:subtract(privileges:space_admin(), Privileges)
     ).
 
 
