@@ -109,6 +109,7 @@ operation_supported(get, eff_clusters, private) -> true;
 operation_supported(update, instance, private) -> true;
 operation_supported(update, password, private) -> true;
 operation_supported(update, basic_auth, private) -> true;
+operation_supported(update, access_block, private) -> true;
 operation_supported(update, oz_privileges, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
@@ -226,7 +227,7 @@ create(Req = #el_req{gri = GRI = #gri{aspect = {idp_access_token, IdPBin}}}) whe
     create(Req#el_req{gri = GRI#gri{aspect = {idp_access_token, binary_to_existing_atom(IdPBin, utf8)}}});
 create(#el_req{gri = #gri{aspect = {idp_access_token, IdP}}}) ->
     fun(User) ->
-        case idp_auth:acquire_idp_access_token(User#od_user.linked_accounts, IdP) of
+        case idp_auth:acquire_idp_access_token(User, IdP) of
             {ok, {AccessToken, Expires}} -> {ok, value, {AccessToken, Expires}};
             {error, _} = Error -> Error
         end
@@ -253,12 +254,12 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, User) ->
     {ok, User};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
     #od_user{
-        basic_auth_enabled = BasicAuthEnabled,
+        basic_auth_enabled = BasicAuthEnabled, blocked = Blocked,
         full_name = FullName, username = Username, emails = Emails,
         linked_accounts = LinkedAccounts, creation_time = CreationTime
     } = User,
     {ok, #{
-        <<"basicAuthEnabled">> => BasicAuthEnabled,
+        <<"basicAuthEnabled">> => BasicAuthEnabled, <<"blocked">> => Blocked,
         <<"fullName">> => FullName, <<"username">> => Username,
         <<"emails">> => Emails,
         <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts, all_fields),
@@ -389,17 +390,12 @@ update(#el_req{gri = #gri{id = UserId, aspect = password}, data = Data}) ->
     OldPassword = maps:get(<<"oldPassword">>, Data),
     NewPassword = maps:get(<<"newPassword">>, Data),
 
-    Result = od_user:update(UserId, fun(User) ->
+    ?extract_ok(od_user:update(UserId, fun(User) ->
         basic_auth:change_password(User, OldPassword, NewPassword)
-    end),
-
-    case Result of
-        {ok, _} -> ok;
-        {error, _} = Error -> Error
-    end;
+    end));
 
 update(#el_req{gri = #gri{id = UserId, aspect = basic_auth}, data = Data}) ->
-    Result = od_user:update(UserId, fun(User) ->
+    ?extract_ok(od_user:update(UserId, fun(User) ->
         {ok, User2} = case maps:find(<<"basicAuthEnabled">>, Data) of
             {ok, Flag} -> basic_auth:toggle_basic_auth(User, Flag);
             error -> {ok, User}
@@ -408,12 +404,19 @@ update(#el_req{gri = #gri{id = UserId, aspect = basic_auth}, data = Data}) ->
             {ok, NewPassword} -> basic_auth:set_password(User2, NewPassword);
             error -> {ok, User2}
         end
-    end),
+    end));
 
-    case Result of
-        {ok, _} -> ok;
-        {error, _} = Error -> Error
-    end;
+update(#el_req{gri = #gri{id = UserId, aspect = access_block}, data = #{<<"blocked">> := Blocked}}) ->
+    Result = ?extract_ok(od_user:update(UserId, fun(User) ->
+        {ok, User#od_user{
+            blocked = Blocked
+        }}
+    end)),
+    case {Result, Blocked} of
+        {ok, true} -> od_user:delete_all_sessions(UserId);
+        _ -> ok
+    end,
+    Result;
 
 update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = Data}) ->
     PrivsToGrant = maps:get(<<"grant">>, Data, []),
@@ -599,6 +602,9 @@ authorize(#el_req{operation = update, gri = #gri{aspect = basic_auth}}, _) ->
     % basic_auth settings modification is restricted to admins only
     false;
 
+authorize(#el_req{operation = update, gri = #gri{aspect = access_block}}, _) ->
+    % blocking access for users is restricted to admins only
+    false;
 
 %% User can perform all operations on his record except the restricted ones handled above
 authorize(#el_req{auth = ?USER(UserId), gri = #gri{id = UserId}}, _) ->
@@ -753,6 +759,8 @@ required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instan
     [?OZ_USERS_UPDATE];
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = basic_auth}}) ->
     [?OZ_USERS_MANAGE_PASSWORDS];
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = access_block}}) ->
+    [?OZ_USERS_UPDATE];
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = oz_privileges}}) ->
     [?OZ_SET_PRIVILEGES];
 
@@ -849,6 +857,12 @@ validate(#el_req{operation = update, gri = #gri{aspect = basic_auth}}) -> #{
     at_least_one => #{
         <<"basicAuthEnabled">> => {boolean, any},
         <<"newPassword">> => {binary, password}
+    }
+};
+
+validate(#el_req{operation = update, gri = #gri{aspect = access_block}}) -> #{
+    required => #{
+        <<"blocked">> => {boolean, any}
     }
 };
 

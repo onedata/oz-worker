@@ -962,6 +962,7 @@ run_invite_token_tests(Testcase) ->
         check_valid_subject_scenarios(Testcase),
         check_invalid_consumer_scenarios(Testcase),
         check_valid_consumer_scenarios(Testcase),
+        check_user_blocking(Testcase),
         check_adding_carried_privileges_to_temporary_token(Testcase),
         check_adding_carried_privileges_to_named_token(Testcase),
         check_multi_use_temporary_token(Testcase),
@@ -1178,6 +1179,27 @@ check_valid_consumer_scenarios(Tc = #testcase{token_type = TokenType}) ->
             Tc#testcase.supports_carried_privileges andalso
                 CheckPrivilegesFun(Consumer, Tc#testcase.default_carried_privileges)
         end, Tc#testcase.eligible_consumer_types)
+    end, [named, temporary]).
+
+
+check_user_blocking(Tc = #testcase{token_type = TokenType}) ->
+    lists:foreach(fun(Persistence) ->
+        case  Tc#testcase.eligible_to_invite of
+            ?SUB(user, InvitingUserId) = EligibleSubject ->
+                ensure_privileges_to_invite(Tc, EligibleSubject),
+                lists:foreach(fun(EligibleConsumerType) ->
+                    Token = ozt_tokens:create(Persistence, EligibleSubject, TokenType),
+                    Consumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
+
+                    ozt_users:toggle_access_block(InvitingUserId, true),
+                    ?assertMatch(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, Consumer, Token)),
+
+                    ozt_users:toggle_access_block(InvitingUserId, false),
+                    ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token))
+                end, Tc#testcase.eligible_consumer_types);
+            _ ->
+                ok
+        end
     end, [named, temporary]).
 
 

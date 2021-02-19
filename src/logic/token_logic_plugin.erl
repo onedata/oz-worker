@@ -645,7 +645,7 @@ create_temporary_token(Subject, Data) ->
     end,
     IsTtlAllowed orelse throw(?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTTL)),
 
-    {Secret, Generation} = temporary_token_secret:get_for_subject(Subject),
+    {ok, {Secret, Generation}} = temporary_token_secret:get_for_subject(Subject),
     Prototype = #token{
         onezone_domain = oz_worker:get_domain(),
         id = datastore_key:new(),

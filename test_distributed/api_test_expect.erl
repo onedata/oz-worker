@@ -42,6 +42,7 @@
 protected_user(logic, _Id, UserData) ->
     ?OK_MAP(#{
         <<"basicAuthEnabled">> => maps:get(<<"basicAuthEnabled">>, UserData, false),
+        <<"blocked">> => maps:get(<<"blocked">>, UserData, false),
         <<"fullName">> => maps:get(<<"fullName">>, UserData),
         <<"username">> => maps:get(<<"username">>, UserData),
         <<"emails">> => maps:get(<<"emails">>, UserData, []),
@@ -52,6 +53,7 @@ protected_user(rest, Id, UserData) ->
     #{
         <<"userId">> => Id,
         <<"basicAuthEnabled">> => maps:get(<<"basicAuthEnabled">>, UserData, false),
+        <<"blocked">> => maps:get(<<"blocked">>, UserData, false),
         <<"fullName">> => maps:get(<<"fullName">>, UserData),
         <<"username">> => maps:get(<<"username">>, UserData),
         <<"emails">> => maps:get(<<"emails">>, UserData, []),

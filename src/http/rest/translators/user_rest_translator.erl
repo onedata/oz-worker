@@ -59,6 +59,7 @@ get_response(#gri{id = undefined, aspect = list}, Users) ->
 get_response(#gri{id = UserId, aspect = instance, scope = protected}, UserData) ->
     #{
         <<"basicAuthEnabled">> := BasicAuthEnabled,
+        <<"blocked">> := Blocked,
         <<"fullName">> := FullName, <<"username">> := Username,
         <<"emails">> := Emails,
         <<"linkedAccounts">> := LinkedAccounts,
@@ -66,6 +67,7 @@ get_response(#gri{id = UserId, aspect = instance, scope = protected}, UserData) 
     } = UserData,
     rest_translator:ok_body_reply(#{
         <<"basicAuthEnabled">> => BasicAuthEnabled,
+        <<"blocked">> => Blocked,
         <<"userId">> => UserId,
         <<"fullName">> => FullName,
         <<"username">> => utils:undefined_to_null(Username),

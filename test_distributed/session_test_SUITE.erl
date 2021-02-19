@@ -395,8 +395,7 @@ validate_session(Config, Cookie) ->
 
 compare_user_sessions(Config, UserId, Expected) ->
     ListFun = fun() ->
-        {ok, Sessions} = rpc:call(random_node(Config), od_user, get_all_sessions, [UserId]),
-        Sessions
+        rpc:call(random_node(Config), od_user, get_all_sessions, [UserId])
     end,
     compare_lists(ListFun, Expected, 60).
 
@@ -410,7 +409,7 @@ compare_connections_per_session(Config, UserId, SessionId, Expected) ->
 
 compare_connections_per_user(Config, UserId, Expected) ->
     ListFun = fun() ->
-        {ok, Sessions} = rpc:call(random_node(Config), od_user, get_all_sessions, [UserId]),
+        Sessions = rpc:call(random_node(Config), od_user, get_all_sessions, [UserId]),
         lists:flatmap(fun(SessionId) ->
             rpc:call(random_node(Config), user_connections, get_all, [UserId, SessionId])
         end, Sessions)

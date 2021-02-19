@@ -21,6 +21,8 @@
     get_env/1,
     get_domain/0,
 
+    add_user_to_cluster/4,
+
     list_users/1,
     create_user/1,
     create_user/2,
@@ -65,6 +67,11 @@ get_env(Env) ->
 -spec get_domain() -> binary().
 get_domain() ->
     oz_worker:get_domain().
+
+
+-spec add_user_to_cluster(aai:auth(), od_cluster:id(), od_user:id(), [privileges:cluster_privilege()]) -> {ok, od_user:id()} | errors:error().
+add_user_to_cluster(Auth, ClusterId, UserId, Privileges) ->
+    cluster_logic:add_user(Auth, ClusterId, UserId, Privileges).
 
 
 -spec list_users(aai:auth()) -> {ok, [od_user:id()]} | {error, term()}.

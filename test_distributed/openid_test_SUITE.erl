@@ -65,8 +65,8 @@
 %% Tests
 -export([
     get_login_endpoint/1,
-    validate_correct_login/1,
-    validate_correct_login_test_mode/1,
+    validate_login/1,
+    validate_login_test_mode/1,
     authority_delegation/1,
     offline_access/1,
     offline_access_internals/1,
@@ -80,8 +80,8 @@
 
 all() -> ?ALL([
     get_login_endpoint,
-    validate_correct_login,
-    validate_correct_login_test_mode,
+    validate_login,
+    validate_login_test_mode,
     authority_delegation,
     offline_access,
     offline_access_internals,
@@ -159,13 +159,13 @@ get_login_endpoint(Config) ->
     ).
 
 
-validate_correct_login(Config) ->
-    validate_correct_login_base(Config, false).
+validate_login(Config) ->
+    validate_login_base(Config, false).
 
-validate_correct_login_test_mode(Config) ->
-    validate_correct_login_base(Config, true).
+validate_login_test_mode(Config) ->
+    validate_login_base(Config, true).
 
-validate_correct_login_base(Config, TestMode) ->
+validate_login_base(Config, TestMode) ->
     RedirectAfterLogin = <<"https://example.com/after-login-path">>,
     OidcSpec = ?CORRECT_OIDC_SPEC,
     oidc_server_mock:mock(Config, OidcSpec),
@@ -208,35 +208,37 @@ validate_correct_login_base(Config, TestMode) ->
         Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, RedirectAfterLogin, TestMode]
     ),
 
+    UserInfo = #{
+        <<"id">> => <<"abcdef1c2c3c4c">>,
+        <<"nameTokens">> => [<<"John">>, <<"Doe">>, <<"Jr">>],
+        <<"username">> => #{
+            <<"value">> => <<"jodoe">>
+        },
+        <<"groups">> => [
+            <<"some">>,
+            <<"entitlements">>,
+            <<"idk">>,
+            <<"admins">>
+        ],
+        <<"emails">> => <<"joedoe@example.com,john.doe@my.org">>,
+        <<"organization">> => <<"My Organization">>,
+        <<"customAttrs">> => #{
+            <<"firstAttr">> => <<"firstValue">>,
+            <<"secondAttr">> => [<<"second">>, <<"value">>],
+            <<"thirdAttr">> => #{
+                <<"nested">> => <<"json">>
+            },
+            <<"fourthAttr">> => 17
+        },
+        <<"roles">> => [
+            #{<<"role">> => #{<<"displayName">> => <<"role1">>}},
+            #{<<"role">> => #{<<"displayName">> => <<"role2">>}},
+            #{<<"role">> => #{<<"displayName">> => <<"role3">>}}
+        ]
+    },
+
     {ok, MockedCowboyReq, _} = ?assertMatch({ok, _, _}, oidc_server_mock:simulate_user_login(
-        Config, OidcSpec, Url, #{
-            <<"id">> => <<"abcdef1c2c3c4c">>,
-            <<"nameTokens">> => [<<"John">>, <<"Doe">>, <<"Jr">>],
-            <<"username">> => #{
-                <<"value">> => <<"jodoe">>
-            },
-            <<"groups">> => [
-                <<"some">>,
-                <<"entitlements">>,
-                <<"idk">>,
-                <<"admins">>
-            ],
-            <<"emails">> => <<"joedoe@example.com,john.doe@my.org">>,
-            <<"organization">> => <<"My Organization">>,
-            <<"customAttrs">> => #{
-                <<"firstAttr">> => <<"firstValue">>,
-                <<"secondAttr">> => [<<"second">>, <<"value">>],
-                <<"thirdAttr">> => #{
-                    <<"nested">> => <<"json">>
-                },
-                <<"fourthAttr">> => 17
-            },
-            <<"roles">> => [
-                #{<<"role">> => #{<<"displayName">> => <<"role1">>}},
-                #{<<"role">> => #{<<"displayName">> => <<"role2">>}},
-                #{<<"role">> => #{<<"displayName">> => <<"role3">>}}
-            ]
-        }
+        Config, OidcSpec, Url, UserInfo
     )),
 
     ExpSubjectId = <<"abxdef1x2x3x4x">>,  % {replace, "c", "x", "id"}
@@ -356,7 +358,40 @@ validate_correct_login_base(Config, TestMode) ->
             ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, od_group, get, [Group2])),
             ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, od_group, get, [Group3])),
             ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, od_group, get, [Group4]))
+    end,
+
+    % check if user blocking works as expected
+    case TestMode of
+        true ->
+            % the test mode does not perform actual authentication and it is not affected by user access blocking
+            ok;
+        false ->
+            {ok, #{<<"url">> := Url2}} = oz_test_utils:call_oz(
+                Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, RedirectAfterLogin, TestMode]
+            ),
+            {ok, MockedCowboyReq2, _} = ?assertMatch({ok, _, _}, oidc_server_mock:simulate_user_login(
+                Config, OidcSpec, Url2, UserInfo
+            )),
+            oz_test_utils:toggle_user_access_block(Config, ExpUserId, true),
+            ?assertMatch(
+                {auth_error, ?ERROR_USER_BLOCKED, _, RedirectAfterLogin},
+                oz_test_utils:call_oz(Config, idp_auth, validate_login, [<<"GET">>, MockedCowboyReq2])
+            ),
+
+            % after unblocking, login should work again
+            {ok, #{<<"url">> := Url3}} = oz_test_utils:call_oz(
+                Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, RedirectAfterLogin, TestMode]
+            ),
+            {ok, MockedCowboyReq3, _} = ?assertMatch({ok, _, _}, oidc_server_mock:simulate_user_login(
+                Config, OidcSpec, Url3, UserInfo
+            )),
+            oz_test_utils:toggle_user_access_block(Config, ExpUserId, false),
+            ?assertMatch(
+                {ok, ExpUserId, RedirectAfterLogin},
+                oz_test_utils:call_oz(Config, idp_auth, validate_login, [<<"GET">>, MockedCowboyReq3])
+            )
     end.
+
 
 
 authority_delegation(Config) ->
@@ -402,6 +437,16 @@ authority_delegation(Config) ->
         end
     } end,
 
+    ?assert(rest_test_utils:check_rest_call(Config, DelegationWorksSpec(true, xAuthToken))),
+    ?assert(rest_test_utils:check_rest_call(Config, DelegationWorksSpec(true, bearer))),
+
+    % check if user blocking works as expected
+    oz_test_utils:toggle_user_access_block(Config, ExpUserId, true),
+    ?assert(rest_test_utils:check_rest_call(Config, DelegationWorksSpec(false, xAuthToken))),
+    ?assert(rest_test_utils:check_rest_call(Config, DelegationWorksSpec(false, bearer))),
+
+    % after unblocking, authority delegation should work again
+    oz_test_utils:toggle_user_access_block(Config, ExpUserId, false),
     ?assert(rest_test_utils:check_rest_call(Config, DelegationWorksSpec(true, xAuthToken))),
     ?assert(rest_test_utils:check_rest_call(Config, DelegationWorksSpec(true, bearer))),
 
@@ -466,13 +511,28 @@ offline_access(Config) ->
 
     % expired access token should be refreshed when refresh threshold is reached
     oz_test_utils:simulate_seconds_passing(2),
+
+    % but first, check if user blocking works as expected when the token is to be refreshed
+    oz_test_utils:toggle_user_access_block(Config, UserId, true),
+    ?assertMatch(?ERROR_USER_BLOCKED, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+
+    % after unblocking, offline access should work again
+    oz_test_utils:toggle_user_access_block(Config, UserId, false),
     {ok, {NewAccessToken, _}} =
         ?assertMatch({ok, {_, ?MOCK_ACCESS_TOKEN_TTL}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
     ?assertNotMatch(NewAccessToken, AccessToken),
     {ok, #od_user{linked_accounts = [
         #linked_account{refresh_token = RefreshToken2}
     ]}} = oz_test_utils:get_user(Config, UserId),
-    ?assertNotMatch(RefreshToken2, RefreshToken1).
+    ?assertNotMatch(RefreshToken2, RefreshToken1),
+
+    % check if user blocking works as expected when a token is cached (no refresh is needed)
+    oz_test_utils:toggle_user_access_block(Config, UserId, true),
+    ?assertMatch(?ERROR_USER_BLOCKED, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+
+    oz_test_utils:toggle_user_access_block(Config, UserId, false),
+    ?assertMatch({ok, {_, ?MOCK_ACCESS_TOKEN_TTL}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)).
+
 
 
 offline_access_internals(Config) ->
