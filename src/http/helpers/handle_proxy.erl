@@ -39,6 +39,7 @@
     od_handle:resource_id(), od_handle:metadata()) -> {ok, od_handle:public_handle()}.
 register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
     {ok, #document{value = #od_handle_service{
+        name = HandleServiceName,
         proxy_endpoint = ProxyEndpoint,
         service_properties = ServiceProperties}}
     } = od_handle_service:get(HandleServiceId),
@@ -60,10 +61,10 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
                 {ok, 201, _, _} ->
                     {ok, ?DOI_DC_IDENTIFIER(DoiHandle)};
                 Other ->
-                    ?error("Error registering a ~s handle, handle proxy at ~s returned:~n~p", [
-                        Type, ProxyEndpoint, Other
+                    ?error("Error registering a ~s handle, handle proxy '~ts' (~ts) returned:~n~p", [
+                        Type, HandleServiceName, ProxyEndpoint, Other
                     ]),
-                    throw(?ERROR_TEMPORARY_FAILURE)
+                    throw(?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(HandleServiceName))
             end;
         _ -> % <<"PID">> and other types
             DoiId = ?RANDOM_ID(),
@@ -72,10 +73,10 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
                     PidHandle = maps:get(<<"handle">>, json_utils:decode(RespJSON)),
                     {ok, PidHandle};
                 Other ->
-                    ?error("Error registering a ~s handle, handle proxy at ~s returned:~n~p", [
-                        Type, ProxyEndpoint, Other
+                    ?error("Error registering a ~s handle, handle proxy '~ts' (~ts) returned:~n~p", [
+                        Type, HandleServiceName, ProxyEndpoint, Other
                     ]),
-                    throw(?ERROR_TEMPORARY_FAILURE)
+                    throw(?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(HandleServiceName))
             end
     end.
 
