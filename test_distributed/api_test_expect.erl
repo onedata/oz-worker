@@ -42,22 +42,22 @@
 protected_user(logic, _Id, UserData) ->
     ?OK_MAP(#{
         <<"basicAuthEnabled">> => maps:get(<<"basicAuthEnabled">>, UserData, false),
-        <<"blocked">> => maps:get(<<"blocked">>, UserData, false),
         <<"fullName">> => maps:get(<<"fullName">>, UserData),
         <<"username">> => maps:get(<<"username">>, UserData),
         <<"emails">> => maps:get(<<"emails">>, UserData, []),
         <<"linkedAccounts">> => [],
+        <<"blocked">> => maps:get(<<"blocked">>, UserData, false),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
     });
 protected_user(rest, Id, UserData) ->
     #{
         <<"userId">> => Id,
         <<"basicAuthEnabled">> => maps:get(<<"basicAuthEnabled">>, UserData, false),
-        <<"blocked">> => maps:get(<<"blocked">>, UserData, false),
         <<"fullName">> => maps:get(<<"fullName">>, UserData),
         <<"username">> => maps:get(<<"username">>, UserData),
         <<"emails">> => maps:get(<<"emails">>, UserData, []),
         <<"linkedAccounts">> => [],
+        <<"blocked">> => maps:get(<<"blocked">>, UserData, false),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         % TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => maps:get(<<"fullName">>, UserData),
@@ -68,11 +68,11 @@ protected_user(rest, Id, UserData) ->
 protected_user(gs, Id, UserData) ->
     ?OK_MAP(#{
         <<"gri">> => gri:serialize(?GRI(od_user, Id, instance, protected)),
-
         <<"fullName">> => maps:get(<<"fullName">>, UserData),
         <<"username">> => maps:get(<<"username">>, UserData),
         <<"emails">> => maps:get(<<"emails">>, UserData, []),
         <<"linkedAccounts">> => [],
+        <<"blocked">> => maps:get(<<"blocked">>, UserData, false),
         % TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => maps:get(<<"fullName">>, UserData),
         <<"login">> => maps:get(<<"username">>, UserData),

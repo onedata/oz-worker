@@ -85,8 +85,8 @@ client_connected(?PROVIDER(ProvId), ConnectionRef) ->
         ProvId,
         {ProvRecord, Revision}
     );
-client_connected(?USER(UserId, SessionId), ConnectionRef) when is_binary(SessionId) ->
-    user_connections:add(UserId, SessionId, ConnectionRef);
+client_connected(?USER = Auth, ConnectionRef) ->
+    user_connections:report_connected(Auth, ConnectionRef);
 client_connected(_, _) ->
     ok.
 
@@ -137,8 +137,8 @@ client_disconnected(?PROVIDER(ProvId), ConnectionRef) ->
         _ ->
             ok
     end;
-client_disconnected(?USER(UserId, SessionId), ConnectionRef) when is_binary(SessionId) ->
-    user_connections:remove(UserId, SessionId, ConnectionRef);
+client_disconnected(?USER = Auth, ConnectionRef) ->
+    user_connections:report_disconnected(Auth, ConnectionRef);
 client_disconnected(_, _) ->
     ok.
 
