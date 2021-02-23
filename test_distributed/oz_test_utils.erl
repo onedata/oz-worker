@@ -3205,7 +3205,7 @@ mock_harvesting_backends(Config, Nodes, BackendName) ->
             (Endpoint) ->
                 case get_env(Config, default_harvesting_backend_endpoint) of
                     Endpoint -> ok;
-                    _ -> ?ERROR_TEMPORARY_FAILURE
+                    _ -> ?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(<<"Elasticsearch">>)
                 end
         end),
     test_utils:mock_expect(Nodes, BackendName, submit_batch, fun(_, HarvesterId, Indices, Batch) ->
