@@ -42,9 +42,6 @@
 -type entitlements() :: [{od_group:id(), entitlement_mapping:privileges()}].
 -export_type([full_name/0, username/0, email/0, linked_account/0, entitlements/0]).
 
-% Delay before all session connections are terminated when user is deleted.
--define(SESSION_CLEANUP_GRACE_PERIOD, 3000).
-
 -define(CTX, #{
     model => ?MODULE,
     secure_fold_enabled => true,
@@ -96,8 +93,6 @@ update(UserId, Diff) ->
 %%--------------------------------------------------------------------
 -spec force_delete(id()) -> ok | {error, term()}.
 force_delete(UserId) ->
-    {ok, Sessions} = get_all_sessions(UserId),
-    [session:delete(S, ?SESSION_CLEANUP_GRACE_PERIOD, false) || S <- Sessions],
     datastore_model:delete(?CTX, UserId).
 
 
@@ -194,13 +189,13 @@ remove_session(UserId, SessionId) ->
     end.
 
 
--spec get_all_sessions(id()) -> {ok, [session:id()]} | {error, term()}.
+-spec get_all_sessions(id()) -> [session:id()].
 get_all_sessions(UserId) ->
     case ?MODULE:get(UserId) of
         {ok, #document{value = #od_user{active_sessions = ActiveSessions}}} ->
-            {ok, ActiveSessions};
-        {error, _} ->
-            {ok, []}
+            ActiveSessions;
+        {error, not_found} ->
+            []
     end.
 
 %%%===================================================================
@@ -214,7 +209,7 @@ get_all_sessions(UserId) ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    13.
+    14.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -609,6 +604,59 @@ get_record_struct(13) ->
             {refresh_token, string}
         ]}]},
         {entitlements, [{string, atom}]},
+
+        {active_sessions, [string]},
+
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {last_activity, integer}, % new field
+
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(14) ->
+    % Changes:
+    %   * new field - blocked
+    {record, [
+        {full_name, string},
+        {username, string},
+        {basic_auth_enabled, boolean},
+        {password_hash, binary},
+        {emails, [string]},
+
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {full_name, string},
+            {username, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, json, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
+        ]}]},
+        {entitlements, [{string, atom}]},
+
+        {blocked, boolean},
 
         {active_sessions, [string]},
 
@@ -1535,7 +1583,84 @@ upgrade_record(12, User) ->
 
         TopDownDirty
     } = User,
-    {13, #od_user{
+    {13, {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        ActiveSessions,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        0,
+
+        TopDownDirty
+    }};
+upgrade_record(13, User) ->
+    {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        ActiveSessions,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        LastActivity,
+
+        TopDownDirty
+    } = User,
+    {14, #od_user{
         full_name = FullName,
         username = Username,
         basic_auth_enabled = BasicAuthEnabled,
@@ -1544,6 +1669,8 @@ upgrade_record(12, User) ->
 
         linked_accounts = LinkedAccounts,
         entitlements = Entitlements,
+
+        blocked = false,
 
         active_sessions = ActiveSessions,
 
@@ -1569,7 +1696,7 @@ upgrade_record(12, User) ->
         eff_clusters = EffClusters,
 
         creation_time = CreationTime,
-        last_activity = 0,
+        last_activity = LastActivity,
 
         top_down_dirty = TopDownDirty
     }}.

@@ -933,7 +933,7 @@ expected_saml_idps(3) -> [
 expected_openid_idps(2) -> [
     {google, #{
         displayName => "Google+",
-        iconBackgroundColor => "#F1514F",
+        iconBackgroundColor => "#FFFFFF",
         iconPath => "/assets/images/auth-providers/google.svg",
         protocol => openid,
         protocolConfig => #{
@@ -1260,7 +1260,7 @@ expected_openid_idps(2) -> [
 expected_openid_idps(3) -> [
     {google, #{
         displayName => "Google+",
-        iconBackgroundColor => "#F1514F",
+        iconBackgroundColor => "#FFFFFF",
         iconPath => "/assets/images/auth-providers/google.svg",
         protocol => openid,
         protocolConfig => #{

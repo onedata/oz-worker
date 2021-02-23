@@ -293,12 +293,7 @@ do_submit_request(Endpoint, IndexId, PreparedBatch) ->
         #{?HDR_CONTENT_TYPE => <<"application/x-ndjson">>}, [{200, 300}]) of
         {ok, _, _, Body} -> {ok, json_utils:decode(Body)};
         {error, _} = Error ->
-            ErrorMsg = case Error of
-                ?ERROR_TEMPORARY_FAILURE ->
-                    <<"Temporary failure: Elasticsearch service is currently unavailable">>;
-                ?ERROR_BAD_DATA(<<"payload">>) ->
-                    <<"Provided payload cannot be understood by the server">>
-            end,
+            ErrorMsg = maps:get(<<"description">>, errors:to_json(Error)),
             {error, ErrorMsg}
     end.
 
@@ -358,7 +353,7 @@ do_request(Method, Endpoint, IndexId, Path, Data, Headers, ExpectedCodes) ->
         {error, _} = Error ->
             ?error(?prepare_log("~p ~p was unsuccessful due to ~w",
                 [Method, Url, Error])),
-            ?ERROR_TEMPORARY_FAILURE
+            ?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(get_name())
     end.
 
 

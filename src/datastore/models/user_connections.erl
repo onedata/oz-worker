@@ -17,8 +17,8 @@
 
 %% API
 -export([
-    report_connected/3,
-    report_disconnected/3,
+    report_connected/2,
+    report_disconnected/2,
     get_all/2,
     get_last_activity/1,
     close_all/2
@@ -39,8 +39,9 @@
 %%% API
 %%%===================================================================
 
--spec report_connected(od_user:id(), session:id(), gs_server:conn_ref()) -> ok | {error, term()}.
-report_connected(UserId, SessionId, ConnectionRef) ->
+-spec report_connected(aai:auth(), gs_server:conn_ref()) -> ok | {error, term()}.
+report_connected(UserAuth, ConnectionRef) ->
+    {UserId, SessionId} = auth_to_user_and_session(UserAuth),
     update(UserId, fun(ConnectionsPerSession) ->
         Connections = maps:get(SessionId, ConnectionsPerSession, []),
         ConnectionsPerSession#{
@@ -49,8 +50,9 @@ report_connected(UserId, SessionId, ConnectionRef) ->
     end).
 
 
--spec report_disconnected(od_user:id(), session:id(), gs_server:conn_ref()) -> ok | {error, term()}.
-report_disconnected(UserId, SessionId, ConnectionRef) ->
+-spec report_disconnected(aai:auth(), gs_server:conn_ref()) -> ok | {error, term()}.
+report_disconnected(UserAuth, ConnectionRef) ->
+    {UserId, SessionId} = auth_to_user_and_session(UserAuth),
     update(UserId, fun(ConnectionsPerSession) ->
         Connections = maps:get(SessionId, ConnectionsPerSession, []),
         case lists:delete(ConnectionRef, Connections) of
@@ -84,6 +86,7 @@ get_last_activity(UserId) ->
             end
     end.
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Closes all connections of given user within a specific session. Closing the
@@ -98,6 +101,18 @@ close_all(UserId, SessionId) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%% @private
+-spec auth_to_user_and_session(aai:auth()) -> {od_user:id(), session:id()}.
+auth_to_user_and_session(?USER(UserId, AuthSessionId)) ->
+    % connections unrelated to any session are associated with the default
+    % user session (see the session module)
+    SessionId = case AuthSessionId of
+        undefined -> session:default_user_session(UserId);
+        Id when is_binary(Id) -> Id
+    end,
+    {UserId, SessionId}.
+
 
 %% @private
 -spec update(od_user:id(), fun((connections_per_session()) -> connections_per_session())) ->

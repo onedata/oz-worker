@@ -39,7 +39,8 @@
     get_self_test/1,
     update_test/1,
     change_password_test/1,
-    update_basic_auth_config/1,
+    update_basic_auth_config_test/1,
+    toggle_access_block_test/1,
     delete_test/1,
     delete_self_test/1,
 
@@ -63,7 +64,8 @@ all() ->
         get_self_test,
         update_test,
         change_password_test,
-        update_basic_auth_config,
+        update_basic_auth_config_test,
+        toggle_access_block_test,
         delete_test,
         delete_self_test,
 
@@ -292,7 +294,8 @@ get_test(Config) ->
     end]),
     ProtectedUserData = UserData#{
         <<"emails">> => ExpEmails,
-        <<"basicAuthEnabled">> => false
+        <<"basicAuthEnabled">> => false,
+        <<"blocked">> => false
     },
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -390,7 +393,7 @@ get_test(Config) ->
                 {provider, P1, P1Token}
             ]
         },
-        rest_spec = #rest_spec{
+        rest_spec = RestSpec = #rest_spec{
             method = get,
             path = [<<"/users/">>, User],
             expected_code = ?HTTP_200_OK,
@@ -426,7 +429,29 @@ get_test(Config) ->
             expected_result = api_test_expect:shared_user(gs, User, UserData)
         }
     },
-    ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)),
+
+    % block the user and check if the blocked flag is set
+    % omit the subject user from client_spec as they cannot make requests due to the block
+    oz_test_utils:toggle_user_access_block(Config, User, true),
+    BlockedUserData = ProtectedUserData#{<<"blocked">> => true},
+    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_USERS_VIEW]}
+            ]
+        },
+        rest_spec = RestSpec#rest_spec{
+            expected_body = api_test_expect:protected_user(rest, User, BlockedUserData)
+        },
+        logic_spec = LogicSpec#logic_spec{
+            expected_result = api_test_expect:protected_user(logic, User, BlockedUserData)
+        },
+        gs_spec = GsSpec#gs_spec{
+            expected_result = api_test_expect:protected_user(gs, User, BlockedUserData)
+        }
+    })).
 
 
 get_self_test(Config) ->
@@ -649,7 +674,7 @@ change_password_test(Config) ->
     end, TestCases).
 
 
-update_basic_auth_config(Config) ->
+update_basic_auth_config_test(Config) ->
     TestCases = [
         % {WasBasicAuthEnabled, OldPassword, Data, ExpHttpCode, ExpResult}
         {
@@ -821,6 +846,62 @@ update_basic_auth_config(Config) ->
 
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun))
     end, TestCases).
+
+
+toggle_access_block_test(Config) ->
+    {ok, UserId} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    EnvSetUpFun = fun() ->
+        {ok, #od_user{blocked = PreviousAccessBlock}} = oz_test_utils:get_user(Config, UserId),
+        #{previousAccessBlock => PreviousAccessBlock}
+    end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{previousAccessBlock := PreviousAccessBlock}, RequestData) ->
+        ExpectedAccessBlock = case ShouldSucceed of
+            true -> maps:get(<<"blocked">>, RequestData);
+            false -> PreviousAccessBlock
+        end,
+        {ok, #od_user{blocked = CurrentAccessBlock}} = oz_test_utils:get_user(Config, UserId),
+        ?assertEqual(CurrentAccessBlock, ExpectedAccessBlock)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_USERS_UPDATE]}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, UserId},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = patch,
+            path = [<<"/users/">>, UserId, <<"/access_block">>],
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
+        logic_spec = #logic_spec{
+            module = user_logic,
+            function = toggle_access_block,
+            args = [auth, UserId, data],
+            expected_result = ?OK_RES
+        },
+        data_spec = #data_spec{
+            required = [<<"blocked">>],
+            correct_values = #{<<"blocked">> => [true, false]},
+            bad_values = [
+                {<<"blocked">>, 1234, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
+                {<<"blocked">>, 34.5, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
+                {<<"blocked">>, null, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
+                {<<"blocked">>, <<"">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
+                {<<"blocked">>, <<"short">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
 
 
 delete_test(Config) ->

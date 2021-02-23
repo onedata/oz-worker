@@ -48,6 +48,7 @@ consume(ConsumerAuth, Token, ExpectedType, ConsumeFun) ->
     AuthCtx = #auth_ctx{ip = PeerIp, consumer = ConsumerSubject},
     case token_auth:verify_invite_token(Token, ExpectedType, AuthCtx) of
         {ok, _} -> ok;
+        ?ERROR_USER_BLOCKED -> throw(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED);
         {error, _} = Err1 -> throw(Err1)
     end,
 

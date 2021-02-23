@@ -62,42 +62,34 @@ access_token_test(Config) ->
         Config, UserId
     ),
 
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => #{?HDR_X_AUTH_TOKEN => Token}
-        },
-        expect => #{
-            code => 200,
-            body => {contains, #{<<"fullName">> => <<"U1">>}}
-        }
-    })),
+    ?assert(check_rest_call(Config,
+        #{?HDR_X_AUTH_TOKEN => Token},
+        {ok, #{<<"fullName">> => <<"U1">>}}
+    )),
 
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => #{?HDR_X_AUTH_TOKEN => Token}
-        },
-        expect => #{
-            code => 200,
-            body => {contains, #{<<"fullName">> => <<"U1">>}}
-        }
-    })),
+    ?assert(check_rest_call(Config,
+        #{?HDR_AUTHORIZATION => <<"Bearer ", Token/binary>>},
+        {ok, #{<<"fullName">> => <<"U1">>}}
+    )),
 
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => #{?HDR_X_AUTH_TOKEN => <<"bad-token">>}
-        },
-        expect => #{
-            code => 401
-        }
-    })),
+    ?assert(check_rest_call(Config,
+        #{?HDR_X_AUTH_TOKEN => <<"bad-token">>},
+        ?ERROR_BAD_TOKEN
+    )),
 
-    ok.
+    % check if user blocking works as expected
+    oz_test_utils:toggle_user_access_block(Config, UserId, true),
+    ?assert(check_rest_call(Config,
+        #{?HDR_X_AUTH_TOKEN => Token},
+        ?ERROR_USER_BLOCKED
+    )),
+
+    % after unblocking, authentication should work again
+    oz_test_utils:toggle_user_access_block(Config, UserId, false),
+    ?assert(check_rest_call(Config,
+        #{?HDR_X_AUTH_TOKEN => Token},
+        {ok, #{<<"fullName">> => <<"U1">>}}
+    )).
 
 
 basic_auth_test(Config) ->
@@ -108,54 +100,40 @@ basic_auth_test(Config) ->
 
     oz_test_utils:toggle_basic_auth(Config, true),
 
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => basic_auth_header(?CORRECT_USERNAME, ?CORRECT_PASSWORD)
-        },
-        expect => #{
-            code => 200,
-            body => {contains, #{
-                <<"userId">> => UserId, <<"username">> => ?CORRECT_USERNAME
-            }}
-        }
-    })),
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => basic_auth_header(?BAD_USERNAME, ?BAD_PASSWORD)
-        },
-        expect => #{
-            code => 401
-        }
-    })),
+    ?assert(check_rest_call(Config,
+        basic_auth_header(?CORRECT_USERNAME, ?CORRECT_PASSWORD),
+        {ok, #{<<"userId">> => UserId, <<"username">> => ?CORRECT_USERNAME}}
+    )),
+
+    ?assert(check_rest_call(Config,
+        basic_auth_header(?BAD_USERNAME, ?BAD_PASSWORD),
+        ?ERROR_BAD_BASIC_CREDENTIALS
+    )),
+
+    % check if user blocking works as expected
+    oz_test_utils:toggle_user_access_block(Config, UserId, true),
+    ?assert(check_rest_call(Config,
+        basic_auth_header(?CORRECT_USERNAME, ?CORRECT_PASSWORD),
+        ?ERROR_USER_BLOCKED
+    )),
+
+    % after unblocking, authentication should work again
+    oz_test_utils:toggle_user_access_block(Config, UserId, false),
+    ?assert(check_rest_call(Config,
+        basic_auth_header(?CORRECT_USERNAME, ?CORRECT_PASSWORD),
+        {ok, #{<<"userId">> => UserId, <<"username">> => ?CORRECT_USERNAME}}
+    )),
 
     % REST authorization by credentials should not work if basic auth is disabled in auth.config
     oz_test_utils:toggle_basic_auth(Config, false),
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => basic_auth_header(?CORRECT_USERNAME, ?CORRECT_PASSWORD)
-        },
-        expect => #{
-            code => 401
-        }
-    })),
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => basic_auth_header(?BAD_USERNAME, ?BAD_PASSWORD)
-        },
-        expect => #{
-            code => 401
-        }
-    })),
-
-    ok.
+    ?assert(check_rest_call(Config,
+        basic_auth_header(?CORRECT_USERNAME, ?CORRECT_PASSWORD),
+        ?ERROR_BASIC_AUTH_NOT_SUPPORTED
+    )),
+    ?assert(check_rest_call(Config,
+        basic_auth_header(?BAD_USERNAME, ?BAD_PASSWORD),
+        ?ERROR_BASIC_AUTH_NOT_SUPPORTED
+    )).
 
 
 external_access_token_test(Config) ->
@@ -176,74 +154,56 @@ external_access_token_test(Config) ->
         <<(PrefixFun(IdP))/binary, (CorrectAccessTokenFun(IdP))/binary>>
     end,
 
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(DummyIdP)}
-        },
-        expect => #{
-            code => 200,
-            body => {contains, #{
-                <<"userId">> => UserIdFun(DummyIdP),
-                <<"fullName">> => UserFullNameFun(DummyIdP)
-            }}
-        }
-    })),
+    ?assert(check_rest_call(Config,
+        #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(DummyIdP)},
+        {ok, #{<<"userId">> => UserIdFun(DummyIdP), <<"fullName">> => UserFullNameFun(DummyIdP)}}
+    )),
 
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(AnotherIdP)}
-        },
-        expect => #{
-            code => 200,
-            body => {contains, #{
-                <<"userId">> => UserIdFun(AnotherIdP),
-                <<"fullName">> => UserFullNameFun(AnotherIdP)
-            }}
-        }
-    })),
+    ?assert(check_rest_call(Config,
+        #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(AnotherIdP)},
+        {ok, #{<<"userId">> => UserIdFun(AnotherIdP), <<"fullName">> => UserFullNameFun(AnotherIdP)}}
+    )),
+
+    % check if user blocking works as expected
+    oz_test_utils:toggle_user_access_block(Config, UserIdFun(DummyIdP), true),
+    oz_test_utils:toggle_user_access_block(Config, UserIdFun(AnotherIdP), true),
+    ?assert(check_rest_call(Config,
+        #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(DummyIdP)},
+        ?ERROR_USER_BLOCKED
+    )),
+    ?assert(check_rest_call(Config,
+        #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(AnotherIdP)},
+        ?ERROR_USER_BLOCKED
+    )),
+
+    % after unblocking, authentication should work again
+    oz_test_utils:toggle_user_access_block(Config, UserIdFun(DummyIdP), false),
+    oz_test_utils:toggle_user_access_block(Config, UserIdFun(AnotherIdP), false),
+    ?assert(check_rest_call(Config,
+        #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(DummyIdP)},
+        {ok, #{<<"userId">> => UserIdFun(DummyIdP), <<"fullName">> => UserFullNameFun(DummyIdP)}}
+    )),
+    ?assert(check_rest_call(Config,
+        #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(AnotherIdP)},
+        {ok, #{<<"userId">> => UserIdFun(AnotherIdP), <<"fullName">> => UserFullNameFun(AnotherIdP)}}
+    )),
 
     % DisabledIdP has disabled authority delegation
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(DisabledIdP)}
-        },
-        expect => #{
-            code => 401
-        }
-    })),
+    ?assert(check_rest_call(Config,
+        #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(DisabledIdP)},
+        ?ERROR_BAD_TOKEN
+    )),
 
     % prefix from DummyIdP, access token from AnotherIdP
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => #{?HDR_X_AUTH_TOKEN => <<
-                (PrefixFun(DummyIdP))/binary, (CorrectAccessTokenFun(AnotherIdP))/binary
-            >>}
-        },
-        expect => #{
-            code => 401
-        }
-    })),
+    ?assert(check_rest_call(Config,
+        #{?HDR_X_AUTH_TOKEN => <<(PrefixFun(DummyIdP))/binary, (CorrectAccessTokenFun(AnotherIdP))/binary>>},
+        ?ERROR_BAD_IDP_ACCESS_TOKEN(DummyIdP)
+    )),
 
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => #{?HDR_X_AUTH_TOKEN => <<"completely-bad-token">>}
-        },
-        expect => #{
-            code => 401
-        }
-    })),
-
-    ok.
+    ?assert(check_rest_call(Config,
+        #{?HDR_X_AUTH_TOKEN => <<"completely-bad-token">>},
+        ?ERROR_BAD_TOKEN
+    )).
 
 
 gui_token_test(Config) ->
@@ -278,97 +238,111 @@ gui_token_test(Config) ->
     Provider1ServiceToken = tokens:add_oneprovider_service_indication(?OP_WORKER, ozt_tokens:ensure_serialized(Provider1IdentityToken)),
     Provider2ServiceToken = tokens:add_oneprovider_service_indication(?OP_PANEL, ozt_tokens:ensure_serialized(Provider2IdentityToken)),
 
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => #{
-                ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
-                ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
-                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
-            }
+    ?assert(check_rest_call(Config,
+        #{
+            ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
         },
-        expect => #{
-            code => 200, % correct service
-            body => {contains, #{<<"fullName">> => <<"U1">>}}
-        }
-    })),
+        {ok, #{<<"fullName">> => <<"U1">>}}
+    )),
 
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => #{
-                ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
-                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
-            }
+    % no session cookie
+    ?assert(check_rest_call(Config,
+        #{
+            ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
         },
-        expect => #{
-            code => 401 % no session cookie
-        }
-    })),
+        ?ERROR_TOKEN_SESSION_INVALID
+    )),
 
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => #{
-                ?HDR_AUTHORIZATION => <<"Bearer ", SerializedGuiToken2/binary>>,
-                ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
-                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider2ServiceToken
-            }
+    % invalid service
+    ?assert(check_rest_call(Config,
+        #{
+            ?HDR_AUTHORIZATION => <<"Bearer ", SerializedGuiToken2/binary>>,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider2ServiceToken
         },
-        expect => #{
-            code => 401 % invalid service
-        }
-    })),
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [?SERVICE(?OP_PANEL, Provider1)]})
+    )),
 
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => #{
-                ?HDR_AUTHORIZATION => <<"Bearer ", SerializedGuiToken2/binary>>,
-                ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
-                ?HDR_X_ONEDATA_SERVICE_TOKEN => SerializedGuiToken1
-            }
+    % bad service token
+    ?assert(check_rest_call(Config,
+        #{
+            ?HDR_AUTHORIZATION => <<"Bearer ", SerializedGuiToken2/binary>>,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => SerializedGuiToken1
         },
-        expect => #{
-            code => 401 % bad service token
-        }
-    })),
+        ?ERROR_BAD_SERVICE_TOKEN(?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN(SessionId)))
+    )),
 
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => #{
-                ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
-                ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
-            }
+    % missing service token
+    ?assert(check_rest_call(Config,
+        #{
+            ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
         },
-        expect => #{
-            code => 401 % missing service token
-        }
-    })),
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [?SERVICE(?OP_WORKER, Provider1)]})
+    )),
 
+    % check if user blocking works as expected
+    oz_test_utils:toggle_user_access_block(Config, UserId, true),
+    ?assert(check_rest_call(Config,
+        #{
+            ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
+        },
+        ?ERROR_USER_BLOCKED
+    )),
+
+    % blocking the user causes the session to be deleted - despite unblocking,
+    % the token should no longer work
+    oz_test_utils:toggle_user_access_block(Config, UserId, false),
+    ?assert(check_rest_call(Config,
+        #{
+            ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
+        },
+        ?ERROR_TOKEN_SESSION_INVALID
+    )),
+
+    % after unblocking and with a new session and token, authentication should work again
+    {ok, {NewSessionId, NewCookie}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {GuiToken3, Ttl}} = oz_test_utils:call_oz(Config, token_logic, create_access_token_for_gui, [
+        ?USER(UserId), UserId, NewSessionId, ?SERVICE(?OP_WORKER, Provider1)
+    ]),
+    {ok, SerializedGuiToken3} = tokens:serialize(GuiToken3),
+    ?assert(check_rest_call(Config,
+        #{
+            ?HDR_X_AUTH_TOKEN => SerializedGuiToken3,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", NewCookie/binary>>,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
+        },
+        {ok, #{<<"fullName">> => <<"U1">>}}
+    )),
+
+    % non-matching session cookie
+    ?assert(check_rest_call(Config,
+        #{
+            ?HDR_X_AUTH_TOKEN => SerializedGuiToken3,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,  % old cookie
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
+        },
+        ?ERROR_TOKEN_SESSION_INVALID
+    )),
+
+    % expired token
     oz_test_utils:simulate_seconds_passing(Ttl + 1),
-
-    ?assert(rest_test_utils:check_rest_call(Config, #{
-        request => #{
-            method => get,
-            path => <<"/user">>,
-            headers => #{
-                ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
-                ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
-                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
-            }
+    ?assert(check_rest_call(Config,
+        #{
+            ?HDR_X_AUTH_TOKEN => SerializedGuiToken3,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
+            ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
         },
-        expect => #{
-            code => 401 % expired token
-        }
-    })),
-    ok.
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = oz_test_utils:timestamp_seconds(Config) - 1})
+    )).
 
 %%%===================================================================
 %%% Helper functions
@@ -377,6 +351,33 @@ gui_token_test(Config) ->
 basic_auth_header(Username, Password) ->
     UserPasswdB64 = base64:encode(<<Username/binary, ":", Password/binary>>),
     #{?HDR_AUTHORIZATION => <<"Basic ", UserPasswdB64/binary>>}.
+
+
+check_rest_call(Config, Headers, ExpResult) ->
+    Expect = case ExpResult of
+        {ok, BodyContains} ->
+            #{
+                code => 200,
+                body => {contains, BodyContains}
+            };
+        {error, _} = Error ->
+            % during encoding to json, atoms are converted to strings and the
+            % payload can slightly change - do the same to match the REST responses
+            ExpErrorJson = json_utils:decode(json_utils:encode(errors:to_json(?ERROR_UNAUTHORIZED(Error)))),
+            #{
+                code => 401,
+                body => #{<<"error">> => ExpErrorJson}
+            }
+    end,
+    rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => Headers
+        },
+        expect => Expect
+    }).
+
 
 %%%===================================================================
 %%% Setup/teardown functions
