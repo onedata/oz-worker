@@ -840,11 +840,6 @@ create_provider(Auth, Data, ProviderId, GRI) ->
     AdminEmail = maps:get(<<"adminEmail">>, Data),
 
     invite_tokens:consume(Auth, Token, ?REGISTER_ONEPROVIDER, fun(CreatorUserId, _, _) ->
-        {ok, RootToken} = token_logic:create_provider_named_token(?ROOT, ProviderId, #{
-            <<"name">> => ?PROVIDER_ROOT_TOKEN_NAME,
-            <<"type">> => ?ACCESS_TOKEN
-        }),
-
         {Domain, Subdomain} = case SubdomainDelegation of
             false ->
                 {maps:get(<<"domain">>, Data), undefined};
@@ -860,7 +855,7 @@ create_provider(Auth, Data, ProviderId, GRI) ->
         end,
 
         ProviderRecord = #od_provider{
-            name = Name, root_token = RootToken#token.id,
+            name = Name,
             subdomain_delegation = SubdomainDelegation,
             domain = Domain, subdomain = Subdomain,
             latitude = Latitude, longitude = Longitude,
@@ -870,6 +865,13 @@ create_provider(Auth, Data, ProviderId, GRI) ->
 
         try
             {ok, _} = od_provider:create(#document{key = ProviderId, value = ProviderRecord}),
+            {ok, RootToken} = token_logic:create_provider_named_token(?ROOT, ProviderId, #{
+                <<"name">> => ?PROVIDER_ROOT_TOKEN_NAME,
+                <<"type">> => ?ACCESS_TOKEN
+            }),
+            od_provider:update(ProviderId, fun(Provider) ->
+                {ok, Provider#od_provider{root_token = RootToken#token.id}}
+            end),
             cluster_logic:create_oneprovider_cluster(CreatorUserId, ProviderId),
             {true, {Provider, Rev}} = fetch_entity(#gri{aspect = instance, id = ProviderId}),
             ?info("Provider '~ts' has registered (~s)", [Name, ProviderId]),

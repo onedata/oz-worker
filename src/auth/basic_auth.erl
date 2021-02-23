@@ -71,6 +71,8 @@ authenticate(Username, Password) ->
             ?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_NOT_SUPPORTED);
         true ->
             case od_user:get_by_username(Username) of
+                {ok, #document{value = #od_user{blocked = true}}} ->
+                    ?ERROR_UNAUTHORIZED(?ERROR_USER_BLOCKED);
                 {ok, #document{value = #od_user{basic_auth_enabled = false}}} ->
                     ?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED);
                 {ok, #document{value = #od_user{password_hash = undefined}}} ->

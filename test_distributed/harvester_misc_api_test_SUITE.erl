@@ -147,7 +147,8 @@ create_test(Config) ->
             bad_values = [
                 {<<"harvestingBackendType">>, <<"not_existing_backend">>,
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"harvestingBackendType">>, ?ALL_HARVESTING_BACKENDS(Config))},
-                {<<"harvestingBackendEndpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE},
+                {<<"harvestingBackendEndpoint">>, <<"bad_endpoint">>,
+                    ?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(<<"Elasticsearch">>)},
                 {<<"harvestingBackendEndpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"harvestingBackendEndpoint">>)}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
@@ -546,7 +547,8 @@ update_test(Config) ->
                 {<<"harvestingBackendType">>, <<"not_existing_backend">>,
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"harvestingBackendType">>, ?ALL_HARVESTING_BACKENDS(Config))},
                 {<<"public">>, not_boolean, ?ERROR_BAD_VALUE_BOOLEAN(<<"public">>)},
-                {<<"harvestingBackendEndpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE},
+                {<<"harvestingBackendEndpoint">>, <<"bad_endpoint">>,
+                    ?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(<<"Elasticsearch">>)},
                 {<<"harvestingBackendEndpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"harvestingBackendEndpoint">>)}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]

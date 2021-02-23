@@ -717,10 +717,10 @@ translate_token(#gri{id = undefined, aspect = {user_named_tokens, _}}, Tokens) -
     #{
         <<"list">> => lists:map(
             fun(TokenId) ->
-                gri:serialize(#gri{type = od_token, id = TokenId, aspect = instance})
+                gri:serialize(#gri{type = od_token, id = TokenId, aspect = instance, scope = auto})
             end, Tokens)
     };
-translate_token(#gri{aspect = instance}, TokenData) ->
+translate_token(#gri{aspect = instance, scope = private}, TokenData) ->
     #{
         <<"id">> := TokenId,
         <<"name">> := Name,

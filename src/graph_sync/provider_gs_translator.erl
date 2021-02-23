@@ -119,13 +119,16 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         username = Username,
         emails = Emails,
         linked_accounts = LinkedAccounts,
-        space_aliases = SpaceAliases
+        space_aliases = SpaceAliases,
+        blocked = Blocked
     } = User,
     #{
         <<"fullName">> => FullName,
         <<"username">> => utils:undefined_to_null(Username),
         <<"emails">> => Emails,
         <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts, luma_payload),
+
+        <<"blocked">> => Blocked,
         <<"spaceAliases">> => SpaceAliases,
 
         <<"effectiveGroups">> => entity_graph:get_relations(effective, top_down, od_group, User),
@@ -146,13 +149,16 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = protected}
         <<"fullName">> := FullName,
         <<"username">> := Username,
         <<"emails">> := Emails,
-        <<"linkedAccounts">> := LinkedAccountMaps
+        <<"linkedAccounts">> := LinkedAccountMaps,
+        <<"blocked">> := Blocked
     } = User,
     #{
         <<"fullName">> => FullName,
         <<"username">> => utils:undefined_to_null(Username),
         <<"emails">> => Emails,
         <<"linkedAccounts">> => LinkedAccountMaps,
+
+        <<"blocked">> => Blocked,
 
         %% @TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => FullName,

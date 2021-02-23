@@ -14,6 +14,7 @@
 
 -include("auth/entitlement_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 %% API
 -export([to_map/2, to_maps/2]).
@@ -124,11 +125,14 @@ find_user(LinkedAccount) ->
 %% @doc
 %% Retrieves a user by given linked account and merges the carried information.
 %% If such user does not exist, creates a new user based on that linked account.
+%% Checks if the user is blocked and returns an error if so.
 %% @end
 %%--------------------------------------------------------------------
--spec acquire_user(od_user:linked_account()) -> {ok, od_user:doc()}.
+-spec acquire_user(od_user:linked_account()) -> {ok, od_user:doc()} | ?ERROR_USER_BLOCKED.
 acquire_user(LinkedAccount) ->
     case find_user(LinkedAccount) of
+        {ok, #document{value = #od_user{blocked = true}}} ->
+            ?ERROR_USER_BLOCKED;
         {ok, #document{key = UserId}} ->
             merge(UserId, LinkedAccount);
         {error, not_found} ->

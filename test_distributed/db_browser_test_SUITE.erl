@@ -153,12 +153,12 @@ set_up_users(Environment) ->
                     ok;
                 _ ->
                     simulate_random_delay(),
-                    ozt:rpc(user_connections, report_connected, [User, <<"sess-id">>, self()]),
+                    ozt:rpc(user_connections, report_connected, [?USER(User, <<"sess-id">>), self()]),
                     case rand:uniform(4) of
                         1 ->
                             ok;
                         _ ->
-                            ozt:rpc(user_connections, report_disconnected, [User, <<"sess-id">>, self()])
+                            ozt:rpc(user_connections, report_disconnected, [?USER(User, <<"sess-id">>), self()])
                     end
             end,
             case rand:uniform(5) of

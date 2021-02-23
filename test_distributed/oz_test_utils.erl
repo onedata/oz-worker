@@ -65,6 +65,8 @@
     user_leave_harvester/3,
     user_leave_cluster/3,
 
+    toggle_user_access_block/3,
+
     create_provider_registration_token/3,
     create_temporary_provider_registration_token/3
 ]).
@@ -614,6 +616,11 @@ user_leave_cluster(Config, UserId, ClusterId) ->
     ?assertMatch(ok, call_oz(
         Config, user_logic, leave_cluster, [?ROOT, UserId, ClusterId]
     )).
+
+
+-spec toggle_user_access_block(Config :: term(), UserId :: od_user:id(), Blocked :: boolean()) -> ok.
+toggle_user_access_block(Config, UserId, Blocked) ->
+    ?assertMatch(ok, call_oz(Config, user_logic, toggle_access_block, [?ROOT, UserId, Blocked])).
 
 
 %%--------------------------------------------------------------------
@@ -3220,7 +3227,7 @@ mock_harvesting_backends(Config, Nodes, BackendName) ->
             (Endpoint) ->
                 case get_env(Config, default_harvesting_backend_endpoint) of
                     Endpoint -> ok;
-                    _ -> ?ERROR_TEMPORARY_FAILURE
+                    _ -> ?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(<<"Elasticsearch">>)
                 end
         end),
     test_utils:mock_expect(Nodes, BackendName, submit_batch, fun(_, HarvesterId, Indices, Batch) ->

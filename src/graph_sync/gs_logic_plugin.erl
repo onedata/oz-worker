@@ -70,8 +70,8 @@ verify_handshake_auth({token, Token}, PeerIp, Cookies) ->
 -spec client_connected(aai:auth(), gs_server:conn_ref()) -> ok.
 client_connected(?PROVIDER(ProvId), ConnectionRef) ->
     provider_connections:report_connected(ProvId, ConnectionRef);
-client_connected(?USER(UserId, SessionId), ConnectionRef) when is_binary(SessionId) ->
-    user_connections:report_connected(UserId, SessionId, ConnectionRef);
+client_connected(?USER = Auth, ConnectionRef) ->
+    user_connections:report_connected(Auth, ConnectionRef);
 client_connected(_, _) ->
     ok.
 
@@ -96,8 +96,8 @@ client_heartbeat(_, _) ->
 -spec client_disconnected(aai:auth(), gs_server:conn_ref()) -> ok.
 client_disconnected(?PROVIDER(ProvId), ConnectionRef) ->
     provider_connections:report_disconnected(ProvId, ConnectionRef);
-client_disconnected(?USER(UserId, SessionId), ConnectionRef) when is_binary(SessionId) ->
-    user_connections:report_disconnected(UserId, SessionId, ConnectionRef);
+client_disconnected(?USER = Auth, ConnectionRef) ->
+    user_connections:report_disconnected(Auth, ConnectionRef);
 client_disconnected(_, _) ->
     ok.
 

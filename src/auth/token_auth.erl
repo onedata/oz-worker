@@ -73,18 +73,10 @@ authenticate_for_rest_interface(Req) when is_map(Req) ->
                 {ok, Token} ->
                     authenticate_for_rest_interface(Req, Token);
                 ?ERROR_BAD_TOKEN ->
-                    case openid_protocol:authenticate_by_idp_access_token(Serialized) of
-                        {true, {IdP, Attributes}} ->
-                            LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
-                            {ok, #document{key = UserId}} = linked_accounts:acquire_user(LinkedAccount),
-                            {true, ?USER(UserId)};
-                        ?ERROR_UNAUTHORIZED(_) = AuthenticationError ->
-                            AuthenticationError;
-                        false ->
-                            ?ERROR_UNAUTHORIZED(?ERROR_BAD_TOKEN)
-                    end
+                    authenticate_by_idp_access_token(Serialized)
             end
     end.
+
 
 %% @private
 -spec authenticate_for_rest_interface(cowboy_req:req(), tokens:token()) ->
@@ -276,53 +268,41 @@ group_membership_checker(_, _) ->
 %%--------------------------------------------------------------------
 -spec validate_subject_and_service(tokens:type(), aai:subject(), aai:service_spec()) ->
     ok | errors:error().
-validate_subject_and_service(?ACCESS_TOKEN(SessId), Subject, Service) ->
-    SessionValid = case {SessId, Subject} of
-        {undefined, _} -> true;
-        {_, ?SUB(user, UserId)} -> session:belongs_to_user(SessId, UserId);
-        {_, _} -> false
-    end,
-    case {SessionValid, is_service_allowed(Subject, Service)} of
-        {true, true} -> ok;
-        {false, _} -> ?ERROR_TOKEN_SESSION_INVALID;
-        {_, false} -> ?ERROR_TOKEN_SERVICE_FORBIDDEN(Service)
-    end;
-validate_subject_and_service(_, _, _) ->
-    % Identity and invite tokens do not require additional checks as they do not
-    % support the service caveat.
-    ok.
+validate_subject_and_service(TokenType, Subject, Service) ->
+    case validate_subject(Subject) of
+        {error, _} = Err1 ->
+            Err1;
+        ok ->
+            case validate_session(TokenType, Subject) of
+                {error, _} = Err2 ->
+                    Err2;
+                ok ->
+                    validate_service(TokenType, Subject, Service)
+            end
+    end.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Determines if the service is allowed for specific subject in an access token,
-%% in other words if the service can use subject's tokens on their behalf.
-%% @end
-%%--------------------------------------------------------------------
--spec is_service_allowed(aai:subject(), aai:service_spec()) -> boolean().
-is_service_allowed(?SUB(nobody), _) ->
-    false; % Service is not applicable in case of nobody (unauthenticated client)
-
-is_service_allowed(_Subject, ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)) ->
-    true; % Any user / provider can generate a token for Onezone
-is_service_allowed(_Subject, ?SERVICE(?OZ_WORKER, <<"*">>)) ->
-    true;
-
-is_service_allowed(?SUB(user, _), ?SERVICE(_, <<"*">>)) ->
-    true; % Always allowed when service id is a wildcard
-is_service_allowed(?SUB(user, UserId), ?SERVICE(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)) ->
-    cluster_logic:has_eff_user(?ONEZONE_CLUSTER_ID, UserId);
-is_service_allowed(?SUB(user, UserId), ?SERVICE(?OP_WORKER, ProviderId)) ->
-    provider_logic:has_eff_user(ProviderId, UserId);
-is_service_allowed(?SUB(user, UserId), ?SERVICE(?OP_PANEL, ProviderId)) ->
-    cluster_logic:has_eff_user(ProviderId, UserId);
-
-is_service_allowed(_, _) ->
-    false.
+-spec authenticate_by_idp_access_token(tokens:serialized()) ->
+    {true, aai:auth()} | errors:unauthorized_error().
+authenticate_by_idp_access_token(Serialized) ->
+    case openid_protocol:authenticate_by_idp_access_token(Serialized) of
+        {true, {IdP, Attributes}} ->
+            LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
+            case linked_accounts:acquire_user(LinkedAccount) of
+                {ok, #document{key = UserId}} ->
+                    {true, ?USER(UserId)};
+                ?ERROR_USER_BLOCKED ->
+                    ?ERROR_UNAUTHORIZED(?ERROR_USER_BLOCKED)
+            end;
+        ?ERROR_UNAUTHORIZED(_) = AuthenticationError ->
+            AuthenticationError;
+        false ->
+            ?ERROR_UNAUTHORIZED(?ERROR_BAD_TOKEN)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -374,23 +354,19 @@ resolve_consumer_for_rest_interface(Req) ->
 %%--------------------------------------------------------------------
 -spec verify_token(tokens:token(), aai:auth_ctx()) -> {ok, aai:auth()} | errors:error().
 verify_token(Token = #token{persistence = {temporary, TokenGen}, subject = Subject}, AuthCtx) ->
-    % This check is not required in case of named tokens, which are deleted
-    % alongside the user / provider.
-    case subject_exists(Subject) of
-        false ->
+    case temporary_token_secret:get_for_subject(Subject) of
+        {ok, {Secret, TokenGen}} ->
+            verify_token(Token, AuthCtx, Secret);
+        {ok, {_, NewerGen}} when NewerGen > TokenGen ->
+            % Most probably, the token has been revoked (or forged, in
+            % such case the error might be confusing for the forger).
+            ?ERROR_TOKEN_REVOKED;
+        {ok, {_, OlderGen}} when OlderGen < TokenGen ->
+            % The token must have been forged (its generation is newer than actual).
             ?ERROR_TOKEN_INVALID;
-        true ->
-            case temporary_token_secret:get_for_subject(Subject) of
-                {Secret, TokenGen} ->
-                    verify_token(Token, AuthCtx, Secret);
-                {_, NewerGen} when NewerGen > TokenGen ->
-                    % Most probably, the token has been revoked (or forged, in
-                    % such case the error might be confusing for the forger).
-                    ?ERROR_TOKEN_REVOKED;
-                {_, OlderGen} when OlderGen < TokenGen ->
-                    % The token must have been forged (its generation is newer than actual).
-                    ?ERROR_TOKEN_INVALID
-            end
+        ?ERROR_NOT_FOUND ->
+            % The subject may have been deleted in the meantime.
+            ?ERROR_TOKEN_SUBJECT_INVALID
     end;
 verify_token(Token = #token{persistence = named}, AuthCtx) ->
     case od_token:get(Token#token.id) of
@@ -408,7 +384,7 @@ verify_token(Token = #token{persistence = named}, AuthCtx) ->
                     verify_token(Token, AuthCtx, Secret);
                 _ ->
                     % The subjects are different - the token is invalid
-                    ?ERROR_TOKEN_INVALID
+                    ?ERROR_TOKEN_SUBJECT_INVALID
             end;
         {error, not_found} ->
             ?ERROR_TOKEN_INVALID
@@ -417,7 +393,7 @@ verify_token(Token = #token{persistence = named}, AuthCtx) ->
 %% @private
 -spec verify_token(tokens:token(), aai:auth_ctx(), tokens:secret()) ->
     {ok, aai:auth()} | errors:error().
-verify_token(Token = #token{type = TokenType}, AuthCtx, Secret) ->
+verify_token(Token = #token{type = TokenType, subject = Subject}, AuthCtx, Secret) ->
     Service = case AuthCtx#auth_ctx.service of
         undefined -> ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID);
         Srv -> Srv
@@ -428,17 +404,79 @@ verify_token(Token = #token{type = TokenType}, AuthCtx, Secret) ->
         group_membership_checker = fun group_membership_checker/2
     },
     case tokens:verify(Token, Secret, CoalescedAuthCtx) of
-        {ok, Auth = #auth{subject = Subject}} ->
+        {error, _} = Err1 ->
+            Err1;
+        {ok, Auth} ->
             case validate_subject_and_service(TokenType, Subject, Service) of
                 ok -> {ok, Auth};
-                {error, _} = Err1 -> Err1
-            end;
-        {error, _} = Err2 ->
-            Err2
+                {error, _} = Err2 -> Err2
+            end
     end.
 
 
 %% @private
--spec subject_exists(aai:subject()) -> boolean().
-subject_exists(?SUB(user, UserId)) -> user_logic:exists(UserId);
-subject_exists(?SUB(?ONEPROVIDER, ProviderId)) -> provider_logic:exists(ProviderId).
+-spec validate_subject(aai:subject()) -> ok | errors:error().
+validate_subject(?SUB(?ONEPROVIDER, ProviderId)) ->
+    case provider_logic:exists(ProviderId) of
+        true -> ok;
+        false -> ?ERROR_TOKEN_SUBJECT_INVALID
+    end;
+validate_subject(?SUB(user, UserId)) ->
+    case od_user:get(UserId) of
+        {ok, #document{value = #od_user{blocked = true}}} -> ?ERROR_USER_BLOCKED;
+        {ok, #document{}} -> ok;
+        {error, not_found} -> ?ERROR_TOKEN_SUBJECT_INVALID
+    end.
+
+
+%% @private
+-spec validate_session(tokens:type(), aai:subject()) -> ok | errors:error().
+validate_session(?ACCESS_TOKEN(undefined), _) ->
+    ok;
+validate_session(?ACCESS_TOKEN(SessId), ?SUB(user, UserId)) ->
+    case session:belongs_to_user(SessId, UserId) of
+        true -> ok;
+        false -> ?ERROR_TOKEN_SESSION_INVALID
+    end;
+validate_session(?ACCESS_TOKEN(_), _) ->
+    ?ERROR_TOKEN_SESSION_INVALID;
+validate_session(_, _) ->
+    ok.
+
+
+%% @private
+-spec validate_service(tokens:type(), aai:subject(), aai:service_spec()) -> ok | errors:error().
+validate_service(?ACCESS_TOKEN, Subject, Service) ->
+    case is_service_allowed(Subject, Service) of
+        true -> ok;
+        false -> ?ERROR_TOKEN_SERVICE_FORBIDDEN(Service)
+    end;
+validate_service(_, _, _) ->
+    % Identity and invite tokens do not support the service caveat.
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Determines if the service is allowed for specific subject in an access token,
+%% in other words if the service can process subject's tokens on their behalf.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_service_allowed(aai:subject(), aai:service_spec()) -> boolean().
+is_service_allowed(_Subject, ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)) ->
+    true; % Any user / provider can generate a token for Onezone
+is_service_allowed(_Subject, ?SERVICE(?OZ_WORKER, <<"*">>)) ->
+    true;
+
+is_service_allowed(?SUB(user, _), ?SERVICE(_, <<"*">>)) ->
+    true; % Always allowed when service id is a wildcard
+is_service_allowed(?SUB(user, UserId), ?SERVICE(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)) ->
+    cluster_logic:has_eff_user(?ONEZONE_CLUSTER_ID, UserId);
+is_service_allowed(?SUB(user, UserId), ?SERVICE(?OP_WORKER, ProviderId)) ->
+    provider_logic:has_eff_user(ProviderId, UserId);
+is_service_allowed(?SUB(user, UserId), ?SERVICE(?OP_PANEL, ProviderId)) ->
+    cluster_logic:has_eff_user(ProviderId, UserId);
+
+is_service_allowed(_, _) ->
+    false.
