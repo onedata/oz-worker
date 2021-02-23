@@ -19,6 +19,7 @@
     simulate_downtime/1,
     timestamp_seconds/0,
     get_env/1,
+    get_domain/0,
 
     add_user_to_cluster/4,
 
@@ -36,6 +37,7 @@
     create_space/3,
     create_space_support_token/2,
     get_space_protected_data/2,
+    space_set_user_privileges/4,
     delete_space/2
 ]).
 
@@ -60,6 +62,11 @@ timestamp_seconds() ->
 -spec get_env(Key :: atom()) -> term() | no_return().
 get_env(Env) ->
     oz_worker:get_env(Env).
+
+
+-spec get_domain() -> binary().
+get_domain() ->
+    oz_worker:get_domain().
 
 
 -spec add_user_to_cluster(aai:auth(), od_cluster:id(), od_user:id(), [privileges:cluster_privilege()]) -> {ok, od_user:id()} | errors:error().
@@ -133,6 +140,16 @@ list_spaces(Auth) ->
 -spec get_space_protected_data(aai:auth(), od_space:id()) -> {ok, map()} | no_return().
 get_space_protected_data(Auth, SpaceId) ->
     space_logic:get_protected_data(Auth, SpaceId).
+
+
+-spec space_set_user_privileges(
+    aai:auth(), od_space:id(), od_user:id(), [privileges:space_privilege()]
+) ->
+    ok | errors:error().
+space_set_user_privileges(Auth, SpaceId, UserId, Privileges) ->
+    space_logic:update_user_privileges(
+        Auth, SpaceId, UserId, Privileges, lists_utils:subtract(privileges:space_admin(), Privileges)
+    ).
 
 
 -spec delete_space(aai:auth(), od_space:id()) -> ok | errors:error().
