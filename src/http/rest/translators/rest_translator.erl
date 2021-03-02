@@ -33,7 +33,7 @@
 %%% API
 %%%===================================================================
 
--spec response(entity_logic:req(), entity_logic:result()) ->
+-spec response(undefined | entity_logic:req(), entity_logic:result()) ->
     #rest_resp{}.
 response(_, {error, _} = Error) ->
     #rest_resp{

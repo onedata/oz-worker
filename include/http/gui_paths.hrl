@@ -28,6 +28,8 @@
 -define(PUBLIC_SHARE_URN(ShareId), <<"/share/", ShareId/binary>>).
 % GUI page where the clients are redirected after visiting the public share URL
 -define(PUBLIC_SHARE_GUI_PATH(ShareId), <<"/i#/public/shares/", ShareId/binary>>).
+% path to the publicly available endpoint for fetching public share info
+-define(PUBLIC_SHARE_REST_PATH(ShareId), <<"/shares/", ShareId/binary, "/public">>).
 
 % Endpoint serving custom, user defined static files
 -define(CUSTOM_STATIC_GUI_PATH, "/custom/[...]").

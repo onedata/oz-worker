@@ -1942,7 +1942,7 @@ get_record(od_space, 9) -> #od_space{
 
 get_record(od_share, 1) -> {od_share,
     <<"name">>,
-    <<"public_url">>,
+    <<"https://onezone.example.com/share/123456">>,
     <<"parent_space_id">>,
     <<"handle_id">>,
     <<"root_file_id">>,
@@ -1952,7 +1952,7 @@ get_record(od_share, 1) -> {od_share,
 };
 get_record(od_share, 2) -> {od_share,
     <<"name">>,
-    <<"public_url">>,
+    <<"https://onezone.example.com/share/123456">>,
     <<"parent_space_id">>,
     <<"handle_id">>,
     <<"root_file_id">>
@@ -1963,7 +1963,7 @@ get_record(od_share, 3) -> {
     %   NextIteration - different record that will be upgraded to the next version
     {od_share,
         <<"name">>,
-        <<"public_url">>,
+        <<"https://onezone.example.com/share/123456">>,
         <<"parent_space_id">>,
         <<"handle_id">>,
         <<"root_file_id">>,
@@ -1973,7 +1973,7 @@ get_record(od_share, 3) -> {
     },
     {od_share,
         <<"name">>,
-        <<"public_url">>,
+        <<"https://onezone.example.com/share/123456">>,
         <<"parent_space_id">>,
         <<"handle_id">>,
         <<"root_file_id">>,
@@ -1984,7 +1984,7 @@ get_record(od_share, 3) -> {
 };
 get_record(od_share, 4) -> {od_share,
     <<"name">>,
-    <<"public_url">>,
+    <<"https://onezone.example.com/share/123456">>,
     <<"parent_space_id">>,
     <<"handle_id">>,
     <<"root_file_id">>,
@@ -1994,7 +1994,7 @@ get_record(od_share, 4) -> {od_share,
 };
 get_record(od_share, 5) -> {od_share,
     <<"name">>,
-    <<"public_url">>,
+    <<"https://onezone.example.com/share/123456">>,
 
     <<"parent_space_id">>,
     <<"handle_id">>,
@@ -2005,10 +2005,23 @@ get_record(od_share, 5) -> {od_share,
     ozt_mocks:get_frozen_time_seconds(),
     ?SUB(nobody)
 };
-get_record(od_share, 6) -> #od_share{
+get_record(od_share, 6) -> {od_share,
+    <<"name">>,
+    <<"">>,
+    <<"https://onezone.example.com/share/123456">>,
+
+    <<"parent_space_id">>,
+    <<"handle_id">>,
+
+    <<"root_file_id">>,
+    dir,
+
+    ozt_mocks:get_frozen_time_seconds(),
+    ?SUB(nobody)
+};
+get_record(od_share, 7) -> #od_share{
     name = <<"name">>,
     description = <<"">>,
-    public_url = <<"public_url">>,
 
     space = <<"parent_space_id">>,
     handle = <<"handle_id">>,

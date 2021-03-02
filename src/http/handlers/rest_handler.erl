@@ -284,7 +284,7 @@ process_request(Req, State) ->
             auth_hint = AuthHint,
             data = Data
         },
-        RestResp = call_entity_logic_and_translate_response(ElReq),
+        RestResp = route_to_proper_handler(ElReq, Req2),
         {stop, send_response(RestResp, Req2), State}
     catch
         throw:Error ->
@@ -377,12 +377,17 @@ resolve_bindings(Other, _Client, _Req) ->
     Other.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates entity logic response into REST response using TranslatorModule.
-%% @end
-%%--------------------------------------------------------------------
+-spec route_to_proper_handler(#el_req{}, cowboy_req:req()) -> #rest_resp{}.
+route_to_proper_handler(#el_req{
+    operation = get, gri = #gri{type = od_share, aspect = {shared_file_or_directory_data, ObjectId}}
+}, Req) ->
+    shared_data_redirector:handle(ObjectId, Req);
+route_to_proper_handler(ElReq, _Req) ->
+    call_entity_logic_and_translate_response(ElReq).
+
+
+%% @private
 -spec call_entity_logic_and_translate_response(#el_req{}) -> #rest_resp{}.
 call_entity_logic_and_translate_response(ElReq) ->
     Result = entity_logic:handle(ElReq),

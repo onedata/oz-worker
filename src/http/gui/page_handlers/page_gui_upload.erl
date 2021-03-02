@@ -58,7 +58,16 @@ handle(<<"POST">>, Req) ->
         handle_gui_upload(Req)
     catch
         throw:{error, _} = Error ->
-            cowboy_req:reply(errors:to_http_code(Error), #{}, json_utils:encode(errors:to_json(Error)), Req);
+            ErrorJson = errors:to_json(Error),
+            % @TODO VFS-6977 providers and panels up to 20.02.6 expect the error
+            % object in the top level of the JSON, while for versions 20.02.7
+            % they expect it to be nested in the "error" field. For now, send
+            % both versions at once and switch to newer way when possible
+            % (backward compatibility can be dropped).
+            ResponseBody = json_utils:encode(ErrorJson#{
+                <<"error">> => ErrorJson
+            }),
+            cowboy_req:reply(errors:to_http_code(Error), #{}, ResponseBody, Req);
         Type:Reason ->
             ?error_stacktrace("Error while processing GUI upload - ~p:~p", [Type, Reason]),
             cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req)

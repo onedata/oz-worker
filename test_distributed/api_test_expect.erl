@@ -183,12 +183,11 @@ protected_space(gs, Id, SpaceData, _Creator) ->
 
 
 -spec private_share(interface(), od_share:id(), map(), aai:subject()) -> expectation().
-private_share(logic, Id, ShareData, Creator) ->
+private_share(logic, _Id, ShareData, Creator) ->
     ?OK_TERM(fun(ShareRecord) ->
         ?assertEqual(ShareRecord, #od_share{
             name = maps:get(<<"name">>, ShareData),
             description = maps:get(<<"description">>, ShareData),
-            public_url = expected_public_share_url(Id),
 
             space = maps:get(<<"spaceId">>, ShareData),
             handle = maps:get(<<"handleId">>, ShareData, undefined),
@@ -210,6 +209,7 @@ private_share(rest, Id, ShareData, Creator) ->
         <<"fileType">> => atom_to_binary(maps:get(<<"fileType">>, ShareData), utf8),
         <<"handleId">> =>  utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
+        <<"publicRestUrl">> => expected_public_share_rest_url(Id),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     };
@@ -222,7 +222,8 @@ private_share(gs, Id, ShareData, _Creator) ->
         <<"rootFileId">> => maps:get(<<"rootFileId">>, ShareData),
         <<"fileType">> => atom_to_binary(maps:get(<<"fileType">>, ShareData), utf8),
         <<"handleId">> =>  utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
-        <<"publicUrl">> => expected_public_share_url(Id)
+        <<"publicUrl">> => expected_public_share_url(Id),
+        <<"publicRestUrl">> => expected_public_share_rest_url(Id)
     }).
 
 
@@ -234,7 +235,6 @@ public_share(logic, Id, ShareData) ->
         <<"rootFileId">> => maps:get(<<"rootFileId">>, ShareData),
         <<"fileType">> => maps:get(<<"fileType">>, ShareData),
         <<"handleId">> => maps:get(<<"handleId">>, ShareData, undefined),
-        <<"publicUrl">> => expected_public_share_url(Id),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
     });
 public_share(rest, Id, ShareData) ->
@@ -246,6 +246,7 @@ public_share(rest, Id, ShareData) ->
         <<"fileType">> => atom_to_binary(maps:get(<<"fileType">>, ShareData), utf8),
         <<"handleId">> =>  utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
+        <<"publicRestUrl">> => expected_public_share_rest_url(Id),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
     };
 public_share(gs, Id, ShareData) ->
@@ -256,7 +257,8 @@ public_share(gs, Id, ShareData) ->
         <<"rootFileId">> => maps:get(<<"rootFileId">>, ShareData),
         <<"fileType">> => atom_to_binary(maps:get(<<"fileType">>, ShareData), utf8),
         <<"handleId">> =>  utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
-        <<"publicUrl">> => expected_public_share_url(Id)
+        <<"publicUrl">> => expected_public_share_url(Id),
+        <<"publicRestUrl">> => expected_public_share_rest_url(Id)
     }).
 
 
@@ -426,6 +428,11 @@ shared_or_public_harvester(rest, Id, HarvesterData) ->
 %% @private
 expected_public_share_url(ShareId) ->
     str_utils:format_bin("https://~s/share/~s", [ozt:get_domain(), ShareId]).
+
+
+%% @private
+expected_public_share_rest_url(ShareId) ->
+    str_utils:format_bin("https://~s/api/v3/onezone/shares/~s/public", [ozt:get_domain(), ShareId]).
 
 
 %% @private
