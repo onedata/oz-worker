@@ -22,6 +22,7 @@
 -export([
     get/2,
     get_protected_data/2,
+    get_public_data/2,
     list/1,
     list_privileges/0
 ]).
@@ -125,6 +126,16 @@ get_protected_data(Auth, HandleId) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = od_handle, id = HandleId, aspect = instance, scope = protected}
+    }).
+
+
+-spec get_public_data(aai:auth(), od_handle:id()) ->
+    {ok, map()} | errors:error().
+get_public_data(Auth, HandleId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_handle, id = HandleId, aspect = instance, scope = public}
     }).
 
 

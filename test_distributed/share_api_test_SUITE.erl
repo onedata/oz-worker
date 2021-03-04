@@ -722,9 +722,9 @@ example_shared_data_subpaths() -> [
     <<"/children">>, <<"/children?offset=100&limit=3">>,
     <<"">>, <<"?attribute=size">>,
     <<"/">>, <<"/?attribute=size">>,
+    <<"/metadata/xattrs">>, <<"/metadata/xattrs?attribute=license">>,
     <<"/metadata/json">>, <<"/metadata/json?filter_type=keypath&filter=key1.key2.[2].key3">>,
     <<"/metadata/rdf">>, <<"/metadata/rdf?not=significant">>,
-    <<"/metadata/xattrs">>, <<"/metadata/xattrs?attribute=license">>,
     <<"/some/invalid/path/should/work/anyway">>,
     <<"/other-invalid-path?arg=value">>
 ].

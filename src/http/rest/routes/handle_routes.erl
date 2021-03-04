@@ -75,6 +75,13 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(id), aspect = instance}
     }},
+    %% Get public handle details
+    %% This operation does not require any specific privileges.
+    {<<"/handles/:id/public">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_handle, id = ?BINDING(id), aspect = instance, scope = public}
+    }},
     %% List handle users
     %% This operation requires one of the following privileges:
     %% - handle_view

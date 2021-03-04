@@ -85,6 +85,25 @@ get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleDa
         <<"creationTime">> => CreationTime
     });
 
+get_response(#gri{id = HandleId, aspect = instance, scope = public}, HandleData) ->
+    #{
+        <<"publicHandle">> := PublicHandle,
+        <<"resourceType">> := ResourceType,
+        <<"resourceId">> := ResourceId,
+        <<"metadata">> := Metadata,
+        <<"timestamp">> := Timestamp,
+        <<"creationTime">> := CreationTime
+    } = HandleData,
+    rest_translator:ok_body_reply(#{
+        <<"handleId">> => HandleId,
+        <<"publicHandle">> => PublicHandle,
+        <<"resourceType">> => ResourceType,
+        <<"resourceId">> => ResourceId,
+        <<"metadata">> => Metadata,
+        <<"timestamp">> => time:seconds_to_iso8601(Timestamp),
+        <<"creationTime">> => CreationTime
+    });
+
 get_response(#gri{aspect = users}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});
 

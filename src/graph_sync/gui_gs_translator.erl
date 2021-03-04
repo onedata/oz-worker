@@ -127,7 +127,11 @@ translate_value(_, #gri{type = od_token, aspect = examine}, Response) ->
         <<"type">> => TokenTypeJson,
         <<"caveats">> => [caveats:to_json(C) || C <- Caveats]
     };
-
+translate_value(_, #gri{type = od_token, aspect = verify_invite_token}, #{<<"subject">> := Sub, <<"ttl">> := TTL}) ->
+    #{
+        <<"subject">> => aai:serialize_subject(Sub),
+        <<"ttl">> => utils:undefined_to_null(TTL)
+    };
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n
     ProtocolVersion: ~p~n

@@ -31,7 +31,7 @@
 -export([protected_provider/3, shared_provider/3]).
 -export([protected_cluster/4, public_cluster/3]).
 -export([protected_hservice/4]).
--export([protected_handle/4]).
+-export([protected_handle/4, public_handle/3]).
 -export([protected_harvester/4, shared_or_public_harvester/3]).
 
 %%%===================================================================
@@ -385,6 +385,35 @@ protected_handle(rest, Id, HandleData, Creator) ->
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     }.
+
+
+-spec public_handle(interface(), od_handle:id(), map()) -> expectation().
+public_handle(logic, Id, HandleData) ->
+    ?OK_MAP(#{
+        <<"publicHandle">> => expected_public_handle(Id),
+        <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
+        <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
+        <<"metadata">> => maps:get(<<"metadata">>, HandleData),
+        <<"timestamp">> => ozt_mocks:get_frozen_time_seconds(),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
+    });
+public_handle(rest, Id, HandleData) ->
+    #{
+        <<"handleId">> => Id,
+        <<"publicHandle">> => expected_public_handle(Id),
+        <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
+        <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
+        <<"metadata">> => maps:get(<<"metadata">>, HandleData),
+        <<"timestamp">> => time:seconds_to_iso8601(ozt_mocks:get_frozen_time_seconds()),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
+    };
+public_handle(gs, Id, HandleData) ->
+    ?OK_MAP(#{
+        <<"gri">> => gri:serialize(?GRI(od_handle, Id, instance, public)),
+        <<"publicHandle">> => expected_public_handle(Id),
+        <<"metadata">> => maps:get(<<"metadata">>, HandleData),
+        <<"timestamp">> => time:seconds_to_iso8601(ozt_mocks:get_frozen_time_seconds())
+    }).
 
 
 -spec protected_harvester(interface(), od_harvester:id(), map(), aai:subject()) -> expectation().
