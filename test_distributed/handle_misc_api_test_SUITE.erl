@@ -108,7 +108,7 @@ list_test(Config) ->
             args = [auth],
             expected_result = ?OK_LIST(ExpHandles)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -226,7 +226,7 @@ create_test(Config) ->
                 ?OK_TERM(fun(Result) -> VerifyResult(Env, Result, HService) end)
             end)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [
                 <<"handleServiceId">>, <<"resourceType">>,
@@ -392,7 +392,7 @@ get_test(Config) ->
             args = [auth, HandleId],
             expected_result = api_test_expect:protected_handle(logic, HandleId, HandleData, ?SUB(user, U1))
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)).
 
