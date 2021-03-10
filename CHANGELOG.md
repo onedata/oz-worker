@@ -1,6 +1,25 @@
-# Release notes for project oz-worker
+Release notes for project oz-worker
+===================================
 
-## CHANGELOG
+CHANGELOG
+---------
+
+### 20.02.7
+
+-   **VFS-7413** Fixed displaying users with the same full name on
+    members views.
+-   **VFS-7321** Added REST API endpoint for blocking and unblocking
+    user accounts. Blocked user is denied access to all Onedata services
+    unless their account is unblocked again.
+-   **VFS-7165** Add a workaround for Erlang's SSL implementation that
+    would not reload server certificate chain when it is changed (e.g.
+    after Let's Encrypt certificate regeneration).
+-   **VFS-6638** Fixed handling duplicate clusters states on clusters
+    list in GUI.
+-   **VFS-6566** Improved UX and fixed minor issues in share views.
+    Fixed inability to open share hosted by Oneprovider 19.02.x using
+    Onezone 20.02.x.
+
 
 ### 20.02.6
 
