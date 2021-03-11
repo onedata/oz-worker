@@ -64,6 +64,6 @@ routes() -> [
     {<<"/shares/data/:file_id/[...]">>, #rest_req{
         method = 'GET',
         produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_share, id = undefined, aspect = {shared_file_or_directory_data, ?BINDING(file_id)}, scope = public}
+        b_gri = #b_gri{type = od_share, id = undefined, aspect = {shared_data, ?BINDING(file_id)}, scope = public}
     }}
 ].

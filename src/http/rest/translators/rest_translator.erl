@@ -34,7 +34,7 @@
 %%%===================================================================
 
 -spec response(undefined | entity_logic:req(), entity_logic:result()) ->
-    #rest_resp{}.
+    rest_handler:rest_resp().
 response(_, {error, _} = Error) ->
     #rest_resp{
         code = errors:to_http_code(Error),
@@ -63,7 +63,7 @@ response(#el_req{operation = delete}, ok) ->
 %% a body in response.
 %% @end
 %%--------------------------------------------------------------------
--spec ok_body_reply(json_utils:json_term() | {binary, binary()}) -> #rest_resp{}.
+-spec ok_body_reply(json_utils:json_term() | {binary, binary()}) -> rest_handler:rest_resp().
 ok_body_reply(Body) ->
     #rest_resp{code = ?HTTP_200_OK, body = Body}.
 
@@ -74,7 +74,7 @@ ok_body_reply(Body) ->
 %% send any body in response.
 %% @end
 %%--------------------------------------------------------------------
--spec ok_no_content_reply() -> #rest_resp{}.
+-spec ok_no_content_reply() -> rest_handler:rest_resp().
 ok_no_content_reply() ->
     #rest_resp{code = ?HTTP_204_NO_CONTENT}.
 
@@ -84,7 +84,7 @@ ok_no_content_reply() ->
 %% Returns 201 CREATED with a response body.
 %% @end
 %%--------------------------------------------------------------------
--spec created_reply_with_body(json_utils:json_term()) -> #rest_resp{}.
+-spec created_reply_with_body(json_utils:json_term()) -> rest_handler:rest_resp().
 created_reply_with_body(Body) ->
     #rest_resp{code = ?HTTP_201_CREATED, body = Body}.
 
@@ -94,7 +94,7 @@ created_reply_with_body(Body) ->
 %% Returns 201 CREATED with proper location headers.
 %% @end
 %%--------------------------------------------------------------------
--spec created_reply_with_location(PathTokens :: [binary()]) -> #rest_resp{}.
+-spec created_reply_with_location(PathTokens :: [binary()]) -> rest_handler:rest_resp().
 created_reply_with_location(PathTokens) ->
     LocationHeader = #{<<"Location">> => oz_worker:get_rest_uri(filename:join(["/" | PathTokens]))},
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
@@ -106,7 +106,7 @@ created_reply_with_location(PathTokens) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec created_reply_with_location_and_body(PathTokens :: [binary()], json_utils:json_term()) ->
-    #rest_resp{}.
+    rest_handler:rest_resp().
 created_reply_with_location_and_body(PathTokens, Body) ->
     CreatedReply = created_reply_with_location(PathTokens),
     CreatedReply#rest_resp{body = Body}.
@@ -117,7 +117,7 @@ created_reply_with_location_and_body(PathTokens, Body) ->
 %% REST reply that should be used for successful REST updates.
 %% @end
 %%--------------------------------------------------------------------
--spec updated_reply() -> #rest_resp{}.
+-spec updated_reply() -> rest_handler:rest_resp().
 updated_reply() ->
     #rest_resp{code = ?HTTP_204_NO_CONTENT}.
 
@@ -127,7 +127,7 @@ updated_reply() ->
 %% REST reply that should be used for successful REST deletions.
 %% @end
 %%--------------------------------------------------------------------
--spec deleted_reply() -> #rest_resp{}.
+-spec deleted_reply() -> rest_handler:rest_resp().
 deleted_reply() ->
     #rest_resp{code = ?HTTP_204_NO_CONTENT}.
 
@@ -138,7 +138,7 @@ deleted_reply() ->
 %% membership intermediaries.
 %% @end
 %%--------------------------------------------------------------------
--spec ok_encoded_intermediaries_reply(entity_graph:intermediaries()) -> #rest_resp{}.
+-spec ok_encoded_intermediaries_reply(entity_graph:intermediaries()) -> rest_handler:rest_resp().
 ok_encoded_intermediaries_reply(Intermediaries) ->
     ok_body_reply(#{<<"intermediaries">> => lists:map(fun({Type, Id}) ->
         #{<<"type">> => gri:serialize_type(Type), <<"id">> => Id}

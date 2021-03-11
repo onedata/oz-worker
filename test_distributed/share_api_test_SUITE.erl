@@ -37,7 +37,7 @@
     update_test/1,
     delete_test/1,
     get_shared_file_or_directory_data_test/1,
-    choose_provider_for_public_view_test/1
+    choose_provider_for_public_share_handling_test/1
 ]).
 
 all() ->
@@ -48,7 +48,7 @@ all() ->
         update_test,
         delete_test,
         get_shared_file_or_directory_data_test,
-        choose_provider_for_public_view_test
+        choose_provider_for_public_share_handling_test
     ]).
 
 
@@ -545,41 +545,41 @@ get_shared_file_or_directory_data_test_base(Config, SubpathWithQs) ->
     % the space gets support, but the provider is offline
     {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config),
     oz_test_utils:support_space_by_provider(Config, ProviderId, SpaceId),
-    clear_chosen_provider_cache(Config, SpaceId),
+    clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
     ?assert(CheckResult(CorrectObjectId, ?ERROR_SERVICE_UNAVAILABLE)),
 
     % the provider connects, but it is in legacy version
     update_provider_version(Config, ProviderId, <<"19.02.3">>),
     start_provider_graphsync_channel(Config, ProviderId, ProviderToken),
-    clear_chosen_provider_cache(Config, SpaceId),
+    clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
     ?assert(CheckResult(CorrectObjectId, ?ERROR_NOT_IMPLEMENTED)),
 
     % the provider is connected and in up-to-date version
     update_provider_version(Config, ProviderId, <<"20.02.1">>),
-    clear_chosen_provider_cache(Config, SpaceId),
+    clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
     ?assert(CheckResult(CorrectObjectId, {ok, expected_shared_data_redirect(
         Config, ProviderId, CorrectObjectId, SubpathWithQs
     )})),
 
     % the ObjectId is not valid
-    clear_chosen_provider_cache(Config, SpaceId),
+    clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
     ?assert(CheckResult(<<"blahblahblah">>, ?ERROR_BAD_DATA(<<"FileId">>))),
 
     % the ObjectId is not a share guid
     NonShareGuid = file_id:pack_guid(str_utils:rand_hex(16), str_utils:rand_hex(16)),
     {ok, NonShareObjectId} = file_id:guid_to_objectid(NonShareGuid),
-    clear_chosen_provider_cache(Config, SpaceId),
+    clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
     ?assert(CheckResult(NonShareObjectId, ?ERROR_BAD_DATA(<<"FileId">>))),
 
     % the share does not exist
     NonExistingShareObjectId = gen_example_object_id(<<"non-existent-share">>),
-    clear_chosen_provider_cache(Config, SpaceId),
+    clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
     ?assert(CheckResult(NonExistingShareObjectId, ?ERROR_NOT_FOUND)).
 
 
 % The SUITE is run on a single node cluster to test caching of chosen providers
 % (the cache is local for each node).
-choose_provider_for_public_view_test(Config) ->
+choose_provider_for_public_share_handling_test(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId)),
 
@@ -627,7 +627,9 @@ choose_provider_for_public_view_test(Config) ->
     ),
 
     ChooseProvider = fun() ->
-        {ok, {PrId, PrVersion}} = oz_test_utils:call_oz(Config, share_logic, choose_provider_for_public_view, [ShareId]),
+        {ok, {PrId, PrVersion}} = oz_test_utils:call_oz(
+            Config, share_logic, choose_provider_for_public_share_handling, [ShareId]
+        ),
         {PrId, PrVersion}
     end,
 
@@ -789,8 +791,8 @@ expected_shared_data_redirect(Config, ProviderId, ObjectId, SubpathWithQs) ->
 
 
 %% @private
-clear_chosen_provider_cache(Config, SpaceId) ->
-    oz_test_utils:call_oz(Config, node_cache, clear, [{chosen_provider_for_public_view, SpaceId}]).
+clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId) ->
+    oz_test_utils:call_oz(Config, node_cache, clear, [{chosen_provider_for_share_handling, SpaceId}]).
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -805,14 +807,14 @@ end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
-init_per_testcase(choose_provider_for_public_view_test, Config) ->
+init_per_testcase(choose_provider_for_public_share_handling_test, Config) ->
     % do not freeze time in this testcase as the logic uses an expiring cache
     Config;
 init_per_testcase(_, Config) ->
     ozt_mocks:freeze_time(),
     Config.
 
-end_per_testcase(choose_provider_for_public_view_test, _Config) ->
+end_per_testcase(choose_provider_for_public_share_handling_test, _Config) ->
     ok;
 end_per_testcase(_, _Config) ->
     ozt_mocks:unfreeze_time().

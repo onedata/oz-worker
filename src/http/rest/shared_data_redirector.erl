@@ -39,14 +39,14 @@
 %%% API
 %%%===================================================================
 
--spec handle(file_id:objectid(), cowboy_req:req()) -> #rest_resp{}.
+-spec handle(file_id:objectid(), cowboy_req:req()) -> rest_handler:rest_resp().
 handle(ObjectId, Req) ->
     Result = try
         case resolve_share_id(ObjectId) of
             {error, _} = Err1 ->
                 Err1;
             {ok, ShareId} ->
-                case share_logic:choose_provider_for_public_view(ShareId) of
+                case share_logic:choose_provider_for_public_share_handling(ShareId) of
                     ?ERROR_NOT_FOUND -> ?ERROR_NOT_FOUND;
                     % there is no suitable, online provider
                     {ok, {undefined, _}} -> ?ERROR_SERVICE_UNAVAILABLE;

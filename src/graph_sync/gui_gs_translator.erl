@@ -582,7 +582,7 @@ translate_share(#gri{aspect = instance, scope = private}, Share) ->
         <<"fileType">> => FileType
     };
 translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name">> := Name}) ->
-    {ok, {ChosenProviderId, ChosenProviderVersion}} = share_logic:choose_provider_for_public_view(ShareId),
+    {ok, {ChosenProviderId, ChosenProviderVersion}} = share_logic:choose_provider_for_public_share_handling(ShareId),
     #{
         <<"name">> => Name,
         <<"chosenProviderId">> => utils:undefined_to_null(ChosenProviderId),
