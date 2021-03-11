@@ -517,7 +517,7 @@ list_handles_test(Config) ->
     %   U2 gets the HANDLE_SERVICE_VIEW privilege
     %   U1 gets all remaining privileges
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
-%%        TODO ?HANDLE_SERVICE_LIST_HANDLES
+%%        TODO VFS-7381
         Config, ?HANDLE_SERVICE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
