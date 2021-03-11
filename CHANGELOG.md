@@ -4,6 +4,11 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha4
+
+-   **VFS-7413** Fixed displaying users with the same full name on
+    members views.
+
 ### 21.02.0-alpha3
 
 -   **VFS-6638** Fixed handling duplicate clusters states on clusters
