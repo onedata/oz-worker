@@ -252,38 +252,41 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected
         <<"providers">> => Providers
     };
 
-translate_resource(_, #gri{type = od_share, aspect = instance, scope = private}, Share) ->
+translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = private}, Share) ->
     #od_share{
+        space = SpaceId,
         name = Name,
         description = Description,
-        public_url = PublicUrl,
-        space = SpaceId,
         handle = HandleId,
         root_file = RootFileId,
         file_type = FileType
     } = Share,
     #{
+        <<"spaceId">> => SpaceId,
         <<"name">> => Name,
         <<"description">> => Description,
-        <<"publicUrl">> => PublicUrl,
-        <<"spaceId">> => SpaceId,
-        <<"handleId">> => utils:undefined_to_null(HandleId),
+        <<"publicUrl">> => share_logic:build_public_url(ShareId),
+        <<"publicRestUrl">> => share_logic:build_public_rest_url(ShareId),
         <<"rootFileId">> => RootFileId,
-        <<"fileType">> => FileType
+        <<"fileType">> => FileType,
+        <<"handleId">> => utils:undefined_to_null(HandleId)
     };
 
-translate_resource(_, #gri{type = od_share, aspect = instance, scope = public}, ShareData) ->
+translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = public}, ShareData) ->
     #{
-        <<"name">> := Name, <<"description">> := Description,
-        <<"publicUrl">> := PublicUrl,
-        <<"handleId">> := HandleId,
-        <<"rootFileId">> := RootFileId, <<"fileType">> := FileType
+        <<"name">> := Name,
+        <<"description">> := Description,
+        <<"rootFileId">> := RootFileId,
+        <<"fileType">> := FileType,
+        <<"handleId">> := HandleId
     } = ShareData,
     #{
-        <<"name">> => Name, <<"description">> => Description,
-        <<"publicUrl">> => PublicUrl,
-        <<"handleId">> => utils:undefined_to_null(HandleId),
-        <<"rootFileId">> => RootFileId, <<"fileType">> => FileType
+        <<"name">> => Name,
+        <<"description">> => Description,
+        <<"publicUrl">> => share_logic:build_public_url(ShareId),
+        <<"publicRestUrl">> => share_logic:build_public_rest_url(ShareId),
+        <<"rootFileId">> => RootFileId, <<"fileType">> => FileType,
+        <<"handleId">> => utils:undefined_to_null(HandleId)
     };
 
 

@@ -1130,8 +1130,13 @@ verify_access_token(_Config) ->
         true, {?SUB(user, ProviderAdmin), 1800}
     ),
     verify_access_token_base(
-        AllClients, TokenGamma, #access_token_ctx{},
+        AllClients -- [{provider, Provider}], TokenGamma, #access_token_ctx{consumer = undefined},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]})
+    ),
+    % the consumer defaults to the authenticated client
+    verify_access_token_base(
+        [{provider, Provider}], TokenGamma, #access_token_ctx{consumer = undefined},
+        true, {?SUB(user, ProviderAdmin), 1800}
     ),
 
     #named_token_data{token = TokenDelta} = create_user_named_token(
@@ -1241,6 +1246,19 @@ verify_access_token(_Config) ->
         true, {?SUB(?ONEPROVIDER, Provider), ?DEFAULT_TEMP_CAVEAT_TTL}
     ),
 
+    #named_token_data{token = TokenOmega} = create_provider_named_token(Provider, ?ACCESS_TOKEN, [
+        #cv_ip{whitelist = [{get_testmaster_ip(), 18}]}
+    ]),
+    verify_access_token_base(
+        AllClients, TokenOmega, #access_token_ctx{peer_ip = <<"133.93.1.182">>},
+        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_ip{whitelist = [{get_testmaster_ip(), 18}]})
+    ),
+    % the IP defaults to the requesting client's IP
+    verify_access_token_base(
+        AllClients, TokenOmega, #access_token_ctx{peer_ip = undefined},
+        true, {?SUB(?ONEPROVIDER, Provider), undefined}
+    ),
+
     #named_token_data{token = TokenTau} = create_user_named_token(User, ?ACCESS_TOKEN, [
         #cv_data_readonly{}
     ]),
@@ -1264,7 +1282,7 @@ verify_access_token_base(AllClients, Token, AccessTokenCtx, ShouldSucceed, ExpRe
         logic_spec = #logic_spec{
             module = token_logic,
             function = verify_access_token,
-            args = [auth, data],
+            args = fun prepare_token_verification_logic_args/3,
             expected_result = case ShouldSucceed of
                 true ->
                     ?OK_TERM(fun(#{<<"subject">> := Subject, <<"ttl">> := TTL}) ->
@@ -1356,15 +1374,20 @@ verify_identity_token(_Config) ->
 
     TokenGamma = create_user_temporary_token(ProviderAdmin, ?IDENTITY_TOKEN, [
         #cv_time{valid_until = ozt:timestamp_seconds() + 1800},
-        #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]}
+        #cv_consumer{whitelist = [?SUB(user, User)]}
     ]),
     verify_identity_token_base(
-        AllClients, TokenGamma, #identity_token_ctx{consumer = ?SUB(?ONEPROVIDER, Provider)},
+        AllClients, TokenGamma, #identity_token_ctx{consumer = ?SUB(user, User)},
         true, {?SUB(user, ProviderAdmin), 1800}
     ),
     verify_identity_token_base(
-        AllClients, TokenGamma, #identity_token_ctx{},
-        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]})
+        AllClients -- [{user, User}], TokenGamma, #identity_token_ctx{consumer = undefined},
+        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_consumer{whitelist = [?SUB(user, User)]})
+    ),
+    % the consumer defaults to the authenticated client
+    verify_identity_token_base(
+        [{user, User}], TokenGamma, #identity_token_ctx{consumer = undefined},
+        true, {?SUB(user, ProviderAdmin), 1800}
     ),
 
     #named_token_data{token = TokenDelta} = create_user_named_token(
@@ -1423,6 +1446,19 @@ verify_identity_token(_Config) ->
     verify_identity_token_base(
         AllClients, TokenTheta, #identity_token_ctx{peer_ip = <<"134.93.1.182">>},
         true, {?SUB(?ONEPROVIDER, Provider), ?DEFAULT_TEMP_CAVEAT_TTL}
+    ),
+
+    TokenTau = create_user_temporary_token(User, ?IDENTITY_TOKEN, [
+        #cv_ip{whitelist = [{get_testmaster_ip(), 13}]}
+    ]),
+    verify_identity_token_base(
+        AllClients, TokenTau, #identity_token_ctx{peer_ip = <<"133.93.1.132">>},
+        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_ip{whitelist = [{get_testmaster_ip(), 13}]})
+    ),
+    % the IP defaults to the requesting client's IP
+    verify_identity_token_base(
+        AllClients, TokenTau, #identity_token_ctx{peer_ip = undefined},
+        true, {?SUB(user, User), ?DEFAULT_TEMP_CAVEAT_TTL}
     ),
 
     %% @todo VFS-6098 for backward compatibility - legacy provider access tokens should be
@@ -1499,7 +1535,7 @@ verify_identity_token_base(AllClients, Token, IdentityTokenCtx, ShouldSucceed, E
         logic_spec = #logic_spec{
             module = token_logic,
             function = verify_identity_token,
-            args = [auth, data],
+            args = fun prepare_token_verification_logic_args/3,
             expected_result = case ShouldSucceed of
                 true ->
                     ?OK_TERM(fun(#{<<"subject">> := Subject, <<"ttl">> := TTL}) ->
@@ -1659,8 +1695,13 @@ verify_invite_token(_Config) ->
         true, {?SUB(user, User), 1200}
     ),
     verify_invite_token_base(
-        AllClients, TokenGamma, any, undefined, any,
+        AllClients -- [{provider, Provider}], TokenGamma, any, undefined, any,
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]})
+    ),
+    % the consumer defaults to the authenticated client
+    verify_invite_token_base(
+        [{provider, Provider}], TokenGamma, any, undefined, any,
+        true, {?SUB(user, User), 1200}
     ),
 
     #named_token_data{token = TokenDelta} = create_user_named_token(
@@ -1691,6 +1732,19 @@ verify_invite_token(_Config) ->
     verify_invite_token_base(
         AllClients, TokenLambda, <<"134.93.1.182">>, any, ?USER_JOIN_GROUP,
         true, {?SUB(user, User), ?DEFAULT_TEMP_CAVEAT_TTL}
+    ),
+
+    #named_token_data{token = TokenKappa} = create_user_named_token(User, ?INVITE_TOKEN(?GROUP_JOIN_SPACE, Space), [
+        #cv_ip{whitelist = [{get_testmaster_ip(), 32}]}
+    ]),
+    verify_invite_token_base(
+        AllClients, TokenKappa, <<"133.93.1.182">>, any, any,
+        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_ip{whitelist = [{get_testmaster_ip(), 32}]})
+    ),
+    % the IP defaults to the requesting client's IP
+    verify_invite_token_base(
+        AllClients, TokenKappa, undefined, any, any,
+        true, {?SUB(user, User), undefined}
     ),
 
     TokenSigma = create_user_temporary_token(ProviderAdmin, ?ACCESS_TOKEN(SessionId)),
@@ -1736,7 +1790,7 @@ verify_invite_token_base(AllClients, Token, PeerIp, Consumer, ExpType, ShouldSuc
         logic_spec = #logic_spec{
             module = token_logic,
             function = verify_invite_token,
-            args = [auth, data],
+            args = fun prepare_token_verification_logic_args/3,
             expected_result = case ShouldSucceed of
                 true ->
                     ?OK_TERM(fun(#{<<"subject">> := Subject, <<"ttl">> := TTL}) ->
@@ -2226,6 +2280,19 @@ create_offline_user_access_token(_Config) ->
         ok
     ),
 
+    #named_token_data{token = TokenEpsilon} = create_user_named_token(SubjectUser, ?ACCESS_TOKEN, [
+        #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, RequestingProvider)]}
+    ]),
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenEpsilon, #access_token_ctx{consumer = ?SUB(user, AnotherUser)},
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_consumer{whitelist = [?SUB(?ONEPROVIDER, RequestingProvider)]})
+    ),
+    % the consumer defaults to the authenticated client
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenEpsilon, #access_token_ctx{consumer = undefined},
+        ok
+    ),
+
     #named_token_data{token = TokenGamma} = create_provider_named_token(
         AnotherProvider, ?ACCESS_TOKEN, [
             #cv_time{valid_until = ozt:timestamp_seconds() + 27000}
@@ -2259,6 +2326,19 @@ create_offline_user_access_token(_Config) ->
         ok
     ),
 
+    TokenTau = create_user_temporary_token(SubjectUser, ?ACCESS_TOKEN, [
+        #cv_ip{whitelist = [{get_testmaster_ip(), 13}]}
+    ]),
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenTau, #access_token_ctx{peer_ip = <<"133.93.1.132">>},
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_ip{whitelist = [{get_testmaster_ip(), 13}]})
+    ),
+    % the IP defaults to the requesting client's IP
+    create_offline_user_access_token_base(
+        RequestingProvider, SubjectUser, TokenTau, #access_token_ctx{peer_ip = undefined},
+        ok
+    ),
+
     #named_token_data{token = TokenOmega} = create_user_named_token(
         SubjectUser, ?ACCESS_TOKEN, [
             #cv_interface{interface = rest},
@@ -2280,6 +2360,7 @@ create_offline_user_access_token(_Config) ->
             ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID), ?SERVICE(?OP_WORKER, RequestingProvider)
         ]})
     ),
+
     create_offline_user_access_token_base(
         RequestingProvider, SubjectUser, TokenOmega, #access_token_ctx{
             interface = rest, service = ?SERVICE(?OP_WORKER, RequestingProvider), allow_data_access_caveats = undefined
@@ -2356,7 +2437,10 @@ create_offline_user_access_token_base(RequestingProvider, SubjectUser, Token, Ac
         logic_spec = #logic_spec{
             module = token_logic,
             function = create_offline_user_access_token,
-            args = [auth, SubjectUser, data],
+            args = fun(Auth, Data, Env) ->
+                [PreparedAuth, PreparedData] = prepare_token_verification_logic_args(Auth, Data, Env),
+                [PreparedAuth, SubjectUser, PreparedData]
+            end,
             expected_result = case ExpectedResult of
                 ok -> ?OK_TERM(VerifyFun);
                 {error, _} = Error -> ?ERROR_REASON(Error)
@@ -3261,3 +3345,12 @@ assert_temporary_token_revoked(IsRevoked, Token = #token{subject = Subject}) ->
         false -> ?assertMatch({ok, #{<<"subject">> := Subject}}, VerificationResult);
         true -> ?assertMatch(?ERROR_TOKEN_REVOKED, VerificationResult)
     end.
+
+
+get_testmaster_ip() ->
+    {ok, [{IP, _, _} | _]} = inet:getif(),
+    IP.
+
+
+prepare_token_verification_logic_args(Auth, Data, _Env) ->
+    [Auth#auth{peer_ip = get_testmaster_ip()}, Data].

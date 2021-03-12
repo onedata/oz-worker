@@ -28,7 +28,7 @@
 %%--------------------------------------------------------------------
 -spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
-    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
+    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> rest_handler:rest_resp().
 create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#gri{id = HServiceId}, _}) ->
     LocationTokens = case AuthHint of
         ?AS_USER(_UserId) ->
@@ -56,7 +56,7 @@ create_response(#gri{id = HServiceId, aspect = {group, GrId}}, _, resource, _) -
 %% {@link rest_translator_behaviour} callback get_response/2.
 %% @end
 %%--------------------------------------------------------------------
--spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
+-spec get_response(entity_logic:gri(), Resource :: term()) -> rest_handler:rest_resp().
 get_response(#gri{id = undefined, aspect = list}, HServices) ->
     rest_translator:ok_body_reply(#{<<"handle_services">> => HServices});
 

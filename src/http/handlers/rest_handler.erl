@@ -40,7 +40,9 @@
 }).
 -type opts() :: #{method() => #rest_req{}}.
 
--export_type([method/0, binding/0, bound_gri/0, bound_auth_hint/0, opts/0]).
+-type rest_resp() :: #rest_resp{}.
+
+-export_type([method/0, binding/0, bound_gri/0, bound_auth_hint/0, opts/0, rest_resp/0]).
 
 %% cowboy rest handler API
 -export([
@@ -284,7 +286,7 @@ process_request(Req, State) ->
             auth_hint = AuthHint,
             data = Data
         },
-        RestResp = call_entity_logic_and_translate_response(ElReq),
+        RestResp = route_to_proper_handler(ElReq, Req2),
         {stop, send_response(RestResp, Req2), State}
     catch
         throw:Error ->
@@ -300,10 +302,10 @@ process_request(Req, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Sends given response (#rest_resp{}) and returns modified cowboy_req record.
+%% Sends given response and returns modified cowboy_req record.
 %% @end
 %%--------------------------------------------------------------------
--spec send_response(RestResp :: #rest_resp{}, Req :: cowboy_req:req()) ->
+-spec send_response(rest_resp(), Req :: cowboy_req:req()) ->
     NewReq :: cowboy_req:req().
 send_response(#rest_resp{code = Code, headers = Headers, body = Body}, Req) ->
     RespBody = case Body of
@@ -377,13 +379,16 @@ resolve_bindings(Other, _Client, _Req) ->
     Other.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates entity logic response into REST response using TranslatorModule.
-%% @end
-%%--------------------------------------------------------------------
--spec call_entity_logic_and_translate_response(#el_req{}) -> #rest_resp{}.
+-spec route_to_proper_handler(#el_req{}, cowboy_req:req()) -> rest_resp().
+route_to_proper_handler(#el_req{operation = get, gri = #gri{type = od_share, aspect = {shared_data, ObjectId}}}, Req) ->
+    shared_data_redirector:handle(ObjectId, Req);
+route_to_proper_handler(ElReq, _Req) ->
+    call_entity_logic_and_translate_response(ElReq).
+
+
+%% @private
+-spec call_entity_logic_and_translate_response(#el_req{}) -> rest_resp().
 call_entity_logic_and_translate_response(ElReq) ->
     Result = entity_logic:handle(ElReq),
     try
