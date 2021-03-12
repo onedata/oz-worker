@@ -207,6 +207,7 @@ refresh_idp_access_token(IdP, RefreshToken) ->
     {ok, od_user:id()} | {error, term()}.
 validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode, link_account := LinkAccount}) ->
     TestMode andalso idp_auth_test_mode:process_enable_test_mode(),
+    TestMode andalso idp_auth_test_mode:store_state_token(StateToken),
     Handler = get_protocol_handler(IdP),
     ?auth_debug("Login attempt from IdP '~p' (state: ~s), payload:~n~tp", [
         IdP, StateToken, Payload

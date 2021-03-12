@@ -20,6 +20,7 @@
     process_enable_test_mode/0, process_disable_test_mode/0,
     process_is_test_mode_enabled/0,
     store_user_data/1, get_user_data/0,
+    store_state_token/1, get_state_token/0,
     gather_log/3, gather_log/4,
     get_logs/0
 ]).
@@ -81,6 +82,17 @@ store_user_data(UserData) ->
 -spec get_user_data() -> json_utils:json_term().
 get_user_data() ->
     get(auth_test_mode_user_data).
+
+
+-spec store_state_token(state_token:state_token()) -> ok.
+store_state_token(UserData) ->
+    put(auth_test_mode_state_token, UserData),
+    ok.
+
+
+-spec get_state_token() -> state_token:state_token().
+get_state_token() ->
+    get(auth_test_mode_state_token).
 
 
 %%--------------------------------------------------------------------
