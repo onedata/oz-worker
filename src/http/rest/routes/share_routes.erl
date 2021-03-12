@@ -51,5 +51,19 @@ routes() -> [
     {<<"/shares/:id">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_share, id = ?BINDING(id), aspect = instance}
+    }},
+    %% Get public share details
+    %% This operation does not require any specific privileges.
+    {<<"/shares/:id/public">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_share, id = ?BINDING(id), aspect = instance, scope = public}
+    }},
+    %% Get shared file or directory data
+    %% This operation does not require any specific privileges.
+    {<<"/shares/data/:file_id/[...]">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_share, id = undefined, aspect = {shared_data, ?BINDING(file_id)}, scope = public}
     }}
 ].

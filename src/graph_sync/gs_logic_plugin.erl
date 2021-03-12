@@ -169,7 +169,7 @@ verify_auth_override(?PROVIDER(ProviderId) = Auth, #auth_override{client_auth = 
 
     ResolvedConsumer = case ConsumerToken of
         undefined ->
-            {ok, undefined};
+            {ok, Auth#auth.subject};
         SerializedConsumerToken ->
             ConsumerAuthCtx = #auth_ctx{ip = PeerIp, interface = Interface},
             token_auth:verify_consumer_token(SerializedConsumerToken, ConsumerAuthCtx)

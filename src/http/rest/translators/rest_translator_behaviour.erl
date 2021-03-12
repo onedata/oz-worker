@@ -17,19 +17,19 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Translates given entity logic CREATE result into REST response
-%% expressed by #rest_resp{} record. GRI holds the #gri{} od the request,
+%% expressed by rest_handler:rest_resp() record. GRI holds the #gri{} od the request,
 %% new GRI holds the #gri{} of new aspect that was created.
 %% @end
 %%--------------------------------------------------------------------
 -callback create_response(entity_logic:gri(), entity_logic:auth_hint(),
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
-    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
+    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> rest_handler:rest_resp().
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Translates given entity logic GET result into REST response
-%% expressed by #rest_resp{} record.
+%% expressed by rest_handler:rest_resp() record.
 %% @end
 %%--------------------------------------------------------------------
--callback get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
+-callback get_response(entity_logic:gri(), Resource :: term()) -> rest_handler:rest_resp().

@@ -145,9 +145,9 @@ create(#el_req{gri = #gri{id = undefined, aspect = confine}, data = Data}) ->
     validate_subject_and_service(Type, Subject, Caveats),
     {ok, value, tokens:confine(Token, Caveats)};
 
-create(#el_req{gri = #gri{id = undefined, aspect = verify_access_token}, data = Data}) ->
+create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_access_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
-    AuthCtx = build_token_verification_auth_ctx(Data),
+    AuthCtx = build_token_verification_auth_ctx(Auth, Data),
     case token_auth:verify_access_token(Token, AuthCtx) of
         {ok, #auth{subject = Subject, caveats = Caveats}} ->
             {ok, value, #{
@@ -158,9 +158,9 @@ create(#el_req{gri = #gri{id = undefined, aspect = verify_access_token}, data = 
             Error
     end;
 
-create(#el_req{gri = #gri{id = undefined, aspect = verify_identity_token}, data = Data}) ->
+create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_identity_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
-    AuthCtx = build_token_verification_auth_ctx(Data),
+    AuthCtx = build_token_verification_auth_ctx(Auth, Data),
     case token_auth:verify_identity_token(Token, AuthCtx) of
         {ok, {Subject, Caveats}} ->
             {ok, value, #{
@@ -171,10 +171,10 @@ create(#el_req{gri = #gri{id = undefined, aspect = verify_identity_token}, data 
             Error
     end;
 
-create(#el_req{gri = #gri{id = undefined, aspect = verify_invite_token}, data = Data}) ->
+create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_invite_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
     ExpType = maps:get(<<"expectedInviteType">>, Data, any),
-    AuthCtx = build_token_verification_auth_ctx(Data),
+    AuthCtx = build_token_verification_auth_ctx(Auth, Data),
     case token_auth:verify_invite_token(Token, ExpType, AuthCtx) of
         {ok, #auth{subject = Subject, caveats = Caveats}} ->
             {ok, value, #{
@@ -197,15 +197,15 @@ create(#el_req{gri = #gri{id = undefined, aspect = {user_temporary_token, UserId
 create(#el_req{gri = #gri{id = undefined, aspect = {provider_temporary_token, ProviderId}}, data = Data}) ->
     create_temporary_token(?SUB(?ONEPROVIDER, ProviderId), Data);
 
-create(#el_req{auth = ?PROVIDER(ProviderId), gri = #gri{id = undefined, aspect = {offline_user_access_token, UserId}}, data = Data}) ->
+create(#el_req{auth = ?PROVIDER(PrId) = Auth, gri = #gri{id = undefined, aspect = {offline_user_access_token, UserId}}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
-    AuthCtx = build_token_verification_auth_ctx(Data),
+    AuthCtx = build_token_verification_auth_ctx(Auth, Data),
     case token_auth:verify_access_token(Token, AuthCtx) of
         {ok, #auth{subject = ?SUB(user, UserId), caveats = OriginalCaveats}} ->
             create_temporary_token(?SUB(user, UserId), #{
                 <<"type">> => ?ACCESS_TOKEN,
                 <<"caveats">> => provider_offline_access:build_token_caveats(
-                    OriginalCaveats, ProviderId, ?OFFLINE_ACCESS_TOKEN_TTL
+                    OriginalCaveats, PrId, ?OFFLINE_ACCESS_TOKEN_TTL
                 )
             });
         {ok, #auth{}} ->
@@ -563,9 +563,12 @@ validate_type(_, _, _, _) ->
 
 
 %% @private
--spec build_token_verification_auth_ctx(entity_logic:data()) -> aai:auth_ctx().
-build_token_verification_auth_ctx(Data) ->
-    PeerIp = utils:null_to_undefined(maps:get(<<"peerIp">>, Data, undefined)),
+-spec build_token_verification_auth_ctx(aai:auth(), entity_logic:data()) -> aai:auth_ctx().
+build_token_verification_auth_ctx(Auth, Data) ->
+    PeerIp = case maps:find(<<"peerIp">>, Data) of
+        {ok, P} -> utils:null_to_undefined(P);
+        error -> Auth#auth.peer_ip
+    end,
     Interface = utils:null_to_undefined(maps:get(<<"interface">>, Data, undefined)),
     Service = case utils:null_to_undefined(maps:get(<<"serviceToken">>, Data, undefined)) of
         undefined ->
@@ -576,10 +579,12 @@ build_token_verification_auth_ctx(Data) ->
                 {error, _} = Error1 -> throw(Error1)
             end
     end,
-    Consumer = case utils:null_to_undefined(maps:get(<<"consumerToken">>, Data, undefined)) of
-        undefined ->
+    Consumer = case maps:find(<<"consumerToken">>, Data) of
+        error ->
+            Auth#auth.subject;
+        {ok, null} ->
             undefined;
-        ConsumerToken ->
+        {ok, ConsumerToken} ->
             case token_auth:verify_consumer_token(ConsumerToken, #auth_ctx{ip = PeerIp, interface = Interface}) of
                 {ok, Csm} -> Csm;
                 {error, _} = Error2 -> throw(Error2)

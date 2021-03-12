@@ -72,7 +72,7 @@ build_oai_record(MetadataPrefix, OaiId, Handle) ->
             metadata_format = #oai_metadata_format{metadataPrefix = MetadataPrefix},
             additional_identifiers = [
                 Handle#od_handle.public_handle,
-                share_logic:share_id_to_public_url(Handle#od_handle.resource_id)
+                share_logic:build_public_url(Handle#od_handle.resource_id)
             ],
             value = Handle#od_handle.metadata
         }

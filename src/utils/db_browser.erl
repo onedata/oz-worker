@@ -756,7 +756,7 @@ field_specs(storages) -> [
 bottom_note(shares) ->
     str_utils:format(
         "Public share URL is equal to: ~ts",
-        [share_logic:share_id_to_public_url(<<"${ID}">>)]
+        [share_logic:build_public_url(<<"${ID}">>)]
     );
 bottom_note(_) ->
     undefined.
