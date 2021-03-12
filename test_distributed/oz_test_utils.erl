@@ -1450,7 +1450,7 @@ delete_share(Config, ShareId) ->
 -spec get_share_public_url(Config :: term(), ShareId :: od_share:id()) -> binary().
 get_share_public_url(Config, ShareId) ->
     ?assertMatch(<<_/binary>>, call_oz(
-        Config, share_logic, share_id_to_public_url, [ShareId])
+        Config, share_logic, build_public_url, [ShareId])
     ).
 
 

@@ -46,7 +46,7 @@ end).
 %%          delete
 %%      path => % Mandatory
 %%          [<<"/parts">>, <<"/to/be">>, <<"/concatenated">>],
-%%      url => % Optional, default: {@link oz_test_utils:get_rest_url/2}
+%%      url => % Optional, default: {@link oz_test_utils:oz_rest_url/2}
 %%          <<"oz-domain-with:port/and/api/prefix">>
 %%      headers => % Optional, default: content-type=app/json
 %%          [{<<"key">>, <<"value">>}]

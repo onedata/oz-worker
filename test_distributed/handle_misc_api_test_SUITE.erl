@@ -367,7 +367,7 @@ get_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
 
     % Get and check protected data
-    GetSharedDataApiTestSpec = #api_test_spec{
+    GetProtectedDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
@@ -394,7 +394,39 @@ get_test(Config) ->
         }
         % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
+
+    % Get and check public data
+    GetPublicDataApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                nobody,
+                {admin, [?OZ_HANDLES_VIEW]},
+                {user, NonAdmin},
+                {user, U1},
+                {user, U2}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/handles/">>, HandleId, <<"/public">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = api_test_expect:public_handle(rest, HandleId, HandleData)
+        },
+        logic_spec = #logic_spec{
+            module = handle_logic,
+            function = get_public_data,
+            args = [auth, HandleId],
+            expected_result = api_test_expect:public_handle(logic, HandleId, HandleData)
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_handle, id = HandleId, aspect = instance, scope = public},
+            expected_result = api_test_expect:public_handle(gs, HandleId, HandleData)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec)).
 
 
 update_test(Config) ->

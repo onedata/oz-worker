@@ -54,14 +54,29 @@
 %%--------------------------------------------------------------------
 -spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"POST">>, Req) ->
-    try
+    Result = try
         handle_gui_upload(Req)
     catch
-        throw:{error, _} = Error ->
-            cowboy_req:reply(errors:to_http_code(Error), #{}, json_utils:encode(errors:to_json(Error)), Req);
+        throw:{error, _} = ThrownError ->
+            ThrownError;
         Type:Reason ->
             ?error_stacktrace("Error while processing GUI upload - ~p:~p", [Type, Reason]),
-            cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req)
+            ?ERROR_INTERNAL_SERVER_ERROR
+    end,
+    case Result of
+        {ok, NewReq} ->
+            NewReq;
+        {error, _} = Error ->
+            ErrorJson = errors:to_json(Error),
+            % @TODO VFS-6977 providers and panels up to 20.02.6 expect the error
+            % object in the top level of the JSON, while for versions 20.02.7
+            % they expect it to be nested in the "error" field. For now, send
+            % both versions at once and switch to newer way when possible
+            % (backward compatibility can be dropped).
+            ResponseBody = json_utils:encode(ErrorJson#{
+                <<"error">> => ErrorJson
+            }),
+            cowboy_req:reply(errors:to_http_code(Error), #{}, ResponseBody, Req)
     end.
 
 %% ====================================================================
@@ -69,7 +84,7 @@ handle(<<"POST">>, Req) ->
 %% ====================================================================
 
 %% @private
--spec handle_gui_upload(cowboy_req:req()) -> cowboy_req:req() | no_return().
+-spec handle_gui_upload(cowboy_req:req()) -> {ok, cowboy_req:req()} | errors:error() | no_return().
 handle_gui_upload(Req) ->
     GuiPrefix = cowboy_req:binding(gui_prefix, Req),
     GuiId = cowboy_req:binding(gui_id, Req),
@@ -87,9 +102,9 @@ handle_gui_upload(Req) ->
             % Harvester GUIs are linked during upload, service GUIs are linked
             % during cluster version update
             GuiType =:= ?HARVESTER_GUI andalso gui_static:link_gui(GuiType, GuiId, GuiHash),
-            cowboy_req:reply(?HTTP_200_OK, Req2);
+            {ok, cowboy_req:reply(?HTTP_200_OK, Req2)};
         {error, _} = Error ->
-            cowboy_req:reply(errors:to_http_code(Error), #{}, json_utils:encode(errors:to_json(Error)), Req)
+            Error
     end.
 
 

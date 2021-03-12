@@ -325,6 +325,8 @@ prepare_logic_spec(LogicSpec, Client, Data, Env) ->
 
 
 % Converts placeholders in logic args into real data
+prepare_logic_args(Fun, Client, Data, Env) when is_function(Fun, 3) ->
+    Fun(Client, Data, Env);
 prepare_logic_args(Args, Client, Data, Env) ->
     lists:map(
         fun
@@ -685,7 +687,7 @@ run_test_combinations(
     CorrectClients = ClientSpec#client_spec.correct,
     UnauthorizedClients = ClientSpec#client_spec.unauthorized,
     ForbiddenClients = ClientSpec#client_spec.forbidden,
-    
+
     Environment = EnvSetUpFun(),
 
     % Get list of various combinations of data regardless of operation.

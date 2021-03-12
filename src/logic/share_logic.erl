@@ -16,6 +16,7 @@
 -include("http/gui_paths.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([
     create/5, create/2
@@ -36,8 +37,9 @@
     exists/1
 ]).
 -export([
-    share_id_to_public_url/1,
-    choose_provider_for_public_view/1
+    build_public_url/1,
+    build_public_rest_url/1,
+    choose_provider_for_public_share_handling/1
 ]).
 
 % Time for which a provider choice for public view is cached, per space.
@@ -194,14 +196,27 @@ exists(ShareId) ->
 %% parent space of the share.
 %% @end
 %%--------------------------------------------------------------------
--spec share_id_to_public_url(od_share:id()) -> binary().
-share_id_to_public_url(ShareId) ->
+-spec build_public_url(od_share:id()) -> binary().
+build_public_url(ShareId) ->
     oz_worker:get_uri(?PUBLIC_SHARE_URN(ShareId)).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Chooses a provider to handle viewing of a public share. Online providers that
+%% Returns public access URL for given share that points to Onezone. Onezone
+%% will then redirect clients to one of providers that support the
+%% parent space of the share.
+%% @end
+%%--------------------------------------------------------------------
+-spec build_public_rest_url(od_share:id()) -> binary().
+build_public_rest_url(ShareId) ->
+    oz_worker:get_rest_uri(?PUBLIC_SHARE_REST_PATH(ShareId)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Chooses a provider to handle requests concerning public share information
+%% and data (for all interfaces). Online providers that
 %% are in newest version are preferred, then any online provider. Returns the
 %% provider Id and its version, or undefined values if there are no online providers.
 %% This operation is performed each time a public share is visited. To minimize
@@ -211,33 +226,37 @@ share_id_to_public_url(ShareId) ->
 %% procedure if needed.
 %% @end
 %%--------------------------------------------------------------------
--spec choose_provider_for_public_view(od_share:id()) ->
-    {od_provider:id() | undefined, onedata:release_version() | undefined}.
-choose_provider_for_public_view(ShareId) ->
-    {ok, SpaceId} = get_space(?ROOT, ShareId),
-    {ok, Result} = node_cache:acquire({chosen_provider_for_public_view, SpaceId}, fun() ->
-        {ok, choose_provider_for_space(SpaceId), ?CHOSEN_PROVIDER_CACHE_TTL}
-    end),
-    case Result of
-        {undefined, undefined} ->
-            Result;
-        {ChosenProviderId, _} ->
-            case provider_connections:is_online(ChosenProviderId) of
-                true ->
-                    Result;
-                false ->
-                    node_cache:clear({chosen_provider_for_public_view, SpaceId}),
-                    choose_provider_for_public_view(ShareId)
+-spec choose_provider_for_public_share_handling(od_share:id()) ->
+    {ok, {od_provider:id() | undefined, onedata:release_version() | undefined}} | ?ERROR_NOT_FOUND.
+choose_provider_for_public_share_handling(ShareId) ->
+    case get_space(?ROOT, ShareId) of
+        ?ERROR_NOT_FOUND ->
+            ?ERROR_NOT_FOUND;
+        {ok, SpaceId} ->
+            {ok, Result} = node_cache:acquire({chosen_provider_for_share_handling, SpaceId}, fun() ->
+                {ok, choose_provider_for_public_share_handling_in_space(SpaceId), ?CHOSEN_PROVIDER_CACHE_TTL}
+            end),
+            case Result of
+                {undefined, undefined} ->
+                    {ok, Result};
+                {ChosenProviderId, _} ->
+                    case provider_connections:is_online(ChosenProviderId) of
+                        true ->
+                            {ok, Result};
+                        false ->
+                            node_cache:clear({chosen_provider_for_share_handling, SpaceId}),
+                            choose_provider_for_public_share_handling(ShareId)
+                    end
             end
     end.
 
 
 %% @private
--spec choose_provider_for_space(od_space:id()) ->
+-spec choose_provider_for_public_share_handling_in_space(od_space:id()) ->
     {od_provider:id() | undefined, onedata:release_version() | undefined}.
-choose_provider_for_space(SpaceId) ->
+choose_provider_for_public_share_handling_in_space(SpaceId) ->
     {ok, Providers} = space_logic:get_eff_providers(?ROOT, SpaceId),
-    <<OzWorkerMajorVersion:6/binary, _/binary>> = oz_worker:get_release_version(),
+    <<OzWorkerReleaseLine:6/binary, _/binary>> = oz_worker:get_release_version(),
     EligibleProviders = lists:filtermap(fun(ProviderId) ->
         case provider_connections:is_online(ProviderId) of
             false ->
@@ -245,7 +264,7 @@ choose_provider_for_space(SpaceId) ->
             true ->
                 {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, ProviderId),
                 VersionClassification = case Version of
-                    <<OzWorkerMajorVersion:6/binary, _/binary>> -> up_to_date;
+                    <<OzWorkerReleaseLine:6/binary, _/binary>> -> up_to_date;
                     _ -> legacy
                 end,
                 {true, {ProviderId, Version, VersionClassification}}

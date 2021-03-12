@@ -229,12 +229,17 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = public}}, Handle) ->
     #od_handle{
-        public_handle = PublicHandle, metadata = Metadata, timestamp = Timestamp
+        public_handle = PublicHandle,
+        resource_type = ResourceType, resource_id = ResourceId,
+        metadata = Metadata, timestamp = Timestamp, creation_time = CreationTime
     } = Handle,
     {ok, #{
         <<"publicHandle">> => PublicHandle,
+        <<"resourceType">> => ResourceType,
+        <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
-        <<"timestamp">> => Timestamp
+        <<"timestamp">> => Timestamp,
+        <<"creationTime">> => CreationTime
     }};
 
 get(#el_req{gri = #gri{aspect = users}}, Handle) ->
