@@ -101,11 +101,11 @@ get_response(<<"adminEmail">>, _Args) ->
         list_to_binary(AdminEmail)
     end, AdminEmails);
 get_response(<<"compression">>, _Args) -> <<"">>;
-%%% TODO by default 'Identity' compressions is supported.
-%%% TODO optionally we can add support for other types of compression
-%%% TODO compressions other than 'Identity' must be enumerated in Identify request
+%%% TODO VFS-7454: by default 'Identity' compressions is supported.
+%%% Optionally we can add support for other types of compression
+%%% compressions other than 'Identity' must be enumerated in Identify request
 get_response(<<"description">>, _Args) -> [].
-%%% TODO add repository description
+%%% TODO VFS-7454  add repository description
 
 
 

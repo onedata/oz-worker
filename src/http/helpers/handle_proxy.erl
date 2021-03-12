@@ -96,7 +96,7 @@ unregister_handle(HandleId) ->
 %%    Body = [
 %%        {<<"serviceProperties">>, ServiceProperties}
 %%    ],
-    Body = ServiceProperties, %todo use above Body after fixing proxy
+    Body = ServiceProperties, %TODO VFS-7415 use above Body after fixing proxy
     Headers = #{?HDR_CONTENT_TYPE => <<"application/json">>, ?HDR_ACCEPT => <<"application/json">>},
     Type = maps:get(<<"type">>, ServiceProperties),
     {ok, 200, _, _} =
