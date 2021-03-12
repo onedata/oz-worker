@@ -78,7 +78,7 @@ create_response(#gri{aspect = {provider_temporary_token, _}}, _, value, Token) -
 %% {@link rest_translator_behaviour} callback get_response/2.
 %% @end
 %%--------------------------------------------------------------------
--spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
+-spec get_response(entity_logic:gri(), Resource :: term()) -> rest_handler:rest_resp().
 get_response(#gri{type = temporary_token_secret, scope = shared}, Generation) ->
     rest_translator:ok_body_reply(#{<<"generation">> => Generation});
 
@@ -103,7 +103,7 @@ get_response(#gri{aspect = {provider_named_token, _}}, TokenData) ->
 %%%===================================================================
 
 %% @private
--spec token_verification_reply(entity_logic:data()) -> #rest_resp{}.
+-spec token_verification_reply(entity_logic:data()) -> rest_handler:rest_resp().
 token_verification_reply(#{<<"subject">> := Subject, <<"ttl">> := TTL}) ->
     rest_translator:ok_body_reply(#{
         <<"subject">> => aai:subject_to_json(Subject),
@@ -112,7 +112,7 @@ token_verification_reply(#{<<"subject">> := Subject, <<"ttl">> := TTL}) ->
 
 
 %% @private
--spec named_token_created_reply(tokens:token()) -> #rest_resp{}.
+-spec named_token_created_reply(tokens:token()) -> rest_handler:rest_resp().
 named_token_created_reply(Token = #token{id = TokenId}) ->
     rest_translator:created_reply_with_location_and_body(
         [<<"tokens">>, <<"named">>, TokenId],
@@ -124,19 +124,19 @@ named_token_created_reply(Token = #token{id = TokenId}) ->
 
 
 %% @private
--spec temporary_token_created_reply(tokens:token()) -> #rest_resp{}.
+-spec temporary_token_created_reply(tokens:token()) -> rest_handler:rest_resp().
 temporary_token_created_reply(Token) ->
     rest_translator:created_reply_with_body(#{<<"token">> => ?SERIALIZE(Token)}).
 
 
 %% @private
--spec tokens_reply([tokens:id()]) -> #rest_resp{}.
+-spec tokens_reply([tokens:id()]) -> rest_handler:rest_resp().
 tokens_reply(Tokens) ->
     rest_translator:ok_body_reply(#{<<"tokens">> => Tokens}).
 
 
 %% @private
--spec named_token_reply(entity_logic:data()) -> #rest_resp{}.
+-spec named_token_reply(entity_logic:data()) -> rest_handler:rest_resp().
 named_token_reply(TokenData) ->
     #{
         <<"id">> := TokenId,

@@ -25,7 +25,6 @@
 
 -include("api_test_utils.hrl").
 
-
 -export([
     all/0,
     init_per_suite/1, end_per_suite/1,
@@ -37,7 +36,8 @@
     get_test/1,
     update_test/1,
     delete_test/1,
-    choose_provider_for_public_view_test/1
+    get_shared_file_or_directory_data_test/1,
+    choose_provider_for_public_share_handling_test/1
 ]).
 
 all() ->
@@ -47,7 +47,8 @@ all() ->
         get_test,
         update_test,
         delete_test,
-        choose_provider_for_public_view_test
+        get_shared_file_or_directory_data_test,
+        choose_provider_for_public_share_handling_test
     ]).
 
 
@@ -135,12 +136,10 @@ create_test(Config) ->
 
     VerifyFun = fun(ShareId, Data) ->
         {ok, Share} = oz_test_utils:get_share(Config, ShareId),
-        PublicURL = oz_test_utils:get_share_public_url(Config, ShareId),
         ExpectedFileType = maps:get(<<"fileType">>, Data, dir),
         ExpectedDescription = maps:get(<<"description">>, Data, <<"">>),
         ?assertMatch(#od_share{
             name = ?CORRECT_NAME, description = ExpectedDescription,
-            public_url = PublicURL,
             space = S1, root_file = ?ROOT_FILE_ID,
             file_type = ExpectedFileType
         }, Share),
@@ -313,6 +312,12 @@ get_test(Config, ShareId, FileType) ->
                 {user, U2}
             ]
         },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/shares/">>, ShareId, <<"/public">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = api_test_expect:public_share(rest, ShareId, ShareData)
+        },
         logic_spec = #logic_spec{
             module = share_logic,
             function = get_public_data,
@@ -325,7 +330,17 @@ get_test(Config, ShareId, FileType) ->
             expected_result = api_test_expect:public_share(gs, ShareId, ShareData)
         }
     },
-    ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec)),
+
+    % Make sure the advertised public rest url works
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            url => oz_test_utils:call_oz(Config, share_logic, build_public_rest_url, [ShareId]),
+            path => <<"">>
+        },
+        expect => api_test_expect:public_share(rest, ShareId, ShareData)
+    })).
 
 
 update_test(Config) ->
@@ -470,10 +485,101 @@ delete_test(Config) ->
     )).
 
 
+get_shared_file_or_directory_data_test(Config) ->
+    lists:foreach(fun(SubpathWithQs) ->
+        get_shared_file_or_directory_data_test_base(Config, SubpathWithQs)
+    end, example_shared_data_subpaths()).
+
+get_shared_file_or_directory_data_test_base(Config, SubpathWithQs) ->
+    ShareId = datastore_key:new(),
+    {SpaceId, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(Config, ?SPACE_VIEW),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(Owner), #{
+        <<"shareId">> => ShareId,
+        <<"spaceId">> => SpaceId,
+        <<"name">> => ?SHARE_NAME1,
+        <<"description">> => str_utils:rand_hex(rand:uniform(1000) - 1),
+        <<"rootFileId">> => ?ROOT_FILE_ID,
+        <<"fileType">> => file
+    }),
+    CorrectObjectId = gen_example_object_id(ShareId),
+
+    CheckResult = fun(ObjectId, ExpectedResult) ->
+        ExpectedCode = case ExpectedResult of
+            {ok, _} -> ?HTTP_307_TEMPORARY_REDIRECT;
+            {error, _} = Err1 -> errors:to_http_code(Err1)
+        end,
+        ExpectedHeaders = case ExpectedResult of
+            {ok, URL} -> fun(#{<<"location">> := Location}) -> Location =:= URL end;
+            {error, _} -> undefined
+        end,
+        ExpectedBody = case ExpectedResult of
+            {ok, _} -> undefined;
+            {error, _} = Err2 -> #{<<"error">> => errors:to_json(Err2)}
+        end,
+        api_test_utils:run_tests(Config, #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    nobody,
+                    {admin, [?OZ_SHARES_VIEW]},
+                    {user, Owner},
+                    {user, NonAdmin},
+                    {user, U1},
+                    {user, U2}
+                ]
+            },
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/shares/data/">>, ObjectId, SubpathWithQs],
+                expected_code = ExpectedCode,
+                expected_headers = ExpectedHeaders,
+                expected_body = ExpectedBody
+            }
+        })
+    end,
+
+    % the space is not supported yet
+    ?assert(CheckResult(CorrectObjectId, ?ERROR_SERVICE_UNAVAILABLE)),
+
+    % the space gets support, but the provider is offline
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, SpaceId),
+    clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
+    ?assert(CheckResult(CorrectObjectId, ?ERROR_SERVICE_UNAVAILABLE)),
+
+    % the provider connects, but it is in legacy version
+    update_provider_version(Config, ProviderId, <<"19.02.3">>),
+    start_provider_graphsync_channel(Config, ProviderId, ProviderToken),
+    clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
+    ?assert(CheckResult(CorrectObjectId, ?ERROR_NOT_IMPLEMENTED)),
+
+    % the provider is connected and in up-to-date version
+    update_provider_version(Config, ProviderId, <<"20.02.1">>),
+    clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
+    ?assert(CheckResult(CorrectObjectId, {ok, expected_shared_data_redirect(
+        Config, ProviderId, CorrectObjectId, SubpathWithQs
+    )})),
+
+    % the ObjectId is not valid
+    clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
+    ?assert(CheckResult(<<"blahblahblah">>, ?ERROR_BAD_DATA(<<"FileId">>))),
+
+    % the ObjectId is not a share guid
+    NonShareGuid = file_id:pack_guid(str_utils:rand_hex(16), str_utils:rand_hex(16)),
+    {ok, NonShareObjectId} = file_id:guid_to_objectid(NonShareGuid),
+    clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
+    ?assert(CheckResult(NonShareObjectId, ?ERROR_BAD_DATA(<<"FileId">>))),
+
+    % the share does not exist
+    NonExistingShareObjectId = gen_example_object_id(<<"non-existent-share">>),
+    clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
+    ?assert(CheckResult(NonExistingShareObjectId, ?ERROR_NOT_FOUND)).
+
+
 % The SUITE is run on a single node cluster to test caching of chosen providers
 % (the cache is local for each node).
-choose_provider_for_public_view_test(Config) ->
-    % Onezone version is mocked in init_per_testcase to <<"19.09.3">>
+choose_provider_for_public_share_handling_test(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId)),
 
@@ -484,14 +590,16 @@ choose_provider_for_public_view_test(Config) ->
     {ok, {SigmaUpToDate, SigmaToken}} = oz_test_utils:create_provider(Config),
     {ok, {OmegaUpToDate, OmegaToken}} = oz_test_utils:create_provider(Config),
 
+    <<OzWorkerReleaseLine:5/binary, _/binary>> = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
+
     ProviderVersion = fun(PrId) ->
         case PrId of
-            AlphaOffline -> <<"19.09.1">>;
+            AlphaOffline -> <<OzWorkerReleaseLine/binary, ".1">>;
             BetaOffline -> <<"18.02.3">>;
             GammaLegacy -> <<"19.02.1">>;
             DeltaLegacy -> <<"19.02.0-rc1">>;
-            SigmaUpToDate -> <<"19.09.0-rc1">>;
-            OmegaUpToDate -> <<"19.09.2">>
+            SigmaUpToDate -> <<OzWorkerReleaseLine/binary, ".0-rc1">>;
+            OmegaUpToDate -> <<OzWorkerReleaseLine/binary, ".2">>
         end
     end,
 
@@ -518,9 +626,12 @@ choose_provider_for_public_view_test(Config) ->
         Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
     ),
 
-    ChooseProvider = fun() -> oz_test_utils:call_oz(
-        Config, share_logic, choose_provider_for_public_view, [ShareId]
-    ) end,
+    ChooseProvider = fun() ->
+        {ok, {PrId, PrVersion}} = oz_test_utils:call_oz(
+            Config, share_logic, choose_provider_for_public_share_handling, [ShareId]
+        ),
+        {PrId, PrVersion}
+    end,
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -530,12 +641,14 @@ choose_provider_for_public_view_test(Config) ->
     ?assertEqual(ProviderVersion(ChosenProviderId), ChosenProviderVersion),
     % Choice should be cached and reused
     ?assertEqual({ChosenProviderId, ChosenProviderVersion}, ChooseProvider()),
+    check_shares_data_redirector(Config, ShareId, ChosenProviderId, ProviderVersion(ChosenProviderId)),
 
     % If the chosen provider goes down, another up to date provider should be chosen
     terminate_provider_graphsync_channel(Config, ChosenProviderId, maps:get(ChosenProviderId, Connections)),
     [TheOtherUpToDate] = [SigmaUpToDate, OmegaUpToDate] -- [ChosenProviderId],
     ?assertEqual({TheOtherUpToDate, ProviderVersion(TheOtherUpToDate)}, ChooseProvider()),
     ?assertEqual({TheOtherUpToDate, ProviderVersion(TheOtherUpToDate)}, ChooseProvider()),
+    check_shares_data_redirector(Config, ShareId, TheOtherUpToDate, ProviderVersion(TheOtherUpToDate)),
 
     % When the second up to date provider goes down, a legacy one should be picked
     terminate_provider_graphsync_channel(Config, TheOtherUpToDate, maps:get(TheOtherUpToDate, Connections)),
@@ -543,6 +656,7 @@ choose_provider_for_public_view_test(Config) ->
     ?assert(lists:member(LegacyProviderId, [GammaLegacy, DeltaLegacy])),
     ?assertEqual(ProviderVersion(LegacyProviderId), LegacyProviderVersion),
     ?assertEqual({LegacyProviderId, ProviderVersion(LegacyProviderId)}, ChooseProvider()),
+    check_shares_data_redirector(Config, ShareId, LegacyProviderId, ProviderVersion(LegacyProviderId)),
 
     % If one of the up to date providers go up, eventually it should be used again
     % (after the cache expiration)
@@ -551,6 +665,7 @@ choose_provider_for_public_view_test(Config) ->
         SigmaUpToDate => start_provider_graphsync_channel(Config, SigmaUpToDate, SigmaToken)
     },
     ?assertEqual({SigmaUpToDate, ProviderVersion(SigmaUpToDate)}, ChooseProvider(), 60),
+    check_shares_data_redirector(Config, ShareId, SigmaUpToDate, ProviderVersion(SigmaUpToDate)),
 
     % If all providers go down, undefined result should be immediately returned
     terminate_provider_graphsync_channel(Config, GammaLegacy, maps:get(GammaLegacy, NewConnections)),
@@ -558,12 +673,17 @@ choose_provider_for_public_view_test(Config) ->
     terminate_provider_graphsync_channel(Config, SigmaUpToDate, maps:get(SigmaUpToDate, NewConnections)),
     terminate_provider_graphsync_channel(Config, OmegaUpToDate, maps:get(OmegaUpToDate, NewConnections)),
     ?assertEqual({undefined, undefined}, ChooseProvider()),
+    check_shares_data_redirector(Config, ShareId, undefined, undefined),
 
     % After some providers go online again and the cache expires, they should be picked again
     start_provider_graphsync_channel(Config, DeltaLegacy, DeltaToken),
     start_provider_graphsync_channel(Config, OmegaUpToDate, OmegaToken),
-    ?assertEqual({OmegaUpToDate, ProviderVersion(OmegaUpToDate)}, ChooseProvider(), 60).
+    ?assertEqual({OmegaUpToDate, ProviderVersion(OmegaUpToDate)}, ChooseProvider(), 60),
+    check_shares_data_redirector(Config, ShareId, OmegaUpToDate, ProviderVersion(OmegaUpToDate)).
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
 %% @private
 update_provider_version(Config, ProviderId, Version) ->
@@ -573,6 +693,7 @@ update_provider_version(Config, ProviderId, Version) ->
     ])).
 
 
+%% @private
 start_provider_graphsync_channel(Config, ProviderId, ProviderToken) ->
     Url = oz_test_utils:graph_sync_url(Config, provider),
     SSlOpts = [{secure, only_verify_peercert}, {cacerts, oz_test_utils:gui_ca_certs(Config)}],
@@ -587,6 +708,7 @@ start_provider_graphsync_channel(Config, ProviderId, ProviderToken) ->
     GsClient.
 
 
+%% @private
 terminate_provider_graphsync_channel(Config, ProviderId, ClientPid) ->
     gs_client:kill(ClientPid),
     ?assertMatch(
@@ -594,6 +716,83 @@ terminate_provider_graphsync_channel(Config, ProviderId, ClientPid) ->
         oz_test_utils:call_oz(Config, provider_connections, is_online, [ProviderId]),
         60
     ).
+
+
+%% @private
+example_shared_data_subpaths() -> [
+    <<"/content">>, <<"/content?not=significant&key=value">>,
+    <<"/children">>, <<"/children?offset=100&limit=3">>,
+    <<"">>, <<"?attribute=size">>,
+    <<"/">>, <<"/?attribute=size">>,
+    <<"/metadata/xattrs">>, <<"/metadata/xattrs?attribute=license">>,
+    <<"/metadata/json">>, <<"/metadata/json?filter_type=keypath&filter=key1.key2.[2].key3">>,
+    <<"/metadata/rdf">>, <<"/metadata/rdf?not=significant">>,
+    <<"/some/invalid/path/should/work/anyway">>,
+    <<"/other-invalid-path?arg=value">>
+].
+
+
+%% @private
+check_shares_data_redirector(Config, ShareId, ProviderId, ProviderVersion) ->
+    lists:foreach(fun(SubpathWithQs) ->
+        check_shares_data_redirector(Config, ShareId, ProviderId, ProviderVersion, SubpathWithQs)
+    end, example_shared_data_subpaths()).
+
+check_shares_data_redirector(Config, ShareId, ProviderId, ProviderVersion, SubpathWithQs) ->
+    OzDomain = oz_test_utils:oz_domain(Config),
+
+    ExampleObjectId = gen_example_object_id(ShareId),
+    Result = http_client:get(
+        str_utils:format_bin("https://~s/api/v3/onezone/shares/data/~s~s", [OzDomain, ExampleObjectId, SubpathWithQs]),
+        #{}, <<"">>, [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
+    ),
+    ParsedResult = case Result of
+        {ok, ?HTTP_307_TEMPORARY_REDIRECT, #{<<"location">> := Url}, _} ->
+            {ok, Url};
+        {ok, _, _, ErrorJson} ->
+            errors:from_json(maps:get(<<"error">>, json_utils:decode(ErrorJson)))
+    end,
+    case ProviderId of
+        undefined ->
+            ?assertEqual(ParsedResult, ?ERROR_SERVICE_UNAVAILABLE);
+        _ ->
+            case ProviderVersion of
+                <<"18.02", _/binary>> ->
+                    ?assertEqual(ParsedResult, ?ERROR_NOT_IMPLEMENTED);
+                <<"19.02", _/binary>> ->
+                    ?assertEqual(ParsedResult, ?ERROR_NOT_IMPLEMENTED);
+                _ ->
+                    ?assertEqual(ParsedResult, {ok, expected_shared_data_redirect(
+                        Config, ProviderId, ExampleObjectId, SubpathWithQs
+                    )})
+            end
+    end.
+
+
+%% @private
+gen_example_object_id(ShareId) ->
+    ExampleShareGuid = file_id:pack_share_guid(str_utils:rand_hex(16), str_utils:rand_hex(16), ShareId),
+    {ok, ExampleObjectId} = file_id:guid_to_objectid(ExampleShareGuid),
+    ExampleObjectId.
+
+
+%% @private
+expected_shared_data_redirect(Config, ProviderId, ObjectId, SubpathWithQs) ->
+    {ok, #od_provider{domain = OpDomain}} = oz_test_utils:get_provider(Config, ProviderId),
+    % if the path ends with a slash, it is trimmed
+    ExpectedSubpathWithQs = case SubpathWithQs of
+        <<"/">> -> <<"">>;
+        <<"/?", Rest/binary>> -> <<"?", Rest/binary>>;
+        Other -> Other
+    end,
+    str_utils:format_bin("https://~s/api/v3/oneprovider/data/~s~s", [
+        OpDomain, ObjectId, ExpectedSubpathWithQs
+    ]).
+
+
+%% @private
+clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId) ->
+    oz_test_utils:call_oz(Config, node_cache, clear, [{chosen_provider_for_share_handling, SpaceId}]).
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -608,20 +807,14 @@ end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
-init_per_testcase(choose_provider_for_public_view_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, oz_worker, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, oz_worker, get_release_version, fun() ->
-        <<"19.09.3">>
-    end),
+init_per_testcase(choose_provider_for_public_share_handling_test, Config) ->
     % do not freeze time in this testcase as the logic uses an expiring cache
     Config;
 init_per_testcase(_, Config) ->
     ozt_mocks:freeze_time(),
     Config.
 
-end_per_testcase(choose_provider_for_public_view_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, oz_worker);
+end_per_testcase(choose_provider_for_public_share_handling_test, _Config) ->
+    ok;
 end_per_testcase(_, _Config) ->
     ozt_mocks:unfreeze_time().

@@ -121,7 +121,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    6.
+    7.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -203,6 +203,20 @@ get_record_struct(6) ->
         {name, string},
         {description, string}, % new field
         {public_url, string},
+        {space, string},
+        {handle, string},
+
+        {root_file, string},
+        {file_type, atom},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
+    ]};
+get_record_struct(7) ->
+    % removed field - public_url
+    {record, [
+        {name, string},
+        {description, string},
         {space, string},
         {handle, string},
 
@@ -324,10 +338,39 @@ upgrade_record(5, Share) ->
         CreationTime,
         Creator
     } = Share,
-    {6, #od_share{
+    {6, {od_share,
+        Name,
+        <<"">>,
+        PublicUrl,
+
+        SpaceId,
+        HandleId,
+
+        RootFileId,
+        FileType,
+
+        CreationTime,
+        Creator
+    }};
+upgrade_record(6, Share) ->
+    {
+        od_share,
+        Name,
+        Description,
+        _PublicUrl,
+
+        SpaceId,
+        HandleId,
+
+        RootFileId,
+        FileType,
+
+        CreationTime,
+        Creator
+    } = Share,
+    {7, #od_share{
         name = Name,
-        description = <<"">>,
-        public_url = PublicUrl,
+        description = Description,
 
         space = SpaceId,
         handle = HandleId,

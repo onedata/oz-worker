@@ -821,7 +821,14 @@ perform_upload(Config, Prefix, ClusterId, GuiPackagePath, Headers) ->
         {ok, 200, _, <<"">>} ->
             ok;
         {ok, Code, _, Body} when Code >= 400 andalso Code < 500 ->
-            errors:from_json(json_utils:decode(Body))
+            Error = errors:from_json(json_utils:decode(Body)),
+            % @TODO VFS-6977 providers and panels up to 20.02.6 expect the error
+            % object in the top level of the JSON, while for versions 20.02.7
+            % they expect it to be nested in the "error" field. For now, send
+            % both versions at once and switch to newer way when possible
+            % (backward compatibility can be dropped).
+            ?assertEqual(Error, errors:from_json(maps:get(<<"error">>, json_utils:decode(Body)))),
+            Error
     end.
 
 

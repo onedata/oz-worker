@@ -147,12 +147,7 @@ modify_handle(HandleId, NewMetadata) ->
 %%% Internal functions
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Get public url for share.
-%% @end
-%%--------------------------------------------------------------------
+%% @private
 -spec get_redirect_url(od_handle:resource_type(), od_handle:resource_id()) -> public_url().
 get_redirect_url(<<"Share">>, ShareId) ->
-    {ok, #document{value = #od_share{public_url = PublicUrl}}} = od_share:get(ShareId),
-    PublicUrl.
+    share_logic:build_public_url(ShareId).
