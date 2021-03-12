@@ -11,6 +11,12 @@ CHANGELOG
 -   **VFS-7321** Added REST API endpoint for blocking and unblocking
     user accounts. Blocked user is denied access to all Onedata services
     unless their account is unblocked again.
+-   **VFS-7294** Added publicly available REST endpoints for fetching
+    information and data of shared files/directories. The data-related
+    endpoints are offered by Onezone, which redirects to a suitable
+    Oneprovider so that a guest user does not need any knowledge of the
+    environment to access the data. Improved the Web GUI's shares view
+    to present the public endpoints in an easy-to-use manner.
 -   **VFS-7165** Add a workaround for Erlang's SSL implementation that
     would not reload server certificate chain when it is changed (e.g.
     after Let's Encrypt certificate regeneration).
