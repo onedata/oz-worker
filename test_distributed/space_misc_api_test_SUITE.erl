@@ -172,7 +172,7 @@ list_test(Config) ->
             args = [auth],
             expected_result = ?OK_LIST(ExpSpaces)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -523,7 +523,7 @@ list_shares_test(Config) ->
             args = [auth, S1],
             expected_result = ?OK_LIST(ExpShares)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -634,7 +634,7 @@ list_storages_test(Config) ->
             args = [auth, S1],
             expected_result = ?OK_LIST(ExpStorages)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -688,7 +688,7 @@ create_space_support_token(Config) ->
             args = [auth, S1],
             expected_result = ?OK_TERM(VerifyFun)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -741,7 +741,7 @@ remove_storage_test(Config) ->
             args = [auth, S1, storageId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
@@ -807,7 +807,7 @@ remove_provider_test(Config) ->
             args = [auth, S1, P1],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
@@ -862,7 +862,7 @@ list_effective_providers_test(Config) ->
             args = [auth, S1],
             expected_result = ?OK_LIST(ExpProviders)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 

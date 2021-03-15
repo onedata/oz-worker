@@ -101,7 +101,7 @@ list_test(Config) ->
             args = [auth],
             expected_result = ?OK_LIST(ExpShares)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 

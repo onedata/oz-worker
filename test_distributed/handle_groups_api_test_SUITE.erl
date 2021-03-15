@@ -126,7 +126,7 @@ add_group_test(Config) ->
             args = [auth, HandleId, G1, data],
             expected_result = ?OK_BINARY(G1)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"privileges">>],
             correct_values = #{
@@ -194,7 +194,7 @@ remove_group_test(Config) ->
             args = [auth, HandleId, groupId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
@@ -245,7 +245,7 @@ list_groups_test(Config) ->
             args = [auth, HandleId],
             expected_result = ?OK_LIST(ExpGroups)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -353,7 +353,7 @@ get_group_privileges_test(Config) ->
             args = [auth, HandleId, G1],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
@@ -417,7 +417,7 @@ update_group_privileges_test(Config) ->
             args = [auth, HandleId, G1, data],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(update_privileges, [
@@ -458,7 +458,7 @@ list_eff_groups_test(Config) ->
             args = [auth, HandleId],
             expected_result = ?OK_LIST(ExpGroups)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -624,7 +624,7 @@ get_eff_group_privileges_test(Config) ->
             args = [auth, HandleId, G4],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [

@@ -445,7 +445,7 @@ run_gs_tests(
     ).
 
 
-% TODO rm clause after it will be possible to test gs nobody auth
+% TODO VFS-4520 Tests for GraphSync API
 run_gs_test(_Config, _GsSpec, nobody, _Data, _DescFmt, _Env, undefined) ->
     ok;
 run_gs_test(Config, GsSpec, Client, Data, Description, Env, undefined) ->

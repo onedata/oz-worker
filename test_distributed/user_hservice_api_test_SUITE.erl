@@ -115,7 +115,7 @@ list_handle_services_test(Config) ->
             args = [auth, U1],
             expected_result = ?OK_LIST(ExpHServices)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
@@ -287,7 +287,7 @@ get_handle_service_test(Config) ->
             args = [auth, U1, HService],
             expected_result = api_test_expect:protected_hservice(logic, HService, HServiceDetails, ?SUB(user, U1))
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
@@ -355,7 +355,7 @@ leave_handle_service_test(Config) ->
             args = [auth, U1, hserviceId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity, [
         Config, ApiTestSpec2, EnvSetUpFun, VerifyEndFun, DeleteEntityFun
@@ -412,7 +412,7 @@ list_eff_handle_services_test(Config) ->
             args = [auth, U1],
             expected_result = ?OK_LIST(ExpHServices)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
@@ -481,7 +481,7 @@ get_eff_handle_service_test(Config) ->
                 args = [auth, U1, HServiceId],
                 expected_result = api_test_expect:protected_hservice(logic, HServiceId, HServiceData, ?SUB(nobody))
             }
-            % TODO gs
+            % TODO VFS-4520 Tests for GraphSync API
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
 
