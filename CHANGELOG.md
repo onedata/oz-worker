@@ -4,6 +4,8 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha6
+
 ### 21.02.0-alpha5
 
 -   **VFS-7294** Added publicly available REST endpoints for fetching
