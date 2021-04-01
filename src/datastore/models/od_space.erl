@@ -130,7 +130,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    9.
+    10.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -298,7 +298,10 @@ get_record_struct(9) ->
 
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
-    ]}.
+    ]};
+get_record_struct(10) ->
+    % The structure does not change, but some privileges are added.
+    get_record_struct(9).
 
 
 %%--------------------------------------------------------------------
@@ -623,12 +626,19 @@ upgrade_record(7, Space) ->
         _BottomUpDirty
     } = Space,
 
-    PreviousManagerPrivs = privileges:space_manager() -- [?SPACE_REGISTER_FILES],
+    PrevManagerPrivs = privileges:from_list([
+        ?SPACE_VIEW, ?SPACE_READ_DATA, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS,
+        ?SPACE_VIEW_PRIVILEGES, ?SPACE_ADD_USER, ?SPACE_REMOVE_USER, ?SPACE_ADD_GROUP,
+        ?SPACE_REMOVE_GROUP, ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+        ?SPACE_MANAGE_SHARES, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS,
+        ?SPACE_VIEW_STATISTICS, ?SPACE_VIEW_CHANGES_STREAM,
+        ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS
+    ]),
     UpgradePrivileges = fun(Privileges) ->
         % the ?SPACE_REGISTER_FILES is granted to all members that had at least
         % manager privileges before the upgrade
-        case lists_utils:intersect(PreviousManagerPrivs, Privileges) of
-            PreviousManagerPrivs -> privileges:from_list([?SPACE_REGISTER_FILES | Privileges]);
+        case lists_utils:intersect(PrevManagerPrivs, Privileges) of
+            PrevManagerPrivs -> privileges:from_list([?SPACE_REGISTER_FILES | Privileges]);
             _ -> Privileges
         end
     end,
@@ -719,6 +729,77 @@ upgrade_record(8, Space) ->
 
         eff_users = EffUsers,
         eff_groups = EffGroups,
+        eff_providers = EffProviders,
+        eff_harvesters = EffHarvesters,
+
+        creation_time = CreationTime,
+        creator = Creator,
+
+        top_down_dirty = TopDownDirty,
+        bottom_up_dirty = BottomUpDirty
+    }};
+upgrade_record(9, Space) ->
+    {
+        od_space,
+        Name,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Space,
+
+    PreviousManagerPrivs = privileges:from_list([
+        ?SPACE_VIEW, ?SPACE_READ_DATA, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS,
+        ?SPACE_VIEW_PRIVILEGES, ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+        ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP, ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+        ?SPACE_REGISTER_FILES, ?SPACE_MANAGE_SHARES, ?SPACE_VIEW_VIEWS,
+        ?SPACE_QUERY_VIEWS, ?SPACE_VIEW_STATISTICS, ?SPACE_VIEW_CHANGES_STREAM,
+        ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS
+    ]),
+    UpgradePrivileges = fun(Privileges) ->
+        % the ?SPACE_MANAGE_DATASETS is granted to all members that had at least
+        % manager privileges before the upgrade
+        case lists_utils:intersect(PreviousManagerPrivs, Privileges) of
+            PreviousManagerPrivs -> privileges:from_list([?SPACE_MANAGE_DATASETS | Privileges]);
+            _ -> Privileges
+        end
+    end,
+
+    UpgradeRelation = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Relation}) -> {UpgradePrivileges(Privs), Relation};
+            (_, Privs) -> UpgradePrivileges(Privs)
+        end, Field)
+    end,
+
+    {10, #od_space{
+        name = Name,
+
+        owners = Owners,
+
+        users = UpgradeRelation(Users),
+        groups = UpgradeRelation(Groups),
+        storages = Storages,
+        shares = Shares,
+        harvesters = Harvesters,
+
+        eff_users = UpgradeRelation(EffUsers),
+        eff_groups = UpgradeRelation(EffGroups),
         eff_providers = EffProviders,
         eff_harvesters = EffHarvesters,
 

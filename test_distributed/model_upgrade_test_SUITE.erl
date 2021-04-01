@@ -1772,7 +1772,17 @@ get_record(od_space, 7) -> {
         [],
 
         #{
-            <<"user3">> => {privileges:space_manager() -- [?SPACE_REGISTER_FILES], [{od_space, <<"self">>}]}
+            <<"user3">> => {
+                privileges:from_list([
+                    ?SPACE_VIEW, ?SPACE_READ_DATA, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS,
+                    ?SPACE_VIEW_PRIVILEGES, ?SPACE_ADD_USER, ?SPACE_REMOVE_USER, ?SPACE_ADD_GROUP,
+                    ?SPACE_REMOVE_GROUP, ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+                    ?SPACE_MANAGE_SHARES, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS,
+                    ?SPACE_VIEW_STATISTICS, ?SPACE_VIEW_CHANGES_STREAM,
+                    ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS
+                ]),
+                [{od_space, <<"self">>}]
+            }
         },
         #{},
         #{},
@@ -1847,7 +1857,17 @@ get_record(od_space, 8) -> {od_space,
     [],
 
     #{
-        <<"user3">> => {privileges:space_manager(), [{od_space, <<"self">>}]}
+        <<"user3">> => {
+            privileges:from_list([
+                ?SPACE_VIEW, ?SPACE_READ_DATA, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS,
+                ?SPACE_VIEW_PRIVILEGES, ?SPACE_ADD_USER, ?SPACE_REMOVE_USER, ?SPACE_ADD_GROUP,
+                ?SPACE_REMOVE_GROUP, ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+                ?SPACE_MANAGE_SHARES, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS,
+                ?SPACE_VIEW_STATISTICS, ?SPACE_VIEW_CHANGES_STREAM,
+                ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS, ?SPACE_REGISTER_FILES
+            ]),
+            [{od_space, <<"self">>}]
+        }
     },
     #{},
     #{},
@@ -1926,7 +1946,108 @@ get_record(od_space, 9) -> #od_space{
     harvesters = [],
 
     eff_users = #{
-        <<"user3">> => {privileges:space_manager(), [{od_space, <<"self">>}]}
+        <<"user3">> => {
+            privileges:from_list([
+                ?SPACE_VIEW, ?SPACE_READ_DATA, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS,
+                ?SPACE_VIEW_PRIVILEGES, ?SPACE_ADD_USER, ?SPACE_REMOVE_USER, ?SPACE_ADD_GROUP,
+                ?SPACE_REMOVE_GROUP, ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+                ?SPACE_MANAGE_SHARES, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS,
+                ?SPACE_VIEW_STATISTICS, ?SPACE_VIEW_CHANGES_STREAM,
+                ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS, ?SPACE_REGISTER_FILES
+            ]),
+            [{od_space, <<"self">>}]
+        }
+    },
+    eff_groups = #{},
+    eff_providers = #{},
+    eff_harvesters = #{},
+
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
+    creator = ?SUB(nobody),
+
+    top_down_dirty = true,
+    bottom_up_dirty = true
+};
+get_record(od_space, 10) -> #od_space{
+    name = <<"name">>,
+
+    % Space ownership is automatically granted to all direct users that had the
+    % most effective privileges in the space before the upgrade
+    owners = [<<"user3">>, <<"user1">>],
+
+    users = #{
+        <<"user1">> => privileges:from_list([
+            ?SPACE_VIEW,
+            ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+            ?SPACE_VIEW_TRANSFERS,
+            ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+            ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+            ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_MANAGE_SHARES,
+            ?SPACE_VIEW_VIEWS,
+            ?SPACE_QUERY_VIEWS,
+            ?SPACE_VIEW_STATISTICS,
+            ?SPACE_VIEW_CHANGES_STREAM,
+            ?SPACE_SCHEDULE_REPLICATION,
+            ?SPACE_VIEW_QOS,
+            ?SPACE_REGISTER_FILES,
+            ?SPACE_MANAGE_DATASETS % should be added by the upgrade procedure
+        ]),
+        <<"user2">> => privileges:from_list([
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+            ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
+            ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
+        ]),
+        <<"user3">> => [?SPACE_READ_DATA, ?SPACE_WRITE_DATA]
+    },
+    groups = #{
+        <<"group1">> => privileges:from_list([
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT
+        ]),
+        <<"group2">> => privileges:from_list([
+            ?SPACE_VIEW,
+            ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+            ?SPACE_VIEW_TRANSFERS,
+            ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+            ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+            ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_MANAGE_SHARES,
+            ?SPACE_VIEW_VIEWS,
+            ?SPACE_QUERY_VIEWS,
+            ?SPACE_VIEW_STATISTICS,
+            ?SPACE_VIEW_CHANGES_STREAM,
+            ?SPACE_SCHEDULE_REPLICATION,
+            ?SPACE_VIEW_QOS,
+            ?SPACE_UPDATE, ?SPACE_DELETE,
+            ?SPACE_SET_PRIVILEGES,
+            ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+            ?SPACE_MANAGE_VIEWS,
+            ?SPACE_CANCEL_REPLICATION,
+            ?SPACE_SCHEDULE_EVICTION, ?SPACE_CANCEL_EVICTION,
+            ?SPACE_MANAGE_QOS,
+            ?SPACE_REGISTER_FILES,
+            ?SPACE_MANAGE_DATASETS % should be added by the upgrade procedure
+        ])
+    },
+    storages = #{},
+    shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+    harvesters = [],
+
+    eff_users = #{
+        <<"user3">> => {
+            privileges:from_list([
+                ?SPACE_VIEW, ?SPACE_READ_DATA, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS,
+                ?SPACE_VIEW_PRIVILEGES, ?SPACE_ADD_USER, ?SPACE_REMOVE_USER, ?SPACE_ADD_GROUP,
+                ?SPACE_REMOVE_GROUP, ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+                ?SPACE_MANAGE_SHARES, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS,
+                ?SPACE_VIEW_STATISTICS, ?SPACE_VIEW_CHANGES_STREAM,
+                ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS, ?SPACE_REGISTER_FILES,
+                ?SPACE_MANAGE_DATASETS
+            ]),
+            [{od_space, <<"self">>}]
+        }
     },
     eff_groups = #{},
     eff_providers = #{},
