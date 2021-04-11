@@ -4,6 +4,23 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha7
+
+-   **VFS-7515** Added new harvesting options - fileType and
+    datasetInfo.
+-   **VFS-7429** Implemented the concept of datasets. Datasets allow the
+    space users to organize their data into collections with desired
+    granularity. A file or directory marked as a dataset offers
+    additional features, such as optional data and metadata protection
+    or the ability to create persistent snapshots of the physical
+    dataset contents. In case of a directory, a dataset covers all its
+    subdirectories and files. Datasets can be nested, allowing users to
+    compose arbitrary hierarchical structures. Added corresponding views
+    for managing datasets and write protection flags in file browser Web
+    GUI and a REST API, accessible under \`/datasets\`,
+    \`/datasets/{DatasetId}\` and \`/data/{FileId}/dataset/summary\`
+    paths.
+
 ### 21.02.0-alpha6
 
 ### 21.02.0-alpha5
