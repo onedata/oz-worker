@@ -528,7 +528,13 @@ gen_invite_token_name(?GROUP_JOIN_HARVESTER, HarvesterId) ->
     format_invite_token_name(<<"group invite to harvester">>, Name);
 gen_invite_token_name(?SPACE_JOIN_HARVESTER, HarvesterId) ->
     {ok, Name} = harvester_logic:get_name(?ROOT, HarvesterId),
-    format_invite_token_name(<<"space invite to harvester">>, Name).
+    format_invite_token_name(<<"space invite to harvester">>, Name);
+gen_invite_token_name(?USER_JOIN_ATM_INVENTORY, AtmInventoryId) ->
+    {ok, Name} = od_atm_inventory:get_name(AtmInventoryId),
+    format_invite_token_name(<<"user invite to atm inventory">>, Name);
+gen_invite_token_name(?GROUP_JOIN_ATM_INVENTORY, AtmInventoryId) ->
+    {ok, Name} = od_atm_inventory:get_name(AtmInventoryId),
+    format_invite_token_name(<<"group invite to atm inventory">>, Name).
 
 
 %% @private

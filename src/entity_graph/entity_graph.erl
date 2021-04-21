@@ -18,6 +18,7 @@
 %%%     - od_harvester
 %%%     - od_cluster
 %%%     - od_storage
+%%%     - od_atm_inventory
 %%% There are two main jobs of the entity graph:
 %%%     - encapsulate all logic concerning relations between entities
 %%%     - ensure that effective relations are always up to date
@@ -38,17 +39,10 @@
 %%% Graph refreshes can be scheduled multiple times, only one process at a time
 %%% can recalculate the graph, and if the graph is already up-to-date, the
 %%% refresh does nothing.
-%%% The refreshing of effective relations goes as follows:
-%%% 1) bottom-up traversing:
-%%%     1.1) groups with least children to most children
-%%%     1.2) spaces, handles, handle_services, harvesters, clusters
-%%%     1.3) providers
-%%% 2) top-down traversing:
-%%%     2.1) spaces, storages
-%%%     2.2) groups with least parents to most parents
-%%%     2.3) users
-%%% When a record is marked dirty, it is given a priority and the list is
-%%% sorted by priorities, so later they can be taken one by one and processed.
+%%%
+%%% The refreshing of effective relations is done in the order depending on
+%%% priorities, which are assigned when a record is queued for recalculation -
+%%% consult the get_priority/2 function.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(entity_graph).
@@ -197,7 +191,7 @@ init_state() ->
 verify_state_of_all_entities() ->
     EntityTypes = [
         od_user, od_group, od_space, od_provider, od_handle_service,
-        od_handle, od_harvester, od_cluster, od_storage
+        od_handle, od_harvester, od_cluster, od_storage, od_atm_inventory
     ],
     lists:foreach(
         fun(EntityType) ->
@@ -300,6 +294,8 @@ add_relation(od_user, UserId, od_harvester, HarvesterId, Privileges) ->
     add_relation(od_user, UserId, Privileges, od_harvester, HarvesterId, undefined);
 add_relation(od_user, UserId, od_cluster, ClusterId, Privileges) ->
     add_relation(od_user, UserId, Privileges, od_cluster, ClusterId, undefined);
+add_relation(od_user, UserId, od_atm_inventory, AtmInventoryId, Privileges) ->
+    add_relation(od_user, UserId, Privileges, od_atm_inventory, AtmInventoryId, undefined);
 
 add_relation(od_group, ChildId, od_group, ParentId, Privs) ->
     add_relation(od_group, ChildId, Privs, od_group, ParentId, undefined);
@@ -313,6 +309,8 @@ add_relation(od_group, GroupId, od_harvester, HarvesterId, Privileges) ->
     add_relation(od_group, GroupId, Privileges, od_harvester, HarvesterId, undefined);
 add_relation(od_group, GroupId, od_cluster, ClusterId, Privileges) ->
     add_relation(od_group, GroupId, Privileges, od_cluster, ClusterId, undefined);
+add_relation(od_group, GroupId, od_atm_inventory, AtmInventoryId, Privileges) ->
+    add_relation(od_group, GroupId, Privileges, od_atm_inventory, AtmInventoryId, undefined);
 
 add_relation(od_space, SpaceId, od_storage, StorageId, SupportSize) ->
     % Support size is kept in both records
@@ -433,7 +431,12 @@ update_relation(od_space, SpaceId, od_storage, StorageId, NewSupportSize) ->
 update_relation(od_user, UserId, od_harvester, HarvesterId, NewPrivs) ->
     update_relation(od_user, UserId, NewPrivs, od_harvester, HarvesterId, undefined);
 update_relation(od_group, GroupId, od_harvester, HarvesterId, NewPrivs) ->
-    update_relation(od_group, GroupId, NewPrivs, od_harvester, HarvesterId, undefined).
+    update_relation(od_group, GroupId, NewPrivs, od_harvester, HarvesterId, undefined);
+
+update_relation(od_user, UserId, od_atm_inventory, AtmInventoryId, NewPrivs) ->
+    update_relation(od_user, UserId, NewPrivs, od_atm_inventory, AtmInventoryId, undefined);
+update_relation(od_group, GroupId, od_atm_inventory, AtmInventoryId, NewPrivs) ->
+    update_relation(od_group, GroupId, NewPrivs, od_atm_inventory, AtmInventoryId, undefined).
 
 
 %%--------------------------------------------------------------------
@@ -1133,6 +1136,7 @@ get_priority(bottom_up, od_group) -> 0;
 get_priority(bottom_up, od_handle_service) -> 1;
 get_priority(bottom_up, od_handle) -> 1;
 get_priority(bottom_up, od_harvester) -> 1;
+get_priority(bottom_up, od_atm_inventory) -> 1;
 get_priority(bottom_up, od_space) -> 2;
 get_priority(bottom_up, od_storage) -> 3;
 get_priority(bottom_up, od_provider) -> 4;
@@ -1171,6 +1175,8 @@ mark_record_dirty(bottom_up, Flag, #od_harvester{} = Harvester) ->
     Harvester#od_harvester{bottom_up_dirty = Flag};
 mark_record_dirty(bottom_up, Flag, #od_storage{} = Storage) ->
     Storage#od_storage{bottom_up_dirty = Flag};
+mark_record_dirty(bottom_up, Flag, #od_atm_inventory{} = AtmInventory) ->
+    AtmInventory#od_atm_inventory{bottom_up_dirty = Flag};
 
 mark_record_dirty(top_down, Flag, #od_user{} = User) ->
     User#od_user{top_down_dirty = Flag};
@@ -1207,6 +1213,7 @@ is_dirty(bottom_up, #od_harvester{bottom_up_dirty = Flag}) -> Flag;
 is_dirty(bottom_up, #od_cluster{bottom_up_dirty = Flag}) -> Flag;
 is_dirty(top_down, #od_storage{top_down_dirty = Flag}) -> Flag;
 is_dirty(bottom_up, #od_storage{bottom_up_dirty = Flag}) -> Flag;
+is_dirty(bottom_up, #od_atm_inventory{bottom_up_dirty = Flag}) -> Flag;
 is_dirty(_, _) -> false.
 
 
@@ -1260,7 +1267,12 @@ has_child(#od_cluster{groups = Groups}, od_group, GroupId) ->
     maps:is_key(GroupId, Groups);
 
 has_child(#od_storage{spaces = Spaces}, od_space, SpaceId) ->
-    maps:is_key(SpaceId, Spaces).
+    maps:is_key(SpaceId, Spaces);
+
+has_child(#od_atm_inventory{users = Users}, od_user, UserId) ->
+    maps:is_key(UserId, Users);
+has_child(#od_atm_inventory{groups = Groups}, od_group, GroupId) ->
+    maps:is_key(GroupId, Groups).
 
 
 %%--------------------------------------------------------------------
@@ -1320,7 +1332,12 @@ add_child(#od_cluster{groups = Groups} = Cluster, od_group, GroupId, Privs) ->
     Cluster#od_cluster{groups = maps:put(GroupId, Privs, Groups)};
 
 add_child(#od_storage{spaces = Spaces} = Storage, od_space, SpaceId, SupportSize) ->
-    Storage#od_storage{spaces = maps:put(SpaceId, SupportSize, Spaces)}.
+    Storage#od_storage{spaces = maps:put(SpaceId, SupportSize, Spaces)};
+
+add_child(#od_atm_inventory{users = Users} = AtmInventory, od_user, UserId, Privs) ->
+    AtmInventory#od_atm_inventory{users = maps:put(UserId, Privs, Users)};
+add_child(#od_atm_inventory{groups = Groups} = AtmInventory, od_group, GroupId, Privs) ->
+    AtmInventory#od_atm_inventory{groups = maps:put(GroupId, Privs, Groups)}.
 
 
 %%--------------------------------------------------------------------
@@ -1363,6 +1380,11 @@ update_child(#od_cluster{groups = Groups} = Cluster, od_group, GroupId, {PrivsTo
 
 update_child(#od_storage{spaces = Spaces} = Storage, od_space, SpaceId, NewSupportSize) ->
     Storage#od_storage{spaces = maps:put(SpaceId, NewSupportSize, Spaces)};
+
+update_child(#od_atm_inventory{users = Users} = AtmInventory, od_user, UserId, {PrivsToGrant, PrivsToRevoke}) ->
+    AtmInventory#od_atm_inventory{users = update_privileges(UserId, Users, PrivsToGrant, PrivsToRevoke)};
+update_child(#od_atm_inventory{groups = Groups} = AtmInventory, od_group, GroupId, {PrivsToGrant, PrivsToRevoke}) ->
+    AtmInventory#od_atm_inventory{groups = update_privileges(GroupId, Groups, PrivsToGrant, PrivsToRevoke)};
 
 update_child(Entity, _, _, undefined) ->
     % Other entities do not have updatable children relations.
@@ -1449,7 +1471,12 @@ remove_child(#od_cluster{groups = Groups} = Cluster, od_group, GroupId) ->
     Cluster#od_cluster{groups = maps:remove(GroupId, Groups)};
 
 remove_child(#od_storage{spaces = Spaces} = Storage, od_space, SpaceId) ->
-    Storage#od_storage{spaces = maps:remove(SpaceId, Spaces)}.
+    Storage#od_storage{spaces = maps:remove(SpaceId, Spaces)};
+
+remove_child(#od_atm_inventory{users = Users} = AtmInventory, od_user, UserId) ->
+    AtmInventory#od_atm_inventory{users = maps:remove(UserId, Users)};
+remove_child(#od_atm_inventory{groups = Groups} = AtmInventory, od_group, GroupId) ->
+    AtmInventory#od_atm_inventory{groups = maps:remove(GroupId, Groups)}.
 
 
 %%--------------------------------------------------------------------
@@ -1471,6 +1498,8 @@ has_parent(#od_user{harvesters = Harvesters}, od_harvester, HarvesterId) ->
     lists:member(HarvesterId, Harvesters);
 has_parent(#od_user{clusters = Clusters}, od_cluster, ClusterId) ->
     lists:member(ClusterId, Clusters);
+has_parent(#od_user{atm_inventories = AtmInventories}, od_atm_inventory, AtmInventoryId) ->
+    lists:member(AtmInventoryId, AtmInventories);
 
 has_parent(#od_group{parents = Parents}, od_group, GroupId) ->
     lists:member(GroupId, Parents);
@@ -1484,6 +1513,8 @@ has_parent(#od_group{harvesters = Harvesters}, od_harvester, HarvesterId) ->
     lists:member(HarvesterId, Harvesters);
 has_parent(#od_group{clusters = Clusters}, od_cluster, ClusterId) ->
     lists:member(ClusterId, Clusters);
+has_parent(#od_group{atm_inventories = AtmInventories}, od_atm_inventory, AtmInventoryId) ->
+    lists:member(AtmInventoryId, AtmInventories);
 
 has_parent(#od_space{storages = Storages}, od_storage, StorageId) ->
     maps:is_key(StorageId, Storages);
@@ -1523,6 +1554,8 @@ add_parent(#od_user{harvesters = Harvesters} = User, od_harvester, HarvesterId, 
     User#od_user{harvesters = [HarvesterId | Harvesters]};
 add_parent(#od_user{clusters = Clusters} = User, od_cluster, ClusterId, _) ->
     User#od_user{clusters = [ClusterId | Clusters]};
+add_parent(#od_user{atm_inventories = AtmInventories} = User, od_atm_inventory, AtmInventoryId, _) ->
+    User#od_user{atm_inventories = [AtmInventoryId | AtmInventories]};
 
 add_parent(#od_group{parents = Parents} = Group, od_group, GroupId, _) ->
     Group#od_group{parents = [GroupId | Parents]};
@@ -1536,6 +1569,8 @@ add_parent(#od_group{harvesters = Harvesters} = Group, od_harvester, HarvesterId
     Group#od_group{harvesters = [HarvesterId | Harvesters]};
 add_parent(#od_group{clusters = Clusters} = Group, od_cluster, ClusterId, _) ->
     Group#od_group{clusters = [ClusterId | Clusters]};
+add_parent(#od_group{atm_inventories = AtmInventories} = Group, od_atm_inventory, AtmInventoryId, _) ->
+    Group#od_group{atm_inventories = [AtmInventoryId | AtmInventories]};
 
 add_parent(#od_space{storages = Storages} = Space, od_storage, StorageId, SupportSize) ->
     Space#od_space{storages = maps:put(StorageId, SupportSize, Storages)};
@@ -1588,8 +1623,10 @@ remove_parent(#od_user{handles = Handles} = User, od_handle, HandleId) ->
     User#od_user{handles = lists:delete(HandleId, Handles)};
 remove_parent(#od_user{harvesters = Harvesters} = User, od_harvester, HarvesterId) ->
     User#od_user{harvesters = lists:delete(HarvesterId, Harvesters)};
-remove_parent(#od_user{clusters = Clusters} = User, od_cluster, ClusterId) ->
-    User#od_user{clusters = lists:delete(ClusterId, Clusters)};
+remove_parent(#od_user{clusters = AtmInventories} = User, od_cluster, AtmInventoryId) ->
+    User#od_user{clusters = lists:delete(AtmInventoryId, AtmInventories)};
+remove_parent(#od_user{atm_inventories = AtmInventories} = User, od_atm_inventory, AtmInventoryId) ->
+    User#od_user{atm_inventories = lists:delete(AtmInventoryId, AtmInventories)};
 
 remove_parent(#od_group{parents = Parents} = Group, od_group, GroupId) ->
     Group#od_group{parents = lists:delete(GroupId, Parents)};
@@ -1603,6 +1640,8 @@ remove_parent(#od_group{harvesters = Harvesters} = Group, od_harvester, Harveste
     Group#od_group{harvesters = lists:delete(HarvesterId, Harvesters)};
 remove_parent(#od_group{clusters = Clusters} = Group, od_cluster, ClusterId) ->
     Group#od_group{clusters = lists:delete(ClusterId, Clusters)};
+remove_parent(#od_group{atm_inventories = AtmInventories} = Group, od_atm_inventory, AtmInventoryId) ->
+    Group#od_group{atm_inventories = lists:delete(AtmInventoryId, AtmInventories)};
 
 remove_parent(#od_space{storages = Storages} = Space, od_storage, StorageId) ->
     Space#od_space{storages = maps:remove(StorageId, Storages)};
@@ -1678,12 +1717,18 @@ gather_eff_from_itself(bottom_up, #od_storage{} = Storage) ->
     #{
         od_space => relations_to_eff_relations(Spaces, [{od_storage, ?SELF_INTERMEDIARY}])
     };
+gather_eff_from_itself(bottom_up, #od_atm_inventory{} = AtmInventory) ->
+    #od_atm_inventory{users = Users, groups = Groups} = AtmInventory,
+    #{
+        od_user => relations_to_eff_relations(Users, [{od_atm_inventory, ?SELF_INTERMEDIARY}]),
+        od_group => relations_to_eff_relations(Groups, [{od_atm_inventory, ?SELF_INTERMEDIARY}])
+    };
 
 gather_eff_from_itself(top_down, #od_user{} = User) ->
     #od_user{
         groups = Groups, spaces = Spaces,
         handle_services = HServices, handles = Handles,
-        harvesters = Harvesters, clusters = Clusters,
+        harvesters = Harvesters, clusters = Clusters, atm_inventories = AtmInventories,
         oz_privileges = OzPrivileges
     } = User,
     #{
@@ -1693,13 +1738,14 @@ gather_eff_from_itself(top_down, #od_user{} = User) ->
         od_handle => relations_to_eff_relations(Handles, [{od_user, ?SELF_INTERMEDIARY}]),
         od_harvester => relations_to_eff_relations(Harvesters, [{od_user, ?SELF_INTERMEDIARY}]),
         od_cluster => relations_to_eff_relations(Clusters, [{od_user, ?SELF_INTERMEDIARY}]),
+        od_atm_inventory => relations_to_eff_relations(AtmInventories, [{od_user, ?SELF_INTERMEDIARY}]),
         oz_privileges => OzPrivileges
     };
 gather_eff_from_itself(top_down, #od_group{} = Group) ->
     #od_group{
         parents = Groups, spaces = Spaces,
         handle_services = HServices, handles = Handles,
-        harvesters = Harvesters, clusters = Clusters,
+        harvesters = Harvesters, clusters = Clusters, atm_inventories = AtmInventories,
         oz_privileges = OzPrivileges
     } = Group,
     #{
@@ -1709,6 +1755,7 @@ gather_eff_from_itself(top_down, #od_group{} = Group) ->
         od_handle => relations_to_eff_relations(Handles, [{od_group, ?SELF_INTERMEDIARY}]),
         od_harvester => relations_to_eff_relations(Harvesters, [{od_user, ?SELF_INTERMEDIARY}]),
         od_cluster => relations_to_eff_relations(Clusters, [{od_group, ?SELF_INTERMEDIARY}]),
+        od_atm_inventory => relations_to_eff_relations(AtmInventories, [{od_group, ?SELF_INTERMEDIARY}]),
         oz_privileges => OzPrivileges
     };
 gather_eff_from_itself(top_down, #od_space{} = Space) ->
@@ -1786,6 +1833,13 @@ gather_eff_from_neighbours(bottom_up, #od_storage{} = Storage) ->
             EffRelations = get_all_eff_relations(bottom_up, od_space, SpaceId),
             override_eff_relations(EffRelations, [od_user, od_group, od_harvester], [{od_space, SpaceId}])
         end, maps:to_list(Spaces));
+gather_eff_from_neighbours(bottom_up, #od_atm_inventory{} = AtmInventory) ->
+    #od_atm_inventory{groups = Groups} = AtmInventory,
+    lists:map(
+        fun({GroupId, Privileges}) ->
+            EffRelations = get_all_eff_relations(bottom_up, od_group, GroupId),
+            override_eff_relations(EffRelations, [od_user, od_group], {Privileges, [{od_group, GroupId}]})
+        end, maps:to_list(Groups));
 
 gather_eff_from_neighbours(top_down, #od_user{} = User) ->
     #od_user{groups = Groups, spaces = Spaces} = User,
@@ -1793,7 +1847,7 @@ gather_eff_from_neighbours(top_down, #od_user{} = User) ->
         fun(GroupId) ->
             EffRelations = get_all_eff_relations(top_down, od_group, GroupId),
             override_eff_relations(EffRelations, [
-                od_group, od_space, od_provider, od_handle_service, od_handle, od_harvester, od_cluster
+                od_group, od_space, od_provider, od_handle_service, od_handle, od_harvester, od_cluster, od_atm_inventory
             ], [{od_group, GroupId}])
         end, Groups),
     FromSpaces = lists:map(
@@ -1808,7 +1862,7 @@ gather_eff_from_neighbours(top_down, #od_group{} = Group) ->
         fun(GroupId) ->
             EffRelations = get_all_eff_relations(top_down, od_group, GroupId),
             override_eff_relations(EffRelations, [
-                od_group, od_space, od_provider, od_handle_service, od_handle, od_harvester, od_cluster
+                od_group, od_space, od_provider, od_handle_service, od_handle, od_harvester, od_cluster, od_atm_inventory
             ], [{od_group, GroupId}])
         end, Groups),
     FromSpaces = lists:map(
@@ -1888,6 +1942,11 @@ update_eff_relations(bottom_up, #od_storage{} = Storage, EffNeighbours) ->
         eff_spaces = maps:get(od_space, EffNeighbours, #{}),
         eff_harvesters = maps:get(od_harvester, EffNeighbours, #{})
     };
+update_eff_relations(bottom_up, #od_atm_inventory{} = AtmInventory, EffNeighbours) ->
+    AtmInventory#od_atm_inventory{
+        eff_users = maps:get(od_user, EffNeighbours, #{}),
+        eff_groups = maps:get(od_group, EffNeighbours, #{})
+    };
 
 update_eff_relations(top_down, #od_user{} = User, EffNeighbours) ->
     User#od_user{
@@ -1898,6 +1957,7 @@ update_eff_relations(top_down, #od_user{} = User, EffNeighbours) ->
         eff_handles = maps:get(od_handle, EffNeighbours, #{}),
         eff_harvesters = maps:get(od_harvester, EffNeighbours, #{}),
         eff_clusters = maps:get(od_cluster, EffNeighbours, #{}),
+        eff_atm_inventories = maps:get(od_atm_inventory, EffNeighbours, #{}),
         eff_oz_privileges = maps:get(oz_privileges, EffNeighbours, #{})
     };
 update_eff_relations(top_down, #od_group{} = Group, EffNeighbours) ->
@@ -1909,6 +1969,7 @@ update_eff_relations(top_down, #od_group{} = Group, EffNeighbours) ->
         eff_handles = maps:get(od_handle, EffNeighbours, #{}),
         eff_harvesters = maps:get(od_harvester, EffNeighbours, #{}),
         eff_clusters = maps:get(od_cluster, EffNeighbours, #{}),
+        eff_atm_inventories = maps:get(od_atm_inventory, EffNeighbours, #{}),
         eff_oz_privileges = maps:get(oz_privileges, EffNeighbours, #{})
     };
 update_eff_relations(top_down, #od_space{} = Space, EffNeighbours) ->
@@ -2030,28 +2091,35 @@ get_all_direct_relations(bottom_up, #od_cluster{} = Cluster) ->
 get_all_direct_relations(bottom_up, #od_storage{} = Storage) ->
     #od_storage{spaces = Spaces} = Storage,
     #{od_space => Spaces};
+get_all_direct_relations(bottom_up, #od_atm_inventory{} = AtmInventory) ->
+    #od_atm_inventory{users = Users, groups = Groups} = AtmInventory,
+    #{od_user => Users, od_group => Groups};
 
 get_all_direct_relations(top_down, #od_user{} = User) ->
     #od_user{
         groups = Groups, spaces = Spaces,
         handle_services = HServices, handles = Handles,
-        harvesters = Harvesters, clusters = Clusters
+        harvesters = Harvesters, clusters = Clusters,
+        atm_inventories = AtmInventories
     } = User,
     #{
         od_group => Groups, od_space => Spaces,
         od_handle_service => HServices, od_handle => Handles,
-        od_harvester => Harvesters, od_cluster => Clusters
+        od_harvester => Harvesters, od_cluster => Clusters,
+        od_atm_inventory => AtmInventories
     };
 get_all_direct_relations(top_down, #od_group{} = Group) ->
     #od_group{
         parents = Groups, spaces = Spaces,
         handle_services = HServices, handles = Handles,
-        harvesters = Harvesters, clusters = Clusters
+        harvesters = Harvesters, clusters = Clusters,
+        atm_inventories = AtmInventories
     } = Group,
     #{
         od_group => Groups, od_space => Spaces,
         od_handle_service => HServices, od_handle => Handles,
-        od_harvester => Harvesters, od_cluster => Clusters
+        od_harvester => Harvesters, od_cluster => Clusters,
+        od_atm_inventory => AtmInventories
     };
 get_all_direct_relations(top_down, #od_space{} = Space) ->
     #od_space{storages = Storages} = Space,
@@ -2147,6 +2215,9 @@ get_all_eff_relations(bottom_up, #od_storage{} = Storage) ->
         od_space => EffSpaces,
         od_harvester => EffHarvesters
     };
+get_all_eff_relations(bottom_up, #od_atm_inventory{} = AtmInventory) ->
+    #od_atm_inventory{eff_users = EffUsers, eff_groups = EffGroups} = AtmInventory,
+    #{od_user => EffUsers, od_group => EffGroups};
 
 get_all_eff_relations(top_down, #od_user{} = User) ->
     #od_user{
@@ -2155,6 +2226,7 @@ get_all_eff_relations(top_down, #od_user{} = User) ->
         eff_handle_services = EffHServices, eff_handles = EffHandles,
         eff_harvesters = EffHarvesters,
         eff_clusters = EffClusters,
+        eff_atm_inventories = EffAtmInventories,
         eff_oz_privileges = EffOzPrivileges
     } = User,
     #{
@@ -2163,6 +2235,7 @@ get_all_eff_relations(top_down, #od_user{} = User) ->
         od_handle_service => EffHServices, od_handle => EffHandles,
         od_harvester => EffHarvesters,
         od_cluster => EffClusters,
+        od_atm_inventory => EffAtmInventories,
         oz_privileges => EffOzPrivileges
     };
 get_all_eff_relations(top_down, #od_group{} = Group) ->
@@ -2172,6 +2245,7 @@ get_all_eff_relations(top_down, #od_group{} = Group) ->
         eff_handle_services = EffHServices, eff_handles = EffHandles,
         eff_harvesters = EffHarvesters,
         eff_clusters = EffClusters,
+        eff_atm_inventories = EffAtmInventories,
         eff_oz_privileges = EffOzPrivileges
     } = Group,
     #{
@@ -2180,6 +2254,7 @@ get_all_eff_relations(top_down, #od_group{} = Group) ->
         od_handle_service => EffHServices, od_handle => EffHandles,
         od_harvester => EffHarvesters,
         od_cluster => EffClusters,
+        od_atm_inventory => EffAtmInventories,
         oz_privileges => EffOzPrivileges
     };
 get_all_eff_relations(top_down, #od_space{} = Space) ->
@@ -2273,6 +2348,14 @@ get_successors(top_down, #od_cluster{} = Cluster) ->
 get_successors(top_down, #od_storage{} = Storage) ->
     #{od_space := Spaces} = get_all_direct_relations(bottom_up, Storage),
     #{od_space => get_ids(Spaces)};
+get_successors(top_down, #od_atm_inventory{} = AtmInventory) ->
+    #{
+        od_user := Users, od_group := Groups
+    } = get_all_direct_relations(bottom_up, AtmInventory),
+    #{
+        od_user => get_ids(Users),
+        od_group => get_ids(Groups)
+    };
 % All other relations should return an empty map (have no successors).
 get_successors(_, _) ->
     #{}.

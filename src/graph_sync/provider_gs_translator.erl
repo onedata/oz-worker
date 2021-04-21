@@ -439,6 +439,11 @@ translate_resource(_, #gri{type = od_token, aspect = instance, scope = shared}, 
 translate_resource(_, #gri{type = temporary_token_secret, scope = shared}, Generation) ->
     #{<<"generation">> => Generation};
 
+translate_resource(_, #gri{type = od_atm_inventory, aspect = instance, scope = private}, AtmInventory) ->
+    #{
+        <<"name">> => AtmInventory#od_atm_inventory.name
+    };
+
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync get result for:~n
     ProtocolVersion: ~p~n

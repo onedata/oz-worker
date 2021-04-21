@@ -33,6 +33,7 @@
 -export([protected_hservice/4]).
 -export([protected_handle/4, public_handle/3]).
 -export([protected_harvester/4, shared_or_public_harvester/3]).
+-export([protected_atm_inventory/4]).
 
 %%%===================================================================
 %%% API
@@ -449,6 +450,21 @@ shared_or_public_harvester(rest, Id, HarvesterData) ->
         <<"name">> => maps:get(<<"name">>, HarvesterData)
     }.
 
+
+-spec protected_atm_inventory(interface(), od_handle_service:id(), map(), aai:subject()) -> expectation().
+protected_atm_inventory(logic, _Id, HServiceData, Creator) ->
+    ?OK_MAP(#{
+        <<"name">> => maps:get(<<"name">>, HServiceData),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
+        <<"creator">> => Creator
+    });
+protected_atm_inventory(rest, Id, HServiceData, Creator) ->
+    #{
+        <<"atmInventoryId">> => Id,
+        <<"name">> => maps:get(<<"name">>, HServiceData),
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
+        <<"creator">> => aai:subject_to_json(Creator)
+    }.
 
 %%%===================================================================
 %%% helpers

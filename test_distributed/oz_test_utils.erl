@@ -2922,6 +2922,16 @@ delete_storage(Config, StorageId) ->
     )).
 
 
+-spec list_atm_inventories(Config :: term()) -> {ok, [od_atm_inventory:id()]}.
+list_atm_inventories(Config) ->
+    ?assertMatch({ok, _}, call_oz(Config, atm_inventory_logic, list, [?ROOT])).
+
+
+-spec delete_atm_inventory(Config :: term(), od_atm_inventory:id()) -> ok.
+delete_atm_inventory(Config, AtmInventoryId) ->
+    ?assertMatch(ok, call_oz(Config, atm_inventory_logic, delete, [?ROOT, AtmInventoryId])).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Asserts that an invite token's usage limit was reached or not
@@ -3081,12 +3091,14 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     {ok, Groups} = list_groups(Config),
     {ok, Users} = list_users(Config),
     {ok, Harvesters} = list_harvesters(Config),
+    {ok, AtmInventories} = list_atm_inventories(Config),
     lists_utils:pforeach(fun(PId) -> delete_provider(Config, PId) end, Providers),
     lists_utils:pforeach(fun(HId) -> delete_handle(Config, HId) end, Handles),
     lists_utils:pforeach(fun(ShId) -> delete_share(Config, ShId) end, Shares),
     lists_utils:pforeach(fun(SpId) -> delete_space(Config, SpId) end, Spaces),
     lists_utils:pforeach(fun(HSId) -> delete_handle_service(Config, HSId) end, HServices),
     lists_utils:pforeach(fun(HId) -> delete_harvester(Config, HId) end, Harvesters),
+    lists_utils:pforeach(fun(AIId) -> delete_atm_inventory(Config, AIId) end, AtmInventories),
     % Clusters and storages are removed together with providers
 
     % Check if predefined groups should be removed too.

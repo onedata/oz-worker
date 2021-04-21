@@ -122,7 +122,9 @@
     group_join_cluster_token/1,
     user_join_harvester_token/1,
     group_join_harvester_token/1,
-    space_join_harvester_token/1
+    space_join_harvester_token/1,
+    user_join_atm_inventory_token/1,
+    group_join_atm_inventory_token/1
 ]).
 
 all() -> ?ALL([
@@ -137,7 +139,9 @@ all() -> ?ALL([
     group_join_cluster_token,
     user_join_harvester_token,
     group_join_harvester_token,
-    space_join_harvester_token
+    space_join_harvester_token,
+    user_join_atm_inventory_token,
+    group_join_atm_inventory_token
 ]).
 
 %%%===================================================================
@@ -951,6 +955,125 @@ space_join_harvester_token(_Config) ->
         end
     })).
 
+
+user_join_atm_inventory_token(_Config) ->
+    AtmInventoryCreatorUserId = ozt_users:create(),
+    AtmInventoryId = ozt_users:create_atm_inventory_for(AtmInventoryCreatorUserId),
+
+    ?assert(run_invite_token_tests(#testcase{
+        token_type = ?INVITE_TOKEN(?USER_JOIN_ATM_INVENTORY, AtmInventoryId),
+
+        eligible_to_invite = ?SUB(user, AtmInventoryCreatorUserId),
+        requires_privileges_to_invite = true,
+        admin_privilege_to_invite = ?OZ_ATM_INVENTORIES_ADD_RELATIONSHIPS,
+
+        supports_carried_privileges = true,
+        requires_privileges_to_set_privileges = true,
+        allowed_carried_privileges = privileges:atm_inventory_privileges(),
+        default_carried_privileges = privileges:atm_inventory_member(),
+        admin_privilege_to_set_privileges = ?OZ_ATM_INVENTORIES_SET_PRIVILEGES,
+
+        eligible_consumer_types = [user],
+        requires_privileges_to_consume = false,
+        admin_privilege_to_consume = undefined,
+
+        modify_privileges_fun = fun(?SUB(user, UserId), Modification) ->
+            set_user_privs_in_atm_inventory(AtmInventoryId, UserId, Modification)
+        end,
+        check_privileges_fun = fun(?SUB(user, UserId), ExpectedPrivileges) ->
+            ActualPrivileges = ozt_atm_inventories:get_user_privileges(AtmInventoryId, UserId),
+            lists:sort(ExpectedPrivileges) =:= lists:sort(ActualPrivileges)
+        end,
+
+        prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, UserId)}, Token) ->
+            Data = #{<<"token">> => ozt_tokens:ensure_serialized(Token)},
+            #consume_request{
+                logic_call_args = {user_logic, join_atm_inventory, [Auth, UserId, Data]},
+                rest_call_args = {<<"/user/atm_inventories/join">>, Data},
+                graph_sync_args = {?GRI(od_atm_inventory, undefined, join, private), ?AS_USER(UserId), Data}
+            }
+        end,
+
+        delete_target_entity_fun = fun() ->
+            ozt_atm_inventories:delete(AtmInventoryId)
+        end,
+        expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
+            ?ERROR_RELATION_ALREADY_EXISTS(od_user, UserId, od_atm_inventory, AtmInventoryId)
+        end
+    })).
+
+
+group_join_atm_inventory_token(_Config) ->
+    AtmInventoryCreatorUserId = ozt_users:create(),
+    AtmInventoryId = ozt_users:create_atm_inventory_for(AtmInventoryCreatorUserId),
+
+    ?assert(run_invite_token_tests(#testcase{
+        token_type = ?INVITE_TOKEN(?GROUP_JOIN_ATM_INVENTORY, AtmInventoryId),
+
+        eligible_to_invite = ?SUB(user, AtmInventoryCreatorUserId),
+        requires_privileges_to_invite = true,
+        admin_privilege_to_invite = ?OZ_ATM_INVENTORIES_ADD_RELATIONSHIPS,
+
+        supports_carried_privileges = true,
+        requires_privileges_to_set_privileges = true,
+        allowed_carried_privileges = privileges:atm_inventory_privileges(),
+        default_carried_privileges = privileges:atm_inventory_member(),
+        admin_privilege_to_set_privileges = ?OZ_ATM_INVENTORIES_SET_PRIVILEGES,
+
+        eligible_consumer_types = [{user, fun(?SUB(user, UserId)) ->
+            GroupId = ozt_users:create_group_for(UserId),
+            % Store the group in memory for use in different callbacks
+            node_cache:put({user_group, UserId}, GroupId)
+        end}],
+        requires_privileges_to_consume = true,
+        admin_privilege_to_consume = ?OZ_GROUPS_ADD_RELATIONSHIPS,
+
+        modify_privileges_fun = fun(?SUB(user, UserId), Modification) ->
+            case Modification of
+                {_, to_invite} ->
+                    set_user_privs_in_atm_inventory(AtmInventoryId, UserId, Modification);
+                {_, to_set_privs} ->
+                    set_user_privs_in_atm_inventory(AtmInventoryId, UserId, Modification);
+                {_, to_consume} ->
+                    GroupId = node_cache:get({user_group, UserId}),
+                    set_user_privs_in_group(GroupId, UserId, Modification)
+            end
+        end,
+        check_privileges_fun = fun(?SUB(user, UserId), ExpectedPrivileges) ->
+            GroupId = node_cache:get({user_group, UserId}),
+            ActualPrivileges = ozt_atm_inventories:get_group_privileges(AtmInventoryId, GroupId),
+            lists:sort(ExpectedPrivileges) =:= lists:sort(ActualPrivileges)
+        end,
+
+        prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, SubjectId)}, Token) ->
+            GroupId = case node_cache:get({user_group, SubjectId}, undefined) of
+                undefined ->
+                    % Covers users with no group and other consumer types.
+                    % Other consumer than user does not make sense, but for the
+                    % sake of checking if bad consumer is properly handled, try
+                    % to use a freshly created group
+                    ozt_groups:create();
+                GrId ->
+                    % Covers users that were set up according to eligible_consumer_types
+                    GrId
+            end,
+            Data = #{<<"token">> => ozt_tokens:ensure_serialized(Token)},
+            #consume_request{
+                logic_call_args = {group_logic, join_atm_inventory, [Auth, GroupId, Data]},
+                rest_call_args = {[<<"/groups/">>, GroupId, <<"/atm_inventories/join">>], Data},
+                graph_sync_args = {?GRI(od_atm_inventory, undefined, join, private), ?AS_GROUP(GroupId), Data}
+            }
+        end,
+
+        delete_target_entity_fun = fun() ->
+            ozt_atm_inventories:delete(AtmInventoryId)
+        end,
+        expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
+            GroupId = node_cache:get({user_group, UserId}),
+            ?ERROR_RELATION_ALREADY_EXISTS(od_group, GroupId, od_atm_inventory, AtmInventoryId)
+        end
+    })).
+
 %%%===================================================================
 %%% Testing framework
 %%%===================================================================
@@ -1700,7 +1823,7 @@ set_user_privs_in_group(GroupId, UserId, {GrantOrRevoke, to_invite}) ->
     set_user_privs(group_logic, GroupId, UserId, GrantOrRevoke, [?GROUP_ADD_USER, ?GROUP_ADD_CHILD]);
 set_user_privs_in_group(GroupId, UserId, {GrantOrRevoke, to_consume}) ->
     set_user_privs(group_logic, GroupId, UserId, GrantOrRevoke, [
-        ?GROUP_ADD_PARENT, ?GROUP_ADD_SPACE, ?GROUP_ADD_CLUSTER, ?GROUP_ADD_HARVESTER
+        ?GROUP_ADD_PARENT, ?GROUP_ADD_SPACE, ?GROUP_ADD_CLUSTER, ?GROUP_ADD_HARVESTER, ?GROUP_ADD_ATM_INVENTORY
     ]);
 set_user_privs_in_group(GroupId, UserId, {GrantOrRevoke, to_set_privs}) ->
     set_user_privs(group_logic, GroupId, UserId, GrantOrRevoke, [?GROUP_SET_PRIVILEGES]).
@@ -1727,6 +1850,13 @@ set_user_privs_in_harvester(HarvesterId, UserId, {GrantOrRevoke, to_consume}) ->
     set_user_privs(harvester_logic, HarvesterId, UserId, GrantOrRevoke, [?HARVESTER_ADD_SPACE]);
 set_user_privs_in_harvester(HarvesterId, UserId, {GrantOrRevoke, to_set_privs}) ->
     set_user_privs(harvester_logic, HarvesterId, UserId, GrantOrRevoke, [?HARVESTER_SET_PRIVILEGES]).
+
+set_user_privs_in_atm_inventory(AtmInventoryId, UserId, {GrantOrRevoke, to_invite}) ->
+    set_user_privs(atm_inventory_logic, AtmInventoryId, UserId, GrantOrRevoke, [
+        ?ATM_INVENTORY_ADD_USER, ?ATM_INVENTORY_ADD_GROUP
+    ]);
+set_user_privs_in_atm_inventory(AtmInventoryId, UserId, {GrantOrRevoke, to_set_privs}) ->
+    set_user_privs(atm_inventory_logic, AtmInventoryId, UserId, GrantOrRevoke, [?ATM_INVENTORY_SET_PRIVILEGES]).
 
 
 % Grants or revokes privileges to perform an operation. In case of revoke,

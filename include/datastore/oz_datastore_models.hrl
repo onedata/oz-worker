@@ -168,6 +168,7 @@ end).
     handles = [] :: entity_graph:relations(od_handle:id()),
     harvesters = [] :: entity_graph:relations(od_harvester:id()),
     clusters = [] :: entity_graph:relations(od_cluster:id()),
+    atm_inventories = [] :: entity_graph:relations(od_atm_inventory:id()),
 
     % Effective relations to other entities
     eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
@@ -177,6 +178,7 @@ end).
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
     eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
     eff_clusters = #{} :: entity_graph:eff_relations(od_cluster:id()),
+    eff_atm_inventories = #{} :: entity_graph:eff_relations(od_atm_inventory:id()),
 
     creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),
     last_activity = 0 :: time:seconds(),
@@ -210,6 +212,7 @@ end).
     handles = [] :: entity_graph:relations(od_handle:id()),
     harvesters = [] :: entity_graph:relations(od_harvester:id()),
     clusters = [] :: entity_graph:relations(od_cluster:id()),
+    atm_inventories = [] :: entity_graph:relations(od_atm_inventory:id()),
 
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:group_privilege()]),
@@ -219,6 +222,7 @@ end).
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
     eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
     eff_clusters = #{} :: entity_graph:eff_relations(od_cluster:id()),
+    eff_atm_inventories = #{} :: entity_graph:eff_relations(od_atm_inventory:id()),
 
     creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),
@@ -450,6 +454,24 @@ end).
     secret :: tokens:secret(),
     metadata = #{} :: token_metadata:metadata(),
     revoked = false :: boolean()
+}).
+
+-record(od_atm_inventory, {
+    name :: od_token:name(),
+
+    % Direct relations to other entities
+    users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:atm_inventory_privilege()]),
+    groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:atm_inventory_privilege()]),
+
+    % Effective relations to other entities
+    eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:atm_inventory_privilege()]),
+    eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:atm_inventory_privilege()]),
+
+    creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | aai:subject(),
+
+    % Marks that the record's effective relations are not up to date
+    bottom_up_dirty = true :: boolean()
 }).
 
 %%%===================================================================

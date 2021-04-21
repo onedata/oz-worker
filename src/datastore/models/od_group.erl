@@ -131,7 +131,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    8.
+    9.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -319,6 +319,47 @@ get_record_struct(8) ->
 
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(9) ->
+    % Changes:
+    %   * new field - atm_inventories
+    %   * new field - eff_atm_inventories
+    {record, [
+        {name, string},
+        {type, atom},
+        {protected, boolean},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {parents, [string]},
+        {children, #{string => [atom]}},
+        {eff_parents, #{string => [{atom, string}]}},
+        {eff_children, #{string => {[atom], [{atom, string}]}}},
+
+        {users, #{string => [atom]}},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+        {atm_inventories, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+        {eff_atm_inventories, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -329,8 +370,7 @@ get_record_struct(8) ->
 -spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
     {datastore_model:record_version(), datastore_model:record()}.
 upgrade_record(1, Group) ->
-    {
-        od_group,
+    {od_group,
         Name,
         Type,
         OzPrivileges,
@@ -356,8 +396,7 @@ upgrade_record(1, Group) ->
         _TopDownDirty,
         _BottomUpDirty
     } = Group,
-    {2, {
-        od_group,
+    {2, {od_group,
         Name,
         Type,
         OzPrivileges,
@@ -383,8 +422,7 @@ upgrade_record(1, Group) ->
         true
     }};
 upgrade_record(2, Group) ->
-    {
-        od_group,
+    {od_group,
         Name,
         Type,
         OzPrivileges,
@@ -437,8 +475,7 @@ upgrade_record(2, Group) ->
         true
     }};
 upgrade_record(3, Group) ->
-    {
-        od_group,
+    {od_group,
         Name,
         Type,
         OzPrivileges,
@@ -491,8 +528,7 @@ upgrade_record(3, Group) ->
         true
     }};
 upgrade_record(4, Group) ->
-    {
-        od_group,
+    {od_group,
         Name,
         Type,
 
@@ -549,8 +585,7 @@ upgrade_record(4, Group) ->
         BottomUpDirty
     }};
 upgrade_record(5, Group) ->
-    {
-        od_group,
+    {od_group,
         Name,
         Type,
         OzPrivileges,
@@ -618,8 +653,7 @@ upgrade_record(5, Group) ->
         end, Field)
     end,
 
-    {6, {
-        od_group,
+    {6, {od_group,
         Name,
         Type,
         false,
@@ -653,8 +687,7 @@ upgrade_record(5, Group) ->
         BottomUpDirty
     }};
 upgrade_record(6, Group) ->
-    {
-        od_group,
+    {od_group,
         Name,
         Type,
         Protected,
@@ -688,8 +721,7 @@ upgrade_record(6, Group) ->
         BottomUpDirty
     } = Group,
 
-    {7, {
-        od_group,
+    {7, {od_group,
         Name,
         Type,
         Protected,
@@ -723,8 +755,7 @@ upgrade_record(6, Group) ->
         BottomUpDirty
     }};
 upgrade_record(7, Group) ->
-    {
-        od_group,
+    {od_group,
         Name,
         Type,
         Protected,
@@ -758,10 +789,79 @@ upgrade_record(7, Group) ->
         BottomUpDirty
     } = Group,
 
-    {8, #od_group{
+    {8, {od_group,
+        Name,
+        Type,
+        Protected,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        upgrade_common:upgrade_subject_record(Creator),
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(8, Group) ->
+    {od_group,
+        Name,
+        Type,
+        Protected,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Group,
+
+    {9, #od_group{
         name = Name,
         type = Type,
         protected = Protected,
+
         oz_privileges = OzPrivileges,
         eff_oz_privileges = EffOzPrivileges,
 
@@ -776,6 +876,7 @@ upgrade_record(7, Group) ->
         handles = Handles,
         harvesters = Harvesters,
         clusters = Clusters,
+        atm_inventories = [],
 
         eff_users = EffUsers,
         eff_spaces = EffSpaces,
@@ -784,9 +885,10 @@ upgrade_record(7, Group) ->
         eff_handles = EffHandles,
         eff_harvesters = EffHarvesters,
         eff_clusters = EffClusters,
+        eff_atm_inventories = #{},
 
         creation_time = CreationTime,
-        creator = upgrade_common:upgrade_subject_record(Creator),
+        creator = Creator,
 
         top_down_dirty = TopDownDirty,
         bottom_up_dirty = BottomUpDirty

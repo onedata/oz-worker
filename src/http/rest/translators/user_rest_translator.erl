@@ -154,4 +154,11 @@ get_response(#gri{aspect = clusters}, Clusters) ->
     rest_translator:ok_body_reply(#{<<"clusters">> => Clusters});
 
 get_response(#gri{aspect = eff_clusters}, Clusters) ->
-    rest_translator:ok_body_reply(#{<<"clusters">> => Clusters}).
+    rest_translator:ok_body_reply(#{<<"clusters">> => Clusters});
+
+
+get_response(#gri{aspect = atm_inventories}, AtmInventories) ->
+    rest_translator:ok_body_reply(#{<<"atm_inventories">> => AtmInventories});
+
+get_response(#gri{aspect = eff_atm_inventories}, AtmInventories) ->
+    rest_translator:ok_body_reply(#{<<"atm_inventories">> => AtmInventories}).

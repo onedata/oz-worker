@@ -1040,7 +1040,79 @@ get_record(od_user, 13) -> {od_user,
 
     true
 };
-get_record(od_user, 14) -> #od_user{
+get_record(od_user, 14) -> {od_user,
+    <<"name">>,
+    <<"username">>,
+    true,
+    undefined,
+    [<<"email1@email.com">>, <<"email2@email.com">>],
+
+    [
+        #linked_account{
+            idp = google,
+            subject_id = <<"user_id1">>,
+            full_name = <<"name1">>,
+            username = <<"username1">>,
+            emails = [<<"email1@email.com">>],
+            entitlements = [],
+            custom = #{},
+            access_token = {undefined, 0},
+            refresh_token = undefined
+        },
+        #linked_account{
+            idp = github,
+            subject_id = <<"user_id2">>,
+            full_name = <<"name2">>,
+            username = <<"username2">>,
+            emails = [<<"email2@email.com">>],
+            entitlements = [],
+            custom = #{},
+            access_token = {undefined, 0},
+            refresh_token = undefined
+        }
+    ],
+    [{<<"ent1">>, member}, {<<"ent2">>, member}, {<<"ent3">>, member}],
+
+    false,
+
+    [],
+
+    [<<"token1">>, <<"token2">>],
+    #{
+        <<"sp1">> => <<"sp1Name">>,
+        <<"sp2">> => <<"sp2Name">>
+    },
+
+    [
+        ?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_LIST, ?OZ_GROUPS_LIST_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_VIEW,
+        ?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_LIST_RELATIONSHIPS, ?OZ_PROVIDERS_VIEW,
+        ?OZ_SET_PRIVILEGES,
+        ?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_LIST, ?OZ_SPACES_LIST_RELATIONSHIPS, ?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_SPACES_VIEW,
+        ?OZ_USERS_LIST, ?OZ_USERS_VIEW, ?OZ_VIEW_PRIVILEGES
+    ],
+    [],
+
+    [<<"group1">>, <<"group2">>, <<"group3">>],
+    [<<"space1">>, <<"space2">>, <<"space3">>],
+    [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
+    [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+    [],
+    [],
+
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+
+    ozt_mocks:get_frozen_time_seconds(),
+    0,
+
+    true
+};
+get_record(od_user, 15) -> #od_user{
     full_name = <<"name">>,
     username = <<"username">>,
     basic_auth_enabled = true,
@@ -1098,6 +1170,7 @@ get_record(od_user, 14) -> #od_user{
     handles = [<<"handle1">>, <<"handle2">>, <<"handle3">>],
     harvesters = [],
     clusters = [],
+    atm_inventories = [],
 
     eff_groups = #{},
     eff_spaces = #{},
@@ -1106,6 +1179,7 @@ get_record(od_user, 14) -> #od_user{
     eff_handles = #{},
     eff_harvesters = #{},
     eff_clusters = #{},
+    eff_atm_inventories = #{},
 
     creation_time = ozt_mocks:get_frozen_time_seconds(),
     last_activity = 0,
@@ -1229,143 +1303,188 @@ get_record(od_group, 6) -> {
     % Returns two records:
     %   ExpAfterUpgrade - expected value after upgrade from previous version
     %   NextIteration - different record that will be upgraded to the next version
-    #od_group{
-        name = <<"ńąµę"/utf8>>,
-        type = role_holders,
-        protected = false,
-        oz_privileges = [
+    {od_group,
+        <<"ńąµę"/utf8>>,
+        role_holders,
+        false,
+        [
             ?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_LIST, ?OZ_GROUPS_LIST_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_VIEW,
             ?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_LIST_RELATIONSHIPS, ?OZ_PROVIDERS_VIEW,
             ?OZ_SET_PRIVILEGES,
             ?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_LIST, ?OZ_SPACES_LIST_RELATIONSHIPS, ?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_SPACES_VIEW,
             ?OZ_USERS_LIST, ?OZ_USERS_VIEW, ?OZ_VIEW_PRIVILEGES
         ],
-        eff_oz_privileges = [],
+        [],
 
-        parents = [<<"parent1">>, <<"parent2">>],
-        children = #{
+        [<<"parent1">>, <<"parent2">>],
+        #{
             <<"child1">> => [?GROUP_ADD_CHILD, ?GROUP_ADD_SPACE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES],
             <<"child2">> => [?GROUP_DELETE, ?GROUP_REMOVE_CHILD, ?GROUP_UPDATE]
         },
-        eff_parents = #{},
-        eff_children = #{},
+        #{},
+        #{},
 
-        users = #{
+        #{
             <<"user1">> => [?GROUP_ADD_PARENT, ?GROUP_ADD_SPACE, ?GROUP_SET_PRIVILEGES],
             <<"user2">> => [?GROUP_ADD_USER, ?GROUP_LEAVE_PARENT, ?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES]
         },
-        spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
-        handle_services = [<<"handle_service1">>],
-        handles = [<<"handle1">>, <<"handle2">>],
-        harvesters = [],
-        clusters = [],
+        [<<"space1">>, <<"space2">>, <<"space3">>],
+        [<<"handle_service1">>],
+        [<<"handle1">>, <<"handle2">>],
+        [],
+        [],
 
-        eff_users = #{},
-        eff_spaces = #{},
-        eff_providers = #{},
-        eff_handle_services = #{},
-        eff_handles = #{},
-        eff_harvesters = #{},
-        eff_clusters = #{},
+        #{},
+        #{},
+        #{},
+        #{},
+        #{},
+        #{},
+        #{},
 
-        creation_time = ozt_mocks:get_frozen_time_seconds(),
-        creator = undefined,
+        ozt_mocks:get_frozen_time_seconds(),
+        undefined,
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        true,
+        true
     },
-    #od_group{
-        name = <<"ńąµę"/utf8>>,
-        type = role_holders,
-        protected = false,
-        oz_privileges = [
+    {od_group,
+        <<"ńąµę"/utf8>>,
+        role_holders,
+        false,
+        [
             ?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_LIST, ?OZ_GROUPS_LIST_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_VIEW,
             ?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_LIST_RELATIONSHIPS, ?OZ_PROVIDERS_VIEW,
             ?OZ_SET_PRIVILEGES,
             ?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_LIST, ?OZ_SPACES_LIST_RELATIONSHIPS, ?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_SPACES_VIEW,
             ?OZ_USERS_LIST, ?OZ_USERS_VIEW, ?OZ_VIEW_PRIVILEGES
         ],
-        eff_oz_privileges = [],
+        [],
 
-        parents = [<<"parent1">>, <<"parent2">>],
-        children = #{
+        [<<"parent1">>, <<"parent2">>],
+        #{
             <<"child1">> => [?GROUP_ADD_CHILD, ?GROUP_ADD_SPACE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES],
             <<"child2">> => [?GROUP_DELETE, ?GROUP_REMOVE_CHILD, ?GROUP_UPDATE]
         },
-        eff_parents = #{},
-        eff_children = #{},
+        #{},
+        #{},
 
-        users = #{
+        #{
             <<"user1">> => [?GROUP_ADD_PARENT, ?GROUP_ADD_SPACE, ?GROUP_SET_PRIVILEGES],
             <<"user2">> => [?GROUP_ADD_USER, ?GROUP_LEAVE_PARENT, ?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES]
         },
-        spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
-        handle_services = [<<"handle_service1">>],
-        handles = [<<"handle1">>, <<"handle2">>],
-        harvesters = [],
-        clusters = [],
+        [<<"space1">>, <<"space2">>, <<"space3">>],
+        [<<"handle_service1">>],
+        [<<"handle1">>, <<"handle2">>],
+        [],
+        [],
 
-        eff_users = #{},
-        eff_spaces = #{},
-        eff_providers = #{},
-        eff_handle_services = #{},
-        eff_handles = #{},
-        eff_harvesters = #{},
-        eff_clusters = #{},
+        #{},
+        #{},
+        #{},
+        #{},
+        #{},
+        #{},
+        #{},
 
-        creation_time = ozt_mocks:get_frozen_time_seconds(),
-        creator = {client, user, <<"userId123">>},
+        ozt_mocks:get_frozen_time_seconds(),
+        {client, user, <<"userId123">>},
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        true,
+        true
     }
 };
-get_record(od_group, 7) -> #od_group{
-    name = <<"ńąµę"/utf8>>,
-    type = role_holders,
-    protected = false,
-    oz_privileges = [
+get_record(od_group, 7) -> {od_group,
+    <<"ńąµę"/utf8>>,
+    role_holders,
+    false,
+    [
         ?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_LIST, ?OZ_GROUPS_LIST_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_VIEW,
         ?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_LIST_RELATIONSHIPS, ?OZ_PROVIDERS_VIEW,
         ?OZ_SET_PRIVILEGES,
         ?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_LIST, ?OZ_SPACES_LIST_RELATIONSHIPS, ?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_SPACES_VIEW,
         ?OZ_USERS_LIST, ?OZ_USERS_VIEW, ?OZ_VIEW_PRIVILEGES
     ],
-    eff_oz_privileges = [],
+    [],
 
-    parents = [<<"parent1">>, <<"parent2">>],
-    children = #{
+    [<<"parent1">>, <<"parent2">>],
+    #{
         <<"child1">> => [?GROUP_ADD_CHILD, ?GROUP_ADD_SPACE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES],
         <<"child2">> => [?GROUP_DELETE, ?GROUP_REMOVE_CHILD, ?GROUP_UPDATE]
     },
-    eff_parents = #{},
-    eff_children = #{},
+    #{},
+    #{},
 
-    users = #{
+    #{
         <<"user1">> => [?GROUP_ADD_PARENT, ?GROUP_ADD_SPACE, ?GROUP_SET_PRIVILEGES],
         <<"user2">> => [?GROUP_ADD_USER, ?GROUP_LEAVE_PARENT, ?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES]
     },
-    spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
-    handle_services = [<<"handle_service1">>],
-    handles = [<<"handle1">>, <<"handle2">>],
-    harvesters = [],
-    clusters = [],
+    [<<"space1">>, <<"space2">>, <<"space3">>],
+    [<<"handle_service1">>],
+    [<<"handle1">>, <<"handle2">>],
+    [],
+    [],
 
-    eff_users = #{},
-    eff_spaces = #{},
-    eff_providers = #{},
-    eff_handle_services = #{},
-    eff_handles = #{},
-    eff_harvesters = #{},
-    eff_clusters = #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
 
-    creation_time = ozt_mocks:get_frozen_time_seconds(),
-    creator = {subject, user, <<"userId123">>},
+    ozt_mocks:get_frozen_time_seconds(),
+    {subject, user, <<"userId123">>},
 
-    top_down_dirty = true,
-    bottom_up_dirty = true
+    true,
+    true
 };
-get_record(od_group, 8) -> #od_group{
+get_record(od_group, 8) -> {od_group,
+    <<"ńąµę"/utf8>>,
+    role_holders,
+    false,
+    [
+        ?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_LIST, ?OZ_GROUPS_LIST_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_VIEW,
+        ?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_LIST_RELATIONSHIPS, ?OZ_PROVIDERS_VIEW,
+        ?OZ_SET_PRIVILEGES,
+        ?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_LIST, ?OZ_SPACES_LIST_RELATIONSHIPS, ?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_SPACES_VIEW,
+        ?OZ_USERS_LIST, ?OZ_USERS_VIEW, ?OZ_VIEW_PRIVILEGES
+    ],
+    [],
+
+    [<<"parent1">>, <<"parent2">>],
+    #{
+        <<"child1">> => [?GROUP_ADD_CHILD, ?GROUP_ADD_SPACE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES],
+        <<"child2">> => [?GROUP_DELETE, ?GROUP_REMOVE_CHILD, ?GROUP_UPDATE]
+    },
+    #{},
+    #{},
+
+    #{
+        <<"user1">> => [?GROUP_ADD_PARENT, ?GROUP_ADD_SPACE, ?GROUP_SET_PRIVILEGES],
+        <<"user2">> => [?GROUP_ADD_USER, ?GROUP_LEAVE_PARENT, ?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES]
+    },
+    [<<"space1">>, <<"space2">>, <<"space3">>],
+    [<<"handle_service1">>],
+    [<<"handle1">>, <<"handle2">>],
+    [],
+    [],
+
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+
+    ozt_mocks:get_frozen_time_seconds(),
+    ?SUB(user, <<"userId123">>),
+
+    true,
+    true
+};
+get_record(od_group, 9) -> #od_group{
     name = <<"ńąµę"/utf8>>,
     type = role_holders,
     protected = false,
@@ -1395,6 +1514,7 @@ get_record(od_group, 8) -> #od_group{
     handles = [<<"handle1">>, <<"handle2">>],
     harvesters = [],
     clusters = [],
+    atm_inventories = [],
 
     eff_users = #{},
     eff_spaces = #{},
@@ -1403,6 +1523,7 @@ get_record(od_group, 8) -> #od_group{
     eff_handles = #{},
     eff_harvesters = #{},
     eff_clusters = #{},
+    eff_atm_inventories = #{},
 
     creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(user, <<"userId123">>),

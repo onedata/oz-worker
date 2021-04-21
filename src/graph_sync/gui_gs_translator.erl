@@ -112,7 +112,11 @@ translate_value(_, #gri{type = od_token, aspect = examine}, Response) ->
                 {?GROUP_JOIN_HARVESTER, HarvesterId} ->
                     #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
                 {?SPACE_JOIN_HARVESTER, HarvesterId} ->
-                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)}
+                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
+                {?USER_JOIN_ATM_INVENTORY, AtmInventoryId} ->
+                    #{<<"atmInventoryName">> => lookup_name(atm_inventory_logic, AtmInventoryId)};
+                {?GROUP_JOIN_ATM_INVENTORY, AtmInventoryId} ->
+                    #{<<"atmInventoryName">> => lookup_name(atm_inventory_logic, AtmInventoryId)}
             end,
             #{<<"inviteToken">> := Json} = token_type:to_json(Type),
             #{<<"inviteToken">> => maps:merge(Json, InviteTargetNameData)};
@@ -166,6 +170,8 @@ translate_resource(_, GRI = #gri{type = od_harvester}, Data) ->
     translate_harvester(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_cluster}, Data) ->
     translate_cluster(GRI, Data);
+translate_resource(_, GRI = #gri{type = od_atm_inventory}, Data) ->
+    translate_atm_inventory(GRI, Data);
 translate_resource(_, GRI = #gri{type = oz_worker}, Data) ->
     translate_zone(GRI, Data);
 
@@ -206,6 +212,7 @@ translate_user(GRI = #gri{type = od_user, id = UserId, aspect = instance, scope 
         <<"providerList">> => gri:serialize(GRI#gri{aspect = eff_providers, scope = private}),
         <<"harvesterList">> => gri:serialize(GRI#gri{aspect = eff_harvesters, scope = private}),
         <<"clusterList">> => gri:serialize(GRI#gri{aspect = eff_clusters, scope = private}),
+        <<"atmInventoryList">> => gri:serialize(GRI#gri{aspect = eff_atm_inventories, scope = private}),
         <<"info">> => #{
             <<"creationTime">> => User#od_user.creation_time
         }
@@ -285,6 +292,14 @@ translate_user(#gri{aspect = eff_clusters}, Clusters) ->
             fun(ClusterId) ->
                 gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = instance, scope = auto})
             end, Clusters)
+    };
+
+translate_user(#gri{aspect = eff_atm_inventories}, AtmInventories) ->
+    #{
+        <<"list">> => lists:map(
+            fun(AtmInventoryId) ->
+                gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = instance, scope = auto})
+            end, AtmInventories)
     }.
 
 
@@ -308,6 +323,7 @@ translate_group(#gri{id = GroupId, aspect = instance, scope = private}, Group) -
         <<"effUserList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = eff_users}),
         <<"spaceList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = spaces}),
         <<"harvesterList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = eff_harvesters}),
+        <<"atmInventoryList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = eff_atm_inventories}),
         <<"info">> => maps:merge(translate_creator(Group#od_group.creator), #{
             <<"creationTime">> => Group#od_group.creation_time
         })
@@ -425,6 +441,14 @@ translate_group(#gri{aspect = eff_harvesters}, Harvesters) ->
             fun(HarvesterId) ->
                 gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = auto})
             end, Harvesters)
+    };
+
+translate_group(#gri{aspect = eff_atm_inventories}, AtmInventories) ->
+    #{
+        <<"list">> => lists:map(
+            fun(AtmInventoryId) ->
+                gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = instance, scope = auto})
+            end, AtmInventories)
     }.
 
 
@@ -1076,6 +1100,108 @@ translate_cluster(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
     };
 
 translate_cluster(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    }.
+
+
+%% @private
+-spec translate_atm_inventory(gri:gri(), Data :: term()) ->
+    gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_atm_inventory(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
+    Privileges;
+
+translate_atm_inventory(#gri{id = AtmInventoryId, aspect = instance, scope = private}, AtmInventory) ->
+    #od_atm_inventory{
+        name = Name,
+        creation_time = CreationTime,
+        creator = Creator
+    } = AtmInventory,
+
+    fun(?USER(UserId)) -> #{
+        <<"scope">> => <<"private">>,
+        <<"name">> => Name,
+        <<"canViewPrivileges">> => atm_inventory_logic:has_eff_privilege(AtmInventory, UserId, ?ATM_INVENTORY_VIEW_PRIVILEGES),
+        <<"directMembership">> => atm_inventory_logic:has_direct_user(AtmInventory, UserId),
+        <<"userList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = users}),
+        <<"effUserList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = eff_users}),
+        <<"groupList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = groups}),
+        <<"effGroupList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = eff_groups}),
+        <<"info">> => maps:merge(translate_creator(Creator), #{
+            <<"creationTime">> => CreationTime
+        })
+    } end;
+
+translate_atm_inventory(#gri{id = AtmInventoryId, aspect = instance, scope = protected}, AtmInventory) ->
+    #{
+        <<"name">> := Name,
+        <<"creationTime">> := CreationTime,
+        <<"creator">> := Creator
+    } = AtmInventory,
+
+    fun(?USER(UserId)) -> #{
+        <<"scope">> => <<"protected">>,
+        <<"name">> => Name,
+        <<"directMembership">> => atm_inventory_logic:has_direct_user(AtmInventoryId, UserId),
+        <<"info">> => maps:merge(translate_creator(Creator), #{
+            <<"creationTime">> => CreationTime
+        })
+    } end;
+
+translate_atm_inventory(#gri{aspect = users}, Users) ->
+    #{
+        <<"list">> => lists:map(
+            fun(UserId) ->
+                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+            end, Users)
+    };
+
+translate_atm_inventory(#gri{aspect = eff_users}, Users) ->
+    #{
+        <<"list">> => lists:map(
+            fun(UserId) ->
+                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+            end, Users)
+    };
+
+translate_atm_inventory(#gri{aspect = groups}, Groups) ->
+    #{
+        <<"list">> => lists:map(
+            fun(GroupId) ->
+                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
+            end, Groups)
+    };
+
+translate_atm_inventory(#gri{aspect = eff_groups}, Groups) ->
+    #{
+        <<"list">> => lists:map(
+            fun(GroupId) ->
+                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
+            end, Groups)
+    };
+
+translate_atm_inventory(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    };
+
+translate_atm_inventory(#gri{aspect = {eff_user_privileges, _UserId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    };
+
+translate_atm_inventory(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
+    format_intermediaries(Intermediaries);
+
+translate_atm_inventory(#gri{aspect = {eff_group_membership, _UserId}}, Intermediaries) ->
+    format_intermediaries(Intermediaries);
+
+translate_atm_inventory(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    };
+
+translate_atm_inventory(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
     #{
         <<"privileges">> => Privileges
     }.

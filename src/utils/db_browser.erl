@@ -22,7 +22,7 @@
 -type entries() :: all | [gri:entity_id()].
 % Basic table types - all collections reuse these tables to display the data
 -type table_type() :: users | groups | spaces | shares | providers | clusters
-| handle_services | handles | harvesters | storages.
+| handle_services | handles | harvesters | storages | atm_inventories.
 % Id of a column in displayed table, also used as display name
 -type column_id() :: atom().
 % Number of the column, counting from the left, starting with 1
@@ -60,6 +60,7 @@
 -export([handles/0]).
 -export([harvesters/0]).
 -export([storages/0]).
+-export([atm_inventories/0]).
 
 -export([pr/1, pr/2, pr/3]).
 -export([format/1, format/2, format/3]).
@@ -100,6 +101,9 @@ harvesters() -> pr(harvesters).
 
 -spec storages() -> ok.
 storages() -> pr(storages).
+
+-spec atm_inventories() -> ok.
+atm_inventories() -> pr(atm_inventories).
 
 
 %%--------------------------------------------------------------------
@@ -180,18 +184,21 @@ print_help() ->
 
 -spec all_collections() -> [collection()].
 all_collections() -> [
-    users, groups, spaces, shares, providers, clusters, handle_services, handles, harvesters, storages,
+    users, groups, spaces, shares, providers, clusters,
+    handle_services, handles, harvesters, storages, atm_inventories,
 
     {user_groups, <<"user_id">>}, {user_spaces, <<"user_id">>},
     {user_providers, <<"user_id">>}, {user_clusters, <<"user_id">>},
     {user_handle_services, <<"user_id">>}, {user_handles, <<"user_id">>},
     {user_harvesters, <<"user_id">>},
+    {user_atm_inventories, <<"user_id">>},
 
     {group_users, <<"group_id">>}, {group_children, <<"group_id">>},
     {group_parents, <<"group_id">>}, {group_spaces, <<"group_id">>},
     {group_providers, <<"group_id">>}, {group_clusters, <<"group_id">>},
     {group_handle_services, <<"group_id">>}, {group_handles, <<"group_id">>},
     {group_harvesters, <<"group_id">>},
+    {group_atm_inventories, <<"group_id">>},
 
     {space_users, <<"space_id">>}, {space_groups, <<"space_id">>},
     {space_shares, <<"space_id">>}, {space_providers, <<"space_id">>},
@@ -213,7 +220,10 @@ all_collections() -> [
     {harvester_spaces, <<"harvester_id">>}, {harvester_providers, <<"harvester_id">>},
 
     {storage_users, <<"storage_id">>}, {storage_groups, <<"storage_id">>},
-    {storage_spaces, <<"storage_id">>}, {storage_harvesters, <<"storage_id">>}
+    {storage_spaces, <<"storage_id">>}, {storage_harvesters, <<"storage_id">>},
+
+    {atm_inventory_users, <<"atm_inventory_id">>},
+    {atm_inventory_groups, <<"atm_inventory_id">>}
 ].
 
 %%%===================================================================
@@ -318,6 +328,10 @@ format_collection({user_harvesters, UserId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_user{harvesters = Harvesters, eff_harvesters = EffHarvesters}}} = od_user:get(UserId),
     format_memberships(harvesters, maps:keys(EffHarvesters), SortBy, SortOrder, Harvesters);
 
+format_collection({user_atm_inventories, UserId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_user{atm_inventories = AtmInvts, eff_atm_inventories = EffAtmInvts}}} = od_user:get(UserId),
+    format_memberships(atm_inventories, maps:keys(EffAtmInvts), SortBy, SortOrder, AtmInvts);
+
 
 format_collection({group_users, GroupId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_group{users = Users, eff_users = EffUsers}}} = od_group:get(GroupId),
@@ -354,6 +368,10 @@ format_collection({group_handles, GroupId}, SortBy, SortOrder) ->
 format_collection({group_harvesters, GroupId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_group{harvesters = Harvesters, eff_harvesters = EffHarvesters}}} = od_group:get(GroupId),
     format_memberships(harvesters, maps:keys(EffHarvesters), SortBy, SortOrder, Harvesters);
+
+format_collection({group_atm_inventories, GroupId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_group{atm_inventories = AtmInvts, eff_atm_inventories = EffAtmInvts}}} = od_group:get(GroupId),
+    format_memberships(atm_inventories, maps:keys(EffAtmInvts), SortBy, SortOrder, AtmInvts);
 
 
 format_collection({space_users, SpaceId}, SortBy, SortOrder) ->
@@ -486,7 +504,16 @@ format_collection({storage_spaces, StorageId}, SortBy, SortOrder) ->
 
 format_collection({storage_harvesters, StorageId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_storage{eff_harvesters = Harvesters}}} = od_storage:get(StorageId),
-    format_table(harvesters, maps:keys(Harvesters), SortBy, SortOrder).
+    format_table(harvesters, maps:keys(Harvesters), SortBy, SortOrder);
+
+
+format_collection({atm_inventory_users, AtmInventoryId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_atm_inventory{users = Users, eff_users = EffUsers}}} = od_atm_inventory:get(AtmInventoryId),
+    format_members(users, maps:keys(EffUsers), SortBy, SortOrder, Users, EffUsers, privileges:atm_inventory_privileges());
+
+format_collection({atm_inventory_groups, AtmInventoryId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_atm_inventory{groups = Groups, eff_groups = EffGroups}}} = od_atm_inventory:get(AtmInventoryId),
+    format_members(groups, maps:keys(EffGroups), SortBy, SortOrder, Groups, EffGroups, privileges:atm_inventory_privileges()).
 
 
 %% @private
@@ -748,6 +775,17 @@ field_specs(storages) -> [
         end, maps:to_list(QosParameters)),
         str_utils:join_binary(KeyValuePairs, <<", ">>)
     end}
+];
+field_specs(atm_inventories) -> [
+    {id, text, 38, fun(Doc) -> Doc#document.key end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_atm_inventory.name end},
+    {users, direct_and_eff, 9, fun(#document{value = HService}) ->
+        {maps:size(HService#od_atm_inventory.users), maps:size(HService#od_atm_inventory.eff_users)}
+    end},
+    {groups, direct_and_eff, 9, fun(#document{value = HService}) ->
+        {maps:size(HService#od_atm_inventory.groups), maps:size(HService#od_atm_inventory.eff_groups)}
+    end},
+    {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_atm_inventory.creation_time end}
 ].
 
 
@@ -922,4 +960,5 @@ module(clusters) -> od_cluster;
 module(handle_services) -> od_handle_service;
 module(handles) -> od_handle;
 module(harvesters) -> od_harvester;
-module(storages) -> od_storage.
+module(storages) -> od_storage;
+module(atm_inventories) -> od_atm_inventory.

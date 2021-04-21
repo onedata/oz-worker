@@ -57,6 +57,12 @@ create(Persistence, Subject, Type, Caveats) ->
     create(Persistence, Subject, #{<<"type">> => Type, <<"caveats">> => Caveats}).
 
 
+-spec get_named_token(tokens:id()) -> od_token:record().
+get_named_token(TokenId) ->
+    {ok, NamedToken} = ?assertMatch({ok, _}, ozt:rpc(token_logic, get_named_token, [?ROOT, TokenId])),
+    NamedToken.
+
+
 -spec try_create(named | temporary, aai:subject(), entity_logic:data()) ->
     {ok, tokens:token()} | errors:error().
 try_create(Persistence, Subject, Data) ->
