@@ -4,6 +4,8 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha8
+
 ### 21.02.0-alpha7
 
 -   **VFS-7515** Added new harvesting options - fileType and
