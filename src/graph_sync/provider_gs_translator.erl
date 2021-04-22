@@ -274,6 +274,7 @@ translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, sco
 
 translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = public}, ShareData) ->
     #{
+        <<"spaceId">> := SpaceId,
         <<"name">> := Name,
         <<"description">> := Description,
         <<"rootFileId">> := RootFileId,
@@ -281,11 +282,13 @@ translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, sco
         <<"handleId">> := HandleId
     } = ShareData,
     #{
+        <<"spaceId">> => SpaceId,
         <<"name">> => Name,
         <<"description">> => Description,
         <<"publicUrl">> => share_logic:build_public_url(ShareId),
         <<"publicRestUrl">> => share_logic:build_public_rest_url(ShareId),
-        <<"rootFileId">> => RootFileId, <<"fileType">> => FileType,
+        <<"rootFileId">> => RootFileId,
+        <<"fileType">> => FileType,
         <<"handleId">> => utils:undefined_to_null(HandleId)
     };
 

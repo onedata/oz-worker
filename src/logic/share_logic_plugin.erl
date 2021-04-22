@@ -140,12 +140,14 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Share) ->
     {ok, Share};
 get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
     #od_share{
+        space = SpaceId,
         name = Name, description = Description,
         handle = HandleId,
         root_file = RootFileId, file_type = FileType,
         creation_time = CreationTime
     } = Share,
     {ok, #{
+        <<"spaceId">> => SpaceId,
         <<"name">> => Name, <<"description">> => Description,
         <<"rootFileId">> => RootFileId,
         <<"fileType">> => FileType,
