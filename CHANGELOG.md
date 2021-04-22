@@ -6,6 +6,12 @@ CHANGELOG
 
 ### 21.02.0-alpha8
 
+-   **VFS-7575** Add the possibility to incorporate an XRootD server
+    within the Onedata environment for exposing Open Data collections
+    for public access using the XRootD protocol.
+-   **VFS-7228** Improve the design and UX of the token consumer page in
+    Onezone GUI .
+
 ### 21.02.0-alpha7
 
 -   **VFS-7515** Added new harvesting options - fileType and
