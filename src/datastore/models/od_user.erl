@@ -748,7 +748,7 @@ get_record_struct(15) ->
         {handles, [string]},
         {harvesters, [string]},
         {clusters, [string]},
-        {atm_inventories, [string]},
+        {atm_inventories, [string]}, % new field
 
         {eff_groups, #{string => [{atom, string}]}},
         {eff_spaces, #{string => [{atom, string}]}},
@@ -757,10 +757,10 @@ get_record_struct(15) ->
         {eff_handles, #{string => [{atom, string}]}},
         {eff_harvesters, #{string => [{atom, string}]}},
         {eff_clusters, #{string => [{atom, string}]}},
-        {eff_atm_inventories, #{string => [{atom, string}]}},
+        {eff_atm_inventories, #{string => [{atom, string}]}}, % new field
 
         {creation_time, integer},
-        {last_activity, integer}, % new field
+        {last_activity, integer},
 
         {top_down_dirty, boolean}
     ]}.

@@ -19,7 +19,6 @@
 
 %% API
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
--export([get_name/1]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -84,16 +83,6 @@ force_delete(InventoryId) ->
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
-
-
--spec get_name(od_atm_inventory:id()) -> {ok, od_atm_inventory:name()} | {error, term()}.
-get_name(AtmInventoryId) ->
-    case get(AtmInventoryId) of
-        {ok, #document{value = #od_atm_inventory{name = Name}}} ->
-            {ok, Name};
-        {error, _} = Error ->
-            Error
-    end.
 
 
 -spec to_string(InventoryId :: id()) -> binary().

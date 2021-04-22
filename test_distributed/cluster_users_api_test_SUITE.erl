@@ -451,7 +451,7 @@ get_user_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:cluster_add_user(Config, C1, U3),
@@ -512,7 +512,7 @@ update_user_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to update user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:cluster_add_user(Config, C1, U3),
@@ -692,7 +692,7 @@ get_eff_user_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose eff privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config),
 

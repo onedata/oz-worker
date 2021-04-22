@@ -437,7 +437,7 @@ get_group_privileges_test(Config) ->
     NonAdmin = ozt_users:create(),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get group privileges and sometimes not)
     GroupCreator = ozt_users:create(),
     SubjectGroup = ozt_users:create_group_for(GroupCreator),
@@ -498,7 +498,7 @@ update_group_privileges_test(Config) ->
     NonAdmin = ozt_users:create(),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to update group privileges and sometimes not)
     GroupCreator = ozt_users:create(),
     SubjectGroup = ozt_users:create_group_for(GroupCreator),
@@ -671,7 +671,7 @@ get_eff_group_privileges_test(Config) ->
     NonAdmin = ozt_users:create(),
 
     % User whose eff privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
     SubjectUser = ozt_users:create(),
 

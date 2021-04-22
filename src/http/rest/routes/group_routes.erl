@@ -739,10 +739,10 @@ routes() -> [
     %% This operation requires one of the following privileges:
     %% - group_view
     %% - oz_atm_inventories_view
-    {<<"/groups/:id/atm_inventories/:hid">>, #rest_req{
+    {<<"/groups/:id/atm_inventories/:aiid">>, #rest_req{
         method = 'GET',
         produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(hid), aspect = instance, scope = protected},
+        b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(aiid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
     %% Remove group from atm_inventory
@@ -750,9 +750,9 @@ routes() -> [
     %% - group_leave_atm_inventory
     %% - oz_atm_inventories_remove_relationships
     %% - oz_groups_remove_relationships
-    {<<"/groups/:id/atm_inventories/:hid">>, #rest_req{
+    {<<"/groups/:id/atm_inventories/:aiid">>, #rest_req{
         method = 'DELETE',
-        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {atm_inventory, ?BINDING(hid)}}
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {atm_inventory, ?BINDING(aiid)}}
     }},
     %% List effective group's atm_inventories
     %% This operation requires one of the following privileges:
@@ -767,10 +767,10 @@ routes() -> [
     %% This operation requires one of the following privileges:
     %% - group_view
     %% - oz_atm_inventories_view
-    {<<"/groups/:id/effective_atm_inventories/:hid">>, #rest_req{
+    {<<"/groups/:id/effective_atm_inventories/:aiid">>, #rest_req{
         method = 'GET',
         produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(hid), aspect = instance, scope = protected},
+        b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(aiid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }}
 ].

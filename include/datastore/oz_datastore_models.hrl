@@ -111,16 +111,16 @@ end).
 %           ^ ^ ^ ^             ^         ^       ^  ^      /     /
 %          /  | |  \           /          |      /   |     /     /
 %         /   | |   \         /           |     /    |    /     /
-%        /   /   \   \       /            |    /     |   /     /
-%       /   /     \   \     /             |   /      |  /     /
-% share user harvester group             user      group     /
-%              ^    ^     ^                          ^      /
-%             /      \    |                          |     /
-%            /        \   |                          |    /
-%          user        group                        user-'
-%                      ^   ^
-%                     /     \
-%                    /       \
+%        /   /   \   \       /             \   /     |   /     /
+%       /   /     \   \     /              user      |  /     /
+% share user harvester group                       group     /
+%              ^    ^     ^    atm_inventory         ^      /
+%             /      \    |     ^    ^               |     /
+%            /        \   |    /    /                |    /
+%          user        group--'    /                user-'
+%                      ^   ^      /
+%                     /     \    /
+%                    /       \  /
 %                  user      user
 %
 % Members of groups, spaces, providers, handle_services, handles and harvesters are

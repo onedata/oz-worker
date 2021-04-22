@@ -342,7 +342,7 @@ get_record_struct(9) ->
         {handles, [string]},
         {harvesters, [string]},
         {clusters, [string]},
-        {atm_inventories, [string]},
+        {atm_inventories, [string]}, % new field
 
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_spaces, #{string => [{atom, string}]}},
@@ -351,11 +351,9 @@ get_record_struct(9) ->
         {eff_handles, #{string => [{atom, string}]}},
         {eff_harvesters, #{string => [{atom, string}]}},
         {eff_clusters, #{string => [{atom, string}]}},
-        {eff_atm_inventories, #{string => [{atom, string}]}},
+        {eff_atm_inventories, #{string => [{atom, string}]}}, % new field
 
         {creation_time, integer},
-        % nested #subject{} record was extended and is now encoded as string
-        % rather than record tuple
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
 
         {top_down_dirty, boolean},

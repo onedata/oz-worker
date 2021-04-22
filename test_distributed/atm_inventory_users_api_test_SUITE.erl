@@ -385,7 +385,7 @@ get_user_privileges_test(Config) ->
     NonAdmin = ozt_users:create(),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
     SubjectUser = ozt_users:create(),
     ozt_atm_inventories:add_user(AtmInventory, SubjectUser),
@@ -445,7 +445,7 @@ update_user_privileges_test(Config) ->
     NonAdmin = ozt_users:create(),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to update user privileges and sometimes not)
     SubjectUser = ozt_users:create(),
     ozt_atm_inventories:add_user(AtmInventory, SubjectUser),
@@ -615,7 +615,7 @@ get_eff_user_privileges_test(Config) ->
     NonAdmin = ozt_users:create(),
 
     % User whose eff privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
     SubjectUser = ozt_users:create(),
 

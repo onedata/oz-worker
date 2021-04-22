@@ -547,18 +547,18 @@ routes() -> [
     }},
     %% Get atm_inventory details
     %% This operation does not require any specific privileges.
-    {<<"/user/atm_inventories/:hid">>, #rest_req{
+    {<<"/user/atm_inventories/:aiid">>, #rest_req{
         method = 'GET',
         produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(hid), aspect = instance, scope = protected},
+        b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(aiid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
     %% Leave atm_inventory
     %% This operation does not require any specific privileges.
-    {<<"/user/atm_inventories/:hid">>, #rest_req{
+    {<<"/user/atm_inventories/:aiid">>, #rest_req{
         method = 'DELETE',
         produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {atm_inventory, ?BINDING(hid)}}
+        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {atm_inventory, ?BINDING(aiid)}}
     }},
     %% List effective user atm_inventories
     %% This operation does not require any specific privileges.
@@ -569,10 +569,10 @@ routes() -> [
     }},
     %% Get effective atm_inventory details
     %% This operation does not require any specific privileges.
-    {<<"/user/effective_atm_inventories/:hid">>, #rest_req{
+    {<<"/user/effective_atm_inventories/:aiid">>, #rest_req{
         method = 'GET',
         produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(hid), aspect = instance, scope = protected},
+        b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(aiid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }}
 ].

@@ -1623,8 +1623,8 @@ remove_parent(#od_user{handles = Handles} = User, od_handle, HandleId) ->
     User#od_user{handles = lists:delete(HandleId, Handles)};
 remove_parent(#od_user{harvesters = Harvesters} = User, od_harvester, HarvesterId) ->
     User#od_user{harvesters = lists:delete(HarvesterId, Harvesters)};
-remove_parent(#od_user{clusters = AtmInventories} = User, od_cluster, AtmInventoryId) ->
-    User#od_user{clusters = lists:delete(AtmInventoryId, AtmInventories)};
+remove_parent(#od_user{clusters = Clusters} = User, od_cluster, ClusterId) ->
+    User#od_user{clusters = lists:delete(ClusterId, Clusters)};
 remove_parent(#od_user{atm_inventories = AtmInventories} = User, od_atm_inventory, AtmInventoryId) ->
     User#od_user{atm_inventories = lists:delete(AtmInventoryId, AtmInventories)};
 

@@ -148,7 +148,7 @@ create_atm_inventory_test(Config) ->
     VerifyFun = fun(AtmInventory) ->
         ozt:reconcile_entity_graph(),
         AtmInventoryRecord = ozt_atm_inventories:get(AtmInventory),
-        ?assertEqual(?CORRECT_NAME, AtmInventoryRecord#od_atm_inventory.name),
+        ?assertEqual(ExpName, AtmInventoryRecord#od_atm_inventory.name),
 
         ?assertEqual(#{}, AtmInventoryRecord#od_atm_inventory.users),
         ?assertEqual(

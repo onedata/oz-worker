@@ -43,16 +43,16 @@ create() ->
     create(<<"atm_inventory-", (?UNIQUE_STRING)/binary>>).
 
 
--spec get(od_atm_inventory:id()) -> od_atm_inventory:record().
-get(InventoryId) ->
-    {ok, Inventory} = ?assertMatch({ok, _}, ozt:rpc(atm_inventory_logic, get, [?ROOT, InventoryId])),
-    Inventory.
-
-
 -spec create(od_atm_inventory:name()) -> od_atm_inventory:id().
 create(Name) ->
     {ok, AtmInventoryId} = ?assertMatch({ok, _}, ozt:rpc(atm_inventory_logic, create, [?ROOT, #{<<"name">> => Name}])),
     AtmInventoryId.
+
+
+-spec get(od_atm_inventory:id()) -> od_atm_inventory:record().
+get(InventoryId) ->
+    {ok, Inventory} = ?assertMatch({ok, _}, ozt:rpc(atm_inventory_logic, get, [?ROOT, InventoryId])),
+    Inventory.
 
 
 -spec add_user(od_atm_inventory:id(), od_user:id()) -> ok.
