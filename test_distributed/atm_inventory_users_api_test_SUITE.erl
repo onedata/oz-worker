@@ -74,143 +74,163 @@ all() ->
 add_user_test(Config) ->
     Creator = ozt_users:create(),
     EffectiveUser = ozt_users:create(),
-    EffectiveUserWithoutInvitePriv = ozt_users:create(),
+    EffectiveUserWithoutAddUserPriv = ozt_users:create(),
     NonAdmin = ozt_users:create(),
 
     AtmInventory = ozt_users:create_atm_inventory_for(Creator),
 
     % EffectiveUser belongs to the atm_inventory effectively via SubGroup1, with the
-    % effective privilege to INVITE_USER, so he should be able to join the atm_inventory as a user
+    % effective privilege to ADD_USER, so he should be able to add himself to the atm_inventory
     SubGroup1 = ozt_users:create_group_for(EffectiveUser),
     ozt_atm_inventories:add_group(AtmInventory, SubGroup1, [?ATM_INVENTORY_ADD_USER]),
 
-    % EffectiveUserWithoutInvitePriv belongs to the atm_inventory effectively via SubGroup2,
-    % but without the effective privilege to INVITE_USER, so he should NOT be able
-    % to join the atm_inventory as a user
-    SubGroup2 = ozt_users:create_group_for(EffectiveUserWithoutInvitePriv),
+    % EffectiveUserWithoutAddUserPriv belongs to the atm_inventory effectively via SubGroup2,
+    % but without the effective privilege to ADD_USER, so he should NOT be able
+    % to add himself to the atm_inventory
+    SubGroup2 = ozt_users:create_group_for(EffectiveUserWithoutAddUserPriv),
     ozt_atm_inventories:add_group(AtmInventory, SubGroup2, []),
 
-    VerifyEndFun = fun
-        (true = _ShouldSucceed, _, _) ->
-            ?assert(lists:member(EffectiveUser, ozt_atm_inventories:get_users(AtmInventory))),
-            ozt_atm_inventories:remove_user(AtmInventory, EffectiveUser);
-        (false = _ShouldSucceed, _, _) ->
-            ?assertNot(lists:member(EffectiveUser, ozt_atm_inventories:get_users(AtmInventory)))
-    end,
+    lists:foreach(fun({ClientClassification, SubjectUser}) ->
+        VerifyEndFun = fun
+            (true = _ShouldSucceed, _, _) ->
+                ?assert(lists:member(SubjectUser, ozt_atm_inventories:get_users(AtmInventory))),
+                ozt_atm_inventories:remove_user(AtmInventory, SubjectUser);
+            (false = _ShouldSucceed, _, _) ->
+                ?assertNot(lists:member(SubjectUser, ozt_atm_inventories:get_users(AtmInventory)))
+        end,
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_ATM_INVENTORIES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, Creator},
-                {user, NonAdmin}
-            ]
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = lists:flatten([
+                    root,
+                    {admin, [?OZ_ATM_INVENTORIES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]},
+                    case ClientClassification of
+                        correct -> {user, SubjectUser};
+                        forbidden -> []
+                    end
+                ]),
+                unauthorized = [nobody],
+                forbidden = lists:flatten([
+                    {user, Creator},
+                    {user, NonAdmin},
+                    case ClientClassification of
+                        correct -> [];
+                        forbidden -> {user, SubjectUser}
+                    end
+                ])
+            },
+            rest_spec = #rest_spec{
+                method = put,
+                path = [<<"/atm_inventories/">>, AtmInventory, <<"/users/">>, SubjectUser],
+                expected_code = ?HTTP_201_CREATED,
+                expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                    ExpLocation = ?URL(Config, [<<"/atm_inventories/">>, AtmInventory, <<"/users/">>, SubjectUser]),
+                    ?assertEqual(ExpLocation, Location),
+                    true
+                end
+            },
+            logic_spec = #logic_spec{
+                module = atm_inventory_logic,
+                function = add_user,
+                args = [auth, AtmInventory, SubjectUser, data],
+                expected_result = ?OK_BINARY(SubjectUser)
+            }
+            % TODO VFS-4520 Tests for GraphSync API
         },
-        rest_spec = #rest_spec{
-            method = put,
-            path = [<<"/atm_inventories/">>, AtmInventory, <<"/users/">>, EffectiveUser],
-            expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/atm_inventories/">>, AtmInventory, <<"/users/">>, EffectiveUser]),
-                ?assertEqual(ExpLocation, Location),
-                true
-            end
-        },
-        logic_spec = #logic_spec{
-            module = atm_inventory_logic,
-            function = add_user,
-            args = [auth, AtmInventory, EffectiveUser, data],
-            expected_result = ?OK_BINARY(EffectiveUser)
-        }
-        % TODO VFS-4520 Tests for GraphSync API
-    },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, undefined, undefined, VerifyEndFun
-    )).
+        ?assert(api_test_utils:run_tests(
+            Config, ApiTestSpec, undefined, undefined, VerifyEndFun
+        ))
+    end, [{correct, EffectiveUser}, {forbidden, EffectiveUserWithoutAddUserPriv}]).
 
 
 add_user_with_privileges_test(Config) ->
     Creator = ozt_users:create(),
     EffectiveUser = ozt_users:create(),
-    EffectiveUserWithoutInvitePriv = ozt_users:create(),
+    EffectiveUserWithoutAddUserPriv = ozt_users:create(),
     NonAdmin = ozt_users:create(),
 
     AtmInventory = ozt_users:create_atm_inventory_for(Creator),
 
     % EffectiveUser belongs to the atm_inventory effectively via SubGroup1, with the
-    % effective privilege to INVITE_USER, so he should be able to join the atm_inventory as a user
+    % effective privilege to ADD_USER, so he should be able to add himself to the atm_inventory
     SubGroup1 = ozt_users:create_group_for(EffectiveUser),
     ozt_atm_inventories:add_group(AtmInventory, SubGroup1, [?ATM_INVENTORY_ADD_USER, ?ATM_INVENTORY_SET_PRIVILEGES]),
 
-    % EffectiveUserWithoutInvitePriv belongs to the atm_inventory effectively via SubGroup2,
-    % but without the effective privilege to INVITE_USER, so he should NOT be able
-    % to join the atm_inventory as a user
-    SubGroup2 = ozt_users:create_group_for(EffectiveUserWithoutInvitePriv),
+    % EffectiveUserWithoutAddUserPriv belongs to the atm_inventory effectively via SubGroup2,
+    % but without the effective privilege to ADD_USER, so he should NOT be able
+    % to add himself to the atm_inventory
+    SubGroup2 = ozt_users:create_group_for(EffectiveUserWithoutAddUserPriv),
     ozt_atm_inventories:add_group(AtmInventory, SubGroup2, []),
 
-    VerifyEndFun = fun
-        (true = _ShouldSucceed, _, Data) ->
-            ExpPrivs = maps:get(<<"privileges">>, Data),
-            ActualPrivs = ozt_atm_inventories:get_user_privileges(AtmInventory, EffectiveUser),
-            ?assertEqual(lists:sort(ExpPrivs), lists:sort(ActualPrivs)),
-            ozt_atm_inventories:remove_user(AtmInventory, EffectiveUser);
-        (false = ShouldSucceed, _, _) ->
-            Users = ozt_atm_inventories:get_users(AtmInventory),
-            ?assertEqual(lists:member(EffectiveUser, Users), ShouldSucceed)
-    end,
+    lists:foreach(fun({ClientClassification, SubjectUser}) ->
+        VerifyEndFun = fun
+            (true = _ShouldSucceed, _, Data) ->
+                ExpPrivs = maps:get(<<"privileges">>, Data),
+                ActualPrivs = ozt_atm_inventories:get_user_privileges(AtmInventory, SubjectUser),
+                ?assertEqual(lists:sort(ExpPrivs), lists:sort(ActualPrivs)),
+                ozt_atm_inventories:remove_user(AtmInventory, SubjectUser);
+            (false = ShouldSucceed, _, _) ->
+                Users = ozt_atm_inventories:get_users(AtmInventory),
+                ?assertEqual(lists:member(SubjectUser, Users), ShouldSucceed)
+        end,
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_ATM_INVENTORIES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS, ?OZ_ATM_INVENTORIES_SET_PRIVILEGES]}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, Creator},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = put,
-            path = [<<"/atm_inventories/">>, AtmInventory, <<"/users/">>, EffectiveUser],
-            expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/atm_inventories/">>, AtmInventory, <<"/users/">>, EffectiveUser]),
-                ?assertEqual(ExpLocation, Location),
-                true
-            end
-        },
-        logic_spec = #logic_spec{
-            module = atm_inventory_logic,
-            function = add_user,
-            args = [auth, AtmInventory, EffectiveUser, data],
-            expected_result = ?OK_BINARY(EffectiveUser)
-        },
-        % TODO VFS-4520 Tests for GraphSync API
-        data_spec = #data_spec{
-            required = [<<"privileges">>],
-            correct_values = #{
-                <<"privileges">> => [
-                    [?ATM_INVENTORY_UPDATE],
-                    [?ATM_INVENTORY_VIEW]
-                ]
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = lists:flatten([
+                    root,
+                    {admin, [?OZ_ATM_INVENTORIES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS, ?OZ_ATM_INVENTORIES_SET_PRIVILEGES]},
+                    case ClientClassification of
+                        correct -> {user, SubjectUser};
+                        forbidden -> []
+                    end
+                ]),
+                unauthorized = [nobody],
+                forbidden = lists:flatten([
+                    {user, Creator},
+                    {user, NonAdmin},
+                    case ClientClassification of
+                        correct -> [];
+                        forbidden -> {user, SubjectUser}
+                    end
+                ])
             },
-            bad_values = [
-                {<<"privileges">>, <<"">>,
-                    ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
-                {<<"privileges">>, [?ATM_INVENTORY_VIEW, ?GROUP_VIEW],
-                    ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, ?ALL_PRIVS)}
-            ]
-        }
-    },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, undefined, undefined, VerifyEndFun
-    )).
+            rest_spec = #rest_spec{
+                method = put,
+                path = [<<"/atm_inventories/">>, AtmInventory, <<"/users/">>, SubjectUser],
+                expected_code = ?HTTP_201_CREATED,
+                expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                    ExpLocation = ?URL(Config, [<<"/atm_inventories/">>, AtmInventory, <<"/users/">>, SubjectUser]),
+                    ?assertEqual(ExpLocation, Location),
+                    true
+                end
+            },
+            logic_spec = #logic_spec{
+                module = atm_inventory_logic,
+                function = add_user,
+                args = [auth, AtmInventory, SubjectUser, data],
+                expected_result = ?OK_BINARY(SubjectUser)
+            },
+            % TODO VFS-4520 Tests for GraphSync API
+            data_spec = #data_spec{
+                required = [<<"privileges">>],
+                correct_values = #{
+                    <<"privileges">> => [
+                        [?ATM_INVENTORY_UPDATE],
+                        [?ATM_INVENTORY_VIEW]
+                    ]
+                },
+                bad_values = [
+                    {<<"privileges">>, <<"">>,
+                        ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
+                    {<<"privileges">>, [?ATM_INVENTORY_VIEW, ?GROUP_VIEW],
+                        ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, ?ALL_PRIVS)}
+                ]
+            }
+        },
+        ?assert(api_test_utils:run_tests(
+            Config, ApiTestSpec, undefined, undefined, VerifyEndFun
+        ))
+    end, [{correct, EffectiveUser}, {forbidden, EffectiveUserWithoutAddUserPriv}]).
 
 
 remove_user_test(Config) ->
@@ -614,9 +634,6 @@ get_eff_user_privileges_test(Config) ->
     ),
     NonAdmin = ozt_users:create(),
 
-    % User whose eff privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes have privilege
-    % to get user privileges and sometimes not)
     SubjectUser = ozt_users:create(),
 
     Group1 = ozt_groups:create(),

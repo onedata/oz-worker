@@ -231,6 +231,7 @@ private_share(gs, Id, ShareData, _Creator) ->
 -spec public_share(interface(), od_share:id(), map()) -> expectation().
 public_share(logic, _Id, ShareData) ->
     ?OK_MAP(#{
+        <<"spaceId">> => maps:get(<<"spaceId">>, ShareData),
         <<"name">> => maps:get(<<"name">>, ShareData),
         <<"description">> => maps:get(<<"description">>, ShareData),
         <<"rootFileId">> => maps:get(<<"rootFileId">>, ShareData),

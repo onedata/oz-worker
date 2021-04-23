@@ -223,162 +223,177 @@ get_user_details_test(Config) ->
 
 
 add_user_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, Creator} = oz_test_utils:create_user(Config),
     {ok, EffectiveUser} = oz_test_utils:create_user(Config),
-    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUserWithoutAddUserPriv} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(Creator), ?GROUP_NAME1),
 
     % EffectiveUser belongs to group G1 effectively via SubGroup1, with the
-    % effective privilege to INVITE_USER, so he should be able to join the parent
-    % group as a user
+    % effective privilege to ADD_USER, so he should be able to add himself to the group
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:group_add_group(Config, G1, SubGroup1),
     oz_test_utils:group_set_group_privileges(Config, G1, SubGroup1, [?GROUP_ADD_USER], []),
 
-    % EffectiveUserWithoutInvitePriv belongs to group G1 effectively via SubGroup2,
-    % but without the effective privilege to INVITE_USER, so he should NOT be able
-    % to join the parent group as a user
-    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
+    % EffectiveUserWithoutAddUserPriv belongs to group G1 effectively via SubGroup2,
+    % but without the effective privilege to ADD_USER, so he should NOT be able
+    % to add himself to the group
+    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutAddUserPriv), ?GROUP_NAME2),
     {ok, SubGroup2} = oz_test_utils:group_add_group(Config, G1, SubGroup2),
 
-    VerifyEndFun = fun
-        (true = _ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:group_get_users(Config, G1),
-            ?assert(lists:member(EffectiveUser, Users)),
-            oz_test_utils:group_remove_user(Config, G1, EffectiveUser);
-        (false = _ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:group_get_users(Config, G1),
-            ?assertNot(lists:member(EffectiveUser, Users))
-    end,
+    lists:foreach(fun({ClientClassification, SubjectUser}) ->
+        VerifyEndFun = fun
+            (true = _ShouldSucceed, _, _) ->
+                {ok, Users} = oz_test_utils:group_get_users(Config, G1),
+                ?assert(lists:member(SubjectUser, Users)),
+                oz_test_utils:group_remove_user(Config, G1, SubjectUser);
+            (false = _ShouldSucceed, _, _) ->
+                {ok, Users} = oz_test_utils:group_get_users(Config, G1),
+                ?assertNot(lists:member(SubjectUser, Users))
+        end,
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]},
-                {user, EffectiveUser}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin},
-                {user, EffectiveUserWithoutInvitePriv}
-            ]
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = lists:flatten([
+                    root,
+                    {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]},
+                    case ClientClassification of
+                        correct -> {user, SubjectUser};
+                        forbidden -> []
+                    end
+                ]),
+                unauthorized = [nobody],
+                forbidden = lists:flatten([
+                    {user, Creator},
+                    {user, NonAdmin},
+                    case ClientClassification of
+                        correct -> [];
+                        forbidden -> {user, SubjectUser}
+                    end
+                ])
+            },
+            rest_spec = #rest_spec{
+                method = put,
+                path = [<<"/groups/">>, G1, <<"/users/">>, SubjectUser],
+                expected_code = ?HTTP_201_CREATED,
+                expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                    ExpLocation = ?URL(Config, [<<"/groups/">>, G1, <<"/users/">>, SubjectUser]),
+                    ?assertEqual(ExpLocation, Location),
+                    true
+                end
+            },
+            logic_spec = #logic_spec{
+                module = group_logic,
+                function = add_user,
+                args = [auth, G1, SubjectUser, data],
+                expected_result = ?OK_BINARY(SubjectUser)
+            },
+            % TODO VFS-4520 Tests for GraphSync API
+            data_spec = #data_spec{
+                required = [],
+                correct_values = #{},
+                bad_values = []
+            }
         },
-        rest_spec = #rest_spec{
-            method = put,
-            path = [<<"/groups/">>, G1, <<"/users/">>, EffectiveUser],
-            expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/groups/">>, G1, <<"/users/">>, EffectiveUser]),
-                ?assertEqual(ExpLocation, Location),
-                true
-            end
-        },
-        logic_spec = #logic_spec{
-            module = group_logic,
-            function = add_user,
-            args = [auth, G1, EffectiveUser, data],
-            expected_result = ?OK_BINARY(EffectiveUser)
-        },
-        % TODO VFS-4520 Tests for GraphSync API
-        data_spec = #data_spec{
-            required = [],
-            correct_values = #{},
-            bad_values = []
-        }
-    },
 
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, undefined, undefined, VerifyEndFun
-    )).
+        ?assert(api_test_utils:run_tests(
+            Config, ApiTestSpec, undefined, undefined, VerifyEndFun
+        ))
+    end, [{correct, EffectiveUser}, {forbidden, EffectiveUserWithoutAddUserPriv}]).
 
 
 add_user_with_privileges_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, Creator} = oz_test_utils:create_user(Config),
     {ok, EffectiveUser} = oz_test_utils:create_user(Config),
-    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUserWithoutAddUserPriv} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(Creator), ?GROUP_NAME1),
 
     % EffectiveUser belongs to group G1 effectively via SubGroup1, with the
-    % effective privilege to INVITE_USER and SET_PRIVILEGES, so he should be
-    % able to join the parent group as a user with given privileges
+    % effective privilege to ADD_USER and SET_PRIVILEGES, so he should be
+    % able to add himself to the group with given privileges
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:group_add_group(Config, G1, SubGroup1),
     oz_test_utils:group_set_group_privileges(Config, G1, SubGroup1, [?GROUP_ADD_USER, ?GROUP_SET_PRIVILEGES], []),
 
-    % EffectiveUserWithoutInvitePriv belongs to group G1 effectively via SubGroup2,
-    % but without the effective privilege to INVITE_USER and SET_PRIVILEGES, so
-    % he should NOT be able to join the parent group as a user with given privileges
-    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
+    % EffectiveUserWithoutAddUserPriv belongs to group G1 effectively via SubGroup2,
+    % but without the effective privilege to ADD_USER and SET_PRIVILEGES, so
+    % he should NOT be able to add himself to the group with given privileges
+    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutAddUserPriv), ?GROUP_NAME2),
     {ok, SubGroup2} = oz_test_utils:group_add_group(Config, G1, SubGroup2),
 
-    VerifyEndFun = fun
-        (true = _ShouldSucceed, _, Data) ->
-            ExpPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
-            {ok, Privs} = oz_test_utils:group_get_user_privileges(
-                Config, G1, EffectiveUser
-            ),
-            ?assertEqual(ExpPrivs, lists:sort(Privs)),
-            oz_test_utils:group_remove_user(Config, G1, EffectiveUser);
-        (false = ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:group_get_users(Config, G1),
-            ?assertEqual(lists:member(EffectiveUser, Users), ShouldSucceed)
-    end,
+    lists:foreach(fun({ClientClassification, SubjectUser}) ->
+        VerifyEndFun = fun
+            (true = _ShouldSucceed, _, Data) ->
+                ExpPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
+                {ok, Privs} = oz_test_utils:group_get_user_privileges(
+                    Config, G1, SubjectUser
+                ),
+                ?assertEqual(ExpPrivs, lists:sort(Privs)),
+                oz_test_utils:group_remove_user(Config, G1, SubjectUser);
+            (false = ShouldSucceed, _, _) ->
+                {ok, Users} = oz_test_utils:group_get_users(Config, G1),
+                ?assertEqual(lists:member(SubjectUser, Users), ShouldSucceed)
+        end,
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS, ?OZ_GROUPS_SET_PRIVILEGES]},
-                {user, EffectiveUser}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin},
-                {user, EffectiveUserWithoutInvitePriv}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = put,
-            path = [<<"/groups/">>, G1, <<"/users/">>, EffectiveUser],
-            expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/groups/">>, G1, <<"/users/">>, EffectiveUser]),
-                ?assertEqual(ExpLocation, Location),
-                true
-            end
-        },
-        logic_spec = #logic_spec{
-            module = group_logic,
-            function = add_user,
-            args = [auth, G1, EffectiveUser, data],
-            expected_result = ?OK_BINARY(EffectiveUser)
-        },
-        % TODO VFS-4520 Tests for GraphSync API
-        data_spec = #data_spec{
-            required = [<<"privileges">>],
-            correct_values = #{
-                <<"privileges">> => [
-                    [?GROUP_ADD_PARENT, ?GROUP_REMOVE_CHILD],
-                    [?GROUP_ADD_USER, ?GROUP_VIEW]
-                ]
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = lists:flatten([
+                    root,
+                    {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS, ?OZ_GROUPS_SET_PRIVILEGES]},
+                    case ClientClassification of
+                        correct -> {user, SubjectUser};
+                        forbidden -> []
+                    end
+                ]),
+                unauthorized = [nobody],
+                forbidden = lists:flatten([
+                    {user, Creator},
+                    {user, NonAdmin},
+                    case ClientClassification of
+                        correct -> [];
+                        forbidden -> {user, SubjectUser}
+                    end
+                ])
             },
-            bad_values = [
-                {<<"privileges">>, <<"">>,
-                    ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)}
-            ]
-        }
-    },
+            rest_spec = #rest_spec{
+                method = put,
+                path = [<<"/groups/">>, G1, <<"/users/">>, SubjectUser],
+                expected_code = ?HTTP_201_CREATED,
+                expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                    ExpLocation = ?URL(Config, [<<"/groups/">>, G1, <<"/users/">>, SubjectUser]),
+                    ?assertEqual(ExpLocation, Location),
+                    true
+                end
+            },
+            logic_spec = #logic_spec{
+                module = group_logic,
+                function = add_user,
+                args = [auth, G1, SubjectUser, data],
+                expected_result = ?OK_BINARY(SubjectUser)
+            },
+            % TODO VFS-4520 Tests for GraphSync API
+            data_spec = #data_spec{
+                required = [<<"privileges">>],
+                correct_values = #{
+                    <<"privileges">> => [
+                        [?GROUP_ADD_PARENT, ?GROUP_REMOVE_CHILD],
+                        [?GROUP_ADD_USER, ?GROUP_VIEW]
+                    ]
+                },
+                bad_values = [
+                    {<<"privileges">>, <<"">>,
+                        ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)}
+                ]
+            }
+        },
 
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, undefined, undefined, VerifyEndFun
-    )).
+        ?assert(api_test_utils:run_tests(
+            Config, ApiTestSpec, undefined, undefined, VerifyEndFun
+        ))
+    end, [{correct, EffectiveUser}, {forbidden, EffectiveUserWithoutAddUserPriv}]).
 
 
 remove_user_test(Config) ->

@@ -1581,9 +1581,9 @@ create_eff_atm_inventories_env(Config) ->
 
     AtmInventories = lists:map(
         fun(GroupId) ->
-            InventoryData = #{<<"name">> => ?UNIQUE_STRING},
-            AtmInventoryId = ozt_groups:create_atm_inventory_for(GroupId, InventoryData),
-            {AtmInventoryId, InventoryData}
+            AtmInventoryData = #{<<"name">> => ?UNIQUE_STRING},
+            AtmInventoryId = ozt_groups:create_atm_inventory_for(GroupId, AtmInventoryData),
+            {AtmInventoryId, AtmInventoryData}
         end, [G1, G2, G4, G5, G5]
     ),
 

@@ -176,9 +176,9 @@ get_test(Config) ->
     UserWithViewPrivs = ozt_users:create(),
     NonAdmin = ozt_users:create(),
 
-    InventoryName = ?UNIQUE_STRING,
-    InventoryData = #{<<"name">> => InventoryName},
-    AtmInventory = ozt_users:create_atm_inventory_for(UserWithoutViewPrivs, InventoryData),
+    AtmInventoryName = ?UNIQUE_STRING,
+    AtmInventoryData = #{<<"name">> => AtmInventoryName},
+    AtmInventory = ozt_users:create_atm_inventory_for(UserWithoutViewPrivs, AtmInventoryData),
 
     AllPrivs = privileges:atm_inventory_privileges(),
     ozt_atm_inventories:set_user_privileges(AtmInventory, UserWithoutViewPrivs, AllPrivs -- [?ATM_INVENTORY_VIEW]),
@@ -209,7 +209,7 @@ get_test(Config) ->
                     eff_users = EffUsers, eff_groups = #{},
                     bottom_up_dirty = false
                 }) ->
-                    ?assertEqual(InventoryName, Name),
+                    ?assertEqual(AtmInventoryName, Name),
                     ?assertEqual(Users, #{
                         UserWithoutViewPrivs => AllPrivs -- [?ATM_INVENTORY_VIEW],
                         UserWithViewPrivs => [?ATM_INVENTORY_VIEW]}
@@ -224,7 +224,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_atm_inventory, id = AtmInventory, aspect = instance, scope = private},
-            expected_result = ?OK_MAP_CONTAINS(InventoryData#{
+            expected_result = ?OK_MAP_CONTAINS(AtmInventoryData#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(AtmInventory, Id)
@@ -253,13 +253,13 @@ get_test(Config) ->
             method = get,
             path = [<<"/atm_inventories/">>, AtmInventory],
             expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:protected_atm_inventory(rest, AtmInventory, InventoryData, ?SUB(user, UserWithoutViewPrivs))
+            expected_body = api_test_expect:protected_atm_inventory(rest, AtmInventory, AtmInventoryData, ?SUB(user, UserWithoutViewPrivs))
         },
         logic_spec = #logic_spec{
             module = atm_inventory_logic,
             function = get_protected_data,
             args = [auth, AtmInventory],
-            expected_result = api_test_expect:protected_atm_inventory(logic, AtmInventory, InventoryData, ?SUB(user, UserWithoutViewPrivs))
+            expected_result = api_test_expect:protected_atm_inventory(logic, AtmInventory, AtmInventoryData, ?SUB(user, UserWithoutViewPrivs))
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).

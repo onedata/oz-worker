@@ -53,18 +53,18 @@ create(Doc) ->
 
 
 -spec get(id()) -> {ok, doc()} | {error, term()}.
-get(InventoryId) ->
-    datastore_model:get(?CTX, InventoryId).
+get(AtmInventoryId) ->
+    datastore_model:get(?CTX, AtmInventoryId).
 
 
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
-exists(InventoryId) ->
-    datastore_model:exists(?CTX, InventoryId).
+exists(AtmInventoryId) ->
+    datastore_model:exists(?CTX, AtmInventoryId).
 
 
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
-update(InventoryId, Diff) ->
-    datastore_model:update(?CTX, InventoryId, Diff).
+update(AtmInventoryId, Diff) ->
+    datastore_model:update(?CTX, AtmInventoryId, Diff).
 
 
 %%--------------------------------------------------------------------
@@ -76,8 +76,8 @@ update(InventoryId, Diff) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec force_delete(id()) -> ok | {error, term()}.
-force_delete(InventoryId) ->
-    datastore_model:delete(?CTX, InventoryId).
+force_delete(AtmInventoryId) ->
+    datastore_model:delete(?CTX, AtmInventoryId).
 
 
 -spec list() -> {ok, [doc()]} | {error, term()}.
@@ -85,9 +85,9 @@ list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
 
 
--spec to_string(InventoryId :: id()) -> binary().
-to_string(InventoryId) ->
-    <<"atmInventory:", InventoryId/binary>>.
+-spec to_string(AtmInventoryId :: id()) -> binary().
+to_string(AtmInventoryId) ->
+    <<"atmInventory:", AtmInventoryId/binary>>.
 
 
 -spec entity_logic_plugin() -> module().
