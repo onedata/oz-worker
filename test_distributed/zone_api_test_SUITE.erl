@@ -54,6 +54,7 @@ all() ->
     ]).
 
 -define(SIGNIN_NOTIFICATION_BODY, "custom login notification").
+-define(XROOTD_SERVER_DOMAIN, "xrootd.example.com").
 
 %%%===================================================================
 %%% Test functions
@@ -403,6 +404,9 @@ expected_configuration(Config) ->
         }
     }),
 
+    OpenDataXrootdServerDomain = lists_utils:random_element([undefined, ?XROOTD_SERVER_DOMAIN]),
+    oz_test_utils:set_env(Config, open_data_xrootd_server_domain, OpenDataXrootdServerDomain),
+
     #{
         <<"name">> => OZName,
         <<"domain">> => OZDomain,
@@ -411,7 +415,11 @@ expected_configuration(Config) ->
         <<"subdomainDelegationSupported">> => SubdomainDelegationSupported,
         <<"supportedIdPs">> => MockedSupportedIdPs,
         <<"compatibilityRegistryRevision">> => MockedCompatRevision,
-        <<"compatibleOneproviderVersions">> => MockedCompatOpVersions
+        <<"compatibleOneproviderVersions">> => MockedCompatOpVersions,
+        <<"openDataXrootdServerDomain">> => case OpenDataXrootdServerDomain of
+            undefined -> null;
+            Url -> list_to_binary(Url)
+        end
     }.
 
 
