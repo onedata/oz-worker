@@ -73,161 +73,181 @@ all() ->
 
 
 add_user_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, Creator} = oz_test_utils:create_user(Config),
     {ok, EffectiveUser} = oz_test_utils:create_user(Config),
-    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUserWithoutAddUserPriv} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, Creator, ?PROVIDER_NAME1),
     ClusterId = ProviderId,
 
     % EffectiveUser belongs to cluster C1 effectively via SubGroup1, with the
-    % effective privilege to ADD_USER, so he should be able to join the cluster as a user
+    % effective privilege to ADD_USER, so he should be able to add himself to the cluster
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:cluster_add_group(Config, ClusterId, SubGroup1),
     oz_test_utils:cluster_set_group_privileges(Config, ClusterId, SubGroup1, [?CLUSTER_ADD_USER], []),
 
-    % EffectiveUserWithoutInvitePriv belongs to group C1 effectively via SubGroup2,
+    % EffectiveUserWithoutAddUserPriv belongs to group C1 effectively via SubGroup2,
     % but without the effective privilege to ADD_USER, so he should NOT be able
-    % to join the parent group as a user
-    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
+    % to add himself to the cluster
+    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutAddUserPriv), ?GROUP_NAME2),
     {ok, SubGroup2} = oz_test_utils:cluster_add_group(Config, ClusterId, SubGroup2),
     oz_test_utils:cluster_set_group_privileges(Config, ClusterId, SubGroup2, [], [?CLUSTER_ADD_USER]),
 
-    VerifyEndFun = fun
-        (true = _ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:cluster_get_users(Config, ClusterId),
-            ?assert(lists:member(EffectiveUser, Users)),
-            oz_test_utils:cluster_remove_user(Config, ClusterId, EffectiveUser);
-        (false = _ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:cluster_get_users(Config, ClusterId),
-            ?assertNot(lists:member(EffectiveUser, Users))
-    end,
+    lists:foreach(fun({ClientClassification, SubjectUser}) ->
+        VerifyEndFun = fun
+            (true = _ShouldSucceed, _, _) ->
+                {ok, Users} = oz_test_utils:cluster_get_users(Config, ClusterId),
+                ?assert(lists:member(SubjectUser, Users)),
+                oz_test_utils:cluster_remove_user(Config, ClusterId, SubjectUser);
+            (false = _ShouldSucceed, _, _) ->
+                {ok, Users} = oz_test_utils:cluster_get_users(Config, ClusterId),
+                ?assertNot(lists:member(SubjectUser, Users))
+        end,
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_CLUSTERS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin}
-            ]
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = lists:flatten([
+                    root,
+                    {admin, [?OZ_CLUSTERS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]},
+                    case ClientClassification of
+                        correct -> {user, SubjectUser};
+                        forbidden -> []
+                    end
+                ]),
+                unauthorized = [nobody],
+                forbidden = lists:flatten([
+                    {user, Creator},
+                    {user, NonAdmin},
+                    case ClientClassification of
+                        correct -> [];
+                        forbidden -> {user, SubjectUser}
+                    end
+                ])
+            },
+            rest_spec = #rest_spec{
+                method = put,
+                path = [<<"/clusters/">>, ClusterId, <<"/users/">>, SubjectUser],
+                expected_code = ?HTTP_201_CREATED,
+                expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                    ExpLocation = ?URL(Config, [<<"/clusters/">>, ClusterId, <<"/users/">>, SubjectUser]),
+                    ?assertEqual(ExpLocation, Location),
+                    true
+                end
+            },
+            logic_spec = #logic_spec{
+                module = cluster_logic,
+                function = add_user,
+                args = [auth, ClusterId, SubjectUser, data],
+                expected_result = ?OK_BINARY(SubjectUser)
+            },
+            % TODO VFS-4520 Tests for GraphSync API
+            data_spec = #data_spec{
+                required = [],
+                correct_values = #{},
+                bad_values = []
+            }
         },
-        rest_spec = #rest_spec{
-            method = put,
-            path = [<<"/clusters/">>, ClusterId, <<"/users/">>, EffectiveUser],
-            expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/clusters/">>, ClusterId, <<"/users/">>, EffectiveUser]),
-                ?assertEqual(ExpLocation, Location),
-                true
-            end
-        },
-        logic_spec = #logic_spec{
-            module = cluster_logic,
-            function = add_user,
-            args = [auth, ClusterId, EffectiveUser, data],
-            expected_result = ?OK_BINARY(EffectiveUser)
-        },
-        % TODO VFS-4520 Tests for GraphSync API
-        data_spec = #data_spec{
-            required = [],
-            correct_values = #{},
-            bad_values = []
-        }
-    },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, undefined, undefined, VerifyEndFun
-    )).
+        ?assert(api_test_utils:run_tests(
+            Config, ApiTestSpec, undefined, undefined, VerifyEndFun
+        ))
+    end, [{correct, EffectiveUser}, {forbidden, EffectiveUserWithoutAddUserPriv}]).
 
 
 add_user_with_privileges_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, Creator} = oz_test_utils:create_user(Config),
     {ok, EffectiveUser} = oz_test_utils:create_user(Config),
-    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUserWithoutAddUserPriv} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, Creator, ?PROVIDER_NAME1),
     ClusterId = ProviderId,
 
     AllPrivs = privileges:cluster_privileges(),
 
     % EffectiveUser belongs to cluster C1 effectively via SubGroup1, with the
-    % effective privilege to ADD_USER, so he should be able to join the cluster as a user
+    % effective privilege to ADD_USER, so he should be able to add himself to the cluster
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:cluster_add_group(Config, ClusterId, SubGroup1),
     oz_test_utils:cluster_set_group_privileges(Config, ClusterId, SubGroup1, [?CLUSTER_ADD_USER, ?CLUSTER_SET_PRIVILEGES], []),
 
-    % EffectiveUserWithoutInvitePriv belongs to group C1 effectively via SubGroup2,
+    % EffectiveUserWithoutAddUserPriv belongs to group C1 effectively via SubGroup2,
     % but without the effective privilege to ADD_USER, so he should NOT be able
-    % to join the parent group as a user
-    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
+    % to add himself to the cluster
+    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutAddUserPriv), ?GROUP_NAME2),
     {ok, SubGroup2} = oz_test_utils:cluster_add_group(Config, ClusterId, SubGroup2),
 
-    VerifyEndFun = fun
-        (true = _ShouldSucceed, _, Data) ->
-            Privs = lists:sort(maps:get(<<"privileges">>, Data)),
-            {ok, ActualPrivs} = oz_test_utils:cluster_get_user_privileges(
-                Config, ClusterId, EffectiveUser
-            ),
-            ?assertEqual(Privs, lists:sort(ActualPrivs)),
-            oz_test_utils:cluster_remove_user(Config, ClusterId, EffectiveUser);
-        (false = _ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:cluster_get_users(Config, ClusterId),
-            ?assertNot(lists:member(EffectiveUser, Users))
-    end,
+    lists:foreach(fun({ClientClassification, SubjectUser}) ->
+        VerifyEndFun = fun
+            (true = _ShouldSucceed, _, Data) ->
+                Privs = lists:sort(maps:get(<<"privileges">>, Data)),
+                {ok, ActualPrivs} = oz_test_utils:cluster_get_user_privileges(
+                    Config, ClusterId, SubjectUser
+                ),
+                ?assertEqual(Privs, lists:sort(ActualPrivs)),
+                oz_test_utils:cluster_remove_user(Config, ClusterId, SubjectUser);
+            (false = _ShouldSucceed, _, _) ->
+                {ok, Users} = oz_test_utils:cluster_get_users(Config, ClusterId),
+                ?assertNot(lists:member(SubjectUser, Users))
+        end,
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_CLUSTERS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS, ?OZ_CLUSTERS_SET_PRIVILEGES]}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = put,
-            path = [<<"/clusters/">>, ClusterId, <<"/users/">>, EffectiveUser],
-            expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/clusters/">>, ClusterId, <<"/users/">>, EffectiveUser]),
-                ?assertEqual(ExpLocation, Location),
-                true
-            end
-        },
-        logic_spec = #logic_spec{
-            module = cluster_logic,
-            function = add_user,
-            args = [auth, ClusterId, EffectiveUser, data],
-            expected_result = ?OK_BINARY(EffectiveUser)
-        },
-        % TODO VFS-4520 Tests for GraphSync API
-        data_spec = #data_spec{
-            required = [<<"privileges">>],
-            correct_values = #{
-                <<"privileges">> => [
-                    [?CLUSTER_UPDATE, ?CLUSTER_REMOVE_GROUP],
-                    [?CLUSTER_ADD_USER, ?CLUSTER_VIEW]
-                ]
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = lists:flatten([
+                    root,
+                    {admin, [?OZ_CLUSTERS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS, ?OZ_CLUSTERS_SET_PRIVILEGES]},
+                    case ClientClassification of
+                        correct -> {user, SubjectUser};
+                        forbidden -> []
+                    end
+                ]),
+                unauthorized = [nobody],
+                forbidden = lists:flatten([
+                    {user, Creator},
+                    {user, NonAdmin},
+                    case ClientClassification of
+                        correct -> [];
+                        forbidden -> {user, SubjectUser}
+                    end
+                ])
             },
-            bad_values = [
-                {<<"privileges">>, <<"">>,
-                    ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
-                {<<"privileges">>, [?CLUSTER_VIEW, ?GROUP_VIEW],
-                    ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
-            ]
-        }
-    },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, undefined, undefined, VerifyEndFun
-    )).
+            rest_spec = #rest_spec{
+                method = put,
+                path = [<<"/clusters/">>, ClusterId, <<"/users/">>, SubjectUser],
+                expected_code = ?HTTP_201_CREATED,
+                expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                    ExpLocation = ?URL(Config, [<<"/clusters/">>, ClusterId, <<"/users/">>, SubjectUser]),
+                    ?assertEqual(ExpLocation, Location),
+                    true
+                end
+            },
+            logic_spec = #logic_spec{
+                module = cluster_logic,
+                function = add_user,
+                args = [auth, ClusterId, SubjectUser, data],
+                expected_result = ?OK_BINARY(SubjectUser)
+            },
+            % TODO VFS-4520 Tests for GraphSync API
+            data_spec = #data_spec{
+                required = [<<"privileges">>],
+                correct_values = #{
+                    <<"privileges">> => [
+                        [?CLUSTER_UPDATE, ?CLUSTER_REMOVE_GROUP],
+                        [?CLUSTER_ADD_USER, ?CLUSTER_VIEW]
+                    ]
+                },
+                bad_values = [
+                    {<<"privileges">>, <<"">>,
+                        ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
+                    {<<"privileges">>, [?CLUSTER_VIEW, ?GROUP_VIEW],
+                        ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
+                ]
+            }
+        },
+        ?assert(api_test_utils:run_tests(
+            Config, ApiTestSpec, undefined, undefined, VerifyEndFun
+        ))
+    end, [{correct, EffectiveUser}, {forbidden, EffectiveUserWithoutAddUserPriv}]).
 
 
 create_user_invite_token_test(Config) ->
@@ -451,7 +471,7 @@ get_user_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:cluster_add_user(Config, C1, U3),
@@ -512,7 +532,7 @@ update_user_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to update user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:cluster_add_user(Config, C1, U3),
@@ -691,10 +711,7 @@ get_eff_user_privileges_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    % User whose eff privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
-    % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, SubjectUser} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
@@ -703,8 +720,8 @@ get_eff_user_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:cluster_add_group(Config, C1, G1),
     {ok, G2} = oz_test_utils:cluster_add_group(Config, C1, G2),
     {ok, G3} = oz_test_utils:group_add_group(Config, G1, G3),
-    {ok, U3} = oz_test_utils:group_add_user(Config, G3, U3),
-    {ok, U3} = oz_test_utils:group_add_user(Config, G2, U3),
+    {ok, SubjectUser} = oz_test_utils:group_add_user(Config, G3, SubjectUser),
+    {ok, SubjectUser} = oz_test_utils:group_add_user(Config, G2, SubjectUser),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -737,7 +754,7 @@ get_eff_user_privileges_test(Config) ->
                 {user, U2},
                 {provider, P1, P1Token},
                 % user can always see his own privileges
-                {user, U3}
+                {user, SubjectUser}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -748,7 +765,7 @@ get_eff_user_privileges_test(Config) ->
         rest_spec = #rest_spec{
             method = get,
             path = [
-                <<"/clusters/">>, C1, <<"/effective_users/">>, U3,
+                <<"/clusters/">>, C1, <<"/effective_users/">>, SubjectUser,
                 <<"/privileges">>
             ],
             expected_code = ?HTTP_200_OK,
@@ -757,7 +774,7 @@ get_eff_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = get_eff_user_privileges,
-            args = [auth, C1, U3],
+            args = [auth, C1, SubjectUser],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO VFS-4520 Tests for GraphSync API
@@ -765,7 +782,7 @@ get_eff_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?CLUSTER_VIEW_PRIVILEGES, false, U3
+        {user, SubjectUser}, ?CLUSTER_VIEW_PRIVILEGES, false, SubjectUser
     ])).
 
 

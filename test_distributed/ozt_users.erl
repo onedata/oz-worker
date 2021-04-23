@@ -26,7 +26,9 @@
 -export([join_space/2, leave_space/2]).
 -export([create_handle_service_for/1]).
 -export([create_harvester_for/1]).
+-export([create_atm_inventory_for/1, create_atm_inventory_for/2]).
 -export([get_eff_providers/1]).
+-export([get_atm_inventories/1]).
 -export([grant_oz_privileges/2, revoke_oz_privileges/2]).
 -export([delete/1]).
 
@@ -113,10 +115,29 @@ create_harvester_for(UserId) ->
     HarvesterId.
 
 
+-spec create_atm_inventory_for(od_user:id()) -> od_atm_inventory:id().
+create_atm_inventory_for(UserId) ->
+    create_atm_inventory_for(UserId, #{<<"name">> => <<"of-user-", UserId/binary>>}).
+
+
+-spec create_atm_inventory_for(od_user:id(), entity_logic:data()) -> od_atm_inventory:id().
+create_atm_inventory_for(UserId, Data) ->
+    {ok, AtmInventoryId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create_atm_inventory, [
+        ?USER(UserId), UserId, Data
+    ])),
+    AtmInventoryId.
+
+
 -spec get_eff_providers(od_user:id()) -> [od_provider:id()].
 get_eff_providers(UserId) ->
     {ok, Providers} = ?assertMatch({ok, _}, ozt:rpc(user_logic, get_eff_providers, [?ROOT, UserId])),
     Providers.
+
+
+-spec get_atm_inventories(od_user:id()) -> [od_atm_inventory:id()].
+get_atm_inventories(UserId) ->
+    {ok, Inventories} = ?assertMatch({ok, _}, ozt:rpc(user_logic, get_atm_inventories, [?ROOT, UserId])),
+    Inventories.
 
 
 -spec grant_oz_privileges(od_user:id(), [privileges:oz_privilege()]) -> ok.

@@ -18,11 +18,14 @@
 
 %% API
 -export([create/0, create/1]).
+-export([get/1]).
 -export([create_space_for/1]).
+-export([create_atm_inventory_for/1, create_atm_inventory_for/2]).
 -export([add_user/2, add_user/3]).
 -export([remove_user/2]).
 -export([add_child/2, add_child/3]).
 -export([get_user_privileges/2, get_child_privileges/2]).
+-export([get_atm_inventories/1]).
 -export([grant_oz_privileges/2, revoke_oz_privileges/2]).
 -export([join_space/3]).
 -export([delete/1]).
@@ -41,12 +44,31 @@ create(Data) ->
     GroupId.
 
 
+-spec get(od_group:id()) -> od_group:record().
+get(GroupId) ->
+    {ok, Group} = ?assertMatch({ok, _}, ozt:rpc(group_logic, get, [?ROOT, GroupId])),
+    Group.
+
+
 -spec create_space_for(od_group:id()) -> od_group:id().
 create_space_for(GroupId) ->
     {ok, SpaceId} = ?assertMatch({ok, _}, ozt:rpc(group_logic, create_space, [
         ?ROOT, GroupId, #{<<"name">> => <<"of-group-", GroupId/binary>>}
     ])),
     SpaceId.
+
+
+-spec create_atm_inventory_for(od_group:id()) -> od_atm_inventory:id().
+create_atm_inventory_for(GroupId) ->
+    create_atm_inventory_for(GroupId, #{<<"name">> => <<"of-group-", GroupId/binary>>}).
+
+
+-spec create_atm_inventory_for(od_group:id(), entity_logic:data()) -> od_atm_inventory:id().
+create_atm_inventory_for(GroupId, Data) ->
+    {ok, AtmInventoryId} = ?assertMatch({ok, _}, ozt:rpc(group_logic, create_atm_inventory, [
+        ?ROOT, GroupId, Data
+    ])),
+    AtmInventoryId.
 
 
 -spec add_user(od_group:id(), od_user:id()) -> ok.
@@ -84,6 +106,12 @@ get_user_privileges(GroupId, UserId) ->
 get_child_privileges(ParentId, ChildId) ->
     {ok, Privs} = ?assertMatch({ok, _}, ozt:rpc(group_logic, get_child_privileges, [?ROOT, ParentId, ChildId])),
     Privs.
+
+
+-spec get_atm_inventories(od_group:id()) -> [od_atm_inventory:id()].
+get_atm_inventories(GroupId) ->
+    {ok, Inventories} = ?assertMatch({ok, _}, ozt:rpc(group_logic, get_atm_inventories, [?ROOT, GroupId])),
+    Inventories.
 
 
 -spec grant_oz_privileges(od_group:id(), [privileges:oz_privilege()]) -> ok.

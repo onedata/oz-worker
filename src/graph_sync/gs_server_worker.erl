@@ -207,5 +207,7 @@ change_to_entity_type_and_id(Key, #od_token{}) ->
 change_to_entity_type_and_id(Key, #temporary_token_secret{}) ->
     ?SUB(_, SubjectId) = temporary_token_secret:key_to_subject(Key),
     {temporary_token_secret, SubjectId};
+change_to_entity_type_and_id(Key, #od_atm_inventory{}) ->
+    {od_atm_inventory, Key};
 change_to_entity_type_and_id(_, _) ->
     ignore.

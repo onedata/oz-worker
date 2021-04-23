@@ -112,7 +112,11 @@ translate_value(_, #gri{type = od_token, aspect = examine}, Response) ->
                 {?GROUP_JOIN_HARVESTER, HarvesterId} ->
                     #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
                 {?SPACE_JOIN_HARVESTER, HarvesterId} ->
-                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)}
+                    #{<<"harvesterName">> => lookup_name(harvester_logic, HarvesterId)};
+                {?USER_JOIN_ATM_INVENTORY, AtmInventoryId} ->
+                    #{<<"atmInventoryName">> => lookup_name(atm_inventory_logic, AtmInventoryId)};
+                {?GROUP_JOIN_ATM_INVENTORY, AtmInventoryId} ->
+                    #{<<"atmInventoryName">> => lookup_name(atm_inventory_logic, AtmInventoryId)}
             end,
             #{<<"inviteToken">> := Json} = token_type:to_json(Type),
             #{<<"inviteToken">> => maps:merge(Json, InviteTargetNameData)};
@@ -166,6 +170,8 @@ translate_resource(_, GRI = #gri{type = od_harvester}, Data) ->
     translate_harvester(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_cluster}, Data) ->
     translate_cluster(GRI, Data);
+translate_resource(_, GRI = #gri{type = od_atm_inventory}, Data) ->
+    translate_atm_inventory(GRI, Data);
 translate_resource(_, GRI = #gri{type = oz_worker}, Data) ->
     translate_zone(GRI, Data);
 
@@ -206,6 +212,7 @@ translate_user(GRI = #gri{type = od_user, id = UserId, aspect = instance, scope 
         <<"providerList">> => gri:serialize(GRI#gri{aspect = eff_providers, scope = private}),
         <<"harvesterList">> => gri:serialize(GRI#gri{aspect = eff_harvesters, scope = private}),
         <<"clusterList">> => gri:serialize(GRI#gri{aspect = eff_clusters, scope = private}),
+        <<"atmInventoryList">> => gri:serialize(GRI#gri{aspect = eff_atm_inventories, scope = private}),
         <<"info">> => #{
             <<"creationTime">> => User#od_user.creation_time
         }
@@ -249,42 +256,32 @@ translate_user(#gri{aspect = {linked_account, _}}, #linked_account{idp = IdP, em
 
 translate_user(#gri{aspect = eff_groups}, Groups) ->
     #{
-        <<"list">> => lists:map(
-            fun(GroupId) ->
-                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
-            end, Groups)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_group, aspect = instance, scope = auto}, Groups)
     };
 
 translate_user(#gri{aspect = eff_spaces}, Spaces) ->
     #{
-        <<"list">> => lists:map(
-            fun(SpaceId) ->
-                gri:serialize(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
-            end, Spaces)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_space, aspect = instance, scope = auto}, Spaces)
     };
 
 translate_user(#gri{aspect = eff_providers}, Providers) ->
     #{
-        <<"list">> => lists:map(
-            fun(ProviderId) ->
-                gri:serialize(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = auto})
-            end, Providers)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_provider, aspect = instance, scope = auto}, Providers)
     };
 
 translate_user(#gri{aspect = eff_harvesters}, Harvesters) ->
     #{
-        <<"list">> => lists:map(
-            fun(HarvesterId) ->
-                gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = auto})
-            end, Harvesters)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_harvester, aspect = instance, scope = auto}, Harvesters)
     };
 
 translate_user(#gri{aspect = eff_clusters}, Clusters) ->
     #{
-        <<"list">> => lists:map(
-            fun(ClusterId) ->
-                gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = instance, scope = auto})
-            end, Clusters)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_cluster, aspect = instance, scope = auto}, Clusters)
+    };
+
+translate_user(#gri{aspect = eff_atm_inventories}, AtmInventories) ->
+    #{
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_atm_inventory, aspect = instance, scope = auto}, AtmInventories)
     }.
 
 
@@ -308,6 +305,7 @@ translate_group(#gri{id = GroupId, aspect = instance, scope = private}, Group) -
         <<"effUserList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = eff_users}),
         <<"spaceList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = spaces}),
         <<"harvesterList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = eff_harvesters}),
+        <<"atmInventoryList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = eff_atm_inventories}),
         <<"info">> => maps:merge(translate_creator(Group#od_group.creator), #{
             <<"creationTime">> => Group#od_group.creation_time
         })
@@ -345,44 +343,14 @@ translate_group(#gri{aspect = instance, scope = shared}, Group) ->
         <<"scope">> => <<"shared">>
     };
 
-translate_group(#gri{aspect = parents}, Parents) ->
+translate_group(#gri{aspect = As}, Groups) when As =:= parents; As =:= children; As =:= eff_children ->
     #{
-        <<"list">> => lists:map(
-            fun(ParentId) ->
-                gri:serialize(#gri{type = od_group, id = ParentId, aspect = instance, scope = auto})
-            end, Parents)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_group, aspect = instance, scope = auto}, Groups)
     };
 
-translate_group(#gri{aspect = children}, Children) ->
+translate_group(#gri{aspect = As}, Users) when As =:= users; As =:= eff_users ->
     #{
-        <<"list">> => lists:map(
-            fun(ChildId) ->
-                gri:serialize(#gri{type = od_group, id = ChildId, aspect = instance, scope = auto})
-            end, Children)
-    };
-
-translate_group(#gri{aspect = eff_children}, Children) ->
-    #{
-        <<"list">> => lists:map(
-            fun(ChildId) ->
-                gri:serialize(#gri{type = od_group, id = ChildId, aspect = instance, scope = auto})
-            end, Children)
-    };
-
-translate_group(#gri{aspect = users}, Users) ->
-    #{
-        <<"list">> => lists:map(
-            fun(UserId) ->
-                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
-            end, Users)
-    };
-
-translate_group(#gri{aspect = eff_users}, Users) ->
-    #{
-        <<"list">> => lists:map(
-            fun(UserId) ->
-                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
-            end, Users)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_user, aspect = instance, scope = auto}, Users)
     };
 
 translate_group(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
@@ -413,18 +381,17 @@ translate_group(#gri{aspect = {eff_child_privileges, _ChildId}}, Privileges) ->
 
 translate_group(#gri{aspect = spaces}, Spaces) ->
     #{
-        <<"list">> => lists:map(
-            fun(SpaceId) ->
-                gri:serialize(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
-            end, Spaces)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_space, aspect = instance, scope = auto}, Spaces)
     };
 
 translate_group(#gri{aspect = eff_harvesters}, Harvesters) ->
     #{
-        <<"list">> => lists:map(
-            fun(HarvesterId) ->
-                gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = auto})
-            end, Harvesters)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_harvester, aspect = instance, scope = auto}, Harvesters)
+    };
+
+translate_group(#gri{aspect = eff_atm_inventories}, AtmInventories) ->
+    #{
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_atm_inventory, aspect = instance, scope = auto}, AtmInventories)
     }.
 
 
@@ -481,44 +448,14 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
 
     } end;
 
-translate_space(#gri{aspect = owners}, Users) ->
+translate_space(#gri{aspect = As}, Users) when As =:= users; As =:= owners; As =:= eff_users ->
     #{
-        <<"list">> => lists:map(
-            fun(UserId) ->
-                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
-            end, Users)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_user, aspect = instance, scope = auto}, Users)
     };
 
-translate_space(#gri{aspect = users}, Users) ->
+translate_space(#gri{aspect = As}, Groups) when As =:= groups; As =:= eff_groups ->
     #{
-        <<"list">> => lists:map(
-            fun(UserId) ->
-                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
-            end, Users)
-    };
-
-translate_space(#gri{aspect = eff_users}, Users) ->
-    #{
-        <<"list">> => lists:map(
-            fun(UserId) ->
-                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
-            end, Users)
-    };
-
-translate_space(#gri{aspect = groups}, Groups) ->
-    #{
-        <<"list">> => lists:map(
-            fun(GroupId) ->
-                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
-            end, Groups)
-    };
-
-translate_space(#gri{aspect = eff_groups}, Groups) ->
-    #{
-        <<"list">> => lists:map(
-            fun(GroupId) ->
-                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
-            end, Groups)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_group, aspect = instance, scope = auto}, Groups)
     };
 
 translate_space(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
@@ -549,26 +486,17 @@ translate_space(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
 
 translate_space(#gri{aspect = shares}, Shares) ->
     #{
-        <<"list">> => lists:map(
-            fun(ShareId) ->
-                gri:serialize(#gri{type = od_share, id = ShareId, aspect = instance, scope = auto})
-            end, Shares)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_share, aspect = instance, scope = auto}, Shares)
     };
 
 translate_space(#gri{aspect = eff_providers, scope = private}, Providers) ->
     #{
-        <<"list">> => lists:map(
-            fun(ProviderId) ->
-                gri:serialize(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = auto})
-            end, Providers)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_provider, aspect = instance, scope = auto}, Providers)
     };
 
 translate_space(#gri{aspect = harvesters}, Harvesters) ->
     #{
-        <<"list">> => lists:map(
-            fun(HarvesterId) ->
-                gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = auto})
-            end, Harvesters)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_harvester, aspect = instance, scope = auto}, Harvesters)
     }.
 
 
@@ -668,10 +596,7 @@ translate_provider(#gri{aspect = {eff_group_membership, _UserId}}, Intermediarie
 
 translate_provider(#gri{aspect = {user_spaces, _UserId}}, Spaces) ->
     #{
-        <<"list">> => lists:map(
-            fun(SpaceId) ->
-                gri:serialize(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
-            end, Spaces)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_space, aspect = instance, scope = auto}, Spaces)
     };
 
 translate_provider(#gri{aspect = eff_users}, Users) ->
@@ -689,10 +614,7 @@ translate_provider(#gri{aspect = spaces}, Spaces) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_token(#gri{id = undefined, aspect = {user_named_tokens, _}}, Tokens) ->
     #{
-        <<"list">> => lists:map(
-            fun(TokenId) ->
-                gri:serialize(#gri{type = od_token, id = TokenId, aspect = instance, scope = auto})
-            end, Tokens)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_token, aspect = instance, scope = auto}, Tokens)
     };
 translate_token(#gri{aspect = instance, scope = private}, TokenData) ->
     #{
@@ -800,52 +722,24 @@ translate_harvester(#gri{aspect = gui_plugin_config}, Config) ->
         <<"guiPluginConfig">> => Config
     };
 
-translate_harvester(#gri{aspect = users}, Users) ->
+translate_harvester(#gri{aspect = As}, Users) when As =:= users; As =:= eff_users ->
     #{
-        <<"list">> => lists:map(
-            fun(UserId) ->
-                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
-            end, Users)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_user, aspect = instance, scope = auto}, Users)
     };
 
-translate_harvester(#gri{aspect = eff_users}, Users) ->
+translate_harvester(#gri{aspect = As}, Groups) when As =:= groups; As =:= eff_groups ->
     #{
-        <<"list">> => lists:map(
-            fun(UserId) ->
-                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
-            end, Users)
-    };
-
-translate_harvester(#gri{aspect = groups}, Groups) ->
-    #{
-        <<"list">> => lists:map(
-            fun(GroupId) ->
-                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
-            end, Groups)
-    };
-
-translate_harvester(#gri{aspect = eff_groups}, Groups) ->
-    #{
-        <<"list">> => lists:map(
-            fun(GroupId) ->
-                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
-            end, Groups)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_group, aspect = instance, scope = auto}, Groups)
     };
 
 translate_harvester(#gri{aspect = spaces}, Spaces) ->
     #{
-        <<"list">> => lists:map(
-            fun(SpaceId) ->
-                gri:serialize(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
-            end, Spaces)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_space, aspect = instance, scope = auto}, Spaces)
     };
 
-translate_harvester(#gri{aspect = eff_providers}, Groups) ->
+translate_harvester(#gri{aspect = eff_providers}, Providers) ->
     #{
-        <<"list">> => lists:map(
-            fun(ProviderId) ->
-                gri:serialize(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = auto})
-            end, Groups)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_provider, aspect = instance, scope = auto}, Providers)
     };
 
 translate_harvester(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
@@ -1022,36 +916,14 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = public}, Clust
         }
     } end;
 
-translate_cluster(#gri{aspect = users}, Users) ->
+translate_cluster(#gri{aspect = As}, Users) when As =:= users; As =:= eff_users ->
     #{
-        <<"list">> => lists:map(
-            fun(UserId) ->
-                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
-            end, Users)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_user, aspect = instance, scope = auto}, Users)
     };
 
-translate_cluster(#gri{aspect = eff_users}, Users) ->
+translate_cluster(#gri{aspect = As}, Groups) when As =:= groups; As =:= eff_groups ->
     #{
-        <<"list">> => lists:map(
-            fun(UserId) ->
-                gri:serialize(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
-            end, Users)
-    };
-
-translate_cluster(#gri{aspect = groups}, Groups) ->
-    #{
-        <<"list">> => lists:map(
-            fun(GroupId) ->
-                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
-            end, Groups)
-    };
-
-translate_cluster(#gri{aspect = eff_groups}, Groups) ->
-    #{
-        <<"list">> => lists:map(
-            fun(GroupId) ->
-                gri:serialize(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
-            end, Groups)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_group, aspect = instance, scope = auto}, Groups)
     };
 
 translate_cluster(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
@@ -1082,6 +954,89 @@ translate_cluster(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) -
 
 
 %% @private
+-spec translate_atm_inventory(gri:gri(), Data :: term()) ->
+    gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_atm_inventory(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
+    Privileges;
+
+translate_atm_inventory(#gri{id = AtmInventoryId, aspect = instance, scope = private}, AtmInventory) ->
+    #od_atm_inventory{
+        name = Name,
+        creation_time = CreationTime,
+        creator = Creator
+    } = AtmInventory,
+
+    fun(?USER(UserId)) -> #{
+        <<"scope">> => <<"private">>,
+        <<"name">> => Name,
+        <<"canViewPrivileges">> => atm_inventory_logic:has_eff_privilege(AtmInventory, UserId, ?ATM_INVENTORY_VIEW_PRIVILEGES),
+        <<"directMembership">> => atm_inventory_logic:has_direct_user(AtmInventory, UserId),
+        <<"currentUserEffPrivileges">> => entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, AtmInventory),
+        <<"userList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = users}),
+        <<"effUserList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = eff_users}),
+        <<"groupList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = groups}),
+        <<"effGroupList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = eff_groups}),
+        <<"info">> => maps:merge(translate_creator(Creator), #{
+            <<"creationTime">> => CreationTime
+        })
+    } end;
+
+translate_atm_inventory(#gri{id = AtmInventoryId, aspect = instance, scope = protected}, AtmInventoryData) ->
+    #{
+        <<"name">> := Name,
+        <<"creationTime">> := CreationTime,
+        <<"creator">> := Creator
+    } = AtmInventoryData,
+
+    {ok, #document{value = AtmInventory}} = od_atm_inventory:get(AtmInventoryId),
+    fun(?USER(UserId)) -> #{
+        <<"scope">> => <<"protected">>,
+        <<"name">> => Name,
+        <<"directMembership">> => atm_inventory_logic:has_direct_user(AtmInventory, UserId),
+        <<"currentUserEffPrivileges">> => entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, AtmInventory),
+        <<"info">> => maps:merge(translate_creator(Creator), #{
+            <<"creationTime">> => CreationTime
+        })
+    } end;
+
+translate_atm_inventory(#gri{aspect = As}, Users) when As =:= users; As =:= eff_users ->
+    #{
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_user, aspect = instance, scope = auto}, Users)
+    };
+
+translate_atm_inventory(#gri{aspect = As}, Groups) when As =:= groups; As =:= eff_groups ->
+    #{
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_group, aspect = instance, scope = auto}, Groups)
+    };
+
+translate_atm_inventory(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    };
+
+translate_atm_inventory(#gri{aspect = {eff_user_privileges, _UserId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    };
+
+translate_atm_inventory(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
+    format_intermediaries(Intermediaries);
+
+translate_atm_inventory(#gri{aspect = {eff_group_membership, _UserId}}, Intermediaries) ->
+    format_intermediaries(Intermediaries);
+
+translate_atm_inventory(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    };
+
+translate_atm_inventory(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    }.
+
+
+%% @private
 -spec translate_zone(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_zone(#gri{aspect = {gui_message, _MessageId}}, GuiMessage) ->
@@ -1090,6 +1045,14 @@ translate_zone(#gri{aspect = {gui_message, _MessageId}}, GuiMessage) ->
         <<"enabled">> => Enabled,
         <<"body">> => Body
     }.
+
+
+%% @private
+-spec ids_to_serialized_gris(gri:gri(), [binary()]) -> [binary()].
+ids_to_serialized_gris(GriTemplate, Ids) ->
+    lists:map(fun(Id) ->
+        gri:serialize(GriTemplate#gri{id = Id})
+    end, Ids).
 
 
 %% @private
