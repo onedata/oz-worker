@@ -845,13 +845,29 @@ upgrade_record(10, Space) ->
         ?SPACE_QUERY_VIEWS, ?SPACE_VIEW_STATISTICS, ?SPACE_VIEW_CHANGES_STREAM,
         ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS, ?SPACE_MANAGE_DATASETS
     ]),
-    NewPrivileges = [?SPACE_VIEW_ARCHIVES, ?SPACE_CREATE_ARCHIVES, ?SPACE_REMOVE_ARCHIVES, ?SPACE_RECALL_ARCHIVES],
+
+    PreviousAdminPrivs = privileges:from_list(PreviousManagerPrivs ++ [
+        ?SPACE_UPDATE, ?SPACE_DELETE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+        ?SPACE_MANAGE_VIEWS, ?SPACE_CANCEL_REPLICATION, ?SPACE_SCHEDULE_EVICTION, ?SPACE_CANCEL_EVICTION,
+        ?SPACE_MANAGE_QOS
+    ]),
+
+    NewManagerPrivileges = [?SPACE_VIEW_ARCHIVES, ?SPACE_CREATE_ARCHIVES],
+    NewAdminPrivileges = NewManagerPrivileges ++ [?SPACE_REMOVE_ARCHIVES, ?SPACE_RECALL_ARCHIVES],
+
     UpgradePrivileges = fun(Privileges) ->
-        % the privileges concerning archives are granted to all members that had at least
-        % manager privileges before the upgrade
-        case lists_utils:intersect(PreviousManagerPrivs, Privileges) of
-            PreviousManagerPrivs -> privileges:from_list(NewPrivileges ++ Privileges);
-            _ -> Privileges
+        % appropriate privileges concerning archives are granted to all members that had at least
+        % manager or admin privileges before the upgrade
+        case lists_utils:intersect(PreviousAdminPrivs, Privileges) of
+            PreviousAdminPrivs ->
+                privileges:from_list(NewAdminPrivileges ++ Privileges);
+            _ ->
+                case lists_utils:intersect(PreviousManagerPrivs, Privileges) of
+                    PreviousManagerPrivs ->
+                        privileges:from_list(NewManagerPrivileges ++ Privileges);
+                    _ ->
+                        Privileges
+                end
         end
     end,
 

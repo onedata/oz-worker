@@ -2091,9 +2091,6 @@ get_record(od_space, 9) -> #od_space{
 };
 get_record(od_space, 10) -> #od_space{
     name = <<"name">>,
-
-    % Space ownership is automatically granted to all direct users that had the
-    % most effective privileges in the space before the upgrade
     owners = [<<"user3">>, <<"user1">>],
 
     users = #{
@@ -2182,9 +2179,6 @@ get_record(od_space, 10) -> #od_space{
 };
 get_record(od_space, 11) -> #od_space{
     name = <<"name">>,
-
-    % Space ownership is automatically granted to all direct users that had the
-    % most effective privileges in the space before the upgrade
     owners = [<<"user3">>, <<"user1">>],
 
     users = #{
@@ -2207,9 +2201,7 @@ get_record(od_space, 11) -> #od_space{
             ?SPACE_MANAGE_DATASETS,
             % following privs should be added by the upgrade procedure
             ?SPACE_VIEW_ARCHIVES,
-            ?SPACE_CREATE_ARCHIVES,
-            ?SPACE_REMOVE_ARCHIVES,
-            ?SPACE_RECALL_ARCHIVES
+            ?SPACE_CREATE_ARCHIVES
         ]),
         <<"user2">> => privileges:from_list([
             ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
@@ -2230,6 +2222,7 @@ get_record(od_space, 11) -> #od_space{
             ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
             ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
             ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_REGISTER_FILES,
             ?SPACE_MANAGE_SHARES,
             ?SPACE_VIEW_VIEWS,
             ?SPACE_QUERY_VIEWS,
@@ -2244,8 +2237,8 @@ get_record(od_space, 11) -> #od_space{
             ?SPACE_CANCEL_REPLICATION,
             ?SPACE_SCHEDULE_EVICTION, ?SPACE_CANCEL_EVICTION,
             ?SPACE_MANAGE_QOS,
-            ?SPACE_REGISTER_FILES,
             ?SPACE_MANAGE_DATASETS,
+
             % following privs should be added by the upgrade procedure
             ?SPACE_VIEW_ARCHIVES,
             ?SPACE_CREATE_ARCHIVES,
@@ -2268,7 +2261,7 @@ get_record(od_space, 11) -> #od_space{
                 ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS, ?SPACE_REGISTER_FILES,
                 ?SPACE_MANAGE_DATASETS,
                 % following privs should be added by the upgrade procedure
-                ?SPACE_VIEW_ARCHIVES, ?SPACE_CREATE_ARCHIVES, ?SPACE_REMOVE_ARCHIVES, ?SPACE_RECALL_ARCHIVES
+                ?SPACE_VIEW_ARCHIVES, ?SPACE_CREATE_ARCHIVES
             ]),
             [{od_space, <<"self">>}]
         }
