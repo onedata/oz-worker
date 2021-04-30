@@ -172,6 +172,8 @@ translate_resource(_, GRI = #gri{type = od_cluster}, Data) ->
     translate_cluster(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_atm_inventory}, Data) ->
     translate_atm_inventory(GRI, Data);
+translate_resource(_, GRI = #gri{type = od_atm_lambda}, Data) ->
+    translate_atm_lambda(GRI, Data);
 translate_resource(_, GRI = #gri{type = oz_worker}, Data) ->
     translate_zone(GRI, Data);
 
@@ -976,6 +978,7 @@ translate_atm_inventory(#gri{id = AtmInventoryId, aspect = instance, scope = pri
         <<"effUserList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = eff_users}),
         <<"groupList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = groups}),
         <<"effGroupList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = eff_groups}),
+        <<"atmLambdaList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = atm_lambdas}),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
         })
@@ -1033,6 +1036,47 @@ translate_atm_inventory(#gri{aspect = {group_privileges, _GroupId}}, Privileges)
 translate_atm_inventory(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
     #{
         <<"privileges">> => Privileges
+    }.
+
+
+%% @private
+-spec translate_atm_lambda(gri:gri(), Data :: term()) ->
+    gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_atm_lambda(GRI = #gri{aspect = instance, scope = private}, AtmInventory) ->
+    #od_atm_lambda{
+        name = Name,
+        summary = Summary,
+        description = Description,
+
+        engine = Engine,
+        operation_ref = OperationRef,
+
+        execution_options = ExecutionOptions,
+        argument_specs = ArgumentSpecs,
+        result_specs = ResultSpecs,
+
+        creation_time = CreationTime,
+        creator = Creator
+    } = AtmInventory,
+
+    #{
+        <<"scope">> => <<"private">>,
+        <<"name">> => Name,
+        <<"summary">> => Summary,
+        <<"description">> => Description,
+
+        <<"engine">> => automation:lambda_engine_to_json(Engine),
+        <<"operationRef">> => OperationRef,
+
+        <<"executionOptions">> => atm_lambda_execution_options:to_json(ExecutionOptions),
+        <<"argumentSpecs">> => [atm_lambda_argument_spec:to_json(S) || S <- ArgumentSpecs],
+        <<"resultSpecs">> => [atm_lambda_result_spec:to_json(S) || S <- ResultSpecs],
+
+        <<"atmInventoryList">> => gri:serialize(GRI#gri{aspect = atm_inventories, scope = private}),
+
+        <<"info">> => maps:merge(translate_creator(Creator), #{
+            <<"creationTime">> => CreationTime
+        })
     }.
 
 

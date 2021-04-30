@@ -6,13 +6,12 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Database model representing an automation inventory - a set of workflow
-%%% schemas and their building blocks - lambda functions. Members of an
-%%% automation inventory share all these definitions and can execute the
-%%% workflows on their data.
+%%% Database model representing an automation lambda - an abstraction of a
+%%% granular operation that is used as a building block for automation workflow
+%%% schemas.
 %%% @end
 %%%-------------------------------------------------------------------
--module(od_atm_inventory).
+-module(od_atm_lambda).
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
@@ -26,7 +25,7 @@
 -export([get_record_version/0, get_record_struct/1]).
 
 -type id() :: binary().
--type record() :: #od_atm_inventory{}.
+-type record() :: #od_atm_lambda{}.
 -type doc() :: datastore_doc:doc(record()).
 -type diff() :: datastore_doc:diff(record()).
 -type name() :: binary().
@@ -53,31 +52,31 @@ create(Doc) ->
 
 
 -spec get(id()) -> {ok, doc()} | {error, term()}.
-get(AtmInventoryId) ->
-    datastore_model:get(?CTX, AtmInventoryId).
+get(AtmLambdaId) ->
+    datastore_model:get(?CTX, AtmLambdaId).
 
 
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
-exists(AtmInventoryId) ->
-    datastore_model:exists(?CTX, AtmInventoryId).
+exists(AtmLambdaId) ->
+    datastore_model:exists(?CTX, AtmLambdaId).
 
 
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
-update(AtmInventoryId, Diff) ->
-    datastore_model:update(?CTX, AtmInventoryId, Diff).
+update(AtmLambdaId, Diff) ->
+    datastore_model:update(?CTX, AtmLambdaId, Diff).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes an automation inventory by Id.
-%% WARNING: Must not be used directly, as deleting an inventory that still has
+%% Deletes an automation lambda by Id.
+%% WARNING: Must not be used directly, as deleting an lambda that still has
 %% relations to other entities will cause serious inconsistencies in database.
-%% To safely delete a inventory, use atm_inventory_logic.
+%% To safely delete a lambda, use atm_lambda_logic.
 %% @end
 %%--------------------------------------------------------------------
 -spec force_delete(id()) -> ok | {error, term()}.
-force_delete(AtmInventoryId) ->
-    datastore_model:delete(?CTX, AtmInventoryId).
+force_delete(AtmLambdaId) ->
+    datastore_model:delete(?CTX, AtmLambdaId).
 
 
 -spec list() -> {ok, [doc()]} | {error, term()}.
@@ -85,14 +84,14 @@ list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
 
 
--spec to_string(AtmInventoryId :: id()) -> binary().
-to_string(AtmInventoryId) ->
-    <<"atmInventory:", AtmInventoryId/binary>>.
+-spec to_string(AtmLambdaId :: id()) -> binary().
+to_string(AtmLambdaId) ->
+    <<"atmLambda:", AtmLambdaId/binary>>.
 
 
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
-    atm_inventory_logic_plugin.
+    atm_lambda_logic_plugin.
 
 %%%===================================================================
 %%% datastore_model callbacks
@@ -107,16 +106,18 @@ get_record_version() ->
 get_record_struct(1) ->
     {record, [
         {name, string},
+        {summary, string},
+        {description, string},
 
-        {users, #{string => [atom]}},
-        {groups, #{string => [atom]}},
-        {atm_lambdas, [string]},
+        {engine, {custom, string, {automation, encode_lambda_engine, decode_lambda_engine}}},
+        {operation_ref, string},
 
-        {eff_users, #{string => {[atom], [{atom, string}]}}},
-        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {execution_options, {custom, string, {record_json_encoder, encode, decode}}},
+        {argument_specs, [{custom, string, {record_json_encoder, encode, decode}}]},
+        {result_specs, [{custom, string, {record_json_encoder, encode, decode}}]},
+
+        {atm_inventories, [string]},
 
         {creation_time, integer},
-        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
-
-        {bottom_up_dirty, boolean}
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
     ]}.

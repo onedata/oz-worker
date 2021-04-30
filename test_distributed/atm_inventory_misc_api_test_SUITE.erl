@@ -34,6 +34,7 @@
     list_test/1,
     list_privileges_test/1,
     get_test/1,
+    get_atm_lambdas_test/1,
     update_test/1,
     delete_test/1
 ]).
@@ -44,10 +45,10 @@ all() ->
         list_test,
         list_privileges_test,
         get_test,
+        get_atm_lambdas_test,
         update_test,
         delete_test
     ]).
-
 
 %%%===================================================================
 %%% Test functions
@@ -263,6 +264,47 @@ get_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
+
+
+get_atm_lambdas_test(Config) ->
+    Creator = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+    AnotherMember = ozt_users:create(),
+    AtmInventory = ozt_users:create_atm_inventory_for(Creator),
+    ozt_atm_inventories:add_user(AtmInventory, AnotherMember, []),
+
+    ExpAtmLambdas = lists:map(fun(_) ->
+        ozt_atm_lambdas:create(AtmInventory)
+    end, lists:seq(1, 10)),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_ATM_INVENTORIES_VIEW]},
+                {user, Creator},
+                {user, AnotherMember}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/atm_inventories/">>, AtmInventory, <<"/atm_lambdas">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"atm_lambdas">> => ExpAtmLambdas}
+        },
+        logic_spec = #logic_spec{
+            module = atm_inventory_logic,
+            function = get_atm_lambdas,
+            args = [auth, AtmInventory],
+            expected_result = ?OK_LIST(ExpAtmLambdas)
+        }
+        % TODO VFS-4520 Tests for GraphSync API
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 update_test(Config) ->

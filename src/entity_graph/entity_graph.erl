@@ -12,6 +12,7 @@
 %%%     - od_user
 %%%     - od_group
 %%%     - od_space
+%%%     - od_share
 %%%     - od_provider
 %%%     - od_handle_service
 %%%     - od_handle
@@ -19,6 +20,7 @@
 %%%     - od_cluster
 %%%     - od_storage
 %%%     - od_atm_inventory
+%%%     - od_atm_lambda
 %%% There are two main jobs of the entity graph:
 %%%     - encapsulate all logic concerning relations between entities
 %%%     - ensure that effective relations are always up to date
@@ -189,7 +191,7 @@ init_state() ->
 %%--------------------------------------------------------------------
 -spec verify_state_of_all_entities() -> ok.
 verify_state_of_all_entities() ->
-    EntityTypes = [
+    EntityTypesToCheck = [
         od_user, od_group, od_space, od_provider, od_handle_service,
         od_handle, od_harvester, od_cluster, od_storage, od_atm_inventory
     ],
@@ -213,7 +215,7 @@ verify_state_of_all_entities() ->
                             end
                         end, [top_down, bottom_up])
                 end, Entities)
-        end, EntityTypes),
+        end, EntityTypesToCheck),
     schedule_refresh().
 
 
@@ -267,6 +269,8 @@ add_relation(od_handle, HandleId, od_share, ShareId) ->
     add_relation(od_handle, HandleId, undefined, od_share, ShareId, undefined);
 add_relation(od_handle, HandleId, od_handle_service, HServiceId) ->
     add_relation(od_handle, HandleId, undefined, od_handle_service, HServiceId, undefined);
+add_relation(od_atm_lambda, AtmLambdaId, od_atm_inventory, AtmInventoryId) ->
+    add_relation(od_atm_lambda, AtmLambdaId, undefined, od_atm_inventory, AtmInventoryId, undefined);
 add_relation(od_harvester, HarvesterId, od_space, SpaceId) ->
     add_relation(od_harvester, HarvesterId, undefined, od_space, SpaceId, undefined);
 add_relation(od_storage, StorageId, od_provider, ProviderId) ->
@@ -944,6 +948,9 @@ set_refresh_in_progress(Flag) ->
 update_dirty_queue(_, _, od_share, _) ->
     % Shares do not take part in eff graph recomputation
     ok;
+update_dirty_queue(_, _, od_atm_lambda, _) ->
+    % atm_lambdas do not take part in eff graph recomputation
+    ok;
 update_dirty_queue(top_down, _, od_handle, _) ->
     % Handles are children towards shares only, modifying this relation should
     % not cause graph recalculation.
@@ -1159,6 +1166,9 @@ get_priority(top_down, od_user) -> 4.
 mark_record_dirty(_, _, #od_share{} = Entity) ->
     % Shares do not take part in eff graph recomputation
     Entity;
+mark_record_dirty(_, _, #od_atm_lambda{} = Entity) ->
+    % atm_lambdas do not take part in eff graph recomputation
+    Entity;
 mark_record_dirty(bottom_up, Flag, #od_group{} = Group) ->
     Group#od_group{bottom_up_dirty = Flag};
 mark_record_dirty(bottom_up, Flag, #od_space{} = Space) ->
@@ -1272,7 +1282,9 @@ has_child(#od_storage{spaces = Spaces}, od_space, SpaceId) ->
 has_child(#od_atm_inventory{users = Users}, od_user, UserId) ->
     maps:is_key(UserId, Users);
 has_child(#od_atm_inventory{groups = Groups}, od_group, GroupId) ->
-    maps:is_key(GroupId, Groups).
+    maps:is_key(GroupId, Groups);
+has_child(#od_atm_inventory{atm_lambdas = AtmLambdas}, od_atm_lambda, AtmLambdaId) ->
+    lists:member(AtmLambdaId, AtmLambdas).
 
 
 %%--------------------------------------------------------------------
@@ -1337,7 +1349,9 @@ add_child(#od_storage{spaces = Spaces} = Storage, od_space, SpaceId, SupportSize
 add_child(#od_atm_inventory{users = Users} = AtmInventory, od_user, UserId, Privs) ->
     AtmInventory#od_atm_inventory{users = maps:put(UserId, Privs, Users)};
 add_child(#od_atm_inventory{groups = Groups} = AtmInventory, od_group, GroupId, Privs) ->
-    AtmInventory#od_atm_inventory{groups = maps:put(GroupId, Privs, Groups)}.
+    AtmInventory#od_atm_inventory{groups = maps:put(GroupId, Privs, Groups)};
+add_child(#od_atm_inventory{atm_lambdas = AtmLambdas} = AtmInventory, od_atm_lambda, AtmLambdaId, _) ->
+    AtmInventory#od_atm_inventory{atm_lambdas = [AtmLambdaId | AtmLambdas]}.
 
 
 %%--------------------------------------------------------------------
@@ -1476,7 +1490,9 @@ remove_child(#od_storage{spaces = Spaces} = Storage, od_space, SpaceId) ->
 remove_child(#od_atm_inventory{users = Users} = AtmInventory, od_user, UserId) ->
     AtmInventory#od_atm_inventory{users = maps:remove(UserId, Users)};
 remove_child(#od_atm_inventory{groups = Groups} = AtmInventory, od_group, GroupId) ->
-    AtmInventory#od_atm_inventory{groups = maps:remove(GroupId, Groups)}.
+    AtmInventory#od_atm_inventory{groups = maps:remove(GroupId, Groups)};
+remove_child(#od_atm_inventory{atm_lambdas = AtmLambdas} = AtmInventory, od_atm_lambda, AtmLambdaId) ->
+    AtmInventory#od_atm_inventory{atm_lambdas = lists:delete(AtmLambdaId, AtmLambdas)}.
 
 
 %%--------------------------------------------------------------------
@@ -1531,7 +1547,10 @@ has_parent(#od_harvester{spaces = Spaces}, od_space, SpaceId) ->
     lists:member(SpaceId, Spaces);
 
 has_parent(#od_storage{provider = Provider}, od_provider, ProviderId) ->
-    Provider =:= ProviderId.
+    Provider =:= ProviderId;
+
+has_parent(#od_atm_lambda{atm_inventories = AtmInventories}, od_atm_inventory, AtmInventoryId) ->
+    lists:member(AtmInventoryId, AtmInventories).
 
 
 %%--------------------------------------------------------------------
@@ -1588,7 +1607,10 @@ add_parent(#od_harvester{spaces = Spaces} = Harvester, od_space, SpaceId, _) ->
     Harvester#od_harvester{spaces = [SpaceId | Spaces]};
 
 add_parent(#od_storage{} = Storage, od_provider, ProviderId, _) ->
-    Storage#od_storage{provider = ProviderId}.
+    Storage#od_storage{provider = ProviderId};
+
+add_parent(#od_atm_lambda{atm_inventories = AtmInventories} = AtmLambda, od_atm_inventory, AtmInventoryId, _) ->
+    AtmLambda#od_atm_lambda{atm_inventories = [AtmInventoryId | AtmInventories]}.
 
 
 %%--------------------------------------------------------------------
@@ -1659,7 +1681,10 @@ remove_parent(#od_harvester{spaces = Spaces} = Harvester, od_space, SpaceId) ->
     Harvester#od_harvester{spaces = lists:delete(SpaceId, Spaces)};
 
 remove_parent(#od_storage{} = Storage, od_provider, _ProviderId) ->
-    Storage#od_storage{provider = undefined}.
+    Storage#od_storage{provider = undefined};
+
+remove_parent(#od_atm_lambda{atm_inventories = AtmInventories} = AtmLambda, od_atm_inventory, AtmInventoryId) ->
+    AtmLambda#od_atm_lambda{atm_inventories = lists:delete(AtmInventoryId, AtmInventories)}.
 
 
 %%--------------------------------------------------------------------
@@ -2011,6 +2036,12 @@ get_children(#od_handle_service{handles = Handles} = HService) -> #{
     dependent => #{od_handle => Handles},
     independent => get_successors(top_down, HService)
 };
+get_children(#od_atm_inventory{atm_lambdas = AtmLambdas} = AtmInventory) -> #{
+    independent => maps:merge(
+        get_successors(top_down, AtmInventory),
+        #{od_atm_lambda => AtmLambdas}
+    )
+};
 get_children(Entity) -> #{
     independent => get_successors(top_down, Entity)
 }.
@@ -2040,6 +2071,9 @@ get_parents(#od_handle{} = Handle) ->
     #{
         independent => Independent#{od_handle_service => [HService]}
     };
+get_parents(#od_atm_lambda{atm_inventories = AtmInventories}) -> #{
+    independent => #{od_atm_inventory => AtmInventories}
+};
 get_parents(Entity) -> #{
     independent => get_successors(bottom_up, Entity)
 }.
@@ -2092,8 +2126,8 @@ get_all_direct_relations(bottom_up, #od_storage{} = Storage) ->
     #od_storage{spaces = Spaces} = Storage,
     #{od_space => Spaces};
 get_all_direct_relations(bottom_up, #od_atm_inventory{} = AtmInventory) ->
-    #od_atm_inventory{users = Users, groups = Groups} = AtmInventory,
-    #{od_user => Users, od_group => Groups};
+    #od_atm_inventory{users = Users, groups = Groups, atm_lambdas = AtmLambdas} = AtmInventory,
+    #{od_user => Users, od_group => Groups, od_atm_lambda => AtmLambdas};
 
 get_all_direct_relations(top_down, #od_user{} = User) ->
     #od_user{
@@ -2135,7 +2169,9 @@ get_all_direct_relations(top_down, #od_storage{provider = Provider}) ->
         % possible during storage removal
         undefined -> [];
         _ -> [Provider]
-    end}.
+    end};
+get_all_direct_relations(top_down, #od_atm_lambda{atm_inventories = AtmInventories}) ->
+    #{od_atm_inventory => AtmInventories}.
 
 
 %%--------------------------------------------------------------------

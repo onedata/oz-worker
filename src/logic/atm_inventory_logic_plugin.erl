@@ -86,6 +86,8 @@ operation_supported(get, {group_privileges, _}, private) -> true;
 operation_supported(get, {eff_group_privileges, _}, private) -> true;
 operation_supported(get, {eff_group_membership, _}, private) -> true;
 
+operation_supported(get, atm_lambdas, private) -> true;
+
 operation_supported(update, instance, private) -> true;
 operation_supported(update, {user_privileges, _}, private) -> true;
 operation_supported(update, {group_privileges, _}, private) -> true;
@@ -118,6 +120,7 @@ is_subscribable({eff_user_membership, _}, private) -> true;
 is_subscribable({group_privileges, _}, private) -> true;
 is_subscribable({eff_group_privileges, _}, private) -> true;
 is_subscribable({eff_group_membership, _}, private) -> true;
+is_subscribable(atm_lambdas, private) -> true;
 is_subscribable(_, _) -> false.
 
 
@@ -283,7 +286,10 @@ get(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, AtmInventory) ->
 get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, AtmInventory) ->
     {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_group, GroupId, AtmInventory)};
 get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, AtmInventory) ->
-    {ok, entity_graph:get_intermediaries(bottom_up, od_group, GroupId, AtmInventory)}.
+    {ok, entity_graph:get_intermediaries(bottom_up, od_group, GroupId, AtmInventory)};
+
+get(#el_req{gri = #gri{aspect = atm_lambdas}}, AtmInventory) ->
+    {ok, entity_graph:get_relations(direct, bottom_up, od_atm_lambda, AtmInventory)}.
 
 
 %%--------------------------------------------------------------------
@@ -486,6 +492,9 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_group_privileg
 authorize(Req = #el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, AtmInventory) ->
     group_logic:has_eff_user(GroupId, UserId) orelse auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_VIEW);
 
+authorize(#el_req{operation = get, auth = ?USER(ClientUserId), gri = #gri{aspect = atm_lambdas}}, AtmInventory) ->
+    atm_inventory_logic:has_eff_user(AtmInventory, ClientUserId);
+
 authorize(Req = #el_req{operation = get, auth = ?USER}, AtmInventory) ->
     % All other resources can be accessed with view privileges
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_VIEW);
@@ -559,6 +568,8 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {group_pr
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {eff_group_privileges, _}}}) ->
     [?OZ_ATM_INVENTORIES_VIEW_PRIVILEGES];
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {eff_group_membership, _}}}) ->
+    [?OZ_ATM_INVENTORIES_VIEW];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = atm_lambdas}}) ->
     [?OZ_ATM_INVENTORIES_VIEW];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = users}}) ->

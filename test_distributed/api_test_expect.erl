@@ -34,6 +34,7 @@
 -export([protected_handle/4, public_handle/3]).
 -export([protected_harvester/4, shared_or_public_harvester/3]).
 -export([protected_atm_inventory/4]).
+-export([private_atm_lambda/4]).
 
 %%%===================================================================
 %%% API
@@ -467,6 +468,60 @@ protected_atm_inventory(rest, Id, HServiceData, Creator) ->
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     }.
+
+
+-spec private_atm_lambda(interface(), od_atm_lambda:id(), map(), aai:subject()) -> expectation().
+private_atm_lambda(logic, _Id, AtmLambdaData, Creator) ->
+    ?OK_TERM(fun(AtmLambdaRecord) ->
+        ?assertEqual(AtmLambdaRecord, #od_atm_lambda{
+            name = maps:get(<<"name">>, AtmLambdaData),
+            summary = maps:get(<<"summary">>, AtmLambdaData),
+            description = maps:get(<<"description">>, AtmLambdaData),
+
+            engine = automation:lambda_engine_from_json(maps:get(<<"engine">>, AtmLambdaData)),
+            operation_ref = maps:get(<<"operationRef">>, AtmLambdaData),
+
+            execution_options = atm_lambda_execution_options:from_json(maps:get(<<"executionOptions">>, AtmLambdaData)),
+            argument_specs = [atm_lambda_argument_spec:from_json(S) || S <- maps:get(<<"argumentSpecs">>, AtmLambdaData)],
+            result_specs = [atm_lambda_result_spec:from_json(S) || S <- maps:get(<<"resultSpecs">>, AtmLambdaData)],
+
+            atm_inventories = [maps:get(<<"atmInventoryId">>, AtmLambdaData)],
+
+            creation_time = ozt_mocks:get_frozen_time_seconds(),
+            creator = Creator
+        })
+    end);
+private_atm_lambda(rest, Id, AtmLambdaData, Creator) ->
+    #{
+        <<"atmLambdaId">> => Id,
+        <<"name">> => maps:get(<<"name">>, AtmLambdaData),
+        <<"summary">> => maps:get(<<"summary">>, AtmLambdaData),
+        <<"description">> => maps:get(<<"description">>, AtmLambdaData),
+
+        <<"engine">> => maps:get(<<"engine">>, AtmLambdaData),
+        <<"operationRef">> => maps:get(<<"operationRef">>, AtmLambdaData),
+
+        <<"executionOptions">> => maps:get(<<"executionOptions">>, AtmLambdaData),
+        <<"argumentSpecs">> => maps:get(<<"argumentSpecs">>, AtmLambdaData),
+        <<"resultSpecs">> => maps:get(<<"resultSpecs">>, AtmLambdaData),
+
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
+        <<"creator">> => aai:subject_to_json(Creator)
+    };
+private_atm_lambda(gs, Id, AtmLambdaData, _Creator) ->
+    ?OK_MAP(#{
+        <<"gri">> => gri:serialize(?GRI(od_atm_lambda, Id, instance, private)),
+        <<"name">> => maps:get(<<"name">>, AtmLambdaData),
+        <<"summary">> => maps:get(<<"summary">>, AtmLambdaData),
+        <<"description">> => maps:get(<<"description">>, AtmLambdaData),
+
+        <<"engine">> => maps:get(<<"engine">>, AtmLambdaData),
+        <<"operationRef">> => maps:get(<<"operationRef">>, AtmLambdaData),
+
+        <<"executionOptions">> => maps:get(<<"executionOptions">>, AtmLambdaData),
+        <<"argumentSpecs">> => maps:get(<<"argumentSpecs">>, AtmLambdaData),
+        <<"resultSpecs">> => maps:get(<<"resultSpecs">>, AtmLambdaData)
+    }).
 
 %%%===================================================================
 %%% helpers

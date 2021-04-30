@@ -32,14 +32,14 @@
 -type operation() :: gs_protocol:operation().
 -type entity_id() :: undefined | od_user:id() | od_group:id() | od_space:id()
 | od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id()
-| od_cluster:id() | od_storage:id() | od_atm_inventory:id().
+| od_cluster:id() | od_storage:id() | od_atm_inventory:id() | od_atm_lambda:id().
 -type entity_type() :: od_user | od_group | od_space | od_share | od_provider
 | od_handle_service | od_handle | od_harvester | od_cluster | od_storage
-| oz_privileges | temporary_token_secret | od_atm_inventory.
+| oz_privileges | temporary_token_secret | od_atm_inventory | od_atm_lambda.
 -type entity() :: undefined | #od_user{} | #od_group{} | #od_space{} |
 #od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}
 | #od_harvester{} | #od_cluster{} | #od_storage{}
-| #temporary_token_secret{} | #od_atm_inventory{}.
+| #temporary_token_secret{} | #od_atm_inventory{} | #od_atm_lambda{}.
 -type revision() :: gs_protocol:revision().
 -type versioned_entity() :: gs_protocol:versioned_entity().
 -type aspect() :: gs_protocol:aspect().
@@ -59,7 +59,8 @@
 -type type_validator() :: any | atom | list_of_atoms | binary
 | list_of_binaries | integer | integer_or_infinity | float | json
 | token | invite_token | token_type | caveats
-| boolean | ipv4_address | list_of_ipv4_addresses.
+| boolean | ipv4_address | list_of_ipv4_addresses
+| {custom_type, SanitizerFun :: fun((term()) -> term() | no_return())}.
 
 -type value_validator() :: any | non_empty |
 fun((term()) -> boolean()) |
@@ -884,6 +885,18 @@ check_type(list_of_ipv4_addresses, Key, ListOfIPs) ->
     catch _:_ ->
         throw(?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(Key))
     end;
+check_type({custom_type, single, SanitizerFun}, Key, Value) ->
+    try
+        SanitizerFun(Value)
+    catch _:_ ->
+        throw(?ERROR_BAD_DATA(Key))
+    end;
+check_type({custom_type, list, SanitizerFun}, Key, Values) ->
+    try
+        [SanitizerFun(Value) || Value <- Values]
+    catch _:_ ->
+        throw(?ERROR_BAD_DATA(Key))
+    end;
 check_type(Rule, Key, _) ->
     ?error("Unknown type rule: ~p for key: ~p", [Rule, Key]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
@@ -985,8 +998,8 @@ check_value(json, JsonValidator, Key, Map) when is_map(JsonValidator) ->
     end, JsonValidator);
 
 check_value(json, qos_parameters, _Key, Map) ->
-    case maps:fold(fun(K, V, Acc) -> 
-        Acc andalso is_binary(K) andalso (is_binary(V) or is_number(V)) 
+    case maps:fold(fun(K, V, Acc) ->
+        Acc andalso is_binary(K) andalso (is_binary(V) or is_number(V))
     end, true, Map) of
         true -> Map;
         false -> throw(?ERROR_BAD_VALUE_QOS_PARAMETERS)
