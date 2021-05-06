@@ -79,6 +79,7 @@ get_atm_inventories(Auth, AtmLambdaId) ->
     }).
 
 
+%% Only for admins
 -spec list(aai:auth()) ->
     {ok, [od_atm_lambda:id()]} | errors:error().
 list(Auth) ->

@@ -479,10 +479,10 @@ end).
 
 -record(od_atm_lambda, {
     name :: automation:name(),
-    summary :: automation:lambda_summary(),
-    description :: automation:lambda_description(),
+    summary :: automation:summary(),
+    description :: automation:description(),
 
-    engine :: automation:lambda_engine(),
+    engine :: atm_lambda_engine_type:type(),
     operation_ref :: automation:lambda_operation_ref(),
 
     execution_options = #atm_lambda_execution_options{} :: atm_lambda_execution_options:record(),
@@ -533,9 +533,7 @@ end).
     subdomain_to_provider = #{} :: #{dns_state:subdomain() => od_provider:id()},
     provider_to_subdomain = #{} :: #{od_provider:id() => dns_state:subdomain()},
     provider_to_ips = #{} :: #{od_provider:id() => [inet:ip4_address()]},
-    provider_to_txt_records = #{} :: #{
-    od_provider:id() => [{binary(), binary(), integer() | undefined}]
-    }
+    provider_to_txt_records = #{} :: #{od_provider:id() => [{binary(), binary(), integer() | undefined}]}
 }).
 
 

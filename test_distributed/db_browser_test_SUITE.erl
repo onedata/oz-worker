@@ -441,7 +441,7 @@ print_collection(Env, Collection) ->
         {C, <<"harvester_id">>} -> {C, lists_utils:random_element(Env#environment.harvesters)};
         {C, <<"storage_id">>} -> {C, lists_utils:random_element(Env#environment.storages)};
         {C, <<"atm_inventory_id">>} -> {C, lists_utils:random_element(Env#environment.atm_inventories)};
-        {C, <<"atm_lambdaid">>} -> {C, lists_utils:random_element(Env#environment.atm_lambdas)};
+        {C, <<"atm_lambda_id">>} -> {C, lists_utils:random_element(Env#environment.atm_lambdas)};
         C when is_atom(C) -> C
     end,
     CollectionAtom = case CollectionWithExistingId of

@@ -478,7 +478,7 @@ private_atm_lambda(logic, _Id, AtmLambdaData, Creator) ->
             summary = maps:get(<<"summary">>, AtmLambdaData),
             description = maps:get(<<"description">>, AtmLambdaData),
 
-            engine = automation:lambda_engine_from_json(maps:get(<<"engine">>, AtmLambdaData)),
+            engine = jsonable_record:from_json(maps:get(<<"engine">>, AtmLambdaData), atm_lambda_engine_type),
             operation_ref = maps:get(<<"operationRef">>, AtmLambdaData),
 
             execution_options = atm_lambda_execution_options:from_json(maps:get(<<"executionOptions">>, AtmLambdaData)),

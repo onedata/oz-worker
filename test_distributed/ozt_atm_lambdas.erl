@@ -55,9 +55,10 @@ gen_example_data() ->
 gen_example_data(name) -> <<"atm_lambda-", (?UNIQUE_STRING)/binary>>;
 gen_example_data(summary) -> lists_utils:random_element([<<>>, str_utils:rand_hex(rand:uniform(50))]);
 gen_example_data(description) -> lists_utils:random_element([<<>>, str_utils:rand_hex(rand:uniform(1000) + 50)]);
-gen_example_data(engine) -> automation:lambda_engine_to_json(lists_utils:random_element([
-    onedata_function, open_faas, atm_workflow, user_form
-]));
+gen_example_data(engine) -> jsonable_record:to_json(
+    lists_utils:random_element(atm_lambda_engine_type:allowed_types_for_custom_lambdas()),
+    atm_lambda_engine_type
+);
 gen_example_data(operation_ref) -> str_utils:rand_hex(rand:uniform(15));
 gen_example_data(execution_options) -> atm_lambda_execution_options:to_json(
     lists_utils:random_element([
@@ -76,7 +77,7 @@ gen_example_data(argument_specs) -> lists:map(fun(_) ->
     atm_lambda_argument_spec:to_json(#atm_lambda_argument_spec{
         name = ?UNIQUE_STRING,
         data_spec = atm_data_spec:from_json(gen_example_data(data_spec)),
-        is_array = lists_utils:random_element([true, false]),
+        is_batch = lists_utils:random_element([true, false]),
         is_optional = lists_utils:random_element([true, false]),
         default_value = lists_utils:random_element([true, false, 6, #{}, <<"binary">>, #{<<"key">> => 984.222}])
     })
@@ -85,8 +86,7 @@ gen_example_data(result_specs) -> lists:map(fun(_) ->
     atm_lambda_result_spec:to_json(#atm_lambda_result_spec{
         name = ?UNIQUE_STRING,
         data_spec = atm_data_spec:from_json(gen_example_data(data_spec)),
-        is_array = lists_utils:random_element([true, false]),
-        is_optional = lists_utils:random_element([true, false])
+        is_batch = lists_utils:random_element([true, false])
     })
 end, lists:seq(1, rand:uniform(5) - 1));
 gen_example_data(data_spec) ->

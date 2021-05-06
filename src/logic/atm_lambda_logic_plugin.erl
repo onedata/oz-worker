@@ -105,7 +105,6 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     Name = maps:get(<<"name">>, Req#el_req.data),
     Summary = maps:get(<<"summary">>, Req#el_req.data, ?DEFAULT_SUMMARY),
     Description = maps:get(<<"description">>, Req#el_req.data, ?DEFAULT_DESCRIPTION),
-    Description = maps:get(<<"description">>, Req#el_req.data, ?DEFAULT_DESCRIPTION),
 
     Engine = maps:get(<<"engine">>, Req#el_req.data),
     OperationRef = maps:get(<<"operationRef">>, Req#el_req.data),
@@ -136,7 +135,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     {true, {AtmLambda, Rev}} = fetch_entity(#gri{aspect = instance, id = AtmLambdaId}),
     {ok, resource, {GRI#gri{id = AtmLambdaId}, {AtmLambda, Rev}}};
 
-create(#el_req{gri = #gri{id = AtmLambdaId, aspect = {atm_inventory, AtmInventoryId}}, data = Data}) ->
+create(#el_req{gri = #gri{id = AtmLambdaId, aspect = {atm_inventory, AtmInventoryId}}}) ->
     entity_graph:add_relation(
         od_atm_lambda, AtmLambdaId,
         od_atm_inventory, AtmInventoryId
@@ -260,6 +259,7 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instan
 required_admin_privileges(_) ->
     forbidden.
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns validity verificators for given request.
@@ -276,16 +276,25 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
             <<"atmInventoryId">> => {binary, {exists, fun atm_inventory_logic:exists/1}},
             <<"name">> => {binary, name},
 
-            <<"engine">> => {{custom_type, single, fun automation:lambda_engine_from_json/1}, any},
+            <<"engine">> => {{jsonable_record, single, atm_lambda_engine_type}, fun(EngineType) ->
+                case lists:member(EngineType, atm_lambda_engine_type:allowed_types_for_custom_lambdas()) of
+                    true ->
+                        true;
+                    false ->
+                        throw(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"engine">>, lists:map(fun(AllowedType) ->
+                            jsonable_record:to_json(AllowedType, atm_lambda_engine_type)
+                        end, atm_lambda_engine_type:allowed_types_for_custom_lambdas())))
+                end
+            end},
             <<"operationRef">> => {binary, non_empty},
 
-            <<"argumentSpecs">> => {{custom_type, list, fun atm_lambda_argument_spec:from_json/1}, any},
-            <<"resultSpecs">> => {{custom_type, list, fun atm_lambda_result_spec:from_json/1}, any}
+            <<"argumentSpecs">> => {{jsonable_record, list, atm_lambda_argument_spec}, any},
+            <<"resultSpecs">> => {{jsonable_record, list, atm_lambda_result_spec}, any}
         },
         optional => #{
             <<"summary">> => {binary, {size_limit, ?SUMMARY_SIZE_LIMIT}},
             <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}},
-            <<"executionOptions">> => {{custom_type, single, fun atm_lambda_execution_options:from_json/1}, any}
+            <<"executionOptions">> => {{jsonable_record, single, atm_lambda_execution_options}, any}
         }
     };
 

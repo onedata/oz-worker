@@ -70,7 +70,7 @@ routes() -> [
     %% Add atm_lambda to atm_inventory
     %% This operation requires one of the following privileges:
     %% - atm_inventory_manage_lambdas
-    %% - oz_atm_lambdas_update
+    %% - oz_atm_inventories_update
     {<<"/atm_lambdas/:id/atm_inventories/:aiid">>, #rest_req{
         method = 'PUT',
         produces = [<<"application/json">>],

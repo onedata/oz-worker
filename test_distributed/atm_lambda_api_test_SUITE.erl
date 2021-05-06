@@ -16,6 +16,7 @@
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/automation/automation.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
@@ -66,7 +67,7 @@ create_test(Config) ->
         ExpName = maps:get(<<"name">>, Data),
         ExpSummary = maps:get(<<"summary">>, Data, <<"Missing summary">>),
         ExpDescription = maps:get(<<"description">>, Data, <<"Missing description">>),
-        ExpEngine = automation:lambda_engine_from_json(maps:get(<<"engine">>, Data)),
+        ExpEngine = jsonable_record:from_json(maps:get(<<"engine">>, Data), atm_lambda_engine_type),
         ExpOperationRef = maps:get(<<"operationRef">>, Data),
         ExpExecutionOptions = atm_lambda_execution_options:from_json(maps:get(<<"executionOptions">>, Data, #{})),
         ExpArgumentSpecs = [atm_lambda_argument_spec:from_json(A) || A <- maps:get(<<"argumentSpecs">>, Data, #{})],
@@ -98,9 +99,19 @@ create_test(Config) ->
         true
     end,
 
+    %% Users are allowed to create custom lambdas, but the onedata_function
+    %% engine type is restricted to predefined lambdas only.
+    DisallowedEngineType = jsonable_record:to_json(
+        #atm_lambda_engine_type{type = onedata_function},
+        atm_lambda_engine_type
+    ),
+    DisallowedEngineTypeError = ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"engine">>, lists:map(fun(EngineType) ->
+        jsonable_record:to_json(EngineType, atm_lambda_engine_type)
+    end, atm_lambda_engine_type:allowed_types_for_custom_lambdas())),
     BadDataValues = [
         {<<"engine">>, bad_engine, ?ERROR_BAD_DATA(<<"engine">>)},
         {<<"engine">>, 1234, ?ERROR_BAD_DATA(<<"engine">>)},
+        {<<"engine">>, DisallowedEngineType, DisallowedEngineTypeError},
         {<<"operationRef">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"operationRef">>)},
         {<<"operationRef">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"operationRef">>)},
         {<<"argumentSpecs">>, #{<<"bad">> => <<"object">>}, ?ERROR_BAD_DATA(<<"argumentSpecs">>)},
@@ -122,7 +133,6 @@ create_test(Config) ->
                 {user, NonAdmin}
             ]
         },
-        % CREATE operation is not supported in REST API (reserved for Oneprovider logic via GraphSync)
         logic_spec = LogicSpec = #logic_spec{
             module = atm_lambda_logic,
             function = create,

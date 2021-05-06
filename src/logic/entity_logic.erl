@@ -60,7 +60,7 @@
 | list_of_binaries | integer | integer_or_infinity | float | json
 | token | invite_token | token_type | caveats
 | boolean | ipv4_address | list_of_ipv4_addresses
-| {custom_type, SanitizerFun :: fun((term()) -> term() | no_return())}.
+| {jsonable_record, sing_list, SanitizerFun :: fun((term()) -> term() | no_return())}.
 
 -type value_validator() :: any | non_empty |
 fun((term()) -> boolean()) |
@@ -885,15 +885,17 @@ check_type(list_of_ipv4_addresses, Key, ListOfIPs) ->
     catch _:_ ->
         throw(?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(Key))
     end;
-check_type({custom_type, single, SanitizerFun}, Key, Value) ->
+check_type({jsonable_record, single, RecordType}, Key, Value) ->
     try
-        SanitizerFun(Value)
+        jsonable_record:from_json(Value, RecordType)
     catch _:_ ->
         throw(?ERROR_BAD_DATA(Key))
     end;
-check_type({custom_type, list, SanitizerFun}, Key, Values) ->
+check_type({jsonable_record, list, RecordType}, Key, Values) ->
     try
-        [SanitizerFun(Value) || Value <- Values]
+        lists:map(fun(Value) ->
+            check_type({jsonable_record, single, RecordType}, Key, Value)
+        end, Values)
     catch _:_ ->
         throw(?ERROR_BAD_DATA(Key))
     end;

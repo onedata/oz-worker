@@ -109,12 +109,12 @@ get_record_struct(1) ->
         {summary, string},
         {description, string},
 
-        {engine, {custom, string, {automation, encode_lambda_engine, decode_lambda_engine}}},
+        {engine, {custom, string, {persistent_record, encode, decode, atm_lambda_engine_type}}},
         {operation_ref, string},
 
-        {execution_options, {custom, string, {record_json_encoder, encode, decode}}},
-        {argument_specs, [{custom, string, {record_json_encoder, encode, decode}}]},
-        {result_specs, [{custom, string, {record_json_encoder, encode, decode}}]},
+        {execution_options, {custom, string, {persistent_record, encode, decode, atm_lambda_execution_options}}},
+        {argument_specs, [{custom, string, {persistent_record, encode, decode, atm_lambda_argument_spec}}]},
+        {result_specs, [{custom, string, {persistent_record, encode, decode, atm_lambda_result_spec}}]},
 
         {atm_inventories, [string]},
 

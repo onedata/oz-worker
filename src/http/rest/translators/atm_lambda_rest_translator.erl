@@ -65,12 +65,12 @@ get_response(#gri{id = AtmLambdaId, aspect = instance, scope = private}, AtmLamb
         <<"summary">> => Summary,
         <<"description">> => Description,
 
-        <<"engine">> => automation:lambda_engine_to_json(Engine),
+        <<"engine">> => jsonable_record:to_json(Engine, atm_lambda_engine_type),
         <<"operationRef">> => OperationRef,
 
-        <<"executionOptions">> => atm_lambda_execution_options:to_json(ExecutionOptions),
-        <<"argumentSpecs">> => [atm_lambda_argument_spec:to_json(S) || S <- ArgumentSpecs],
-        <<"resultSpecs">> => [atm_lambda_result_spec:to_json(S) || S <- ResultSpecs],
+        <<"executionOptions">> => jsonable_record:to_json(ExecutionOptions, atm_lambda_execution_options),
+        <<"argumentSpecs">> => [jsonable_record:to_json(S, atm_lambda_argument_spec) || S <- ArgumentSpecs],
+        <<"resultSpecs">> => [jsonable_record:to_json(S, atm_lambda_result_spec) || S <- ResultSpecs],
 
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
         <<"creationTime">> => CreationTime
