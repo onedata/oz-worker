@@ -806,7 +806,7 @@ field_specs(atm_inventories) -> [
 field_specs(atm_lambdas) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
     {name, text, 28, fun(Doc) -> Doc#document.value#od_atm_lambda.name end},
-    {engine, text, 16, fun(Doc) -> Doc#document.value#od_atm_lambda.engine end},
+    {engine, text, 16, fun(Doc) -> Doc#document.value#od_atm_lambda.engine#atm_lambda_engine_type.type end},
     {operation_ref, text, 35, fun(Doc) -> Doc#document.value#od_atm_lambda.operation_ref end},
     {atm_inventories, integer, 15, fun(Doc) -> length(Doc#document.value#od_atm_lambda.atm_inventories) end},
     {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_atm_lambda.creation_time end}

@@ -60,7 +60,7 @@
 | list_of_binaries | integer | integer_or_infinity | float | json
 | token | invite_token | token_type | caveats
 | boolean | ipv4_address | list_of_ipv4_addresses
-| {jsonable_record, sing_list, SanitizerFun :: fun((term()) -> term() | no_return())}.
+| {jsonable_record, single | list, jsonable_record:record_type()}.
 
 -type value_validator() :: any | non_empty |
 fun((term()) -> boolean()) |
