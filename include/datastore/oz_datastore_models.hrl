@@ -482,10 +482,7 @@ end).
     summary :: automation:summary(),
     description :: automation:description(),
 
-    engine :: atm_lambda_engine_type:record(),
-    operation_ref :: automation:lambda_operation_ref(),
-
-    execution_options = #atm_lambda_execution_options{} :: atm_lambda_execution_options:record(),
+    operation_spec :: atm_lambda_operation_spec:record(),
     argument_specs = [] :: [atm_lambda_argument_spec:record()],
     result_specs = [] :: [atm_lambda_result_spec:record()],
 

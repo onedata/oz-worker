@@ -25,6 +25,10 @@
 -export([get_atm_inventories/1]).
 -export([add_to_inventory/2]).
 
+-define(RAND_STR(), ?RAND_STR(16)).
+-define(RAND_STR(Bytes), str_utils:rand_hex(Bytes)).
+-define(RAND_BOOL(), lists_utils:random_element([true, false])).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -42,10 +46,7 @@ gen_example_data() ->
         <<"summary">> => gen_example_data(summary),
         <<"description">> => gen_example_data(description),
 
-        <<"engine">> => gen_example_data(engine),
-        <<"operationRef">> => gen_example_data(operation_ref),
-
-        <<"executionOptions">> => gen_example_data(execution_options),
+        <<"operationSpec">> => gen_example_data(operation_spec),
         <<"argumentSpecs">> => gen_example_data(argument_specs),
         <<"resultSpecs">> => gen_example_data(result_specs)
     }.
@@ -53,41 +54,47 @@ gen_example_data() ->
 
 -spec gen_example_data(atom()) -> json_utils:json_term().
 gen_example_data(name) -> <<"atm_lambda-", (?UNIQUE_STRING)/binary>>;
-gen_example_data(summary) -> lists_utils:random_element([<<>>, str_utils:rand_hex(rand:uniform(50))]);
-gen_example_data(description) -> lists_utils:random_element([<<>>, str_utils:rand_hex(rand:uniform(1000) + 50)]);
-gen_example_data(engine) -> jsonable_record:to_json(
-    lists_utils:random_element(atm_lambda_engine_type:allowed_types_for_custom_lambdas()),
-    atm_lambda_engine_type
-);
-gen_example_data(operation_ref) -> str_utils:rand_hex(rand:uniform(15));
-gen_example_data(execution_options) -> atm_lambda_execution_options:to_json(
+gen_example_data(summary) -> lists_utils:random_element([<<>>, ?RAND_STR(rand:uniform(50))]);
+gen_example_data(description) -> lists_utils:random_element([<<>>, ?RAND_STR(rand:uniform(1000) + 50)]);
+gen_example_data(operation_spec) -> jsonable_record:to_json(
     lists_utils:random_element([
-        #atm_lambda_execution_options{},
-        #atm_lambda_execution_options{
-            readonly = lists_utils:random_element([true, false]),
-            mount_space_options = #atm_mount_space_options{
-                mount_oneclient = lists_utils:random_element([true, false]),
-                mount_point = str_utils:rand_hex(rand:uniform(15)),
-                oneclient_options = str_utils:rand_hex(rand:uniform(10))
+        #atm_lambda_operation_spec{
+            spec = #atm_openfaas_operation_spec{
+                docker_image = ?RAND_STR(),
+                docker_execution_options = #atm_docker_execution_options{
+                    readonly = ?RAND_BOOL(),
+                    mount_oneclient = ?RAND_BOOL(),
+                    oneclient_mount_point = <<"/a/b/c/d/", (?RAND_STR())/binary>>,
+                    oneclient_options = lists_utils:random_element([<<"">>, <<"--a --b">>])
+                }
+            }
+        },
+        #atm_lambda_operation_spec{
+            spec = #atm_workflow_operation_spec{
+                atm_workflow_id = ?RAND_STR()
+            }
+        },
+        #atm_lambda_operation_spec{
+            spec = #atm_user_form_operation_spec{
+                user_form_id = ?RAND_STR()
             }
         }
-    ])
-);
+    ]), atm_lambda_operation_spec);
 gen_example_data(argument_specs) -> lists:map(fun(_) ->
-    atm_lambda_argument_spec:to_json(#atm_lambda_argument_spec{
+    jsonable_record:to_json(#atm_lambda_argument_spec{
         name = ?UNIQUE_STRING,
         data_spec = atm_data_spec:from_json(gen_example_data(data_spec)),
-        is_batch = lists_utils:random_element([true, false]),
-        is_optional = lists_utils:random_element([true, false]),
+        is_batch = ?RAND_BOOL(),
+        is_optional = ?RAND_BOOL(),
         default_value = lists_utils:random_element([true, false, 6, #{}, <<"binary">>, #{<<"key">> => 984.222}])
-    })
+    }, atm_lambda_argument_spec)
 end, lists:seq(1, rand:uniform(5) - 1));
 gen_example_data(result_specs) -> lists:map(fun(_) ->
-    atm_lambda_result_spec:to_json(#atm_lambda_result_spec{
+    jsonable_record:to_json(#atm_lambda_result_spec{
         name = ?UNIQUE_STRING,
         data_spec = atm_data_spec:from_json(gen_example_data(data_spec)),
-        is_batch = lists_utils:random_element([true, false])
-    })
+        is_batch = ?RAND_BOOL()
+    }, atm_lambda_result_spec)
 end, lists:seq(1, rand:uniform(5) - 1));
 gen_example_data(data_spec) ->
     RandomType = lists_utils:random_element([
@@ -102,10 +109,10 @@ gen_example_data(data_spec) ->
         _ ->
             #{}
     end,
-    atm_data_spec:to_json(#atm_data_spec{
+    jsonable_record:to_json(#atm_data_spec{
         type = RandomType,
         value_constraints = RandomValueConstraints
-    }).
+    }, atm_data_spec).
 
 
 -spec create(od_atm_inventory:id()) -> od_atm_lambda:id().

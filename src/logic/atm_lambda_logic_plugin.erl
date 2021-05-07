@@ -106,10 +106,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     Summary = maps:get(<<"summary">>, Req#el_req.data, ?DEFAULT_SUMMARY),
     Description = maps:get(<<"description">>, Req#el_req.data, ?DEFAULT_DESCRIPTION),
 
-    Engine = maps:get(<<"engine">>, Req#el_req.data),
-    OperationRef = maps:get(<<"operationRef">>, Req#el_req.data),
-
-    ExecutionOptions = maps:get(<<"executionOptions">>, Req#el_req.data, #atm_lambda_execution_options{}),
+    OperationSpec = maps:get(<<"operationSpec">>, Req#el_req.data),
     ArgumentSpecs = maps:get(<<"argumentSpecs">>, Req#el_req.data),
     ResultSpecs = maps:get(<<"resultSpecs">>, Req#el_req.data),
 
@@ -118,10 +115,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         summary = Summary,
         description = Description,
 
-        engine = Engine,
-        operation_ref = OperationRef,
-
-        execution_options = ExecutionOptions,
+        operation_spec = OperationSpec,
         argument_specs = ArgumentSpecs,
         result_specs = ResultSpecs,
 
@@ -276,25 +270,23 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
             <<"atmInventoryId">> => {binary, {exists, fun atm_inventory_logic:exists/1}},
             <<"name">> => {binary, name},
 
-            <<"engine">> => {{jsonable_record, single, atm_lambda_engine_type}, fun(EngineType) ->
-                case lists:member(EngineType, atm_lambda_engine_type:allowed_types_for_custom_lambdas()) of
+            <<"operationSpec">> => {{jsonable_record, single, atm_lambda_operation_spec}, fun(OperationSpec) ->
+                Engine = atm_lambda_operation_spec:get_engine(OperationSpec),
+                case lists:member(Engine, atm_lambda_operation_spec:allowed_engines_for_custom_lambdas()) of
                     true ->
                         true;
                     false ->
-                        throw(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"engine">>, lists:map(fun(AllowedType) ->
-                            jsonable_record:to_json(AllowedType, atm_lambda_engine_type)
-                        end, atm_lambda_engine_type:allowed_types_for_custom_lambdas())))
+                        throw(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"operationSpec.engine">>, lists:map(fun(AllowedEngine) ->
+                            atm_lambda_operation_spec:engine_to_json(AllowedEngine)
+                        end, atm_lambda_operation_spec:allowed_engines_for_custom_lambdas())))
                 end
             end},
-            <<"operationRef">> => {binary, non_empty},
-
             <<"argumentSpecs">> => {{jsonable_record, list, atm_lambda_argument_spec}, any},
             <<"resultSpecs">> => {{jsonable_record, list, atm_lambda_result_spec}, any}
         },
         optional => #{
             <<"summary">> => {binary, {size_limit, ?SUMMARY_SIZE_LIMIT}},
-            <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}},
-            <<"executionOptions">> => {{jsonable_record, single, atm_lambda_execution_options}, any}
+            <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}}
         }
     };
 

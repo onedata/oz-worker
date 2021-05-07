@@ -478,12 +478,9 @@ private_atm_lambda(logic, _Id, AtmLambdaData, Creator) ->
             summary = maps:get(<<"summary">>, AtmLambdaData),
             description = maps:get(<<"description">>, AtmLambdaData),
 
-            engine = jsonable_record:from_json(maps:get(<<"engine">>, AtmLambdaData), atm_lambda_engine_type),
-            operation_ref = maps:get(<<"operationRef">>, AtmLambdaData),
-
-            execution_options = atm_lambda_execution_options:from_json(maps:get(<<"executionOptions">>, AtmLambdaData)),
-            argument_specs = [atm_lambda_argument_spec:from_json(S) || S <- maps:get(<<"argumentSpecs">>, AtmLambdaData)],
-            result_specs = [atm_lambda_result_spec:from_json(S) || S <- maps:get(<<"resultSpecs">>, AtmLambdaData)],
+            operation_spec = jsonable_record:from_json(maps:get(<<"operationSpec">>, AtmLambdaData), atm_lambda_operation_spec),
+            argument_specs = [jsonable_record:from_json(S, atm_lambda_argument_spec) || S <- maps:get(<<"argumentSpecs">>, AtmLambdaData)],
+            result_specs = [jsonable_record:from_json(S, atm_lambda_result_spec) || S <- maps:get(<<"resultSpecs">>, AtmLambdaData)],
 
             atm_inventories = [maps:get(<<"atmInventoryId">>, AtmLambdaData)],
 
@@ -498,10 +495,7 @@ private_atm_lambda(rest, Id, AtmLambdaData, Creator) ->
         <<"summary">> => maps:get(<<"summary">>, AtmLambdaData),
         <<"description">> => maps:get(<<"description">>, AtmLambdaData),
 
-        <<"engine">> => maps:get(<<"engine">>, AtmLambdaData),
-        <<"operationRef">> => maps:get(<<"operationRef">>, AtmLambdaData),
-
-        <<"executionOptions">> => maps:get(<<"executionOptions">>, AtmLambdaData),
+        <<"operationSpec">> => maps:get(<<"operationSpec">>, AtmLambdaData),
         <<"argumentSpecs">> => maps:get(<<"argumentSpecs">>, AtmLambdaData),
         <<"resultSpecs">> => maps:get(<<"resultSpecs">>, AtmLambdaData),
 
@@ -515,10 +509,7 @@ private_atm_lambda(gs, Id, AtmLambdaData, _Creator) ->
         <<"summary">> => maps:get(<<"summary">>, AtmLambdaData),
         <<"description">> => maps:get(<<"description">>, AtmLambdaData),
 
-        <<"engine">> => maps:get(<<"engine">>, AtmLambdaData),
-        <<"operationRef">> => maps:get(<<"operationRef">>, AtmLambdaData),
-
-        <<"executionOptions">> => maps:get(<<"executionOptions">>, AtmLambdaData),
+        <<"operationSpec">> => maps:get(<<"operationSpec">>, AtmLambdaData),
         <<"argumentSpecs">> => maps:get(<<"argumentSpecs">>, AtmLambdaData),
         <<"resultSpecs">> => maps:get(<<"resultSpecs">>, AtmLambdaData)
     }).

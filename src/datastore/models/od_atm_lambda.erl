@@ -109,10 +109,7 @@ get_record_struct(1) ->
         {summary, string},
         {description, string},
 
-        {engine, {custom, string, {persistent_record, encode, decode, atm_lambda_engine_type}}},
-        {operation_ref, string},
-
-        {execution_options, {custom, string, {persistent_record, encode, decode, atm_lambda_execution_options}}},
+        {operation_spec, {custom, string, {persistent_record, encode, decode, atm_lambda_operation_spec}}},
         {argument_specs, [{custom, string, {persistent_record, encode, decode, atm_lambda_argument_spec}}]},
         {result_specs, [{custom, string, {persistent_record, encode, decode, atm_lambda_result_spec}}]},
 

@@ -48,10 +48,7 @@ get_response(#gri{id = AtmLambdaId, aspect = instance, scope = private}, AtmLamb
         summary = Summary,
         description = Description,
 
-        engine = Engine,
-        operation_ref = OperationRef,
-
-        execution_options = ExecutionOptions,
+        operation_spec = OperationSpec,
         argument_specs = ArgumentSpecs,
         result_specs = ResultSpecs,
 
@@ -65,10 +62,7 @@ get_response(#gri{id = AtmLambdaId, aspect = instance, scope = private}, AtmLamb
         <<"summary">> => Summary,
         <<"description">> => Description,
 
-        <<"engine">> => jsonable_record:to_json(Engine, atm_lambda_engine_type),
-        <<"operationRef">> => OperationRef,
-
-        <<"executionOptions">> => jsonable_record:to_json(ExecutionOptions, atm_lambda_execution_options),
+        <<"operationSpec">> => jsonable_record:to_json(OperationSpec, atm_lambda_operation_spec),
         <<"argumentSpecs">> => [jsonable_record:to_json(S, atm_lambda_argument_spec) || S <- ArgumentSpecs],
         <<"resultSpecs">> => [jsonable_record:to_json(S, atm_lambda_result_spec) || S <- ResultSpecs],
 

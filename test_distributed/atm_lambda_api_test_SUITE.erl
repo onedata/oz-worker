@@ -67,11 +67,9 @@ create_test(Config) ->
         ExpName = maps:get(<<"name">>, Data),
         ExpSummary = maps:get(<<"summary">>, Data, <<"Missing summary">>),
         ExpDescription = maps:get(<<"description">>, Data, <<"Missing description">>),
-        ExpEngine = jsonable_record:from_json(maps:get(<<"engine">>, Data), atm_lambda_engine_type),
-        ExpOperationRef = maps:get(<<"operationRef">>, Data),
-        ExpExecutionOptions = atm_lambda_execution_options:from_json(maps:get(<<"executionOptions">>, Data, #{})),
-        ExpArgumentSpecs = [atm_lambda_argument_spec:from_json(A) || A <- maps:get(<<"argumentSpecs">>, Data, #{})],
-        ExpResultSpecs = [atm_lambda_result_spec:from_json(A) || A <- maps:get(<<"resultSpecs">>, Data, #{})],
+        ExpOperationSpec = jsonable_record:from_json(maps:get(<<"operationSpec">>, Data), atm_lambda_operation_spec),
+        ExpArgumentSpecs = [jsonable_record:from_json(S, atm_lambda_argument_spec) || S <- maps:get(<<"argumentSpecs">>, Data, #{})],
+        ExpResultSpecs = [jsonable_record:from_json(S, atm_lambda_result_spec) || S <- maps:get(<<"resultSpecs">>, Data, #{})],
         ExpAtmInventories = [AtmInventory],
         ExpCreationTime = ozt_mocks:get_frozen_time_seconds(),
         ExpCreator = case CheckCreator of
@@ -84,10 +82,7 @@ create_test(Config) ->
             summary = ExpSummary,
             description = ExpDescription,
 
-            engine = ExpEngine,
-            operation_ref = ExpOperationRef,
-
-            execution_options = ExpExecutionOptions,
+            operation_spec = ExpOperationSpec,
             argument_specs = ExpArgumentSpecs,
             result_specs = ExpResultSpecs,
 
@@ -101,26 +96,23 @@ create_test(Config) ->
 
     %% Users are allowed to create custom lambdas, but the onedata_function
     %% engine type is restricted to predefined lambdas only.
-    DisallowedEngineType = jsonable_record:to_json(
-        #atm_lambda_engine_type{type = onedata_function},
-        atm_lambda_engine_type
+    DisallowedOperationSpec = jsonable_record:to_json(
+        #atm_lambda_operation_spec{spec = #atm_onedata_function_operation_spec{}},
+        atm_lambda_operation_spec
     ),
-    DisallowedEngineTypeError = ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"engine">>, lists:map(fun(EngineType) ->
-        jsonable_record:to_json(EngineType, atm_lambda_engine_type)
-    end, atm_lambda_engine_type:allowed_types_for_custom_lambdas())),
+    DisallowedOperationSpecError = ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"operationSpec.engine">>, lists:map(fun(AllowedType) ->
+        atm_lambda_operation_spec:engine_to_json(AllowedType)
+    end, atm_lambda_operation_spec:allowed_engines_for_custom_lambdas())),
     BadDataValues = [
-        {<<"engine">>, bad_engine, ?ERROR_BAD_DATA(<<"engine">>)},
-        {<<"engine">>, 1234, ?ERROR_BAD_DATA(<<"engine">>)},
-        {<<"engine">>, DisallowedEngineType, DisallowedEngineTypeError},
-        {<<"operationRef">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"operationRef">>)},
-        {<<"operationRef">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"operationRef">>)},
+        {<<"operationSpec">>, bad_spec, ?ERROR_BAD_DATA(<<"operationSpec">>)},
+        {<<"operationSpec">>, 1234, ?ERROR_BAD_DATA(<<"operationSpec">>)},
+        {<<"operationSpec">>, DisallowedOperationSpec, DisallowedOperationSpecError},
         {<<"argumentSpecs">>, #{<<"bad">> => <<"object">>}, ?ERROR_BAD_DATA(<<"argumentSpecs">>)},
         {<<"resultSpecs">>, undefined, ?ERROR_BAD_DATA(<<"resultSpecs">>)},
         {<<"summary">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"summary">>)},
         {<<"summary">>, str_utils:rand_hex(250), ?ERROR_BAD_VALUE_BINARY_TOO_LARGE(<<"summary">>, 200)},
         {<<"description">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"description">>)},
-        {<<"description">>, str_utils:rand_hex(50001), ?ERROR_BAD_VALUE_BINARY_TOO_LARGE(<<"description">>, 100000)},
-        {<<"executionOptions">>, 4562, ?ERROR_BAD_DATA(<<"executionOptions">>)}
+        {<<"description">>, str_utils:rand_hex(50001), ?ERROR_BAD_VALUE_BINARY_TOO_LARGE(<<"description">>, 100000)}
     ],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -169,26 +161,22 @@ create_test(Config) ->
             required = [
                 <<"atmInventoryId">>,
                 <<"name">>,
-                <<"engine">>,
-                <<"operationRef">>,
+                <<"operationSpec">>,
                 <<"argumentSpecs">>,
                 <<"resultSpecs">>
             ],
             optional = [
                 <<"summary">>,
-                <<"description">>,
-                <<"executionOptions">>
+                <<"description">>
             ],
             correct_values = #{
                 <<"atmInventoryId">> => [AtmInventory],
                 <<"name">> => [ozt_atm_lambdas:gen_example_data(name)],
-                <<"engine">> => [ozt_atm_lambdas:gen_example_data(engine)],
-                <<"operationRef">> => [ozt_atm_lambdas:gen_example_data(operation_ref)],
+                <<"operationSpec">> => [ozt_atm_lambdas:gen_example_data(operation_spec)],
                 <<"argumentSpecs">> => [ozt_atm_lambdas:gen_example_data(argument_specs)],
                 <<"resultSpecs">> => [ozt_atm_lambdas:gen_example_data(result_specs)],
                 <<"summary">> => [ozt_atm_lambdas:gen_example_data(summary)],
-                <<"description">> => [ozt_atm_lambdas:gen_example_data(description)],
-                <<"executionOptions">> => [ozt_atm_lambdas:gen_example_data(execution_options)]
+                <<"description">> => [ozt_atm_lambdas:gen_example_data(description)]
             },
             bad_values = lists:flatten([
                 {<<"atmInventoryId">>, 1234, ?ERROR_FORBIDDEN},
