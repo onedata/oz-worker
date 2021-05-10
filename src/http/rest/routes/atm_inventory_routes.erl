@@ -268,5 +268,13 @@ routes() -> [
         method = 'GET',
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(id), aspect = {eff_group_membership, ?BINDING(gid)}}
+    }},
+    %% List atm_lambdas of atm_inventory
+    %% This operation requires one of the following privileges:
+    %% - oz_inventories_view
+    {<<"/atm_inventories/:id/atm_lambdas">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(id), aspect = atm_lambdas}
     }}
 ].

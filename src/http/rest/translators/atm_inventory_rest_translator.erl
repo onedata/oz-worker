@@ -114,6 +114,9 @@ get_response(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
 get_response(#gri{aspect = {eff_group_membership, _GroupId}}, Intermediaries) ->
-    rest_translator:ok_encoded_intermediaries_reply(Intermediaries).
+    rest_translator:ok_encoded_intermediaries_reply(Intermediaries);
+
+get_response(#gri{aspect = atm_lambdas}, AtmLambdas) ->
+    rest_translator:ok_body_reply(#{<<"atm_lambdas">> => AtmLambdas}).
 
 

@@ -232,6 +232,7 @@ rest_routes() ->
         harvester_routes:routes(),
         cluster_routes:routes(),
         atm_inventory_routes:routes(),
+        atm_lambda_routes:routes(),
         zone_routes:routes()
     ]),
     % Aggregate routes that share the same path

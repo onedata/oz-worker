@@ -447,6 +447,26 @@ translate_resource(_, #gri{type = od_atm_inventory, aspect = instance, scope = p
         <<"name">> => AtmInventory#od_atm_inventory.name
     };
 
+translate_resource(_, #gri{type = od_atm_lambda, aspect = instance, scope = private}, AtmLambda) ->
+    #od_atm_lambda{
+        name = Name,
+        summary = Summary,
+        description = Description,
+
+        operation_spec = OperationSpec,
+        argument_specs = ArgumentSpecs,
+        result_specs = ResultSpecs
+    } = AtmLambda,
+    #{
+        <<"name">> => Name,
+        <<"summary">> => Summary,
+        <<"description">> => Description,
+
+        <<"operationSpec">> => jsonable_record:to_json(OperationSpec, atm_lambda_operation_spec),
+        <<"argumentSpecs">> => [jsonable_record:to_json(S, atm_lambda_argument_spec) || S <- ArgumentSpecs],
+        <<"resultSpecs">> => [jsonable_record:to_json(S, atm_lambda_result_spec) || S <- ResultSpecs]
+    };
+
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync get result for:~n
     ProtocolVersion: ~p~n

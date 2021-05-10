@@ -35,8 +35,8 @@
 
 -spec list() -> [od_atm_inventory:id()].
 list() ->
-    {ok, Inventories} = ?assertMatch({ok, _}, ozt:rpc(atm_inventory_logic, list, [?ROOT])),
-    Inventories.
+    {ok, AtmInventories} = ?assertMatch({ok, _}, ozt:rpc(atm_inventory_logic, list, [?ROOT])),
+    AtmInventories.
 
 -spec create() -> od_atm_inventory:id().
 create() ->
@@ -50,9 +50,9 @@ create(Name) ->
 
 
 -spec get(od_atm_inventory:id()) -> od_atm_inventory:record().
-get(InventoryId) ->
-    {ok, Inventory} = ?assertMatch({ok, _}, ozt:rpc(atm_inventory_logic, get, [?ROOT, InventoryId])),
-    Inventory.
+get(AtmInventoryId) ->
+    {ok, AtmInventory} = ?assertMatch({ok, _}, ozt:rpc(atm_inventory_logic, get, [?ROOT, AtmInventoryId])),
+    AtmInventory.
 
 
 -spec add_user(od_atm_inventory:id(), od_user:id()) -> ok.

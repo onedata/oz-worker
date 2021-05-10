@@ -22,7 +22,7 @@
 -type entries() :: all | [gri:entity_id()].
 % Basic table types - all collections reuse these tables to display the data
 -type table_type() :: users | groups | spaces | shares | providers | clusters
-| handle_services | handles | harvesters | storages | atm_inventories.
+| handle_services | handles | harvesters | storages | atm_inventories | atm_lambdas.
 % Id of a column in displayed table, also used as display name
 -type column_id() :: atom().
 % Number of the column, counting from the left, starting with 1
@@ -61,6 +61,7 @@
 -export([harvesters/0]).
 -export([storages/0]).
 -export([atm_inventories/0]).
+-export([atm_lambdas/0]).
 
 -export([pr/1, pr/2, pr/3]).
 -export([format/1, format/2, format/3]).
@@ -104,6 +105,9 @@ storages() -> pr(storages).
 
 -spec atm_inventories() -> ok.
 atm_inventories() -> pr(atm_inventories).
+
+-spec atm_lambdas() -> ok.
+atm_lambdas() -> pr(atm_lambdas).
 
 
 %%--------------------------------------------------------------------
@@ -223,7 +227,10 @@ all_collections() -> [
     {storage_spaces, <<"storage_id">>}, {storage_harvesters, <<"storage_id">>},
 
     {atm_inventory_users, <<"atm_inventory_id">>},
-    {atm_inventory_groups, <<"atm_inventory_id">>}
+    {atm_inventory_groups, <<"atm_inventory_id">>},
+    {atm_inventory_lambdas, <<"atm_inventory_id">>},
+
+    {atm_lambda_inventories, <<"atm_lambda_id">>}
 ].
 
 %%%===================================================================
@@ -513,7 +520,16 @@ format_collection({atm_inventory_users, AtmInventoryId}, SortBy, SortOrder) ->
 
 format_collection({atm_inventory_groups, AtmInventoryId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_atm_inventory{groups = Groups, eff_groups = EffGroups}}} = od_atm_inventory:get(AtmInventoryId),
-    format_members(groups, maps:keys(EffGroups), SortBy, SortOrder, Groups, EffGroups, privileges:atm_inventory_privileges()).
+    format_members(groups, maps:keys(EffGroups), SortBy, SortOrder, Groups, EffGroups, privileges:atm_inventory_privileges());
+
+format_collection({atm_inventory_lambdas, AtmInventoryId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_atm_inventory{atm_lambdas = AtmLambdas}}} = od_atm_inventory:get(AtmInventoryId),
+    format_table(atm_lambdas, AtmLambdas, SortBy, SortOrder);
+
+
+format_collection({atm_lambda_inventories, AtmLambdaId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_atm_lambda{atm_inventories = AtmInventories}}} = od_atm_lambda:get(AtmLambdaId),
+    format_table(atm_inventories, AtmInventories, SortBy, SortOrder).
 
 
 %% @private
@@ -786,6 +802,21 @@ field_specs(atm_inventories) -> [
         {maps:size(HService#od_atm_inventory.groups), maps:size(HService#od_atm_inventory.eff_groups)}
     end},
     {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_atm_inventory.creation_time end}
+];
+field_specs(atm_lambdas) -> [
+    {id, text, 38, fun(Doc) -> Doc#document.key end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_atm_lambda.name end},
+    {engine, text, 16, fun(Doc) ->
+        atm_lambda_operation_spec:get_engine(Doc#document.value#od_atm_lambda.operation_spec)
+    end},
+    {operation_ref, text, 35, fun(Doc) -> case Doc#document.value#od_atm_lambda.operation_spec of
+        #atm_onedata_function_operation_spec{function_id = FunctionId} -> FunctionId;
+        #atm_openfaas_operation_spec{docker_image = DockerImage} -> DockerImage;
+        #atm_workflow_operation_spec{atm_workflow_id = AtmWorkflowId} -> AtmWorkflowId;
+        #atm_user_form_operation_spec{user_form_id = UserFormId} -> UserFormId
+    end end},
+    {atm_inventories, integer, 15, fun(Doc) -> length(Doc#document.value#od_atm_lambda.atm_inventories) end},
+    {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_atm_lambda.creation_time end}
 ].
 
 
@@ -961,4 +992,5 @@ module(handle_services) -> od_handle_service;
 module(handles) -> od_handle;
 module(harvesters) -> od_harvester;
 module(storages) -> od_storage;
-module(atm_inventories) -> od_atm_inventory.
+module(atm_inventories) -> od_atm_inventory;
+module(atm_lambdas) -> od_atm_lambda.

@@ -14,6 +14,7 @@
 
 -include("entity_logic.hrl").
 -include_lib("ctool/include/onedata.hrl").
+-include_lib("ctool/include/automation/automation.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_models.hrl").
 
 -define(DEFAULT_GROUP_TYPE, team).
@@ -101,26 +102,26 @@ end).
 %
 % The below ASCII visual shows possible relations in entities graph.
 %
-%           provider------------------------------------------>cluster
-%              ^                                                ^  ^
-%              |                                                |  |
-%           storage                              share          |  |
-%              ^                                   ^           /   |
-%              |                                   |          /    |
-%            space            handle_service<----handle      /     |
-%           ^ ^ ^ ^             ^         ^       ^  ^      /     /
-%          /  | |  \           /          |      /   |     /     /
-%         /   | |   \         /           |     /    |    /     /
-%        /   /   \   \       /             \   /     |   /     /
-%       /   /     \   \     /              user      |  /     /
-% share user harvester group                       group     /
-%              ^    ^     ^    atm_inventory         ^      /
-%             /      \    |     ^    ^               |     /
-%            /        \   |    /    /                |    /
-%          user        group--'    /                user-'
-%                      ^   ^      /
-%                     /     \    /
-%                    /       \  /
+%           provider----------------------------->cluster
+%              ^                                    ^  ^
+%              |                                    |  |
+%           storage                       share     |  |
+%              ^                            ^       |  |
+%              |                            |       |  |
+%            space     handle_service<----handle    |  |
+%           ^ ^ ^ ^          ^     ^       ^  ^     |  |
+%          /  | |  \         |     |      /   |     |  |
+%         /   | |   \        |     |     /    |    /   |
+%        /   /   \   \       /      \   /     |   /    |   atm_inventory
+%       /   /     \   \     /       user      |  /     /     ^  ^    ^
+% share user harvester group                group     /     /   |    |
+%              ^    ^     ^                   ^      /  group   |    |
+%             /      \    |                   |     /     ^     |    |
+%            /        \   |                   |    /     /     /     |
+%          user        group                 user-'-----------'   atm_lambda
+%                      ^   ^
+%                     /     \
+%                    /       \
 %                  user      user
 %
 % Members of groups, spaces, providers, handle_services, handles and harvesters are
@@ -457,21 +458,41 @@ end).
 }).
 
 -record(od_atm_inventory, {
-    name :: od_token:name(),
+    name :: automation:name(),
 
-    % Direct relations to other entities
+    % direct relations to other entities
     users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:atm_inventory_privilege()]),
     groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:atm_inventory_privilege()]),
+    % all members of an inventory have read access to all its lambdas
+    atm_lambdas = [] :: entity_graph:relations(od_atm_inventory:id()),
 
-    % Effective relations to other entities
+    % effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:atm_inventory_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:atm_inventory_privilege()]),
 
     creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),
 
-    % Marks that the record's effective relations are not up to date
+    % marks that the record's effective relations are not up to date
     bottom_up_dirty = true :: boolean()
+}).
+
+-record(od_atm_lambda, {
+    name :: automation:name(),
+    summary :: automation:summary(),
+    description :: automation:description(),
+
+    operation_spec :: atm_lambda_operation_spec:record(),
+    argument_specs = [] :: [atm_lambda_argument_spec:record()],
+    result_specs = [] :: [atm_lambda_result_spec:record()],
+
+    % @TODO VFS-7596 each lambda can be referenced in multiple automation inventories and is
+    % automatically deleted when the last reference is removed
+    % @TODO VFS-7596 comprehensive tests for the above
+    atm_inventories = [] :: entity_graph:relations(od_atm_inventory:id()),
+
+    creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | aai:subject()
 }).
 
 %%%===================================================================
@@ -509,9 +530,7 @@ end).
     subdomain_to_provider = #{} :: #{dns_state:subdomain() => od_provider:id()},
     provider_to_subdomain = #{} :: #{od_provider:id() => dns_state:subdomain()},
     provider_to_ips = #{} :: #{od_provider:id() => [inet:ip4_address()]},
-    provider_to_txt_records = #{} :: #{
-        od_provider:id() => [{binary(), binary(), integer() | undefined}]
-    }
+    provider_to_txt_records = #{} :: #{od_provider:id() => [{binary(), binary(), integer() | undefined}]}
 }).
 
 

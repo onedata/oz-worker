@@ -48,6 +48,10 @@
     get_group_privileges/3, get_eff_group_privileges/3,
     get_eff_group_membership_intermediaries/3,
 
+    get_atm_lambdas/2,
+    get_atm_lambda/3,
+    get_atm_lambda_atm_inventories/3,
+
     update_user_privileges/5, update_user_privileges/4,
     update_group_privileges/5, update_group_privileges/4,
 
@@ -354,6 +358,38 @@ get_eff_group_membership_intermediaries(Auth, AtmInventoryId, GroupId) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = od_atm_inventory, id = AtmInventoryId, aspect = {eff_group_membership, GroupId}}
+    }).
+
+
+-spec get_atm_lambdas(aai:auth(), od_atm_inventory:id()) ->
+    {ok, [od_atm_lambda:id()]} | errors:error().
+get_atm_lambdas(Auth, AtmInventoryId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_atm_inventory, id = AtmInventoryId, aspect = atm_lambdas}
+    }).
+
+
+-spec get_atm_lambda(aai:auth(), od_atm_inventory:id(), od_atm_lambda:id()) ->
+    {ok, od_atm_lambda:record()} | errors:error().
+get_atm_lambda(Auth, AtmInventoryId, AtmLambdaId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_atm_lambda, id = AtmLambdaId, aspect = instance},
+        auth_hint = ?THROUGH_ATM_INVENTORY(AtmInventoryId)
+    }).
+
+
+-spec get_atm_lambda_atm_inventories(aai:auth(), od_atm_inventory:id(), od_atm_lambda:id()) ->
+    {ok, [od_atm_inventory:id()]} | errors:error().
+get_atm_lambda_atm_inventories(Auth, AtmInventoryId, AtmLambdaId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_atm_lambda, id = AtmLambdaId, aspect = atm_inventories},
+        auth_hint = ?THROUGH_ATM_INVENTORY(AtmInventoryId)
     }).
 
 
