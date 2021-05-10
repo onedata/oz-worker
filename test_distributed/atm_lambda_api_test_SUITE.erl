@@ -97,7 +97,7 @@ create_test(Config) ->
     %% Users are allowed to create custom lambdas, but the onedata_function
     %% engine type is restricted to predefined lambdas only.
     DisallowedOperationSpec = jsonable_record:to_json(
-        #atm_lambda_operation_spec{spec = #atm_onedata_function_operation_spec{}},
+        #atm_onedata_function_operation_spec{},
         atm_lambda_operation_spec
     ),
     DisallowedOperationSpecError = ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"operationSpec.engine">>, lists:map(fun(AllowedType) ->

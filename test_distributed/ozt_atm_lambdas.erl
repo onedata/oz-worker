@@ -58,26 +58,20 @@ gen_example_data(summary) -> lists_utils:random_element([<<>>, ?RAND_STR(rand:un
 gen_example_data(description) -> lists_utils:random_element([<<>>, ?RAND_STR(rand:uniform(1000) + 50)]);
 gen_example_data(operation_spec) -> jsonable_record:to_json(
     lists_utils:random_element([
-        #atm_lambda_operation_spec{
-            spec = #atm_openfaas_operation_spec{
-                docker_image = ?RAND_STR(),
-                docker_execution_options = #atm_docker_execution_options{
-                    readonly = ?RAND_BOOL(),
-                    mount_oneclient = ?RAND_BOOL(),
-                    oneclient_mount_point = <<"/a/b/c/d/", (?RAND_STR())/binary>>,
-                    oneclient_options = lists_utils:random_element([<<"">>, <<"--a --b">>])
-                }
+        #atm_openfaas_operation_spec{
+            docker_image = ?RAND_STR(),
+            docker_execution_options = #atm_docker_execution_options{
+                readonly = ?RAND_BOOL(),
+                mount_oneclient = ?RAND_BOOL(),
+                oneclient_mount_point = <<"/a/b/c/d/", (?RAND_STR())/binary>>,
+                oneclient_options = lists_utils:random_element([<<"">>, <<"--a --b">>])
             }
         },
-        #atm_lambda_operation_spec{
-            spec = #atm_workflow_operation_spec{
-                atm_workflow_id = ?RAND_STR()
-            }
+        #atm_workflow_operation_spec{
+            atm_workflow_id = ?RAND_STR()
         },
-        #atm_lambda_operation_spec{
-            spec = #atm_user_form_operation_spec{
-                user_form_id = ?RAND_STR()
-            }
+        #atm_user_form_operation_spec{
+            user_form_id = ?RAND_STR()
         }
     ]), atm_lambda_operation_spec);
 gen_example_data(argument_specs) -> lists:map(fun(_) ->
