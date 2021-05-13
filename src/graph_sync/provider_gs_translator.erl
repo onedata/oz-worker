@@ -132,6 +132,7 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         <<"effectiveSpaces">> => entity_graph:get_relations(effective, top_down, od_space, User),
         <<"effectiveHandles">> => entity_graph:get_relations(effective, top_down, od_handle, User),
         <<"effectiveHandleServices">> => entity_graph:get_relations(effective, top_down, od_handle_service, User),
+        <<"effectiveAtmInventories">> => entity_graph:get_relations(effective, top_down, od_atm_inventory, User),
 
         % TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"defaultSpaceId">> => null,
@@ -455,7 +456,9 @@ translate_resource(_, #gri{type = od_atm_lambda, aspect = instance, scope = priv
 
         operation_spec = OperationSpec,
         argument_specs = ArgumentSpecs,
-        result_specs = ResultSpecs
+        result_specs = ResultSpecs,
+        
+        atm_inventories = AtmInventories
     } = AtmLambda,
     #{
         <<"name">> => Name,
@@ -464,7 +467,9 @@ translate_resource(_, #gri{type = od_atm_lambda, aspect = instance, scope = priv
 
         <<"operationSpec">> => jsonable_record:to_json(OperationSpec, atm_lambda_operation_spec),
         <<"argumentSpecs">> => [jsonable_record:to_json(S, atm_lambda_argument_spec) || S <- ArgumentSpecs],
-        <<"resultSpecs">> => [jsonable_record:to_json(S, atm_lambda_result_spec) || S <- ResultSpecs]
+        <<"resultSpecs">> => [jsonable_record:to_json(S, atm_lambda_result_spec) || S <- ResultSpecs],
+        
+        <<"atmInventories">> => AtmInventories
     };
 
 translate_resource(ProtocolVersion, GRI, Data) ->
