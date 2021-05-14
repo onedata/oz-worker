@@ -356,6 +356,7 @@ get_test(Config) ->
             gri = #gri{type = od_user, id = User, aspect = instance},
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"effectiveGroups">> => [],
+                <<"effectiveAtmInventories">> => [],
                 <<"effectiveHandleServices">> => [],
                 <<"effectiveHandles">> => [],
                 <<"effectiveSpaces">> => [S1],

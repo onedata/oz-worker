@@ -511,7 +511,9 @@ private_atm_lambda(gs, Id, AtmLambdaData, _Creator) ->
 
         <<"operationSpec">> => maps:get(<<"operationSpec">>, AtmLambdaData),
         <<"argumentSpecs">> => maps:get(<<"argumentSpecs">>, AtmLambdaData),
-        <<"resultSpecs">> => maps:get(<<"resultSpecs">>, AtmLambdaData)
+        <<"resultSpecs">> => maps:get(<<"resultSpecs">>, AtmLambdaData),
+        
+        <<"atmInventories">> => [maps:get(<<"atmInventoryId">>, AtmLambdaData)]
     }).
 
 %%%===================================================================
