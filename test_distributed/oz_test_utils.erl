@@ -3112,6 +3112,7 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     lists_utils:pforeach(fun(AIId) -> delete_atm_inventory(Config, AIId) end, AtmInventories),
     lists_utils:pforeach(fun(ALId) -> delete_atm_lambda(Config, ALId) end, AtmLambdas),
     % Clusters and storages are removed together with providers
+    % Workflow schemas are removed together with Inventories
 
     % Check if predefined groups should be removed too.
     GroupsToDelete = case RemovePredefinedGroups of

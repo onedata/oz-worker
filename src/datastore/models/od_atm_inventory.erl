@@ -111,6 +111,7 @@ get_record_struct(1) ->
         {users, #{string => [atom]}},
         {groups, #{string => [atom]}},
         {atm_lambdas, [string]},
+        {atm_workflow_schemas, [string]},
 
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_groups, #{string => {[atom], [{atom, string}]}}},

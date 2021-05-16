@@ -457,7 +457,7 @@ translate_resource(_, #gri{type = od_atm_lambda, aspect = instance, scope = priv
         operation_spec = OperationSpec,
         argument_specs = ArgumentSpecs,
         result_specs = ResultSpecs,
-        
+
         atm_inventories = AtmInventories
     } = AtmLambda,
     #{
@@ -466,10 +466,34 @@ translate_resource(_, #gri{type = od_atm_lambda, aspect = instance, scope = priv
         <<"description">> => Description,
 
         <<"operationSpec">> => jsonable_record:to_json(OperationSpec, atm_lambda_operation_spec),
-        <<"argumentSpecs">> => [jsonable_record:to_json(S, atm_lambda_argument_spec) || S <- ArgumentSpecs],
-        <<"resultSpecs">> => [jsonable_record:to_json(S, atm_lambda_result_spec) || S <- ResultSpecs],
-        
+        <<"argumentSpecs">> => jsonable_record:list_to_json(ArgumentSpecs, atm_lambda_argument_spec),
+        <<"resultSpecs">> => jsonable_record:list_to_json(ResultSpecs, atm_lambda_result_spec),
+
         <<"atmInventories">> => AtmInventories
+    };
+
+translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, scope = private}, AtmLambda) ->
+    #od_atm_workflow_schema{
+        name = Name,
+        description = Description,
+
+        stores = Stores,
+        lanes = Lanes,
+
+        state = State,
+
+        atm_inventory = AtmInventoryId
+    } = AtmLambda,
+    #{
+        <<"name">> => Name,
+        <<"description">> => Description,
+
+        <<"stores">> => jsonable_record:list_to_json(Stores, atm_store_schema),
+        <<"lanes">> => jsonable_record:list_to_json(Lanes, atm_lane_schema),
+
+        <<"state">> => automation:workflow_schema_state_to_json(State),
+
+        <<"atmInventoryId">> => AtmInventoryId
     };
 
 translate_resource(ProtocolVersion, GRI, Data) ->

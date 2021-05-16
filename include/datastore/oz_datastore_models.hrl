@@ -112,17 +112,18 @@ end).
 %           ^ ^ ^ ^          ^     ^       ^  ^     |  |
 %          /  | |  \         |     |      /   |     |  |
 %         /   | |   \        |     |     /    |    /   |
-%        /   /   \   \       /      \   /     |   /    |   atm_inventory
-%       /   /     \   \     /       user      |  /     /     ^  ^    ^
-% share user harvester group                group     /     /   |    |
-%              ^    ^     ^                   ^      /  group   |    |
-%             /      \    |                   |     /     ^     |    |
-%            /        \   |                   |    /     /     /     |
-%          user        group                 user-'-----------'   atm_lambda
-%                      ^   ^
-%                     /     \
-%                    /       \
-%                  user      user
+%        /   /   \   \       /      \   /     |   /    |    atm_inventory
+%       /   /     \   \     /       user      |  /     /     ^  ^  ^  ^
+% share user harvester group                group     /     /   |  |  |
+%              ^    ^     ^                   ^      /  group   |  |  |
+%             /      \    |                   |     /     ^     |  |  |
+%            /        \   |                   |    /     /     /   |  |
+%          user        group                 user-'-----------'   /    \
+%                      ^   ^                                     /      \
+%                     /     \                      atm_workflow_schema   \
+%                    /       \                                ^           \
+%                  user      user                              \           \
+%                                                               '-- atm_lambda
 %
 % Members of groups, spaces, providers, handle_services, handles and harvesters are
 % calculated bottom-up.
@@ -464,7 +465,8 @@ end).
     users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:atm_inventory_privilege()]),
     groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:atm_inventory_privilege()]),
     % all members of an inventory have read access to all its lambdas
-    atm_lambdas = [] :: entity_graph:relations(od_atm_inventory:id()),
+    atm_lambdas = [] :: entity_graph:relations(od_atm_lambda:id()),
+    atm_workflow_schemas = [] :: entity_graph:relations(od_atm_workflow_schema:id()),
 
     % effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:atm_inventory_privilege()]),
@@ -490,6 +492,23 @@ end).
     % automatically deleted when the last reference is removed
     % @TODO VFS-7596 comprehensive tests for the above
     atm_inventories = [] :: entity_graph:relations(od_atm_inventory:id()),
+    atm_workflow_schemas = [] :: entity_graph:relations(od_atm_workflow_schema:id()),
+
+    creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | aai:subject()
+}).
+
+-record(od_atm_workflow_schema, {
+    name :: automation:name(),
+    description :: automation:description(),
+
+    stores = [] :: [atm_store_schema:record()],
+    lanes = [] :: [atm_lane_schema:record()],
+
+    state :: automation:workflow_schema_state(),
+
+    atm_inventory :: undefined | od_atm_inventory:id(),
+    atm_lambdas = [] :: [od_atm_lambda:id()],
 
     creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject()

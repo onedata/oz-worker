@@ -24,7 +24,7 @@
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
--define(DESCRIPTION_SIZE_LIMIT, 100000).
+-define(SHARE_DESCRIPTION_SIZE_LIMIT, 100000).
 
 %%%===================================================================
 %%% API
@@ -285,14 +285,14 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     },
     optional => #{
         <<"fileType">> => {atom, [file, dir]},
-        <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}}
+        <<"description">> => {binary, {size_limit, ?SHARE_DESCRIPTION_SIZE_LIMIT}}
     }
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}}
+        <<"description">> => {binary, {size_limit, ?SHARE_DESCRIPTION_SIZE_LIMIT}}
     }
 }.
 

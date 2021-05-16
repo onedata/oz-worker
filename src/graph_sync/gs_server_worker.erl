@@ -211,5 +211,7 @@ change_to_entity_type_and_id(Key, #od_atm_inventory{}) ->
     {od_atm_inventory, Key};
 change_to_entity_type_and_id(Key, #od_atm_lambda{}) ->
     {od_atm_lambda, Key};
+change_to_entity_type_and_id(Key, #od_atm_workflow_schema{}) ->
+    {od_atm_workflow_schema, Key};
 change_to_entity_type_and_id(_, _) ->
     ignore.

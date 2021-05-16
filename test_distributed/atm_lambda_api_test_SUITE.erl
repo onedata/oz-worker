@@ -36,8 +36,10 @@
     list_test/1,
     get_test/1,
     get_atm_inventories_test/1,
+    get_atm_workflow_schemas_test/1,
     update_test/1,
     add_to_inventory_test/1
+    % @TODO VFS-7596 delete test, with checks if inventories or schemas are properly deleted (or not) along with the lambda
 ]).
 
 all() ->
@@ -46,6 +48,7 @@ all() ->
         list_test,
         get_test,
         get_atm_inventories_test,
+        get_atm_workflow_schemas_test,
         update_test,
         add_to_inventory_test
     ]).
@@ -68,8 +71,8 @@ create_test(Config) ->
         ExpSummary = maps:get(<<"summary">>, Data, <<"Missing summary">>),
         ExpDescription = maps:get(<<"description">>, Data, <<"Missing description">>),
         ExpOperationSpec = jsonable_record:from_json(maps:get(<<"operationSpec">>, Data), atm_lambda_operation_spec),
-        ExpArgumentSpecs = [jsonable_record:from_json(S, atm_lambda_argument_spec) || S <- maps:get(<<"argumentSpecs">>, Data, #{})],
-        ExpResultSpecs = [jsonable_record:from_json(S, atm_lambda_result_spec) || S <- maps:get(<<"resultSpecs">>, Data, #{})],
+        ExpArgumentSpecs = jsonable_record:list_from_json(maps:get(<<"argumentSpecs">>, Data, []), atm_lambda_argument_spec),
+        ExpResultSpecs = jsonable_record:list_from_json(maps:get(<<"resultSpecs">>, Data, []), atm_lambda_result_spec),
         ExpAtmInventories = [AtmInventory],
         ExpCreationTime = ozt_mocks:get_frozen_time_seconds(),
         ExpCreator = case CheckCreator of
@@ -171,12 +174,12 @@ create_test(Config) ->
             ],
             correct_values = #{
                 <<"atmInventoryId">> => [AtmInventory],
-                <<"name">> => [ozt_atm_lambdas:gen_example_data(name)],
-                <<"operationSpec">> => [ozt_atm_lambdas:gen_example_data(operation_spec)],
-                <<"argumentSpecs">> => [ozt_atm_lambdas:gen_example_data(argument_specs)],
-                <<"resultSpecs">> => [ozt_atm_lambdas:gen_example_data(result_specs)],
-                <<"summary">> => [ozt_atm_lambdas:gen_example_data(summary)],
-                <<"description">> => [ozt_atm_lambdas:gen_example_data(description)]
+                <<"name">> => [ozt_atm:gen_example_name()],
+                <<"operationSpec">> => [ozt_atm_lambdas:gen_example_operation_spec()],
+                <<"argumentSpecs">> => [ozt_atm_lambdas:gen_example_argument_specs()],
+                <<"resultSpecs">> => [ozt_atm_lambdas:gen_example_result_specs()],
+                <<"summary">> => [ozt_atm:gen_example_summary()],
+                <<"description">> => [ozt_atm:gen_example_description()]
             },
             bad_values = lists:flatten([
                 {<<"atmInventoryId">>, 1234, ?ERROR_FORBIDDEN},
@@ -377,6 +380,58 @@ get_atm_inventories_test(Config) ->
             function = get_atm_inventories,
             args = [auth, AtmLambda],
             expected_result = ?OK_LIST(AtmInventories)
+        }
+        % TODO VFS-4520 Tests for GraphSync API
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+get_atm_workflow_schemas_test(Config) ->
+    Creator = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+    AnotherMember = ozt_users:create(),
+
+    AtmInventory = ozt_users:create_atm_inventory_for(Creator),
+    ozt_atm_inventories:add_user(AtmInventory, AnotherMember, []),
+
+    AtmLambda = ozt_atm_lambdas:create(AtmInventory),
+
+    ExpAtmWorkflowSchemas = lists:foldl(fun(_, Acc) ->
+        % this procedure internally checks what lambdas are available in the
+        % inventory (here, just the one) and reference them in task schemas,
+        % but randomly generated lanes may be empty too
+        AtmWorkflowSchema = ozt_atm_workflow_schemas:create(AtmInventory),
+        #od_atm_workflow_schema{lanes = Lanes} = ozt_atm_workflow_schemas:get(AtmWorkflowSchema),
+        case lists:member(AtmLambda, ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(Lanes)) of
+            true -> lists:usort([AtmWorkflowSchema | Acc]);
+            false -> Acc
+        end
+    end, [], lists:seq(1, rand:uniform(8))),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = lists:flatten([
+                root,
+                {admin, [?OZ_ATM_INVENTORIES_VIEW]},
+                {user, Creator},
+                {user, AnotherMember}
+            ]),
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/atm_lambdas/">>, AtmLambda, <<"/atm_workflow_schemas">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"atm_workflow_schemas">> => ExpAtmWorkflowSchemas}
+        },
+        logic_spec = #logic_spec{
+            module = atm_lambda_logic,
+            function = get_atm_workflow_schemas,
+            args = [auth, AtmLambda],
+            expected_result = ?OK_LIST(ExpAtmWorkflowSchemas)
         }
         % TODO VFS-4520 Tests for GraphSync API
     },

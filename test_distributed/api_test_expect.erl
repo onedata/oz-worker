@@ -35,6 +35,7 @@
 -export([protected_harvester/4, shared_or_public_harvester/3]).
 -export([protected_atm_inventory/4]).
 -export([private_atm_lambda/4]).
+-export([private_atm_workflow_schema/4]).
 
 %%%===================================================================
 %%% API
@@ -479,8 +480,8 @@ private_atm_lambda(logic, _Id, AtmLambdaData, Creator) ->
             description = maps:get(<<"description">>, AtmLambdaData),
 
             operation_spec = jsonable_record:from_json(maps:get(<<"operationSpec">>, AtmLambdaData), atm_lambda_operation_spec),
-            argument_specs = [jsonable_record:from_json(S, atm_lambda_argument_spec) || S <- maps:get(<<"argumentSpecs">>, AtmLambdaData)],
-            result_specs = [jsonable_record:from_json(S, atm_lambda_result_spec) || S <- maps:get(<<"resultSpecs">>, AtmLambdaData)],
+            argument_specs = jsonable_record:list_from_json(maps:get(<<"argumentSpecs">>, AtmLambdaData), atm_lambda_argument_spec),
+            result_specs = jsonable_record:list_from_json(maps:get(<<"resultSpecs">>, AtmLambdaData), atm_lambda_result_spec),
 
             atm_inventories = [maps:get(<<"atmInventoryId">>, AtmLambdaData)],
 
@@ -514,6 +515,59 @@ private_atm_lambda(gs, Id, AtmLambdaData, _Creator) ->
         <<"resultSpecs">> => maps:get(<<"resultSpecs">>, AtmLambdaData),
         
         <<"atmInventories">> => [maps:get(<<"atmInventoryId">>, AtmLambdaData)]
+    }).
+
+
+-spec private_atm_workflow_schema(interface(), od_atm_workflow_schema:id(), map(), aai:subject()) -> expectation().
+private_atm_workflow_schema(logic, _Id, AtmWorkflowSchemaData, Creator) ->
+    ?OK_TERM(fun(AtmWorkflowSchemaRecord) ->
+        ?assertEqual(#od_atm_workflow_schema{
+            name = maps:get(<<"name">>, AtmWorkflowSchemaData),
+            description = maps:get(<<"description">>, AtmWorkflowSchemaData),
+
+            stores = jsonable_record:list_from_json(maps:get(<<"stores">>, AtmWorkflowSchemaData), atm_store_schema),
+            lanes = jsonable_record:list_from_json(maps:get(<<"lanes">>, AtmWorkflowSchemaData), atm_lane_schema),
+
+            state = automation:workflow_schema_state_from_json(maps:get(<<"state">>, AtmWorkflowSchemaData)),
+
+            atm_inventory = maps:get(<<"atmInventoryId">>, AtmWorkflowSchemaData),
+            atm_lambdas = lists:sort(ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(maps:get(<<"lanes">>, AtmWorkflowSchemaData, []))),
+
+            creation_time = ozt_mocks:get_frozen_time_seconds(),
+            creator = Creator
+        }, AtmWorkflowSchemaRecord#od_atm_workflow_schema{
+            atm_lambdas = lists:sort(AtmWorkflowSchemaRecord#od_atm_workflow_schema.atm_lambdas)
+        })
+    end);
+private_atm_workflow_schema(rest, Id, AtmWorkflowSchemaData, Creator) ->
+    #{
+        <<"atmWorkflowSchemaId">> => Id,
+        <<"name">> => maps:get(<<"name">>, AtmWorkflowSchemaData),
+        <<"description">> => maps:get(<<"description">>, AtmWorkflowSchemaData),
+
+        <<"stores">> => maps:get(<<"stores">>, AtmWorkflowSchemaData),
+        <<"lanes">> => maps:get(<<"lanes">>, AtmWorkflowSchemaData),
+
+        <<"state">> => maps:get(<<"state">>, AtmWorkflowSchemaData),
+
+        <<"atmInventoryId">> => maps:get(<<"atmInventoryId">>, AtmWorkflowSchemaData),
+        <<"atmLambdaIds">> => ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(maps:get(<<"lanes">>, AtmWorkflowSchemaData, [])),
+
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
+        <<"creator">> => aai:subject_to_json(Creator)
+    };
+private_atm_workflow_schema(gs, Id, AtmWorkflowSchemaData, _Creator) ->
+    ?OK_MAP(#{
+        <<"gri">> => gri:serialize(?GRI(od_atm_workflow_schema, Id, instance, private)),
+        <<"name">> => maps:get(<<"name">>, AtmWorkflowSchemaData),
+        <<"description">> => maps:get(<<"description">>, AtmWorkflowSchemaData),
+
+        <<"stores">> => maps:get(<<"stores">>, AtmWorkflowSchemaData),
+        <<"lanes">> => maps:get(<<"lanes">>, AtmWorkflowSchemaData),
+
+        <<"state">> => maps:get(<<"state">>, AtmWorkflowSchemaData),
+
+        <<"atmInventoryId">> => maps:get(<<"atmInventoryId">>, AtmWorkflowSchemaData)
     }).
 
 %%%===================================================================
@@ -582,4 +636,3 @@ expected_cluster_creation_time(?ONEZONE) ->
     CreationTime;
 expected_cluster_creation_time(?ONEPROVIDER) ->
     ozt_mocks:get_frozen_time_seconds().
-

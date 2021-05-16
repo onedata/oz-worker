@@ -22,6 +22,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
+%% @doc
 %% Definitions of atm_inventory REST paths.
 %% @end
 %%--------------------------------------------------------------------
@@ -276,5 +277,13 @@ routes() -> [
         method = 'GET',
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(id), aspect = atm_lambdas}
+    }},
+    %% List atm_workflow_schemas of atm_inventory
+    %% This operation requires one of the following privileges:
+    %% - oz_inventories_view
+    {<<"/atm_inventories/:id/atm_workflow_schemas">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(id), aspect = atm_workflow_schemas}
     }}
 ].
