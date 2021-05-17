@@ -1126,7 +1126,7 @@ translate_atm_workflow_schema(#gri{id = Id, aspect = instance, scope = private},
 
         <<"state">> => automation:workflow_schema_state_to_json(State),
 
-        <<"atmInventory">> => AtmInventoryId,
+        <<"atmInventory">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = instance, scope = auto}),
         <<"atmLambdaList">> => gri:serialize(#gri{type = od_atm_workflow_schema, id = Id, aspect = atm_lambdas}),
 
         <<"info">> => maps:merge(translate_creator(Creator), #{
