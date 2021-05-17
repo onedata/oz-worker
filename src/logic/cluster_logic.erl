@@ -183,7 +183,7 @@ get_public_data(Auth, ClusterId) ->
 -spec get_name(aai:auth(), od_cluster:id()) ->
     {ok, binary()} | {error, term()}.
 get_name(_Auth, ?ONEZONE_CLUSTER_ID) ->
-    <<"Onezone">>;
+    {ok, <<"Onezone">>};
 get_name(Auth, ClusterId) ->
     provider_logic:get_name(Auth, ClusterId).
 

@@ -105,7 +105,9 @@ end_per_suite(_Config) ->
     clusters = [] :: [od_cluster:id()],
     handle_services = [] :: [od_handle_service:id()],
     handles = [] :: [od_handle:id()],
-    harvesters = [] :: [od_harvester:id()]
+    harvesters = [] :: [od_harvester:id()],
+    atm_inventories = [] :: [od_atm_inventory:id()],
+    atm_lambdas = [] :: [od_atm_inventory:id()]
 }).
 
 
@@ -121,7 +123,9 @@ set_up_environment() ->
         fun set_up_providers_and_clusters/1,
         fun set_up_storages/1,
         fun set_up_handle_services_and_handles/1,
-        fun set_up_harvesters/1
+        fun set_up_harvesters/1,
+        fun set_up_atm_inventories/1,
+        fun set_up_atm_lambdas/1
     ]).
 
 
@@ -326,6 +330,33 @@ set_up_harvesters(Environment = #environment{users = Users, groups = Groups, spa
     }.
 
 
+set_up_atm_inventories(Environment = #environment{users = Users, groups = Groups}) ->
+    Environment#environment{
+        atm_inventories = lists:map(fun(_) ->
+            AtmInventory = ozt_atm_inventories:create(?GEN_NAME()),
+            simulate_random_delay(),
+            generate_members(od_atm_inventory, AtmInventory, od_user, Users),
+            generate_members(od_atm_inventory, AtmInventory, od_group, Groups),
+            AtmInventory
+        end, lists:seq(1, ?ENTITY_COUNT))
+    }.
+
+
+set_up_atm_lambdas(Environment = #environment{atm_inventories = AtmInventories}) ->
+    Environment#environment{
+        atm_lambdas = lists:map(fun(_) ->
+            AtmLambdaData = ozt_atm_lambdas:gen_example_data(),
+            ParentInventories = lists_utils:random_sublist(AtmInventories, 1, all),
+            AtmLambda = ozt_atm_lambdas:create(hd(ParentInventories), AtmLambdaData#{
+                <<"name">> => ?GEN_NAME()
+            }),
+            [ozt_atm_lambdas:add_to_inventory(AtmLambda, I) || I <- tl(ParentInventories)],
+            simulate_random_delay(),
+            AtmLambda
+        end, lists:seq(1, ?ENTITY_COUNT))
+    }.
+
+
 generate_members(ParentType, ParentId, MemberType, AllMembers) ->
     [add_member(ParentType, ParentId, MemberType, M) || M <- ?RAND_SUBLIST(AllMembers, ?MEMBERS_COUNT)].
 
@@ -337,7 +368,8 @@ add_member(ParentType, ParentId, MemberType, MemberId) ->
         od_handle_service -> privileges:handle_service_privileges();
         od_handle -> privileges:handle_privileges();
         od_cluster -> privileges:cluster_privileges();
-        od_harvester -> privileges:harvester_privileges()
+        od_harvester -> privileges:harvester_privileges();
+        od_atm_inventory -> privileges:atm_inventory_privileges()
     end,
     Module = case ParentType of
         od_group -> group_logic;
@@ -345,7 +377,8 @@ add_member(ParentType, ParentId, MemberType, MemberId) ->
         od_handle_service -> handle_service_logic;
         od_handle -> handle_logic;
         od_cluster -> cluster_logic;
-        od_harvester -> harvester_logic
+        od_harvester -> harvester_logic;
+        od_atm_inventory -> atm_inventory_logic
     end,
     Function = case MemberType of
         od_user -> add_user;
@@ -407,6 +440,8 @@ print_collection(Env, Collection) ->
         {C, <<"handle_id">>} -> {C, lists_utils:random_element(Env#environment.handles)};
         {C, <<"harvester_id">>} -> {C, lists_utils:random_element(Env#environment.harvesters)};
         {C, <<"storage_id">>} -> {C, lists_utils:random_element(Env#environment.storages)};
+        {C, <<"atm_inventory_id">>} -> {C, lists_utils:random_element(Env#environment.atm_inventories)};
+        {C, <<"atm_lambda_id">>} -> {C, lists_utils:random_element(Env#environment.atm_lambdas)};
         C when is_atom(C) -> C
     end,
     CollectionAtom = case CollectionWithExistingId of

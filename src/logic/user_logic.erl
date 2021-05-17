@@ -65,11 +65,13 @@
     create_handle_service/5, create_handle_service/3,
     create_handle/6, create_handle/3,
     create_harvester/3, create_harvester/6,
+    create_atm_inventory/3,
 
     join_group/3,
     join_space/3,
     join_harvester/3,
     join_cluster/3,
+    join_atm_inventory/3,
 
     get_full_name/2,
 
@@ -94,12 +96,16 @@
     get_eff_clusters/1, get_clusters/2, get_eff_clusters/2,
     get_cluster/3, get_eff_cluster/3,
 
+    get_atm_inventories/2, get_eff_atm_inventories/2,
+    get_atm_inventory/3, get_eff_atm_inventory/3,
+
     leave_group/3,
     leave_space/3,
     leave_handle_service/3,
     leave_handle/3,
     leave_harvester/3,
-    leave_cluster/3
+    leave_cluster/3,
+    leave_atm_inventory/3
 ]).
 -export([
     exists/1,
@@ -110,7 +116,8 @@
     has_eff_handle_service/2,
     has_eff_handle/2,
     has_eff_harvester/2,
-    has_eff_cluster/2
+    has_eff_cluster/2,
+    has_eff_atm_inventory/2
 ]).
 -export([
     validate_full_name/1, normalize_full_name/1,
@@ -739,6 +746,20 @@ create_harvester(Auth, UserId, Data) ->
     })).
 
 
+-spec create_atm_inventory(aai:auth(), od_user:id(), binary() | entity_logic:data()) ->
+    {ok, od_atm_inventory:id()} | errors:error().
+create_atm_inventory(Auth, UserId, Name) when is_binary(Name) ->
+    create_atm_inventory(Auth, UserId, #{<<"name">> => Name});
+create_atm_inventory(Auth, UserId, Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_atm_inventory, id = undefined, aspect = instance},
+        auth_hint = ?AS_USER(UserId),
+        data = Data
+    })).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Joins a group on behalf of given user based on group_invite_user token.
@@ -829,6 +850,20 @@ join_cluster(Auth, UserId, Data) when is_map(Data) ->
     }));
 join_cluster(Auth, UserId, Token) ->
     join_cluster(Auth, UserId, #{<<"token">> => Token}).
+
+
+-spec join_atm_inventory(aai:auth(), od_user:id(), tokens:serialized() | tokens:token() | entity_logic:data()) ->
+    {ok, od_atm_inventory:id()} | errors:error().
+join_atm_inventory(Auth, UserId, Data) when is_map(Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_atm_inventory, id = undefined, aspect = join},
+        auth_hint = ?AS_USER(UserId),
+        data = Data
+    }));
+join_atm_inventory(Auth, UserId, Token) ->
+    join_atm_inventory(Auth, UserId, #{<<"token">> => Token}).
 
 
 -spec get_full_name(aai:auth(), od_user:id()) ->
@@ -1216,6 +1251,7 @@ get_eff_cluster(Auth, UserId, ClusterId) ->
         auth_hint = ?THROUGH_USER(UserId)
     }).
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Retrieves the list of harvesters of given user.
@@ -1275,6 +1311,48 @@ get_eff_harvester(Auth, UserId, HarvesterId) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_USER(UserId)
+    }).
+
+
+-spec get_atm_inventories(aai:auth(), od_user:id()) ->
+    {ok, [od_atm_inventory:id()]} | errors:error().
+get_atm_inventories(Auth, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_user, id = UserId, aspect = atm_inventories}
+    }).
+
+
+-spec get_eff_atm_inventories(aai:auth(), od_user:id()) ->
+    {ok, [od_atm_inventory:id()]} | errors:error().
+get_eff_atm_inventories(Auth, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_user, id = UserId, aspect = eff_atm_inventories}
+    }).
+
+
+-spec get_atm_inventory(aai:auth(), od_user:id(), od_atm_inventory:id()) ->
+    {ok, #{}} | errors:error().
+get_atm_inventory(Auth, UserId, AtmInventoryId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_atm_inventory, id = AtmInventoryId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_USER(UserId)
+    }).
+
+
+-spec get_eff_atm_inventory(aai:auth(), od_user:id(), od_atm_inventory:id()) ->
+    {ok, #{}} | errors:error().
+get_eff_atm_inventory(Auth, UserId, AtmInventoryId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_atm_inventory, id = AtmInventoryId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_USER(UserId)
     }).
 
@@ -1366,6 +1444,16 @@ leave_cluster(Auth, UserId, ClusterId) ->
         operation = delete,
         auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = {cluster, ClusterId}}
+    }).
+
+
+-spec leave_atm_inventory(aai:auth(), od_user:id(), od_atm_inventory:id()) ->
+    ok | errors:error().
+leave_atm_inventory(Auth, UserId, AtmInventoryId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        auth = Auth,
+        gri = #gri{type = od_user, id = UserId, aspect = {atm_inventory, AtmInventoryId}}
     }).
 
 
@@ -1482,6 +1570,13 @@ has_eff_cluster(UserId, ClusterId) when is_binary(UserId) ->
     entity_graph:has_relation(effective, top_down, od_cluster, ClusterId, od_user, UserId);
 has_eff_cluster(User, ClusterId) ->
     entity_graph:has_relation(effective, top_down, od_cluster, ClusterId, User).
+
+
+-spec has_eff_atm_inventory(od_user:id() | od_user:record(), od_atm_inventory:id()) -> boolean().
+has_eff_atm_inventory(UserId, AtmInventoryId) when is_binary(UserId) ->
+    entity_graph:has_relation(effective, top_down, od_atm_inventory, AtmInventoryId, od_user, UserId);
+has_eff_atm_inventory(User, AtmInventoryId) ->
+    entity_graph:has_relation(effective, top_down, od_atm_inventory, AtmInventoryId, User).
 
 
 %%--------------------------------------------------------------------

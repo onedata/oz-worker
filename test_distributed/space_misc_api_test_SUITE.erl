@@ -39,7 +39,7 @@
     update_test/1,
     delete_test/1,
 
-    list_shares_test/1,
+    get_shares_test/1,
     get_share_test/1,
 
     list_storages_test/1,
@@ -60,7 +60,7 @@ all() ->
         update_test,
         delete_test,
 
-        list_shares_test,
+        get_shares_test,
         get_share_test,
 
         list_storages_test,
@@ -482,7 +482,7 @@ delete_test(Config) ->
     )).
 
 
-list_shares_test(Config) ->
+get_shares_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 

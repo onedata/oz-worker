@@ -132,6 +132,7 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         <<"effectiveSpaces">> => entity_graph:get_relations(effective, top_down, od_space, User),
         <<"effectiveHandles">> => entity_graph:get_relations(effective, top_down, od_handle, User),
         <<"effectiveHandleServices">> => entity_graph:get_relations(effective, top_down, od_handle_service, User),
+        <<"effectiveAtmInventories">> => entity_graph:get_relations(effective, top_down, od_atm_inventory, User),
 
         % TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"defaultSpaceId">> => null,
@@ -441,6 +442,35 @@ translate_resource(_, #gri{type = od_token, aspect = instance, scope = shared}, 
 
 translate_resource(_, #gri{type = temporary_token_secret, scope = shared}, Generation) ->
     #{<<"generation">> => Generation};
+
+translate_resource(_, #gri{type = od_atm_inventory, aspect = instance, scope = private}, AtmInventory) ->
+    #{
+        <<"name">> => AtmInventory#od_atm_inventory.name
+    };
+
+translate_resource(_, #gri{type = od_atm_lambda, aspect = instance, scope = private}, AtmLambda) ->
+    #od_atm_lambda{
+        name = Name,
+        summary = Summary,
+        description = Description,
+
+        operation_spec = OperationSpec,
+        argument_specs = ArgumentSpecs,
+        result_specs = ResultSpecs,
+        
+        atm_inventories = AtmInventories
+    } = AtmLambda,
+    #{
+        <<"name">> => Name,
+        <<"summary">> => Summary,
+        <<"description">> => Description,
+
+        <<"operationSpec">> => jsonable_record:to_json(OperationSpec, atm_lambda_operation_spec),
+        <<"argumentSpecs">> => [jsonable_record:to_json(S, atm_lambda_argument_spec) || S <- ArgumentSpecs],
+        <<"resultSpecs">> => [jsonable_record:to_json(S, atm_lambda_result_spec) || S <- ResultSpecs],
+        
+        <<"atmInventories">> => AtmInventories
+    };
 
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync get result for:~n
