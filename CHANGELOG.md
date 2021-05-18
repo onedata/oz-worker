@@ -4,6 +4,8 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha9
+
 ### 21.02.0-alpha8
 
 -   **VFS-7575** Add the possibility to incorporate an XRootD server
