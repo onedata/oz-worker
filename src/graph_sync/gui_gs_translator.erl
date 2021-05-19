@@ -1046,9 +1046,9 @@ translate_atm_inventory(#gri{aspect = atm_lambdas}, AtmLambdas) ->
         <<"list">> => ids_to_serialized_gris(#gri{type = od_atm_lambda, aspect = instance, scope = auto}, AtmLambdas)
     };
 
-translate_atm_inventory(#gri{aspect = atm_workflow_schemas}, AtmWfSchemas) ->
+translate_atm_inventory(#gri{aspect = atm_workflow_schemas}, AtmWorkflowSchemas) ->
     #{
-        <<"list">> => ids_to_serialized_gris(#gri{type = od_atm_workflow_schema, aspect = instance, scope = auto}, AtmWfSchemas)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_atm_workflow_schema, aspect = instance, scope = auto}, AtmWorkflowSchemas)
     }.
 
 
@@ -1092,9 +1092,9 @@ translate_atm_lambda(#gri{aspect = atm_inventories}, AtmInventories) ->
         <<"list">> => ids_to_serialized_gris(#gri{type = od_atm_inventory, aspect = instance, scope = auto}, AtmInventories)
     };
 
-translate_atm_lambda(#gri{aspect = atm_workflow_schemas}, AtmWfSchemas) ->
+translate_atm_lambda(#gri{aspect = atm_workflow_schemas}, AtmWorkflowSchemas) ->
     #{
-        <<"list">> => ids_to_serialized_gris(#gri{type = od_atm_workflow_schema, aspect = instance, scope = auto}, AtmWfSchemas)
+        <<"list">> => ids_to_serialized_gris(#gri{type = od_atm_workflow_schema, aspect = instance, scope = auto}, AtmWorkflowSchemas)
     }.
 
 

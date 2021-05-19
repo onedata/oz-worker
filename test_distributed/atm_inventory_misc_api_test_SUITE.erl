@@ -428,22 +428,22 @@ delete_test(Config) ->
         AtmLambdas = lists:map(fun(_) ->
             ozt_atm_lambdas:create(AtmInventoryId)
         end, lists:seq(1, rand:uniform(5))),
-        AtmWfSchemas = lists:map(fun(_) ->
+        AtmWorkflowSchemas = lists:map(fun(_) ->
             ozt_atm_workflow_schemas:create(AtmInventoryId)
         end, lists:seq(1, rand:uniform(5))),
-        #{atm_inventory_id => AtmInventoryId, atm_lambdas => AtmLambdas, atm_workflow_schemas => AtmWfSchemas}
+        #{atm_inventory_id => AtmInventoryId, atm_lambdas => AtmLambdas, atm_workflow_schemas => AtmWorkflowSchemas}
     end,
     DeleteEntityFun = fun(#{atm_inventory_id := AtmInventoryId} = _Env) ->
         ozt_atm_inventories:delete(AtmInventoryId)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{
-        atm_inventory_id := AtmInventoryId, atm_lambdas := AtmLambdas, atm_workflow_schemas := AtmWfSchemas
+        atm_inventory_id := AtmInventoryId, atm_lambdas := AtmLambdas, atm_workflow_schemas := AtmWorkflowSchemas
     }, _Data) ->
         ?assertEqual(not ShouldSucceed, lists:member(AtmInventoryId, ozt_atm_inventories:list())),
         % referenced atm_lambdas SHOULD NOT be removed if an inventory is
         [?assert(ozt_atm_lambdas:exists(AL)) || AL <- AtmLambdas],
         % inventory's atm_workflow schemas SHOULD be removed along with the inventory
-        [?assertEqual(not ShouldSucceed, ozt_atm_workflow_schemas:exists(AWS)) || AWS <- AtmWfSchemas]
+        [?assertEqual(not ShouldSucceed, ozt_atm_workflow_schemas:exists(AWS)) || AWS <- AtmWorkflowSchemas]
     end,
 
     ApiTestSpec = #api_test_spec{

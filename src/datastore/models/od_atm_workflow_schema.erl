@@ -98,9 +98,9 @@ entity_logic_plugin() ->
 
 -spec extract_atm_lambdas_from_lanes([atm_lane_schema:record()]) -> [od_atm_lambda:id()].
 extract_atm_lambdas_from_lanes(Lanes) ->
-    ordsets:from_list(lists:foldl(fun(#atm_lane_schema{parallel_boxes = ParallelBoxes}, TopAcc) ->
-        lists:foldl(fun(#atm_parallel_box_schema{tasks = Tasks}, MiddleAcc) ->
-            lists:foldl(fun(#atm_task_schema{lambda_id = LambdaId}, BottomAcc) ->
+    ordsets:to_list(lists:foldl(fun(#atm_lane_schema{parallel_boxes = ParallelBoxes}, TopAcc) ->
+        ordsets:fold(fun(#atm_parallel_box_schema{tasks = Tasks}, MiddleAcc) ->
+            ordsets:fold(fun(#atm_task_schema{lambda_id = LambdaId}, BottomAcc) ->
                 ordsets:add_element(LambdaId, BottomAcc)
             end, MiddleAcc, Tasks)
         end, TopAcc, ParallelBoxes)

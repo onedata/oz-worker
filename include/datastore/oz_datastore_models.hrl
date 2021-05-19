@@ -507,7 +507,7 @@ end).
 
     state :: automation:workflow_schema_state(),
 
-    atm_inventory :: undefined | od_atm_inventory:id(),
+    atm_inventory :: undefined | od_atm_inventory:id(),  % undefined until a relation in entity graph is created
     atm_lambdas = [] :: [od_atm_lambda:id()],
 
     creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),

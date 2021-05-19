@@ -200,19 +200,19 @@ gen_example_result_mappings(AtmLambdaId, StoreSchemaIds) ->
     end.
 
 
--spec gen_example_argument_value_builder([automation:id()]) -> atm_argument_value_builder:record().
+-spec gen_example_argument_value_builder([automation:id()]) -> atm_task_argument_value_builder:record().
 gen_example_argument_value_builder(StoreSchemaIds) ->
     case rand:uniform(5) of
-        1 -> #atm_argument_value_builder{
+        1 -> #atm_task_argument_value_builder{
             type = iterated_item, recipe = lists_utils:random_element([
                 undefined,
                 lists_utils:random_sublist(["key1", "key2", "key3", 0, 1, 2])
             ])
         };
-        2 -> #atm_argument_value_builder{
+        2 -> #atm_task_argument_value_builder{
             type = const, recipe = lists_utils:random_element([?RAND_STR(), 0, 151, 27.8])
         };
-        3 -> #atm_argument_value_builder{
+        3 -> #atm_task_argument_value_builder{
             type = object, recipe = maps:from_list(lists:map(fun(_) ->
                 {?RAND_STR(), gen_example_argument_value_builder(StoreSchemaIds)}
             end, lists:seq(1, rand:uniform(7))))
@@ -224,11 +224,11 @@ gen_example_argument_value_builder(StoreSchemaIds) ->
                 [] ->
                     gen_example_argument_value_builder(StoreSchemaIds);
                 _ ->
-                    #atm_argument_value_builder{
+                    #atm_task_argument_value_builder{
                         type = store_credentials, recipe = lists_utils:random_element(StoreSchemaIds)
                     }
             end;
-        5 -> #atm_argument_value_builder{
+        5 -> #atm_task_argument_value_builder{
             type = onedatafs_credentials, recipe = undefined
         }
     end.
