@@ -233,6 +233,7 @@ rest_routes() ->
         cluster_routes:routes(),
         atm_inventory_routes:routes(),
         atm_lambda_routes:routes(),
+        atm_workflow_schema_routes:routes(),
         zone_routes:routes()
     ]),
     % Aggregate routes that share the same path

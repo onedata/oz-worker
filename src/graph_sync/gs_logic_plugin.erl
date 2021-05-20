@@ -330,5 +330,6 @@ is_type_supported(#gri{type = od_harvester}) -> true;
 is_type_supported(#gri{type = temporary_token_secret}) -> true;
 is_type_supported(#gri{type = od_atm_inventory}) -> true;
 is_type_supported(#gri{type = od_atm_lambda}) -> true;
+is_type_supported(#gri{type = od_atm_workflow_schema}) -> true;
 is_type_supported(#gri{type = oz_worker}) -> true;
 is_type_supported(#gri{type = _}) -> false.

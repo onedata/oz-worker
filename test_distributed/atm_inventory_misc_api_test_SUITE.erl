@@ -35,6 +35,7 @@
     list_privileges_test/1,
     get_test/1,
     get_atm_lambdas_test/1,
+    get_atm_workflow_schemas_test/1,
     update_test/1,
     delete_test/1
 ]).
@@ -46,6 +47,7 @@ all() ->
         list_privileges_test,
         get_test,
         get_atm_lambdas_test,
+        get_atm_workflow_schemas_test,
         update_test,
         delete_test
     ]).
@@ -307,6 +309,47 @@ get_atm_lambdas_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
+get_atm_workflow_schemas_test(Config) ->
+    Creator = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+    AnotherMember = ozt_users:create(),
+    AtmInventory = ozt_users:create_atm_inventory_for(Creator),
+    ozt_atm_inventories:add_user(AtmInventory, AnotherMember, []),
+
+    ExpAtmWorkflowSchemas = lists:map(fun(_) ->
+        ozt_atm_workflow_schemas:create(AtmInventory)
+    end, lists:seq(1, 10)),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_ATM_INVENTORIES_VIEW]},
+                {user, Creator},
+                {user, AnotherMember}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/atm_inventories/">>, AtmInventory, <<"/atm_workflow_schemas">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"atm_workflow_schemas">> => ExpAtmWorkflowSchemas}
+        },
+        logic_spec = #logic_spec{
+            module = atm_inventory_logic,
+            function = get_atm_workflow_schemas,
+            args = [auth, AtmInventory],
+            expected_result = ?OK_LIST(ExpAtmWorkflowSchemas)
+        }
+        % TODO VFS-4520 Tests for GraphSync API
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
 update_test(Config) ->
     UserWithUpdatePrivs = ozt_users:create(),
     UserWithoutUpdatePrivs = ozt_users:create(),
@@ -382,13 +425,25 @@ delete_test(Config) ->
         AtmInventoryId = ozt_users:create_atm_inventory_for(UserWithoutDeletePrivs),
         ozt_atm_inventories:set_user_privileges(AtmInventoryId, UserWithoutDeletePrivs, AllPrivs -- [?ATM_INVENTORY_DELETE]),
         ozt_atm_inventories:add_user(AtmInventoryId, UserWithDeletePrivs, [?ATM_INVENTORY_DELETE]),
-        #{atm_inventory_id => AtmInventoryId}
+        AtmLambdas = lists:map(fun(_) ->
+            ozt_atm_lambdas:create(AtmInventoryId)
+        end, lists:seq(1, rand:uniform(5))),
+        AtmWorkflowSchemas = lists:map(fun(_) ->
+            ozt_atm_workflow_schemas:create(AtmInventoryId)
+        end, lists:seq(1, rand:uniform(5))),
+        #{atm_inventory_id => AtmInventoryId, atm_lambdas => AtmLambdas, atm_workflow_schemas => AtmWorkflowSchemas}
     end,
     DeleteEntityFun = fun(#{atm_inventory_id := AtmInventoryId} = _Env) ->
         ozt_atm_inventories:delete(AtmInventoryId)
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{atm_inventory_id := AtmInventoryId} = _Env, _Data) ->
-        ?assertEqual(lists:member(AtmInventoryId, ozt_atm_inventories:list()), not ShouldSucceed)
+    VerifyEndFun = fun(ShouldSucceed, #{
+        atm_inventory_id := AtmInventoryId, atm_lambdas := AtmLambdas, atm_workflow_schemas := AtmWorkflowSchemas
+    }, _Data) ->
+        ?assertEqual(not ShouldSucceed, lists:member(AtmInventoryId, ozt_atm_inventories:list())),
+        % referenced atm_lambdas SHOULD NOT be removed if an inventory is
+        [?assert(ozt_atm_lambdas:exists(AL)) || AL <- AtmLambdas],
+        % inventory's atm_workflow schemas SHOULD be removed along with the inventory
+        [?assertEqual(not ShouldSucceed, ozt_atm_workflow_schemas:exists(AWS)) || AWS <- AtmWorkflowSchemas]
     end,
 
     ApiTestSpec = #api_test_spec{

@@ -20,9 +20,11 @@
 -export([list/0]).
 -export([create/0, create/1]).
 -export([get/1]).
+-export([exists/1]).
 -export([add_user/2, add_user/3]).
 -export([add_group/2, add_group/3]).
 -export([get_users/1, get_groups/1]).
+-export([get_atm_lambdas/1]).
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([set_user_privileges/3, set_group_privileges/3]).
 -export([remove_user/2, remove_group/2]).
@@ -55,6 +57,11 @@ get(AtmInventoryId) ->
     AtmInventory.
 
 
+-spec exists(od_atm_inventory:id()) -> boolean().
+exists(AtmInventoryId) ->
+    ozt:rpc(atm_inventory_logic, exists, [AtmInventoryId]).
+
+
 -spec add_user(od_atm_inventory:id(), od_user:id()) -> ok.
 add_user(AtmInventoryId, UserId) ->
     add_user(AtmInventoryId, UserId, privileges:atm_inventory_member()).
@@ -85,6 +92,12 @@ get_users(AtmInventoryId) ->
 get_groups(AtmInventoryId) ->
     {ok, Groups} = ?assertMatch({ok, _}, ozt:rpc(atm_inventory_logic, get_groups, [?ROOT, AtmInventoryId])),
     Groups.
+
+
+-spec get_atm_lambdas(od_atm_inventory:id()) -> [od_atm_lambda:id()].
+get_atm_lambdas(AtmInventoryId) ->
+    {ok, Lambdas} = ?assertMatch({ok, _}, ozt:rpc(atm_inventory_logic, get_atm_lambdas, [?ROOT, AtmInventoryId])),
+    Lambdas.
 
 
 -spec get_user_privileges(od_atm_inventory:id(), od_user:id()) -> [privileges:atm_inventory_privilege()].

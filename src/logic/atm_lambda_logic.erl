@@ -23,6 +23,7 @@
 -export([
     get/2,
     get_atm_inventories/2,
+    get_atm_workflow_schemas/2,
     list/1
 ]).
 -export([
@@ -57,7 +58,6 @@ create(Auth, Data) ->
     })).
 
 
-%% Only for admins - regular users must use the atm_inventory_logic:get_atm_lambda/3
 -spec get(aai:auth(), od_atm_lambda:id()) ->
     {ok, od_atm_lambda:record()} | errors:error().
 get(Auth, AtmLambdaId) ->
@@ -68,7 +68,6 @@ get(Auth, AtmLambdaId) ->
     }).
 
 
-%% Only for admins - regular users must use the atm_inventory_logic:get_atm_lambda_atm_inventories/3
 -spec get_atm_inventories(aai:auth(), od_atm_lambda:id()) ->
     {ok, [od_atm_inventory:id()]} | errors:error().
 get_atm_inventories(Auth, AtmLambdaId) ->
@@ -76,6 +75,16 @@ get_atm_inventories(Auth, AtmLambdaId) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = od_atm_lambda, id = AtmLambdaId, aspect = atm_inventories}
+    }).
+
+
+-spec get_atm_workflow_schemas(aai:auth(), od_atm_lambda:id()) ->
+    {ok, [od_atm_inventory:id()]} | errors:error().
+get_atm_workflow_schemas(Auth, AtmLambdaId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_atm_lambda, id = AtmLambdaId, aspect = atm_workflow_schemas}
     }).
 
 

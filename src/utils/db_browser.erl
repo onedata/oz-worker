@@ -22,7 +22,8 @@
 -type entries() :: all | [gri:entity_id()].
 % Basic table types - all collections reuse these tables to display the data
 -type table_type() :: users | groups | spaces | shares | providers | clusters
-| handle_services | handles | harvesters | storages | atm_inventories | atm_lambdas.
+| handle_services | handles | harvesters | storages
+| atm_inventories | atm_lambdas | atm_workflow_schemas.
 % Id of a column in displayed table, also used as display name
 -type column_id() :: atom().
 % Number of the column, counting from the left, starting with 1
@@ -62,6 +63,7 @@
 -export([storages/0]).
 -export([atm_inventories/0]).
 -export([atm_lambdas/0]).
+-export([atm_workflow_schemas/0]).
 
 -export([pr/1, pr/2, pr/3]).
 -export([format/1, format/2, format/3]).
@@ -108,6 +110,9 @@ atm_inventories() -> pr(atm_inventories).
 
 -spec atm_lambdas() -> ok.
 atm_lambdas() -> pr(atm_lambdas).
+
+-spec atm_workflow_schemas() -> ok.
+atm_workflow_schemas() -> pr(atm_workflow_schemas).
 
 
 %%--------------------------------------------------------------------
@@ -230,7 +235,9 @@ all_collections() -> [
     {atm_inventory_groups, <<"atm_inventory_id">>},
     {atm_inventory_lambdas, <<"atm_inventory_id">>},
 
-    {atm_lambda_inventories, <<"atm_lambda_id">>}
+    {atm_lambda_inventories, <<"atm_lambda_id">>},
+
+    {atm_workflow_schema_lambdas, <<"atm_workflow_schema_id">>}
 ].
 
 %%%===================================================================
@@ -526,10 +533,13 @@ format_collection({atm_inventory_lambdas, AtmInventoryId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_atm_inventory{atm_lambdas = AtmLambdas}}} = od_atm_inventory:get(AtmInventoryId),
     format_table(atm_lambdas, AtmLambdas, SortBy, SortOrder);
 
-
 format_collection({atm_lambda_inventories, AtmLambdaId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_atm_lambda{atm_inventories = AtmInventories}}} = od_atm_lambda:get(AtmLambdaId),
-    format_table(atm_inventories, AtmInventories, SortBy, SortOrder).
+    format_table(atm_inventories, AtmInventories, SortBy, SortOrder);
+
+format_collection({atm_workflow_schema_lambdas, AtmWorkflowSchemaId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_atm_workflow_schema{atm_lambdas = AtmLambdas}}} = od_atm_workflow_schema:get(AtmWorkflowSchemaId),
+    format_table(atm_lambdas, AtmLambdas, SortBy, SortOrder).
 
 
 %% @private
@@ -817,6 +827,28 @@ field_specs(atm_lambdas) -> [
     end end},
     {atm_inventories, integer, 15, fun(Doc) -> length(Doc#document.value#od_atm_lambda.atm_inventories) end},
     {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_atm_lambda.creation_time end}
+];
+field_specs(atm_workflow_schemas) -> [
+    {id, text, 38, fun(Doc) -> Doc#document.key end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_atm_workflow_schema.name end},
+    {atm_inventory_id, text, 38, fun(Doc) -> Doc#document.value#od_atm_workflow_schema.atm_inventory end},
+    {used_lambdas, integer, 12, fun(Doc) -> length(Doc#document.value#od_atm_workflow_schema.atm_lambdas) end},
+    {stores, integer, 6, fun(Doc) -> length(Doc#document.value#od_atm_workflow_schema.stores) end},
+    {lanes, integer, 5, fun(Doc) -> length(Doc#document.value#od_atm_workflow_schema.lanes) end},
+    {pboxes, integer, 6, fun(Doc) -> lists:sum(
+        lists:map(fun(#atm_lane_schema{parallel_boxes = PBoxes}) ->
+            length(PBoxes)
+        end, Doc#document.value#od_atm_workflow_schema.lanes)
+    ) end},
+    {tasks, integer, 5, fun(Doc) -> lists:sum(
+        lists:flatmap(fun(#atm_lane_schema{parallel_boxes = PBoxes}) ->
+            lists:map(fun(#atm_parallel_box_schema{tasks = Tasks}) ->
+                length(Tasks)
+            end, PBoxes)
+        end, Doc#document.value#od_atm_workflow_schema.lanes)
+    ) end},
+    {state, integer, 10, fun(Doc) -> length(Doc#document.value#od_atm_workflow_schema.lanes) end},
+    {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_atm_workflow_schema.creation_time end}
 ].
 
 
@@ -993,4 +1025,5 @@ module(handles) -> od_handle;
 module(harvesters) -> od_harvester;
 module(storages) -> od_storage;
 module(atm_inventories) -> od_atm_inventory;
-module(atm_lambdas) -> od_atm_lambda.
+module(atm_lambdas) -> od_atm_lambda;
+module(atm_workflow_schemas) -> od_atm_workflow_schema.

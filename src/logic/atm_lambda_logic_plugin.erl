@@ -26,11 +26,6 @@
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
--define(DEFAULT_SUMMARY, <<"Missing summary">>).
--define(SUMMARY_SIZE_LIMIT, 200).
--define(DEFAULT_DESCRIPTION, <<"Missing description">>).
--define(DESCRIPTION_SIZE_LIMIT, 100000).
-
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -73,6 +68,7 @@ operation_supported(create, {atm_inventory, _}, private) -> true;
 operation_supported(get, list, private) -> true;
 operation_supported(get, instance, private) -> true;
 operation_supported(get, atm_inventories, private) -> true;
+operation_supported(get, atm_workflow_schemas, private) -> true;
 
 operation_supported(update, instance, private) -> true;
 
@@ -91,6 +87,7 @@ operation_supported(_, _, _) -> false.
     boolean().
 is_subscribable(instance, _) -> true;
 is_subscribable(atm_inventories, private) -> true;
+is_subscribable(atm_workflow_schemas, private) -> true;
 is_subscribable(_, _) -> false.
 
 %%--------------------------------------------------------------------
@@ -152,7 +149,10 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, AtmLambda) ->
     {ok, AtmLambda};
 
 get(#el_req{gri = #gri{aspect = atm_inventories}}, AtmLambda) ->
-    {ok, entity_graph:get_relations(direct, top_down, od_atm_inventory, AtmLambda)}.
+    {ok, entity_graph:get_relations(direct, top_down, od_atm_inventory, AtmLambda)};
+
+get(#el_req{gri = #gri{aspect = atm_workflow_schemas}}, AtmLambda) ->
+    {ok, entity_graph:get_relations(direct, top_down, od_atm_workflow_schema, AtmLambda)}.
 
 
 %%--------------------------------------------------------------------
@@ -242,6 +242,8 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) -
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance}}) ->
     [?OZ_ATM_INVENTORIES_VIEW];
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = atm_inventories}}) ->
+    [?OZ_ATM_INVENTORIES_VIEW];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = atm_workflow_schemas}}) ->
     [?OZ_ATM_INVENTORIES_VIEW];
 
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->

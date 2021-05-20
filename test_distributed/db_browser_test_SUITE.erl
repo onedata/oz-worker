@@ -107,7 +107,8 @@ end_per_suite(_Config) ->
     handles = [] :: [od_handle:id()],
     harvesters = [] :: [od_harvester:id()],
     atm_inventories = [] :: [od_atm_inventory:id()],
-    atm_lambdas = [] :: [od_atm_inventory:id()]
+    atm_lambdas = [] :: [od_atm_lambda:id()],
+    atm_workflow_schemas = [] :: [od_atm_workflow_schema:id()]
 }).
 
 
@@ -125,7 +126,8 @@ set_up_environment() ->
         fun set_up_handle_services_and_handles/1,
         fun set_up_harvesters/1,
         fun set_up_atm_inventories/1,
-        fun set_up_atm_lambdas/1
+        fun set_up_atm_lambdas/1,
+        fun set_up_atm_workflow_schemas/1
     ]).
 
 
@@ -357,6 +359,20 @@ set_up_atm_lambdas(Environment = #environment{atm_inventories = AtmInventories})
     }.
 
 
+set_up_atm_workflow_schemas(Environment = #environment{atm_inventories = AtmInventories}) ->
+    Environment#environment{
+        atm_workflow_schemas = lists:map(fun(_) ->
+            ParentInventory = lists_utils:random_element(AtmInventories),
+            AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data(ParentInventory),
+            AtmWorkflowSchema = ozt_atm_workflow_schemas:create(ParentInventory, AtmWorkflowSchemaData#{
+                <<"name">> => ?GEN_NAME()
+            }),
+            simulate_random_delay(),
+            AtmWorkflowSchema
+        end, lists:seq(1, ?ENTITY_COUNT))
+    }.
+
+
 generate_members(ParentType, ParentId, MemberType, AllMembers) ->
     [add_member(ParentType, ParentId, MemberType, M) || M <- ?RAND_SUBLIST(AllMembers, ?MEMBERS_COUNT)].
 
@@ -442,6 +458,7 @@ print_collection(Env, Collection) ->
         {C, <<"storage_id">>} -> {C, lists_utils:random_element(Env#environment.storages)};
         {C, <<"atm_inventory_id">>} -> {C, lists_utils:random_element(Env#environment.atm_inventories)};
         {C, <<"atm_lambda_id">>} -> {C, lists_utils:random_element(Env#environment.atm_lambdas)};
+        {C, <<"atm_workflow_schema_id">>} -> {C, lists_utils:random_element(Env#environment.atm_workflow_schemas)};
         C when is_atom(C) -> C
     end,
     CollectionAtom = case CollectionWithExistingId of
