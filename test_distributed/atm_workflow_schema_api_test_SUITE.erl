@@ -58,18 +58,18 @@ create_test(Config) ->
     Creator = ozt_users:create(),
     MemberWithNoPriv = ozt_users:create(),
     NonAdmin = ozt_users:create(),
-    AtmInventory = ozt_users:create_atm_inventory_for(Creator),
-    ozt_atm_inventories:add_user(AtmInventory, MemberWithNoPriv, privileges:atm_inventory_admin() -- [?ATM_INVENTORY_MANAGE_WORKFLOW_SCHEMAS]),
+    AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    ozt_atm_inventories:add_user(AtmInventoryId, MemberWithNoPriv, privileges:atm_inventory_admin() -- [?ATM_INVENTORY_MANAGE_WORKFLOW_SCHEMAS]),
 
     AvailableAtmLambdas = lists:map(fun(_) ->
-        ozt_atm_lambdas:create(AtmInventory)
+        ozt_atm_lambdas:create(AtmInventoryId)
     end, lists:seq(1, rand:uniform(7))),
 
     StoreSchemas = ozt_atm_workflow_schemas:gen_example_stores(),
     StoreSchemaIds = [StoreSchemaId || #{<<"id">> := StoreSchemaId} <- StoreSchemas],
 
-    VerifyFun = fun(AtmWorkflowSchema, Data, CheckCreator) ->
-        AtmWorkflowSchemaRecord = ozt_atm_workflow_schemas:get(AtmWorkflowSchema),
+    VerifyFun = fun(AtmWorkflowSchemaId, Data, CheckCreator) ->
+        AtmWorkflowSchemaRecord = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
 
         ExpName = maps:get(<<"name">>, Data),
         ExpDescription = maps:get(<<"description">>, Data, <<"Missing description">>),
@@ -100,7 +100,7 @@ create_test(Config) ->
 
             state = ExpState,
 
-            atm_inventory = AtmInventory,
+            atm_inventory = AtmInventoryId,
             atm_lambdas = lists:sort(ExpAtmLambdas),
 
             creation_time = ExpCreationTime,
@@ -137,8 +137,8 @@ create_test(Config) ->
             expected_headers = ?OK_ENV(fun(_, Data) ->
                 fun(#{<<"Location">> := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/atm_workflow_schemas/">>]),
-                    [AtmWorkflowSchema] = binary:split(Location, [BaseURL], [global, trim_all]),
-                    VerifyFun(AtmWorkflowSchema, Data, {true, Creator})
+                    [AtmWorkflowSchemaId] = binary:split(Location, [BaseURL], [global, trim_all]),
+                    VerifyFun(AtmWorkflowSchemaId, Data, {true, Creator})
                 end
             end)
         },
@@ -166,7 +166,7 @@ create_test(Config) ->
                 <<"state">>
             ],
             correct_values = #{
-                <<"atmInventoryId">> => [AtmInventory],
+                <<"atmInventoryId">> => [AtmInventoryId],
                 <<"name">> => [ozt_atm:gen_example_name()],
                 <<"description">> => [ozt_atm:gen_example_description()],
                 <<"stores">> => [StoreSchemas],
@@ -177,7 +177,7 @@ create_test(Config) ->
                 {<<"atmInventoryId">>, 1234, ?ERROR_FORBIDDEN},
                 {<<"atmInventoryId">>, <<"">>, ?ERROR_FORBIDDEN},
                 {<<"atmInventoryId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN},
-                create_update_bad_data_values(AtmInventory)
+                create_update_bad_data_values(AtmInventoryId)
             ])
         }
     },
@@ -202,8 +202,8 @@ create_test(Config) ->
             expected_headers = ?OK_ENV(fun(_, Data) ->
                 fun(#{<<"Location">> := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/atm_workflow_schemas/">>]),
-                    [AtmWorkflowSchema] = binary:split(Location, [BaseURL], [global, trim_all]),
-                    VerifyFun(AtmWorkflowSchema, Data, false)
+                    [AtmWorkflowSchemaId] = binary:split(Location, [BaseURL], [global, trim_all]),
+                    VerifyFun(AtmWorkflowSchemaId, Data, false)
                 end
             end)
         },
@@ -221,7 +221,7 @@ create_test(Config) ->
             bad_values = lists:flatten([
                 {<<"atmInventoryId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
                 {<<"atmInventoryId">>, <<"asdq4ewfs">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
-                create_update_bad_data_values(AtmInventory)
+                create_update_bad_data_values(AtmInventoryId)
             ])
         }
     },
@@ -239,8 +239,8 @@ list_test(Config) ->
         lists:map(fun(_) -> ozt_users:create_atm_inventory_for(Creator) end, lists:seq(1, rand:uniform(8)))
     end, Creators),
 
-    AtmWorkflowSchemas = lists:flatmap(fun(AtmInventory) ->
-        lists:map(fun(_) -> ozt_atm_workflow_schemas:create(AtmInventory) end, lists:seq(1, rand:uniform(8)))
+    AtmWorkflowSchemas = lists:flatmap(fun(AtmInventoryId) ->
+        lists:map(fun(_) -> ozt_atm_workflow_schemas:create(AtmInventoryId) end, lists:seq(1, rand:uniform(8)))
     end, AtmInventories),
 
     ApiTestSpec = #api_test_spec{
@@ -272,8 +272,8 @@ list_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % check also atm_workflow_schema_logic:exist function
-    lists:foreach(fun(AtmWorkflowSchema) ->
-        ?assert(ozt:rpc(atm_workflow_schema_logic, exists, [AtmWorkflowSchema]))
+    lists:foreach(fun(AtmWorkflowSchemaId) ->
+        ?assert(ozt:rpc(atm_workflow_schema_logic, exists, [AtmWorkflowSchemaId]))
     end, AtmWorkflowSchemas),
     ?assert(not ozt:rpc(atm_workflow_schema_logic, exists, [<<"asdiucyaie827346w">>])).
 
@@ -282,13 +282,13 @@ get_test(Config) ->
     Creator = ozt_users:create(),
     NonAdmin = ozt_users:create(),
     AnotherMember = ozt_users:create(),
-    AtmInventory = ozt_users:create_atm_inventory_for(Creator),
-    ozt_atm_inventories:add_user(AtmInventory, AnotherMember, []),
+    AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    ozt_atm_inventories:add_user(AtmInventoryId, AnotherMember, []),
 
-    AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data(AtmInventory),
-    AtmWorkflowSchema = ozt_atm_workflow_schemas:create(?USER(Creator), AtmInventory, AtmWorkflowSchemaData),
+    AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data(AtmInventoryId),
+    AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(?USER(Creator), AtmInventoryId, AtmWorkflowSchemaData),
     AtmWorkflowSchemaDataWithInventory = AtmWorkflowSchemaData#{
-        <<"atmInventoryId">> => AtmInventory
+        <<"atmInventoryId">> => AtmInventoryId
     },
 
     ApiTestSpec = #api_test_spec{
@@ -306,24 +306,24 @@ get_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/atm_workflow_schemas/">>, AtmWorkflowSchema],
+            path = [<<"/atm_workflow_schemas/">>, AtmWorkflowSchemaId],
             expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:private_atm_workflow_schema(rest, AtmWorkflowSchema, AtmWorkflowSchemaDataWithInventory, ?SUB(user, Creator))
+            expected_body = api_test_expect:private_atm_workflow_schema(rest, AtmWorkflowSchemaId, AtmWorkflowSchemaDataWithInventory, ?SUB(user, Creator))
         },
         logic_spec = #logic_spec{
             module = atm_workflow_schema_logic,
             function = get,
-            args = [auth, AtmWorkflowSchema],
-            expected_result = api_test_expect:private_atm_workflow_schema(logic, AtmWorkflowSchema, AtmWorkflowSchemaDataWithInventory, ?SUB(user, Creator))
+            args = [auth, AtmWorkflowSchemaId],
+            expected_result = api_test_expect:private_atm_workflow_schema(logic, AtmWorkflowSchemaId, AtmWorkflowSchemaDataWithInventory, ?SUB(user, Creator))
         },
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{
-                type = od_atm_workflow_schema, id = AtmWorkflowSchema,
+                type = od_atm_workflow_schema, id = AtmWorkflowSchemaId,
                 aspect = instance, scope = private
             },
-            auth_hint = ?THROUGH_ATM_INVENTORY(AtmInventory),
-            expected_result = api_test_expect:private_atm_workflow_schema(gs, AtmWorkflowSchema, AtmWorkflowSchemaDataWithInventory, ?SUB(user, Creator))
+            auth_hint = ?THROUGH_ATM_INVENTORY(AtmInventoryId),
+            expected_result = api_test_expect:private_atm_workflow_schema(gs, AtmWorkflowSchemaId, AtmWorkflowSchemaDataWithInventory, ?SUB(user, Creator))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -334,15 +334,15 @@ get_atm_lambdas_test(Config) ->
     NonAdmin = ozt_users:create(),
     AnotherMember = ozt_users:create(),
 
-    AtmInventory = ozt_users:create_atm_inventory_for(Creator),
-    ozt_atm_inventories:add_user(AtmInventory, AnotherMember, []),
+    AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    ozt_atm_inventories:add_user(AtmInventoryId, AnotherMember, []),
     lists:foreach(fun(_) ->
-        ozt_atm_lambdas:create(AtmInventory)
+        ozt_atm_lambdas:create(AtmInventoryId)
     end, lists:seq(1, rand:uniform(7))),
 
-    AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data(AtmInventory),
+    AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data(AtmInventoryId),
     ExpAtmLambdas = ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(maps:get(<<"lanes">>, AtmWorkflowSchemaData)),
-    AtmWorkflowSchema = ozt_atm_workflow_schemas:create(AtmInventory, AtmWorkflowSchemaData),
+    AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(AtmInventoryId, AtmWorkflowSchemaData),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -359,14 +359,14 @@ get_atm_lambdas_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/atm_workflow_schemas/">>, AtmWorkflowSchema, <<"/atm_lambdas">>],
+            path = [<<"/atm_workflow_schemas/">>, AtmWorkflowSchemaId, <<"/atm_lambdas">>],
             expected_code = ?HTTP_200_OK,
             expected_body = #{<<"atm_lambdas">> => ExpAtmLambdas}
         },
         logic_spec = #logic_spec{
             module = atm_workflow_schema_logic,
             function = get_atm_lambdas,
-            args = [auth, AtmWorkflowSchema],
+            args = [auth, AtmWorkflowSchemaId],
             expected_result = ?OK_LIST(ExpAtmLambdas)
         }
         % TODO VFS-4520 Tests for GraphSync API
@@ -378,19 +378,19 @@ update_test(Config) ->
     Creator = ozt_users:create(),
     AnotherMember = ozt_users:create(),
     NonAdmin = ozt_users:create(),
-    AtmInventory = ozt_users:create_atm_inventory_for(Creator),
-    ozt_atm_inventories:add_user(AtmInventory, AnotherMember, []),
+    AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    ozt_atm_inventories:add_user(AtmInventoryId, AnotherMember, []),
 
-    InitialWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data(AtmInventory),
-    AvailableAtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventory),
+    InitialWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data(AtmInventoryId),
+    AvailableAtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
     StoreSchemas = maps:get(<<"stores">>, InitialWorkflowSchemaData),
     StoreSchemaIds = [StoreSchemaId || #{<<"id">> := StoreSchemaId} <- StoreSchemas],
 
     EnvSetUpFun = fun() ->
-        #{atm_workflow_schema_id => ozt_atm_workflow_schemas:create(AtmInventory, InitialWorkflowSchemaData)}
+        #{atm_workflow_schema_id => ozt_atm_workflow_schemas:create(AtmInventoryId, InitialWorkflowSchemaData)}
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{atm_workflow_schema_id := AtmWorkflowSchema}, Data) ->
-        AtmWorkflowSchemaRecord = ozt_atm_workflow_schemas:get(AtmWorkflowSchema),
+    VerifyEndFun = fun(ShouldSucceed, #{atm_workflow_schema_id := AtmWorkflowSchemaId}, Data) ->
+        AtmWorkflowSchemaRecord = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
 
         InitialName = maps:get(<<"name">>, InitialWorkflowSchemaData),
         ExpName = case ShouldSucceed of
@@ -483,7 +483,7 @@ update_test(Config) ->
                 <<"lanes">> => [ozt_atm_workflow_schemas:gen_example_lanes(AvailableAtmLambdas, StoreSchemaIds)],
                 <<"state">> => [ozt_atm_workflow_schemas:gen_example_state()]
             },
-            bad_values = create_update_bad_data_values(AtmInventory)
+            bad_values = create_update_bad_data_values(AtmInventoryId)
         }
     },
     ?assert(api_test_utils:run_tests(
@@ -496,12 +496,12 @@ delete_test(Config) ->
     UserWithoutDeletePrivs = ozt_users:create(),
     NonAdmin = ozt_users:create(),
     AllPrivs = privileges:atm_inventory_privileges(),
-    AtmInventory = ozt_users:create_atm_inventory_for(UserWithoutDeletePrivs),
-    ozt_atm_inventories:set_user_privileges(AtmInventory, UserWithoutDeletePrivs, AllPrivs -- [?ATM_INVENTORY_MANAGE_WORKFLOW_SCHEMAS]),
-    ozt_atm_inventories:add_user(AtmInventory, UserWithDeletePrivs, [?ATM_INVENTORY_MANAGE_WORKFLOW_SCHEMAS]),
+    AtmInventoryId = ozt_users:create_atm_inventory_for(UserWithoutDeletePrivs),
+    ozt_atm_inventories:set_user_privileges(AtmInventoryId, UserWithoutDeletePrivs, AllPrivs -- [?ATM_INVENTORY_MANAGE_WORKFLOW_SCHEMAS]),
+    ozt_atm_inventories:add_user(AtmInventoryId, UserWithDeletePrivs, [?ATM_INVENTORY_MANAGE_WORKFLOW_SCHEMAS]),
 
     EnvSetUpFun = fun() ->
-        AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(AtmInventory),
+        AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(AtmInventoryId),
         #od_atm_workflow_schema{atm_lambdas = AtmLambdas} = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
         #{atm_workflow_schema_id => AtmWorkflowSchemaId, atm_lambdas => AtmLambdas}
     end,
@@ -511,7 +511,7 @@ delete_test(Config) ->
     VerifyEndFun = fun(ShouldSucceed, #{atm_workflow_schema_id := AtmWorkflowSchemaId, atm_lambdas := AtmLambdas}, _Data) ->
         ?assertEqual(lists:member(AtmWorkflowSchemaId, ozt_atm_workflow_schemas:list()), not ShouldSucceed),
         % parent inventory should not be removed along with the atm_workflow_schema
-        ?assert(ozt_atm_inventories:exists(AtmInventory)),
+        ?assert(ozt_atm_inventories:exists(AtmInventoryId)),
         % referenced atm_lambdas SHOULD NOT be removed if a atm_workflow_schema is
         [?assert(ozt_atm_lambdas:exists(AL)) || AL <- AtmLambdas]
     end,
@@ -555,7 +555,7 @@ delete_test(Config) ->
 %%%===================================================================
 
 %% @private
-create_update_bad_data_values(AtmInventory) ->
+create_update_bad_data_values(AtmInventoryId) ->
     {DisallowedLanes, DisallowedLambda} = gen_lanes_containing_disallowed_lambda(),
     lists:flatten([
         {<<"description">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"description">>)},
@@ -564,9 +564,9 @@ create_update_bad_data_values(AtmInventory) ->
         {<<"stores">>, [1234], ?ERROR_BAD_DATA(<<"stores">>)},
         {<<"lanes">>, #{<<"bad">> => <<"object">>}, ?ERROR_BAD_DATA(<<"lanes">>)},
         {<<"lanes">>, [<<"text">>], ?ERROR_BAD_DATA(<<"lanes">>)},
-        {<<"lanes">>, DisallowedLanes, ?ERROR_RELATION_DOES_NOT_EXIST(od_atm_lambda, DisallowedLambda, od_atm_inventory, AtmInventory)},
+        {<<"lanes">>, DisallowedLanes, ?ERROR_RELATION_DOES_NOT_EXIST(od_atm_lambda, DisallowedLambda, od_atm_inventory, AtmInventoryId)},
         {<<"state">>, 78.4, ?ERROR_BAD_VALUE_ATOM(<<"state">>)},
-        {<<"state">>, bad, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"state">>, [incomplete, ready, deprecated])},
+        {<<"state">>, bad, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"state">>, automation:all_workflow_schema_states())},
         ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
     ]).
 

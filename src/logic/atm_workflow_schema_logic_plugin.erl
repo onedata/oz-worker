@@ -285,7 +285,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
             <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}},
             <<"stores">> => {{jsonable_record, list, atm_store_schema}, any},
             <<"lanes">> => {{jsonable_record, list, atm_lane_schema}, any},
-            <<"state">> => {atom, [incomplete, ready, deprecated]}
+            <<"state">> => {atom, automation:all_workflow_schema_states()}
         }
     };
 
@@ -297,7 +297,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
         <<"stores">> => {{jsonable_record, list, atm_store_schema}, any},
         <<"lanes">> => {{jsonable_record, list, atm_lane_schema}, any},
 
-        <<"state">> => {atom, [incomplete, ready, deprecated]}
+        <<"state">> => {atom, automation:all_workflow_schema_states()}
     }
 }.
 
@@ -353,8 +353,6 @@ assert_inventory_has_lambdas(AtmInventoryId, AtmLambdas) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec reconcile_lambdas_unsafe(od_atm_workflow_schema:id(), [od_atm_lambda:id()], [od_atm_lambda:id()]) -> ok.
-reconcile_lambdas_unsafe(_AtmWorkflowSchemaId, SameAtmLambdas, SameAtmLambdas) ->
-    ok;
 reconcile_lambdas_unsafe(AtmWorkflowSchemaId, OldAtmLambdas, NewAtmLambdas) ->
     ToAdd = lists_utils:subtract(NewAtmLambdas, OldAtmLambdas),
     ToDelete = lists_utils:subtract(OldAtmLambdas, NewAtmLambdas),

@@ -111,9 +111,7 @@ gen_example_data(AtmInventoryId) when is_binary(AtmInventoryId) ->
 
 -spec gen_example_state() -> json_utils:json_term().
 gen_example_state() ->
-    automation:workflow_schema_state_to_json(lists_utils:random_element([
-        incomplete, ready, deprecated
-    ])).
+    automation:workflow_schema_state_to_json(lists_utils:random_element(automation:all_workflow_schema_states())).
 
 
 -spec gen_example_stores() -> entity_logic:data().
