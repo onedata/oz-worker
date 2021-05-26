@@ -8,8 +8,10 @@ CHANGELOG
 
 -   **VFS-7663** Changed background image of sign-in page in Onezone and
     Onepanel.
--   **VFS-7304** Add preliminary REST API and GUI for dataset
-    archivisation - to be extended in near future.
+-   **VFS-7648** Added Web GUI views for browsing and creating datasets
+    and archives.
+-   **VFS-7304** Add preliminary REST API for dataset archivization - to
+    be extended in near future.
 
 ### 21.02.0-alpha10
 
