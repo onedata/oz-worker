@@ -1,6 +1,17 @@
-# Release notes for project oz-worker
+Release notes for project oz-worker
+===================================
 
-## CHANGELOG
+CHANGELOG
+---------
+
+### 21.02.0-alpha11
+
+-   **VFS-7663** Changed background image of sign-in page in Onezone and
+    Onepanel.
+-   **VFS-7648** Added Web GUI views for browsing and creating datasets
+    and archives.
+-   **VFS-7304** Add preliminary REST API for dataset archivization - to
+    be extended in near future.
 
 ### 21.02.0-alpha10
 
