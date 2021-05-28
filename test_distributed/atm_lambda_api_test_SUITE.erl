@@ -175,9 +175,9 @@ create_test(Config) ->
             correct_values = #{
                 <<"atmInventoryId">> => [AtmInventory],
                 <<"name">> => [ozt_atm:gen_example_name()],
-                <<"operationSpec">> => [ozt_atm_lambdas:gen_example_operation_spec()],
-                <<"argumentSpecs">> => [ozt_atm_lambdas:gen_example_argument_specs()],
-                <<"resultSpecs">> => [ozt_atm_lambdas:gen_example_result_specs()],
+                <<"operationSpec">> => [ozt_atm_lambdas:gen_example_operation_spec_json()],
+                <<"argumentSpecs">> => [ozt_atm_lambdas:gen_example_argument_specs_json()],
+                <<"resultSpecs">> => [ozt_atm_lambdas:gen_example_result_specs_json()],
                 <<"summary">> => [ozt_atm:gen_example_summary()],
                 <<"description">> => [ozt_atm:gen_example_description()]
             },
@@ -295,7 +295,7 @@ get_test(Config) ->
     AtmInventory = ozt_users:create_atm_inventory_for(Creator),
     ozt_atm_inventories:add_user(AtmInventory, AnotherMember, []),
 
-    AtmLambdaData = ozt_atm_lambdas:gen_example_data(),
+    AtmLambdaData = ozt_atm_lambdas:gen_example_data_json(),
     AtmLambda = ozt_atm_lambdas:create(?USER(Creator), AtmInventory, AtmLambdaData),
     AtmLambdaDataWithInventory = AtmLambdaData#{
         <<"atmInventoryId">> => AtmInventory
@@ -347,7 +347,7 @@ get_atm_inventories_test(Config) ->
         lists:map(fun(_) -> ozt_users:create_atm_inventory_for(Creator) end, lists:seq(1, rand:uniform(8)))
     end, Creators),
 
-    AtmLambdaData = ozt_atm_lambdas:gen_example_data(),
+    AtmLambdaData = ozt_atm_lambdas:gen_example_data_json(),
     AtmLambda = ozt_atm_lambdas:create(hd(AtmInventories), AtmLambdaData),
     lists:foreach(fun(AtmInventory) ->
         ozt_atm_lambdas:add_to_inventory(AtmLambda, AtmInventory)
@@ -445,7 +445,7 @@ update_test(Config) ->
     AtmInventory = ozt_users:create_atm_inventory_for(Creator),
     ozt_atm_inventories:add_user(AtmInventory, AnotherMember, []),
 
-    InitialLambdaData = ozt_atm_lambdas:gen_example_data(),
+    InitialLambdaData = ozt_atm_lambdas:gen_example_data_json(),
 
     EnvSetUpFun = fun() ->
         #{atm_lambda_id => ozt_atm_lambdas:create(AtmInventory, InitialLambdaData)}

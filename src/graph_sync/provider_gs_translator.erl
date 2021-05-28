@@ -482,7 +482,8 @@ translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, sco
 
         state = State,
 
-        atm_inventory = AtmInventoryId
+        atm_inventory = AtmInventoryId,
+        atm_lambdas = AtmLambdas
     } = AtmLambda,
     #{
         <<"name">> => Name,
@@ -493,7 +494,8 @@ translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, sco
 
         <<"state">> => automation:workflow_schema_state_to_json(State),
 
-        <<"atmInventoryId">> => AtmInventoryId
+        <<"atmInventoryId">> => AtmInventoryId,
+        <<"atmLambdas">> => AtmLambdas
     };
 
 translate_resource(ProtocolVersion, GRI, Data) ->

@@ -20,13 +20,16 @@
 %% API
 -export([list/0]).
 -export([create/1, create/2, create/3]).
+-export([try_create/3]).
 -export([get/1]).
 -export([exists/1]).
 -export([get_atm_inventories/1]).
 -export([add_to_inventory/2]).
 %% Example data generation
--export([gen_example_data/0]).
--export([gen_example_operation_spec/0, gen_example_argument_specs/0, gen_example_result_specs/0]).
+-export([gen_example_data_json/0]).
+-export([gen_example_operation_spec_json/0]).
+-export([gen_example_argument_spec_json/0, gen_example_argument_spec_json/2, gen_example_argument_specs_json/0]).
+-export([gen_example_result_spec_json/0, gen_example_result_specs_json/0]).
 
 %%%===================================================================
 %%% API
@@ -40,7 +43,7 @@ list() ->
 
 -spec create(od_atm_inventory:id()) -> od_atm_lambda:id().
 create(AtmInventoryId) ->
-    create(AtmInventoryId, gen_example_data()).
+    create(AtmInventoryId, gen_example_data_json()).
 
 -spec create(od_atm_inventory:id(), entity_logic:data()) -> od_atm_lambda:id().
 create(AtmInventoryId, Data) ->
@@ -48,11 +51,16 @@ create(AtmInventoryId, Data) ->
 
 -spec create(aai:auth(), od_atm_inventory:id(), entity_logic:data()) -> od_atm_lambda:id().
 create(Auth, AtmInventoryId, Data) ->
-    {ok, AtmLambdaId} = ?assertMatch({ok, _}, ozt:rpc(atm_lambda_logic, create, [Auth, Data#{
-        <<"atmInventoryId">> => AtmInventoryId
-    }])),
+    {ok, AtmLambdaId} = ?assertMatch({ok, _}, try_create(Auth, AtmInventoryId, Data)),
     AtmLambdaId.
 
+
+-spec try_create(aai:auth(), od_atm_inventory:id(), entity_logic:data()) ->
+    {ok, od_atm_lambda:id()} | errors:error().
+try_create(Auth, AtmInventoryId, Data) ->
+    ozt:rpc(atm_lambda_logic, create, [Auth, Data#{
+        <<"atmInventoryId">> => AtmInventoryId
+    }]).
 
 -spec get(od_atm_lambda:id()) -> od_atm_lambda:record().
 get(AtmLambdaId) ->
@@ -79,21 +87,21 @@ add_to_inventory(AtmLambdaId, AtmInventoryId) ->
 %%% Example data generation
 %%%===================================================================
 
--spec gen_example_data() -> entity_logic:data().
-gen_example_data() ->
+-spec gen_example_data_json() -> entity_logic:data().
+gen_example_data_json() ->
     #{
         <<"name">> => ozt_atm:gen_example_name(),
         <<"summary">> => ozt_atm:gen_example_summary(),
         <<"description">> => ozt_atm:gen_example_description(),
 
-        <<"operationSpec">> => gen_example_operation_spec(),
-        <<"argumentSpecs">> => gen_example_argument_specs(),
-        <<"resultSpecs">> => gen_example_result_specs()
+        <<"operationSpec">> => gen_example_operation_spec_json(),
+        <<"argumentSpecs">> => gen_example_argument_specs_json(),
+        <<"resultSpecs">> => gen_example_result_specs_json()
     }.
 
 
--spec gen_example_operation_spec() -> json_utils:json_term().
-gen_example_operation_spec() -> jsonable_record:to_json(
+-spec gen_example_operation_spec_json() -> json_utils:json_term().
+gen_example_operation_spec_json() -> jsonable_record:to_json(
     lists_utils:random_element([
         #atm_openfaas_operation_spec{
             docker_image = ?RAND_STR(),
@@ -113,23 +121,37 @@ gen_example_operation_spec() -> jsonable_record:to_json(
     ]), atm_lambda_operation_spec).
 
 
--spec gen_example_argument_specs() -> json_utils:json_term().
-gen_example_argument_specs() -> lists:map(fun(_) ->
+-spec gen_example_argument_spec_json() -> json_utils:json_term().
+gen_example_argument_spec_json() ->
+    DataSpec = ozt_atm:gen_example_data_spec(),
+    DefaultValue = lists_utils:random_element([undefined, ozt_atm:gen_example_initial_value(DataSpec#atm_data_spec.type)]),
+    gen_example_argument_spec_json(DataSpec, DefaultValue).
+
+-spec gen_example_argument_spec_json(atm_data_spec:record(), term()) -> json_utils:json_term().
+gen_example_argument_spec_json(DataSpec, DefaultValue) ->
     jsonable_record:to_json(#atm_lambda_argument_spec{
         name = ?UNIQUE_STRING,
-        data_spec = ozt_atm:gen_example_data_spec(),
+        data_spec = DataSpec,
         is_batch = ?RAND_BOOL(),
         is_optional = ?RAND_BOOL(),
-        default_value = lists_utils:random_element([true, false, 6, #{}, <<"binary">>, #{<<"key">> => 984.222}])
-    }, atm_lambda_argument_spec)
+        default_value = DefaultValue
+    }, atm_lambda_argument_spec).
+
+-spec gen_example_argument_specs_json() -> json_utils:json_term().
+gen_example_argument_specs_json() -> lists:map(fun(_) ->
+    gen_example_argument_spec_json()
 end, lists:seq(1, ?RAND_INT(0, 5))).
 
 
--spec gen_example_result_specs() -> json_utils:json_term().
-gen_example_result_specs() -> lists:map(fun(_) ->
+-spec gen_example_result_spec_json() -> json_utils:json_term().
+gen_example_result_spec_json() ->
     jsonable_record:to_json(#atm_lambda_result_spec{
         name = ?UNIQUE_STRING,
         data_spec = ozt_atm:gen_example_data_spec(),
         is_batch = ?RAND_BOOL()
-    }, atm_lambda_result_spec)
+    }, atm_lambda_result_spec).
+
+-spec gen_example_result_specs_json() -> json_utils:json_term().
+gen_example_result_specs_json() -> lists:map(fun(_) ->
+    gen_example_result_spec_json()
 end, lists:seq(1, ?RAND_INT(0, 5))).

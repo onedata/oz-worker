@@ -347,7 +347,7 @@ set_up_atm_inventories(Environment = #environment{users = Users, groups = Groups
 set_up_atm_lambdas(Environment = #environment{atm_inventories = AtmInventories}) ->
     Environment#environment{
         atm_lambdas = lists:map(fun(_) ->
-            AtmLambdaData = ozt_atm_lambdas:gen_example_data(),
+            AtmLambdaData = ozt_atm_lambdas:gen_example_data_json(),
             ParentInventories = lists_utils:random_sublist(AtmInventories, 1, all),
             AtmLambda = ozt_atm_lambdas:create(hd(ParentInventories), AtmLambdaData#{
                 <<"name">> => ?GEN_NAME()
@@ -363,7 +363,7 @@ set_up_atm_workflow_schemas(Environment = #environment{atm_inventories = AtmInve
     Environment#environment{
         atm_workflow_schemas = lists:map(fun(_) ->
             ParentInventory = lists_utils:random_element(AtmInventories),
-            AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data(ParentInventory),
+            AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(ParentInventory),
             AtmWorkflowSchema = ozt_atm_workflow_schemas:create(ParentInventory, AtmWorkflowSchemaData#{
                 <<"name">> => ?GEN_NAME()
             }),

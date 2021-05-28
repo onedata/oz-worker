@@ -21,7 +21,7 @@
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
--export([extract_atm_lambdas_from_lanes/1]).
+-export([fold_tasks/3, extract_atm_lambdas_from_lanes/1]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1]).
@@ -96,14 +96,27 @@ entity_logic_plugin() ->
     atm_workflow_schema_logic_plugin.
 
 
--spec extract_atm_lambdas_from_lanes([atm_lane_schema:record()]) -> [od_atm_lambda:id()].
-extract_atm_lambdas_from_lanes(Lanes) ->
-    ordsets:to_list(lists:foldl(fun(#atm_lane_schema{parallel_boxes = ParallelBoxes}, TopAcc) ->
-        ordsets:fold(fun(#atm_parallel_box_schema{tasks = Tasks}, MiddleAcc) ->
-            ordsets:fold(fun(#atm_task_schema{lambda_id = LambdaId}, BottomAcc) ->
-                ordsets:add_element(LambdaId, BottomAcc)
+-spec fold_tasks(
+    fun((atm_task_schema:record(), AccIn :: term()) -> AccOut :: term()),
+    InitialAcc :: term(),
+    od_atm_workflow_schema:record() | [atm_lane_schema:record()]
+) -> FinalAcc :: term().
+fold_tasks(Callback, InitialAcc, #od_atm_workflow_schema{lanes = Lanes}) ->
+    fold_tasks(Callback, InitialAcc, Lanes);
+fold_tasks(Callback, InitialAcc, Lanes) ->
+    lists:foldl(fun(#atm_lane_schema{parallel_boxes = ParallelBoxes}, TopAcc) ->
+        lists:foldl(fun(#atm_parallel_box_schema{tasks = Tasks}, MiddleAcc) ->
+            lists:foldl(fun(#atm_task_schema{} = AtmTaskSchema, BottomAcc) ->
+                Callback(AtmTaskSchema, BottomAcc)
             end, MiddleAcc, Tasks)
         end, TopAcc, ParallelBoxes)
+    end, InitialAcc, Lanes).
+
+
+-spec extract_atm_lambdas_from_lanes([atm_lane_schema:record()]) -> [od_atm_lambda:id()].
+extract_atm_lambdas_from_lanes(Lanes) ->
+    ordsets:to_list(fold_tasks(fun(#atm_task_schema{lambda_id = LambdaId}, Acc) ->
+        ordsets:add_element(LambdaId, Acc)
     end, ordsets:new(), Lanes)).
 
 %%%===================================================================

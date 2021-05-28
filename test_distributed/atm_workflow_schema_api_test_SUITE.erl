@@ -65,7 +65,7 @@ create_test(Config) ->
         ozt_atm_lambdas:create(AtmInventoryId)
     end, lists:seq(1, rand:uniform(7))),
 
-    StoreSchemas = ozt_atm_workflow_schemas:gen_example_stores(),
+    StoreSchemas = ozt_atm_workflow_schemas:gen_example_stores_json(),
     StoreSchemaIds = [StoreSchemaId || #{<<"id">> := StoreSchemaId} <- StoreSchemas],
 
     VerifyFun = fun(AtmWorkflowSchemaId, Data, CheckCreator) ->
@@ -170,8 +170,8 @@ create_test(Config) ->
                 <<"name">> => [ozt_atm:gen_example_name()],
                 <<"description">> => [ozt_atm:gen_example_description()],
                 <<"stores">> => [StoreSchemas],
-                <<"lanes">> => [ozt_atm_workflow_schemas:gen_example_lanes(AvailableAtmLambdas, StoreSchemaIds)],
-                <<"state">> => [ozt_atm_workflow_schemas:gen_example_state()]
+                <<"lanes">> => [ozt_atm_workflow_schemas:gen_example_lanes_json(AvailableAtmLambdas, StoreSchemaIds)],
+                <<"state">> => [ozt_atm_workflow_schemas:gen_example_state_json()]
             },
             bad_values = lists:flatten([
                 {<<"atmInventoryId">>, 1234, ?ERROR_FORBIDDEN},
@@ -285,7 +285,7 @@ get_test(Config) ->
     AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
     ozt_atm_inventories:add_user(AtmInventoryId, AnotherMember, []),
 
-    AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data(AtmInventoryId),
+    AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(AtmInventoryId),
     AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(?USER(Creator), AtmInventoryId, AtmWorkflowSchemaData),
     AtmWorkflowSchemaDataWithInventory = AtmWorkflowSchemaData#{
         <<"atmInventoryId">> => AtmInventoryId
@@ -340,7 +340,7 @@ get_atm_lambdas_test(Config) ->
         ozt_atm_lambdas:create(AtmInventoryId)
     end, lists:seq(1, rand:uniform(7))),
 
-    AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data(AtmInventoryId),
+    AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(AtmInventoryId),
     ExpAtmLambdas = ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(maps:get(<<"lanes">>, AtmWorkflowSchemaData)),
     AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(AtmInventoryId, AtmWorkflowSchemaData),
 
@@ -381,7 +381,7 @@ update_test(Config) ->
     AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
     ozt_atm_inventories:add_user(AtmInventoryId, AnotherMember, []),
 
-    InitialWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data(AtmInventoryId),
+    InitialWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(AtmInventoryId),
     AvailableAtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
     StoreSchemas = maps:get(<<"stores">>, InitialWorkflowSchemaData),
     StoreSchemaIds = [StoreSchemaId || #{<<"id">> := StoreSchemaId} <- StoreSchemas],
@@ -480,8 +480,8 @@ update_test(Config) ->
                 <<"name">> => [ozt_atm:gen_example_name()],
                 <<"description">> => [ozt_atm:gen_example_description()],
                 <<"stores">> => [StoreSchemas],
-                <<"lanes">> => [ozt_atm_workflow_schemas:gen_example_lanes(AvailableAtmLambdas, StoreSchemaIds)],
-                <<"state">> => [ozt_atm_workflow_schemas:gen_example_state()]
+                <<"lanes">> => [ozt_atm_workflow_schemas:gen_example_lanes_json(AvailableAtmLambdas, StoreSchemaIds)],
+                <<"state">> => [ozt_atm_workflow_schemas:gen_example_state_json()]
             },
             bad_values = create_update_bad_data_values(AtmInventoryId)
         }
@@ -574,10 +574,10 @@ create_update_bad_data_values(AtmInventoryId) ->
 %% @private
 gen_lanes_containing_disallowed_lambda() ->
     UnrelatedInventory = ozt_atm_inventories:create(),
-    ExampleStores = ozt_atm_workflow_schemas:gen_example_stores(),
+    ExampleStores = ozt_atm_workflow_schemas:gen_example_stores_json(),
     ExampleStoreSchemaIds = [StoreSchemaId || #{<<"id">> := StoreSchemaId} <- ExampleStores],
     DisallowedLambda = ozt_atm_lambdas:create(UnrelatedInventory),
-    DisallowedLanes = ozt_atm_workflow_schemas:gen_example_lanes([DisallowedLambda], ExampleStoreSchemaIds),
+    DisallowedLanes = ozt_atm_workflow_schemas:gen_example_lanes_json([DisallowedLambda], ExampleStoreSchemaIds),
     % the generated lanes may randomly be empty - keep generating until some task containing the lambda appear
     case ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(DisallowedLanes) of
         [DisallowedLambda] ->
