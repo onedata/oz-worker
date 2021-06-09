@@ -59,7 +59,7 @@ end)).
 -define(wrap_in_try_catch(Term), try
     Term
 catch __Type:__Reason ->
-    ct:print("Test crash in ~s:~B~n~w:~p~nStacktrace: ~s", [
+    ct:pal("Test crash in ~s:~B~n~w:~p~nStacktrace: ~s", [
         ?MODULE, ?LINE,
         __Type, __Reason,
         lager:pr_stacktrace(erlang:get_stacktrace())

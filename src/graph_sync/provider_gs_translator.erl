@@ -445,7 +445,10 @@ translate_resource(_, #gri{type = temporary_token_secret, scope = shared}, Gener
 
 translate_resource(_, #gri{type = od_atm_inventory, aspect = instance, scope = private}, AtmInventory) ->
     #{
-        <<"name">> => AtmInventory#od_atm_inventory.name
+        <<"name">> => AtmInventory#od_atm_inventory.name,
+
+        <<"atmLambdas">> => AtmInventory#od_atm_inventory.atm_lambdas,
+        <<"atmWorkflowSchemas">> => AtmInventory#od_atm_inventory.atm_workflow_schemas
     };
 
 translate_resource(_, #gri{type = od_atm_lambda, aspect = instance, scope = private}, AtmLambda) ->
@@ -482,7 +485,8 @@ translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, sco
 
         state = State,
 
-        atm_inventory = AtmInventoryId
+        atm_inventory = AtmInventoryId,
+        atm_lambdas = AtmLambdas
     } = AtmLambda,
     #{
         <<"name">> => Name,
@@ -493,7 +497,8 @@ translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, sco
 
         <<"state">> => automation:workflow_schema_state_to_json(State),
 
-        <<"atmInventoryId">> => AtmInventoryId
+        <<"atmInventoryId">> => AtmInventoryId,
+        <<"atmLambdas">> => AtmLambdas
     };
 
 translate_resource(ProtocolVersion, GRI, Data) ->

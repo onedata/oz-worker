@@ -107,7 +107,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     ArgumentSpecs = maps:get(<<"argumentSpecs">>, Req#el_req.data),
     ResultSpecs = maps:get(<<"resultSpecs">>, Req#el_req.data),
 
-    {ok, #document{key = AtmLambdaId}} = od_atm_lambda:create(#document{value = #od_atm_lambda{
+    AtmLambda = #od_atm_lambda{
         name = Name,
         summary = Summary,
         description = Description,
@@ -118,13 +118,20 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
 
         creator = aai:normalize_subject(Auth#auth.subject),
         creation_time = global_clock:timestamp_seconds()
-    }}),
+    },
+
+    case atm_lambda_validator:validate(AtmLambda) of
+        ok -> ok;
+        {error, _} = Error -> throw(Error)
+    end,
+
+    {ok, #document{key = AtmLambdaId}} = od_atm_lambda:create(#document{value = AtmLambda}),
     entity_graph:add_relation(
         od_atm_lambda, AtmLambdaId,
         od_atm_inventory, AtmInventoryId
     ),
-    {true, {AtmLambda, Rev}} = fetch_entity(#gri{aspect = instance, id = AtmLambdaId}),
-    {ok, resource, {GRI#gri{id = AtmLambdaId}, {AtmLambda, Rev}}};
+    {true, {FetchedAtmLambda, Rev}} = fetch_entity(#gri{aspect = instance, id = AtmLambdaId}),
+    {ok, resource, {GRI#gri{id = AtmLambdaId}, {FetchedAtmLambda, Rev}}};
 
 create(#el_req{gri = #gri{id = AtmLambdaId, aspect = {atm_inventory, AtmInventoryId}}}) ->
     entity_graph:add_relation(

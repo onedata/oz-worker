@@ -2276,6 +2276,110 @@ get_record(od_space, 11) -> #od_space{
     top_down_dirty = true,
     bottom_up_dirty = true
 };
+get_record(od_space, 12) -> #od_space{
+    name = <<"name">>,
+    owners = [<<"user3">>, <<"user1">>],
+
+    users = #{
+        <<"user1">> => privileges:from_list([
+            ?SPACE_VIEW,
+            ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+            ?SPACE_VIEW_TRANSFERS,
+            ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+            ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+            ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_MANAGE_SHARES,
+            ?SPACE_VIEW_VIEWS,
+            ?SPACE_QUERY_VIEWS,
+            ?SPACE_VIEW_STATISTICS,
+            ?SPACE_VIEW_CHANGES_STREAM,
+            ?SPACE_SCHEDULE_REPLICATION,
+            ?SPACE_VIEW_QOS,
+            ?SPACE_REGISTER_FILES,
+            ?SPACE_MANAGE_DATASETS,
+            ?SPACE_VIEW_ARCHIVES,
+            ?SPACE_CREATE_ARCHIVES,
+            ?SPACE_VIEW_ATM_WORKFLOW_EXECUTIONS,
+            ?SPACE_SCHEDULE_ATM_WORKFLOW_EXECUTIONS
+            % following privs should be added by the upgrade procedure
+        ]),
+        <<"user2">> => privileges:from_list([
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+            ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
+            ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
+        ]),
+        <<"user3">> => [?SPACE_READ_DATA, ?SPACE_WRITE_DATA]
+    },
+    groups = #{
+        <<"group1">> => privileges:from_list([
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT
+        ]),
+        <<"group2">> => privileges:from_list([
+            ?SPACE_VIEW,
+            ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+            ?SPACE_VIEW_TRANSFERS,
+            ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+            ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+            ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_REGISTER_FILES,
+            ?SPACE_MANAGE_SHARES,
+            ?SPACE_VIEW_VIEWS,
+            ?SPACE_QUERY_VIEWS,
+            ?SPACE_VIEW_STATISTICS,
+            ?SPACE_VIEW_CHANGES_STREAM,
+            ?SPACE_SCHEDULE_REPLICATION,
+            ?SPACE_VIEW_QOS,
+            ?SPACE_UPDATE, ?SPACE_DELETE,
+            ?SPACE_SET_PRIVILEGES,
+            ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+            ?SPACE_MANAGE_VIEWS,
+            ?SPACE_CANCEL_REPLICATION,
+            ?SPACE_SCHEDULE_EVICTION, ?SPACE_CANCEL_EVICTION,
+            ?SPACE_MANAGE_QOS,
+            ?SPACE_MANAGE_DATASETS,
+            ?SPACE_VIEW_ARCHIVES,
+            ?SPACE_CREATE_ARCHIVES,
+            ?SPACE_REMOVE_ARCHIVES,
+            ?SPACE_RECALL_ARCHIVES,
+            % following privs should be added by the upgrade procedure
+            ?SPACE_VIEW_ATM_WORKFLOW_EXECUTIONS,
+            ?SPACE_SCHEDULE_ATM_WORKFLOW_EXECUTIONS
+        ])
+    },
+    storages = #{},
+    shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+    harvesters = [],
+
+    eff_users = #{
+        <<"user3">> => {
+            privileges:from_list([
+                ?SPACE_VIEW, ?SPACE_READ_DATA, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS,
+                ?SPACE_VIEW_PRIVILEGES, ?SPACE_ADD_USER, ?SPACE_REMOVE_USER, ?SPACE_ADD_GROUP,
+                ?SPACE_REMOVE_GROUP, ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+                ?SPACE_MANAGE_SHARES, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS,
+                ?SPACE_VIEW_STATISTICS, ?SPACE_VIEW_CHANGES_STREAM,
+                ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS, ?SPACE_REGISTER_FILES,
+                ?SPACE_MANAGE_DATASETS,
+                ?SPACE_VIEW_ARCHIVES, ?SPACE_CREATE_ARCHIVES,
+                % following privs should be added by the upgrade procedure
+                ?SPACE_VIEW_ATM_WORKFLOW_EXECUTIONS,
+                ?SPACE_SCHEDULE_ATM_WORKFLOW_EXECUTIONS
+            ]),
+            [{od_space, <<"self">>}]
+        }
+    },
+    eff_groups = #{},
+    eff_providers = #{},
+    eff_harvesters = #{},
+
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
+    creator = ?SUB(nobody),
+
+    top_down_dirty = true,
+    bottom_up_dirty = true
+};
 
 
 get_record(od_share, 1) -> {od_share,
@@ -2990,7 +3094,7 @@ get_record(od_harvester, 1) -> #od_harvester{
 };
 get_record(od_harvester, 2) -> #od_harvester{
     name = <<"h-name">>,
-    backend =  elasticsearch_plugin,
+    backend = elasticsearch_plugin,
     endpoint = <<"https://es.example.com:9056">>,
 
     gui_plugin_config = #{
@@ -3112,13 +3216,13 @@ get_record(od_harvester, 4) -> #od_harvester{
     name = <<"h-name">>,
     backend = elasticsearch_harvesting_backend,
     endpoint = <<"https://es.example.com:9056">>,
-    
+
     gui_plugin_config = #{
         <<"attr1">> => <<"val2">>,
         <<"attr2">> => 15
     },
     public = true,
-    
+
     indices = #{
         <<"567">> => #harvester_index{
             name = <<"Simulations index">>,
@@ -3149,9 +3253,9 @@ get_record(od_harvester, 4) -> #od_harvester{
                 }
             }
         }
-        
+
     },
-    
+
     users = #{
         <<"user1">> => [?HARVESTER_VIEW, ?HARVESTER_UPDATE],
         <<"user2">> => [?HARVESTER_VIEW, ?HARVESTER_UPDATE, ?HARVESTER_DELETE]
@@ -3161,14 +3265,14 @@ get_record(od_harvester, 4) -> #od_harvester{
         <<"group2">> => [?HARVESTER_DELETE]
     },
     spaces = [<<"s1">>, <<"s2">>],
-    
+
     eff_users = #{},
     eff_groups = #{},
     eff_providers = #{},
-    
+
     creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(nobody),
-    
+
     bottom_up_dirty = true,
     top_down_dirty = true
 };

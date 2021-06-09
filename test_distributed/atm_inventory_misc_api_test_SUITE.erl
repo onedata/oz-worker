@@ -182,6 +182,8 @@ get_test(Config) ->
     AtmInventoryName = ?UNIQUE_STRING,
     AtmInventoryData = #{<<"name">> => AtmInventoryName},
     AtmInventory = ozt_users:create_atm_inventory_for(UserWithoutViewPrivs, AtmInventoryData),
+    AtmLambda = ozt_atm_lambdas:create(AtmInventory),
+    AtmWorkflowSchema = ozt_atm_workflow_schemas:create(AtmInventory),
 
     AllPrivs = privileges:atm_inventory_privileges(),
     ozt_atm_inventories:set_user_privileges(AtmInventory, UserWithoutViewPrivs, AllPrivs -- [?ATM_INVENTORY_VIEW]),
@@ -210,6 +212,8 @@ get_test(Config) ->
                 fun(#od_atm_inventory{
                     name = Name, users = Users, groups = #{},
                     eff_users = EffUsers, eff_groups = #{},
+                    atm_lambdas = AtmLambdas,
+                    atm_workflow_schemas = AtmWorkflowSchemas,
                     bottom_up_dirty = false
                 }) ->
                     ?assertEqual(AtmInventoryName, Name),
@@ -220,7 +224,9 @@ get_test(Config) ->
                     ?assertEqual(EffUsers, #{
                         UserWithoutViewPrivs => {AllPrivs -- [?ATM_INVENTORY_VIEW], [{od_atm_inventory, <<"self">>}]},
                         UserWithViewPrivs => {[?ATM_INVENTORY_VIEW], [{od_atm_inventory, <<"self">>}]}
-                    })
+                    }),
+                    ?assertEqual(AtmLambdas, [AtmLambda]),
+                    ?assertEqual(AtmWorkflowSchemas, [AtmWorkflowSchema])
                 end
             )
         },
@@ -231,8 +237,9 @@ get_test(Config) ->
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(AtmInventory, Id)
-                end
-
+                end,
+                <<"atmLambdas">> => [AtmLambda],
+                <<"atmWorkflowSchemas">> => [AtmWorkflowSchema]
             })
         }
     },

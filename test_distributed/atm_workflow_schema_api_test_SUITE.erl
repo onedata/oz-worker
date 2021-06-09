@@ -65,7 +65,7 @@ create_test(Config) ->
         ozt_atm_lambdas:create(AtmInventoryId)
     end, lists:seq(1, rand:uniform(7))),
 
-    StoreSchemas = ozt_atm_workflow_schemas:gen_example_stores(),
+    StoreSchemas = ozt_atm_workflow_schemas:gen_example_stores_json(),
     StoreSchemaIds = [StoreSchemaId || #{<<"id">> := StoreSchemaId} <- StoreSchemas],
 
     VerifyFun = fun(AtmWorkflowSchemaId, Data, CheckCreator) ->
@@ -162,7 +162,6 @@ create_test(Config) ->
             optional = [
                 <<"description">>,
                 <<"stores">>,
-                <<"lanes">>,
                 <<"state">>
             ],
             correct_values = #{
@@ -170,8 +169,8 @@ create_test(Config) ->
                 <<"name">> => [ozt_atm:gen_example_name()],
                 <<"description">> => [ozt_atm:gen_example_description()],
                 <<"stores">> => [StoreSchemas],
-                <<"lanes">> => [ozt_atm_workflow_schemas:gen_example_lanes(AvailableAtmLambdas, StoreSchemaIds)],
-                <<"state">> => [ozt_atm_workflow_schemas:gen_example_state()]
+                <<"lanes">> => [ozt_atm_workflow_schemas:gen_example_lanes_json(AvailableAtmLambdas, StoreSchemaIds)],
+                <<"state">> => [ozt_atm_workflow_schemas:gen_example_state_json()]
             },
             bad_values = lists:flatten([
                 {<<"atmInventoryId">>, 1234, ?ERROR_FORBIDDEN},
@@ -181,7 +180,21 @@ create_test(Config) ->
             ])
         }
     },
+    % lanes can only be provided if stores are, as they reference specific store schema ids
+    % first, test without lanes at all (see above spec), then mark stores as required
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec#api_test_spec{data_spec = DataSpec#data_spec{
+        required = [
+            <<"atmInventoryId">>,
+            <<"name">>,
+            <<"stores">>
+        ],
+        optional = [
+            <<"description">>,
+            <<"state">>,
+            <<"lanes">>
+        ]
+    }})),
 
     % Root client bypasses authorization checks,
     % hence wrong values of atmInventoryId
@@ -217,7 +230,7 @@ create_test(Config) ->
                 })
             end)
         },
-        data_spec = DataSpec#data_spec{
+        data_spec = RootDataSpec = DataSpec#data_spec{
             bad_values = lists:flatten([
                 {<<"atmInventoryId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
                 {<<"atmInventoryId">>, <<"asdq4ewfs">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
@@ -225,7 +238,21 @@ create_test(Config) ->
             ])
         }
     },
-    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec)).
+    % lanes can only be provided if stores are, as they reference specific store schema ids
+    % first, test without lanes at all (see above spec), then mark stores as required
+    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec#api_test_spec{data_spec = RootDataSpec#data_spec{
+        required = [
+            <<"atmInventoryId">>,
+            <<"name">>,
+            <<"stores">>
+        ],
+        optional = [
+            <<"description">>,
+            <<"state">>,
+            <<"lanes">>
+        ]
+    }})).
 
 
 list_test(Config) ->
@@ -285,7 +312,7 @@ get_test(Config) ->
     AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
     ozt_atm_inventories:add_user(AtmInventoryId, AnotherMember, []),
 
-    AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data(AtmInventoryId),
+    AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(AtmInventoryId),
     AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(?USER(Creator), AtmInventoryId, AtmWorkflowSchemaData),
     AtmWorkflowSchemaDataWithInventory = AtmWorkflowSchemaData#{
         <<"atmInventoryId">> => AtmInventoryId
@@ -340,7 +367,7 @@ get_atm_lambdas_test(Config) ->
         ozt_atm_lambdas:create(AtmInventoryId)
     end, lists:seq(1, rand:uniform(7))),
 
-    AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data(AtmInventoryId),
+    AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(AtmInventoryId),
     ExpAtmLambdas = ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(maps:get(<<"lanes">>, AtmWorkflowSchemaData)),
     AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(AtmInventoryId, AtmWorkflowSchemaData),
 
@@ -381,7 +408,7 @@ update_test(Config) ->
     AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
     ozt_atm_inventories:add_user(AtmInventoryId, AnotherMember, []),
 
-    InitialWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data(AtmInventoryId),
+    InitialWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(AtmInventoryId),
     AvailableAtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
     StoreSchemas = maps:get(<<"stores">>, InitialWorkflowSchemaData),
     StoreSchemaIds = [StoreSchemaId || #{<<"id">> := StoreSchemaId} <- StoreSchemas],
@@ -468,27 +495,37 @@ update_test(Config) ->
             gri = #gri{type = od_atm_workflow_schema, id = atm_workflow_schema_id, aspect = instance},
             expected_result = ?OK_RES
         },
-        data_spec = #data_spec{
+        data_spec = DataSpec = #data_spec{
             at_least_one = [
                 <<"name">>,
                 <<"description">>,
                 <<"stores">>,
-                <<"lanes">>,
                 <<"state">>
             ],
             correct_values = #{
                 <<"name">> => [ozt_atm:gen_example_name()],
                 <<"description">> => [ozt_atm:gen_example_description()],
                 <<"stores">> => [StoreSchemas],
-                <<"lanes">> => [ozt_atm_workflow_schemas:gen_example_lanes(AvailableAtmLambdas, StoreSchemaIds)],
-                <<"state">> => [ozt_atm_workflow_schemas:gen_example_state()]
+                <<"lanes">> => [ozt_atm_workflow_schemas:gen_example_lanes_json(AvailableAtmLambdas, StoreSchemaIds)],
+                <<"state">> => [ozt_atm_workflow_schemas:gen_example_state_json()]
             },
             bad_values = create_update_bad_data_values(AtmInventoryId)
         }
     },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
-    )).
+    % lanes can only be provided if stores are, as they reference specific store schema ids
+    % first, test without lanes at all (see above spec), then mark stores as required
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec#api_test_spec{
+        data_spec = DataSpec#data_spec{
+            required = [<<"stores">>],
+            at_least_one = [
+                <<"name">>,
+                <<"description">>,
+                <<"state">>,
+                <<"lanes">>
+            ]
+        }
+    }, EnvSetUpFun, undefined, VerifyEndFun)).
 
 
 delete_test(Config) ->
@@ -574,10 +611,10 @@ create_update_bad_data_values(AtmInventoryId) ->
 %% @private
 gen_lanes_containing_disallowed_lambda() ->
     UnrelatedInventory = ozt_atm_inventories:create(),
-    ExampleStores = ozt_atm_workflow_schemas:gen_example_stores(),
+    ExampleStores = ozt_atm_workflow_schemas:gen_example_stores_json(),
     ExampleStoreSchemaIds = [StoreSchemaId || #{<<"id">> := StoreSchemaId} <- ExampleStores],
     DisallowedLambda = ozt_atm_lambdas:create(UnrelatedInventory),
-    DisallowedLanes = ozt_atm_workflow_schemas:gen_example_lanes([DisallowedLambda], ExampleStoreSchemaIds),
+    DisallowedLanes = ozt_atm_workflow_schemas:gen_example_lanes_json([DisallowedLambda], ExampleStoreSchemaIds),
     % the generated lanes may randomly be empty - keep generating until some task containing the lambda appear
     case ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(DisallowedLanes) of
         [DisallowedLambda] ->
@@ -585,7 +622,6 @@ gen_lanes_containing_disallowed_lambda() ->
         _ ->
             gen_lanes_containing_disallowed_lambda()
     end.
-
 
 %%%===================================================================
 %%% Setup/teardown functions

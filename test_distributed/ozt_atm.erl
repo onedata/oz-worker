@@ -23,7 +23,8 @@
 -export([gen_example_summary/0]).
 -export([gen_example_description/0]).
 -export([gen_example_store_type/0]).
--export([gen_example_data_spec/0]).
+-export([gen_example_data_spec/0, gen_example_data_spec/1]).
+-export([gen_example_initial_value/1]).
 
 %%%===================================================================
 %%% API
@@ -31,11 +32,11 @@
 
 -spec gen_example_id() -> automation:id().
 gen_example_id() ->
-    ?RAND_STR().
+    ?UNIQUE_STRING.
 
 -spec gen_example_name() -> automation:name().
 gen_example_name() ->
-    ?RAND_STR(rand:uniform(10) + 2).
+    ?UNIQUE_STRING.
 
 
 -spec gen_example_summary() -> automation:summary().
@@ -50,24 +51,48 @@ gen_example_description() ->
 
 -spec gen_example_store_type() -> automation:store_type().
 gen_example_store_type() ->
-    lists_utils:random_element([single_value, list, map, tree_forest, range, histogram]).
+    lists_utils:random_element(automation:all_store_types()).
 
 
 -spec gen_example_data_spec() -> atm_data_spec:record().
 gen_example_data_spec() ->
-    RandomType = lists_utils:random_element([
-        atm_integer_type, atm_string_type, atm_object_type, atm_file_type, atm_histogram_type,
-        atm_dataset_type, atm_archive_type, atm_store_credentials_type, atm_onedatafs_credentials_type
-    ]),
-    RandomValueConstraints = case RandomType of
-        atm_file_type ->
-            lists_utils:random_element([#{}, #{file_type => lists_utils:random_element(['REG', 'DIR', 'ANY'])}]);
-        atm_store_credentials_type ->
-            #{store_type => gen_example_store_type()};
-        _ ->
-            #{}
-    end,
+    gen_example_data_spec(lists_utils:random_element(atm_data_type:all_data_types())).
+
+-spec gen_example_data_spec(atm_data_type:type()) -> atm_data_spec:record().
+gen_example_data_spec(atm_file_type) ->
     #atm_data_spec{
-        type = RandomType,
-        value_constraints = RandomValueConstraints
+        type = atm_file_type,
+        value_constraints = lists_utils:random_element([#{}, #{file_type => lists_utils:random_element(['REG', 'DIR', 'ANY'])}])
+    };
+gen_example_data_spec(atm_store_credentials_type) ->
+    #atm_data_spec{
+        type = atm_store_credentials_type,
+        value_constraints = #{store_type => gen_example_store_type()}
+    };
+gen_example_data_spec(DataType) ->
+    #atm_data_spec{
+        type = DataType,
+        value_constraints = #{}
     }.
+
+
+-spec gen_example_initial_value(atm_data_type:type()) -> json_utils:json_term().
+gen_example_initial_value(atm_integer_type) ->
+    ?RAND_INT(0, 1000);
+gen_example_initial_value(atm_string_type) ->
+    ?RAND_STR(?RAND_INT(1, 25));
+gen_example_initial_value(atm_object_type) ->
+    lists_utils:random_element([#{}, #{<<"key">> => 984.222}, #{<<"key">> => #{<<"nested">> => 984.222}}]);
+%% @TODO VFS-7687 Implement all automation data types and validators
+gen_example_initial_value(atm_file_type) ->
+    #{<<"atm_file_type">> => <<"value">>};
+gen_example_initial_value(atm_histogram_type) ->
+    [1, 2, 3, 4];
+gen_example_initial_value(atm_dataset_type) ->
+    #{<<"atm_dataset_type">> => <<"value">>};
+gen_example_initial_value(atm_archive_type) ->
+    #{<<"atm_archive_type">> => <<"value">>};
+gen_example_initial_value(atm_store_credentials_type) ->
+    undefined;
+gen_example_initial_value(atm_onedatafs_credentials_type) ->
+    undefined.

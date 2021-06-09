@@ -107,10 +107,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         {_, _} -> ready
     end),
 
-    AtmLambdas = od_atm_workflow_schema:extract_atm_lambdas_from_lanes(Lanes),
-    assert_inventory_has_lambdas(AtmInventoryId, AtmLambdas),
-
-    {ok, #document{key = AtmWorkflowSchemaId}} = od_atm_workflow_schema:create(#document{value = #od_atm_workflow_schema{
+    AtmWorkflowSchema = #od_atm_workflow_schema{
         name = Name,
         description = Description,
 
@@ -119,18 +116,27 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
 
         state = State,
 
+        atm_inventory = AtmInventoryId,
+
         creator = aai:normalize_subject(Auth#auth.subject),
         creation_time = global_clock:timestamp_seconds()
-    }}),
+    },
+    case atm_workflow_schema_validator:validate(AtmWorkflowSchema) of
+        ok -> ok;
+        {error, _} = Error -> throw(Error)
+    end,
+
+    {ok, #document{key = AtmWorkflowSchemaId}} = od_atm_workflow_schema:create(#document{value = AtmWorkflowSchema}),
     entity_graph:add_relation(
         od_atm_workflow_schema, AtmWorkflowSchemaId,
         od_atm_inventory, AtmInventoryId
     ),
+
     lock_on_workflow(AtmWorkflowSchemaId, fun() ->
-        reconcile_lambdas_unsafe(AtmWorkflowSchemaId, [], AtmLambdas)
+        reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, [], Lanes)
     end),
-    {true, {AtmWorkflowSchema, Rev}} = fetch_entity(#gri{aspect = instance, id = AtmWorkflowSchemaId}),
-    {ok, resource, {GRI#gri{id = AtmWorkflowSchemaId}, {AtmWorkflowSchema, Rev}}}.
+    {true, {FetchedAtmWorkflowSchema, Rev}} = fetch_entity(#gri{aspect = instance, id = AtmWorkflowSchemaId}),
+    {ok, resource, {GRI#gri{id = AtmWorkflowSchemaId}, {FetchedAtmWorkflowSchema, Rev}}}.
 
 
 %%--------------------------------------------------------------------
@@ -161,32 +167,29 @@ get(#el_req{gri = #gri{aspect = atm_lambdas}}, AtmWorkflowSchema) ->
 update(#el_req{gri = #gri{id = AtmWorkflowSchemaId, aspect = instance}, data = Data}) ->
     lock_on_workflow(AtmWorkflowSchemaId, fun() ->
         {ok, #document{value = #od_atm_workflow_schema{
-            lanes = OldLanes,
-            atm_inventory = AtmInventoryId
+            lanes = OldLanes
         }}} = od_atm_workflow_schema:get(AtmWorkflowSchemaId),
 
-        NewLanes = maps:get(<<"lanes">>, Data, OldLanes),
-        NewAtmLambdas = od_atm_workflow_schema:extract_atm_lambdas_from_lanes(NewLanes),
-        assert_inventory_has_lambdas(AtmInventoryId, NewAtmLambdas),
-
         Diff = fun(AtmWorkflowSchema) ->
-            {ok, AtmWorkflowSchema#od_atm_workflow_schema{
+            NewAtmWorkflowSchema = AtmWorkflowSchema#od_atm_workflow_schema{
                 name = maps:get(<<"name">>, Data, AtmWorkflowSchema#od_atm_workflow_schema.name),
                 description = maps:get(<<"description">>, Data, AtmWorkflowSchema#od_atm_workflow_schema.description),
 
                 stores = maps:get(<<"stores">>, Data, AtmWorkflowSchema#od_atm_workflow_schema.stores),
-                lanes = NewLanes,
+                lanes = maps:get(<<"lanes">>, Data, OldLanes),
 
                 state = maps:get(<<"state">>, Data, AtmWorkflowSchema#od_atm_workflow_schema.state)
-            }}
+            },
+            case atm_workflow_schema_validator:validate(NewAtmWorkflowSchema) of
+                ok -> {ok, NewAtmWorkflowSchema};
+                {error, _} = Error -> Error
+            end
         end,
         case od_atm_workflow_schema:update(AtmWorkflowSchemaId, Diff) of
             {error, _} = Error ->
                 Error;
             {ok, #document{value = #od_atm_workflow_schema{lanes = NewLanes}}} ->
-                OldAtmLambdas = od_atm_workflow_schema:extract_atm_lambdas_from_lanes(OldLanes),
-                NewAtmLambdas = od_atm_workflow_schema:extract_atm_lambdas_from_lanes(NewLanes),
-                reconcile_lambdas_unsafe(AtmWorkflowSchemaId, OldAtmLambdas, NewAtmLambdas)
+                reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, OldLanes, NewLanes)
         end
     end).
 
@@ -301,13 +304,6 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     }
 }.
 
-% @TODO VFS-7658 validation of workflow schema data and cross references, such as:
-% * storeSchemaId given in result mapper
-% * storeSchemaId given in value builder
-% * cross-references between argument/result specs and mappers
-% * references between tasks and lambdas
-% * limit the defaultInitialValue in store schema to a sane size
-% * corresponding tests for the above
 
 %%%===================================================================
 %%% Internal functions
@@ -333,18 +329,6 @@ lock_on_workflow(AtmWorkflowSchemaId, Callback) ->
     critical_section:run({?MODULE, AtmWorkflowSchemaId}, Callback).
 
 
-%% @private
--spec assert_inventory_has_lambdas(od_atm_inventory:id(), [od_atm_lambda:id()]) -> ok | no_return().
-assert_inventory_has_lambdas(AtmInventoryId, AtmLambdas) ->
-    {ok, #document{value = #od_atm_inventory{atm_lambdas = AtmInventoryLambdas}}} = od_atm_inventory:get(AtmInventoryId),
-    case lists_utils:subtract(AtmLambdas, AtmInventoryLambdas) of
-        [] ->
-            ok;
-        [OffendingLambdaId | _] ->
-            throw(?ERROR_RELATION_DOES_NOT_EXIST(od_atm_lambda, OffendingLambdaId, od_atm_inventory, AtmInventoryId))
-    end.
-
-
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -352,8 +336,14 @@ assert_inventory_has_lambdas(AtmInventoryId, AtmLambdas) ->
 %% this information must be refreshed after each update.
 %% @end
 %%--------------------------------------------------------------------
--spec reconcile_lambdas_unsafe(od_atm_workflow_schema:id(), [od_atm_lambda:id()], [od_atm_lambda:id()]) -> ok.
-reconcile_lambdas_unsafe(AtmWorkflowSchemaId, OldAtmLambdas, NewAtmLambdas) ->
+-spec reconcile_referenced_lambdas_unsafe(
+    od_atm_workflow_schema:id(),
+    [atm_lane_schema:record()],
+    [atm_lane_schema:record()]
+) -> ok.
+reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, OldLanes, NewLanes) ->
+    OldAtmLambdas = od_atm_workflow_schema:extract_atm_lambdas_from_lanes(OldLanes),
+    NewAtmLambdas = od_atm_workflow_schema:extract_atm_lambdas_from_lanes(NewLanes),
     ToAdd = lists_utils:subtract(NewAtmLambdas, OldAtmLambdas),
     ToDelete = lists_utils:subtract(OldAtmLambdas, NewAtmLambdas),
     lists:foreach(fun(AtmLambdaId) ->
