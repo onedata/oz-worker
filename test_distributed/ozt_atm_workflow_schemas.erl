@@ -29,13 +29,14 @@
 %% Example data generation
 -export([gen_example_data_json/1]).
 -export([gen_example_state_json/0]).
--export([gen_example_store_json/0, gen_example_store_json/1, gen_example_store_json/2, gen_example_stores_json/0]).
+-export([gen_example_store_json/0, gen_example_store_json/1, gen_example_store_json/3, gen_example_stores_json/0]).
 -export([gen_example_lane_with_parallel_boxes_json/2, gen_example_lane_json/2, gen_example_lanes_json/2]).
 -export([gen_parallel_box_with_tasks/1, gen_example_parallel_box/2, gen_example_parallel_boxes/2]).
 -export([gen_example_task/2, gen_example_tasks/2]).
 -export([gen_example_argument_mappings_for_specs/2, gen_example_argument_mappings/2]).
 -export([gen_example_result_mappings_for_specs/2, gen_example_result_mappings/2]).
 -export([gen_example_argument_value_builder/1, gen_example_store_iterator_spec/1]).
+-export([available_store_types_for_data_spec/1]).
 
 %%%===================================================================
 %%% API
@@ -135,18 +136,17 @@ gen_example_store_json() ->
 
 -spec gen_example_store_json(atm_data_spec:record()) -> entity_logic:data().
 gen_example_store_json(DataSpec) ->
-    DefaultInitialValue = lists_utils:random_element([undefined, ozt_atm:gen_example_initial_value(DataSpec#atm_data_spec.type)]),
-    gen_example_store_json(DataSpec, DefaultInitialValue).
-
--spec gen_example_store_json(atm_data_spec:record(), term()) -> entity_logic:data().
-gen_example_store_json(DataSpec, DefaultInitialValue) ->
-    AvailableStoreType = case DataSpec#atm_data_spec.type of
-        atm_file_type -> automation:all_store_types() -- [range];
-        atm_dataset_type -> automation:all_store_types() -- [range];
-        atm_integer_type -> automation:all_store_types() -- [tree_forest];
-        _ -> automation:all_store_types() -- [range, tree_forest]
+    StoreType = lists_utils:random_element(available_store_types_for_data_spec(DataSpec)),
+    DefaultInitialValue = case StoreType of
+        range ->
+            #{<<"start">> => ?RAND_INT(0, 10), <<"end">> => ?RAND_INT(10, 20), <<"step">> => ?RAND_INT(0, 5)};
+        _ ->
+            lists_utils:random_element([undefined, ozt_atm:gen_example_initial_value(DataSpec#atm_data_spec.type)])
     end,
-    StoreType = lists_utils:random_element(AvailableStoreType),
+    gen_example_store_json(StoreType, DataSpec, DefaultInitialValue).
+
+-spec gen_example_store_json(automation:store_type(), atm_data_spec:record(), term()) -> entity_logic:data().
+gen_example_store_json(StoreType, DataSpec, DefaultInitialValue) ->
     jsonable_record:to_json(#atm_store_schema{
         id = ozt_atm:gen_example_id(),
         name = ozt_atm:gen_example_name(),
@@ -330,3 +330,15 @@ gen_example_store_iterator_spec(StoreSchemaIds) ->
             strategy = #atm_store_iterator_batch_strategy{size = ?RAND_INT(1, 1000)}
         }
     ]).
+
+
+-spec available_store_types_for_data_spec(atm_data_spec:record()) -> [automation:store_type()].
+available_store_types_for_data_spec(DataSpec) ->
+    case DataSpec#atm_data_spec.type of
+        atm_file_type -> automation:all_store_types() -- [range];
+        atm_dataset_type -> automation:all_store_types() -- [range];
+        atm_integer_type -> automation:all_store_types() -- [tree_forest];
+        _ -> automation:all_store_types() -- [range, tree_forest]
+    end.
+
+

@@ -71,14 +71,36 @@ validate_all_ids_in_lanes(#od_atm_workflow_schema{lanes = Lanes}) ->
     ok | errors:error().
 validate_store_schemas(#od_atm_workflow_schema{stores = Stores}) ->
     StoreIds = lists:map(fun(#atm_store_schema{
-        id = Id, default_initial_value = DefaultInitialValue, data_spec = DataSpec
+        id = Id, type = Type, default_initial_value = DefaultInitialValue, data_spec = DataSpec
     } = AtmStoreSchema) ->
         DataKeyName = str_utils:format_bin("stores[~s].defaultInitialValue", [Id]),
-        atm_schema_validator:sanitize_initial_value(DefaultInitialValue, DataSpec, DataKeyName),
         sanitize_store_type_and_data_spec(AtmStoreSchema),
+        sanitize_store_default_initial_value(Type, DefaultInitialValue, DataSpec, DataKeyName),
         Id
     end, Stores),
     atm_schema_validator:assert_unique_identifiers(id, StoreIds, <<"stores">>).
+
+
+-spec sanitize_store_default_initial_value(
+    automation:store_type(),
+    json_utils:json_term(),
+    atm_data_spec:record(),
+    atm_schema_validator:data_key_name()
+) -> ok | no_return().
+%% @TODO VFS-7755 proper checks for other store types
+sanitize_store_default_initial_value(range, DefaultInitialValue, _DataSpec, DataKeyName) ->
+    case DefaultInitialValue of
+        #{<<"end">> := Index} when is_integer(Index) ->
+            ok;
+        _ ->
+            atm_schema_validator:raise_validation_error(
+                DataKeyName,
+                "Range store requires default initial value as an object with the following fields: "
+                "\"end\" (required), \"start\" (optional), \"step\" (optional)"
+            )
+    end;
+sanitize_store_default_initial_value(_StoreType, DefaultInitialValue, DataSpec, DataKeyName) ->
+    atm_schema_validator:sanitize_initial_value(DefaultInitialValue, DataSpec, DataKeyName).
 
 
 %% @private

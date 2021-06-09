@@ -129,8 +129,11 @@ gen_example_argument_spec_json() ->
         false ->
             lists_utils:random_element([undefined, ozt_atm:gen_example_initial_value(DataSpec#atm_data_spec.type)]);
         true ->
-            lists:map(fun(_) ->
-                ozt_atm:gen_example_initial_value(DataSpec#atm_data_spec.type)
+            lists:filtermap(fun(_) ->
+                case ozt_atm:gen_example_initial_value(DataSpec#atm_data_spec.type) of
+                    undefined -> false;
+                    Value -> {true, Value}
+                end
             end, lists:seq(1, ?RAND_INT(0, 5)))
     end,
     gen_example_argument_spec_json(DataSpec, IsBatch, DefaultValue).

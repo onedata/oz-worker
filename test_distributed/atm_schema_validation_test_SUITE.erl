@@ -267,9 +267,8 @@ atm_workflow_schema_non_unique_task_ids(_Config) ->
 
 
 atm_workflow_schema_disallowed_store_default_initial_value(_Config) ->
-    lists:foreach(fun({DataSpec, DefaultValue}) ->
-        DataType = DataSpec#atm_data_spec.type,
-        OffendingStoreSchema = ozt_atm_workflow_schemas:gen_example_store_json(DataSpec, DefaultValue),
+    lists:foreach(fun({StoreType, DataSpec, DefaultInitialValue, ExpError}) ->
+        OffendingStoreSchema = ozt_atm_workflow_schemas:gen_example_store_json(StoreType, DataSpec, DefaultInitialValue),
         #{<<"id">> := StoreId} = OffendingStoreSchema,
         run_validation_tests(#test_spec{
             schema_type = atm_workflow_schema,
@@ -279,12 +278,12 @@ atm_workflow_schema_disallowed_store_default_initial_value(_Config) ->
                     lists_utils:shuffle([OffendingStoreSchema | StoresJson]),
                     ?ERROR_BAD_DATA(
                         <<"stores[", StoreId/binary, "].defaultInitialValue">>,
-                        expected_disallowed_initial_value_error_description(DataType)
+                        ExpError
                     )
                 }
             end
         })
-    end, example_invalid_data_specs_and_default_values()).
+    end, example_invalid_stores_and_default_initial_values()).
 
 
 atm_workflow_schema_store_type_conflicting_with_data_spec(_Config) ->
@@ -689,6 +688,30 @@ example_invalid_data_specs_and_default_values() ->
         }, 13},
         {#atm_data_spec{type = atm_onedatafs_credentials_type}, #{<<"token">> => <<"123">>}}
     ].
+
+
+%% @private
+example_invalid_stores_and_default_initial_values() ->
+    lists:map(fun({DataSpec, InvalidDefaultValue}) ->
+        StoreType = lists_utils:random_element(ozt_atm_workflow_schemas:available_store_types_for_data_spec(DataSpec)),
+        case StoreType of
+            range ->
+                {
+                    StoreType,
+                    DataSpec,
+                    InvalidDefaultValue,
+                    <<"Range store requires default initial value as an object with the following fields: "
+                    "\"end\" (required), \"start\" (optional), \"step\" (optional)">>
+                };
+            _ ->
+                {
+                    StoreType,
+                    DataSpec,
+                    InvalidDefaultValue,
+                    expected_disallowed_initial_value_error_description(DataSpec#atm_data_spec.type)
+                }
+        end
+    end, example_invalid_data_specs_and_default_values()).
 
 
 %% @private

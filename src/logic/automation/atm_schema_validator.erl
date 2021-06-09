@@ -96,7 +96,8 @@ assert_known_names(NamesToCheck, KnownNames, DataKeyName) ->
 %% @TODO VFS-7755 Check if the default value's being an array corresponds to is_batch flag
 %% @end
 %%--------------------------------------------------------------------
--spec sanitize_initial_value(term(), atm_data_spec:record(), data_key_name()) -> ok | no_return().
+-spec sanitize_initial_value(json_utils:json_term(), atm_data_spec:record(), data_key_name()) ->
+    ok | no_return().
 sanitize_initial_value(undefined, _DataSpec, _DataKeyName) ->
     ok;
 sanitize_initial_value(_Value, #atm_data_spec{type = atm_store_credentials_type}, DataKeyName) ->
