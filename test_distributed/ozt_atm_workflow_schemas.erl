@@ -141,9 +141,10 @@ gen_example_store_json(DataSpec) ->
 -spec gen_example_store_json(atm_data_spec:record(), term()) -> entity_logic:data().
 gen_example_store_json(DataSpec, DefaultInitialValue) ->
     AvailableStoreType = case DataSpec#atm_data_spec.type of
-        atm_file_type -> automation:all_store_types();
-        atm_dataset_type -> automation:all_store_types();
-        _ -> automation:all_store_types() -- [tree_forest]
+        atm_file_type -> automation:all_store_types() -- [range];
+        atm_dataset_type -> automation:all_store_types() -- [range];
+        atm_integer_type -> automation:all_store_types() -- [tree_forest];
+        _ -> automation:all_store_types() -- [range, tree_forest]
     end,
     StoreType = lists_utils:random_element(AvailableStoreType),
     jsonable_record:to_json(#atm_store_schema{

@@ -162,7 +162,6 @@ create_test(Config) ->
             optional = [
                 <<"description">>,
                 <<"stores">>,
-                <<"lanes">>,
                 <<"state">>
             ],
             correct_values = #{
@@ -181,7 +180,21 @@ create_test(Config) ->
             ])
         }
     },
+    % lanes can only be provided if stores are, as they reference specific store schema ids
+    % first, test without lanes at all (see above spec), then mark stores as required
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec#api_test_spec{data_spec = DataSpec#data_spec{
+        required = [
+            <<"atmInventoryId">>,
+            <<"name">>,
+            <<"stores">>
+        ],
+        optional = [
+            <<"description">>,
+            <<"state">>,
+            <<"lanes">>
+        ]
+    }})),
 
     % Root client bypasses authorization checks,
     % hence wrong values of atmInventoryId
@@ -217,7 +230,7 @@ create_test(Config) ->
                 })
             end)
         },
-        data_spec = DataSpec#data_spec{
+        data_spec = RootDataSpec = DataSpec#data_spec{
             bad_values = lists:flatten([
                 {<<"atmInventoryId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
                 {<<"atmInventoryId">>, <<"asdq4ewfs">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
@@ -225,7 +238,21 @@ create_test(Config) ->
             ])
         }
     },
-    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec)).
+    % lanes can only be provided if stores are, as they reference specific store schema ids
+    % first, test without lanes at all (see above spec), then mark stores as required
+    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec#api_test_spec{data_spec = RootDataSpec#data_spec{
+        required = [
+            <<"atmInventoryId">>,
+            <<"name">>,
+            <<"stores">>
+        ],
+        optional = [
+            <<"description">>,
+            <<"state">>,
+            <<"lanes">>
+        ]
+    }})).
 
 
 list_test(Config) ->
@@ -468,12 +495,11 @@ update_test(Config) ->
             gri = #gri{type = od_atm_workflow_schema, id = atm_workflow_schema_id, aspect = instance},
             expected_result = ?OK_RES
         },
-        data_spec = #data_spec{
+        data_spec = DataSpec = #data_spec{
             at_least_one = [
                 <<"name">>,
                 <<"description">>,
                 <<"stores">>,
-                <<"lanes">>,
                 <<"state">>
             ],
             correct_values = #{
@@ -486,9 +512,20 @@ update_test(Config) ->
             bad_values = create_update_bad_data_values(AtmInventoryId)
         }
     },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
-    )).
+    % lanes can only be provided if stores are, as they reference specific store schema ids
+    % first, test without lanes at all (see above spec), then mark stores as required
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec#api_test_spec{
+        data_spec = DataSpec#data_spec{
+            required = [<<"stores">>],
+            at_least_one = [
+                <<"name">>,
+                <<"description">>,
+                <<"state">>,
+                <<"lanes">>
+            ]
+        }
+    }, EnvSetUpFun, undefined, VerifyEndFun)).
 
 
 delete_test(Config) ->
@@ -585,7 +622,6 @@ gen_lanes_containing_disallowed_lambda() ->
         _ ->
             gen_lanes_containing_disallowed_lambda()
     end.
-
 
 %%%===================================================================
 %%% Setup/teardown functions

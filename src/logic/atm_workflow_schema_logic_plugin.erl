@@ -116,10 +116,12 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
 
         state = State,
 
+        atm_inventory = AtmInventoryId,
+
         creator = aai:normalize_subject(Auth#auth.subject),
         creation_time = global_clock:timestamp_seconds()
     },
-    case atm_workflow_schema_validator:validate(AtmWorkflowSchema#od_atm_workflow_schema{atm_inventory = AtmInventoryId}) of
+    case atm_workflow_schema_validator:validate(AtmWorkflowSchema) of
         ok -> ok;
         {error, _} = Error -> throw(Error)
     end,

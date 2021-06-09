@@ -53,7 +53,23 @@ validate_result_names(#od_atm_lambda{result_specs = ResultSpecs}) ->
 -spec sanitize_initial_values(od_atm_lambda:record()) ->
     ok | errors:error().
 sanitize_initial_values(#od_atm_lambda{argument_specs = ArgumentSpecs}) ->
-    lists:foreach(fun(#atm_lambda_argument_spec{name = Name, default_value = DefaultValue, data_spec = DataSpec}) ->
+    lists:foreach(fun(#atm_lambda_argument_spec{
+        name = Name,
+        default_value = DefaultValue,
+        is_batch = IsBatch,
+        data_spec = DataSpec
+    }) ->
         DataKeyName = str_utils:format_bin("argumentSpecs[~s].defaultValue", [Name]),
-        atm_schema_validator:sanitize_initial_value(DefaultValue, DataSpec, DataKeyName)
+        case IsBatch of
+            false ->
+                atm_schema_validator:sanitize_initial_value(DefaultValue, DataSpec, DataKeyName);
+            true when DefaultValue == undefined ->
+                ok;
+            true when not is_list(DefaultValue) ->
+                atm_schema_validator:raise_validation_error(DataKeyName, "Expected a list of values (batch)");
+            true ->
+                lists:foreach(fun(Value) ->
+                    atm_schema_validator:sanitize_initial_value(Value, DataSpec, DataKeyName)
+                end, DefaultValue)
+        end
     end, ArgumentSpecs).

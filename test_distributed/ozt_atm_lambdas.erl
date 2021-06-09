@@ -28,7 +28,7 @@
 %% Example data generation
 -export([gen_example_data_json/0]).
 -export([gen_example_operation_spec_json/0]).
--export([gen_example_argument_spec_json/0, gen_example_argument_spec_json/2, gen_example_argument_specs_json/0]).
+-export([gen_example_argument_spec_json/0, gen_example_argument_spec_json/3, gen_example_argument_specs_json/0]).
 -export([gen_example_result_spec_json/0, gen_example_result_specs_json/0]).
 
 %%%===================================================================
@@ -124,15 +124,23 @@ gen_example_operation_spec_json() -> jsonable_record:to_json(
 -spec gen_example_argument_spec_json() -> json_utils:json_term().
 gen_example_argument_spec_json() ->
     DataSpec = ozt_atm:gen_example_data_spec(),
-    DefaultValue = lists_utils:random_element([undefined, ozt_atm:gen_example_initial_value(DataSpec#atm_data_spec.type)]),
-    gen_example_argument_spec_json(DataSpec, DefaultValue).
+    IsBatch = ?RAND_BOOL(),
+    DefaultValue = case IsBatch of
+        false ->
+            lists_utils:random_element([undefined, ozt_atm:gen_example_initial_value(DataSpec#atm_data_spec.type)]);
+        true ->
+            lists:map(fun(_) ->
+                ozt_atm:gen_example_initial_value(DataSpec#atm_data_spec.type)
+            end, lists:seq(1, ?RAND_INT(0, 5)))
+    end,
+    gen_example_argument_spec_json(DataSpec, IsBatch, DefaultValue).
 
--spec gen_example_argument_spec_json(atm_data_spec:record(), term()) -> json_utils:json_term().
-gen_example_argument_spec_json(DataSpec, DefaultValue) ->
+-spec gen_example_argument_spec_json(atm_data_spec:record(), boolean(), term()) -> json_utils:json_term().
+gen_example_argument_spec_json(DataSpec, IsBatch, DefaultValue) ->
     jsonable_record:to_json(#atm_lambda_argument_spec{
         name = ?UNIQUE_STRING,
         data_spec = DataSpec,
-        is_batch = ?RAND_BOOL(),
+        is_batch = IsBatch,
         is_optional = ?RAND_BOOL(),
         default_value = DefaultValue
     }, atm_lambda_argument_spec).

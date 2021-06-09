@@ -513,7 +513,7 @@ private_atm_lambda(gs, Id, AtmLambdaData, _Creator) ->
         <<"operationSpec">> => maps:get(<<"operationSpec">>, AtmLambdaData),
         <<"argumentSpecs">> => maps:get(<<"argumentSpecs">>, AtmLambdaData),
         <<"resultSpecs">> => maps:get(<<"resultSpecs">>, AtmLambdaData),
-        
+
         <<"atmInventories">> => [maps:get(<<"atmInventoryId">>, AtmLambdaData)]
     }).
 
@@ -551,7 +551,7 @@ private_atm_workflow_schema(rest, Id, AtmWorkflowSchemaData, Creator) ->
         <<"state">> => maps:get(<<"state">>, AtmWorkflowSchemaData),
 
         <<"atmInventoryId">> => maps:get(<<"atmInventoryId">>, AtmWorkflowSchemaData),
-        <<"atmLambdaIds">> => ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(maps:get(<<"lanes">>, AtmWorkflowSchemaData, [])),
+        <<"atmLambdas">> => ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(maps:get(<<"lanes">>, AtmWorkflowSchemaData, [])),
 
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
@@ -567,7 +567,8 @@ private_atm_workflow_schema(gs, Id, AtmWorkflowSchemaData, _Creator) ->
 
         <<"state">> => maps:get(<<"state">>, AtmWorkflowSchemaData),
 
-        <<"atmInventoryId">> => maps:get(<<"atmInventoryId">>, AtmWorkflowSchemaData)
+        <<"atmInventoryId">> => maps:get(<<"atmInventoryId">>, AtmWorkflowSchemaData),
+        <<"atmLambdas">> => ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(maps:get(<<"lanes">>, AtmWorkflowSchemaData, []))
     }).
 
 %%%===================================================================

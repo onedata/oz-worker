@@ -25,10 +25,10 @@
 -spec validate(od_atm_workflow_schema:record()) -> ok | errors:error().
 validate(AtmWorkflowSchema) ->
     atm_schema_validator:run_validation_procedures(AtmWorkflowSchema, [
-        fun validate_store_schemas/1,
-        fun validate_all_ids_in_lanes/1,
-        fun validate_store_schema_references/1,
         fun validate_lambda_references/1,
+        fun validate_all_ids_in_lanes/1,
+        fun validate_store_schemas/1,
+        fun validate_store_schema_references/1,
         fun validate_argument_and_result_mappers/1
     ]).
 
@@ -37,18 +37,17 @@ validate(AtmWorkflowSchema) ->
 %%%===================================================================
 
 %% @private
--spec validate_store_schemas(od_atm_workflow_schema:record()) ->
+-spec validate_lambda_references(od_atm_workflow_schema:record()) ->
     ok | errors:error().
-validate_store_schemas(#od_atm_workflow_schema{stores = Stores}) ->
-    StoreIds = lists:map(fun(#atm_store_schema{
-        id = Id, default_initial_value = DefaultInitialValue, data_spec = DataSpec
-    } = AtmStoreSchema) ->
-        DataKeyName = str_utils:format_bin("stores[~s].defaultInitialValue", [Id]),
-        atm_schema_validator:sanitize_initial_value(DefaultInitialValue, DataSpec, DataKeyName),
-        sanitize_store_type_and_data_spec(AtmStoreSchema),
-        Id
-    end, Stores),
-    atm_schema_validator:assert_unique_identifiers(id, StoreIds, <<"stores">>).
+validate_lambda_references(#od_atm_workflow_schema{lanes = Lanes, atm_inventory = AtmInventoryId}) ->
+    {ok, #document{value = #od_atm_inventory{atm_lambdas = InventoryLambdas}}} = od_atm_inventory:get(AtmInventoryId),
+    WorkflowLambdas = od_atm_workflow_schema:extract_atm_lambdas_from_lanes(Lanes),
+    case lists_utils:subtract(WorkflowLambdas, InventoryLambdas) of
+        [] ->
+            ok;
+        [OffendingLambdaId | _] ->
+            ?ERROR_RELATION_DOES_NOT_EXIST(od_atm_lambda, OffendingLambdaId, od_atm_inventory, AtmInventoryId)
+    end.
 
 
 %% @private
@@ -65,6 +64,21 @@ validate_all_ids_in_lanes(#od_atm_workflow_schema{lanes = Lanes}) ->
     atm_schema_validator:assert_unique_identifiers(id, LaneIds, <<"lanes">>),
     atm_schema_validator:assert_unique_identifiers(id, ParallelBoxIds, <<"parallelBoxes">>),
     atm_schema_validator:assert_unique_identifiers(id, TaskIds, <<"tasks">>).
+
+
+%% @private
+-spec validate_store_schemas(od_atm_workflow_schema:record()) ->
+    ok | errors:error().
+validate_store_schemas(#od_atm_workflow_schema{stores = Stores}) ->
+    StoreIds = lists:map(fun(#atm_store_schema{
+        id = Id, default_initial_value = DefaultInitialValue, data_spec = DataSpec
+    } = AtmStoreSchema) ->
+        DataKeyName = str_utils:format_bin("stores[~s].defaultInitialValue", [Id]),
+        atm_schema_validator:sanitize_initial_value(DefaultInitialValue, DataSpec, DataKeyName),
+        sanitize_store_type_and_data_spec(AtmStoreSchema),
+        Id
+    end, Stores),
+    atm_schema_validator:assert_unique_identifiers(id, StoreIds, <<"stores">>).
 
 
 %% @private
@@ -106,20 +120,6 @@ validate_store_schema_references(#od_atm_workflow_schema{stores = Stores} = AtmW
         end, AtmTaskSchema#atm_task_schema.result_mappings)
 
     end, AtmWorkflowSchema).
-
-
-%% @private
--spec validate_lambda_references(od_atm_workflow_schema:record()) ->
-    ok | errors:error().
-validate_lambda_references(#od_atm_workflow_schema{lanes = Lanes, atm_inventory = AtmInventoryId}) ->
-    {ok, #document{value = #od_atm_inventory{atm_lambdas = InventoryLambdas}}} = od_atm_inventory:get(AtmInventoryId),
-    WorkflowLambdas = od_atm_workflow_schema:extract_atm_lambdas_from_lanes(Lanes),
-    case lists_utils:subtract(WorkflowLambdas, InventoryLambdas) of
-        [] ->
-            ok;
-        [OffendingLambdaId | _] ->
-            ?ERROR_RELATION_DOES_NOT_EXIST(od_atm_lambda, OffendingLambdaId, od_atm_inventory, AtmInventoryId)
-    end.
 
 
 %% @private
@@ -188,6 +188,11 @@ sanitize_store_type_and_data_spec(#atm_store_schema{type = tree_forest, data_spe
     case AtmDataSpec of
         #atm_data_spec{type = atm_file_type} -> ok;
         #atm_data_spec{type = atm_dataset_type} -> ok;
+        #atm_data_spec{type = AtmDataType} -> raise_conflicting_store_and_data_type(Id, AtmDataType)
+    end;
+sanitize_store_type_and_data_spec(#atm_store_schema{type = range, data_spec = AtmDataSpec, id = Id}) ->
+    case AtmDataSpec of
+        #atm_data_spec{type = atm_integer_type} -> ok;
         #atm_data_spec{type = AtmDataType} -> raise_conflicting_store_and_data_type(Id, AtmDataType)
     end;
 sanitize_store_type_and_data_spec(#atm_store_schema{}) ->

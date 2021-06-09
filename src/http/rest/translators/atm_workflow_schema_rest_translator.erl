@@ -70,7 +70,7 @@ get_response(#gri{id = AtmWorkflowSchemaId, aspect = instance, scope = private},
         <<"state">> => automation:workflow_schema_state_to_json(State),
 
         <<"atmInventoryId">> => AtmInventoryId,
-        <<"atmLambdaIds">> => AtmLambdaIds,
+        <<"atmLambdas">> => AtmLambdaIds,
 
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
         <<"creationTime">> => CreationTime

@@ -6,7 +6,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This file contains tests concerning atm_workflow_schema basic API (REST + logic + gs).
+%%% This file contains tests concerning validation of automation schemas -
+%%% workflows and lambdas.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(atm_schema_validation_test_SUITE).
@@ -74,6 +75,12 @@ all() ->
     ]).
 
 
+%% @TODO VFS-7755 test non unique parallel box ids in different lanes
+%% @TODO VFS-7755 test non unique task ids in different lanes
+%% @TODO VFS-7755 test non unique task ids in different parallel boxes
+%% @TODO VFS-7755 test non-batch default value when argument spec's is_batch=true
+
+
 % Record used to expressively define a schema validation test. Each test tries
 % to create/update an atm_lambda/atm_workflow_schema, but with invalid input
 % data that should cause validation errors. Firstly, a correct input data set
@@ -131,9 +138,14 @@ atm_lambda_non_unique_result_spec_names(_Config) ->
 
 
 atm_lambda_disallowed_default_value(_Config) ->
-    lists:foreach(fun({DataSpec, DefaultValue}) ->
+    lists:foreach(fun({DataSpec, InvalidDefaultValue}) ->
         DataType = DataSpec#atm_data_spec.type,
-        OffendingArgumentSpec = ozt_atm_lambdas:gen_example_argument_spec_json(DataSpec, DefaultValue),
+        IsBatch = ?RAND_BOOL(),
+        SpecDefaultValue = case IsBatch of
+            true -> [InvalidDefaultValue];
+            false -> InvalidDefaultValue
+        end,
+        OffendingArgumentSpec = ozt_atm_lambdas:gen_example_argument_spec_json(DataSpec, IsBatch, SpecDefaultValue),
         #{<<"name">> := ArgumentName} = OffendingArgumentSpec,
         run_validation_tests(#test_spec{
             schema_type = atm_lambda,
@@ -194,6 +206,7 @@ atm_workflow_schema_non_unique_lane_ids(_Config) ->
             }
         end
     }).
+
 
 atm_workflow_schema_non_unique_parallel_box_ids(_Config) ->
     run_validation_tests(#test_spec{
@@ -275,29 +288,30 @@ atm_workflow_schema_disallowed_store_default_initial_value(_Config) ->
 
 
 atm_workflow_schema_store_type_conflicting_with_data_spec(_Config) ->
-    DataTypesDisallowedForTreeForest = atm_data_type:all_data_types() -- [atm_file_type, atm_dataset_type],
-    lists:foreach(fun(DataType) ->
-        DataTypeJson = atm_data_type:type_to_json(DataType),
-        DataSpec = ozt_atm:gen_example_data_spec(DataType),
-        CorrectStoreSchema = ozt_atm_workflow_schemas:gen_example_store_json(DataSpec),
-        OffendingStoreSchema = CorrectStoreSchema#{
-            <<"type">> => automation:store_type_to_json(tree_forest)
-        },
-        #{<<"id">> := StoreId} = OffendingStoreSchema,
-        run_validation_tests(#test_spec{
-            schema_type = atm_workflow_schema,
-            tested_data_field = <<"stores">>,
-            spoil_data_field_fun = fun(StoresJson, _AtmInventoryId) ->
-                {
-                    lists_utils:shuffle([OffendingStoreSchema | StoresJson]),
-                    ?ERROR_BAD_DATA(
-                        <<"stores[", StoreId/binary, "].type">>,
-                        <<"Provided store type is disallowed for data type ", DataTypeJson/binary>>
-                    )
-                }
-            end
-        })
-    end, DataTypesDisallowedForTreeForest).
+    lists:foreach(fun({StoreType, DisallowedDataTypes}) ->
+        lists:foreach(fun(DataType) ->
+            DataTypeJson = atm_data_type:type_to_json(DataType),
+            DataSpec = ozt_atm:gen_example_data_spec(DataType),
+            CorrectStoreSchema = ozt_atm_workflow_schemas:gen_example_store_json(DataSpec),
+            OffendingStoreSchema = CorrectStoreSchema#{
+                <<"type">> => automation:store_type_to_json(StoreType)
+            },
+            #{<<"id">> := StoreId} = OffendingStoreSchema,
+            run_validation_tests(#test_spec{
+                schema_type = atm_workflow_schema,
+                tested_data_field = <<"stores">>,
+                spoil_data_field_fun = fun(StoresJson, _AtmInventoryId) ->
+                    {
+                        lists_utils:shuffle([OffendingStoreSchema | StoresJson]),
+                        ?ERROR_BAD_DATA(
+                            <<"stores[", StoreId/binary, "].type">>,
+                            <<"Provided store type is disallowed for data type ", DataTypeJson/binary>>
+                        )
+                    }
+                end
+            })
+        end, DisallowedDataTypes)
+    end, invalid_data_types_for_store_type()).
 
 
 atm_workflow_schema_bad_store_reference_in_iterator(_Config) ->
@@ -567,7 +581,7 @@ atm_workflow_schema_missing_required_argument_mapper(_Config) ->
                 ozt_atm_lambdas:gen_example_argument_spec_json(),
                 #{
                     <<"isOptional">> => false,
-                    <<"defaultValue">> => undefined
+                    <<"defaultValue">> => null
                 }
             ),
             OtherArgumentSpecs = maps:get(<<"argumentSpecs">>, AtmLambdaData),
@@ -674,6 +688,14 @@ example_invalid_data_specs_and_default_values() ->
             value_constraints = #{store_type => lists_utils:random_element(automation:all_store_types())}
         }, 13},
         {#atm_data_spec{type = atm_onedatafs_credentials_type}, #{<<"token">> => <<"123">>}}
+    ].
+
+
+%% @private
+invalid_data_types_for_store_type() ->
+    [
+        {range, atm_data_type:all_data_types() -- [atm_integer_type]},
+        {tree_forest, atm_data_type:all_data_types() -- [atm_file_type, atm_dataset_type]}
     ].
 
 

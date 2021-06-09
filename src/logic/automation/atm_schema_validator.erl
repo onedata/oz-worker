@@ -25,6 +25,15 @@
 -type data_key_name() :: binary().
 -export_type([data_key_name/0]).
 
+%% @TODO VFS-7755 make sure requested dispatch_function is supported for given store type
+%% @TODO VFS-7755 examine the workflows diagram and think what else should be validated
+%% @TODO VFS-7755 check if result data spec is compatible with target store's data spec
+%% @TODO VFS-7755 for item value builder, check if iterated store's data spec is compatible with argument's data spec
+%% @TODO VFS-7755 check if argument has is_batch=true and if so, if the corresponding lane's iterator has batch strategy
+%% @TODO VFS-7755 check if const value builder is compatible with argument's data spec
+%% @TODO VFS-7755 consider built in audit log when validating referenced store schemas - do we need any other built in stores?
+%% @TODO VFS-7755 sanitize result's data specs - e.g. store and onedatafs credentials can only appear in arguments
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -84,6 +93,7 @@ assert_known_names(NamesToCheck, KnownNames, DataKeyName) ->
 %% @doc
 %% Ensures that the initial value is valid in relation to given data spec.
 %% @TODO VFS-7683 Limit the size of values inserted into atm_stores or default values
+%% @TODO VFS-7755 Check if the default value's being an array corresponds to is_batch flag
 %% @end
 %%--------------------------------------------------------------------
 -spec sanitize_initial_value(term(), atm_data_spec:record(), data_key_name()) -> ok | no_return().

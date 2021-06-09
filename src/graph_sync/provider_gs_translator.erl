@@ -445,7 +445,10 @@ translate_resource(_, #gri{type = temporary_token_secret, scope = shared}, Gener
 
 translate_resource(_, #gri{type = od_atm_inventory, aspect = instance, scope = private}, AtmInventory) ->
     #{
-        <<"name">> => AtmInventory#od_atm_inventory.name
+        <<"name">> => AtmInventory#od_atm_inventory.name,
+
+        <<"atmLambdas">> => AtmInventory#od_atm_inventory.atm_lambdas,
+        <<"atmWorkflowSchemas">> => AtmInventory#od_atm_inventory.atm_workflow_schemas
     };
 
 translate_resource(_, #gri{type = od_atm_lambda, aspect = instance, scope = private}, AtmLambda) ->
