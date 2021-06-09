@@ -13,6 +13,7 @@
 -author("Piotr Duleba").
 
 -include("entity_logic.hrl").
+-include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/errors.hrl").
 
 -export([
@@ -28,6 +29,7 @@
     create_user/2,
     get_user_protected_data/2,
     create_user_temporary_token/3,
+    create_user_temporary_access_token/1,
     are_basic_credentials_valid/2,
 
     create_group/2,
@@ -40,6 +42,8 @@
     space_set_user_privileges/4,
     delete_space/2
 ]).
+
+-define(DEFAULT_TEMP_CAVEAT_TTL, 360000).
 
 
 %%%===================================================================
@@ -98,6 +102,18 @@ get_user_protected_data(Auth, UserId) ->
     {ok, tokens:token()} | no_return().
 create_user_temporary_token(Auth, UserId, Data) ->
     token_logic:create_user_temporary_token(Auth, UserId, Data).
+
+
+-spec create_user_temporary_access_token(od_user:id()) ->
+    {ok, binary()} | no_return().
+create_user_temporary_access_token(UserId) ->
+    Auth = ?USER(UserId),
+    Now = timestamp_seconds(),
+    {ok, Token} = create_user_temporary_token(Auth, UserId,#{
+        <<"type">> => ?ACCESS_TOKEN,
+        <<"caveats">> => [#cv_time{valid_until = Now + ?DEFAULT_TEMP_CAVEAT_TTL}]
+    }),
+    tokens:serialize(Token).
 
 
 -spec are_basic_credentials_valid(od_user:username(), binary()) -> boolean().
