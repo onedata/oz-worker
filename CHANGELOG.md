@@ -83,6 +83,8 @@ CHANGELOG
     Fixed inability to open share hosted by Oneprovider 19.02.x using
     Onezone 20.02.x.
 
+### 20.02.10
+
 ### 20.02.9
 
 ### 20.02.8
