@@ -375,7 +375,7 @@ verify_logic_result({ok, Bin}, ?OK_BINARY) when is_binary(Bin) ->
 verify_logic_result({ok, Value}, ?OK_BINARY(Value)) when is_binary(Value) ->
     true;
 verify_logic_result({ok, Got}, ?OK_MAP(Expected)) when is_map(Got) ->
-    Got =:= Expected;
+    rest_test_utils:compare_maps(Got, Expected);
 verify_logic_result({ok, Got}, ?OK_MAP_CONTAINS(Expected)) when is_map(Got) ->
     rest_test_utils:contains_map(Got, Expected);
 verify_logic_result({ok, GotList}, ?OK_LIST(ExpList)) ->
@@ -445,7 +445,7 @@ run_gs_tests(
     ).
 
 
-% TODO rm clause after it will be possible to test gs nobody auth
+% TODO VFS-4520 Tests for GraphSync API
 run_gs_test(_Config, _GsSpec, nobody, _Data, _DescFmt, _Env, undefined) ->
     ok;
 run_gs_test(Config, GsSpec, Client, Data, Description, Env, undefined) ->
@@ -620,9 +620,9 @@ verify_gs_result({ok, ?GS_RESP(Map)}, ?OK_MAP(ExpMap)) when is_map(Map) ->
         {GriVerifyFun, ExpMap2} when is_function(GriVerifyFun, 1) ->
             {Gri, Map2} = maps:take(<<"gri">>, Map),
             GriVerifyFun(Gri),
-            Map2 =:= ExpMap2;
+            rest_test_utils:compare_maps(Map2, ExpMap2);
         _ ->
-            Map =:= ExpMap
+            rest_test_utils:compare_maps(Map ,ExpMap)
     end;
 verify_gs_result({ok, ?GS_RESP(Map)}, ?OK_MAP_CONTAINS(ExpMap)) when is_map(Map) ->
     case maps:take(<<"gri">>, ExpMap) of
@@ -904,18 +904,24 @@ bad_data_sets(DataSpec, Env) ->
         optional = Optional,
         bad_values = BadValues
     } = DataSpec,
-    AllCorrect = maps:from_list(lists:map(fun(Key) ->
+    DefinedKeys = Required ++ AtLeastOne ++ Optional,
+    CorrectData = maps:from_list(lists:map(fun(Key) ->
         {Key, hd(get_correct_value(Key, DataSpec))}
-    end, Required ++ AtLeastOne ++ Optional)),
+    end, DefinedKeys)),
+    % test only the keys specified in the specs (bad values may contain some
+    % superfluous entries)
+    ApplicableBadValues = lists:filter(fun({Key, _, _}) ->
+        lists:member(Key, DefinedKeys)
+    end, BadValues),
     lists:map(
         fun
             ({Key, Value, ErrorTypeFun}) when is_function(ErrorTypeFun, 1) ->
-                Data = AllCorrect#{Key => Value},
+                Data = CorrectData#{Key => Value},
                 {Data, Key, ErrorTypeFun(Env)};
             ({Key, Value, ErrorType}) ->
-                Data = AllCorrect#{Key => Value},
+                Data = CorrectData#{Key => Value},
                 {Data, Key, ErrorType}
-        end, BadValues).
+        end, ApplicableBadValues).
 
 
 % Converts correct value spec into a value

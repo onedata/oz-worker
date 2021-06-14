@@ -166,4 +166,7 @@ entity_type_to_translator(od_harvester) -> harvester_rest_translator;
 entity_type_to_translator(od_cluster) -> cluster_rest_translator;
 entity_type_to_translator(od_token) -> token_rest_translator;
 entity_type_to_translator(temporary_token_secret) -> token_rest_translator;
+entity_type_to_translator(od_atm_inventory) -> atm_inventory_rest_translator;
+entity_type_to_translator(od_atm_lambda) -> atm_lambda_rest_translator;
+entity_type_to_translator(od_atm_workflow_schema) -> atm_workflow_schema_rest_translator;
 entity_type_to_translator(oz_worker) -> zone_rest_translator.

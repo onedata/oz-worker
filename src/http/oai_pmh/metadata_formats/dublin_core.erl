@@ -102,7 +102,7 @@ elements() -> [
 -spec encode(#{} | binary(), AdditionalIdentifiers :: [binary()]) -> #xmlElement{}.
 encode(Metadata, AdditionalIdentifiers) ->
 
-    %% @TODO currently bare xml is saved in  handle
+    %% @TODO VFS-7454 currently bare xml is saved in  handle
     %%    MetadataXML = lists:flatmap(fun(Key) ->
     %%        case maps:get(Key, Metadata, undefined) of
     %%            undefined -> [];

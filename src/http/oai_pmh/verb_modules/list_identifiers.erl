@@ -86,4 +86,4 @@ get_response(<<"header">>, Args) ->
     end,
     oai_utils:harvest(MetadataPrefix, From, Until, HarvestingFun).
 
-%%% TODO * support resumptionToken
+%%% TODO VFS-7454 support resumptionToken

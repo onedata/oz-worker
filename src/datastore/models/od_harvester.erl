@@ -46,6 +46,7 @@
 %% Batch entry is a map in a following format:
 %% #{
 %%    <<"fileId">> := binary(),
+%%    <<"fileType">> := binary() %% <<"DIR">> | <<"REG">> | <<"SYMLNK">>
 %%    <<"spaceId">> => binary(),
 %%    <<"fileName">> => binary(),
 %%    <<"operation">> := binary(), %% <<"submit">> | <<"delete">>
@@ -60,7 +61,7 @@
 -type batch() :: [batch_entry()].
 -type payload() :: #{binary => binary() | json_utils:json_map()}.
 -type metadata_type() :: json | xattrs | rdf.
--type file_details() :: spaceId | fileName | metadataExistenceFlags.
+-type file_details() :: fileName | fileType | spaceId | metadataExistenceFlags | datasetInfo.
 
 -type index_submit_response() :: ok | {error, SuccessfulSeq :: pos_integer() | undefined,
     FailedSeq :: pos_integer(), ErrorMsg :: binary()}.
@@ -163,7 +164,7 @@ all_metadata_types() ->
 
 -spec all_file_details() -> [file_details()].
 all_file_details() ->
-    [spaceId, fileName, metadataExistenceFlags].
+    [fileName, fileType, spaceId, metadataExistenceFlags, datasetInfo].
 
 %%%===================================================================
 %%% datastore_model callbacks

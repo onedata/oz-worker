@@ -124,6 +124,19 @@ prepare_data_test() ->
     ),
     ok.
 
+prepare_data_file_details_test() ->
+    lists:foreach(fun(FileDetail) ->
+        ?assertEqual(
+            #{
+                <<"__onedata">> => expected_file_details(FileDetail)
+            },
+            call_prepare_data(#{},
+                #harvester_index{include_metadata = [], include_rejection_reason = false, include_file_details = [FileDetail]},
+                all)
+        )
+    end, od_harvester:all_file_details() -- [metadataExistenceFlags]),
+    ok.
+
 prepare_data_with_rejected_fields_test() ->
     IndexInfo = #harvester_index{
         include_metadata = [json, xattrs, rdf],
@@ -564,6 +577,19 @@ prepare_internal_fields_schema_test() ->
             #{}
         )),
     ?assertEqual(
+        #{
+            <<"fileType">> => TextEsType,
+            <<"datasetId">> => TextEsType,
+            <<"isDataset">> => BooleanEsType
+        },
+        elasticsearch_harvesting_backend:prepare_internal_fields_schema(
+            #harvester_index{
+                include_metadata = [],
+                include_file_details = [fileType, datasetInfo]
+            },
+            #{}
+        )),
+    ?assertEqual(
         #{},
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
             #harvester_index{
@@ -762,8 +788,20 @@ call_prepare_data(Payload, IndexInfo, RejectedFields) ->
     elasticsearch_harvesting_backend:prepare_data(#{
         <<"fileId">> => <<"fileId">>,
         <<"fileName">> => <<"fileName">>,
+        <<"fileType">> => <<"fileType">>,
+        <<"datasetId">> => <<"datasetId">>,
         <<"payload">> => Payload,
         <<"spaceId">> => <<"spaceId">>
     }, IndexInfo, {RejectedFields, RejectionReason}).
+
+
+expected_file_details(datasetInfo) ->
+    #{
+        <<"datasetId">> =>  <<"datasetId">>,
+        <<"isDataset">> => true
+    };
+expected_file_details(FileDetail) ->
+    BinaryFileDetail = atom_to_binary(FileDetail, utf8),
+    #{BinaryFileDetail => BinaryFileDetail}.
 
 -endif.

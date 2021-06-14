@@ -2922,6 +2922,26 @@ delete_storage(Config, StorageId) ->
     )).
 
 
+-spec list_atm_inventories(Config :: term()) -> {ok, [od_atm_inventory:id()]}.
+list_atm_inventories(Config) ->
+    ?assertMatch({ok, _}, call_oz(Config, atm_inventory_logic, list, [?ROOT])).
+
+
+-spec delete_atm_inventory(Config :: term(), od_atm_inventory:id()) -> ok.
+delete_atm_inventory(Config, AtmInventoryId) ->
+    ?assertMatch(ok, call_oz(Config, atm_inventory_logic, delete, [?ROOT, AtmInventoryId])).
+
+
+-spec list_atm_lambdas(Config :: term()) -> {ok, [od_atm_lambda:id()]}.
+list_atm_lambdas(Config) ->
+    ?assertMatch({ok, _}, call_oz(Config, atm_lambda_logic, list, [?ROOT])).
+
+
+-spec delete_atm_lambda(Config :: term(), od_atm_lambda:id()) -> ok.
+delete_atm_lambda(Config, AtmLambdaId) ->
+    ?assertMatch(ok, call_oz(Config, atm_lambda_logic, delete, [?ROOT, AtmLambdaId])).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Asserts that an invite token's usage limit was reached or not
@@ -3081,13 +3101,18 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     {ok, Groups} = list_groups(Config),
     {ok, Users} = list_users(Config),
     {ok, Harvesters} = list_harvesters(Config),
+    {ok, AtmInventories} = list_atm_inventories(Config),
+    {ok, AtmLambdas} = list_atm_lambdas(Config),
     lists_utils:pforeach(fun(PId) -> delete_provider(Config, PId) end, Providers),
     lists_utils:pforeach(fun(HId) -> delete_handle(Config, HId) end, Handles),
     lists_utils:pforeach(fun(ShId) -> delete_share(Config, ShId) end, Shares),
     lists_utils:pforeach(fun(SpId) -> delete_space(Config, SpId) end, Spaces),
     lists_utils:pforeach(fun(HSId) -> delete_handle_service(Config, HSId) end, HServices),
     lists_utils:pforeach(fun(HId) -> delete_harvester(Config, HId) end, Harvesters),
+    lists_utils:pforeach(fun(AIId) -> delete_atm_inventory(Config, AIId) end, AtmInventories),
+    lists_utils:pforeach(fun(ALId) -> delete_atm_lambda(Config, ALId) end, AtmLambdas),
     % Clusters and storages are removed together with providers
+    % Workflow schemas are removed together with Inventories
 
     % Check if predefined groups should be removed too.
     GroupsToDelete = case RemovePredefinedGroups of

@@ -523,5 +523,56 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(cid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
+    }},
+    %% Create a new atm_inventory for the current user
+    %% This operation does not require any specific privileges.
+    {<<"/user/atm_inventories">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_atm_inventory, id = undefined, aspect = instance},
+        b_auth_hint = ?AS_USER(?CLIENT_ID)
+    }},
+    %% List user atm_inventories
+    %% This operation does not require any specific privileges.
+    {<<"/user/atm_inventories">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = atm_inventories}
+    }},
+    %% Join atm_inventory
+    %% This operation does not require any specific privileges.
+    {<<"/user/atm_inventories/join">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_atm_inventory, id = undefined, aspect = join},
+        b_auth_hint = ?AS_USER(?CLIENT_ID)
+    }},
+    %% Get atm_inventory details
+    %% This operation does not require any specific privileges.
+    {<<"/user/atm_inventories/:aiid">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(aiid), aspect = instance, scope = protected},
+        b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
+    }},
+    %% Leave atm_inventory
+    %% This operation does not require any specific privileges.
+    {<<"/user/atm_inventories/:aiid">>, #rest_req{
+        method = 'DELETE',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {atm_inventory, ?BINDING(aiid)}}
+    }},
+    %% List effective user atm_inventories
+    %% This operation does not require any specific privileges.
+    {<<"/user/effective_atm_inventories">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = eff_atm_inventories}
+    }},
+    %% Get effective atm_inventory details
+    %% This operation does not require any specific privileges.
+    {<<"/user/effective_atm_inventories/:aiid">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(aiid), aspect = instance, scope = protected},
+        b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }}
 ].

@@ -123,7 +123,7 @@ add_user_test(Config) ->
             args = [auth, HandleId, U3, data],
             expected_result = ?OK_BINARY(U3)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"privileges">>],
             correct_values = #{
@@ -191,7 +191,7 @@ remove_user_test(Config) ->
             args = [auth, HandleId, userId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
@@ -236,7 +236,7 @@ list_users_test(Config) ->
             args = [auth, HandleId],
             expected_result = ?OK_LIST(ExpUsers)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -331,7 +331,7 @@ get_user_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:handle_add_user(Config, HandleId, U3),
 
@@ -373,7 +373,7 @@ get_user_privileges_test(Config) ->
             args = [auth, HandleId, U3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
@@ -393,7 +393,7 @@ update_user_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:handle_add_user(Config, HandleId, U3),
 
@@ -436,7 +436,7 @@ update_user_privileges_test(Config) ->
             args = [auth, HandleId, U3, data],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(update_privileges, [
@@ -477,7 +477,7 @@ list_eff_users_test(Config) ->
             args = [auth, HandleId],
             expected_result = ?OK_LIST(ExpUsers)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -575,10 +575,7 @@ get_eff_user_privileges_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    % User whose eff privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
-    % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, SubjectUser} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
@@ -587,8 +584,8 @@ get_eff_user_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:handle_add_group(Config, HandleId, G1),
     {ok, G2} = oz_test_utils:handle_add_group(Config, HandleId, G2),
     {ok, G3} = oz_test_utils:group_add_group(Config, G1, G3),
-    {ok, U3} = oz_test_utils:group_add_user(Config, G3, U3),
-    {ok, U3} = oz_test_utils:group_add_user(Config, G2, U3),
+    {ok, SubjectUser} = oz_test_utils:group_add_user(Config, G3, SubjectUser),
+    {ok, SubjectUser} = oz_test_utils:group_add_user(Config, G2, SubjectUser),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -624,7 +621,7 @@ get_eff_user_privileges_test(Config) ->
                 {admin, [?OZ_HANDLES_VIEW_PRIVILEGES]},
                 {user, U2},
                 % user can always see his own privileges
-                {user, U3}
+                {user, SubjectUser}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -636,7 +633,7 @@ get_eff_user_privileges_test(Config) ->
             method = get,
             path = [
                 <<"/handles/">>, HandleId,
-                <<"/effective_users/">>, U3, <<"/privileges">>
+                <<"/effective_users/">>, SubjectUser, <<"/privileges">>
             ],
             expected_code = ?HTTP_200_OK,
             expected_body = #{<<"privileges">> => InitialPrivsBin}
@@ -644,15 +641,15 @@ get_eff_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_logic,
             function = get_eff_user_privileges,
-            args = [auth, HandleId, U3],
+            args = [auth, HandleId, SubjectUser],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?HANDLE_VIEW, false, U3
+        {user, SubjectUser}, ?HANDLE_VIEW, false, SubjectUser
     ])).
 
 

@@ -30,6 +30,11 @@
 % Time caveat is required in temporary tokens, a default one is added if there isn't any
 -define(DEFAULT_TEMP_CAVEAT_TTL, 36000).
 
+-define(RAND_STR(), ?RAND_STR(16)).
+-define(RAND_STR(Bytes), str_utils:rand_hex(Bytes)).
+-define(RAND_BOOL(), lists_utils:random_element([true, false])).
+-define(RAND_INT(From, To), From + rand:uniform(To - From + 1) - 1).
+
 % Macro used to check the result in ensure_exists / ensure_member functions
 % (where an entity / relation should be created if it does not exist)
 -define(assertSuccessOrAlreadyExists(Result), ?assertMatch(ok, case Result of
@@ -54,7 +59,7 @@ end)).
 -define(wrap_in_try_catch(Term), try
     Term
 catch __Type:__Reason ->
-    ct:print("Test crash in ~s:~B~n~w:~p~nStacktrace: ~s", [
+    ct:pal("Test crash in ~s:~B~n~w:~p~nStacktrace: ~s", [
         ?MODULE, ?LINE,
         __Type, __Reason,
         lager:pr_stacktrace(erlang:get_stacktrace())

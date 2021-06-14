@@ -4,6 +4,85 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha13
+
+### 21.02.0-alpha12
+
+-   **VFS-7705** Added more file actions to archive file browser GUI:
+    share, metadata, permissions read, data distribution and quality of
+    service.
+
+### 21.02.0-alpha11
+
+-   **VFS-7663** Changed background image of sign-in page in Onezone and
+    Onepanel.
+-   **VFS-7648** Added Web GUI views for browsing and creating datasets
+    and archives.
+-   **VFS-7304** Add preliminary REST API for dataset archivization - to
+    be extended in near future.
+
+### 21.02.0-alpha10
+
+### 21.02.0-alpha9
+
+### 21.02.0-alpha8
+
+-   **VFS-7575** Add the possibility to incorporate an XRootD server
+    within the Onedata environment for exposing Open Data collections
+    for public access using the XRootD protocol.
+-   **VFS-7228** Improve the design and UX of the token consumer page in
+    Onezone GUI .
+
+### 21.02.0-alpha7
+
+-   **VFS-7515** Added new harvesting options - fileType and
+    datasetInfo.
+-   **VFS-7429** Implemented the concept of datasets. Datasets allow the
+    space users to organize their data into collections with desired
+    granularity. A file or directory marked as a dataset offers
+    additional features, such as optional data and metadata protection
+    or the ability to create persistent snapshots of the physical
+    dataset contents. In case of a directory, a dataset covers all its
+    subdirectories and files. Datasets can be nested, allowing users to
+    compose arbitrary hierarchical structures. Added corresponding views
+    for managing datasets and write protection flags in file browser Web
+    GUI and a REST API, accessible under \`/datasets\`,
+    \`/datasets/{DatasetId}\` and \`/data/{FileId}/dataset/summary\`
+    paths.
+
+### 21.02.0-alpha6
+
+### 21.02.0-alpha5
+
+-   **VFS-7294** Added publicly available REST endpoints for fetching
+    information and data of shared files/directories. The data-related
+    endpoints are offered by Onezone, which redirects to a suitable
+    Oneprovider so that a guest user does not need any knowledge of the
+    environment to access the data. Improved the Web GUI\'s shares view
+    to present the public endpoints in an easy-to-use manner.
+
+### 21.02.0-alpha4
+
+-   **VFS-7413** Fixed displaying users with the same full name on
+    members views.
+
+### 21.02.0-alpha3
+
+-   **VFS-6638** Fixed handling duplicate clusters states on clusters
+    list in GUI.
+
+### 21.02.0-alpha2
+
+-   **VFS-7321** Added REST API endpoint for blocking and unblocking
+    user accounts. Blocked user is denied access to all Onedata services
+    unless their account is unblocked again.
+-   **VFS-7165** Add a workaround for Erlang\'s SSL implementation that
+    would not reload server certificate chain when it is changed (e.g.
+    after Let\'s Encrypt certificate regeneration).
+-   **VFS-6566** Improved UX and fixed minor issues in share views.
+    Fixed inability to open share hosted by Oneprovider 19.02.x using
+    Onezone 20.02.x.
+
 ### 20.02.10
 
 ### 20.02.9
@@ -31,7 +110,6 @@ CHANGELOG
 -   **VFS-6566** Improved UX and fixed minor issues in share views.
     Fixed inability to open share hosted by Oneprovider 19.02.x using
     Onezone 20.02.x.
-
 
 ### 20.02.6
 
