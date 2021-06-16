@@ -13,6 +13,8 @@
 -author("Piotr Duleba").
 
 -include("entity_logic.hrl").
+-include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/errors.hrl").
 
 -export([
@@ -38,7 +40,13 @@
     create_space_support_token/2,
     get_space_protected_data/2,
     space_set_user_privileges/4,
-    delete_space/2
+    delete_space/2,
+
+    create_inventory/3,
+    create_lambda/2,
+    create_workflow_schema/2,
+    update_workflow_schema/3,
+    get_workflow_schema/2
 ]).
 
 
@@ -155,3 +163,32 @@ space_set_user_privileges(Auth, SpaceId, UserId, Privileges) ->
 -spec delete_space(aai:auth(), od_space:id()) -> ok | errors:error().
 delete_space(Auth, SpaceId) ->
     space_logic:delete(Auth, SpaceId).
+
+
+-spec create_inventory(aai:auth(), od_user:id(), od_atm_inventory:name() | entity_logic:data()) ->
+    {ok, od_atm_inventory:id()} | errors:error().
+create_inventory(Auth, UserId, NameOrData) ->
+    user_logic:create_atm_inventory(Auth, UserId, NameOrData).
+
+
+-spec create_lambda(aai:auth(), od_atm_lambda:name() | entity_logic:data()) ->
+    {ok, od_atm_lambda:id()} | errors:error().
+create_lambda(Auth, Data) ->
+    atm_lambda_logic:create(Auth, Data).
+
+
+-spec create_workflow_schema(aai:auth(), od_atm_workflow_schema:name() | entity_logic:data()) ->
+    {ok, od_atm_workflow_schema:id()} | errors:error().
+create_workflow_schema(Auth, NameOrData) ->
+    atm_workflow_schema_logic:create(Auth, NameOrData).
+
+
+-spec update_workflow_schema(aai:auth(), od_atm_workflow_schema:id(), entity_logic:data()) -> ok.
+update_workflow_schema(Auth, WorkflowId, Data) ->
+    atm_workflow_schema_logic:update(Auth, WorkflowId, Data).
+
+
+-spec get_workflow_schema(aai:auth(), od_atm_workflow_schema:id()) ->
+    {ok, od_atm_workflow_schema:record()} | errors:error().
+get_workflow_schema(Auth, AtmWorkflowSchemaId) ->
+    atm_workflow_schema_logic:get(Auth, AtmWorkflowSchemaId).
