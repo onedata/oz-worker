@@ -42,7 +42,7 @@
     space_set_user_privileges/4,
     delete_space/2,
 
-    create_inventory/3,
+    create_inventory_for_user/3,
     create_lambda/2,
     create_workflow_schema/2,
     update_workflow_schema/3,
@@ -165,9 +165,9 @@ delete_space(Auth, SpaceId) ->
     space_logic:delete(Auth, SpaceId).
 
 
--spec create_inventory(aai:auth(), od_user:id(), od_atm_inventory:name() | entity_logic:data()) ->
+-spec create_inventory_for_user(aai:auth(), od_user:id(), od_atm_inventory:name() | entity_logic:data()) ->
     {ok, od_atm_inventory:id()} | errors:error().
-create_inventory(Auth, UserId, NameOrData) ->
+create_inventory_for_user(Auth, UserId, NameOrData) ->
     user_logic:create_atm_inventory(Auth, UserId, NameOrData).
 
 
@@ -184,8 +184,8 @@ create_workflow_schema(Auth, NameOrData) ->
 
 
 -spec update_workflow_schema(aai:auth(), od_atm_workflow_schema:id(), entity_logic:data()) -> ok.
-update_workflow_schema(Auth, WorkflowId, Data) ->
-    atm_workflow_schema_logic:update(Auth, WorkflowId, Data).
+update_workflow_schema(Auth, AtmWorkflowSchemaId, Data) ->
+    atm_workflow_schema_logic:update(Auth, AtmWorkflowSchemaId, Data).
 
 
 -spec get_workflow_schema(aai:auth(), od_atm_workflow_schema:id()) ->
