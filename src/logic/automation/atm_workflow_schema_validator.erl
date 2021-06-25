@@ -99,6 +99,18 @@ sanitize_store_default_initial_value(range, DefaultInitialValue, _DataSpec, Data
                 "\"end\" (required), \"start\" (optional), \"step\" (optional)"
             )
     end;
+sanitize_store_default_initial_value(list, DefaultInitialValue, DataSpec, DataKeyName) ->
+    case DefaultInitialValue of
+        List when is_list(List) ->
+            lists:foreach(fun(Element) ->
+                atm_schema_validator:sanitize_initial_value(Element, DataSpec, DataKeyName)
+            end, DefaultInitialValue);
+        _ ->
+            atm_schema_validator:raise_validation_error(
+                DataKeyName,
+                "List store requires default initial value to be a list"
+            )
+    end;
 sanitize_store_default_initial_value(_StoreType, DefaultInitialValue, DataSpec, DataKeyName) ->
     atm_schema_validator:sanitize_initial_value(DefaultInitialValue, DataSpec, DataKeyName).
 

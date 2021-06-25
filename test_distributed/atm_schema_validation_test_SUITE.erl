@@ -79,6 +79,7 @@ all() ->
 %% @TODO VFS-7755 test non unique task ids in different lanes
 %% @TODO VFS-7755 test non unique task ids in different parallel boxes
 %% @TODO VFS-7755 test non-batch default value when argument spec's is_batch=true
+%% @TODO VFS-7829 test list store default initial value validation
 
 
 % Record used to expressively define a schema validation test. Each test tries
