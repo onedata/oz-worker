@@ -21,7 +21,8 @@
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
--export([fold_tasks/3, extract_atm_lambdas_from_lanes/1]).
+-export([dump_schema_to_json/2]).
+-export([fold_tasks/3, map_tasks/2, extract_atm_lambdas_from_lanes/1]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1]).
@@ -96,6 +97,30 @@ entity_logic_plugin() ->
     atm_workflow_schema_logic_plugin.
 
 
+-spec dump_schema_to_json(id(), record()) -> json_utils:json_map().
+dump_schema_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema) ->
+    #{
+        <<"schemaFormatVersion">> => 1,
+
+        <<"atmWorkflowSchemaId">> => AtmWorkflowSchemaId,
+
+        <<"name">> => AtmWorkflowSchema#od_atm_workflow_schema.name,
+        <<"description">> => AtmWorkflowSchema#od_atm_workflow_schema.description,
+
+        <<"stores">> => jsonable_record:list_to_json(AtmWorkflowSchema#od_atm_workflow_schema.stores, atm_store_schema),
+        <<"lanes">> => jsonable_record:list_to_json(AtmWorkflowSchema#od_atm_workflow_schema.lanes, atm_lane_schema),
+
+        <<"state">> => automation:workflow_schema_state_to_json(AtmWorkflowSchema#od_atm_workflow_schema.state),
+
+        <<"supplementaryAtmLambdas">> => lists:foldl(fun(AtmLambdaId, Acc) ->
+            {ok, #document{value = AtmLambda}} = od_atm_lambda:get(AtmLambdaId),
+            Acc#{
+                AtmLambdaId => od_atm_lambda:dump_schema_to_json(AtmLambda)
+            }
+        end, #{}, extract_atm_lambdas_from_lanes(AtmWorkflowSchema#od_atm_workflow_schema.lanes))
+    }.
+
+
 -spec fold_tasks(
     fun((atm_task_schema:record(), AccIn :: term()) -> AccOut :: term()),
     InitialAcc :: term(),
@@ -111,6 +136,26 @@ fold_tasks(Callback, InitialAcc, Lanes) ->
             end, MiddleAcc, Tasks)
         end, TopAcc, ParallelBoxes)
     end, InitialAcc, Lanes).
+
+
+-spec map_tasks(
+    fun((atm_task_schema:record()) -> atm_task_schema:record()),
+    od_atm_workflow_schema:record() | [atm_lane_schema:record()]
+) -> od_atm_workflow_schema:record() | [atm_lane_schema:record()].
+map_tasks(MappingFunction, #od_atm_workflow_schema{lanes = Lanes} = AtmWorkflowSchema) ->
+    AtmWorkflowSchema#od_atm_workflow_schema{
+        lanes = map_tasks(MappingFunction, Lanes)
+    };
+map_tasks(MappingFunction, Lanes) ->
+    lists:map(fun(Lane = #atm_lane_schema{parallel_boxes = ParallelBoxes}) ->
+        Lane#atm_lane_schema{
+            parallel_boxes = lists:map(fun(ParallelBox = #atm_parallel_box_schema{tasks = Tasks}) ->
+                ParallelBox#atm_parallel_box_schema{
+                    tasks = lists:map(MappingFunction, Tasks)
+                }
+            end, ParallelBoxes)
+        }
+    end, Lanes).
 
 
 -spec extract_atm_lambdas_from_lanes([atm_lane_schema:record()]) -> [od_atm_lambda:id()].

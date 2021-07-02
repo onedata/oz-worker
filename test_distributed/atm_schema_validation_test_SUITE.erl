@@ -79,7 +79,6 @@ all() ->
 %% @TODO VFS-7755 test non unique task ids in different lanes
 %% @TODO VFS-7755 test non unique task ids in different parallel boxes
 %% @TODO VFS-7755 test non-batch default value when argument spec's is_batch=true
-%% @TODO VFS-7829 test list store default initial value validation
 
 
 % Record used to expressively define a schema validation test. Each test tries
@@ -435,9 +434,11 @@ atm_workflow_schema_bad_lambda_reference_in_task(_Config) ->
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemas),
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_RELATION_DOES_NOT_EXIST(
-                    od_atm_lambda, BadLambdaId,
-                    od_atm_inventory, AtmInventoryId
+                ?ERROR_BAD_DATA(
+                    <<"tasks">>,
+                    <<"The lambda id '", BadLambdaId/binary, "' referenced by one of the tasks was not found or is "
+                    "not available for the requesting client. Consider providing supplementary "
+                    "lambdas so that missing ones can be linked or created along with the workflow schema.">>
                 )
             }
         end
@@ -630,14 +631,16 @@ run_validation_tests(TestSpec) ->
 
 %% @private
 run_validation_test(#test_spec{schema_type = atm_lambda} = TestSpec) ->
-    AtmInventoryId = ozt_atm_inventories:create(),
+    UserId = ozt_users:create(),
+    AtmInventoryId = ozt_users:create_atm_inventory_for(UserId),
     CorrectAtmLambdaData = ozt_atm_lambdas:gen_example_data_json(),
     {InvalidAtmLambdaData, ExpectedError} = spoil_data_field(TestSpec, CorrectAtmLambdaData, AtmInventoryId),
     ?assertEqual(ExpectedError, ozt_atm_lambdas:try_create(
-        ?ROOT, AtmInventoryId, InvalidAtmLambdaData
+        ?USER(UserId), AtmInventoryId, InvalidAtmLambdaData
     ));
 run_validation_test(#test_spec{schema_type = atm_workflow_schema} = TestSpec) ->
-    AtmInventoryId = ozt_atm_inventories:create(),
+    UserId = ozt_users:create(),
+    AtmInventoryId = ozt_users:create_atm_inventory_for(UserId),
 
     CorrectAtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(AtmInventoryId),
     % repeat test data generation as needed to make sure that at least one store
@@ -653,13 +656,15 @@ run_validation_test(#test_spec{schema_type = atm_workflow_schema} = TestSpec) ->
             ),
 
             ?assertEqual(ExpectedError, ozt_atm_workflow_schemas:try_create(
-                ?ROOT, AtmInventoryId, InvalidAtmWorkflowSchemaData
+                ?USER(UserId), AtmInventoryId, InvalidAtmWorkflowSchemaData
             )),
 
             % updating a valid schema with invalid values should fail as well
-            AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(AtmInventoryId, CorrectAtmWorkflowSchemaData),
+            AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(
+                ?USER(UserId), AtmInventoryId, CorrectAtmWorkflowSchemaData
+            ),
             ?assertEqual(ExpectedError, ozt_atm_workflow_schemas:try_update(
-                ?ROOT, AtmWorkflowSchemaId, InvalidAtmWorkflowSchemaData
+                ?USER(UserId), AtmWorkflowSchemaId, InvalidAtmWorkflowSchemaData
             ))
     end.
 
@@ -696,6 +701,18 @@ example_invalid_stores_and_default_initial_values() ->
     lists:map(fun({DataSpec, InvalidDefaultValue}) ->
         StoreType = lists_utils:random_element(ozt_atm_workflow_schemas:available_store_types_for_data_spec(DataSpec)),
         case StoreType of
+            list ->
+                {
+                    StoreType,
+                    DataSpec,
+                    InvalidDefaultValue,
+                    case InvalidDefaultValue of
+                        List when is_list(List) ->
+                            expected_disallowed_initial_value_error_description(DataSpec#atm_data_spec.type);
+                        _ ->
+                            <<"List store requires default initial value to be a list">>
+                    end
+                };
             range ->
                 {
                     StoreType,

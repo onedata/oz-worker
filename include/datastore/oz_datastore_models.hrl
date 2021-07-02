@@ -488,6 +488,8 @@ end).
     argument_specs = [] :: [atm_lambda_argument_spec:record()],
     result_specs = [] :: [atm_lambda_result_spec:record()],
 
+    schema_checksum = undefined :: undefined | od_atm_lambda:schema_checksum(),
+
     % @TODO VFS-7596 each lambda can be referenced in multiple automation inventories and is
     % automatically deleted when the last reference is removed
     % @TODO VFS-7596 comprehensive tests for the above

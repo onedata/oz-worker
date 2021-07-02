@@ -136,11 +136,13 @@ translate_value(_, #gri{type = od_token, aspect = verify_invite_token}, #{<<"sub
         <<"subject">> => aai:serialize_subject(Sub),
         <<"ttl">> => utils:undefined_to_null(TTL)
     };
+translate_value(_, #gri{type = od_atm_workflow_schema, aspect = dump}, JsonMap) ->
+    JsonMap;
 translate_value(ProtocolVersion, GRI, Data) ->
-    ?error("Cannot translate graph sync create result for:~n
-    ProtocolVersion: ~p~n
-    GRI: ~p~n
-    Data: ~p~n", [
+    ?error("Cannot translate graph sync create result for:~n"
+    "ProtocolVersion: ~p~n"
+    "GRI: ~p~n"
+    "Data: ~p~n", [
         ProtocolVersion, GRI, Data
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).

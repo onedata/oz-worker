@@ -99,7 +99,7 @@ rpc(Node, Module, Function, Args) ->
                 "Stacktrace: ~s",
                 [Node, Module, Function, Args, Type, Reason, Stacktrace]
             ),
-            {error, {badrpc, Reason}};
+            error({badrpc, Reason});
         {badrpc, Reason} ->
             ct:pal(
                 "badrpc in call to oz-worker!~n"

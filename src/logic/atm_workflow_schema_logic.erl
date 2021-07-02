@@ -23,6 +23,7 @@
 -export([
     get/2,
     get_atm_lambdas/2,
+    dump/2,
     list/1
 ]).
 -export([
@@ -61,6 +62,16 @@ get(Auth, AtmWorkflowSchemaId) ->
         auth = Auth,
         gri = #gri{type = od_atm_workflow_schema, id = AtmWorkflowSchemaId, aspect = instance}
     }).
+
+
+-spec dump(aai:auth(), od_atm_workflow_schema:id()) ->
+    {ok, od_atm_workflow_schema:id()} | errors:error().
+dump(Auth, AtmWorkflowSchemaId) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_atm_workflow_schema, id = AtmWorkflowSchemaId, aspect = dump}
+    })).
 
 
 -spec get_atm_lambdas(aai:auth(), od_atm_workflow_schema:id()) ->

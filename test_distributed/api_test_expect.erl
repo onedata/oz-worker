@@ -474,20 +474,7 @@ protected_atm_inventory(rest, Id, HServiceData, Creator) ->
 -spec private_atm_lambda(interface(), od_atm_lambda:id(), map(), aai:subject()) -> expectation().
 private_atm_lambda(logic, _Id, AtmLambdaData, Creator) ->
     ?OK_TERM(fun(AtmLambdaRecord) ->
-        ?assertEqual(AtmLambdaRecord, #od_atm_lambda{
-            name = maps:get(<<"name">>, AtmLambdaData),
-            summary = maps:get(<<"summary">>, AtmLambdaData),
-            description = maps:get(<<"description">>, AtmLambdaData),
-
-            operation_spec = jsonable_record:from_json(maps:get(<<"operationSpec">>, AtmLambdaData), atm_lambda_operation_spec),
-            argument_specs = jsonable_record:list_from_json(maps:get(<<"argumentSpecs">>, AtmLambdaData), atm_lambda_argument_spec),
-            result_specs = jsonable_record:list_from_json(maps:get(<<"resultSpecs">>, AtmLambdaData), atm_lambda_result_spec),
-
-            atm_inventories = [maps:get(<<"atmInventoryId">>, AtmLambdaData)],
-
-            creation_time = ozt_mocks:get_frozen_time_seconds(),
-            creator = Creator
-        })
+        ?assertEqual(AtmLambdaRecord, lambda_data_to_record(AtmLambdaData, Creator))
     end);
 private_atm_lambda(rest, Id, AtmLambdaData, Creator) ->
     #{
@@ -499,6 +486,8 @@ private_atm_lambda(rest, Id, AtmLambdaData, Creator) ->
         <<"operationSpec">> => maps:get(<<"operationSpec">>, AtmLambdaData),
         <<"argumentSpecs">> => maps:get(<<"argumentSpecs">>, AtmLambdaData),
         <<"resultSpecs">> => maps:get(<<"resultSpecs">>, AtmLambdaData),
+
+        <<"schemaChecksum">> => (lambda_data_to_record(AtmLambdaData, Creator))#od_atm_lambda.schema_checksum,
 
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
@@ -637,3 +626,24 @@ expected_cluster_creation_time(?ONEZONE) ->
     CreationTime;
 expected_cluster_creation_time(?ONEPROVIDER) ->
     ozt_mocks:get_frozen_time_seconds().
+
+
+%% @private
+lambda_data_to_record(AtmLambdaData, Creator) ->
+    ExpectedRecord = #od_atm_lambda{
+        name = maps:get(<<"name">>, AtmLambdaData),
+        summary = maps:get(<<"summary">>, AtmLambdaData),
+        description = maps:get(<<"description">>, AtmLambdaData),
+
+        operation_spec = jsonable_record:from_json(maps:get(<<"operationSpec">>, AtmLambdaData), atm_lambda_operation_spec),
+        argument_specs = jsonable_record:list_from_json(maps:get(<<"argumentSpecs">>, AtmLambdaData), atm_lambda_argument_spec),
+        result_specs = jsonable_record:list_from_json(maps:get(<<"resultSpecs">>, AtmLambdaData), atm_lambda_result_spec),
+
+        atm_inventories = [maps:get(<<"atmInventoryId">>, AtmLambdaData)],
+
+        creation_time = ozt_mocks:get_frozen_time_seconds(),
+        creator = Creator
+    },
+    ExpectedRecord#od_atm_lambda{
+        schema_checksum = od_atm_lambda:calculate_schema_checksum(ExpectedRecord)
+    }.
