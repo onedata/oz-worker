@@ -22,10 +22,14 @@
 -export([create/1, create/2, create/3]).
 -export([try_create/3]).
 -export([get/1]).
+-export([get_atm_lambdas/1]).
 -export([exists/1]).
 -export([try_update/3]).
 -export([delete/1]).
+-export([dump_schema_to_json/1, dump_schema_to_json/2]).
+-export([map_tasks/2]).
 -export([extract_atm_lambdas_from_lanes/1]).
+-export([substitute_atm_lambdas_for_duplicates_in_lanes/2, substitute_atm_lambdas_for_duplicates_in_lanes/3]).
 %% Example data generation
 -export([gen_example_data_json/1]).
 -export([gen_example_state_json/0]).
@@ -37,6 +41,8 @@
 -export([gen_example_result_mappings_for_specs/2, gen_example_result_mappings/2]).
 -export([gen_example_argument_value_builder/1, gen_example_store_iterator_spec/1]).
 -export([available_store_types_for_data_spec/1]).
+
+-compile({no_auto_import, [get/1]}).
 
 %%%===================================================================
 %%% API
@@ -74,6 +80,12 @@ get(AtmWorkflowSchemaId) ->
     AtmWorkflowSchema.
 
 
+-spec get_atm_lambdas(od_atm_workflow_schema:id()) -> [od_atm_lambda:id()].
+get_atm_lambdas(AtmInventoryId) ->
+    {ok, Lambdas} = ?assertMatch({ok, _}, ozt:rpc(atm_workflow_schema_logic, get_atm_lambdas, [?ROOT, AtmInventoryId])),
+    Lambdas.
+
+
 -spec try_update(aai:auth(), od_atm_workflow_schema:id(), entity_logic:data()) -> ok | errors:error().
 try_update(Auth, AtmWorkflowSchemaId, Data) ->
     ozt:rpc(atm_workflow_schema_logic, update, [Auth, AtmWorkflowSchemaId, Data]).
@@ -89,11 +101,57 @@ delete(AtmWorkflowSchemaId) ->
     ?assertMatch(ok, ozt:rpc(atm_workflow_schema_logic, delete, [?ROOT, AtmWorkflowSchemaId])).
 
 
--spec extract_atm_lambdas_from_lanes([json_utils:json_map() | atm_lane_schema:record()]) -> od_atm_workflow_schema:record().
+-spec dump_schema_to_json(od_atm_workflow_schema:id()) ->
+    json_utils:json_term().
+dump_schema_to_json(AtmWorkflowSchemaId) when is_binary(AtmWorkflowSchemaId) ->
+    dump_schema_to_json(AtmWorkflowSchemaId, get(AtmWorkflowSchemaId)).
+
+-spec dump_schema_to_json(od_atm_workflow_schema:id(), od_atm_workflow_schema:record()) ->
+    json_utils:json_term().
+dump_schema_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema) ->
+    ozt:rpc(od_atm_workflow_schema, dump_schema_to_json, [AtmWorkflowSchemaId, AtmWorkflowSchema]).
+
+
+-spec map_tasks(
+    fun((atm_task_schema:record()) -> atm_task_schema:record()),
+    od_atm_workflow_schema:record() | [atm_lane_schema:record()]
+) -> od_atm_workflow_schema:record().
+map_tasks(MappingFunction, AtmWorkflowSchemaOrLanes) ->
+    ozt:rpc(od_atm_workflow_schema, map_tasks, [MappingFunction, AtmWorkflowSchemaOrLanes]).
+
+
+-spec extract_atm_lambdas_from_lanes([json_utils:json_map() | atm_lane_schema:record()]) ->
+    od_atm_workflow_schema:record().
 extract_atm_lambdas_from_lanes(Lanes) when is_map(hd(Lanes)) ->
     extract_atm_lambdas_from_lanes(jsonable_record:list_from_json(Lanes, atm_lane_schema));
 extract_atm_lambdas_from_lanes(Lanes) ->
     ozt:rpc(od_atm_workflow_schema, extract_atm_lambdas_from_lanes, [Lanes]).
+
+
+% Tries to find duplicates of lambdas that belong to given inventory and replaces
+% their counterparts in given lanes.
+-spec substitute_atm_lambdas_for_duplicates_in_lanes([atm_lane_schema:record()], od_atm_inventory:id()) ->
+    [atm_lane_schema:record()].
+substitute_atm_lambdas_for_duplicates_in_lanes(Lanes, TargetAtmInventoryId) ->
+    AtmLambdas = extract_atm_lambdas_from_lanes(Lanes),
+    substitute_atm_lambdas_for_duplicates_in_lanes(Lanes, AtmLambdas, TargetAtmInventoryId).
+
+-spec substitute_atm_lambdas_for_duplicates_in_lanes(
+    [atm_lane_schema:record()], [od_atm_lambda:id()], od_atm_inventory:id()
+) ->
+    [atm_lane_schema:record()].
+substitute_atm_lambdas_for_duplicates_in_lanes(Lanes, AtmLambdasToSubstitute, TargetAtmInventoryId) ->
+    OriginalToDuplicate = ozt_atm_lambdas:find_all_duplicates(AtmLambdasToSubstitute, TargetAtmInventoryId),
+    ozt_atm_workflow_schemas:map_tasks(fun(Task = #atm_task_schema{lambda_id = OriginalAtmLambdaId}) ->
+        case lists:member(OriginalAtmLambdaId, AtmLambdasToSubstitute) of
+            true ->
+                Task#atm_task_schema{
+                    lambda_id = maps:get(OriginalAtmLambdaId, OriginalToDuplicate)
+                };
+            false ->
+                Task
+        end
+    end, Lanes).
 
 %%%===================================================================
 %%% Example data generation
@@ -140,6 +198,18 @@ gen_example_store_json(DataSpec) ->
     DefaultInitialValue = case StoreType of
         range ->
             #{<<"start">> => ?RAND_INT(0, 10), <<"end">> => ?RAND_INT(10, 20), <<"step">> => ?RAND_INT(0, 5)};
+        list ->
+            case ?RAND_BOOL() of
+                true ->
+                    undefined;
+                false ->
+                    lists_utils:random_sublist(lists:filtermap(fun(_) ->
+                        case ozt_atm:gen_example_initial_value(DataSpec#atm_data_spec.type) of
+                            undefined -> false;
+                            Value -> {true, Value}
+                        end
+                    end, lists:seq(1, ?RAND_INT(0, 10))))
+            end;
         _ ->
             lists_utils:random_element([undefined, ozt_atm:gen_example_initial_value(DataSpec#atm_data_spec.type)])
     end,

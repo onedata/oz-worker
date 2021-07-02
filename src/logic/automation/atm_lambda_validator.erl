@@ -21,7 +21,7 @@
 %%% API
 %%%===================================================================
 
--spec validate(od_atm_lambda:record()) -> ok | errors:error().
+-spec validate(od_atm_lambda:record()) -> ok | no_return().
 validate(AtmLambda) ->
     atm_schema_validator:run_validation_procedures(AtmLambda, [
         fun validate_argument_names/1,

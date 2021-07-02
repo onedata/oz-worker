@@ -67,7 +67,7 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_atm_lambda, id = ?BINDING(id), aspect = atm_inventories, scope = private}
     }},
-    %% Add atm_lambda to atm_inventory
+    %% Link atm_lambda to atm_inventory
     %% This operation requires one of the following privileges:
     %% - atm_inventory_manage_lambdas
     %% - oz_atm_inventories_update

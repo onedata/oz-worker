@@ -18,7 +18,8 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([
-    create/2
+    create/2,
+    parse/2
 ]).
 -export([
     get/2,
@@ -34,7 +35,7 @@
     delete/2
 ]).
 -export([
-    add_to_inventory/3
+    link_to_inventory/3
 ]).
 
 -export([
@@ -54,6 +55,17 @@ create(Auth, Data) ->
         operation = create,
         auth = Auth,
         gri = #gri{type = od_atm_lambda, id = undefined, aspect = instance},
+        data = Data
+    })).
+
+
+-spec parse(aai:auth(), od_atm_lambda:name() | entity_logic:data()) ->
+    {ok, od_atm_lambda:record()} | errors:error().
+parse(Auth, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_atm_lambda, id = undefined, aspect = parse, scope = public},
         data = Data
     })).
 
@@ -120,9 +132,9 @@ delete(Auth, AtmLambdaId) ->
     }).
 
 
--spec add_to_inventory(aai:auth(), od_atm_lambda:id(), od_atm_inventory:id()) ->
+-spec link_to_inventory(aai:auth(), od_atm_lambda:id(), od_atm_inventory:id()) ->
     ok | errors:error().
-add_to_inventory(Auth, AtmLambdaId, AtmInventoryId) ->
+link_to_inventory(Auth, AtmLambdaId, AtmInventoryId) ->
     entity_logic:handle(#el_req{
         operation = create,
         auth = Auth,

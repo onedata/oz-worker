@@ -25,11 +25,15 @@
 -export([exists/1]).
 -export([get_atm_inventories/1]).
 -export([add_to_inventory/2]).
+-export([dump_schema_to_json/1]).
+-export([find_duplicate/2, find_all_duplicates/2]).
 %% Example data generation
 -export([gen_example_data_json/0]).
 -export([gen_example_operation_spec_json/0]).
 -export([gen_example_argument_spec_json/0, gen_example_argument_spec_json/3, gen_example_argument_specs_json/0]).
 -export([gen_example_result_spec_json/0, gen_example_result_specs_json/0]).
+
+-compile({no_auto_import, [get/1]}).
 
 %%%===================================================================
 %%% API
@@ -81,7 +85,45 @@ get_atm_inventories(AtmLambdaId) ->
 
 -spec add_to_inventory(od_atm_lambda:id(), od_atm_inventory:id()) -> ok.
 add_to_inventory(AtmLambdaId, AtmInventoryId) ->
-    ?assertMatch(ok, ozt:rpc(atm_lambda_logic, add_to_inventory, [?ROOT, AtmLambdaId, AtmInventoryId])).
+    ?assertMatch(ok, ozt:rpc(atm_lambda_logic, link_to_inventory, [?ROOT, AtmLambdaId, AtmInventoryId])).
+
+
+-spec dump_schema_to_json(od_atm_lambda:id() | od_atm_lambda:record()) ->
+    json_utils:json_term().
+dump_schema_to_json(AtmLambdaId) when is_binary(AtmLambdaId) ->
+    dump_schema_to_json(get(AtmLambdaId));
+dump_schema_to_json(AtmLambda) ->
+    ozt:rpc(od_atm_lambda, dump_to_json, [AtmLambda]).
+
+
+-spec find_duplicate(od_atm_lambda:id(), od_atm_inventory:id()) ->
+    undefined | od_atm_lambda:id().
+find_duplicate(PatternAtmLambdaId, TargetAtmInventoryId) ->
+    #od_atm_lambda{checksum = TargetChecksum} = get(PatternAtmLambdaId),
+    InventoryLambdas = ozt_atm_inventories:get_atm_lambdas(TargetAtmInventoryId),
+    lists_utils:foldl_while(fun(CheckedAtmLambdaId, _) ->
+        case get(CheckedAtmLambdaId) of
+            #od_atm_lambda{checksum = TargetChecksum} ->
+                {halt, CheckedAtmLambdaId};
+            _ ->
+                {cont, undefined}
+        end
+    end, undefined, InventoryLambdas -- [PatternAtmLambdaId]).
+
+
+-spec find_all_duplicates([od_atm_lambda:id()], od_atm_inventory:id()) ->
+    #{Original :: od_atm_lambda:id() => Duplicate :: od_atm_lambda:id()}.
+find_all_duplicates(AtmLambdas, TargetAtmInventoryId) ->
+    lists:foldl(fun(AtmLambdaId, Acc) ->
+        Acc#{
+            AtmLambdaId => case find_duplicate(AtmLambdaId, TargetAtmInventoryId) of
+                undefined ->
+                    error({lambda_duplicate_not_found, AtmLambdaId, TargetAtmInventoryId});
+                DuplicateId ->
+                    DuplicateId
+            end
+        }
+    end, #{}, AtmLambdas).
 
 %%%===================================================================
 %%% Example data generation

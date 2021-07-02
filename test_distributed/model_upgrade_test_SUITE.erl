@@ -3442,7 +3442,6 @@ get_record(od_storage, 3) -> #od_storage{
     bottom_up_dirty = true
 };
 
-
 get_record(dns_state, 1) -> {dns_state,
     #{<<"sub">> => <<"p1">>},
     #{<<"p1">> => <<"sub">>},

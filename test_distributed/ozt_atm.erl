@@ -85,11 +85,11 @@ gen_example_initial_value(atm_object_type) ->
     lists_utils:random_element([#{}, #{<<"key">> => 984.222}, #{<<"key">> => #{<<"nested">> => 984.222}}]);
 %% @TODO VFS-7687 Implement all automation data types and validators
 gen_example_initial_value(atm_file_type) ->
-    #{<<"atm_file_type">> => <<"value">>};
+    #{<<"file_id">> => ?RAND_STR()};
 gen_example_initial_value(atm_histogram_type) ->
     [1, 2, 3, 4];
 gen_example_initial_value(atm_dataset_type) ->
-    #{<<"atm_dataset_type">> => <<"value">>};
+    #{<<"datasetId">> => ?RAND_STR()};
 gen_example_initial_value(atm_archive_type) ->
     #{<<"atm_archive_type">> => <<"value">>};
 gen_example_initial_value(atm_store_credentials_type) ->

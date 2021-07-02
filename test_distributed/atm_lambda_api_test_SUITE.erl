@@ -38,7 +38,7 @@
     get_atm_inventories_test/1,
     get_atm_workflow_schemas_test/1,
     update_test/1,
-    add_to_inventory_test/1
+    link_to_inventory_test/1
     % @TODO VFS-7596 delete test, with checks if inventories or schemas are properly deleted (or not) along with the lambda
 ]).
 
@@ -50,7 +50,7 @@ all() ->
         get_atm_inventories_test,
         get_atm_workflow_schemas_test,
         update_test,
-        add_to_inventory_test
+        link_to_inventory_test
     ]).
 
 %%%===================================================================
@@ -525,7 +525,7 @@ update_test(Config) ->
     )).
 
 
-add_to_inventory_test(Config) ->
+link_to_inventory_test(Config) ->
     Creator = ozt_users:create(),
     MemberWithPrivs = ozt_users:create(),
     MemberWithNoPrivs = ozt_users:create(),
@@ -567,7 +567,7 @@ add_to_inventory_test(Config) ->
         },
         logic_spec = LogicSpec = #logic_spec{
             module = atm_lambda_logic,
-            function = add_to_inventory,
+            function = link_to_inventory,
             args = [auth, atm_lambda_id, TargetAtmInventory],
             expected_result = ?OK
         }
@@ -577,9 +577,9 @@ add_to_inventory_test(Config) ->
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )),
 
-    % check that adding is not possible if the lambda already is a member of the inventory
+    % check that linking is not possible if the lambda already is a member of the inventory
     MemberAtmLambda = ozt_atm_lambdas:create(OriginalAtmInventory),
-    AddingErrorApiTestSpec = ApiTestSpec#api_test_spec{
+    LinkingErrorApiTestSpec = ApiTestSpec#api_test_spec{
         rest_spec = RestSpec#rest_spec{
             path = [<<"/atm_lambdas/">>, MemberAtmLambda, <<"/atm_inventories/">>, OriginalAtmInventory],
             expected_code = ?HTTP_409_CONFLICT
@@ -594,7 +594,7 @@ add_to_inventory_test(Config) ->
     },
 
     ?assert(api_test_utils:run_tests(
-        Config, AddingErrorApiTestSpec, EnvSetUpFun, undefined, undefined
+        Config, LinkingErrorApiTestSpec, EnvSetUpFun, undefined, undefined
     )).
 
 %%%===================================================================

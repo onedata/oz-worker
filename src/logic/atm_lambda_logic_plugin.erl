@@ -22,9 +22,12 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/errors.hrl").
 
+%% entity logic API
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
+%% convenience functions
+-export([can_manage_lambda/2]).
 
 %%%===================================================================
 %%% API
@@ -63,6 +66,7 @@ fetch_entity(#gri{id = AtmLambdaId}) ->
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
 operation_supported(create, instance, private) -> true;
+operation_supported(create, parse, public) -> true;
 operation_supported(create, {atm_inventory, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
@@ -99,31 +103,13 @@ is_subscribable(_, _) -> false.
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     AtmInventoryId = maps:get(<<"atmInventoryId">>, Req#el_req.data),
 
-    Name = maps:get(<<"name">>, Req#el_req.data),
-    Summary = maps:get(<<"summary">>, Req#el_req.data, ?DEFAULT_SUMMARY),
-    Description = maps:get(<<"description">>, Req#el_req.data, ?DEFAULT_DESCRIPTION),
-
-    OperationSpec = maps:get(<<"operationSpec">>, Req#el_req.data),
-    ArgumentSpecs = maps:get(<<"argumentSpecs">>, Req#el_req.data),
-    ResultSpecs = maps:get(<<"resultSpecs">>, Req#el_req.data),
-
-    AtmLambda = #od_atm_lambda{
-        name = Name,
-        summary = Summary,
-        description = Description,
-
-        operation_spec = OperationSpec,
-        argument_specs = ArgumentSpecs,
-        result_specs = ResultSpecs,
-
+    {ok, value, ParsedAtmLambda} = create(Req#el_req{gri = GRI#gri{id = undefined, aspect = parse, scope = public}}),
+    AtmLambda = ParsedAtmLambda#od_atm_lambda{
         creator = aai:normalize_subject(Auth#auth.subject),
         creation_time = global_clock:timestamp_seconds()
     },
 
-    case atm_lambda_validator:validate(AtmLambda) of
-        ok -> ok;
-        {error, _} = Error -> throw(Error)
-    end,
+    atm_lambda_validator:validate(AtmLambda),
 
     {ok, #document{key = AtmLambdaId}} = od_atm_lambda:create(#document{value = AtmLambda}),
     entity_graph:add_relation(
@@ -132,6 +118,29 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     ),
     {true, {FetchedAtmLambda, Rev}} = fetch_entity(#gri{aspect = instance, id = AtmLambdaId}),
     {ok, resource, {GRI#gri{id = AtmLambdaId}, {FetchedAtmLambda, Rev}}};
+
+create(Req = #el_req{gri = #gri{id = undefined, aspect = parse, scope = public}}) ->
+    Name = maps:get(<<"name">>, Req#el_req.data),
+    Summary = maps:get(<<"summary">>, Req#el_req.data, ?DEFAULT_SUMMARY),
+    Description = maps:get(<<"description">>, Req#el_req.data, ?DEFAULT_DESCRIPTION),
+
+    OperationSpec = maps:get(<<"operationSpec">>, Req#el_req.data),
+    ArgumentSpecs = maps:get(<<"argumentSpecs">>, Req#el_req.data),
+    ResultSpecs = maps:get(<<"resultSpecs">>, Req#el_req.data),
+
+    AtmLambdaWithoutChecksum = #od_atm_lambda{
+        name = Name,
+        summary = Summary,
+        description = Description,
+
+        operation_spec = OperationSpec,
+        argument_specs = ArgumentSpecs,
+        result_specs = ResultSpecs
+    },
+    AtmLambda = AtmLambdaWithoutChecksum#od_atm_lambda{
+        checksum = od_atm_lambda:calculate_checksum(AtmLambdaWithoutChecksum)
+    },
+    {ok, value, AtmLambda};
 
 create(#el_req{gri = #gri{id = AtmLambdaId, aspect = {atm_inventory, AtmInventoryId}}}) ->
     entity_graph:add_relation(
@@ -210,6 +219,9 @@ exists(#el_req{gri = #gri{id = Id}}, #od_atm_lambda{}) ->
 authorize(#el_req{auth = ?USER(UserId), operation = create, gri = #gri{id = undefined, aspect = instance}, data = Data}, _) ->
     AtmInventoryId = maps:get(<<"atmInventoryId">>, Data, <<"">>),
     atm_inventory_logic:has_eff_privilege(AtmInventoryId, UserId, ?ATM_INVENTORY_MANAGE_LAMBDAS);
+
+authorize(#el_req{operation = create, gri = #gri{id = undefined, aspect = parse, scope = public}}, _) ->
+    true;
 
 authorize(#el_req{auth = ?USER(UserId), operation = create, gri = #gri{aspect = {atm_inventory, AtmInventoryId}}}, AtmLambda) ->
     can_manage_lambda(UserId, AtmLambda) andalso
@@ -299,6 +311,12 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
         }
     };
 
+validate(Req = #el_req{operation = create, gri = #gri{aspect = parse}}) ->
+    CreateVerificator = validate(Req#el_req{operation = create, gri = #gri{aspect = instance}}),
+    CreateVerificator#{
+        required => maps:without([<<"atmInventoryId">>], maps:get(required, CreateVerificator))
+    };
+
 validate(#el_req{operation = create, gri = #gri{aspect = {atm_inventory, _}}}) -> #{
 };
 
@@ -311,11 +329,17 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 }.
 
 %%%===================================================================
-%%% Internal functions
+%%% Convenience functions
 %%%===================================================================
 
-%% @private
--spec can_manage_lambda(od_user:id(), od_atm_lambda:record()) -> boolean().
+-spec can_manage_lambda(od_user:id(), od_atm_lambda:record() | od_atm_lambda:id()) -> boolean().
+can_manage_lambda(UserId, AtmLambdaId) when is_binary(AtmLambdaId) ->
+    case od_atm_lambda:get(AtmLambdaId) of
+        {ok, #document{value = AtmLambda}} ->
+            can_manage_lambda(UserId, AtmLambda);
+        {error, not_found} ->
+            false
+    end;
 can_manage_lambda(UserId, #od_atm_lambda{atm_inventories = AtmInventories}) ->
     % A lambda can be updated by each user that has the manage lambdas privilege in at least one
     % of automation inventories that include the lambda

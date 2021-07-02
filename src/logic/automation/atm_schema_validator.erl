@@ -39,19 +39,18 @@
 %%%===================================================================
 
 -spec run_validation_procedures(
-    jsonable_record:record(),
+    Ctx :: term(),
     [fun((jsonable_record:record()) -> ok | errors:error()) | no_return()]
 ) ->
-    ok | errors:error().
-run_validation_procedures(Record, ValidationProcedures) ->
-    lists_utils:foldl_while(fun(ValidationProcedure, _Acc) ->
-        try ValidationProcedure(Record) of
-            ok -> {cont, ok};
-            {error, _} = Error -> {halt, Error}
-        catch
-            throw:{error, _} = Error -> {halt, Error}
+    ok | no_return().
+run_validation_procedures(Ctx, ValidationProcedures) ->
+    lists:foreach(fun(ValidationProcedure) ->
+        % each procedure may throw an error internally
+        case ValidationProcedure(Ctx) of
+            ok -> ok;
+            {error, _} = Error -> throw(Error)
         end
-    end, ok, ValidationProcedures).
+    end, ValidationProcedures).
 
 
 -spec raise_validation_error(data_key_name(), string() | binary()) -> no_return().

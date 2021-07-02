@@ -63,6 +63,7 @@ fetch_entity(#gri{id = AtmWorkflowSchemaId}) ->
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
 operation_supported(create, instance, private) -> true;
+operation_supported(create, dump, private) -> true;
 
 operation_supported(get, list, private) -> true;
 operation_supported(get, instance, private) -> true;
@@ -93,50 +94,19 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
-    Name = maps:get(<<"name">>, Req#el_req.data),
-    Description = maps:get(<<"description">>, Req#el_req.data, ?DEFAULT_DESCRIPTION),
+create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = instance} = GRI, data = Data}) ->
+    AtmWorkflowSchemaId = atm_workflow_schema_builder:create(Auth, Data),
 
-    AtmInventoryId = maps:get(<<"atmInventoryId">>, Req#el_req.data),
-    Stores = maps:get(<<"stores">>, Req#el_req.data, []),
-    Lanes = maps:get(<<"lanes">>, Req#el_req.data, []),
-
-    State = maps:get(<<"state">>, Req#el_req.data, case {Stores, Lanes} of
-        {[], _} -> incomplete;
-        {_, []} -> incomplete;
-        {_, _} -> ready
-    end),
-
-    AtmWorkflowSchema = #od_atm_workflow_schema{
-        name = Name,
-        description = Description,
-
-        stores = Stores,
-        lanes = Lanes,
-
-        state = State,
-
-        atm_inventory = AtmInventoryId,
-
-        creator = aai:normalize_subject(Auth#auth.subject),
-        creation_time = global_clock:timestamp_seconds()
-    },
-    case atm_workflow_schema_validator:validate(AtmWorkflowSchema) of
-        ok -> ok;
-        {error, _} = Error -> throw(Error)
-    end,
-
-    {ok, #document{key = AtmWorkflowSchemaId}} = od_atm_workflow_schema:create(#document{value = AtmWorkflowSchema}),
-    entity_graph:add_relation(
-        od_atm_workflow_schema, AtmWorkflowSchemaId,
-        od_atm_inventory, AtmInventoryId
-    ),
-
-    lock_on_workflow(AtmWorkflowSchemaId, fun() ->
-        reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, [], Lanes)
-    end),
     {true, {FetchedAtmWorkflowSchema, Rev}} = fetch_entity(#gri{aspect = instance, id = AtmWorkflowSchemaId}),
-    {ok, resource, {GRI#gri{id = AtmWorkflowSchemaId}, {FetchedAtmWorkflowSchema, Rev}}}.
+    {ok, resource, {GRI#gri{id = AtmWorkflowSchemaId}, {FetchedAtmWorkflowSchema, Rev}}};
+
+create(#el_req{gri = #gri{id = AtmWorkflowSchemaId, aspect = dump}}) ->
+    case fetch_entity(#gri{id = AtmWorkflowSchemaId}) of
+        {error, _} = Error ->
+            Error;
+        {true, {AtmWorkflowSchema, _}} ->
+            {ok, value, od_atm_workflow_schema:dump_schema_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema)}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -164,34 +134,8 @@ get(#el_req{gri = #gri{aspect = atm_lambdas}}, AtmWorkflowSchema) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
-update(#el_req{gri = #gri{id = AtmWorkflowSchemaId, aspect = instance}, data = Data}) ->
-    lock_on_workflow(AtmWorkflowSchemaId, fun() ->
-        {ok, #document{value = #od_atm_workflow_schema{
-            lanes = OldLanes
-        }}} = od_atm_workflow_schema:get(AtmWorkflowSchemaId),
-
-        Diff = fun(AtmWorkflowSchema) ->
-            NewAtmWorkflowSchema = AtmWorkflowSchema#od_atm_workflow_schema{
-                name = maps:get(<<"name">>, Data, AtmWorkflowSchema#od_atm_workflow_schema.name),
-                description = maps:get(<<"description">>, Data, AtmWorkflowSchema#od_atm_workflow_schema.description),
-
-                stores = maps:get(<<"stores">>, Data, AtmWorkflowSchema#od_atm_workflow_schema.stores),
-                lanes = maps:get(<<"lanes">>, Data, OldLanes),
-
-                state = maps:get(<<"state">>, Data, AtmWorkflowSchema#od_atm_workflow_schema.state)
-            },
-            case atm_workflow_schema_validator:validate(NewAtmWorkflowSchema) of
-                ok -> {ok, NewAtmWorkflowSchema};
-                {error, _} = Error -> Error
-            end
-        end,
-        case od_atm_workflow_schema:update(AtmWorkflowSchemaId, Diff) of
-            {error, _} = Error ->
-                Error;
-            {ok, #document{value = #od_atm_workflow_schema{lanes = NewLanes}}} ->
-                reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, OldLanes, NewLanes)
-        end
-    end).
+update(#el_req{auth = Auth, gri = #gri{id = AtmWorkflowSchemaId, aspect = instance}, data = Data}) ->
+    atm_workflow_schema_builder:update(Auth, AtmWorkflowSchemaId, Data).
 
 
 %%--------------------------------------------------------------------
@@ -227,6 +171,9 @@ authorize(#el_req{auth = ?USER(UserId), operation = create, gri = #gri{id = unde
     AtmInventoryId = maps:get(<<"atmInventoryId">>, Data, <<"">>),
     can_manage_workflow_schemas(UserId, AtmInventoryId);
 
+authorize(#el_req{auth = ?USER(UserId), operation = create, gri = #gri{aspect = dump}}, AtmWorkflowSchema) ->
+    is_inventory_member(UserId, AtmWorkflowSchema);
+
 authorize(#el_req{auth = ?USER(UserId), operation = get}, AtmWorkflowSchema) ->
     is_inventory_member(UserId, AtmWorkflowSchema);
 
@@ -250,6 +197,8 @@ authorize(_, _) ->
 -spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
     [?OZ_ATM_INVENTORIES_UPDATE];
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = dump}}) ->
+    [?OZ_ATM_INVENTORIES_VIEW];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
     [?OZ_ATM_INVENTORIES_VIEW];
@@ -278,19 +227,24 @@ required_admin_privileges(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-validate(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
-    #{
-        required => #{
-            <<"atmInventoryId">> => {binary, {exists, fun atm_inventory_logic:exists/1}},
-            <<"name">> => {binary, name}
-        },
-        optional => #{
-            <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}},
-            <<"stores">> => {{jsonable_record, list, atm_store_schema}, any},
-            <<"lanes">> => {{jsonable_record, list, atm_lane_schema}, any},
-            <<"state">> => {atom, automation:all_workflow_schema_states()}
-        }
-    };
+validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
+    required => #{
+        <<"atmInventoryId">> => {binary, {exists, fun atm_inventory_logic:exists/1}},
+        <<"name">> => {binary, name}
+    },
+    optional => #{
+        <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}},
+
+        <<"stores">> => {{jsonable_record, list, atm_store_schema}, any},
+        <<"lanes">> => {{jsonable_record, list, atm_lane_schema}, any},
+
+        <<"state">> => {atom, automation:all_workflow_schema_states()},
+
+        <<"supplementaryAtmLambdas">> => {json, any}  % validation is performed by atm_workflow_schema_builder
+    }
+};
+validate(#el_req{operation = create, gri = #gri{aspect = dump}}) -> #{
+};
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
@@ -300,7 +254,9 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
         <<"stores">> => {{jsonable_record, list, atm_store_schema}, any},
         <<"lanes">> => {{jsonable_record, list, atm_lane_schema}, any},
 
-        <<"state">> => {atom, automation:all_workflow_schema_states()}
+        <<"state">> => {atom, automation:all_workflow_schema_states()},
+
+        <<"supplementaryAtmLambdas">> => {json, any}  % validation is performed by atm_workflow_schema_builder
     }
 }.
 
@@ -321,40 +277,3 @@ can_manage_workflow_schemas(UserId, AtmInventoryId) ->
 -spec is_inventory_member(od_user:id(), od_atm_workflow_schema:record() | od_atm_inventory:id()) -> boolean().
 is_inventory_member(UserId, #od_atm_workflow_schema{atm_inventory = AtmInventoryId}) ->
     atm_inventory_logic:has_eff_user(AtmInventoryId, UserId).
-
-
-%% @private
--spec lock_on_workflow(od_atm_workflow_schema:id(), fun(() -> Result)) -> Result.
-lock_on_workflow(AtmWorkflowSchemaId, Callback) ->
-    critical_section:run({?MODULE, AtmWorkflowSchemaId}, Callback).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Each workflow schema tracks what lambdas are used throughout its lanes and
-%% this information must be refreshed after each update.
-%% @end
-%%--------------------------------------------------------------------
--spec reconcile_referenced_lambdas_unsafe(
-    od_atm_workflow_schema:id(),
-    [atm_lane_schema:record()],
-    [atm_lane_schema:record()]
-) -> ok.
-reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, OldLanes, NewLanes) ->
-    OldAtmLambdas = od_atm_workflow_schema:extract_atm_lambdas_from_lanes(OldLanes),
-    NewAtmLambdas = od_atm_workflow_schema:extract_atm_lambdas_from_lanes(NewLanes),
-    ToAdd = lists_utils:subtract(NewAtmLambdas, OldAtmLambdas),
-    ToDelete = lists_utils:subtract(OldAtmLambdas, NewAtmLambdas),
-    lists:foreach(fun(AtmLambdaId) ->
-        entity_graph:add_relation(
-            od_atm_lambda, AtmLambdaId,
-            od_atm_workflow_schema, AtmWorkflowSchemaId
-        )
-    end, ToAdd),
-    lists:foreach(fun(AtmLambdaId) ->
-        entity_graph:remove_relation(
-            od_atm_lambda, AtmLambdaId,
-            od_atm_workflow_schema, AtmWorkflowSchemaId
-        )
-    end, ToDelete).

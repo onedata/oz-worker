@@ -74,5 +74,13 @@ routes() -> [
         method = 'GET',
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_atm_workflow_schema, id = ?BINDING(id), aspect = atm_lambdas, scope = private}
+    }},
+    %% Dump atm_workflow_schema to JSON
+    %% This operation requires one of the following privileges:
+    %% - oz_atm_inventories_view
+    {<<"/atm_workflow_schemas/:id/dump">>, #rest_req{
+        method = 'POST',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_workflow_schema, id = ?BINDING(id), aspect = dump, scope = private}
     }}
 ].

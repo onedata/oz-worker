@@ -31,7 +31,10 @@
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
     {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> rest_handler:rest_resp().
 create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id = AtmWorkflowSchemaId}, _}) ->
-    rest_translator:created_reply_with_location([<<"atm_workflow_schemas">>, AtmWorkflowSchemaId]).
+    rest_translator:created_reply_with_location([<<"atm_workflow_schemas">>, AtmWorkflowSchemaId]);
+
+create_response(#gri{aspect = dump}, _, value, JsonMap) ->
+    rest_translator:ok_body_reply(JsonMap).
 
 %%--------------------------------------------------------------------
 %% @doc
