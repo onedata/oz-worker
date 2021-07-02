@@ -72,7 +72,7 @@ create_test(Config) ->
     create_test_base(Config, Creator, none),
 
     % test with supplementary lambdas that should be linked
-    % (available in different inventory where the used has privileges to manage lambdas)
+    % (available in different inventory where the user has privileges to manage lambdas)
     AnotherAtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
     AtmLambdasToBeLinked = maps:from_list(lists:map(fun(_) ->
         AtmLambdaId = ozt_atm_lambdas:create(AnotherAtmInventoryId),
@@ -511,7 +511,7 @@ dump_test(Config) ->
                 <<"argumentSpecs">> => jsonable_record:list_to_json(AtmLambda#od_atm_lambda.argument_specs, atm_lambda_argument_spec),
                 <<"resultSpecs">> => jsonable_record:list_to_json(AtmLambda#od_atm_lambda.result_specs, atm_lambda_result_spec),
 
-                <<"schemaChecksum">> => AtmLambda#od_atm_lambda.schema_checksum
+                <<"checksum">> => AtmLambda#od_atm_lambda.checksum
             }}
         end, #{}, ReferencedAtmLambdas)
     },
@@ -1054,8 +1054,8 @@ bad_supplementary_lambdas_data_test(_Config) ->
             AnotherAtmInventoryId,
             maps:update_with(<<"supplementaryAtmLambdas">>, fun(SupplementaryAtmLambdas) ->
                 maps:map(fun(_AtmLambdaId, AtmLambdaData) ->
-                    % include ONLY the schemaChecksum field and drop the actual lambda data
-                    maps:with([<<"schemaChecksum">>], AtmLambdaData)
+                    % include ONLY the checksum field and drop the actual lambda data
+                    maps:with([<<"checksum">>], AtmLambdaData)
                 end, SupplementaryAtmLambdas)
             end, DumpedAtmWorkflowSchema)
         )

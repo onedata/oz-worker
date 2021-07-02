@@ -487,7 +487,7 @@ private_atm_lambda(rest, Id, AtmLambdaData, Creator) ->
         <<"argumentSpecs">> => maps:get(<<"argumentSpecs">>, AtmLambdaData),
         <<"resultSpecs">> => maps:get(<<"resultSpecs">>, AtmLambdaData),
 
-        <<"schemaChecksum">> => (lambda_data_to_record(AtmLambdaData, Creator))#od_atm_lambda.schema_checksum,
+        <<"checksum">> => (lambda_data_to_record(AtmLambdaData, Creator))#od_atm_lambda.checksum,
 
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
@@ -645,5 +645,5 @@ lambda_data_to_record(AtmLambdaData, Creator) ->
         creator = Creator
     },
     ExpectedRecord#od_atm_lambda{
-        schema_checksum = od_atm_lambda:calculate_schema_checksum(ExpectedRecord)
+        checksum = od_atm_lambda:calculate_checksum(ExpectedRecord)
     }.

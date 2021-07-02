@@ -20,11 +20,11 @@
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
--export([calculate_schema_checksum/1]).
--export([dump_schema_to_json/1]).
+-export([calculate_checksum/1]).
+-export([dump_to_json/1]).
 
 %% datastore_model callbacks
--export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
+-export([get_record_version/0, get_record_struct/1]).
 
 -type id() :: binary().
 -type record() :: #od_atm_lambda{}.
@@ -33,11 +33,11 @@
 -type name() :: binary().
 % used to compare two lambdas - they are considered the same from the functional
 % point of view if their checksums are the same
--type schema_checksum() :: binary().
+-type checksum() :: binary().
 
 -export_type([id/0, record/0]).
 -export_type([name/0]).
--export_type([schema_checksum/0]).
+-export_type([checksum/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -100,8 +100,8 @@ entity_logic_plugin() ->
     atm_lambda_logic_plugin.
 
 
--spec calculate_schema_checksum(record()) -> schema_checksum().
-calculate_schema_checksum(AtmLambda) ->
+-spec calculate_checksum(record()) -> checksum().
+calculate_checksum(AtmLambda) ->
     str_utils:md5_digest([
         AtmLambda#od_atm_lambda.name,
         AtmLambda#od_atm_lambda.operation_spec,
@@ -110,8 +110,8 @@ calculate_schema_checksum(AtmLambda) ->
     ]).
 
 
--spec dump_schema_to_json(record()) -> json_utils:json_map().
-dump_schema_to_json(AtmLambda) ->
+-spec dump_to_json(record()) -> json_utils:json_map().
+dump_to_json(AtmLambda) ->
     #{
         <<"schemaFormatVersion">> => 1,
 
@@ -123,7 +123,7 @@ dump_schema_to_json(AtmLambda) ->
         <<"argumentSpecs">> => jsonable_record:list_to_json(AtmLambda#od_atm_lambda.argument_specs, atm_lambda_argument_spec),
         <<"resultSpecs">> => jsonable_record:list_to_json(AtmLambda#od_atm_lambda.result_specs, atm_lambda_result_spec),
 
-        <<"schemaChecksum">> => AtmLambda#od_atm_lambda.schema_checksum
+        <<"checksum">> => AtmLambda#od_atm_lambda.checksum
     }.
 
 %%%===================================================================
@@ -132,7 +132,7 @@ dump_schema_to_json(AtmLambda) ->
 
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    1.
 
 -spec get_record_struct(datastore_model:record_version()) ->
     datastore_model:record_struct().
@@ -146,23 +146,7 @@ get_record_struct(1) ->
         {argument_specs, [{custom, string, {persistent_record, encode, decode, atm_lambda_argument_spec}}]},
         {result_specs, [{custom, string, {persistent_record, encode, decode, atm_lambda_result_spec}}]},
 
-        {atm_inventories, [string]},
-        {atm_workflow_schemas, [string]},
-
-        {creation_time, integer},
-        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
-    ]};
-get_record_struct(2) ->
-    {record, [
-        {name, string},
-        {summary, string},
-        {description, string},
-
-        {operation_spec, {custom, string, {persistent_record, encode, decode, atm_lambda_operation_spec}}},
-        {argument_specs, [{custom, string, {persistent_record, encode, decode, atm_lambda_argument_spec}}]},
-        {result_specs, [{custom, string, {persistent_record, encode, decode, atm_lambda_result_spec}}]},
-
-        {schema_checksum, string},  % new field
+        {checksum, string},
 
         {atm_inventories, [string]},
         {atm_workflow_schemas, [string]},
@@ -170,46 +154,3 @@ get_record_struct(2) ->
         {creation_time, integer},
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
     ]}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Upgrades model's record from provided version to the next one.
-%% @end
-%%--------------------------------------------------------------------
--spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
-    {datastore_model:record_version(), datastore_model:record()}.
-upgrade_record(1, AtmLambda) ->
-    {od_atm_lambda,
-        Name,
-        Summary,
-        Description,
-
-        OperationSpec,
-        ArgumentSpecs,
-        ResultSpecs,
-
-        AtmInventories,
-        AtmWorkflowSchemas,
-
-        CreationTime,
-        Creator
-    } = AtmLambda,
-    Upgraded = #od_atm_lambda{
-        name = Name,
-        summary = Summary,
-        description = Description,
-
-        operation_spec = OperationSpec,
-        argument_specs = ArgumentSpecs,
-        result_specs = ResultSpecs,
-
-        atm_inventories = AtmInventories,
-        atm_workflow_schemas = AtmWorkflowSchemas,
-
-        creation_time = CreationTime,
-        creator = Creator
-    },
-    {2, Upgraded#od_atm_lambda{
-        schema_checksum = calculate_schema_checksum(Upgraded)
-    }}.

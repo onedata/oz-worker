@@ -93,17 +93,17 @@ add_to_inventory(AtmLambdaId, AtmInventoryId) ->
 dump_schema_to_json(AtmLambdaId) when is_binary(AtmLambdaId) ->
     dump_schema_to_json(get(AtmLambdaId));
 dump_schema_to_json(AtmLambda) ->
-    ozt:rpc(od_atm_lambda, dump_schema_to_json, [AtmLambda]).
+    ozt:rpc(od_atm_lambda, dump_to_json, [AtmLambda]).
 
 
 -spec find_duplicate(od_atm_lambda:id(), od_atm_inventory:id()) ->
     undefined | od_atm_lambda:id().
 find_duplicate(PatternAtmLambdaId, TargetAtmInventoryId) ->
-    #od_atm_lambda{schema_checksum = TargetChecksum} = get(PatternAtmLambdaId),
+    #od_atm_lambda{checksum = TargetChecksum} = get(PatternAtmLambdaId),
     InventoryLambdas = ozt_atm_inventories:get_atm_lambdas(TargetAtmInventoryId),
     lists_utils:foldl_while(fun(CheckedAtmLambdaId, _) ->
         case get(CheckedAtmLambdaId) of
-            #od_atm_lambda{schema_checksum = TargetChecksum} ->
+            #od_atm_lambda{checksum = TargetChecksum} ->
                 {halt, CheckedAtmLambdaId};
             _ ->
                 {cont, undefined}

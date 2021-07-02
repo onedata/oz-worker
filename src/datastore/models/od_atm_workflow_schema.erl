@@ -115,7 +115,7 @@ dump_schema_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema) ->
         <<"supplementaryAtmLambdas">> => lists:foldl(fun(AtmLambdaId, Acc) ->
             {ok, #document{value = AtmLambda}} = od_atm_lambda:get(AtmLambdaId),
             Acc#{
-                AtmLambdaId => od_atm_lambda:dump_schema_to_json(AtmLambda)
+                AtmLambdaId => od_atm_lambda:dump_to_json(AtmLambda)
             }
         end, #{}, extract_atm_lambdas_from_lanes(AtmWorkflowSchema#od_atm_workflow_schema.lanes))
     }.

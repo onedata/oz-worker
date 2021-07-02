@@ -65,7 +65,7 @@ get(Auth, AtmWorkflowSchemaId) ->
 
 
 -spec dump(aai:auth(), od_atm_workflow_schema:id()) ->
-    {ok, od_atm_workflow_schema:id()} | errors:error().
+    {ok, json_utils:json_term()} | errors:error().
 dump(Auth, AtmWorkflowSchemaId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,

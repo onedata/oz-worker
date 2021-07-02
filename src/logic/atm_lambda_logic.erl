@@ -60,7 +60,7 @@ create(Auth, Data) ->
 
 
 -spec parse(aai:auth(), od_atm_lambda:name() | entity_logic:data()) ->
-    {ok, od_atm_lambda:id()} | errors:error().
+    {ok, od_atm_lambda:record()} | errors:error().
 parse(Auth, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,

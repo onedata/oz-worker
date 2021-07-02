@@ -39,7 +39,6 @@
     harvester_upgrade_test/1,
     cluster_upgrade_test/1,
     storage_upgrade_test/1,
-    atm_lambda_upgrade_test/1,
     dns_state_upgrade_test/1,
     macaroon_auth_upgrade_test/1,
     generate_cluster_for_a_legacy_provider_test/1
@@ -60,7 +59,6 @@ all() -> ?ALL([
     harvester_upgrade_test,
     cluster_upgrade_test,
     storage_upgrade_test,
-    atm_lambda_upgrade_test,
     dns_state_upgrade_test,
     macaroon_auth_upgrade_test,
     generate_cluster_for_a_legacy_provider_test
@@ -126,10 +124,6 @@ cluster_upgrade_test(Config) ->
 
 storage_upgrade_test(Config) ->
     test_record_upgrade(Config, od_storage).
-
-
-atm_lambda_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_atm_lambda).
 
 
 dns_state_upgrade_test(Config) ->
@@ -3446,87 +3440,6 @@ get_record(od_storage, 3) -> #od_storage{
 
     top_down_dirty = true,
     bottom_up_dirty = true
-};
-
-get_record(od_atm_lambda, 1) -> {od_atm_lambda,
-    <<"name">>,
-    <<"summary">>,
-    <<"description">>,
-
-    #atm_openfaas_operation_spec{
-        docker_image = <<"onedata/image">>,
-        docker_execution_options = #atm_docker_execution_options{
-            readonly = false,
-            mount_oneclient = true,
-            oneclient_mount_point = <<"/a/b/c/d/">>,
-            oneclient_options = <<"--a --b">>
-        }
-    },
-    [#atm_lambda_argument_spec{
-        name = <<"arg">>,
-        data_spec = #atm_data_spec{
-            type = atm_string_type,
-            value_constraints = #{}
-        },
-        is_batch = true,
-        is_optional = false,
-        default_value = <<"string">>
-    }],
-    [#atm_lambda_result_spec{
-        name = <<"result">>,
-        data_spec = #atm_data_spec{
-            type = atm_integer_type,
-            value_constraints = #{}
-        },
-        is_batch = false
-    }],
-
-    [<<"1">>, <<"2">>, <<"3">>],
-    [<<"a">>, <<"b">>, <<"c">>],
-
-    ozt_mocks:get_frozen_time_seconds(),
-    ?SUB(user, <<"abc">>)
-};
-get_record(od_atm_lambda, 2) -> R = #od_atm_lambda{
-    name = <<"name">>,
-    summary = <<"summary">>,
-    description = <<"description">>,
-
-    operation_spec = #atm_openfaas_operation_spec{
-        docker_image = <<"onedata/image">>,
-        docker_execution_options = #atm_docker_execution_options{
-            readonly = false,
-            mount_oneclient = true,
-            oneclient_mount_point = <<"/a/b/c/d/">>,
-            oneclient_options = <<"--a --b">>
-        }
-    },
-    argument_specs = [#atm_lambda_argument_spec{
-        name = <<"arg">>,
-        data_spec = #atm_data_spec{
-            type = atm_string_type,
-            value_constraints = #{}
-        },
-        is_batch = true,
-        is_optional = false,
-        default_value = <<"string">>
-    }],
-    result_specs = [#atm_lambda_result_spec{
-        name = <<"result">>,
-        data_spec = #atm_data_spec{
-            type = atm_integer_type,
-            value_constraints = #{}
-        },
-        is_batch = false
-    }],
-
-    atm_inventories = [<<"1">>, <<"2">>, <<"3">>],
-    atm_workflow_schemas = [<<"a">>, <<"b">>, <<"c">>],
-
-    creation_time = ozt_mocks:get_frozen_time_seconds(),
-    creator = ?SUB(user, <<"abc">>)
-}, R#od_atm_lambda{
-    schema_checksum = od_atm_lambda:calculate_schema_checksum(R)
 };
 
 get_record(dns_state, 1) -> {dns_state,

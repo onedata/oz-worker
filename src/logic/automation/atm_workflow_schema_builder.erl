@@ -27,6 +27,8 @@
 -record(builder_ctx, {
     auth :: aai:auth(),
     atm_workflow_schema :: od_atm_workflow_schema:record(),
+    target_atm_inventory = undefined :: undefined | od_atm_inventory:record(),
+    can_manage_lambdas_in_target_inventory = false :: boolean(),
     % During workflow schema creation, one can supply additional information
     % including full definitions of lambdas referenced by tasks in the schema.
     % This way, in case any lambdas are missing or unavailable for the creating
@@ -34,7 +36,6 @@
     % copying workflow schemas between zones or users that do not belong to the
     % same inventories.
     supplementary_lambdas = #{} :: lambda_definitions(),
-    can_manage_lambdas_in_inventory = false :: boolean(),
     lambdas_to_link = [] :: [od_atm_lambda:id()],
     % this map contains ids that are only used for cross-referencing with the
     % schema, they are substituted with actual lambda ids after they are created
@@ -79,7 +80,7 @@ create(Auth, Data) ->
         creation_time = global_clock:timestamp_seconds()
     },
 
-    FinalBuilderCtx = preprocess(#builder_ctx{
+    FinalBuilderCtx = validate_schema_and_resolve_lambdas(#builder_ctx{
         auth = Auth,
         atm_workflow_schema = AtmWorkflowSchema,
         supplementary_lambdas = SupplementaryAtmLambdas
@@ -110,7 +111,7 @@ update(Auth, AtmWorkflowSchemaId, Data) ->
         },
         SupplementaryAtmLambdas = maps:get(<<"supplementaryAtmLambdas">>, Data, #{}),
 
-        FinalBuilderCtx = preprocess(#builder_ctx{
+        FinalBuilderCtx = validate_schema_and_resolve_lambdas(#builder_ctx{
             auth = Auth,
             atm_workflow_schema = ProposedAtmWorkflowSchema,
             supplementary_lambdas = SupplementaryAtmLambdas
@@ -131,8 +132,8 @@ update(Auth, AtmWorkflowSchemaId, Data) ->
 %%%===================================================================
 
 %% @private
--spec preprocess(builder_ctx()) -> builder_ctx() | no_return().
-preprocess(Ctx1) ->
+-spec validate_schema_and_resolve_lambdas(builder_ctx()) -> builder_ctx().
+validate_schema_and_resolve_lambdas(Ctx1) ->
     Ctx2 = resolve_referenced_lambdas(Ctx1),
     validate_workflow_schema(Ctx2),
     Ctx3 = create_missing_lambdas(Ctx2),
@@ -150,7 +151,11 @@ resolve_referenced_lambdas(BuilderCtx = #builder_ctx{
     },
     supplementary_lambdas = SupplementaryAtmLambdas
 }) ->
-    {ok, #document{value = #od_atm_inventory{atm_lambdas = InventoryLambdas}}} = od_atm_inventory:get(AtmInventoryId),
+    {ok, #document{
+        value = #od_atm_inventory{
+            atm_lambdas = InventoryLambdas
+        } = AtmInventory
+    }} = od_atm_inventory:get(AtmInventoryId),
     WorkflowLambdas = od_atm_workflow_schema:extract_atm_lambdas_from_lanes(Lanes),
     MissingLambdas = lists_utils:subtract(WorkflowLambdas, InventoryLambdas),
     case MissingLambdas of
@@ -158,41 +163,42 @@ resolve_referenced_lambdas(BuilderCtx = #builder_ctx{
             BuilderCtx;
         _ ->
             UpdatedBuilderCtx = BuilderCtx#builder_ctx{
-                can_manage_lambdas_in_inventory = can_manage_lambdas_in_inventory(Auth, AtmInventoryId)
+                target_atm_inventory = AtmInventory,
+                can_manage_lambdas_in_target_inventory = can_manage_lambdas_in_inventory(Auth, AtmInventory)
             },
             lists:foldl(fun(AtmLambdaId, BuilderCtxAcc) ->
                 AtmLambdaData = maps:get(AtmLambdaId, SupplementaryAtmLambdas, undefined),
-                qualify_missing_lambda(BuilderCtxAcc, AtmLambdaId, AtmLambdaData)
+                resolve_missing_lambda(BuilderCtxAcc, AtmLambdaId, AtmLambdaData)
             end, UpdatedBuilderCtx, MissingLambdas)
     end.
 
 
 %% @private
--spec qualify_missing_lambda(builder_ctx(), od_atm_lambda:id(), undefined | entity_logic:data()) ->
+-spec resolve_missing_lambda(builder_ctx(), od_atm_lambda:id(), undefined | entity_logic:data()) ->
     builder_ctx().
-qualify_missing_lambda(BuilderCtx1, AtmLambdaId, AtmLambdaData) ->
-    SchemaChecksum = case AtmLambdaData of
+resolve_missing_lambda(BuilderCtx1, AtmLambdaId, AtmLambdaData) ->
+    Checksum = case AtmLambdaData of
         undefined ->
             undefined;
         _ ->
-            maps:get(<<"schemaChecksum">>, AtmLambdaData, undefined)
+            maps:get(<<"checksum">>, AtmLambdaData, undefined)
     end,
-    case consider_reusing_lambda_duplicate_in_current_inventory(BuilderCtx1, AtmLambdaId, SchemaChecksum) of
+    case try_reusing_lambda_duplicate_in_current_inventory(BuilderCtx1, AtmLambdaId, Checksum) of
         {true, BuilderCtx2} ->
             BuilderCtx2;
         false ->
-            % at least lambda will have to be linked or created,
+            % at least one lambda will have to be linked or created,
             % skip further checks if the client is not authorized to do so
-            BuilderCtx1#builder_ctx.can_manage_lambdas_in_inventory orelse throw(?ERROR_FORBIDDEN),
-            case consider_linking_referenced_lambda(BuilderCtx1, AtmLambdaId) of
+            BuilderCtx1#builder_ctx.can_manage_lambdas_in_target_inventory orelse throw(?ERROR_FORBIDDEN),
+            case try_linking_referenced_lambda(BuilderCtx1, AtmLambdaId) of
                 {true, BuilderCtx3} ->
                     BuilderCtx3;
                 false ->
-                    case consider_linking_any_lambda_duplicate(BuilderCtx1, AtmLambdaId, SchemaChecksum) of
+                    case try_linking_any_lambda_duplicate(BuilderCtx1, AtmLambdaId, Checksum) of
                         {true, BuilderCtx4} ->
                             BuilderCtx4;
                         false ->
-                            case consider_creating_lambda_duplicate(BuilderCtx1, AtmLambdaId, AtmLambdaData) of
+                            case try_creating_lambda_duplicate(BuilderCtx1, AtmLambdaId, AtmLambdaData) of
                                 {true, BuilderCtx5} ->
                                     BuilderCtx5;
                                 false ->
@@ -210,20 +216,18 @@ qualify_missing_lambda(BuilderCtx1, AtmLambdaId, AtmLambdaData) ->
 
 
 %% @private
--spec consider_reusing_lambda_duplicate_in_current_inventory(
+-spec try_reusing_lambda_duplicate_in_current_inventory(
     builder_ctx(),
     od_atm_lambda:id(),
-    undefined | od_atm_lambda:schema_checksum()
+    undefined | od_atm_lambda:checksum()
 ) ->
     {true, builder_ctx()} | false.
-consider_reusing_lambda_duplicate_in_current_inventory(_BuilderCtx, _AtmLambdaId, undefined) ->
+try_reusing_lambda_duplicate_in_current_inventory(_BuilderCtx, _AtmLambdaId, undefined) ->
     false;
-consider_reusing_lambda_duplicate_in_current_inventory(BuilderCtx = #builder_ctx{
-    atm_workflow_schema = #od_atm_workflow_schema{
-        atm_inventory = AtmInventoryId
-    }
-}, AtmLambdaId, SchemaChecksum) ->
-    case find_lambda_duplicate_in_inventory(SchemaChecksum, AtmInventoryId) of
+try_reusing_lambda_duplicate_in_current_inventory(BuilderCtx = #builder_ctx{
+    target_atm_inventory = TargetAtmInventory
+}, AtmLambdaId, Checksum) ->
+    case find_lambda_duplicate_in_inventory(Checksum, TargetAtmInventory) of
         {ok, DuplicateLambdaId} ->
             {true, substitute_lambda_id(BuilderCtx, AtmLambdaId, DuplicateLambdaId)};
         error ->
@@ -232,12 +236,12 @@ consider_reusing_lambda_duplicate_in_current_inventory(BuilderCtx = #builder_ctx
 
 
 %% @private
--spec consider_linking_referenced_lambda(
+-spec try_linking_referenced_lambda(
     builder_ctx(),
     od_atm_lambda:id()
 ) ->
     {true, builder_ctx()} | false.
-consider_linking_referenced_lambda(BuilderCtx, AtmLambdaId) ->
+try_linking_referenced_lambda(BuilderCtx, AtmLambdaId) ->
     case can_manage_lambda(BuilderCtx#builder_ctx.auth, AtmLambdaId) of
         true ->
             {true, BuilderCtx#builder_ctx{
@@ -249,16 +253,16 @@ consider_linking_referenced_lambda(BuilderCtx, AtmLambdaId) ->
 
 
 %% @private
--spec consider_linking_any_lambda_duplicate(
+-spec try_linking_any_lambda_duplicate(
     builder_ctx(),
     od_atm_lambda:id(),
-    undefined | od_atm_lambda:schema_checksum()
+    undefined | od_atm_lambda:checksum()
 ) ->
     {true, builder_ctx()} | false.
-consider_linking_any_lambda_duplicate(_BuilderCtx, _AtmLambdaId, undefined) ->
+try_linking_any_lambda_duplicate(_BuilderCtx, _AtmLambdaId, undefined) ->
     false;
-consider_linking_any_lambda_duplicate(BuilderCtx, AtmLambdaId, SchemaChecksum) ->
-    case find_linkable_lambda_duplicate(BuilderCtx, SchemaChecksum) of
+try_linking_any_lambda_duplicate(BuilderCtx, AtmLambdaId, Checksum) ->
+    case find_linkable_lambda_duplicate(BuilderCtx, Checksum) of
         {ok, DuplicateLambdaId} ->
             BuilderCtxWithSubstitutions = substitute_lambda_id(BuilderCtx, AtmLambdaId, DuplicateLambdaId),
             {true, BuilderCtxWithSubstitutions#builder_ctx{
@@ -270,15 +274,15 @@ consider_linking_any_lambda_duplicate(BuilderCtx, AtmLambdaId, SchemaChecksum) -
 
 
 %% @private
--spec consider_creating_lambda_duplicate(
+-spec try_creating_lambda_duplicate(
     builder_ctx(),
     od_atm_lambda:id(),
     undefined | entity_logic:data()
 ) ->
     {true, builder_ctx()} | false.
-consider_creating_lambda_duplicate(_BuilderCtx, _AtmLambdaId, undefined) ->
+try_creating_lambda_duplicate(_BuilderCtx, _AtmLambdaId, undefined) ->
     false;
-consider_creating_lambda_duplicate(BuilderCtx, AtmLambdaId, AtmLambdaData) ->
+try_creating_lambda_duplicate(BuilderCtx, AtmLambdaId, AtmLambdaData) ->
     {true, BuilderCtx#builder_ctx{
         lambdas_to_create = maps:put(
             AtmLambdaId, AtmLambdaData, BuilderCtx#builder_ctx.lambdas_to_create
@@ -361,23 +365,23 @@ create_workflow_schema(#builder_ctx{
 
 
 %% @private
--spec find_linkable_lambda_duplicate(builder_ctx(), od_atm_lambda:schema_checksum()) ->
+-spec find_linkable_lambda_duplicate(builder_ctx(), od_atm_lambda:checksum()) ->
     {ok, od_atm_lambda:id()} | error.
 find_linkable_lambda_duplicate(#builder_ctx{
     auth = ?USER(UserId) = Auth,
     atm_workflow_schema = #od_atm_workflow_schema{
         atm_inventory = TargetAtmInventoryId
     }
-}, SchemaChecksum) ->
+}, Checksum) ->
     {ok, EffAtmInventories} = user_logic:get_eff_atm_inventories(Auth, UserId),
     lists_utils:foldl_while(fun(AtmInventoryId, _) ->
-        case can_manage_lambdas_in_inventory(Auth, AtmInventoryId) of
-            false ->
+        case od_atm_inventory:get(AtmInventoryId) of
+            {error, not_found} ->
                 {cont, error};
-            true ->
-                case find_lambda_duplicate_in_inventory(SchemaChecksum, AtmInventoryId) of
-                    {ok, FoundAtmLambdaId} ->
-                        {halt, {ok, FoundAtmLambdaId}};
+            {ok, #document{value = AtmInventory}} ->
+                case find_linkable_lambda_duplicate_in_inventory(Auth, AtmInventory, Checksum) of
+                    {ok, DuplicateLambdaId} ->
+                        {halt, {ok, DuplicateLambdaId}};
                     error ->
                         {cont, error}
                 end
@@ -388,22 +392,33 @@ find_linkable_lambda_duplicate(_, _) ->
 
 
 %% @private
--spec find_lambda_duplicate_in_inventory(od_atm_lambda:schema_checksum(), od_atm_inventory:id()) ->
+-spec find_linkable_lambda_duplicate_in_inventory(
+    aai:auth(),
+    od_atm_inventory:record(),
+    od_atm_lambda:checksum()
+) ->
     {ok, od_atm_lambda:id()} | error.
-find_lambda_duplicate_in_inventory(SchemaChecksum, AtmInventoryId) ->
-    case atm_inventory_logic:get_atm_lambdas(?ROOT, AtmInventoryId) of
-        {error, _} ->
+find_linkable_lambda_duplicate_in_inventory(Auth, AtmInventory, Checksum) ->
+    case can_manage_lambdas_in_inventory(Auth, AtmInventory) of
+        false ->
             error;
-        {ok, AtmLambdas} ->
-            lists_utils:foldl_while(fun(AtmLambdaId, _) ->
-                case od_atm_lambda:get(AtmLambdaId) of
-                    {ok, #document{key = Id, value = #od_atm_lambda{schema_checksum = SchemaChecksum}}} ->
-                        {halt, {ok, Id}};
-                    _ ->
-                        {cont, error}
-                end
-            end, error, AtmLambdas)
+        true ->
+            find_lambda_duplicate_in_inventory(Checksum, AtmInventory)
     end.
+
+
+%% @private
+-spec find_lambda_duplicate_in_inventory(od_atm_lambda:checksum(), od_atm_inventory:record()) ->
+    {ok, od_atm_lambda:id()} | error.
+find_lambda_duplicate_in_inventory(Checksum, #od_atm_inventory{atm_lambdas = AtmLambdas}) ->
+    lists_utils:foldl_while(fun(AtmLambdaId, _) ->
+        case od_atm_lambda:get(AtmLambdaId) of
+            {ok, #document{key = Id, value = #od_atm_lambda{checksum = Checksum}}} ->
+                {halt, {ok, Id}};
+            _ ->
+                {cont, error}
+        end
+    end, error, AtmLambdas).
 
 
 %% @private
@@ -422,11 +437,12 @@ substitute_lambda_id(BuilderCtx = #builder_ctx{
 
 
 %% @private
--spec can_manage_lambdas_in_inventory(aai:auth(), od_atm_inventory:id()) -> boolean().
+-spec can_manage_lambdas_in_inventory(aai:auth(), od_atm_inventory:id() | od_atm_inventory:record()) ->
+    boolean().
 can_manage_lambdas_in_inventory(?ROOT, _) ->
     true;
-can_manage_lambdas_in_inventory(?USER(UserId), AtmInventoryId) ->
-    atm_inventory_logic:has_eff_privilege(AtmInventoryId, UserId, ?ATM_INVENTORY_MANAGE_LAMBDAS) orelse
+can_manage_lambdas_in_inventory(?USER(UserId), AtmInventoryOrId) ->
+    atm_inventory_logic:has_eff_privilege(AtmInventoryOrId, UserId, ?ATM_INVENTORY_MANAGE_LAMBDAS) orelse
         user_logic:has_eff_oz_privilege(UserId, ?OZ_ATM_INVENTORIES_UPDATE);
 can_manage_lambdas_in_inventory(_, _) ->
     false.

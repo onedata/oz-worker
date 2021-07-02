@@ -52,7 +52,7 @@ get_response(#gri{id = AtmLambdaId, aspect = instance, scope = private}, AtmLamb
         argument_specs = ArgumentSpecs,
         result_specs = ResultSpecs,
 
-        schema_checksum = SchemaChecksum,
+        checksum = Checksum,
 
         creation_time = CreationTime,
         creator = Creator
@@ -68,7 +68,7 @@ get_response(#gri{id = AtmLambdaId, aspect = instance, scope = private}, AtmLamb
         <<"argumentSpecs">> => jsonable_record:list_to_json(ArgumentSpecs, atm_lambda_argument_spec),
         <<"resultSpecs">> => jsonable_record:list_to_json(ResultSpecs, atm_lambda_result_spec),
 
-        <<"schemaChecksum">> => SchemaChecksum,
+        <<"checksum">> => Checksum,
 
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
         <<"creationTime">> => CreationTime

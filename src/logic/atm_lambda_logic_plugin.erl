@@ -138,7 +138,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = parse, scope = public}}
         result_specs = ResultSpecs
     },
     AtmLambda = AtmLambdaWithoutChecksum#od_atm_lambda{
-        schema_checksum = od_atm_lambda:calculate_schema_checksum(AtmLambdaWithoutChecksum)
+        checksum = od_atm_lambda:calculate_checksum(AtmLambdaWithoutChecksum)
     },
     {ok, value, AtmLambda};
 
