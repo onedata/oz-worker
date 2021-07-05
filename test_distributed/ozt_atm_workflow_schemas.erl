@@ -373,7 +373,7 @@ gen_example_argument_value_builder(StoreSchemaIds) ->
         };
         4 ->
             % generated list of stores may be empty, in such case keep generating
-            % until the is no store_credentials builder type included
+            % until there is no store_credentials builder type included
             case StoreSchemaIds of
                 [] ->
                     gen_example_argument_value_builder(StoreSchemaIds);
@@ -384,7 +384,7 @@ gen_example_argument_value_builder(StoreSchemaIds) ->
             end;
         5 ->
             % generated list of stores may be empty, in such case keep generating
-            % until the is no single_value_store_content builder type included
+            % until there is no single_value_store_content builder type included
             case StoreSchemaIds of
                 [] ->
                     gen_example_argument_value_builder(StoreSchemaIds);
