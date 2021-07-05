@@ -356,7 +356,7 @@ gen_example_result_mappings(AtmLambdaId, StoreSchemaIds) ->
 
 -spec gen_example_argument_value_builder([automation:id()]) -> atm_task_argument_value_builder:record().
 gen_example_argument_value_builder(StoreSchemaIds) ->
-    case rand:uniform(5) of
+    case rand:uniform(6) of
         1 -> #atm_task_argument_value_builder{
             type = iterated_item, recipe = lists_utils:random_element([
                 undefined,
@@ -382,7 +382,18 @@ gen_example_argument_value_builder(StoreSchemaIds) ->
                         type = store_credentials, recipe = lists_utils:random_element(StoreSchemaIds)
                     }
             end;
-        5 -> #atm_task_argument_value_builder{
+        5 ->
+            % generated list of stores may be empty, in such case keep generating
+            % until the is no single_value_store_content builder type included
+            case StoreSchemaIds of
+                [] ->
+                    gen_example_argument_value_builder(StoreSchemaIds);
+                _ ->
+                    #atm_task_argument_value_builder{
+                        type = single_value_store_content, recipe = lists_utils:random_element(StoreSchemaIds)
+                    }
+            end;
+        6 -> #atm_task_argument_value_builder{
             type = onedatafs_credentials, recipe = undefined
         }
     end.

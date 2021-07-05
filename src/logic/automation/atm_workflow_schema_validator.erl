@@ -138,7 +138,10 @@ validate_store_schema_references(#validator_ctx{
 
         lists:foreach(fun(#atm_task_schema_argument_mapper{value_builder = ValueBuilder, argument_name = ArgumentName}) ->
             case ValueBuilder of
-                #atm_task_argument_value_builder{type = store_credentials, recipe = StoreSchemaId} ->
+                #atm_task_argument_value_builder{type = Type, recipe = StoreSchemaId} when
+                    Type == store_credentials;
+                    Type == single_value_store_content
+                ->
                     lists:member(StoreSchemaId, StoreSchemaIds) orelse raise_bad_store_schema_reference_error(
                         str_utils:format_bin("tasks[~s].argumentMappings[~s].valueBuilder.recipe", [
                             TaskId, ArgumentName
