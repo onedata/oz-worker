@@ -33,6 +33,7 @@
 %% @TODO VFS-7755 check if const value builder is compatible with argument's data spec
 %% @TODO VFS-7755 consider built in audit log when validating referenced store schemas - do we need any other built in stores?
 %% @TODO VFS-7755 sanitize result's data specs - e.g. store and onedatafs credentials can only appear in arguments
+%% @TODO VFS-7755 check if storeSchemaId from recipe of single_value_store_content task arg builder points to single_value store
 
 %%%===================================================================
 %%% API
