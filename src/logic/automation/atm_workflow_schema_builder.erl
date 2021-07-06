@@ -450,11 +450,13 @@ can_manage_lambdas_in_inventory(_, _) ->
 
 %% @private
 -spec can_manage_lambda(aai:auth(), od_atm_lambda:id()) -> boolean().
-can_manage_lambda(?ROOT, _) ->
-    true;
+can_manage_lambda(?ROOT, AtmLambdaId) ->
+    atm_lambda_logic:exists(AtmLambdaId);
 can_manage_lambda(?USER(UserId), AtmLambdaId) ->
-    atm_lambda_logic_plugin:can_manage_lambda(UserId, AtmLambdaId) orelse
-        user_logic:has_eff_oz_privilege(UserId, ?OZ_ATM_INVENTORIES_UPDATE);
+    atm_lambda_logic_plugin:can_manage_lambda(UserId, AtmLambdaId) orelse (
+        user_logic:has_eff_oz_privilege(UserId, ?OZ_ATM_INVENTORIES_UPDATE) andalso
+            atm_lambda_logic:exists(AtmLambdaId)
+    );
 can_manage_lambda(_, _) ->
     false.
 
