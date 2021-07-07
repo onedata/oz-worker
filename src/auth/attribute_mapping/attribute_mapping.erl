@@ -335,8 +335,8 @@ map_attribute(IdP, Attribute, Type, IdPAttributes) ->
 
 -define(catch_errors(__Term), try
     __Term
-catch __Type:__Reason ->
-    {error, {attribute_mapping_error, __Type, __Reason, erlang:get_stacktrace()}}
+catch __Type:__Reason:__Stacktrace ->
+    {error, {attribute_mapping_error, __Type, __Reason, __Stacktrace}}
 end).
 
 

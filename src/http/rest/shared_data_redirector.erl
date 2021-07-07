@@ -58,8 +58,8 @@ handle(ObjectId, Req) ->
                 end
         end
     catch
-        Type:Reason ->
-            ?debug_stacktrace("Error while redirecting to public share - ~p:~p", [Type, Reason]),
+        Type:Reason:Stacktrace ->
+            ?debug_stacktrace("Error while redirecting to public share - ~p:~p", [Type, Reason], Stacktrace),
             ?ERROR_INTERNAL_SERVER_ERROR
     end,
 

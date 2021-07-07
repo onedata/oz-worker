@@ -409,9 +409,9 @@ add_member(ParentType, ParentId, MemberType, MemberId) ->
 db_browser_test(_) ->
     try
         db_browser_test_unsafe()
-    catch Type:Reason ->
+    catch Type:Reason:Stacktrace ->
         ct:pal("db_browser test failed with ~w:~w~nStacktrace: ~ts", [
-            Type, Reason, lager:pr_stacktrace(erlang:get_stacktrace())
+            Type, Reason, lager:pr_stacktrace(Stacktrace)
         ]),
         error(test_failed)
     end.

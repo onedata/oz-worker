@@ -84,10 +84,12 @@ get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
                 Err
         end
     catch
-        Type:Reason ->
-            ?error_stacktrace("Cannot resolve redirect URL for IdP '~p' - ~p:~p", [
-                IdP, Type, Reason
-            ]),
+        Type:Reason:Stacktrace ->
+            ?error_stacktrace(
+                "Cannot resolve redirect URL for IdP '~p' - ~p:~p",
+                [IdP, Type, Reason],
+                Stacktrace
+            ),
             ?ERROR_INTERNAL_SERVER_ERROR
     end.
 
@@ -115,11 +117,11 @@ validate_login(Method, Req) ->
                     log_error({error, Reason}, IdP, StateToken, []),
                     {auth_error, {error, Reason}, StateToken, RedirectAfterLogin}
             catch
-                throw:{error, _} = Error ->
-                    log_error(Error, IdP, StateToken, erlang:get_stacktrace()),
+                throw:{error, _} = Error:Stacktrace ->
+                    log_error(Error, IdP, StateToken, Stacktrace),
                     {auth_error, Error, StateToken, RedirectAfterLogin};
-                Type:Reason ->
-                    log_error({Type, Reason}, IdP, StateToken, erlang:get_stacktrace()),
+                Type:Reason:Stacktrace ->
+                    log_error({Type, Reason}, IdP, StateToken, Stacktrace),
                     {auth_error, ?ERROR_INTERNAL_SERVER_ERROR, StateToken, RedirectAfterLogin}
             end
     end.
@@ -189,11 +191,11 @@ refresh_idp_access_token(IdP, RefreshToken) ->
                 {ok, {AccessToken, Expires - ?NOW()}}
         end
     catch
-        throw:Error ->
-            log_error(Error, IdP, <<"refresh_token_flow">>, erlang:get_stacktrace()),
+        throw:Error:Stacktrace ->
+            log_error(Error, IdP, <<"refresh_token_flow">>, Stacktrace),
             ?ERROR_INTERNAL_SERVER_ERROR;
-        Type:Reason ->
-            log_error({Type, Reason}, IdP, <<"refresh_token_flow">>, erlang:get_stacktrace()),
+        Type:Reason:Stacktrace ->
+            log_error({Type, Reason}, IdP, <<"refresh_token_flow">>, Stacktrace),
             ?ERROR_INTERNAL_SERVER_ERROR
     end.
 

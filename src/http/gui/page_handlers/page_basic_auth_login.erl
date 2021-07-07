@@ -46,8 +46,8 @@ handle(<<"POST">>, Req) ->
             {error, _} = AuthenticationError ->
                 AuthenticationError
         end
-    catch Type:Reason ->
-        ?error_stacktrace("Login by basic credentials failed - ~w:~p", [Type, Reason]),
+    catch Type:Reason:Stacktrace ->
+        ?error_stacktrace("Login by basic credentials failed - ~w:~p", [Type, Reason], Stacktrace),
         ?ERROR_INTERNAL_SERVER_ERROR
     end,
     case Result of

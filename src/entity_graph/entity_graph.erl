@@ -814,10 +814,11 @@ remove_all_relations(EntityType, EntityId, Entity) ->
     catch
         throw:{error, _} = Error ->
             throw(Error);
-        Type:Message ->
+        Type:Message:Stacktrace ->
             ?error_stacktrace(
                 "Unexpected error while removing relations of ~p#~s - ~p:~p",
-                [EntityType, EntityId, Type, Message]
+                [EntityType, EntityId, Type, Message],
+                Stacktrace
             ),
             throw(?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId))
     end.
@@ -1011,10 +1012,12 @@ refresh_if_needed() ->
                 try
                     set_refresh_in_progress(true),
                     refresh_entity_graph(entity_graph_state:get())
-                catch Type:Message ->
-                    ?error_stacktrace("Cannot refresh entity graph - ~p:~p", [
-                        Type, Message
-                    ]),
+                catch Type:Message:Stacktrace ->
+                    ?error_stacktrace(
+                        "Cannot refresh entity graph - ~p:~p",
+                        [Type, Message],
+                        Stacktrace
+                    ),
                     error
                 after
                     set_refresh_in_progress(false)
@@ -2077,13 +2080,14 @@ get_children(#od_handle_service{handles = Handles} = HService) -> #{
     dependent => #{od_handle => Handles},
     independent => get_successors(top_down, HService)
 };
-get_children(#od_atm_inventory{atm_lambdas = AtmLambdas, atm_workflow_schemas = AtmWorkflowSchemas} = AtmInventory) -> #{
-    dependent => #{od_atm_workflow_schema => AtmWorkflowSchemas},
-    independent => maps:merge(
-        get_successors(top_down, AtmInventory),
-        #{od_atm_lambda => AtmLambdas}
-    )
-};
+get_children(#od_atm_inventory{atm_lambdas = AtmLambdas, atm_workflow_schemas = AtmWorkflowSchemas} = AtmInventory) ->
+    #{
+        dependent => #{od_atm_workflow_schema => AtmWorkflowSchemas},
+        independent => maps:merge(
+            get_successors(top_down, AtmInventory),
+            #{od_atm_lambda => AtmLambdas}
+        )
+    };
 get_children(#od_atm_workflow_schema{atm_lambdas = AtmLambdas} = AtmWorkflowSchema) -> #{
     independent => maps:merge(
         get_successors(top_down, AtmWorkflowSchema),

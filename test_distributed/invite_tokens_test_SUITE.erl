@@ -150,7 +150,7 @@ all() -> ?ALL([
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 init_per_testcase(_, Config) ->
@@ -169,7 +169,7 @@ end_per_testcase(_, _Config) ->
     ozt_mocks:unmock_geo_db_entry_for_all_ips().
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 %%%===================================================================
@@ -1099,9 +1099,9 @@ run_invite_token_tests(Testcase) ->
         % This must be run last as it deletes the target entity id
         check_subject_or_target_entity_deleted_scenarios(Testcase),
         true
-    catch Type:Reason ->
+    catch Type:Reason:Stacktrace ->
         ct:pal("Invite token tests failed due to ~p:~p~nStacktrace: ~s", [
-            Type, Reason, lager:pr_stacktrace(erlang:get_stacktrace())
+            Type, Reason, lager:pr_stacktrace(Stacktrace)
         ]),
         false
     end.

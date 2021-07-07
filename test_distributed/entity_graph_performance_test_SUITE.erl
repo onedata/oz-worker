@@ -530,13 +530,13 @@ create_n_users(Config, Number) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     [{?LOAD_MODULES, [oz_test_utils, rest_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
     ssl:stop(),
-    hackney:stop(),
+    application:stop(hackney),
     ok.
 
 
