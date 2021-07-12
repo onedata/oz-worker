@@ -4,6 +4,24 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha14
+
+-   **VFS-7880** Introduce the concept of automation; tools for defining
+    and executing automated workflows, made up of lambdas that are
+    submitted to a local OpenFaaS platform. These functionalities
+    currently have experimental status.
+-   **VFS-7829** Add the possibility to export workflow schemas to JSON
+    and import them based on the JSON, linking or creating missing
+    lambdas in one shot.
+-   **VFS-7817** GUI improvements in automation GUI: added navigation
+    via URL to specific execution, creating stores during task and lane
+    creation, showing inventory name for each execution entry.
+-   **VFS-7738** Fixed issues with navigation between datasets, archives
+    and archive files browsers.
+-   **VFS-7329** Added automation GUI - inventories, lambdas and
+    workflows views in Onezone and workflows execution overview in
+    Oneprovider.
+
 ### 21.02.0-alpha13
 
 ### 21.02.0-alpha12
