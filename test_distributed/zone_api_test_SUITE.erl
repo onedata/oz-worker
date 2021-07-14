@@ -407,6 +407,9 @@ expected_configuration(Config) ->
     OpenDataXrootdServerDomain = lists_utils:random_element([undefined, ?XROOTD_SERVER_DOMAIN]),
     oz_test_utils:set_env(Config, open_data_xrootd_server_domain, OpenDataXrootdServerDomain),
 
+    BagitUploaderWorkflowSchemaId = lists_utils:random_element([undefined, binary_to_list(str_utils:rand_hex(20))]),
+    oz_test_utils:set_env(Config, bagit_uploader_workflow_schema_id, BagitUploaderWorkflowSchemaId),
+
     #{
         <<"name">> => OZName,
         <<"domain">> => OZDomain,
@@ -419,6 +422,10 @@ expected_configuration(Config) ->
         <<"openDataXrootdServerDomain">> => case OpenDataXrootdServerDomain of
             undefined -> null;
             Url -> list_to_binary(Url)
+        end,
+        <<"bagitUploaderWorkflowSchemaId">> => case BagitUploaderWorkflowSchemaId of
+            undefined -> null;
+            Id -> list_to_binary(Id)
         end
     }.
 
