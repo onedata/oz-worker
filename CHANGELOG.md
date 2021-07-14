@@ -4,6 +4,16 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha16
+
+-   **VFS-7975** Added possibility to cancel running automation
+    workflow.
+-   **VFS-7846** Added action \"Upload BagIt\" to file browser, which is
+    available when OpenFaaS and special \"BagIt uploader\" workflow are
+    available.
+-   **VFS-7741** Web GUI: showing proper error information page when
+    there is no on-line supporting provider for share.
+
 ### 21.02.0-alpha14
 
 -   **VFS-7880** Introduce the concept of automation; tools for defining
