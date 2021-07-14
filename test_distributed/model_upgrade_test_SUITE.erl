@@ -2300,9 +2300,9 @@ get_record(od_space, 12) -> #od_space{
             ?SPACE_MANAGE_DATASETS,
             ?SPACE_VIEW_ARCHIVES,
             ?SPACE_CREATE_ARCHIVES,
+            % following privs should be added by the upgrade procedure
             ?SPACE_VIEW_ATM_WORKFLOW_EXECUTIONS,
             ?SPACE_SCHEDULE_ATM_WORKFLOW_EXECUTIONS
-            % following privs should be added by the upgrade procedure
         ]),
         <<"user2">> => privileges:from_list([
             ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
@@ -2406,7 +2406,6 @@ get_record(od_space, 13) -> #od_space{
             ?SPACE_CREATE_ARCHIVES,
             ?SPACE_VIEW_ATM_WORKFLOW_EXECUTIONS,
             ?SPACE_SCHEDULE_ATM_WORKFLOW_EXECUTIONS
-            % following privs should be added by the upgrade procedure
         ]),
         <<"user2">> => privileges:from_list([
             ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
@@ -2441,16 +2440,16 @@ get_record(od_space, 13) -> #od_space{
             ?SPACE_MANAGE_VIEWS,
             ?SPACE_CANCEL_REPLICATION,
             ?SPACE_SCHEDULE_EVICTION, ?SPACE_CANCEL_EVICTION,
-            ?SPACE_CANCEL_ATM_WORKFLOW_EXECUTIONS,
             ?SPACE_MANAGE_QOS,
             ?SPACE_MANAGE_DATASETS,
             ?SPACE_VIEW_ARCHIVES,
             ?SPACE_CREATE_ARCHIVES,
             ?SPACE_REMOVE_ARCHIVES,
             ?SPACE_RECALL_ARCHIVES,
-            % following privs should be added by the upgrade procedure
             ?SPACE_VIEW_ATM_WORKFLOW_EXECUTIONS,
-            ?SPACE_SCHEDULE_ATM_WORKFLOW_EXECUTIONS
+            ?SPACE_SCHEDULE_ATM_WORKFLOW_EXECUTIONS,
+            % following privs should be added by the upgrade procedure
+            ?SPACE_CANCEL_ATM_WORKFLOW_EXECUTIONS
         ])
     },
     storages = #{},
@@ -2468,7 +2467,6 @@ get_record(od_space, 13) -> #od_space{
                 ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS, ?SPACE_REGISTER_FILES,
                 ?SPACE_MANAGE_DATASETS,
                 ?SPACE_VIEW_ARCHIVES, ?SPACE_CREATE_ARCHIVES,
-                % following privs should be added by the upgrade procedure
                 ?SPACE_VIEW_ATM_WORKFLOW_EXECUTIONS,
                 ?SPACE_SCHEDULE_ATM_WORKFLOW_EXECUTIONS
             ]),
