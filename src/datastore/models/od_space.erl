@@ -130,7 +130,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    12.
+    13.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -304,10 +304,13 @@ get_record_struct(10) ->
     get_record_struct(9);
 get_record_struct(11) ->
     % The structure does not change, but privileges concerning archives were added.
-    get_record_struct(9);
+    get_record_struct(10);
 get_record_struct(12) ->
     % The structure does not change, but privileges concerning workflow execution were added.
-    get_record_struct(9).
+    get_record_struct(11);
+get_record_struct(13) ->
+    % The structure does not change, but privileges concerning workflow execution were added.
+    get_record_struct(12).
 
 
 %%--------------------------------------------------------------------
@@ -959,6 +962,81 @@ upgrade_record(11, Space) ->
     end,
 
     {12, #od_space{
+        name = Name,
+
+        owners = Owners,
+
+        users = UpgradeRelation(Users),
+        groups = UpgradeRelation(Groups),
+        storages = Storages,
+        shares = Shares,
+        harvesters = Harvesters,
+
+        eff_users = UpgradeRelation(EffUsers),
+        eff_groups = UpgradeRelation(EffGroups),
+        eff_providers = EffProviders,
+        eff_harvesters = EffHarvesters,
+
+        creation_time = CreationTime,
+        creator = Creator,
+
+        top_down_dirty = TopDownDirty,
+        bottom_up_dirty = BottomUpDirty
+    }};
+upgrade_record(12, Space) ->
+    {
+        od_space,
+        Name,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Space,
+
+    PreviousAdminPrivs = privileges:from_list([
+        ?SPACE_UPDATE, ?SPACE_DELETE, ?SPACE_SET_PRIVILEGES,
+        ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+        ?SPACE_MANAGE_VIEWS, ?SPACE_CANCEL_REPLICATION,
+        ?SPACE_SCHEDULE_EVICTION, ?SPACE_CANCEL_EVICTION,
+        ?SPACE_MANAGE_QOS, ?SPACE_REMOVE_ARCHIVES, ?SPACE_RECALL_ARCHIVES
+    ]),
+
+    NewAdminPrivileges = [?SPACE_CANCEL_ATM_WORKFLOW_EXECUTIONS],
+
+    UpgradePrivileges = fun(Privileges) ->
+        % appropriate privileges concerning workflow executions are granted to
+        % all members that had at least admin privileges before the upgrade
+        case lists_utils:intersect(PreviousAdminPrivs, Privileges) of
+            PreviousAdminPrivs ->
+                privileges:from_list(NewAdminPrivileges ++ Privileges);
+            _ ->
+                Privileges
+        end
+    end,
+
+    UpgradeRelation = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Relation}) -> {UpgradePrivileges(Privs), Relation};
+            (_, Privs) -> UpgradePrivileges(Privs)
+        end, Field)
+    end,
+
+    {13, #od_space{
         name = Name,
 
         owners = Owners,
