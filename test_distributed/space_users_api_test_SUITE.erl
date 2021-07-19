@@ -81,158 +81,178 @@ all() ->
 
 
 add_user_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, Creator} = oz_test_utils:create_user(Config),
     {ok, EffectiveUser} = oz_test_utils:create_user(Config),
-    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUserWithoutAddUserPriv} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(Creator), ?SPACE_NAME1),
 
     % EffectiveUser belongs to space S1 effectively via SubGroup1, with the
-    % effective privilege to INVITE_USER, so he should be able to join the space as a user
+    % effective privilege to ADD_USER, so he should be able to add himself to the space
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:space_add_group(Config, S1, SubGroup1),
     oz_test_utils:space_set_group_privileges(Config, S1, SubGroup1, [?SPACE_ADD_USER], []),
 
-    % EffectiveUserWithoutInvitePriv belongs to group S1 effectively via SubGroup2,
-    % but without the effective privilege to INVITE_USER, so he should NOT be able
-    % to join the parent group as a user
-    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
+    % EffectiveUserWithoutAddUserPriv belongs to group S1 effectively via SubGroup2,
+    % but without the effective privilege to ADD_USER, so he should NOT be able
+    % to add himself to the space
+    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutAddUserPriv), ?GROUP_NAME2),
     {ok, SubGroup2} = oz_test_utils:space_add_group(Config, S1, SubGroup2),
 
-    VerifyEndFun = fun
-        (true = _ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:space_get_users(Config, S1),
-            ?assert(lists:member(EffectiveUser, Users)),
-            oz_test_utils:space_remove_user(Config, S1, EffectiveUser);
-        (false = _ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:space_get_users(Config, S1),
-            ?assertNot(lists:member(EffectiveUser, Users))
-    end,
+    lists:foreach(fun({ClientClassification, SubjectUser}) ->
+        VerifyEndFun = fun
+            (true = _ShouldSucceed, _, _) ->
+                {ok, Users} = oz_test_utils:space_get_users(Config, S1),
+                ?assert(lists:member(SubjectUser, Users)),
+                oz_test_utils:space_remove_user(Config, S1, SubjectUser);
+            (false = _ShouldSucceed, _, _) ->
+                {ok, Users} = oz_test_utils:space_get_users(Config, S1),
+                ?assertNot(lists:member(SubjectUser, Users))
+        end,
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin}
-            ]
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = lists:flatten([
+                    root,
+                    {admin, [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]},
+                    case ClientClassification of
+                        correct -> {user, SubjectUser};
+                        forbidden -> []
+                    end
+                ]),
+                unauthorized = [nobody],
+                forbidden = lists:flatten([
+                    {user, Creator},
+                    {user, NonAdmin},
+                    case ClientClassification of
+                        correct -> [];
+                        forbidden -> {user, SubjectUser}
+                    end
+                ])
+            },
+            rest_spec = #rest_spec{
+                method = put,
+                path = [<<"/spaces/">>, S1, <<"/users/">>, SubjectUser],
+                expected_code = ?HTTP_201_CREATED,
+                expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                    ExpLocation = ?URL(Config, [<<"/spaces/">>, S1, <<"/users/">>, SubjectUser]),
+                    ?assertEqual(ExpLocation, Location),
+                    true
+                end
+            },
+            logic_spec = #logic_spec{
+                module = space_logic,
+                function = add_user,
+                args = [auth, S1, SubjectUser, data],
+                expected_result = ?OK_BINARY(SubjectUser)
+            },
+            % TODO VFS-4520 Tests for GraphSync API
+            data_spec = #data_spec{
+                required = [],
+                correct_values = #{},
+                bad_values = []
+            }
         },
-        rest_spec = #rest_spec{
-            method = put,
-            path = [<<"/spaces/">>, S1, <<"/users/">>, EffectiveUser],
-            expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/spaces/">>, S1, <<"/users/">>, EffectiveUser]),
-                ?assertEqual(ExpLocation, Location),
-                true
-            end
-        },
-        logic_spec = #logic_spec{
-            module = space_logic,
-            function = add_user,
-            args = [auth, S1, EffectiveUser, data],
-            expected_result = ?OK_BINARY(EffectiveUser)
-        },
-        % TODO gs
-        data_spec = #data_spec{
-            required = [],
-            correct_values = #{},
-            bad_values = []
-        }
-    },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, undefined, undefined, VerifyEndFun
-    )).
+        ?assert(api_test_utils:run_tests(
+            Config, ApiTestSpec, undefined, undefined, VerifyEndFun
+        ))
+    end, [{correct, EffectiveUser}, {forbidden, EffectiveUserWithoutAddUserPriv}]).
 
 
 add_user_with_privileges_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, Creator} = oz_test_utils:create_user(Config),
     {ok, EffectiveUser} = oz_test_utils:create_user(Config),
-    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUserWithoutAddUserPriv} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(Creator), ?SPACE_NAME1),
 
     AllPrivs = privileges:space_privileges(),
 
     % EffectiveUser belongs to space S1 effectively via SubGroup1, with the
-    % effective privilege to INVITE_USER, so he should be able to join the space as a user
+    % effective privilege to ADD_USER, so he should be able to add himself to the space
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:space_add_group(Config, S1, SubGroup1),
     oz_test_utils:space_set_group_privileges(Config, S1, SubGroup1, [?SPACE_ADD_USER, ?SPACE_SET_PRIVILEGES], []),
 
-    % EffectiveUserWithoutInvitePriv belongs to group S1 effectively via SubGroup2,
-    % but without the effective privilege to INVITE_USER, so he should NOT be able
-    % to join the parent group as a user
-    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
+    % EffectiveUserWithoutAddUserPriv belongs to group S1 effectively via SubGroup2,
+    % but without the effective privilege to ADD_USER, so he should NOT be able
+    % to add himself to the space
+    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutAddUserPriv), ?GROUP_NAME2),
     {ok, SubGroup2} = oz_test_utils:space_add_group(Config, S1, SubGroup2),
 
-    VerifyEndFun = fun
-        (true = _ShouldSucceed, _, Data) ->
-            Privs = lists:sort(maps:get(<<"privileges">>, Data)),
-            {ok, ActualPrivs} = oz_test_utils:space_get_user_privileges(
-                Config, S1, EffectiveUser
-            ),
-            ?assertEqual(Privs, lists:sort(ActualPrivs)),
-            oz_test_utils:space_remove_user(Config, S1, EffectiveUser);
-        (false = ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:space_get_users(Config, S1),
-            ?assertEqual(lists:member(EffectiveUser, Users), ShouldSucceed)
-    end,
+    lists:foreach(fun({ClientClassification, SubjectUser}) ->
+        VerifyEndFun = fun
+            (true = _ShouldSucceed, _, Data) ->
+                Privs = lists:sort(maps:get(<<"privileges">>, Data)),
+                {ok, ActualPrivs} = oz_test_utils:space_get_user_privileges(
+                    Config, S1, SubjectUser
+                ),
+                ?assertEqual(Privs, lists:sort(ActualPrivs)),
+                oz_test_utils:space_remove_user(Config, S1, SubjectUser);
+            (false = ShouldSucceed, _, _) ->
+                {ok, Users} = oz_test_utils:space_get_users(Config, S1),
+                ?assertEqual(lists:member(SubjectUser, Users), ShouldSucceed)
+        end,
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS, ?OZ_SPACES_SET_PRIVILEGES]}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = put,
-            path = [<<"/spaces/">>, S1, <<"/users/">>, EffectiveUser],
-            expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/spaces/">>, S1, <<"/users/">>, EffectiveUser]),
-                ?assertEqual(ExpLocation, Location),
-                true
-            end
-        },
-        logic_spec = #logic_spec{
-            module = space_logic,
-            function = add_user,
-            args = [auth, S1, EffectiveUser, data],
-            expected_result = ?OK_BINARY(EffectiveUser)
-        },
-        % TODO gs
-        data_spec = #data_spec{
-            required = [<<"privileges">>],
-            correct_values = #{
-                <<"privileges">> => [
-                    [?SPACE_UPDATE, ?SPACE_REMOVE_GROUP],
-                    [?SPACE_WRITE_DATA, ?SPACE_VIEW]
-                ]
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = lists:flatten([
+                    root,
+                    {admin, [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS, ?OZ_SPACES_SET_PRIVILEGES]},
+                    case ClientClassification of
+                        correct -> {user, SubjectUser};
+                        forbidden -> []
+                    end
+                ]),
+                unauthorized = [nobody],
+                forbidden = lists:flatten([
+                    {user, Creator},
+                    {user, NonAdmin},
+                    case ClientClassification of
+                        correct -> [];
+                        forbidden -> {user, SubjectUser}
+                    end
+                ])
             },
-            bad_values = [
-                {<<"privileges">>, <<"">>,
-                    ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
-                {<<"privileges">>, [?SPACE_VIEW, ?GROUP_VIEW],
-                    ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
-            ]
-        }
-    },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, undefined, undefined, VerifyEndFun
-    )).
+            rest_spec = #rest_spec{
+                method = put,
+                path = [<<"/spaces/">>, S1, <<"/users/">>, SubjectUser],
+                expected_code = ?HTTP_201_CREATED,
+                expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                    ExpLocation = ?URL(Config, [<<"/spaces/">>, S1, <<"/users/">>, SubjectUser]),
+                    ?assertEqual(ExpLocation, Location),
+                    true
+                end
+            },
+            logic_spec = #logic_spec{
+                module = space_logic,
+                function = add_user,
+                args = [auth, S1, SubjectUser, data],
+                expected_result = ?OK_BINARY(SubjectUser)
+            },
+            % TODO VFS-4520 Tests for GraphSync API
+            data_spec = #data_spec{
+                required = [<<"privileges">>],
+                correct_values = #{
+                    <<"privileges">> => [
+                        [?SPACE_UPDATE, ?SPACE_REMOVE_GROUP],
+                        [?SPACE_WRITE_DATA, ?SPACE_VIEW]
+                    ]
+                },
+                bad_values = [
+                    {<<"privileges">>, <<"">>,
+                        ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
+                    {<<"privileges">>, [?SPACE_VIEW, ?GROUP_VIEW],
+                        ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
+                ]
+            }
+        },
+        ?assert(api_test_utils:run_tests(
+            Config, ApiTestSpec, undefined, undefined, VerifyEndFun
+        ))
+    end, [{correct, EffectiveUser}, {forbidden, EffectiveUserWithoutAddUserPriv}]).
 
 
 create_user_invite_token_test(Config) ->
@@ -272,7 +292,7 @@ create_user_invite_token_test(Config) ->
             args = [auth, S1],
             expected_result = ?OK_TERM(VerifyFun)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -325,7 +345,7 @@ remove_user_test(Config) ->
             args = [auth, S1, userId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
@@ -377,7 +397,7 @@ list_users_test(Config) ->
             args = [auth, S1],
             expected_result = ?OK_LIST(ExpUsers)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -502,7 +522,7 @@ get_owners_test(Config) ->
             args = [auth, Space],
             expected_result = ?OK_LIST(ExpOwners)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -642,7 +662,7 @@ remove_owner_test(Config) ->
             args = [auth, Space, ownerToRemove],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, VerifyEndFun
@@ -660,7 +680,7 @@ get_user_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
@@ -706,7 +726,7 @@ get_user_privileges_test(Config) ->
             args = [auth, S1, U3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
@@ -726,7 +746,7 @@ update_user_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to update user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
@@ -767,7 +787,7 @@ update_user_privileges_test(Config) ->
             args = [auth, S1, U3, data],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(update_privileges, [
@@ -812,7 +832,7 @@ list_eff_users_test(Config) ->
             args = [auth, S1],
             expected_result = ?OK_LIST(ExpUsers)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -912,10 +932,7 @@ get_eff_user_privileges_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    % User whose eff privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
-    % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, SubjectUser} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
@@ -924,8 +941,8 @@ get_eff_user_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
     {ok, G2} = oz_test_utils:space_add_group(Config, S1, G2),
     {ok, G3} = oz_test_utils:group_add_group(Config, G1, G3),
-    {ok, U3} = oz_test_utils:group_add_user(Config, G3, U3),
-    {ok, U3} = oz_test_utils:group_add_user(Config, G2, U3),
+    {ok, SubjectUser} = oz_test_utils:group_add_user(Config, G3, SubjectUser),
+    {ok, SubjectUser} = oz_test_utils:group_add_user(Config, G2, SubjectUser),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     oz_test_utils:support_space_by_provider(Config, P1, S1),
@@ -961,7 +978,7 @@ get_eff_user_privileges_test(Config) ->
                 {user, Owner},
                 {user, U2},
                 % user can always see his own privileges
-                {user, U3},
+                {user, SubjectUser},
                 {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
@@ -973,7 +990,7 @@ get_eff_user_privileges_test(Config) ->
         rest_spec = #rest_spec{
             method = get,
             path = [
-                <<"/spaces/">>, S1, <<"/effective_users/">>, U3,
+                <<"/spaces/">>, S1, <<"/effective_users/">>, SubjectUser,
                 <<"/privileges">>
             ],
             expected_code = ?HTTP_200_OK,
@@ -982,15 +999,15 @@ get_eff_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_eff_user_privileges,
-            args = [auth, S1, U3],
+            args = [auth, S1, SubjectUser],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?SPACE_VIEW_PRIVILEGES, false, U3
+        {user, SubjectUser}, ?SPACE_VIEW_PRIVILEGES, false, SubjectUser
     ])).
 
 
@@ -1107,11 +1124,11 @@ get_eff_user_membership_intermediaries(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

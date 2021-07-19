@@ -216,7 +216,7 @@ list_test(Config) ->
             args = [auth],
             expected_result = ?OK_LIST(ExpHServices)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -351,7 +351,7 @@ get_test(Config) ->
             args = [auth, HService],
             expected_result = api_test_expect:protected_hservice(logic, HService, ?DOI_SERVICE, ?SUB(user, U1))
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
 
@@ -517,7 +517,7 @@ list_handles_test(Config) ->
     %   U2 gets the HANDLE_SERVICE_VIEW privilege
     %   U1 gets all remaining privileges
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
-%%        TODO ?HANDLE_SERVICE_LIST_HANDLES
+%%        TODO VFS-7381
         Config, ?HANDLE_SERVICE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -566,7 +566,7 @@ list_handles_test(Config) ->
             args = [auth, HService],
             expected_result = ?OK_LIST(ExpHandles)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -613,7 +613,7 @@ get_handle_test(Config) ->
             args = [auth, HService, HandleId],
             expected_result = api_test_expect:protected_handle(logic, HandleId, HandleData, ?SUB(nobody))
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -624,11 +624,11 @@ get_handle_test(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

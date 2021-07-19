@@ -1036,7 +1036,7 @@ list_records_no_set_error_test_base(Config, Method) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     Posthook = fun(NewConfig) ->
         [Node1 | _] = ?config(oz_worker_nodes, NewConfig),
         [
@@ -1059,7 +1059,7 @@ end_per_testcase(_, Config) ->
     ok.
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 %%%===================================================================

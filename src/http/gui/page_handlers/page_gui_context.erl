@@ -87,7 +87,7 @@ handle(<<"GET">>, Req) ->
     catch
         throw:Code when is_integer(Code) ->
             cowboy_req:reply(Code, Req);
-        Type:Message ->
-            ?debug_stacktrace("Bad request in ~p - ~p:~p", [?MODULE, Type, Message]),
+        Type:Message:Stacktrace ->
+            ?debug_stacktrace("Bad request in ~p - ~p:~p", [?MODULE, Type, Message], Stacktrace),
             cowboy_req:reply(?HTTP_400_BAD_REQUEST, Req)
     end.

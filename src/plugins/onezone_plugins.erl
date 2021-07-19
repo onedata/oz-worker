@@ -91,8 +91,8 @@ init() ->
             validate_plugin(Module),
             ?info("  -> ~p: successfully loaded", [Module]),
             {ok, Module}
-        catch Type:Reason ->
-            ?error_stacktrace("Cannot load ~s plugin due to ~p:~p", [Plugin, Type, Reason]),
+        catch Type:Reason:Stacktrace ->
+            ?error_stacktrace("Cannot load ~s plugin due to ~p:~p", [Plugin, Type, Reason], Stacktrace),
             error
         end
     end, PluginFiles),
@@ -160,8 +160,8 @@ validate_entitlement_parsing_example(Module, {IdP, Input, ParserConfig, Expected
     ParsingResult = try
         Module:parse(IdP, Input, ParserConfig)
     catch
-        Type:Reason ->
-            {error, malformed, Type, Reason, erlang:get_stacktrace()}
+        Type:Reason:Stacktrace ->
+            {error, malformed, Type, Reason, Stacktrace}
     end,
     case {ExpectedOutput, ParsingResult} of
         {Same, Same} ->
@@ -204,8 +204,8 @@ validate_attribute_mapping_example(Module, {IdP, Attribute, IdPAttributes, Expec
     ParsingResult = try
         Module:map_attribute(IdP, Attribute, IdPAttributes)
     catch
-        Type:Reason ->
-            {error, attribute_mapping_error, Type, Reason, erlang:get_stacktrace()}
+        Type:Reason:Stacktrace ->
+            {error, attribute_mapping_error, Type, Reason, Stacktrace}
     end,
     case {ExpectedOutput, ParsingResult} of
         {Same, Same} ->

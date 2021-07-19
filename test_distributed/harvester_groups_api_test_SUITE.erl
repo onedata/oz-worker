@@ -142,7 +142,7 @@ add_group_test(Config) ->
             args = [auth, H1, G1, data],
             expected_result = ?OK_BINARY(G1)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [],
             correct_values = #{},
@@ -216,7 +216,7 @@ add_group_with_privileges_test(Config) ->
             args = [auth, H1, G1, data],
             expected_result = ?OK_BINARY(G1)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"privileges">>],
             correct_values = #{
@@ -291,7 +291,7 @@ create_group_test(Config) ->
                 ?OK_TERM(fun(HarvesterId) -> VerifyFun(HarvesterId, ExpType) end)
             end)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"name">>],
             optional = [<<"type">>],
@@ -345,7 +345,7 @@ create_group_invite_token_test(Config) ->
             args = [auth, H1],
             expected_result = ?OK_TERM(VerifyFun)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -396,7 +396,7 @@ remove_group_test(Config) ->
             args = [auth, H1, groupId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -448,7 +448,7 @@ list_groups_test(Config) ->
             args = [auth, H1],
             expected_result = ?OK_LIST(ExpGroups)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -513,7 +513,7 @@ get_group_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get group privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config),
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME1),
@@ -555,7 +555,7 @@ get_group_privileges_test(Config) ->
             args = [auth, H1, G1],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
@@ -573,7 +573,7 @@ update_group_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to update group privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config),
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME1),
@@ -616,7 +616,7 @@ update_group_privileges_test(Config) ->
             args = [auth, H1, G1, data],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(update_privileges, [
@@ -658,7 +658,7 @@ list_eff_groups_test(Config) ->
             args = [auth, H1],
             expected_result = ?OK_LIST(ExpGroups)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -753,7 +753,7 @@ get_eff_group_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose eff privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config),
 
@@ -820,7 +820,7 @@ get_eff_group_privileges_test(Config) ->
             args = [auth, H1, G4],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
@@ -967,11 +967,11 @@ get_eff_group_membership_intermediaries(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

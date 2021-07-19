@@ -97,6 +97,8 @@ is_valid_consumer(?GROUP_JOIN_CLUSTER, ?SUB(user, _)) -> true;
 is_valid_consumer(?USER_JOIN_HARVESTER, ?SUB(user, _)) -> true;
 is_valid_consumer(?GROUP_JOIN_HARVESTER, ?SUB(user, _)) -> true;
 is_valid_consumer(?SPACE_JOIN_HARVESTER, ?SUB(user, _)) -> true;
+is_valid_consumer(?USER_JOIN_ATM_INVENTORY, ?SUB(user, _)) -> true;
+is_valid_consumer(?GROUP_JOIN_ATM_INVENTORY, ?SUB(user, _)) -> true;
 is_valid_consumer(_, _) -> false.
 
 
@@ -114,6 +116,8 @@ is_valid_target_id(?GROUP_JOIN_CLUSTER, ClusterId) -> cluster_logic:exists(Clust
 is_valid_target_id(?USER_JOIN_HARVESTER, HarvesterId) -> harvester_logic:exists(HarvesterId);
 is_valid_target_id(?GROUP_JOIN_HARVESTER, HarvesterId) -> harvester_logic:exists(HarvesterId);
 is_valid_target_id(?SPACE_JOIN_HARVESTER, HarvesterId) -> harvester_logic:exists(HarvesterId);
+is_valid_target_id(?USER_JOIN_ATM_INVENTORY, AtmInventoryId) -> atm_inventory_logic:exists(AtmInventoryId);
+is_valid_target_id(?GROUP_JOIN_ATM_INVENTORY, AtmInventoryId) -> atm_inventory_logic:exists(AtmInventoryId);
 is_valid_target_id(_, _) -> false.
 
 
@@ -220,6 +224,11 @@ has_privileges_to_invite(?SUB(user, UserId), ?GROUP_JOIN_HARVESTER, HarvesterId)
 has_privileges_to_invite(?SUB(user, UserId), ?SPACE_JOIN_HARVESTER, HarvesterId) ->
     harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_ADD_SPACE);
 
+has_privileges_to_invite(?SUB(user, UserId), ?USER_JOIN_ATM_INVENTORY, AtmInventoryId) ->
+    atm_inventory_logic:has_eff_privilege(AtmInventoryId, UserId, ?ATM_INVENTORY_ADD_USER);
+has_privileges_to_invite(?SUB(user, UserId), ?GROUP_JOIN_ATM_INVENTORY, AtmInventoryId) ->
+    atm_inventory_logic:has_eff_privilege(AtmInventoryId, UserId, ?ATM_INVENTORY_ADD_GROUP);
+
 has_privileges_to_invite(_, _, _) ->
     false.
 
@@ -251,6 +260,11 @@ has_privileges_to_set_privileges(?SUB(user, UserId), ?USER_JOIN_HARVESTER, Harve
     harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_SET_PRIVILEGES);
 has_privileges_to_set_privileges(?SUB(user, UserId), ?GROUP_JOIN_HARVESTER, HarvesterId) ->
     harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_SET_PRIVILEGES);
+
+has_privileges_to_set_privileges(?SUB(user, UserId), ?USER_JOIN_ATM_INVENTORY, AtmInventoryId) ->
+    atm_inventory_logic:has_eff_privilege(AtmInventoryId, UserId, ?ATM_INVENTORY_SET_PRIVILEGES);
+has_privileges_to_set_privileges(?SUB(user, UserId), ?GROUP_JOIN_ATM_INVENTORY, AtmInventoryId) ->
+    atm_inventory_logic:has_eff_privilege(AtmInventoryId, UserId, ?ATM_INVENTORY_SET_PRIVILEGES);
 
 has_privileges_to_set_privileges(_, _, _) ->
     false.
@@ -287,6 +301,11 @@ has_admin_privileges_to_invite(?SUB(user, UserId), ?GROUP_JOIN_HARVESTER) ->
 has_admin_privileges_to_invite(?SUB(user, UserId), ?SPACE_JOIN_HARVESTER) ->
     user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_ADD_RELATIONSHIPS);
 
+has_admin_privileges_to_invite(?SUB(user, UserId), ?USER_JOIN_ATM_INVENTORY) ->
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_ATM_INVENTORIES_ADD_RELATIONSHIPS);
+has_admin_privileges_to_invite(?SUB(user, UserId), ?GROUP_JOIN_ATM_INVENTORY) ->
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_ATM_INVENTORIES_ADD_RELATIONSHIPS);
+
 has_admin_privileges_to_invite(_, _) ->
     false.
 
@@ -312,6 +331,11 @@ has_admin_privileges_to_set_privileges(?SUB(user, UserId), ?USER_JOIN_HARVESTER)
     user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_SET_PRIVILEGES);
 has_admin_privileges_to_set_privileges(?SUB(user, UserId), ?GROUP_JOIN_HARVESTER) ->
     user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_SET_PRIVILEGES);
+
+has_admin_privileges_to_set_privileges(?SUB(user, UserId), ?USER_JOIN_ATM_INVENTORY) ->
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_ATM_INVENTORIES_SET_PRIVILEGES);
+has_admin_privileges_to_set_privileges(?SUB(user, UserId), ?GROUP_JOIN_ATM_INVENTORY) ->
+    user_logic:has_eff_oz_privilege(UserId, ?OZ_ATM_INVENTORIES_SET_PRIVILEGES);
 
 has_admin_privileges_to_set_privileges(_, _) ->
     false.

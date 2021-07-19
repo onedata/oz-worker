@@ -99,6 +99,21 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
     SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
     CompatibilityRegistryRevision = query_compatibility_registry(peek_current_registry_revision, [Resolver]),
     CompatibleOpVersions = query_compatibility_registry(get_compatible_versions, [Resolver, ?ONEZONE, Version, ?ONEPROVIDER]),
+    OpenDataXrootdServerDomain = case oz_worker:get_env(open_data_xrootd_server_domain, undefined) of
+        undefined -> null;
+        Domain -> str_utils:to_binary(Domain)
+    end,
+    BagitUploaderWorkflowSchemaId = case oz_worker:get_env(bagit_uploader_workflow_schema_id, undefined) of
+        undefined ->
+            null;
+        IdStr ->
+            Id = str_utils:to_binary(IdStr),
+            case atm_workflow_schema_logic:exists(Id) of
+                true -> Id;
+                false -> null
+            end
+
+    end,
     {ok, #{
         <<"name">> => utils:undefined_to_null(oz_worker:get_name()),
         <<"version">> => Version,
@@ -107,7 +122,9 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
         <<"subdomainDelegationSupported">> => SubdomainDelegationSupported,
         <<"supportedIdPs">> => auth_config:get_supported_idps_in_configuration_format(),
         <<"compatibilityRegistryRevision">> => CompatibilityRegistryRevision,
-        <<"compatibleOneproviderVersions">> => CompatibleOpVersions
+        <<"compatibleOneproviderVersions">> => CompatibleOpVersions,
+        <<"openDataXrootdServerDomain">> => OpenDataXrootdServerDomain,
+        <<"bagitUploaderWorkflowSchemaId">> => BagitUploaderWorkflowSchemaId
     }};
 
 get(#el_req{gri = #gri{aspect = test_image}}, _) ->

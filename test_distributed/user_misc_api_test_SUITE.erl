@@ -264,7 +264,7 @@ list_test(Config) ->
             args = [auth],
             expected_result = ?OK_LIST(ExpUsers)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -356,6 +356,7 @@ get_test(Config) ->
             gri = #gri{type = od_user, id = User, aspect = instance},
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"effectiveGroups">> => [],
+                <<"effectiveAtmInventories">> => [],
                 <<"effectiveHandleServices">> => [],
                 <<"effectiveHandles">> => [],
                 <<"effectiveSpaces">> => [S1],
@@ -1010,7 +1011,7 @@ create_client_token_test(Config) ->
             expected_code = ?HTTP_200_OK,
             expected_body = fun(#{<<"token">> := Token}) -> VerifyFun(Token) end
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -1028,7 +1029,7 @@ create_client_token_test(Config) ->
             expected_result = ?OK_TERM(VerifyFun)
         },
         rest_spec = undefined
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
@@ -1057,7 +1058,7 @@ list_client_tokens_test(Config) ->
             expected_code = ?HTTP_200_OK,
             expected_body = #{<<"tokens">> => ExpTokens}
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -1076,7 +1077,7 @@ list_client_tokens_test(Config) ->
             args = [auth, User],
             expected_result = ?OK_LIST(ExpTokens)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
@@ -1105,7 +1106,7 @@ delete_client_token_test(Config) ->
             path = [<<"/user/client_tokens/">>, token],
             expected_code = ?HTTP_204_NO_CONTENT
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
@@ -1125,7 +1126,7 @@ delete_client_token_test(Config) ->
             args = [auth, User, token],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
@@ -1311,7 +1312,7 @@ list_eff_providers_test(Config) ->
             args = [auth, U2],
             expected_result = ?OK_LIST(ExpProviders)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
@@ -1372,7 +1373,7 @@ get_eff_provider_test(Config) ->
                 args = [auth, U2, ProvId],
                 expected_result = api_test_expect:protected_provider(logic, ProvId, ProvDetails)
             }
-            % @todo gs
+            % @TODO VFS-4520 Tests for GraphSync API
 
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
@@ -1439,7 +1440,7 @@ get_spaces_in_eff_provider_test(Config) ->
                     args = [auth, UserId, ProviderId],
                     expected_result = ?OK_LIST(UserSpaces)
                 }
-                % @todo gs
+                % @TODO VFS-4520 Tests for GraphSync API
 
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
@@ -1454,11 +1455,11 @@ get_spaces_in_eff_provider_test(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

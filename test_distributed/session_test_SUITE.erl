@@ -337,7 +337,7 @@ expired_sessions_cleanup_test_base(Config, AdjustTimeFun, CauseCleanupFun) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     Posthook = fun(NewConfig) ->
         oz_test_utils:freeze_time(NewConfig),
         mock_user_connected_callback(NewConfig),
@@ -347,7 +347,7 @@ init_per_suite(Config) ->
 
 
 end_per_suite(Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop(),
     oz_test_utils:unfreeze_time(Config),
     unmock_user_connected_callback(Config),

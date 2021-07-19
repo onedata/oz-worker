@@ -195,6 +195,8 @@ default_invite_privileges(?USER_JOIN_CLUSTER) -> privileges:cluster_admin(); %% 
 default_invite_privileges(?GROUP_JOIN_CLUSTER) -> privileges:cluster_member();
 default_invite_privileges(?USER_JOIN_HARVESTER) -> privileges:harvester_member();
 default_invite_privileges(?GROUP_JOIN_HARVESTER) -> privileges:harvester_member();
+default_invite_privileges(?USER_JOIN_ATM_INVENTORY) -> privileges:atm_inventory_member();
+default_invite_privileges(?GROUP_JOIN_ATM_INVENTORY) -> privileges:atm_inventory_member();
 default_invite_privileges(_) -> undefined.
 
 %%%===================================================================
@@ -211,6 +213,8 @@ allowed_invite_privileges(?USER_JOIN_CLUSTER) -> privileges:cluster_privileges()
 allowed_invite_privileges(?GROUP_JOIN_CLUSTER) -> privileges:cluster_privileges();
 allowed_invite_privileges(?USER_JOIN_HARVESTER) -> privileges:harvester_privileges();
 allowed_invite_privileges(?GROUP_JOIN_HARVESTER) -> privileges:harvester_privileges();
+allowed_invite_privileges(?USER_JOIN_ATM_INVENTORY) -> privileges:atm_inventory_privileges();
+allowed_invite_privileges(?GROUP_JOIN_ATM_INVENTORY) -> privileges:atm_inventory_privileges();
 allowed_invite_privileges(_) -> undefined.
 
 
@@ -224,6 +228,8 @@ are_invite_privileges_applicable(?USER_JOIN_CLUSTER) -> true;
 are_invite_privileges_applicable(?GROUP_JOIN_CLUSTER) -> true;
 are_invite_privileges_applicable(?USER_JOIN_HARVESTER) -> true;
 are_invite_privileges_applicable(?GROUP_JOIN_HARVESTER) -> true;
+are_invite_privileges_applicable(?USER_JOIN_ATM_INVENTORY) -> true;
+are_invite_privileges_applicable(?GROUP_JOIN_ATM_INVENTORY) -> true;
 are_invite_privileges_applicable(_) -> false.
 
 

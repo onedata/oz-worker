@@ -769,12 +769,12 @@ custom_static_files_are_served_from_legacy_location(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite([{?LOAD_MODULES, [oz_test_utils]} | Config]).
 
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 

@@ -120,7 +120,7 @@ list_spaces_test(Config) ->
             args = [auth, U1],
             expected_result = ?OK_LIST(ExpSpaces)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
@@ -290,7 +290,7 @@ join_space_test(Config) ->
                 ?OK_BINARY(SpaceId)
             end)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
@@ -322,7 +322,7 @@ join_space_test(Config) ->
             args = [auth, U1, data],
             expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_user, U1, od_space, Space))
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"token">>],
             correct_values = #{<<"token">> => [Serialized2]}
@@ -446,7 +446,7 @@ leave_space_test(Config) ->
             args = [auth, U1, spaceId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity, [
         Config, ApiTestSpec2, EnvSetUpFun, VerifyEndFun, DeleteEntityFun
@@ -513,7 +513,7 @@ set_space_alias_test(Config) ->
             args = [auth, U1, S1, data],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, undefined, undefined, VerifyEndFun
@@ -547,7 +547,7 @@ get_space_alias_test(Config) ->
             args = [auth, U1, S1],
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -563,7 +563,7 @@ get_space_alias_test(Config) ->
         logic_spec = LogicSpec#logic_spec{
             expected_result = ?OK_BINARY(ExpAlias)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
@@ -586,7 +586,7 @@ get_space_alias_test(Config) ->
             args = [auth, U1, S1],
             expected_result = ?OK_BINARY(ExpAlias)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
 
@@ -652,7 +652,7 @@ delete_space_alias_test(Config) ->
             args = [auth, U1, S1],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity, [
         Config, ApiTestSpec2, EnvSetUpFun, VerifyEndFun, DeleteEntityFun
@@ -705,7 +705,7 @@ list_eff_spaces_test(Config) ->
             args = [auth, U2],
             expected_result = ?OK_LIST(ExpSpaces)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
@@ -795,11 +795,11 @@ get_eff_space_test(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

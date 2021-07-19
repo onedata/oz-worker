@@ -31,7 +31,7 @@ export ONEDATA_GIT_URL
 
 BUILD_VERSION := $(subst $(shell git describe --tags --abbrev=0)-,,$(shell git describe --tags --long))
 
-.PHONY: test deps upgrade generate package artifact
+.PHONY: test deps upgrade generate package
 
 all: test_rel
 
@@ -48,12 +48,12 @@ upgrade:
 compile:
 	$(REBAR) compile
 
-inject-gui:
+inject-gui: get-deps
 	$(LIB_DIR)/gui/pull-gui.sh gui-image.conf --target-path _build/default/lib/ozw_gui_static.tar.gz
 	$(LIB_DIR)/gui/pull-gui.sh default-harvester-gui-image.conf --target-path _build/default/lib/hrv_gui_static.tar.gz
 
 ## Generates a production release
-generate: template compile inject-gui
+generate: template inject-gui
 	$(REBAR) release $(OVERLAY_VARS)
 
 clean:
@@ -150,11 +150,5 @@ package: check_distribution package/$(PKG_ID).tar.gz
 pkgclean:
 	rm -rf package
 
-##
-## Creating bamboo artifact
-##
-
-artifact:
-	cd ..; find oz_worker | grep -v '.git$$' | grep -v '/.git/' > tar.lst; \
-	find oz_worker | grep oz_worker/.git >> tar.lst; \
-	tar -czf oz_worker.tar.gz --no-recursion -T tar.lst 
+codetag-tracker:
+	./bamboos/scripts/codetag-tracker.sh --branch=${BRANCH} --excluded-dirs=node_package
