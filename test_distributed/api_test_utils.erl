@@ -102,11 +102,11 @@ run_tests(Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, VerifyFun) ->
             ),
             false;
         % Unexpected error
-        Type:Message ->
+        Type:Message:Stacktrace ->
             ct:pal("~p:run_tests failed with unexpected result - ~p:~p~n"
             "Stacktrace: ~s", [
                 ?MODULE, Type, Message,
-                lager:pr_stacktrace(erlang:get_stacktrace())
+                lager:pr_stacktrace(Stacktrace)
             ]),
             ct:pal(io_lib_pretty:print(
                 ApiTestSpec, fun get_api_test_spec_rec_def/2)
@@ -357,11 +357,11 @@ check_logic_call(Config, LogicSpec) ->
         _ ->
             true
     catch
-        Type:Message ->
+        Type:Message:Stacktrace ->
             ct:pal(
                 "Logic result verification function crashed - ~p:~p~n"
                 "Stacktrace: ~s", [
-                    Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())
+                    Type, Message, lager:pr_stacktrace(Stacktrace)
                 ]),
             false
     end.
@@ -600,11 +600,11 @@ check_gs_call(GsSpec, GsClient, Data) ->
         _ ->
             true
     catch
-        Type:Message ->
+        Type:Message:Stacktrace ->
             ct:pal(
                 "Gs result verification function crashed - ~p:~p~n"
                 "Stacktrace: ~s", [
-                    Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())
+                    Type, Message, lager:pr_stacktrace(Stacktrace)
                 ]),
             false
     end.

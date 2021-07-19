@@ -103,8 +103,8 @@ set_up_users(Users) ->
             {ok, UserId} = create_user_with_uuid(UserInfo3, UserId)
         end, Users)
     catch
-        T:M ->
-            ?error_stacktrace("Cannot set up users - ~p:~p", [T, M]),
+        T:M:Stacktrace ->
+            ?error_stacktrace("Cannot set up users - ~p:~p", [T, M], Stacktrace),
             error
     end.
 
@@ -198,8 +198,8 @@ set_up_test_entities(Users, Groups, Spaces) ->
             end, Users),
         ok
     catch
-        T:M ->
-            ?error_stacktrace("Cannot set up test entities - ~p:~p", [T, M]),
+        T:M:Stacktrace ->
+            ?error_stacktrace("Cannot set up test entities - ~p:~p", [T, M], Stacktrace),
             error
     end.
 

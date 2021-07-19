@@ -193,11 +193,11 @@ check_rest_call(Config, ArgsMap) ->
                 Result = try
                     Fun(RespHeaders)
                 catch
-                    Type1:Message1 ->
+                    Type1:Message1:Stacktrace1 ->
                         ct:pal(
                             "Headers verification function crashed - ~p:~p~n"
                             "Stacktrace: ~s", [
-                                Type1, Message1, lager:pr_stacktrace(erlang:get_stacktrace())
+                                Type1, Message1, lager:pr_stacktrace(Stacktrace1)
                             ]),
                         false
                 end,
@@ -238,11 +238,11 @@ check_rest_call(Config, ArgsMap) ->
                 Result2 = try
                     Fun2(ActualBodyMap)
                 catch
-                    Type2:Message2 ->
+                    Type2:Message2:Stacktrace2 ->
                         ct:pal(
                             "Body verification function crashed - ~p:~p~n"
                             "Stacktrace: ~s", [
-                                Type2, Message2, lager:pr_stacktrace(erlang:get_stacktrace())
+                                Type2, Message2, lager:pr_stacktrace(Stacktrace2)
                             ]),
                         false
                 end,
@@ -322,11 +322,11 @@ check_rest_call(Config, ArgsMap) ->
                 {response, {Code, Headers, BodyMap}}
             };
         % Unexpected error
-        Type:Message ->
+        Type:Message:Stacktrace ->
             ct:pal(
                 "~p:check_rest_call failed with unexpected result - ~p:~p~n"
                 "Stacktrace: ~s", [
-                    ?MODULE, Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())
+                    ?MODULE, Type, Message, lager:pr_stacktrace(Stacktrace)
                 ]),
             false
     end.

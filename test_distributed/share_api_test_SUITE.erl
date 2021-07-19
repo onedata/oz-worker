@@ -800,11 +800,11 @@ clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(choose_provider_for_public_share_handling_test, Config) ->

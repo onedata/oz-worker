@@ -30,9 +30,9 @@
     idp_auth_test_mode:gather_log(debug, Format, Args),
     ?debug(Format, Args)
 end).
--define(auth_debug_stacktrace(Format, Args), begin
-    idp_auth_test_mode:gather_log(debug, Format, Args, erlang:get_stacktrace()),
-    ?debug_stacktrace(Format, Args)
+-define(auth_debug_stacktrace(Format, Args, Stacktrace), begin
+    idp_auth_test_mode:gather_log(debug, Format, Args, Stacktrace),
+    ?debug_stacktrace(Format, Args, Stacktrace)
 end).
 
 -define(auth_warning(Format, Args), begin

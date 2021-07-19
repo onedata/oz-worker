@@ -419,10 +419,12 @@ migrate_user_tokens() ->
         lists:foldl(fun(Serialized, Counter) ->
             try
                 migrate_user_token(UserId, Serialized, Counter)
-            catch Type:Message ->
-                ?warning_stacktrace("Failed to migrate user token, UserId: ~s, Token: ~s... - ~p:~p", [
-                    UserId, binary:part(Serialized, 0, 30), Type, Message
-                ])
+            catch Type:Message:Stacktrace ->
+                ?warning_stacktrace(
+                    "Failed to migrate user token, UserId: ~s, Token: ~s... - ~p:~p",
+                    [UserId, binary:part(Serialized, 0, 30), Type, Message],
+                    Stacktrace
+                )
             end
         end, 1, ClientTokens)
     end, UserDocs).
@@ -435,10 +437,12 @@ migrate_provider_root_tokens() ->
     lists:foreach(fun(#document{key = ProviderId, value = #od_provider{root_token = RootTokenId}}) ->
         try
             migrate_provider_root_token(ProviderId, RootTokenId)
-        catch Type:Message ->
-            ?warning_stacktrace("Failed to migrate provider root token, ProviderId: ~s, Id: ~s - ~p:~p", [
-                ProviderId, RootTokenId, Type, Message
-            ])
+        catch Type:Message:Stacktrace ->
+            ?warning_stacktrace(
+                "Failed to migrate provider root token, ProviderId: ~s, Id: ~s - ~p:~p",
+                [ProviderId, RootTokenId, Type, Message],
+                Stacktrace
+            )
         end
     end, ProviderDocs).
 

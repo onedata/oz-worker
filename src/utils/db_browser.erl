@@ -289,7 +289,7 @@ parse_and_format_collection(Collection, SortBy, SortOrder) ->
             [Res, Id] -> {list_to_atom(Res), list_to_binary(Id)}
         end,
         {ok, format_collection(ParsedCollection, SortBy, SortOrder)}
-    catch Type:Reason ->
+    catch Type:Reason:Stacktrace ->
         {error, str_utils:format(
             "~ts crashed with ~w:~p~n"
             "Stacktrace: ~ts~n"
@@ -297,7 +297,7 @@ parse_and_format_collection(Collection, SortBy, SortOrder) ->
             "~ts",
             [
                 ?MODULE, Type, Reason,
-                lager:pr_stacktrace(erlang:get_stacktrace()),
+                lager:pr_stacktrace(Stacktrace),
                 format_help()
             ]
         )}

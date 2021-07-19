@@ -620,9 +620,9 @@ run_validation_tests(TestSpec) ->
     lists:foreach(fun(_) ->
         try
             run_validation_test(TestSpec)
-        catch Class:Reason ->
+        catch Class:Reason:Stacktrace ->
             ct:pal("Validation test crashed due to ~p:~p~nStacktrace: ~s", [
-                Class, Reason, lager:pr_stacktrace(erlang:get_stacktrace())
+                Class, Reason, lager:pr_stacktrace(Stacktrace)
             ]),
             error(fail)
         end
@@ -774,11 +774,11 @@ expected_disallowed_initial_value_error_description(DataType) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

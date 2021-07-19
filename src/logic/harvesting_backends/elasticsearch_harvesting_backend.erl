@@ -151,11 +151,16 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
         {ok, lists_utils:pmap(fun({IndexId, IndexInfo}) ->
             {IndexId, submit_to_index(Endpoint, IndexId, IndexInfo, Batch)}
         end, maps:to_list(Indices))}
-    catch error:{parallel_call_failed, {failed_processes, Errors}} ->
-        ?error_stacktrace(?prepare_log("Submit batch in harvester ~p failed due to: ~p",
-            [HarvesterId, Errors])),
-        {ok, lists:map(fun(IndexId) -> 
-            {IndexId, undefined, map_entry_num_to_seq(1, Batch), <<"internal server error - consult oz-worker logs">>} 
+    catch error:{parallel_call_failed, {failed_processes, Errors}}:Stacktrace ->
+        ?error_stacktrace(
+            ?prepare_log(
+                "Submit batch in harvester ~p failed due to: ~p",
+                [HarvesterId, Errors]
+            ),
+            Stacktrace
+        ),
+        {ok, lists:map(fun(IndexId) ->
+            {IndexId, undefined, map_entry_num_to_seq(1, Batch), <<"internal server error - consult oz-worker logs">>}
         end, maps:keys(Indices))}
     end.
 
@@ -212,7 +217,7 @@ query_validator() -> #{
 %% @doc
 %% @equiv submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {[], <<>>}).
 %% @end
--spec submit_to_index(od_harvester:endpoint(), od_harvester:index_id(), od_harvester:index(), 
+-spec submit_to_index(od_harvester:endpoint(), od_harvester:index_id(), od_harvester:index(),
     od_harvester:batch()) -> od_harvester:index_submit_response().
 submit_to_index(Endpoint, IndexId, IndexInfo, Batch) ->
     submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {[], <<>>}).
@@ -421,13 +426,13 @@ prepare_elasticsearch_batch(Batch, IndexInfo, RejectionInfo) ->
 prepare_data(BatchEntry, IndexInfo, {RejectedFields, _RejectionReason} = RI) ->
     MetadataTypesToInclude = atoms_to_binaries(IndexInfo#harvester_index.include_metadata),
     FileDetailsToInclude = atoms_to_binaries(IndexInfo#harvester_index.include_file_details),
-    
+
     InternalParams = maps:with(FileDetailsToInclude, BatchEntry),
     InternalParams1 = case lists:member(datasetInfo, IndexInfo#harvester_index.include_file_details) of
         true -> maps:merge(InternalParams, add_dataset_info(BatchEntry));
         false -> InternalParams
     end,
-    
+
     Payload = maps:with(MetadataTypesToInclude, maps:get(<<"payload">>, BatchEntry, #{})),
     {IsJsonHarvestable, JsonMetadata} = normalize_json_metadata(maps:get(<<"json">>, Payload, #{})),
     InternalParams2 = lists:foldl(fun(MetadataTypeBinary, PartialInternalParams) ->
@@ -464,7 +469,7 @@ add_dataset_info(BatchEntry) ->
 normalize_json_metadata(JsonMap) when is_map(JsonMap) ->
     {true, JsonMap};
 normalize_json_metadata(String) when is_binary(String) ->
-    try 
+    try
         DecodedJson = json_utils:decode(String),
         normalize_json_metadata(DecodedJson)
     catch _:invalid_json ->
@@ -609,7 +614,7 @@ normalize_xattrs(Xattrs) ->
     Sorted = lists:sort(fun({K1, _, _}, {K2, _, _}) -> length(K1) > length(K2) end, AsList),
     lists:foldl(fun({KeyList, OriginalKey, Value}, Map) ->
         ExtendedKeyList = KeyList ++ [<<"__value">>],
-        
+
         try put_xattr_value(ExtendedKeyList, Value, Map) catch
             throw:rejected ->
                 RejectedList = maps:get(?REJECTED_METADATA_KEY, Map, []),

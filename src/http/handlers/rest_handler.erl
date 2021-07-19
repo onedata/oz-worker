@@ -164,10 +164,12 @@ is_authorized(Req, State) ->
     catch
         throw:Error3 ->
             ?ERROR_UNAUTHORIZED(Error3);
-        Type:Message ->
-            ?error_stacktrace("Unexpected error in ~p:is_authorized - ~p:~p", [
-                ?MODULE, Type, Message
-            ]),
+        Type:Message:Stacktrace ->
+            ?error_stacktrace(
+                "Unexpected error in ~p:is_authorized - ~p:~p",
+                [?MODULE, Type, Message],
+                Stacktrace
+            ),
             ?ERROR_UNAUTHORIZED(?ERROR_INTERNAL_SERVER_ERROR)
     end,
 
@@ -295,10 +297,12 @@ process_request(Req, State) ->
     catch
         throw:Error ->
             {stop, send_error_response(Error, Req), State};
-        Type:Message ->
-            ?error_stacktrace("Unexpected error in ~p:process_request - ~p:~p", [
-                ?MODULE, Type, Message
-            ]),
+        Type:Message:Stacktrace ->
+            ?error_stacktrace(
+                "Unexpected error in ~p:process_request - ~p:~p",
+                [?MODULE, Type, Message],
+                Stacktrace
+            ),
             NewReq = cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req),
             {stop, NewReq, State}
     end.
@@ -398,17 +402,19 @@ call_entity_logic_and_translate_response(ElReq) ->
     try
         rest_translator:response(ElReq, Result)
     catch
-        Type:Message ->
+        Type:Message:Stacktrace ->
             #el_req{operation = Operation, gri = GRI, auth_hint = AuthHint} = ElReq,
-            ?error_stacktrace("Cannot translate REST result for:~n"
-            "Operation: ~p~n"
-            "GRI: ~p~n"
-            "AuthHint: ~p~n"
-            "Result: ~p~n"
-            "---------~n"
-            "Error was: ~p:~p", [
-                Operation, GRI, AuthHint, Result, Type, Message
-            ]),
+            ?error_stacktrace(
+                "Cannot translate REST result for:~n"
+                "Operation: ~p~n"
+                "GRI: ~p~n"
+                "AuthHint: ~p~n"
+                "Result: ~p~n"
+                "---------~n"
+                "Error was: ~p:~p",
+                [Operation, GRI, AuthHint, Result, Type, Message],
+                Stacktrace
+            ),
             rest_translator:response(ElReq, ?ERROR_INTERNAL_SERVER_ERROR)
     end.
 

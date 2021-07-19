@@ -83,12 +83,12 @@ run_scenario(Function, Args) ->
     catch
         throw:fail ->
             false;
-        Type:Message ->
+        Type:Message:Stacktrace ->
             ct:pal(
                 "Unexpected error in ~p:run_scenario - ~p:~p~nStacktrace: ~s",
                 [
                     ?MODULE, Type, Message,
-                    lager:pr_stacktrace(erlang:get_stacktrace())
+                    lager:pr_stacktrace(Stacktrace)
                 ]
             ),
             false

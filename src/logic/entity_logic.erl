@@ -158,10 +158,12 @@ handle(#el_req{gri = #gri{type = EntityType}} = ElReq, VersionedEntity) ->
     catch
         throw:Error ->
             Error;
-        Type:Message ->
-            ?error_stacktrace("Unexpected error in entity_logic - ~p:~p", [
-                Type, Message
-            ]),
+        Type:Message:Stacktrace ->
+            ?error_stacktrace(
+                "Unexpected error in entity_logic - ~p:~p",
+                [Type, Message],
+                Stacktrace
+            ),
             ?ERROR_INTERNAL_SERVER_ERROR
     end.
 
@@ -719,10 +721,11 @@ transform_and_check_value(TypeRule, ValueRule, Key, Value) ->
     catch
         throw:Error ->
             throw(Error);
-        Type:Message ->
+        Type:Message:Stacktrace ->
             ?error_stacktrace(
                 "Error in entity_logic:transform_and_check_value - ~p:~p",
-                [Type, Message]
+                [Type, Message],
+                Stacktrace
             ),
             throw(?ERROR_BAD_DATA(Key))
     end.

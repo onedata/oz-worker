@@ -4,6 +4,8 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha17
+
 ### 21.02.0-alpha16
 
 -   **VFS-7975** Added possibility to cancel running automation
@@ -13,6 +15,10 @@ CHANGELOG
     available.
 -   **VFS-7741** Web GUI: showing proper error information page when
     there is no on-line supporting provider for share.
+
+### 21.02.0-alpha15
+
+-   **VFS-7747** Upgrade the codebase to Erlang OTP 24.
 
 ### 21.02.0-alpha14
 

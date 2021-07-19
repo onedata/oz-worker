@@ -234,7 +234,7 @@ migrate_onepanel_user_to_onezone(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 init_per_testcase(_, Config) ->
@@ -246,7 +246,7 @@ end_per_testcase(_, Config) ->
     ok.
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 %%%===================================================================

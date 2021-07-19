@@ -58,11 +58,11 @@ end)).
 % Macro useful for debugging
 -define(wrap_in_try_catch(Term), try
     Term
-catch __Type:__Reason ->
+catch __Type:__Reason:__Stacktrace ->
     ct:pal("Test crash in ~s:~B~n~w:~p~nStacktrace: ~s", [
         ?MODULE, ?LINE,
         __Type, __Reason,
-        lager:pr_stacktrace(erlang:get_stacktrace())
+        lager:pr_stacktrace(__Stacktrace)
     ]),
     error(test_crashed)
 end).

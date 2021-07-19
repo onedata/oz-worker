@@ -325,8 +325,8 @@ call_oz(Config, Module, Function, Args) ->
     FunWrapper = fun() ->
         try
             erlang:apply(Module, Function, Args)
-        catch Type:Reason ->
-            {crash, Type, Reason, lager:pr_stacktrace(erlang:get_stacktrace())}
+        catch Type:Reason:Stacktrace ->
+            {crash, Type, Reason, lager:pr_stacktrace(Stacktrace)}
         end
     end,
     Nodes = ?OZ_NODES(Config),
