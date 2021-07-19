@@ -103,6 +103,17 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
         undefined -> null;
         Domain -> str_utils:to_binary(Domain)
     end,
+    BagitUploaderWorkflowSchemaId = case oz_worker:get_env(bagit_uploader_workflow_schema_id, undefined) of
+        undefined ->
+            null;
+        IdStr ->
+            Id = str_utils:to_binary(IdStr),
+            case atm_workflow_schema_logic:exists(Id) of
+                true -> Id;
+                false -> null
+            end
+
+    end,
     {ok, #{
         <<"name">> => utils:undefined_to_null(oz_worker:get_name()),
         <<"version">> => Version,
@@ -112,7 +123,8 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
         <<"supportedIdPs">> => auth_config:get_supported_idps_in_configuration_format(),
         <<"compatibilityRegistryRevision">> => CompatibilityRegistryRevision,
         <<"compatibleOneproviderVersions">> => CompatibleOpVersions,
-        <<"openDataXrootdServerDomain">> => OpenDataXrootdServerDomain
+        <<"openDataXrootdServerDomain">> => OpenDataXrootdServerDomain,
+        <<"bagitUploaderWorkflowSchemaId">> => BagitUploaderWorkflowSchemaId
     }};
 
 get(#el_req{gri = #gri{aspect = test_image}}, _) ->

@@ -324,7 +324,7 @@ gui_message_is_updated(Config) ->
 init_per_suite(Config) ->
     ssl:start(),
     application:ensure_all_started(hackney),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
+    ozt:init_per_suite(Config).
 
 
 
@@ -407,6 +407,23 @@ expected_configuration(Config) ->
     OpenDataXrootdServerDomain = lists_utils:random_element([undefined, ?XROOTD_SERVER_DOMAIN]),
     oz_test_utils:set_env(Config, open_data_xrootd_server_domain, OpenDataXrootdServerDomain),
 
+    ExpectedBagitUploaderWorkflowSchemaId = case rand:uniform(2) of
+        1 ->
+            % setting the env variable to undefined or a workflow schema Id that
+            % does not exist should both result in null value in Onezone configuration
+            InvalidOrUndefinedAtmWorkflowSchemaId = lists_utils:random_element([
+                undefined,
+                binary_to_list(str_utils:rand_hex(20))
+            ]),
+            oz_test_utils:set_env(Config, bagit_uploader_workflow_schema_id, InvalidOrUndefinedAtmWorkflowSchemaId),
+            null;
+        2 ->
+            AtmInventoryId = ozt_atm_inventories:create(),
+            AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(AtmInventoryId),
+            oz_test_utils:set_env(Config, bagit_uploader_workflow_schema_id, binary_to_list(AtmWorkflowSchemaId)),
+            AtmWorkflowSchemaId
+    end,
+
     #{
         <<"name">> => OZName,
         <<"domain">> => OZDomain,
@@ -419,7 +436,8 @@ expected_configuration(Config) ->
         <<"openDataXrootdServerDomain">> => case OpenDataXrootdServerDomain of
             undefined -> null;
             Url -> list_to_binary(Url)
-        end
+        end,
+        <<"bagitUploaderWorkflowSchemaId">> => ExpectedBagitUploaderWorkflowSchemaId
     }.
 
 
