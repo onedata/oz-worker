@@ -4,6 +4,8 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha17
+
 ### 21.02.0-alpha16
 
 -   **VFS-7975** Added possibility to cancel running automation
