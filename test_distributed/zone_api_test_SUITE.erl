@@ -98,12 +98,12 @@ broken_compatibility_file_test(Config) ->
 
     CurrentRegistryPath = rpc:call(hd(Nodes), ctool, get_env, [current_compatibility_registry_file]),
 
-    {_, []} = rpc:multicall(Nodes, file, delete, [CurrentRegistryPath]),
-    {_, []} = rpc:multicall(Nodes, compatibility, clear_registry_cache, []),
+    {_, []} = utils:rpc_multicall(Nodes, file, delete, [CurrentRegistryPath]),
+    {_, []} = utils:rpc_multicall(Nodes, compatibility, clear_registry_cache, []),
     broken_compatibility_file_test_base(Config),
 
-    {_, []} = rpc:multicall(Nodes, file, write_file, [CurrentRegistryPath, <<"bad content">>]),
-    {_, []} = rpc:multicall(Nodes, compatibility, clear_registry_cache, []),
+    {_, []} = utils:rpc_multicall(Nodes, file, write_file, [CurrentRegistryPath, <<"bad content">>]),
+    {_, []} = utils:rpc_multicall(Nodes, compatibility, clear_registry_cache, []),
     broken_compatibility_file_test_base(Config).
 
 
@@ -149,9 +149,9 @@ multinode_compatibility_registry_unification_test(Config) ->
     },
 
     % write the initial registry as default and current on all nodes
-    {_, []} = rpc:multicall(Nodes, file, write_file, [CurrentRegistryPath, json_utils:encode(InitialRegistry)]),
-    {_, []} = rpc:multicall(Nodes, file, write_file, [DefaultRegistryPath, json_utils:encode(InitialRegistry)]),
-    {_, []} = rpc:multicall(Nodes, compatibility, clear_registry_cache, []),
+    {_, []} = utils:rpc_multicall(Nodes, file, write_file, [CurrentRegistryPath, json_utils:encode(InitialRegistry)]),
+    {_, []} = utils:rpc_multicall(Nodes, file, write_file, [DefaultRegistryPath, json_utils:encode(InitialRegistry)]),
+    {_, []} = utils:rpc_multicall(Nodes, compatibility, clear_registry_cache, []),
 
     % write the newer registry as default on one of the nodes
     ChosenNode = lists_utils:random_element(Nodes),
@@ -363,7 +363,7 @@ expected_configuration(Config) ->
         Build -> list_to_binary(Build)
     end,
 
-    {_, []} = rpc:multicall(Nodes, application, set_env, [
+    {_, []} = utils:rpc_multicall(Nodes, application, set_env, [
         ?APP_NAME, subdomain_delegation_supported, SubdomainDelegationSupported
     ]),
 

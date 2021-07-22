@@ -384,7 +384,7 @@ start_gs_connection(Config, Token, Cookie) ->
     % Prevent exiting GS connections from killing the test master
     process_flag(trap_exit, true),
     Nodes = ?config(oz_worker_nodes, Config),
-    rpc:multicall(Nodes, oz_worker, set_env, [mocked_pid, self()]),
+    utils:rpc_multicall(Nodes, oz_worker, set_env, [mocked_pid, self()]),
     {ok, ClientPid, #gs_resp_handshake{identity = Identity}} = gs_client:start_link(
         oz_test_utils:graph_sync_url(Config, gui),
         case Cookie of
