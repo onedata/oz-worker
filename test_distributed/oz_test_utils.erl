@@ -3419,7 +3419,7 @@ read_auth_config(Config) ->
 -spec overwrite_config(TestConfig :: term(), ConfigFileEnv :: atom(), ConfigData :: term()) -> ok.
 overwrite_config(TestConfig, ConfigFileEnv, ConfigData) ->
     ConfigPath = get_env(TestConfig, ConfigFileEnv),
-    rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [
+    utils:rpc_multicall(?OZ_NODES(TestConfig), file, write_file, [
         ConfigPath, io_lib:format("~tp.~n", [ConfigData])
     ]),
     ok.
@@ -3433,7 +3433,7 @@ overwrite_config(TestConfig, ConfigFileEnv, ConfigData) ->
 -spec overwrite_auth_config(TestConfig :: term(), auth_config:config_v2_or_later()) -> ok.
 overwrite_auth_config(TestConfig, AuthConfigData) ->
     overwrite_config(TestConfig, auth_config_file, AuthConfigData#{version => ?CURRENT_CONFIG_VERSION}),
-    rpc:multicall(?OZ_NODES(TestConfig), auth_config, force_auth_config_reload, []),
+    utils:rpc_multicall(?OZ_NODES(TestConfig), auth_config, force_auth_config_reload, []),
     ok.
 
 
@@ -3456,9 +3456,9 @@ overwrite_test_auth_config(TestConfig, AuthConfigData) ->
 overwrite_compatibility_registry(TestConfig, Registry) ->
     CurrentRegistryPath = call_oz(TestConfig, ctool, get_env, [current_compatibility_registry_file]),
     DefaultRegistryPath = call_oz(TestConfig, ctool, get_env, [default_compatibility_registry_file]),
-    rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [CurrentRegistryPath, json_utils:encode(Registry)]),
-    rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [DefaultRegistryPath, json_utils:encode(Registry)]),
-    rpc:multicall(?OZ_NODES(TestConfig), compatibility, clear_registry_cache, []),
+    utils:rpc_multicall(?OZ_NODES(TestConfig), file, write_file, [CurrentRegistryPath, json_utils:encode(Registry)]),
+    utils:rpc_multicall(?OZ_NODES(TestConfig), file, write_file, [DefaultRegistryPath, json_utils:encode(Registry)]),
+    utils:rpc_multicall(?OZ_NODES(TestConfig), compatibility, clear_registry_cache, []),
     ok.
 
 
@@ -3603,7 +3603,7 @@ get_env(Config, Name, Default) ->
 %%--------------------------------------------------------------------
 -spec set_env(Config :: term(), Name :: atom(), Value :: term()) -> ok.
 set_env(Config, Name, Value) ->
-    {_, []} = rpc:multicall(?OZ_NODES(Config), oz_worker, set_env, [Name, Value]),
+    {_, []} = utils:rpc_multicall(?OZ_NODES(Config), oz_worker, set_env, [Name, Value]),
     ok.
 
 
@@ -3614,7 +3614,7 @@ set_env(Config, Name, Value) ->
 %%--------------------------------------------------------------------
 -spec set_app_env(Config :: term(), App :: atom(), Name :: atom(), Value :: term()) -> ok.
 set_app_env(Config, App, Name, Value) ->
-    {_, []} = rpc:multicall(?OZ_NODES(Config), application, set_env, [App, Name, Value]),
+    {_, []} = utils:rpc_multicall(?OZ_NODES(Config), application, set_env, [App, Name, Value]),
     ok.
 
 

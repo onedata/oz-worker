@@ -283,12 +283,12 @@ resolve_endpoint(LiteralUrl) ->
 
 testmaster_save_everywhere(Config, Key, Value) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    rpc:multicall(Nodes, node_cache, put, [Key, Value]),
+    utils:rpc_multicall(Nodes, node_cache, put, [Key, Value]),
     ok.
 
 
 onezone_save_everywhere(Key, Value) ->
-    rpc:multicall(consistent_hashing:get_all_nodes(), node_cache, put, [Key, Value]),
+    utils:rpc_multicall(consistent_hashing:get_all_nodes(), node_cache, put, [Key, Value]),
     ok.
 
 
