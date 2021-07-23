@@ -6,6 +6,9 @@ CHANGELOG
 
 ### 21.02.0-alpha18
 
+-   **VFS-7947** Added possibility to run workflows directly from file
+    browser.
+
 ### 21.02.0-alpha17
 
 ### 21.02.0-alpha16
