@@ -77,6 +77,7 @@ operation_supported(get, atm_workflow_schemas, private) -> true;
 operation_supported(update, instance, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
+operation_supported(delete, {atm_inventory, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -112,10 +113,14 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     atm_lambda_validator:validate(AtmLambda),
 
     {ok, #document{key = AtmLambdaId}} = od_atm_lambda:create(#document{value = AtmLambda}),
-    entity_graph:add_relation(
-        od_atm_lambda, AtmLambdaId,
-        od_atm_inventory, AtmInventoryId
-    ),
+    od_atm_inventory:critical_section(AtmInventoryId, fun() ->
+        od_atm_lambda:critical_section(AtmLambdaId, fun() ->
+            entity_graph:add_relation(
+                od_atm_lambda, AtmLambdaId,
+                od_atm_inventory, AtmInventoryId
+            )
+        end)
+    end),
     {true, {FetchedAtmLambda, Rev}} = fetch_entity(#gri{aspect = instance, id = AtmLambdaId}),
     {ok, resource, {GRI#gri{id = AtmLambdaId}, {FetchedAtmLambda, Rev}}};
 
@@ -143,10 +148,14 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = parse, scope = public}}
     {ok, value, AtmLambda};
 
 create(#el_req{gri = #gri{id = AtmLambdaId, aspect = {atm_inventory, AtmInventoryId}}}) ->
-    entity_graph:add_relation(
-        od_atm_lambda, AtmLambdaId,
-        od_atm_inventory, AtmInventoryId
-    ).
+    od_atm_inventory:critical_section(AtmInventoryId, fun() ->
+        od_atm_lambda:critical_section(AtmLambdaId, fun() ->
+            entity_graph:add_relation(
+                od_atm_lambda, AtmLambdaId,
+                od_atm_inventory, AtmInventoryId
+            )
+        end)
+    end).
 
 
 %%--------------------------------------------------------------------
@@ -194,7 +203,54 @@ update(#el_req{gri = #gri{id = AtmLambdaId, aspect = instance}, data = Data}) ->
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = AtmLambdaId, aspect = instance}}) ->
-    entity_graph:delete_with_relations(od_atm_lambda, AtmLambdaId).
+    od_atm_lambda:critical_section(AtmLambdaId, fun() ->
+        {ok, #document{
+            value = #od_atm_lambda{
+                atm_workflow_schemas = AtmWorkflowSchemas
+            }
+        }} = od_atm_lambda:get(AtmLambdaId),
+        case AtmWorkflowSchemas of
+            [] ->
+                entity_graph:delete_with_relations(od_atm_lambda, AtmLambdaId);
+            _ ->
+                ?ERROR_ATM_LAMBDA_IN_USE(AtmWorkflowSchemas)
+        end
+    end);
+
+delete(#el_req{gri = #gri{id = AtmLambdaId, aspect = {atm_inventory, AtmInventoryId}}}) ->
+    od_atm_inventory:critical_section(AtmInventoryId, fun() ->
+        od_atm_lambda:critical_section(AtmLambdaId, fun() ->
+            {ok, #document{value = AtmLambda}} = od_atm_lambda:get(AtmLambdaId),
+            case AtmLambda of
+                #od_atm_lambda{atm_workflow_schemas = []} ->
+                    ok;
+                #od_atm_lambda{atm_workflow_schemas = LambdaWorkflowSchemas} ->
+                    {ok, #document{
+                        value = #od_atm_inventory{
+                            atm_workflow_schemas = InventoryWorkflowSchemas
+                        }
+                    }} = od_atm_inventory:get(AtmInventoryId),
+                    case lists_utils:intersect(LambdaWorkflowSchemas, InventoryWorkflowSchemas) of
+                        [] ->
+                            ok;
+                        ConflictingAtmWorkflowSchemas ->
+                            throw(?ERROR_ATM_LAMBDA_IN_USE(ConflictingAtmWorkflowSchemas))
+                    end
+            end,
+
+            entity_graph:remove_relation(
+                od_atm_lambda, AtmLambdaId,
+                od_atm_inventory, AtmInventoryId
+            ),
+            % remove the lambda if it was its last inventory
+            case AtmLambda of
+                #od_atm_lambda{atm_inventories = [AtmInventoryId]} ->
+                    entity_graph:delete_with_relations(od_atm_lambda, AtmLambdaId);
+                _ ->
+                    ok
+            end
+        end)
+    end).
 
 
 %%--------------------------------------------------------------------
@@ -204,6 +260,9 @@ delete(#el_req{gri = #gri{id = AtmLambdaId, aspect = instance}}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
+exists(#el_req{gri = #gri{aspect = {atm_inventory, AtmInventoryId}}}, AtmLambda) ->
+    entity_graph:has_relation(direct, top_down, od_atm_inventory, AtmInventoryId, AtmLambda);
+
 exists(#el_req{gri = #gri{id = Id}}, #od_atm_lambda{}) ->
     % All aspects exist if lambda record exists.
     Id =/= undefined.
@@ -238,8 +297,10 @@ authorize(#el_req{auth = ?USER(UserId), operation = update, gri = #gri{aspect = 
     can_manage_lambda(UserId, AtmLambda);
 
 authorize(#el_req{auth = ?USER(UserId), operation = delete, gri = #gri{aspect = instance}}, AtmLambda) ->
-    % @TODO VFS-7596 Temporary solution -> implement lambda removal with reference count checking
     can_manage_lambda(UserId, AtmLambda);
+
+authorize(#el_req{auth = ?USER(UserId), operation = delete, gri = #gri{aspect = {atm_inventory, AtmInventoryId}}}, _) ->
+    atm_inventory_logic:has_eff_privilege(AtmInventoryId, UserId, ?ATM_INVENTORY_MANAGE_LAMBDAS);
 
 authorize(_, _) ->
     false.
@@ -269,6 +330,8 @@ required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instan
     [?OZ_ATM_INVENTORIES_UPDATE];
 
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance}}) ->
+    [?OZ_ATM_INVENTORIES_UPDATE];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {atm_inventory, _}}}) ->
     [?OZ_ATM_INVENTORIES_UPDATE];
 
 required_admin_privileges(_) ->

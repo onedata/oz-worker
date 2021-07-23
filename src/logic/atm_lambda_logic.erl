@@ -31,11 +31,11 @@
     update/3
 ]).
 -export([
-    % @TODO VFS-7596 Temporary solution -> implement lambda removal with reference count checking
     delete/2
 ]).
 -export([
-    link_to_inventory/3
+    link_to_inventory/3,
+    unlink_from_inventory/3
 ]).
 
 -export([
@@ -137,6 +137,16 @@ delete(Auth, AtmLambdaId) ->
 link_to_inventory(Auth, AtmLambdaId, AtmInventoryId) ->
     entity_logic:handle(#el_req{
         operation = create,
+        auth = Auth,
+        gri = #gri{type = od_atm_lambda, id = AtmLambdaId, aspect = {atm_inventory, AtmInventoryId}}
+    }).
+
+
+-spec unlink_from_inventory(aai:auth(), od_atm_lambda:id(), od_atm_inventory:id()) ->
+    ok | errors:error().
+unlink_from_inventory(Auth, AtmLambdaId, AtmInventoryId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
         auth = Auth,
         gri = #gri{type = od_atm_lambda, id = AtmLambdaId, aspect = {atm_inventory, AtmInventoryId}}
     }).

@@ -352,7 +352,7 @@ set_up_atm_lambdas(Environment = #environment{atm_inventories = AtmInventories})
             AtmLambda = ozt_atm_lambdas:create(hd(ParentInventories), AtmLambdaData#{
                 <<"name">> => ?GEN_NAME()
             }),
-            [ozt_atm_lambdas:add_to_inventory(AtmLambda, I) || I <- tl(ParentInventories)],
+            [ozt_atm_lambdas:link_to_inventory(AtmLambda, I) || I <- tl(ParentInventories)],
             simulate_random_delay(),
             AtmLambda
         end, lists:seq(1, ?ENTITY_COUNT))

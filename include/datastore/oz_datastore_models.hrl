@@ -490,9 +490,6 @@ end).
 
     checksum = undefined :: undefined | od_atm_lambda:checksum(),
 
-    % @TODO VFS-7596 each lambda can be referenced in multiple automation inventories and is
-    % automatically deleted when the last reference is removed
-    % @TODO VFS-7596 comprehensive tests for the above
     atm_inventories = [] :: entity_graph:relations(od_atm_inventory:id()),
     atm_workflow_schemas = [] :: entity_graph:relations(od_atm_workflow_schema:id()),
 

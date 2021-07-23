@@ -59,6 +59,14 @@ routes() -> [
         method = 'PATCH',
         b_gri = #b_gri{type = od_atm_lambda, id = ?BINDING(id), aspect = instance}
     }},
+    %% Delete atm_lambda
+    %% This operation requires one of the following privileges:
+    %% - atm_inventory_manage_lambdas
+    %% - oz_atm_inventories_update
+    {<<"/atm_lambdas/:id">>, #rest_req{
+        method = 'DELETE',
+        b_gri = #b_gri{type = od_atm_lambda, id = ?BINDING(id), aspect = instance}
+    }},
     %% Get atm_inventories referencing atm_lambda
     %% This operation requires one of the following privileges:
     %% - oz_atm_inventories_view
@@ -73,6 +81,15 @@ routes() -> [
     %% - oz_atm_inventories_update
     {<<"/atm_lambdas/:id/atm_inventories/:aiid">>, #rest_req{
         method = 'PUT',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_lambda, id = ?BINDING(id), aspect = {atm_inventory, ?BINDING(aiid)}}
+    }},
+    %% Unlink atm_lambda from atm_inventory
+    %% This operation requires one of the following privileges:
+    %% - atm_inventory_manage_lambdas
+    %% - oz_atm_inventories_update
+    {<<"/atm_lambdas/:id/atm_inventories/:aiid">>, #rest_req{
+        method = 'DELETE',
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_atm_lambda, id = ?BINDING(id), aspect = {atm_inventory, ?BINDING(aiid)}}
     }},

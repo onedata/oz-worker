@@ -336,7 +336,9 @@ update(Req = #el_req{gri = #gri{id = AtmInventoryId, aspect = {group_privileges,
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = AtmInventoryId, aspect = instance}}) ->
-    entity_graph:delete_with_relations(od_atm_inventory, AtmInventoryId);
+    od_atm_inventory:critical_section(AtmInventoryId, fun() ->
+        entity_graph:delete_with_relations(od_atm_inventory, AtmInventoryId)
+    end);
 
 delete(#el_req{gri = #gri{id = AtmInventoryId, aspect = {user, UserId}}}) ->
     entity_graph:remove_relation(
