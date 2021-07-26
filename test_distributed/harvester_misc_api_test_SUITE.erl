@@ -120,7 +120,7 @@ create_test(Config) ->
             path = <<"/harvesters">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, Data) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/harvesters/">>]),
                     [HarvesterId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(HarvesterId, Data)
@@ -809,7 +809,7 @@ create_index_test(Config) ->
             path = [<<"/harvesters/">>, H1, <<"/indices">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, Data) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/harvesters/">>, H1, <<"/indices/">>]),
                     [IndexId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(IndexId, Data)

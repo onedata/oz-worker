@@ -236,7 +236,7 @@ join_cluster_test(Config) ->
             path = <<"/user/clusters/join">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{clusterId := ClusterId} = _Env, _) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config, [<<"/user/clusters/">>, ClusterId]),
                     ?assertEqual(ExpLocation, Location),
                     true

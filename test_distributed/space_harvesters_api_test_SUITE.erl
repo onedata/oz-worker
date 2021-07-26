@@ -115,7 +115,7 @@ join_harvester_test(Config) ->
             path = [<<"/spaces/">>, S1, <<"/harvesters/join">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{harvesterId := HarvesterId} = _Env, _) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config,
                         [<<"/spaces/">>, S1, <<"/harvesters/">>, HarvesterId]
                     ),

@@ -80,7 +80,7 @@ create_test(Config) ->
             path = <<"/atm_inventories">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, Data) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/atm_inventories/">>]),
                     [AtmInventoryId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(AtmInventoryId, Data)

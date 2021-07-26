@@ -21,6 +21,7 @@
 -include("auth/auth_errors.hrl").
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([handle/2]).
 
@@ -62,7 +63,7 @@ handle(Method, Req) ->
             % This page is visited with a POST request, so use a 303 redirect in
             % response so that web browser switches to GET.
             cowboy_req:reply(?HTTP_303_SEE_OTHER, #{
-                <<"location">> => RedirectURL,
+                ?HDR_LOCATION => RedirectURL,
                 % Connection close is required, otherwise chrome/safari can get stuck
                 % stalled waiting for data.
                 ?HDR_CONNECTION => <<"close">>

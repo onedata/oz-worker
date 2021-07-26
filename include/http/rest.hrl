@@ -15,6 +15,7 @@
 
 -include("entity_logic.hrl").
 -include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -define(REST_HANDLER_MODULE, rest_handler).
 

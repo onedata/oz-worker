@@ -129,7 +129,7 @@ add_group_test(Config) ->
             method = put,
             path = [<<"/spaces/">>, S1, <<"/groups/">>, G1],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 ExpLocation = ?URL(Config, [<<"/spaces/">>, S1, <<"/groups/">>, G1]),
                 ?assertEqual(ExpLocation, Location),
                 true
@@ -202,7 +202,7 @@ add_group_with_privileges_test(Config) ->
             method = put,
             path = [<<"/spaces/">>, S1, <<"/groups/">>, G1],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 ExpLocation = ?URL(Config, [<<"/spaces/">>, S1, <<"/groups/">>, G1]),
                 ?assertEqual(ExpLocation, Location),
                 true
@@ -276,7 +276,7 @@ create_group_test(Config) ->
                 ExpType = maps:get(<<"type">>, DataSet, ?DEFAULT_GROUP_TYPE),
                 BaseURL = ?URL(Config, [<<"/spaces/">>, S1, <<"/groups/">>]),
 
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     [GroupId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(GroupId, ExpType)
                 end

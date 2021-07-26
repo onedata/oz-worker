@@ -199,7 +199,7 @@ create_child_test(Config) ->
                 ExpType = maps:get(<<"type">>, DataSet, ?DEFAULT_GROUP_TYPE),
                 BaseURL = ?URL(Config, [<<"/groups/">>, Parent, <<"/children/">>]),
 
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     [GroupId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(GroupId, ExpType)
                 end
@@ -339,7 +339,7 @@ add_child_test(Config) ->
             method = put,
             path = [<<"/groups/">>, ParentGroup, <<"/children/">>, ChildGroup],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 ExpLocation = ?URL(Config, [<<"/groups/">>, ParentGroup, <<"/children/">>, ChildGroup]),
                 ?assertEqual(ExpLocation, Location),
                 true
@@ -411,7 +411,7 @@ add_child_with_privileges_test(Config) ->
             method = put,
             path = [<<"/groups/">>, ParentGroup, <<"/children/">>, ChildGroup],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 ExpLocation = ?URL(Config, [<<"/groups/">>, ParentGroup, <<"/children/">>, ChildGroup]),
                 ?assertEqual(ExpLocation, Location),
                 true
