@@ -145,7 +145,7 @@ update(#el_req{auth = Auth, gri = #gri{id = AtmWorkflowSchemaId, aspect = instan
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = AtmWorkflowSchemaId, aspect = instance}}) ->
-    entity_graph:delete_with_relations(od_atm_workflow_schema, AtmWorkflowSchemaId).
+    atm_workflow_schema_builder:delete(AtmWorkflowSchemaId).
 
 
 %%--------------------------------------------------------------------

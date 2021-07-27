@@ -20,6 +20,7 @@
 
 -export([create/2]).
 -export([update/3]).
+-export([delete/1]).
 
 % map with atm_lambda ids and corresponding json encoded payload
 -type lambda_definitions() :: #{od_atm_lambda:id() => entity_logic:data()}.
@@ -97,7 +98,7 @@ create(Auth, Data) ->
 -spec update(aai:auth(), od_atm_workflow_schema:id(), entity_logic:data()) ->
     ok | no_return().
 update(Auth, AtmWorkflowSchemaId, Data) ->
-    lock_on_workflow(AtmWorkflowSchemaId, fun() ->
+    od_atm_workflow_schema:critical_section(AtmWorkflowSchemaId, fun() ->
         {ok, #document{value = PrevAtmWorkflowSchema}} = od_atm_workflow_schema:get(AtmWorkflowSchemaId),
 
         ProposedAtmWorkflowSchema = PrevAtmWorkflowSchema#od_atm_workflow_schema{
@@ -126,6 +127,20 @@ update(Auth, AtmWorkflowSchemaId, Data) ->
                 reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, OldLanes, NewLanes)
         end
     end).
+
+
+-spec delete(od_atm_workflow_schema:id()) -> ok.
+delete(AtmWorkflowSchemaId) ->
+    od_atm_workflow_schema:critical_section(AtmWorkflowSchemaId, fun() ->
+        {ok, #document{
+            value = #od_atm_workflow_schema{
+                lanes = PreviousLanes
+            }
+        }} = od_atm_workflow_schema:get(AtmWorkflowSchemaId),
+        reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, PreviousLanes, []),
+        entity_graph:delete_with_relations(od_atm_workflow_schema, AtmWorkflowSchemaId)
+    end).
+
 
 %%%===================================================================
 %%% Internal functions
@@ -356,12 +371,14 @@ create_workflow_schema(#builder_ctx{
         atm_inventory = AtmInventoryId
     }
 }) ->
-    {ok, #document{key = AtmWorkflowSchemaId}} = od_atm_workflow_schema:create(#document{value = AtmWorkflowSchema}),
-    entity_graph:add_relation(
-        od_atm_workflow_schema, AtmWorkflowSchemaId,
-        od_atm_inventory, AtmInventoryId
-    ),
-    AtmWorkflowSchemaId.
+    od_atm_inventory:critical_section(AtmInventoryId, fun() ->
+        {ok, #document{key = AtmWorkflowSchemaId}} = od_atm_workflow_schema:create(#document{value = AtmWorkflowSchema}),
+        entity_graph:add_relation(
+            od_atm_workflow_schema, AtmWorkflowSchemaId,
+            od_atm_inventory, AtmInventoryId
+        ),
+        AtmWorkflowSchemaId
+    end).
 
 
 %% @private
@@ -461,12 +478,6 @@ can_manage_lambda(_, _) ->
     false.
 
 
-%% @private
--spec lock_on_workflow(od_atm_workflow_schema:id(), fun(() -> Result)) -> Result.
-lock_on_workflow(AtmWorkflowSchemaId, Callback) ->
-    critical_section:run({?MODULE, AtmWorkflowSchemaId}, Callback).
-
-
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -485,14 +496,18 @@ reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, OldLanes, NewLanes) ->
     ToAdd = lists_utils:subtract(NewAtmLambdas, OldAtmLambdas),
     ToDelete = lists_utils:subtract(OldAtmLambdas, NewAtmLambdas),
     lists:foreach(fun(AtmLambdaId) ->
-        entity_graph:add_relation(
-            od_atm_lambda, AtmLambdaId,
-            od_atm_workflow_schema, AtmWorkflowSchemaId
-        )
+        od_atm_lambda:critical_section(AtmLambdaId, fun() ->
+            entity_graph:add_relation(
+                od_atm_lambda, AtmLambdaId,
+                od_atm_workflow_schema, AtmWorkflowSchemaId
+            )
+        end)
     end, ToAdd),
     lists:foreach(fun(AtmLambdaId) ->
-        entity_graph:remove_relation(
-            od_atm_lambda, AtmLambdaId,
-            od_atm_workflow_schema, AtmWorkflowSchemaId
-        )
+        od_atm_lambda:critical_section(AtmLambdaId, fun() ->
+            entity_graph:remove_relation(
+                od_atm_lambda, AtmLambdaId,
+                od_atm_workflow_schema, AtmWorkflowSchemaId
+            )
+        end)
     end, ToDelete).

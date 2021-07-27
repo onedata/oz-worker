@@ -20,6 +20,7 @@
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
+-export([critical_section/2]).
 
 -export([dump_schema_to_json/2]).
 -export([fold_tasks/3, map_tasks/2, extract_atm_lambdas_from_lanes/1]).
@@ -95,6 +96,18 @@ to_string(AtmWorkflowSchemaId) ->
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     atm_workflow_schema_logic_plugin.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Every operation that modifies relations of a workflow schema should be wrapped
+%% in this critical section to avoid race conditions caused by concurrent
+%% modifications.
+%% @end
+%%--------------------------------------------------------------------
+-spec critical_section(id(), fun(() -> Result)) -> Result.
+critical_section(AtmWorkflowSchemaId, Fun) ->
+    critical_section:run({?MODULE, ?FUNCTION_NAME, AtmWorkflowSchemaId}, Fun).
 
 
 -spec dump_schema_to_json(id(), record()) -> json_utils:json_map().

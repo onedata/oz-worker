@@ -992,7 +992,7 @@ recreate_atm_workflow_schema_with_mixed_linked_and_duplicated_lambdas(_Config) -
     OtherInventoryId = ozt_users:create_atm_inventory_for(Creator),
 
     % add the lambda to the other user's inventory so that the user has privileges to link it
-    ozt_atm_lambdas:add_to_inventory(AtmLambdaToLink, OtherInventoryId),
+    ozt_atm_lambdas:link_to_inventory(AtmLambdaToLink, OtherInventoryId),
 
     % recreate the workflow schema in the target inventory, which should cause one of
     % the lambdas to be linked, and one to be duplicated

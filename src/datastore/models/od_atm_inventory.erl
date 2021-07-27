@@ -21,6 +21,7 @@
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
+-export([critical_section/2]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1]).
@@ -93,6 +94,18 @@ to_string(AtmInventoryId) ->
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     atm_inventory_logic_plugin.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Every operation that modifies relations of an inventory should be wrapped
+%% in this critical section to avoid race conditions caused by concurrent
+%% modifications.
+%% @end
+%%--------------------------------------------------------------------
+-spec critical_section(id(), fun(() -> Result)) -> Result.
+critical_section(AtmInventoryId, Fun) ->
+    critical_section:run({?MODULE, ?FUNCTION_NAME, AtmInventoryId}, Fun).
 
 %%%===================================================================
 %%% datastore_model callbacks

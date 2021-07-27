@@ -38,8 +38,9 @@
     get_atm_inventories_test/1,
     get_atm_workflow_schemas_test/1,
     update_test/1,
-    link_to_inventory_test/1
-    % @TODO VFS-7596 delete test, with checks if inventories or schemas are properly deleted (or not) along with the lambda
+    link_to_inventory_test/1,
+    unlink_from_inventory_test/1,
+    delete_test/1
 ]).
 
 all() ->
@@ -50,7 +51,9 @@ all() ->
         get_atm_inventories_test,
         get_atm_workflow_schemas_test,
         update_test,
-        link_to_inventory_test
+        link_to_inventory_test,
+        unlink_from_inventory_test,
+        delete_test
     ]).
 
 %%%===================================================================
@@ -61,11 +64,11 @@ create_test(Config) ->
     Creator = ozt_users:create(),
     MemberWithNoPriv = ozt_users:create(),
     NonAdmin = ozt_users:create(),
-    AtmInventory = ozt_users:create_atm_inventory_for(Creator),
-    ozt_atm_inventories:add_user(AtmInventory, MemberWithNoPriv, privileges:atm_inventory_admin() -- [?ATM_INVENTORY_MANAGE_LAMBDAS]),
+    AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    ozt_atm_inventories:add_user(AtmInventoryId, MemberWithNoPriv, privileges:atm_inventory_admin() -- [?ATM_INVENTORY_MANAGE_LAMBDAS]),
 
-    VerifyFun = fun(AtmLambda, Data, CheckCreator) ->
-        AtmLambdaRecord = ozt_atm_lambdas:get(AtmLambda),
+    VerifyFun = fun(AtmLambdaId, Data, CheckCreator) ->
+        AtmLambdaRecord = ozt_atm_lambdas:get(AtmLambdaId),
 
         ExpName = maps:get(<<"name">>, Data),
         ExpSummary = maps:get(<<"summary">>, Data, <<"Missing summary">>),
@@ -73,7 +76,7 @@ create_test(Config) ->
         ExpOperationSpec = jsonable_record:from_json(maps:get(<<"operationSpec">>, Data), atm_lambda_operation_spec),
         ExpArgumentSpecs = jsonable_record:list_from_json(maps:get(<<"argumentSpecs">>, Data, []), atm_lambda_argument_spec),
         ExpResultSpecs = jsonable_record:list_from_json(maps:get(<<"resultSpecs">>, Data, []), atm_lambda_result_spec),
-        ExpAtmInventories = [AtmInventory],
+        ExpAtmInventories = [AtmInventoryId],
         ExpCreationTime = ozt_mocks:get_frozen_time_seconds(),
         ExpCreator = case CheckCreator of
             {true, UserId} -> ?SUB(user, UserId);
@@ -143,8 +146,8 @@ create_test(Config) ->
             expected_headers = ?OK_ENV(fun(_, Data) ->
                 fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/atm_lambdas/">>]),
-                    [AtmLambda] = binary:split(Location, [BaseURL], [global, trim_all]),
-                    VerifyFun(AtmLambda, Data, {true, Creator})
+                    [AtmLambdaId] = binary:split(Location, [BaseURL], [global, trim_all]),
+                    VerifyFun(AtmLambdaId, Data, {true, Creator})
                 end
             end)
         },
@@ -173,7 +176,7 @@ create_test(Config) ->
                 <<"description">>
             ],
             correct_values = #{
-                <<"atmInventoryId">> => [AtmInventory],
+                <<"atmInventoryId">> => [AtmInventoryId],
                 <<"name">> => [ozt_atm:gen_example_name()],
                 <<"operationSpec">> => [ozt_atm_lambdas:gen_example_operation_spec_json()],
                 <<"argumentSpecs">> => [ozt_atm_lambdas:gen_example_argument_specs_json()],
@@ -211,8 +214,8 @@ create_test(Config) ->
             expected_headers = ?OK_ENV(fun(_, Data) ->
                 fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/atm_lambdas/">>]),
-                    [AtmLambda] = binary:split(Location, [BaseURL], [global, trim_all]),
-                    VerifyFun(AtmLambda, Data, false)
+                    [AtmLambdaId] = binary:split(Location, [BaseURL], [global, trim_all]),
+                    VerifyFun(AtmLambdaId, Data, false)
                 end
             end)
         },
@@ -249,8 +252,8 @@ list_test(Config) ->
         lists:map(fun(_) -> ozt_users:create_atm_inventory_for(Creator) end, lists:seq(1, rand:uniform(8)))
     end, Creators),
 
-    AtmLambdas = lists:flatmap(fun(AtmInventory) ->
-        lists:map(fun(_) -> ozt_atm_lambdas:create(AtmInventory) end, lists:seq(1, rand:uniform(8)))
+    AtmLambdas = lists:flatmap(fun(AtmInventoryId) ->
+        lists:map(fun(_) -> ozt_atm_lambdas:create(AtmInventoryId) end, lists:seq(1, rand:uniform(8)))
     end, AtmInventories),
 
     ApiTestSpec = #api_test_spec{
@@ -282,8 +285,8 @@ list_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % check also atm_lambda_logic:exist function
-    lists:foreach(fun(AtmLambda) ->
-        ?assert(ozt:rpc(atm_lambda_logic, exists, [AtmLambda]))
+    lists:foreach(fun(AtmLambdaId) ->
+        ?assert(ozt:rpc(atm_lambda_logic, exists, [AtmLambdaId]))
     end, AtmLambdas),
     ?assert(not ozt:rpc(atm_lambda_logic, exists, [<<"asdiucyaie827346w">>])).
 
@@ -292,13 +295,13 @@ get_test(Config) ->
     Creator = ozt_users:create(),
     NonAdmin = ozt_users:create(),
     AnotherMember = ozt_users:create(),
-    AtmInventory = ozt_users:create_atm_inventory_for(Creator),
-    ozt_atm_inventories:add_user(AtmInventory, AnotherMember, []),
+    AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    ozt_atm_inventories:add_user(AtmInventoryId, AnotherMember, []),
 
     AtmLambdaData = ozt_atm_lambdas:gen_example_data_json(),
-    AtmLambda = ozt_atm_lambdas:create(?USER(Creator), AtmInventory, AtmLambdaData),
+    AtmLambdaId = ozt_atm_lambdas:create(?USER(Creator), AtmInventoryId, AtmLambdaData),
     AtmLambdaDataWithInventory = AtmLambdaData#{
-        <<"atmInventoryId">> => AtmInventory
+        <<"atmInventoryId">> => AtmInventoryId
     },
 
     ApiTestSpec = #api_test_spec{
@@ -316,24 +319,24 @@ get_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/atm_lambdas/">>, AtmLambda],
+            path = [<<"/atm_lambdas/">>, AtmLambdaId],
             expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:private_atm_lambda(rest, AtmLambda, AtmLambdaDataWithInventory, ?SUB(user, Creator))
+            expected_body = api_test_expect:private_atm_lambda(rest, AtmLambdaId, AtmLambdaDataWithInventory, ?SUB(user, Creator))
         },
         logic_spec = #logic_spec{
             module = atm_lambda_logic,
             function = get,
-            args = [auth, AtmLambda],
-            expected_result = api_test_expect:private_atm_lambda(logic, AtmLambda, AtmLambdaDataWithInventory, ?SUB(user, Creator))
+            args = [auth, AtmLambdaId],
+            expected_result = api_test_expect:private_atm_lambda(logic, AtmLambdaId, AtmLambdaDataWithInventory, ?SUB(user, Creator))
         },
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{
-                type = od_atm_lambda, id = AtmLambda,
+                type = od_atm_lambda, id = AtmLambdaId,
                 aspect = instance, scope = private
             },
-            auth_hint = ?THROUGH_ATM_INVENTORY(AtmInventory),
-            expected_result = api_test_expect:private_atm_lambda(gs, AtmLambda, AtmLambdaDataWithInventory, ?SUB(user, Creator))
+            auth_hint = ?THROUGH_ATM_INVENTORY(AtmInventoryId),
+            expected_result = api_test_expect:private_atm_lambda(gs, AtmLambdaId, AtmLambdaDataWithInventory, ?SUB(user, Creator))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -348,9 +351,9 @@ get_atm_inventories_test(Config) ->
     end, Creators),
 
     AtmLambdaData = ozt_atm_lambdas:gen_example_data_json(),
-    AtmLambda = ozt_atm_lambdas:create(hd(AtmInventories), AtmLambdaData),
-    lists:foreach(fun(AtmInventory) ->
-        ozt_atm_lambdas:add_to_inventory(AtmLambda, AtmInventory)
+    AtmLambdaId = ozt_atm_lambdas:create(hd(AtmInventories), AtmLambdaData),
+    lists:foreach(fun(AtmInventoryId) ->
+        ozt_atm_lambdas:link_to_inventory(AtmLambdaId, AtmInventoryId)
     end, tl(AtmInventories)),
 
     AnotherMember = ozt_users:create(),
@@ -371,14 +374,14 @@ get_atm_inventories_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/atm_lambdas/">>, AtmLambda, <<"/atm_inventories">>],
+            path = [<<"/atm_lambdas/">>, AtmLambdaId, <<"/atm_inventories">>],
             expected_code = ?HTTP_200_OK,
             expected_body = #{<<"atm_inventories">> => AtmInventories}
         },
         logic_spec = #logic_spec{
             module = atm_lambda_logic,
             function = get_atm_inventories,
-            args = [auth, AtmLambda],
+            args = [auth, AtmLambdaId],
             expected_result = ?OK_LIST(AtmInventories)
         }
         % TODO VFS-4520 Tests for GraphSync API
@@ -391,22 +394,14 @@ get_atm_workflow_schemas_test(Config) ->
     NonAdmin = ozt_users:create(),
     AnotherMember = ozt_users:create(),
 
-    AtmInventory = ozt_users:create_atm_inventory_for(Creator),
-    ozt_atm_inventories:add_user(AtmInventory, AnotherMember, []),
+    AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    ozt_atm_inventories:add_user(AtmInventoryId, AnotherMember, []),
 
-    AtmLambda = ozt_atm_lambdas:create(AtmInventory),
+    AtmLambdaId = ozt_atm_lambdas:create(AtmInventoryId),
 
-    ExpAtmWorkflowSchemas = lists:foldl(fun(_, Acc) ->
-        % this procedure internally checks what lambdas are available in the
-        % inventory (here, just the one) and reference them in task schemas,
-        % but randomly generated lanes may be empty too
-        AtmWorkflowSchema = ozt_atm_workflow_schemas:create(AtmInventory),
-        #od_atm_workflow_schema{lanes = Lanes} = ozt_atm_workflow_schemas:get(AtmWorkflowSchema),
-        case lists:member(AtmLambda, ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(Lanes)) of
-            true -> lists:usort([AtmWorkflowSchema | Acc]);
-            false -> Acc
-        end
-    end, [], lists:seq(1, rand:uniform(8))),
+    ExpAtmWorkflowSchemas = lists:map(fun(_) ->
+        gen_atm_workflow_schema_with_lambda(AtmInventoryId, AtmLambdaId)
+    end, lists:seq(1, rand:uniform(8))),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -423,14 +418,14 @@ get_atm_workflow_schemas_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/atm_lambdas/">>, AtmLambda, <<"/atm_workflow_schemas">>],
+            path = [<<"/atm_lambdas/">>, AtmLambdaId, <<"/atm_workflow_schemas">>],
             expected_code = ?HTTP_200_OK,
             expected_body = #{<<"atm_workflow_schemas">> => ExpAtmWorkflowSchemas}
         },
         logic_spec = #logic_spec{
             module = atm_lambda_logic,
             function = get_atm_workflow_schemas,
-            args = [auth, AtmLambda],
+            args = [auth, AtmLambdaId],
             expected_result = ?OK_LIST(ExpAtmWorkflowSchemas)
         }
         % TODO VFS-4520 Tests for GraphSync API
@@ -442,16 +437,16 @@ update_test(Config) ->
     Creator = ozt_users:create(),
     AnotherMember = ozt_users:create(),
     NonAdmin = ozt_users:create(),
-    AtmInventory = ozt_users:create_atm_inventory_for(Creator),
-    ozt_atm_inventories:add_user(AtmInventory, AnotherMember, []),
+    AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    ozt_atm_inventories:add_user(AtmInventoryId, AnotherMember, []),
 
     InitialLambdaData = ozt_atm_lambdas:gen_example_data_json(),
 
     EnvSetUpFun = fun() ->
-        #{atm_lambda_id => ozt_atm_lambdas:create(AtmInventory, InitialLambdaData)}
+        #{atm_lambda_id => ozt_atm_lambdas:create(AtmInventoryId, InitialLambdaData)}
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{atm_lambda_id := AtmLambda}, Data) ->
-        AtmLambdaRecord = ozt_atm_lambdas:get(AtmLambda),
+    VerifyEndFun = fun(ShouldSucceed, #{atm_lambda_id := AtmLambdaId}, Data) ->
+        AtmLambdaRecord = ozt_atm_lambdas:get(AtmLambdaId),
 
         InitialName = maps:get(<<"name">>, InitialLambdaData),
         ExpName = case ShouldSucceed of
@@ -531,19 +526,19 @@ link_to_inventory_test(Config) ->
     MemberWithNoPrivs = ozt_users:create(),
     NonAdmin = ozt_users:create(),
 
-    OriginalAtmInventory = ozt_users:create_atm_inventory_for(Creator),
-    TargetAtmInventory = ozt_users:create_atm_inventory_for(Creator),
-    ozt_atm_inventories:add_user(TargetAtmInventory, MemberWithPrivs, [?ATM_INVENTORY_MANAGE_LAMBDAS]),
-    ozt_atm_inventories:add_user(OriginalAtmInventory, MemberWithPrivs, [?ATM_INVENTORY_MANAGE_LAMBDAS]),
-    ozt_atm_inventories:add_user(TargetAtmInventory, MemberWithNoPrivs, []),
-    ozt_atm_inventories:add_user(OriginalAtmInventory, MemberWithNoPrivs, []),
+    OriginalAtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    TargetAtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    ozt_atm_inventories:add_user(TargetAtmInventoryId, MemberWithPrivs, [?ATM_INVENTORY_MANAGE_LAMBDAS]),
+    ozt_atm_inventories:add_user(OriginalAtmInventoryId, MemberWithPrivs, [?ATM_INVENTORY_MANAGE_LAMBDAS]),
+    ozt_atm_inventories:add_user(TargetAtmInventoryId, MemberWithNoPrivs, []),
+    ozt_atm_inventories:add_user(OriginalAtmInventoryId, MemberWithNoPrivs, []),
 
     EnvSetUpFun = fun() ->
-        #{atm_lambda_id => ozt_atm_lambdas:create(OriginalAtmInventory)}
+        #{atm_lambda_id => ozt_atm_lambdas:create(OriginalAtmInventoryId)}
     end,
 
     VerifyEndFun = fun(ShouldSucceed, #{atm_lambda_id := SubjectAtmLambda}, _) ->
-        ?assertEqual(ShouldSucceed, lists:member(TargetAtmInventory, ozt_atm_lambdas:get_atm_inventories(SubjectAtmLambda)))
+        ?assertEqual(ShouldSucceed, lists:member(TargetAtmInventoryId, ozt_atm_lambdas:get_atm_inventories(SubjectAtmLambda)))
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -562,13 +557,13 @@ link_to_inventory_test(Config) ->
         },
         rest_spec = RestSpec = #rest_spec{
             method = put,
-            path = [<<"/atm_lambdas/">>, atm_lambda_id, <<"/atm_inventories/">>, TargetAtmInventory],
+            path = [<<"/atm_lambdas/">>, atm_lambda_id, <<"/atm_inventories/">>, TargetAtmInventoryId],
             expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = LogicSpec = #logic_spec{
             module = atm_lambda_logic,
             function = link_to_inventory,
-            args = [auth, atm_lambda_id, TargetAtmInventory],
+            args = [auth, atm_lambda_id, TargetAtmInventoryId],
             expected_result = ?OK
         }
         % TODO VFS-4520 Tests for GraphSync API
@@ -578,16 +573,16 @@ link_to_inventory_test(Config) ->
     )),
 
     % check that linking is not possible if the lambda already is a member of the inventory
-    MemberAtmLambda = ozt_atm_lambdas:create(OriginalAtmInventory),
+    MemberAtmLambda = ozt_atm_lambdas:create(OriginalAtmInventoryId),
     LinkingErrorApiTestSpec = ApiTestSpec#api_test_spec{
         rest_spec = RestSpec#rest_spec{
-            path = [<<"/atm_lambdas/">>, MemberAtmLambda, <<"/atm_inventories/">>, OriginalAtmInventory],
+            path = [<<"/atm_lambdas/">>, MemberAtmLambda, <<"/atm_inventories/">>, OriginalAtmInventoryId],
             expected_code = ?HTTP_409_CONFLICT
         },
         logic_spec = LogicSpec#logic_spec{
-            args = [auth, MemberAtmLambda, OriginalAtmInventory],
+            args = [auth, MemberAtmLambda, OriginalAtmInventoryId],
             expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(
-                od_atm_lambda, MemberAtmLambda, od_atm_inventory, OriginalAtmInventory
+                od_atm_lambda, MemberAtmLambda, od_atm_inventory, OriginalAtmInventoryId
             ))
         }
         % TODO VFS-4520 Tests for GraphSync API
@@ -596,6 +591,284 @@ link_to_inventory_test(Config) ->
     ?assert(api_test_utils:run_tests(
         Config, LinkingErrorApiTestSpec, EnvSetUpFun, undefined, undefined
     )).
+
+
+unlink_from_inventory_test(Config) ->
+    unlink_from_inventory_test_base(Config, last_inventory, not_used),
+    unlink_from_inventory_test_base(Config, last_inventory, used),
+    unlink_from_inventory_test_base(Config, not_last_inventory, not_used),
+    unlink_from_inventory_test_base(Config, not_last_inventory, used).
+
+
+unlink_from_inventory_test_base(Config, FromWhichInventory, UsageInWorkflowSchemas) ->
+    Creator = ozt_users:create(),
+    MemberWithPrivs = ozt_users:create(),
+    MemberWithNoPrivs = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+
+    OriginalAtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    TargetAtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    ozt_atm_inventories:add_user(TargetAtmInventoryId, MemberWithPrivs, [?ATM_INVENTORY_MANAGE_LAMBDAS]),
+    ozt_atm_inventories:add_user(OriginalAtmInventoryId, MemberWithPrivs, [?ATM_INVENTORY_MANAGE_LAMBDAS]),
+    ozt_atm_inventories:add_user(TargetAtmInventoryId, MemberWithNoPrivs, []),
+    ozt_atm_inventories:add_user(OriginalAtmInventoryId, MemberWithNoPrivs, []),
+
+    EnvSetUpFun = fun() ->
+        AtmLambdaId = case FromWhichInventory of
+            last_inventory ->
+                ozt_atm_lambdas:create(TargetAtmInventoryId);
+            not_last_inventory ->
+                Id = ozt_atm_lambdas:create(OriginalAtmInventoryId),
+                ozt_atm_lambdas:link_to_inventory(Id, TargetAtmInventoryId),
+                Id
+        end,
+        ReferencedAtmWorkflowSchemas = case UsageInWorkflowSchemas of
+            not_used ->
+                case FromWhichInventory of
+                    last_inventory ->
+                        ok;
+                    not_last_inventory ->
+                        % randomly use the lambda in workflow schemas from different,
+                        % unrelated inventories, which should not prevent the unlinking
+                        UnrelatedAtmInventories = lists:map(fun(_) ->
+                            UnrelatedAtmInventoryId = ozt_atm_inventories:create(),
+                            ozt_atm_lambdas:link_to_inventory(AtmLambdaId, UnrelatedAtmInventoryId),
+                            UnrelatedAtmInventoryId
+                        end, lists:seq(1, rand:uniform(8))),
+                        lists:map(fun(_) ->
+                            gen_atm_workflow_schema_with_lambda(lists_utils:random_element(UnrelatedAtmInventories), AtmLambdaId)
+                        end, lists:seq(0, rand:uniform(8) - 1))
+                end,
+                [];
+            used ->
+                lists:map(fun(_) ->
+                    gen_atm_workflow_schema_with_lambda(TargetAtmInventoryId, AtmLambdaId)
+                end, lists:seq(1, rand:uniform(8)))
+        end,
+        #{atm_lambda_id => AtmLambdaId, referenced_atm_workflow_schemas => ReferencedAtmWorkflowSchemas}
+    end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{
+        atm_lambda_id := SubjectAtmLambda,
+        referenced_atm_workflow_schemas := ReferencedAtmWorkflowSchemas
+    }, _) ->
+        case {ShouldSucceed, UsageInWorkflowSchemas} of
+            {true, not_used} ->
+                ?assertNot(lists:member(SubjectAtmLambda, ozt_atm_inventories:get_atm_lambdas(TargetAtmInventoryId))),
+                case FromWhichInventory of
+                    not_last_inventory ->
+                        ?assert(ozt_atm_lambdas:exists(SubjectAtmLambda)),
+                        ?assertNot(lists:member(TargetAtmInventoryId, ozt_atm_lambdas:get_atm_inventories(SubjectAtmLambda)));
+                    last_inventory ->
+                        % if the lambda is unlinked from its last inventory, it should be deleted
+                        ?assertNot(ozt_atm_lambdas:exists(SubjectAtmLambda))
+                end;
+            _ ->
+                ?assert(lists:member(TargetAtmInventoryId, ozt_atm_lambdas:get_atm_inventories(SubjectAtmLambda))),
+                ?assert(lists:member(SubjectAtmLambda, ozt_atm_inventories:get_atm_lambdas(TargetAtmInventoryId))),
+                lists:foreach(fun(AtmWorkflowSchemaId) ->
+                    ?assert(lists:member(AtmWorkflowSchemaId, ozt_atm_lambdas:get_atm_workflow_schemas(SubjectAtmLambda)))
+                end, ReferencedAtmWorkflowSchemas)
+        end
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_ATM_INVENTORIES_UPDATE]},
+                {user, Creator},
+                {user, MemberWithPrivs}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, MemberWithNoPrivs},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = RestSpec = #rest_spec{
+            method = delete,
+            path = [<<"/atm_lambdas/">>, atm_lambda_id, <<"/atm_inventories/">>, TargetAtmInventoryId],
+            expected_code = case UsageInWorkflowSchemas of
+                not_used -> ?HTTP_204_NO_CONTENT;
+                used -> ?HTTP_403_FORBIDDEN
+            end
+        },
+        logic_spec = LogicSpec = #logic_spec{
+            module = atm_lambda_logic,
+            function = unlink_from_inventory,
+            args = [auth, atm_lambda_id, TargetAtmInventoryId],
+            expected_result = ?OK_ENV(fun(#{referenced_atm_workflow_schemas := ReferencedAtmWorkflowSchemas}, _) ->
+                case UsageInWorkflowSchemas of
+                    not_used ->
+                        ?OK_RES;
+                    used ->
+                        % referenced lambdas are sorted during usage checks
+                        ?ERROR_REASON(?ERROR_ATM_LAMBDA_IN_USE(lists:sort(ReferencedAtmWorkflowSchemas)))
+                end
+            end)
+        }
+        % TODO VFS-4520 Tests for GraphSync API
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+    )),
+
+    % check that unlinking is not possible if the lambda is not a member of the inventory
+    UnrelatedAtmLambda = ozt_atm_lambdas:create(OriginalAtmInventoryId),
+    UnlinkingErrorApiTestSpec = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_ATM_INVENTORIES_UPDATE]},
+                {user, Creator},
+                {user, MemberWithPrivs},
+                {user, MemberWithNoPrivs},
+                {user, NonAdmin},
+                nobody
+            ]
+        },
+        rest_spec = RestSpec#rest_spec{
+            path = [<<"/atm_lambdas/">>, UnrelatedAtmLambda, <<"/atm_inventories/">>, TargetAtmInventoryId],
+            expected_code = ?HTTP_404_NOT_FOUND
+        },
+        logic_spec = LogicSpec#logic_spec{
+            args = [auth, UnrelatedAtmLambda, TargetAtmInventoryId],
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        }
+        % TODO VFS-4520 Tests for GraphSync API
+    },
+
+    ?assert(api_test_utils:run_tests(
+        Config, UnlinkingErrorApiTestSpec, EnvSetUpFun, undefined, undefined
+    )).
+
+
+delete_test(Config) ->
+    delete_test_base(Config, not_used),
+    delete_test_base(Config, used).
+
+delete_test_base(Config, UsageInWorkflowSchemas) ->
+    Creator = ozt_users:create(),
+    MemberWithPrivs = ozt_users:create(),
+    MemberWithNoPrivs = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+
+    ParentAtmInventories = lists:map(fun(_) ->
+        AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+        ozt_atm_inventories:add_user(AtmInventoryId, MemberWithPrivs, [?ATM_INVENTORY_MANAGE_LAMBDAS]),
+        ozt_atm_inventories:add_user(AtmInventoryId, MemberWithNoPrivs, []),
+        AtmInventoryId
+    end, lists:seq(1, rand:uniform(8))),
+
+    EnvSetUpFun = fun() ->
+        AtmLambdaId = ozt_atm_lambdas:create(hd(ParentAtmInventories)),
+        [ozt_atm_lambdas:link_to_inventory(AtmLambdaId, I) || I <- tl(ParentAtmInventories)],
+        ReferencedAtmWorkflowSchemas = case UsageInWorkflowSchemas of
+            not_used ->
+                [];
+            used ->
+                lists:map(fun(_) ->
+                    gen_atm_workflow_schema_with_lambda(lists_utils:random_element(ParentAtmInventories), AtmLambdaId)
+                end, lists:seq(1, rand:uniform(15)))
+        end,
+        #{atm_lambda_id => AtmLambdaId, referenced_atm_workflow_schemas => ReferencedAtmWorkflowSchemas}
+    end,
+    DeleteEntityFun = fun(#{atm_lambda_id := AtmLambdaId}) ->
+        % make sure the lambda is not used in any workflow schema (or else it cannot be deleted)
+        % workflow schemas are deleted along their inventories
+        lists:foreach(fun(AtmInventoryId) ->
+            ozt_atm_inventories:delete(AtmInventoryId)
+        end, ParentAtmInventories),
+        ozt_atm_lambdas:delete(AtmLambdaId)
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{atm_lambda_id := AtmLambdaId}, _) ->
+        AtmLambdas = ozt_atm_lambdas:list(),
+        case {ShouldSucceed, UsageInWorkflowSchemas} of
+            {true, not_used} ->
+                ?assertNot(lists:member(AtmLambdaId, AtmLambdas));
+            _ ->
+                ?assert(lists:member(AtmLambdaId, AtmLambdas))
+        end
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_ATM_INVENTORIES_UPDATE]},
+                {user, MemberWithPrivs}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, MemberWithNoPrivs},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = delete,
+            path = [<<"/atm_lambdas/">>, atm_lambda_id],
+            expected_code = case UsageInWorkflowSchemas of
+                not_used -> ?HTTP_204_NO_CONTENT;
+                used -> ?HTTP_403_FORBIDDEN
+            end
+        },
+        logic_spec = #logic_spec{
+            module = atm_lambda_logic,
+            function = delete,
+            args = [auth, atm_lambda_id],
+            expected_result = ?OK_ENV(fun(#{
+                atm_lambda_id := AtmLambdaId,
+                referenced_atm_workflow_schemas := ReferencedAtmWorkflowSchemas
+            }, _) ->
+                case UsageInWorkflowSchemas of
+                    not_used ->
+                        ?OK_RES;
+                    used ->
+                        LambdaAtmWorkflowSchemas = ozt_atm_lambdas:get_atm_workflow_schemas(AtmLambdaId),
+                        ?assertEqual(lists:sort(ReferencedAtmWorkflowSchemas), lists:sort(LambdaAtmWorkflowSchemas)),
+                        ?ERROR_REASON(?ERROR_ATM_LAMBDA_IN_USE(LambdaAtmWorkflowSchemas))
+                end
+            end)
+        },
+        gs_spec = #gs_spec{
+            operation = delete,
+            gri = #gri{type = od_atm_lambda, id = atm_lambda_id, aspect = instance},
+            expected_result = ?OK_ENV(fun(#{
+                atm_lambda_id := AtmLambdaId,
+                referenced_atm_workflow_schemas := ReferencedAtmWorkflowSchemas
+            }, _) ->
+                case UsageInWorkflowSchemas of
+                    not_used ->
+                        ?OK_RES;
+                    used ->
+                        LambdaAtmWorkflowSchemas = ozt_atm_lambdas:get_atm_workflow_schemas(AtmLambdaId),
+                        ?assertEqual(lists:sort(ReferencedAtmWorkflowSchemas), lists:sort(LambdaAtmWorkflowSchemas)),
+                        ?ERROR_REASON(?ERROR_ATM_LAMBDA_IN_USE(LambdaAtmWorkflowSchemas))
+                end
+            end)
+        }
+    },
+    ?assert(api_test_scenarios:run_scenario(delete_entity,
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
+    )).
+
+%%%===================================================================
+%%% Helper functions
+%%%===================================================================
+
+gen_atm_workflow_schema_with_lambda(AtmInventoryId, AtmLambdaId) ->
+    % this procedure internally checks what lambdas are available in the inventory
+    % and randomly reference them in task schemas, keep generating until the desired
+    % lambda is referenced at least once
+    AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(AtmInventoryId),
+    #od_atm_workflow_schema{lanes = Lanes} = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
+    case lists:member(AtmLambdaId, ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(Lanes)) of
+        true ->
+            AtmWorkflowSchemaId;
+        false ->
+            gen_atm_workflow_schema_with_lambda(AtmInventoryId, AtmLambdaId)
+    end.
 
 %%%===================================================================
 %%% Setup/teardown functions

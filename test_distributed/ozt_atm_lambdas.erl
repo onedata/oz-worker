@@ -23,8 +23,10 @@
 -export([try_create/3]).
 -export([get/1]).
 -export([exists/1]).
+-export([delete/1]).
 -export([get_atm_inventories/1]).
--export([add_to_inventory/2]).
+-export([get_atm_workflow_schemas/1]).
+-export([link_to_inventory/2]).
 -export([dump_schema_to_json/1]).
 -export([find_duplicate/2, find_all_duplicates/2]).
 %% Example data generation
@@ -77,14 +79,25 @@ exists(AtmLambdaId) ->
     ozt:rpc(atm_lambda_logic, exists, [AtmLambdaId]).
 
 
+-spec delete(od_atm_lambda:id()) -> ok.
+delete(AtmLambdaId) ->
+    ozt:rpc(atm_lambda_logic, delete, [?ROOT, AtmLambdaId]).
+
+
 -spec get_atm_inventories(od_atm_lambda:id()) -> [od_atm_inventory:id()].
 get_atm_inventories(AtmLambdaId) ->
     {ok, AtmInventories} = ?assertMatch({ok, _}, ozt:rpc(atm_lambda_logic, get_atm_inventories, [?ROOT, AtmLambdaId])),
     AtmInventories.
 
 
--spec add_to_inventory(od_atm_lambda:id(), od_atm_inventory:id()) -> ok.
-add_to_inventory(AtmLambdaId, AtmInventoryId) ->
+-spec get_atm_workflow_schemas(od_atm_lambda:id()) -> [od_atm_inventory:id()].
+get_atm_workflow_schemas(AtmLambdaId) ->
+    {ok, AtmWorkflowSchemas} = ?assertMatch({ok, _}, ozt:rpc(atm_lambda_logic, get_atm_workflow_schemas, [?ROOT, AtmLambdaId])),
+    AtmWorkflowSchemas.
+
+
+-spec link_to_inventory(od_atm_lambda:id(), od_atm_inventory:id()) -> ok.
+link_to_inventory(AtmLambdaId, AtmInventoryId) ->
     ?assertMatch(ok, ozt:rpc(atm_lambda_logic, link_to_inventory, [?ROOT, AtmLambdaId, AtmInventoryId])).
 
 
