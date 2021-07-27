@@ -41,12 +41,12 @@
 %%--------------------------------------------------------------------
 -spec freeze_time() -> ok.
 freeze_time() ->
-    clock_freezer_mock:setup_on_nodes(ozt:get_nodes(), [global_clock]).
+    clock_freezer_mock:setup_for_ct(ozt:get_nodes(), [global_clock]).
 
 
 -spec unfreeze_time() -> ok.
 unfreeze_time() ->
-    clock_freezer_mock:teardown_on_nodes(ozt:get_nodes()).
+    clock_freezer_mock:teardown_for_ct(ozt:get_nodes()).
 
 
 -spec get_frozen_time_seconds() -> time:seconds() | no_return().
