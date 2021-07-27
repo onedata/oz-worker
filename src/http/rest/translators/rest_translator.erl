@@ -14,6 +14,7 @@
 
 -include("http/rest.hrl").
 -include("registered_names.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([response/2]).
 
@@ -96,7 +97,7 @@ created_reply_with_body(Body) ->
 %%--------------------------------------------------------------------
 -spec created_reply_with_location(PathTokens :: [binary()]) -> rest_handler:rest_resp().
 created_reply_with_location(PathTokens) ->
-    LocationHeader = #{<<"Location">> => oz_worker:get_rest_uri(filename:join(["/" | PathTokens]))},
+    LocationHeader = #{?HDR_LOCATION => oz_worker:get_rest_uri(filename:join(["/" | PathTokens]))},
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
 
 

@@ -144,7 +144,7 @@ create_atm_inventory_test(Config) ->
             method = post,
             path = <<"/user/atm_inventories">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 BaseURL = ?URL(Config, [<<"/user/atm_inventories/">>]),
                 [AtmInventory] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(AtmInventory)
@@ -207,7 +207,7 @@ join_atm_inventory_test(Config) ->
             path = <<"/user/atm_inventories/join">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{atm_inventory_id := AtmInventory} = _Env, _) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config, [<<"/user/atm_inventories/">>, AtmInventory]),
                     ?assertEqual(ExpLocation, Location),
                     true

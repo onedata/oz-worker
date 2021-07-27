@@ -144,7 +144,7 @@ create_test(Config) ->
             path = <<"/atm_lambdas">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, Data) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/atm_lambdas/">>]),
                     [AtmLambdaId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(AtmLambdaId, Data, {true, Creator})
@@ -212,7 +212,7 @@ create_test(Config) ->
         },
         rest_spec = RestSpec#rest_spec{
             expected_headers = ?OK_ENV(fun(_, Data) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/atm_lambdas/">>]),
                     [AtmLambdaId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(AtmLambdaId, Data, false)

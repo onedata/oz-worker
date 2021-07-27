@@ -100,7 +100,7 @@ create_test(Config) ->
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_Env, Data) ->
                 ExpProperties = maps:get(<<"serviceProperties">>, Data),
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/handle_services/">>]),
                     [HServiceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(HServiceId, ExpProperties)

@@ -112,7 +112,7 @@ add_group_test(Config) ->
             method = put,
             path = [<<"/handles/">>, HandleId, <<"/groups/">>, G1],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 ExpLocation = ?URL(Config,
                     [<<"/handles/">>, HandleId, <<"/groups/">>, G1]
                 ),

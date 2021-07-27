@@ -129,7 +129,7 @@ add_user_test(Config) ->
                 method = put,
                 path = [<<"/harvesters/">>, H1, <<"/users/">>, SubjectUser],
                 expected_code = ?HTTP_201_CREATED,
-                expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config, [<<"/harvesters/">>, H1, <<"/users/">>, SubjectUser]),
                     ?assertEqual(ExpLocation, Location),
                     true
@@ -215,7 +215,7 @@ add_user_with_privileges_test(Config) ->
                 method = put,
                 path = [<<"/harvesters/">>, H1, <<"/users/">>, SubjectUser],
                 expected_code = ?HTTP_201_CREATED,
-                expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config, [<<"/harvesters/">>, H1, <<"/users/">>, SubjectUser]),
                     ?assertEqual(ExpLocation, Location),
                     true

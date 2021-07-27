@@ -155,7 +155,7 @@ create_group_test(Config) ->
                 ExpName = maps:get(<<"name">>, Data),
                 ExpType = maps:get(<<"type">>, Data, ?DEFAULT_GROUP_TYPE),
                 BaseURL = ?URL(Config, [<<"/user/groups/">>]),
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     [GroupId] = binary:split(
                         Location, [BaseURL], [global, trim_all]
                     ),
@@ -265,7 +265,7 @@ join_group_test(Config) ->
             method = post,
             path = <<"/user/groups/join">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 ExpLocation = ?URL(Config, [<<"/user/groups/">>, G1]),
                 ?assertEqual(ExpLocation, Location),
                 true

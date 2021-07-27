@@ -208,7 +208,7 @@ create_test_base(Config, Creator, SupplementaryAtmLambdas) ->
             path = <<"/atm_workflow_schemas">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(Env, Data) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/atm_workflow_schemas/">>]),
                     [AtmWorkflowSchemaId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(AtmWorkflowSchemaId, Env, Data, {regular, Creator})
@@ -295,7 +295,7 @@ create_test_base(Config, Creator, SupplementaryAtmLambdas) ->
         },
         rest_spec = RestSpec#rest_spec{
             expected_headers = ?OK_ENV(fun(Env, Data) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/atm_workflow_schemas/">>]),
                     [AtmWorkflowSchemaId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(AtmWorkflowSchemaId, Env, Data, root_or_admin)

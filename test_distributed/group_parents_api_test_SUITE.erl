@@ -161,7 +161,7 @@ create_parent_test(Config) ->
             path = [<<"/groups/">>, Child, <<"/parents/">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, Data) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/groups/">>, Child, <<"/parents/">>]),
                     [ParentId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(ParentId, Data)
@@ -271,7 +271,7 @@ join_parent_test(Config) ->
             path = [<<"/groups/">>, Child, <<"/parents/join">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{groupId := GroupId} = _Env, _) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config,
                         [<<"/groups/">>, Child, <<"/parents/">>, GroupId]
                     ),

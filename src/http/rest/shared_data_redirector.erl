@@ -66,7 +66,7 @@ handle(ObjectId, Req) ->
     case Result of
         {ok, ProviderId} ->
             #rest_resp{code = ?HTTP_307_TEMPORARY_REDIRECT, headers = #{
-                <<"location">> => build_provider_rest_endpoint(ProviderId, ObjectId, Req)
+                ?HDR_LOCATION => build_provider_rest_endpoint(ProviderId, ObjectId, Req)
             }};
         {error, _} = Error ->
             rest_translator:response(undefined, Error)

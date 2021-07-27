@@ -167,7 +167,7 @@ create_handle_service_test(Config) ->
             method = post,
             path = [<<"/groups/">>, G1, <<"/handle_services">>],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 BaseURL = ?URL(Config, [<<"/groups/">>, G1, <<"/handle_services/">>]),
                 [HServiceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(HServiceId)
