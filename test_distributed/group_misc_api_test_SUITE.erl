@@ -100,7 +100,7 @@ create_test(Config) ->
             expected_headers = ?OK_ENV(fun(_, DataSet) ->
                 ExpType = maps:get(<<"type">>, DataSet, ?DEFAULT_GROUP_TYPE),
                 BaseURL = ?URL(Config, [<<"/groups/">>]),
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     [GroupId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(GroupId, ExpType)
                 end

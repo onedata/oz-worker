@@ -510,7 +510,7 @@ get_shared_file_or_directory_data_test_base(Config, SubpathWithQs) ->
             {error, _} = Err1 -> errors:to_http_code(Err1)
         end,
         ExpectedHeaders = case ExpectedResult of
-            {ok, URL} -> fun(#{<<"location">> := Location}) -> Location =:= URL end;
+            {ok, URL} -> fun(#{?HDR_LOCATION := Location}) -> Location =:= URL end;
             {error, _} -> undefined
         end,
         ExpectedBody = case ExpectedResult of
@@ -747,7 +747,7 @@ check_shares_data_redirector(Config, ShareId, ProviderId, ProviderVersion, Subpa
         #{}, <<"">>, [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
     ),
     ParsedResult = case Result of
-        {ok, ?HTTP_307_TEMPORARY_REDIRECT, #{<<"location">> := Url}, _} ->
+        {ok, ?HTTP_307_TEMPORARY_REDIRECT, #{?HDR_LOCATION := Url}, _} ->
             {ok, Url};
         {ok, _, _, ErrorJson} ->
             errors:from_json(maps:get(<<"error">>, json_utils:decode(ErrorJson)))

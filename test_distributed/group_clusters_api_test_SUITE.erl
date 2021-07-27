@@ -156,7 +156,7 @@ join_cluster_test(Config) ->
             path = [<<"/groups/">>, G1, <<"/clusters/join">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{clusterId := ClusterId} = _Env, _) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config,
                         [<<"/groups/">>, G1, <<"/clusters/">>, ClusterId]
                     ),

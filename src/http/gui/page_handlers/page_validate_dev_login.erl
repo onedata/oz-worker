@@ -16,6 +16,7 @@
 -behaviour(dynamic_page_behaviour).
 
 -include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([handle/2]).
@@ -53,5 +54,5 @@ handle(<<"GET">>, Req) ->
                             gui_session:log_in(UserId, Req)
                     end
             end,
-            cowboy_req:reply(?HTTP_303_SEE_OTHER, #{<<"location">> => <<"/">>}, NewReq)
+            cowboy_req:reply(?HTTP_303_SEE_OTHER, #{?HDR_LOCATION => <<"/">>}, NewReq)
     end.

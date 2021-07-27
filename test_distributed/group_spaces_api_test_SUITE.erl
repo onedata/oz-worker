@@ -216,7 +216,7 @@ create_space_test(Config) ->
             method = post,
             path = [<<"/groups/">>, G1, <<"/spaces">>],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 BaseURL = ?URL(Config, [<<"/groups/">>, G1, <<"/spaces/">>]),
                 [SpaceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(SpaceId)
@@ -301,7 +301,7 @@ join_space_test(Config) ->
             path = [<<"/groups/">>, G1, <<"/spaces/join">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{spaceId := SpaceId} = _Env, _) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config,
                         [<<"/groups/">>, G1, <<"/spaces/">>, SpaceId]
                     ),

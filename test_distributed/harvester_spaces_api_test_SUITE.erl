@@ -114,7 +114,7 @@ join_space_test(Config) ->
             path = [<<"/harvesters/">>, H1, <<"/spaces/join">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{spaceId := SpaceId} = _Env, _) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config,
                         [<<"/harvesters/">>, H1, <<"/spaces/">>, SpaceId]
                     ),
@@ -251,7 +251,7 @@ add_space_test(Config) ->
             method = put,
             path = [<<"/harvesters/">>, H1, <<"/spaces/">>, S1],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 ExpLocation = ?URL(Config, [<<"/harvesters/">>, H1, <<"/spaces/">>, S1]),
                 ?assertEqual(ExpLocation, Location),
                 true

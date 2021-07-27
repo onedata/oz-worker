@@ -183,7 +183,7 @@ create_handle_test(Config) ->
             path = <<"/user/handles">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(Env, _Data) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/user/handles/">>]),
                     [HandleId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyResult(Env, HandleId)
