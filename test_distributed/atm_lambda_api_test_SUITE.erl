@@ -714,7 +714,7 @@ unlink_from_inventory_test_base(Config, FromWhichInventory, UsageInWorkflowSchem
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )),
 
-    % check that unlinking is not possible if the lambda not is a member of the inventory
+    % check that unlinking is not possible if the lambda is not a member of the inventory
     UnrelatedAtmLambda = ozt_atm_lambdas:create(OriginalAtmInventoryId),
     UnlinkingErrorApiTestSpec = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
@@ -745,8 +745,6 @@ unlink_from_inventory_test_base(Config, FromWhichInventory, UsageInWorkflowSchem
 
 
 delete_test(Config) ->
-    delete_test_base(Config, not_used),
-    delete_test_base(Config, used),
     delete_test_base(Config, not_used),
     delete_test_base(Config, used).
 
