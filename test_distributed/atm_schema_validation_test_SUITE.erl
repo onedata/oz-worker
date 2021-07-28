@@ -38,6 +38,7 @@
     atm_lambda_non_unique_result_spec_names/1,
     atm_lambda_disallowed_default_value/1,
     atm_workflow_schema_non_unique_store_ids/1,
+    atm_workflow_schema_reserved_store_id/1,
     atm_workflow_schema_non_unique_lane_ids/1,
     atm_workflow_schema_non_unique_parallel_box_ids/1,
     atm_workflow_schema_non_unique_task_ids/1,
@@ -59,6 +60,7 @@ all() ->
         atm_lambda_non_unique_result_spec_names,
         atm_lambda_disallowed_default_value,
         atm_workflow_schema_non_unique_store_ids,
+        atm_workflow_schema_reserved_store_id,
         atm_workflow_schema_non_unique_lane_ids,
         atm_workflow_schema_non_unique_parallel_box_ids,
         atm_workflow_schema_non_unique_task_ids,
@@ -175,6 +177,29 @@ atm_workflow_schema_non_unique_store_ids(_Config) ->
                 ?ERROR_BAD_DATA(
                     <<"stores">>,
                     <<"The provided list contains duplicate ids">>
+                )
+            }
+        end
+    }).
+
+
+atm_workflow_schema_reserved_store_id(_Config) ->
+    run_validation_tests(#test_spec{
+        schema_type = atm_workflow_schema,
+        tested_data_field = <<"stores">>,
+        spoil_data_field_fun = fun(StoresJson, _AtmInventoryId) ->
+            ReservedStoreId = lists_utils:random_element([
+                ?CURRENT_TASK_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID,
+                ?WORKFLOW_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID
+            ]),
+            BadStore = maps:merge(ozt_atm_workflow_schemas:gen_example_store_json(), #{
+                <<"id">> => ReservedStoreId
+            }),
+            {
+                lists_utils:shuffle([BadStore | StoresJson]),
+                ?ERROR_BAD_DATA(
+                    <<"stores[", ReservedStoreId/binary, "].id">>,
+                    <<"The provided store schema Id is reserved and cannot be used in store schema definitions">>
                 )
             }
         end
