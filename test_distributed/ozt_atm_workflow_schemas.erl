@@ -331,7 +331,11 @@ gen_example_result_mappings_for_specs(ResultSpecs, StoreSchemaIds) ->
     lists:map(fun(ResultSpec) ->
         #atm_task_schema_result_mapper{
             result_name = ResultSpec#atm_lambda_result_spec.name,
-            store_schema_id = lists_utils:random_element(StoreSchemaIds),
+            store_schema_id = lists_utils:random_element([
+                ?CURRENT_TASK_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID,
+                ?WORKFLOW_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID
+                | StoreSchemaIds
+            ]),
             dispatch_function = lists_utils:random_element(atm_task_schema_result_mapper:all_dispatch_functions())
         }
     end, lists_utils:shuffle(ResultSpecs)).

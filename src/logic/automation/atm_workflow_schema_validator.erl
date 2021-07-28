@@ -24,6 +24,11 @@
 }).
 -type validator_ctx() :: #validator_ctx{}.
 
+-define(PREDEFINED_SYSTEM_AUDIT_LOG_STORE_SCHEMA_IDS, [
+    ?CURRENT_TASK_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID,
+    ?WORKFLOW_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID
+]).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -69,8 +74,13 @@ validate_store_schemas(#validator_ctx{workflow_schema = #od_atm_workflow_schema{
     StoreIds = lists:map(fun(#atm_store_schema{
         id = Id, type = Type, default_initial_value = DefaultInitialValue, data_spec = DataSpec
     } = AtmStoreSchema) ->
-        DataKeyName = str_utils:format_bin("stores[~s].defaultInitialValue", [Id]),
+        lists:member(Id, ?PREDEFINED_SYSTEM_AUDIT_LOG_STORE_SCHEMA_IDS) andalso
+            atm_schema_validator:raise_validation_error(
+                str_utils:format_bin("stores[~s].id", [Id]),
+                "The provided store schema Id is reserved and cannot be used in store schema definitions"
+            ),
         sanitize_store_type_and_data_spec(AtmStoreSchema),
+        DataKeyName = str_utils:format_bin("stores[~s].defaultInitialValue", [Id]),
         sanitize_store_default_initial_value(Type, DefaultInitialValue, DataSpec, DataKeyName),
         Id
     end, Stores),
@@ -128,9 +138,10 @@ validate_store_schema_references(#validator_ctx{
         id = LaneId,
         store_iterator_spec = #atm_store_iterator_spec{store_schema_id = StoreSchemaId}
     }) ->
-        lists:member(StoreSchemaId, StoreSchemaIds) orelse raise_bad_store_schema_reference_error(
+        assert_allowed_store_schema_reference(
             str_utils:format_bin("lanes[~s].storeIteratorSpec.storeSchemaId", [LaneId]),
-            StoreSchemaId
+            StoreSchemaId,
+            StoreSchemaIds
         )
     end, AtmWorkflowSchema),
 
@@ -141,12 +152,13 @@ validate_store_schema_references(#validator_ctx{
                 #atm_task_argument_value_builder{type = Type, recipe = StoreSchemaId} when
                     Type == store_credentials;
                     Type == single_value_store_content
-                ->
-                    lists:member(StoreSchemaId, StoreSchemaIds) orelse raise_bad_store_schema_reference_error(
+                    ->
+                    assert_allowed_store_schema_reference(
                         str_utils:format_bin("tasks[~s].argumentMappings[~s].valueBuilder.recipe", [
                             TaskId, ArgumentName
                         ]),
-                        StoreSchemaId
+                        StoreSchemaId,
+                        StoreSchemaIds
                     );
                 _ ->
                     ok
@@ -154,11 +166,13 @@ validate_store_schema_references(#validator_ctx{
         end, AtmTaskSchema#atm_task_schema.argument_mappings),
 
         lists:foreach(fun(#atm_task_schema_result_mapper{store_schema_id = StoreSchemaId, result_name = ResultName}) ->
-            lists:member(StoreSchemaId, StoreSchemaIds) orelse raise_bad_store_schema_reference_error(
+            assert_allowed_store_schema_reference(
                 str_utils:format_bin("tasks[~s].resultMappings[~s].storeSchemaId", [
                     TaskId, ResultName
                 ]),
-                StoreSchemaId
+                StoreSchemaId,
+                % predefined audit log store schemas are allowed only in result mappers
+                StoreSchemaIds ++ ?PREDEFINED_SYSTEM_AUDIT_LOG_STORE_SCHEMA_IDS
             )
         end, AtmTaskSchema#atm_task_schema.result_mappings)
 
@@ -260,14 +274,15 @@ sanitize_store_type_and_data_spec(#atm_store_schema{}) ->
 
 
 %% @private
--spec raise_bad_store_schema_reference_error(atm_schema_validator:data_key_name(), automation:id()) ->
-    no_return().
-raise_bad_store_schema_reference_error(DataKeyName, StoreSchemaId) ->
-    atm_schema_validator:raise_validation_error(
+-spec assert_allowed_store_schema_reference(atm_schema_validator:data_key_name(), automation:id(), [automation:id()]) ->
+    ok | no_return().
+assert_allowed_store_schema_reference(DataKeyName, StoreSchemaId, AllowedStoreSchemaIds) ->
+    lists:member(StoreSchemaId, AllowedStoreSchemaIds) orelse atm_schema_validator:raise_validation_error(
         DataKeyName,
         "The provided storeSchemaId = '~s' was not found among defined store schemas",
         [StoreSchemaId]
-    ).
+    ),
+    ok.
 
 
 %% @private
