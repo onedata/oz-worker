@@ -428,13 +428,24 @@ delete_test(Config) ->
     NonAdmin = ozt_users:create(),
     AllPrivs = privileges:atm_inventory_privileges(),
 
+    UnrelatedAtmInventory = ozt_atm_inventories:create(),
+
     EnvSetUpFun = fun() ->
         AtmInventoryId = ozt_users:create_atm_inventory_for(UserWithoutDeletePrivs),
         ozt_atm_inventories:set_user_privileges(AtmInventoryId, UserWithoutDeletePrivs, AllPrivs -- [?ATM_INVENTORY_DELETE]),
         ozt_atm_inventories:add_user(AtmInventoryId, UserWithDeletePrivs, [?ATM_INVENTORY_DELETE]),
         AtmLambdas = lists:map(fun(_) ->
-            ozt_atm_lambdas:create(AtmInventoryId)
-        end, lists:seq(1, rand:uniform(5))),
+            AtmLambdaId = ozt_atm_lambdas:create(AtmInventoryId),
+            % lambdas that are linked only to the inventory should be deleted along with it,
+            % but lambdas referenced elsewhere should not
+            case rand:uniform(2) of
+                1 ->
+                    {this_inventory_only, AtmLambdaId};
+                2 ->
+                    ozt_atm_lambdas:link_to_inventory(AtmLambdaId, UnrelatedAtmInventory),
+                    {referenced_elsewhere, AtmLambdaId}
+            end
+        end, lists:seq(5, 5 + rand:uniform(15))),
         AtmWorkflowSchemas = lists:map(fun(_) ->
             ozt_atm_workflow_schemas:create(AtmInventoryId)
         end, lists:seq(1, rand:uniform(5))),
@@ -446,9 +457,14 @@ delete_test(Config) ->
     VerifyEndFun = fun(ShouldSucceed, #{
         atm_inventory_id := AtmInventoryId, atm_lambdas := AtmLambdas, atm_workflow_schemas := AtmWorkflowSchemas
     }, _Data) ->
+        ?assertEqual(not ShouldSucceed, ozt_atm_inventories:exists(AtmInventoryId)),
         ?assertEqual(not ShouldSucceed, lists:member(AtmInventoryId, ozt_atm_inventories:list())),
-        % referenced atm_lambdas SHOULD NOT be removed if an inventory is
-        [?assert(ozt_atm_lambdas:exists(AL)) || AL <- AtmLambdas],
+        lists:foreach(fun
+            ({this_inventory_only, AtmLambdaId}) ->
+                ?assertEqual(not ShouldSucceed, ozt_atm_lambdas:exists(AtmLambdaId));
+            ({referenced_elsewhere, AtmLambdaId}) ->
+                ?assert(ozt_atm_lambdas:exists(AtmLambdaId))
+        end, AtmLambdas),
         % inventory's atm_workflow schemas SHOULD be removed along with the inventory
         [?assertEqual(not ShouldSucceed, ozt_atm_workflow_schemas:exists(AWS)) || AWS <- AtmWorkflowSchemas]
     end,

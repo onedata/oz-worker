@@ -31,9 +31,6 @@
     update/3
 ]).
 -export([
-    delete/2
-]).
--export([
     link_to_inventory/3,
     unlink_from_inventory/3
 ]).
@@ -119,16 +116,6 @@ update(Auth, AtmLambdaId, Data) ->
         auth = Auth,
         gri = #gri{type = od_atm_lambda, id = AtmLambdaId, aspect = instance},
         data = Data
-    }).
-
-
--spec delete(Auth :: aai:auth(), od_atm_lambda:id()) ->
-    ok | errors:error().
-delete(Auth, AtmLambdaId) ->
-    entity_logic:handle(#el_req{
-        operation = delete,
-        auth = Auth,
-        gri = #gri{type = od_atm_lambda, id = AtmLambdaId, aspect = instance}
     }).
 
 

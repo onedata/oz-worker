@@ -76,7 +76,6 @@ operation_supported(get, atm_workflow_schemas, private) -> true;
 
 operation_supported(update, instance, private) -> true;
 
-operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {atm_inventory, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
@@ -202,21 +201,6 @@ update(#el_req{gri = #gri{id = AtmLambdaId, aspect = instance}, data = Data}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
-delete(#el_req{gri = #gri{id = AtmLambdaId, aspect = instance}}) ->
-    od_atm_lambda:critical_section(AtmLambdaId, fun() ->
-        {ok, #document{
-            value = #od_atm_lambda{
-                atm_workflow_schemas = AtmWorkflowSchemas
-            }
-        }} = od_atm_lambda:get(AtmLambdaId),
-        case AtmWorkflowSchemas of
-            [] ->
-                entity_graph:delete_with_relations(od_atm_lambda, AtmLambdaId);
-            _ ->
-                ?ERROR_ATM_LAMBDA_IN_USE(AtmWorkflowSchemas)
-        end
-    end);
-
 delete(#el_req{gri = #gri{id = AtmLambdaId, aspect = {atm_inventory, AtmInventoryId}}}) ->
     od_atm_inventory:critical_section(AtmInventoryId, fun() ->
         od_atm_lambda:critical_section(AtmLambdaId, fun() ->
@@ -296,9 +280,6 @@ authorize(#el_req{auth = ?USER(UserId), operation = get}, #od_atm_lambda{atm_inv
 authorize(#el_req{auth = ?USER(UserId), operation = update, gri = #gri{aspect = instance}}, AtmLambda) ->
     can_manage_lambda(UserId, AtmLambda);
 
-authorize(#el_req{auth = ?USER(UserId), operation = delete, gri = #gri{aspect = instance}}, AtmLambda) ->
-    can_manage_lambda(UserId, AtmLambda);
-
 authorize(#el_req{auth = ?USER(UserId), operation = delete, gri = #gri{aspect = {atm_inventory, AtmInventoryId}}}, _) ->
     atm_inventory_logic:has_eff_privilege(AtmInventoryId, UserId, ?ATM_INVENTORY_MANAGE_LAMBDAS);
 
@@ -329,8 +310,6 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = atm_workf
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
     [?OZ_ATM_INVENTORIES_UPDATE];
 
-required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance}}) ->
-    [?OZ_ATM_INVENTORIES_UPDATE];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {atm_inventory, _}}}) ->
     [?OZ_ATM_INVENTORIES_UPDATE];
 

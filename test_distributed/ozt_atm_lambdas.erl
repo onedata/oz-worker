@@ -27,6 +27,7 @@
 -export([get_atm_inventories/1]).
 -export([get_atm_workflow_schemas/1]).
 -export([link_to_inventory/2]).
+-export([unlink_from_inventory/2]).
 -export([dump_schema_to_json/1]).
 -export([find_duplicate/2, find_all_duplicates/2]).
 %% Example data generation
@@ -81,7 +82,12 @@ exists(AtmLambdaId) ->
 
 -spec delete(od_atm_lambda:id()) -> ok.
 delete(AtmLambdaId) ->
-    ozt:rpc(atm_lambda_logic, delete, [?ROOT, AtmLambdaId]).
+    % atm_lambdas do not support the delete operation - they are deleted when
+    % unlinked from all inventories
+    #od_atm_lambda{atm_inventories = AtmInventories} = get(AtmLambdaId),
+    lists:foreach(fun(AtmInventoryId) ->
+        unlink_from_inventory(AtmLambdaId, AtmInventoryId)
+    end, AtmInventories).
 
 
 -spec get_atm_inventories(od_atm_lambda:id()) -> [od_atm_inventory:id()].
@@ -99,6 +105,11 @@ get_atm_workflow_schemas(AtmLambdaId) ->
 -spec link_to_inventory(od_atm_lambda:id(), od_atm_inventory:id()) -> ok.
 link_to_inventory(AtmLambdaId, AtmInventoryId) ->
     ?assertMatch(ok, ozt:rpc(atm_lambda_logic, link_to_inventory, [?ROOT, AtmLambdaId, AtmInventoryId])).
+
+
+-spec unlink_from_inventory(od_atm_lambda:id(), od_atm_inventory:id()) -> ok.
+unlink_from_inventory(AtmLambdaId, AtmInventoryId) ->
+    ?assertMatch(ok, ozt:rpc(atm_lambda_logic, unlink_from_inventory, [?ROOT, AtmLambdaId, AtmInventoryId])).
 
 
 -spec dump_schema_to_json(od_atm_lambda:id() | od_atm_lambda:record()) ->

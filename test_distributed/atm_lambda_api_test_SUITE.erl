@@ -39,8 +39,7 @@
     get_atm_workflow_schemas_test/1,
     update_test/1,
     link_to_inventory_test/1,
-    unlink_from_inventory_test/1,
-    delete_test/1
+    unlink_from_inventory_test/1
 ]).
 
 all() ->
@@ -52,8 +51,7 @@ all() ->
         get_atm_workflow_schemas_test,
         update_test,
         link_to_inventory_test,
-        unlink_from_inventory_test,
-        delete_test
+        unlink_from_inventory_test
     ]).
 
 %%%===================================================================
@@ -741,116 +739,6 @@ unlink_from_inventory_test_base(Config, FromWhichInventory, UsageInWorkflowSchem
 
     ?assert(api_test_utils:run_tests(
         Config, UnlinkingErrorApiTestSpec, EnvSetUpFun, undefined, undefined
-    )).
-
-
-delete_test(Config) ->
-    delete_test_base(Config, not_used),
-    delete_test_base(Config, used).
-
-delete_test_base(Config, UsageInWorkflowSchemas) ->
-    Creator = ozt_users:create(),
-    MemberWithPrivs = ozt_users:create(),
-    MemberWithNoPrivs = ozt_users:create(),
-    NonAdmin = ozt_users:create(),
-
-    ParentAtmInventories = lists:map(fun(_) ->
-        AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
-        ozt_atm_inventories:add_user(AtmInventoryId, MemberWithPrivs, [?ATM_INVENTORY_MANAGE_LAMBDAS]),
-        ozt_atm_inventories:add_user(AtmInventoryId, MemberWithNoPrivs, []),
-        AtmInventoryId
-    end, lists:seq(1, rand:uniform(8))),
-
-    EnvSetUpFun = fun() ->
-        AtmLambdaId = ozt_atm_lambdas:create(hd(ParentAtmInventories)),
-        [ozt_atm_lambdas:link_to_inventory(AtmLambdaId, I) || I <- tl(ParentAtmInventories)],
-        ReferencedAtmWorkflowSchemas = case UsageInWorkflowSchemas of
-            not_used ->
-                [];
-            used ->
-                lists:map(fun(_) ->
-                    gen_atm_workflow_schema_with_lambda(lists_utils:random_element(ParentAtmInventories), AtmLambdaId)
-                end, lists:seq(1, rand:uniform(15)))
-        end,
-        #{atm_lambda_id => AtmLambdaId, referenced_atm_workflow_schemas => ReferencedAtmWorkflowSchemas}
-    end,
-    DeleteEntityFun = fun(#{atm_lambda_id := AtmLambdaId}) ->
-        % make sure the lambda is not used in any workflow schema (or else it cannot be deleted)
-        % workflow schemas are deleted along their inventories
-        lists:foreach(fun(AtmInventoryId) ->
-            ozt_atm_inventories:delete(AtmInventoryId)
-        end, ParentAtmInventories),
-        ozt_atm_lambdas:delete(AtmLambdaId)
-    end,
-    VerifyEndFun = fun(ShouldSucceed, #{atm_lambda_id := AtmLambdaId}, _) ->
-        AtmLambdas = ozt_atm_lambdas:list(),
-        case {ShouldSucceed, UsageInWorkflowSchemas} of
-            {true, not_used} ->
-                ?assertNot(lists:member(AtmLambdaId, AtmLambdas));
-            _ ->
-                ?assert(lists:member(AtmLambdaId, AtmLambdas))
-        end
-    end,
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_ATM_INVENTORIES_UPDATE]},
-                {user, MemberWithPrivs}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, MemberWithNoPrivs},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = delete,
-            path = [<<"/atm_lambdas/">>, atm_lambda_id],
-            expected_code = case UsageInWorkflowSchemas of
-                not_used -> ?HTTP_204_NO_CONTENT;
-                used -> ?HTTP_403_FORBIDDEN
-            end
-        },
-        logic_spec = #logic_spec{
-            module = atm_lambda_logic,
-            function = delete,
-            args = [auth, atm_lambda_id],
-            expected_result = ?OK_ENV(fun(#{
-                atm_lambda_id := AtmLambdaId,
-                referenced_atm_workflow_schemas := ReferencedAtmWorkflowSchemas
-            }, _) ->
-                case UsageInWorkflowSchemas of
-                    not_used ->
-                        ?OK_RES;
-                    used ->
-                        LambdaAtmWorkflowSchemas = ozt_atm_lambdas:get_atm_workflow_schemas(AtmLambdaId),
-                        ?assertEqual(lists:sort(ReferencedAtmWorkflowSchemas), lists:sort(LambdaAtmWorkflowSchemas)),
-                        ?ERROR_REASON(?ERROR_ATM_LAMBDA_IN_USE(LambdaAtmWorkflowSchemas))
-                end
-            end)
-        },
-        gs_spec = #gs_spec{
-            operation = delete,
-            gri = #gri{type = od_atm_lambda, id = atm_lambda_id, aspect = instance},
-            expected_result = ?OK_ENV(fun(#{
-                atm_lambda_id := AtmLambdaId,
-                referenced_atm_workflow_schemas := ReferencedAtmWorkflowSchemas
-            }, _) ->
-                case UsageInWorkflowSchemas of
-                    not_used ->
-                        ?OK_RES;
-                    used ->
-                        LambdaAtmWorkflowSchemas = ozt_atm_lambdas:get_atm_workflow_schemas(AtmLambdaId),
-                        ?assertEqual(lists:sort(ReferencedAtmWorkflowSchemas), lists:sort(LambdaAtmWorkflowSchemas)),
-                        ?ERROR_REASON(?ERROR_ATM_LAMBDA_IN_USE(LambdaAtmWorkflowSchemas))
-                end
-            end)
-        }
-    },
-    ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
 
 %%%===================================================================
