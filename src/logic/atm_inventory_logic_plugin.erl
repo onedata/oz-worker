@@ -336,9 +336,18 @@ update(Req = #el_req{gri = #gri{id = AtmInventoryId, aspect = {group_privileges,
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = AtmInventoryId, aspect = instance}}) ->
-    od_atm_inventory:critical_section(AtmInventoryId, fun() ->
-        entity_graph:delete_with_relations(od_atm_inventory, AtmInventoryId)
-    end);
+    fun(#od_atm_inventory{atm_lambdas = AtmLambdas, atm_workflow_schemas = AtmWorkflowSchemas}) ->
+        lists:foreach(fun(AtmWorkflowSchemaId) ->
+            ok = atm_workflow_schema_builder:delete(AtmWorkflowSchemaId)
+        end, AtmWorkflowSchemas),
+        % this will trigger lambda removal when a lambda has been used only in this inventory
+        lists:foreach(fun(AtmLambdaId) ->
+            ok = atm_lambda_logic:unlink_from_inventory(?ROOT, AtmLambdaId, AtmInventoryId)
+        end, AtmLambdas),
+        od_atm_inventory:critical_section(AtmInventoryId, fun() ->
+            entity_graph:delete_with_relations(od_atm_inventory, AtmInventoryId)
+        end)
+    end;
 
 delete(#el_req{gri = #gri{id = AtmInventoryId, aspect = {user, UserId}}}) ->
     entity_graph:remove_relation(
