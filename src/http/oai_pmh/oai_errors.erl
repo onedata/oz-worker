@@ -66,11 +66,11 @@ handle({invalid_date_format, Date}) ->
 handle({wrong_datestamps_relation, From, Until}) ->
     ?BAD_ARGUMENT(str_utils:format_bin(
         "Datestamp from=~s is greater than until=~s: ", [From, Until]));
-handle({noRecordsMatch, FromDatestamp, UntilDatestamp, MetadataPrefix}) ->
+handle({noRecordsMatch, FromDatestamp, UntilDatestamp, MetadataPrefix, SetSpec}) ->
     ?NO_RECORDS_MATCH(str_utils:format_bin(
-        "The combination of the values of the from= ~s, "
-        "until= ~s and metadataPrefix= ~s arguments results "
-        "in an empty list.", [FromDatestamp, UntilDatestamp, MetadataPrefix]));
+        "The combination of the values of the from=~s, "
+        "until=~s, set=~s and metadataPrefix=~s arguments results "
+        "in an empty list.", [FromDatestamp, UntilDatestamp, MetadataPrefix, SetSpec]));
 handle({illegalId, Id}) ->
     ?ID_DOES_NOT_EXIST(str_utils:format_bin(
         "The value of the identifier argument \"~s\" "

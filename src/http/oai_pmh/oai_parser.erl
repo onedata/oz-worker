@@ -116,19 +116,14 @@ parse_required_arguments(Module, ArgsList) ->
 %%% @private
 %%% @doc
 %%% Parse arguments for harvesting requests.
-%%% Throws if argument 'set' is passed because currently repository
-%%% doesn't support sets.
+%%% NOTE: The "set" argument does not have any specific requirements and hence
+%%% no validation is done at this point.
 %%% @end
 %%%-------------------------------------------------------------------
 -spec parse_harvesting_arguments([proplists:property()]) -> ok.
 parse_harvesting_arguments(ArgsList) ->
-    case proplists:get_value(<<"set">>, ArgsList) of
-        undefined ->
-            parse_harvesting_metadata_prefix(ArgsList),
-            parse_harvesting_datestamps(ArgsList);
-        _ ->
-            throw(noSetHierarchy)
-    end.
+    parse_harvesting_metadata_prefix(ArgsList),
+    parse_harvesting_datestamps(ArgsList).
 
 %%%-------------------------------------------------------------------
 %%% @private
@@ -221,7 +216,7 @@ is_valid_datestamp(_) ->
 is_valid_time({H, M, S}) ->
     (0 =< H) and (H < 24) and
     (0 =< M) and (M < 60) and
-    (0 =< S) and (S < 60) .
+    (0 =< S) and (S < 60).
 
 %%%-------------------------------------------------------------------
 %%% @private

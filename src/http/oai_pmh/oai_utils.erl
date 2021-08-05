@@ -19,8 +19,10 @@
 %% API
 -export([serialize_datestamp/1, deserialize_datestamp/1,
     is_harvesting/1, verb_to_module/1, is_earlier_or_equal/2,
-    dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/4,
-    oai_identifier_encode/1, oai_identifier_decode/1, build_oai_record/3]).
+    dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/5,
+    oai_identifier_encode/1, oai_identifier_decode/1,
+    build_oai_header/2, build_oai_record/3
+]).
 -export([list_handles/0, get_handle/1]).
 
 %%%--------------------------------------------------------------------
@@ -52,22 +54,21 @@ oai_identifier_decode(OAIId) ->
             throw({illegalId, OAIId})
     end.
 
-%%%--------------------------------------------------------------------
-%%% @doc
-%%% Builds an #oai_record{} based on metadata prefix, OAI identifier and
-%%% provided handle.
-%%% @end
-%%%--------------------------------------------------------------------
+-spec build_oai_header(oai_id(), od_handle:header()) -> #oai_header{}.
+build_oai_header(OaiId, Handle) ->
+    #oai_header{
+        identifier = OaiId,
+        datestamp = serialize_datestamp(
+            time:seconds_to_datetime(Handle#od_handle.timestamp)
+        ),
+        set_spec = Handle#od_handle.handle_service
+    }.
+
 -spec build_oai_record(MetadataPrefix :: binary(), oai_id(), od_handle:record()) ->
     #oai_record{}.
 build_oai_record(MetadataPrefix, OaiId, Handle) ->
     #oai_record{
-        header = #oai_header{
-            identifier = OaiId,
-            datestamp = serialize_datestamp(
-                time:seconds_to_datetime(Handle#od_handle.timestamp)
-            )
-        },
+        header = build_oai_header(OaiId, Handle),
         metadata = #oai_metadata{
             metadata_format = #oai_metadata_format{metadataPrefix = MetadataPrefix},
             additional_identifiers = [
@@ -126,40 +127,25 @@ deserialize_datestamp(Datestamp) ->
 %%% Throws with noRecordsMatch if nothing is harvested.
 %%% @end
 %%%--------------------------------------------------------------------
--spec harvest(binary(), binary(), binary(), function()) -> [term()].
-harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, HarvestingFun) ->
+-spec harvest(binary(), binary(), binary(), undefined | oai_set_spec(), function()) -> [term()].
+harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, SetSpec, HarvestingFun) ->
     From = deserialize_datestamp(FromDatestamp),
     Until = deserialize_datestamp(UntilDatestamp),
     Identifiers = list_handles(),
-    HarvestedMetadata = lists:flatmap(fun(Identifier) ->
+    HarvestedMetadata = lists:filtermap(fun(Identifier) ->
         Handle = get_handle(Identifier),
-        case should_be_harvested(From, Until, MetadataPrefix, Handle) of
-            false -> [];
+        case should_be_harvested(From, Until, MetadataPrefix, SetSpec, Handle) of
+            false ->
+                false;
             true ->
-                [HarvestingFun(Identifier, Handle)]
+                {true, HarvestingFun(Identifier, Handle)}
         end
     end, Identifiers),
     case HarvestedMetadata of
         [] ->
-            throw({noRecordsMatch, FromDatestamp, UntilDatestamp, MetadataPrefix});
+            throw({noRecordsMatch, FromDatestamp, UntilDatestamp, MetadataPrefix, SetSpec});
         _ -> HarvestedMetadata
     end.
-
-%%%--------------------------------------------------------------------
-%%% @doc
-%%% Function returns true if metadata of record identified by Identifier
-%%% should be harvested with given harvesting conditions (From, Until,
-%%% MetadataPrefix).
-%%% @end
-%%%--------------------------------------------------------------------
--spec should_be_harvested(supported_datestamp(), supported_datestamp(),
-    binary(), #od_handle{}) -> boolean().
-should_be_harvested(_From, _Until, _MetadataPrefix, #od_handle{metadata = undefined}) ->
-    false;
-should_be_harvested(From, Until, MetadataPrefix, #od_handle{timestamp = Timestamp}) ->
-    MetadataFormats = metadata_formats:supported_formats(),
-    is_in_time_range(From, Until, time:seconds_to_datetime(Timestamp)) and
-        lists:member(MetadataPrefix, MetadataFormats).
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -232,8 +218,8 @@ to_xml({_Name, undefined}) -> [];
 to_xml(#xmlElement{} = XML) -> XML;
 to_xml({_Name, Record = #oai_record{}}) -> to_xml(Record);
 to_xml({_Name, Header = #oai_header{}}) -> to_xml(Header);
-to_xml({_Name, MetadataFormat = #oai_metadata_format{}}) ->
-    to_xml(MetadataFormat);
+to_xml({_Name, MetadataFormat = #oai_metadata_format{}}) -> to_xml(MetadataFormat);
+to_xml({_Name, Set = #oai_set{}}) -> to_xml(Set);
 to_xml(#oai_error{code = Code, description = Description}) ->
     #xmlElement{
         name = error,
@@ -247,11 +233,15 @@ to_xml(#oai_record{header = Header, metadata = Metadata, about = About}) ->
             ensure_list(to_xml(Metadata)) ++
             ensure_list(to_xml(About))
     };
-to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp}) ->
+to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp, set_spec = SetSpec}) ->
     #xmlElement{
         name = header,
-        content = ensure_list(to_xml({identifier, Identifier})) ++
-        ensure_list(to_xml({datestamp, Datestamp}))};
+        content = lists:flatten([
+            ensure_list(to_xml({identifier, Identifier})),
+            ensure_list(to_xml({datestamp, Datestamp})),
+            ensure_list(to_xml({setSpec, SetSpec}))
+        ])
+    };
 to_xml(#oai_metadata{} = OaiMetadata) ->
     #oai_metadata{
         metadata_format = Format, value = Value,
@@ -269,6 +259,14 @@ to_xml(#oai_metadata_format{metadataPrefix = MetadataPrefix, schema = Schema,
         content = ensure_list(to_xml({metadataPrefix, MetadataPrefix})) ++
             ensure_list(to_xml({schema, Schema})) ++
             ensure_list(to_xml({metadataNamespace, Namespace}))
+    };
+to_xml(#oai_set{set_spec = SetSpec, set_name = SetName}) ->
+    #xmlElement{
+        name = set,
+        content = lists:flatten([
+            ensure_list(to_xml({setSpec, SetSpec})),
+            ensure_list(to_xml({setName, SetName}))
+        ])
     };
 to_xml(#oai_about{value = Value}) ->
     #xmlElement{
@@ -336,6 +334,26 @@ get_handle(HandleId) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%%%--------------------------------------------------------------------
+%%% @private
+%%% @doc
+%%% Returns true when the metadata matches requested time range and the set filter.
+%%% @end
+%%%--------------------------------------------------------------------
+-spec should_be_harvested(supported_datestamp(), supported_datestamp(),
+    binary(), undefined | oai_set_spec(), #od_handle{}) -> boolean().
+should_be_harvested(_, _, _, _, #od_handle{metadata = undefined}) ->
+    false;
+should_be_harvested(From, Until, MetadataPrefix, undefined, #od_handle{handle_service = HSId} = Handle) ->
+    % if the set spec is undefined, there is no filtration by set (all handles are considered)
+    should_be_harvested(From, Until, MetadataPrefix, HSId, Handle);
+should_be_harvested(_From, _Until, _MetadataPrefix, SetSpec, #od_handle{handle_service = HSId}) when SetSpec /= HSId ->
+   false;
+should_be_harvested(From, Until, MetadataPrefix, _SetSpec, #od_handle{timestamp = Timestamp}) ->
+    MetadataFormats = metadata_formats:supported_formats(),
+    is_in_time_range(From, Until, time:seconds_to_datetime(Timestamp)) andalso
+        lists:member(MetadataPrefix, MetadataFormats).
 
 %%%-------------------------------------------------------------------
 %%% @private
