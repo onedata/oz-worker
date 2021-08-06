@@ -4,6 +4,12 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 20.02.12
+
+-   **VFS-8196** Add support for sets in OAI PMH. Every handle service
+    is considered a separate set, and all handles created using a handle
+    service belong to its corresponding set.
+
 ### 20.02.11
 
 -   **VFS-7741** Web GUI: showing proper error information page when
