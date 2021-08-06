@@ -14,6 +14,7 @@
 
 -include("registered_names.hrl").
 -include("http/handlers/oai_errors.hrl").
+-include("datastore/oz_datastore_models.hrl").
 
 -behaviour(oai_verb_behaviour).
 
@@ -48,7 +49,7 @@ optional_arguments() -> [].
 %%% @end
 %%%--------------------------------------------------------------------
 -spec exclusive_arguments() -> [binary()].
-exclusive_arguments() -> [].
+exclusive_arguments() -> [<<"resumptionToken">>].
 
 %%%-------------------------------------------------------------------
 %%% @doc
@@ -71,6 +72,13 @@ optional_response_elements() -> [].
 %%% {@link oai_verb_behaviour} callback get_response/2
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_response(binary(), [proplists:property()]) -> no_return().
+-spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"set">>, _Args) ->
-    throw(noSetHierarchy).
+    {ok, HandleServiceDocs} = od_handle_service:list(),
+    % the resulting list of sets (handle services) is sorted by setSpec (handle service Id)
+    lists:sort(lists:map(fun(#document{key = HandleServiceId, value = #od_handle_service{name = Name}}) ->
+        #oai_set{
+            set_spec = HandleServiceId,
+            set_name = Name
+        }
+    end, HandleServiceDocs)).

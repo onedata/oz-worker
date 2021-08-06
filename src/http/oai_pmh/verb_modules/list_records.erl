@@ -74,10 +74,11 @@ get_response(<<"record">>, Args) ->
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
     From = proplists:get_value(<<"from">>, Args),
     Until = proplists:get_value(<<"until">>, Args),
+    SetSpec = proplists:get_value(<<"set">>, Args),
     HarvestingFun = fun(HandleId, Handle) ->
         OaiId = oai_utils:oai_identifier_encode(HandleId),
         oai_utils:build_oai_record(MetadataPrefix, OaiId, Handle)
     end,
-    oai_utils:harvest(MetadataPrefix, From, Until, HarvestingFun).
+    oai_utils:harvest(MetadataPrefix, From, Until, SetSpec, HarvestingFun).
 
 %%% TODO VFS-7454 support resumptionToken

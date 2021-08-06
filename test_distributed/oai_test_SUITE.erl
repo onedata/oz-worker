@@ -25,60 +25,188 @@
 
 %% Test functions
 -export([
-    identify_get_test/1, identify_post_test/1,
-    no_verb_get_test/1, no_verb_post_test/1,
-    invalid_verb_get_test/1, invalid_verb_post_test/1,
-    empty_verb_get_test/1, empty_verb_post_test/1,
-    illegal_arg_get_test/1, illegal_arg_post_test/1,
-    get_record_get_test/1, get_record_post_test/1,
-    get_record_with_bad_metadata_get_test/1,
-    get_record_with_bad_metadata_post_test/1,
-    missing_arg_get_test/1, missing_arg_post_test/1,
-    id_not_existing_get_test/1, id_not_existing_post_test/1,
-    cannot_disseminate_format_get_test/1, cannot_disseminate_format_post_test/1,
-    no_set_hierarchy_get_test/1, no_set_hierarchy_post_test/1,
-    list_metadata_formats_get_test/1, list_metadata_formats_post_test/1,
-    list_metadata_formats_no_format_error_get_test/1,
-    list_metadata_formats_no_format_error_post_test/1,
-    list_identifiers_get_test/1, list_identifiers_post_test/1,
-    list_identifiers_empty_repository_error_get_test/1,
-    list_identifiers_empty_repository_error_post_test/1,
-    selective_list_identifiers1_get_test/1, selective_list_identifiers1_post_test/1,
-    selective_list_identifiers2_get_test/1, selective_list_identifiers2_post_test/1,
-    selective_list_identifiers3_get_test/1, selective_list_identifiers3_post_test/1,
-    selective_list_identifiers4_get_test/1, selective_list_identifiers4_post_test/1,
-    list_identifiers_no_records_match_error1_get_test/1,
-    list_identifiers_no_records_match_error1_post_test/1,
-    list_identifiers_no_records_match_error2_get_test/1,
-    list_identifiers_no_records_match_error2_post_test/1,
-    list_identifiers_granularity_mismatch_error_get_test/1,
-    list_identifiers_granularity_mismatch_error_post_test/1,
-    list_identifiers_wrong_date_format_error1_get_test/1,
-    list_identifiers_wrong_date_format_error1_post_test/1,
-    list_identifiers_wrong_date_format_error2_get_test/1,
-    list_identifiers_wrong_date_format_error2_post_test/1,
-    list_identifiers_wrong_date_format_error3_get_test/1,
-    list_identifiers_wrong_date_format_error3_post_test/1,
-    list_records_get_test/1, list_records_post_test/1,
-    selective_list_records1_get_test/1, selective_list_records1_post_test/1,
-    selective_list_records2_get_test/1, selective_list_records2_post_test/1,
-    selective_list_records3_get_test/1, selective_list_records3_post_test/1,
-    selective_list_records4_get_test/1, selective_list_records4_post_test/1,
-    list_records_no_set_error_get_test/1, list_records_no_set_error_post_test/1,
+    identify_get_test/1,
+    identify_post_test/1,
     identify_change_earliest_datestamp_get_test/1,
     identify_change_earliest_datestamp_post_test/1,
+
+    get_record_get_test/1,
+    get_record_post_test/1,
+    get_record_with_bad_metadata_get_test/1,
+    get_record_with_bad_metadata_post_test/1,
+
+    list_metadata_formats_get_test/1,
+    list_metadata_formats_post_test/1,
+
+    list_identifiers_get_test/1,
+    list_identifiers_post_test/1,
+    selective_list_identifiers1_get_test/1,
+    selective_list_identifiers1_post_test/1,
+    selective_list_identifiers2_get_test/1,
+    selective_list_identifiers2_post_test/1,
+    selective_list_identifiers3_get_test/1,
+    selective_list_identifiers3_post_test/1,
+    selective_list_identifiers4_get_test/1,
+    selective_list_identifiers4_post_test/1,
     list_identifiers_modify_timestamp_get_test/1,
     list_identifiers_modify_timestamp_post_test/1,
     list_identifiers_modify_timestamp1_get_test/1,
     list_identifiers_modify_timestamp1_post_test/1,
     list_identifiers_modify_timestamp2_get_test/1,
     list_identifiers_modify_timestamp2_post_test/1,
+
+    list_records_get_test/1,
+    list_records_post_test/1,
+    selective_list_records1_get_test/1,
+    selective_list_records1_post_test/1,
+    selective_list_records2_get_test/1,
+    selective_list_records2_post_test/1,
+    selective_list_records3_get_test/1,
+    selective_list_records3_post_test/1,
+    selective_list_records4_get_test/1,
+    selective_list_records4_post_test/1,
     list_records_modify_timestamp_get_test/1,
     list_records_modify_timestamp_post_test/1,
     list_records_modify_timestamp1_get_test/1,
     list_records_modify_timestamp1_post_test/1,
     list_records_modify_timestamp2_get_test/1,
-    list_records_modify_timestamp2_post_test/1]).
+    list_records_modify_timestamp2_post_test/1,
+
+    list_sets_get_test/1,
+    list_sets_post_test/1,
+    list_sets_empty_repository_get_test/1,
+    list_sets_empty_repository_post_test/1,
+
+    no_verb_get_test/1,
+    no_verb_post_test/1,
+    empty_verb_get_test/1,
+    empty_verb_post_test/1,
+    invalid_verb_get_test/1,
+    invalid_verb_post_test/1,
+    illegal_arg_get_test/1,
+    illegal_arg_post_test/1,
+    missing_arg_get_test/1,
+    missing_arg_post_test/1,
+    id_not_existing_get_test/1,
+    id_not_existing_post_test/1,
+    list_metadata_formats_no_format_error_get_test/1,
+    list_metadata_formats_no_format_error_post_test/1,
+    cannot_disseminate_format_get_test/1,
+    cannot_disseminate_format_post_test/1,
+    list_identifiers_empty_repository_error_get_test/1,
+    list_identifiers_empty_repository_error_post_test/1,
+    list_identifiers_no_records_match_error1_get_test/1,
+    list_identifiers_no_records_match_error1_post_test/1,
+    list_identifiers_no_records_match_error2_get_test/1,
+    list_identifiers_no_records_match_error2_post_test/1,
+    list_identifiers_granularity_mismatch_error_post_test/1,
+    list_identifiers_granularity_mismatch_error_get_test/1,
+    list_identifiers_wrong_date_format_error1_get_test/1,
+    list_identifiers_wrong_date_format_error1_post_test/1,
+    list_identifiers_wrong_date_format_error2_get_test/1,
+    list_identifiers_wrong_date_format_error2_post_test/1,
+    list_identifiers_wrong_date_format_error3_get_test/1,
+    list_identifiers_wrong_date_format_error3_post_test/1,
+
+    list_records_no_records_match_error1_get_test/1,
+    list_records_no_records_match_error1_post_test/1,
+    list_records_no_records_match_error2_get_test/1,
+    list_records_no_records_match_error2_post_test/1
+]).
+
+%%%===================================================================
+%%% API functions
+%%%===================================================================
+
+all() -> ?ALL([
+    identify_get_test,
+    identify_post_test,
+    identify_change_earliest_datestamp_get_test,
+    identify_change_earliest_datestamp_post_test,
+
+    get_record_get_test,
+    get_record_post_test,
+    get_record_with_bad_metadata_get_test,
+    get_record_with_bad_metadata_post_test,
+
+    list_metadata_formats_get_test,
+    list_metadata_formats_post_test,
+
+    list_identifiers_get_test,
+    list_identifiers_post_test,
+    selective_list_identifiers1_get_test,
+    selective_list_identifiers1_post_test,
+    selective_list_identifiers2_get_test,
+    selective_list_identifiers2_post_test,
+    selective_list_identifiers3_get_test,
+    selective_list_identifiers3_post_test,
+    selective_list_identifiers4_get_test,
+    selective_list_identifiers4_post_test,
+    list_identifiers_modify_timestamp_get_test,
+    list_identifiers_modify_timestamp_post_test,
+    list_identifiers_modify_timestamp1_get_test,
+    list_identifiers_modify_timestamp1_post_test,
+    list_identifiers_modify_timestamp2_get_test,
+    list_identifiers_modify_timestamp2_post_test,
+
+    list_records_get_test,
+    list_records_post_test,
+    selective_list_records1_get_test,
+    selective_list_records1_post_test,
+    selective_list_records2_get_test,
+    selective_list_records2_post_test,
+    selective_list_records3_get_test,
+    selective_list_records3_post_test,
+    selective_list_records4_get_test,
+    selective_list_records4_post_test,
+    list_records_modify_timestamp_get_test,
+    list_records_modify_timestamp_post_test,
+    list_records_modify_timestamp1_get_test,
+    list_records_modify_timestamp1_post_test,
+    list_records_modify_timestamp2_get_test,
+    list_records_modify_timestamp2_post_test,
+
+    list_sets_get_test,
+    list_sets_post_test,
+    list_sets_empty_repository_get_test,
+    list_sets_empty_repository_post_test,
+
+    no_verb_get_test,
+    no_verb_post_test,
+    empty_verb_get_test,
+    empty_verb_post_test,
+    invalid_verb_get_test,
+    invalid_verb_post_test,
+    illegal_arg_get_test,
+    illegal_arg_post_test,
+    missing_arg_get_test,
+    missing_arg_post_test,
+    id_not_existing_get_test,
+    id_not_existing_post_test,
+    list_metadata_formats_no_format_error_get_test,
+    list_metadata_formats_no_format_error_post_test,
+    cannot_disseminate_format_get_test,
+    cannot_disseminate_format_post_test,
+    list_identifiers_empty_repository_error_get_test,
+    list_identifiers_empty_repository_error_post_test,
+    list_identifiers_no_records_match_error1_get_test,
+    list_identifiers_no_records_match_error1_post_test,
+    list_identifiers_no_records_match_error2_get_test,
+    list_identifiers_no_records_match_error2_post_test,
+    list_identifiers_granularity_mismatch_error_post_test,
+    list_identifiers_granularity_mismatch_error_get_test,
+    list_identifiers_wrong_date_format_error1_get_test,
+    list_identifiers_wrong_date_format_error1_post_test,
+    list_identifiers_wrong_date_format_error2_get_test,
+    list_identifiers_wrong_date_format_error2_post_test,
+    list_identifiers_wrong_date_format_error3_get_test,
+    list_identifiers_wrong_date_format_error3_post_test,
+
+    list_records_no_records_match_error1_get_test,
+    list_records_no_records_match_error1_post_test,
+    list_records_no_records_match_error2_get_test,
+    list_records_no_records_match_error2_post_test
+]).
 
 %% useful macros
 -define(CONTENT_TYPE_HEADER,
@@ -121,89 +249,6 @@
 -define(HANDLE_RESOURCE_TYPE, <<"Share">>).
 
 -define(CURRENT_DATETIME(), time:seconds_to_datetime(global_clock:timestamp_seconds())).
-
-%%%===================================================================
-%%% API functions
-%%%===================================================================
-
-all() -> ?ALL([
-    identify_get_test,
-    identify_post_test,
-    identify_change_earliest_datestamp_get_test,
-    identify_change_earliest_datestamp_post_test,
-    get_record_get_test,
-    get_record_post_test,
-    get_record_with_bad_metadata_get_test,
-    get_record_with_bad_metadata_post_test,
-    list_metadata_formats_get_test,
-    list_metadata_formats_post_test,
-    list_identifiers_get_test,
-    list_identifiers_post_test,
-    selective_list_identifiers1_get_test,
-    selective_list_identifiers1_post_test,
-    selective_list_identifiers2_get_test,
-    selective_list_identifiers2_post_test,
-    selective_list_identifiers3_get_test,
-    selective_list_identifiers3_post_test,
-    selective_list_identifiers4_get_test,
-    selective_list_identifiers4_post_test,
-    list_identifiers_modify_timestamp_get_test,
-    list_identifiers_modify_timestamp_post_test,
-    list_identifiers_modify_timestamp1_get_test,
-    list_identifiers_modify_timestamp1_post_test,
-    list_identifiers_modify_timestamp2_get_test,
-    list_identifiers_modify_timestamp2_post_test,
-    list_records_get_test,
-    list_records_post_test,
-    selective_list_records1_get_test,
-    selective_list_records1_post_test,
-    selective_list_records2_get_test,
-    selective_list_records2_post_test,
-    selective_list_records3_get_test,
-    selective_list_records3_post_test,
-    selective_list_records4_get_test,
-    selective_list_records4_post_test,
-    list_records_modify_timestamp_get_test,
-    list_records_modify_timestamp_post_test,
-    list_records_modify_timestamp1_get_test,
-    list_records_modify_timestamp1_post_test,
-    list_records_modify_timestamp2_get_test,
-    list_records_modify_timestamp2_post_test,
-    no_verb_get_test,
-    no_verb_post_test,
-    empty_verb_get_test,
-    empty_verb_post_test,
-    invalid_verb_get_test,
-    invalid_verb_post_test,
-    illegal_arg_get_test,
-    illegal_arg_post_test,
-    missing_arg_get_test,
-    missing_arg_post_test,
-    id_not_existing_get_test,
-    id_not_existing_post_test,
-    list_metadata_formats_no_format_error_get_test,
-    list_metadata_formats_no_format_error_post_test,
-    cannot_disseminate_format_get_test,
-    cannot_disseminate_format_post_test,
-    no_set_hierarchy_get_test,
-    no_set_hierarchy_post_test,
-    list_identifiers_empty_repository_error_get_test,
-    list_identifiers_empty_repository_error_post_test,
-    list_identifiers_no_records_match_error1_get_test,
-    list_identifiers_no_records_match_error1_post_test,
-    list_identifiers_no_records_match_error2_get_test,
-    list_identifiers_no_records_match_error2_post_test,
-    list_identifiers_granularity_mismatch_error_post_test,
-    list_identifiers_granularity_mismatch_error_get_test,
-    list_identifiers_wrong_date_format_error1_get_test,
-    list_identifiers_wrong_date_format_error1_post_test,
-    list_identifiers_wrong_date_format_error2_get_test,
-    list_identifiers_wrong_date_format_error2_post_test,
-    list_identifiers_wrong_date_format_error3_get_test,
-    list_identifiers_wrong_date_format_error3_post_test,
-    list_records_no_set_error_get_test,
-    list_records_no_set_error_post_test
-]).
 
 %%%===================================================================
 %%% Test functions
@@ -335,6 +380,18 @@ list_records_modify_timestamp2_get_test(Config) ->
 list_records_modify_timestamp2_post_test(Config) ->
     list_records_modify_timestamp_test_base(Config, get, 10, undefined, 9, 8).
 
+list_sets_get_test(Config) ->
+    list_sets_test_base(Config, get).
+
+list_sets_post_test(Config) ->
+    list_sets_test_base(Config, post).
+
+list_sets_empty_repository_get_test(Config) ->
+    list_sets_empty_repository_test_base(Config, get).
+
+list_sets_empty_repository_post_test(Config) ->
+    list_sets_empty_repository_test_base(Config, post).
+
 %%% Tests of error handling
 
 no_verb_get_test(Config) ->
@@ -378,12 +435,6 @@ cannot_disseminate_format_get_test(Config) ->
 
 cannot_disseminate_format_post_test(Config) ->
     cannot_disseminate_format_test_base(Config, post).
-
-no_set_hierarchy_get_test(Config) ->
-    no_set_hierarchy_test_base(Config, get).
-
-no_set_hierarchy_post_test(Config) ->
-    no_set_hierarchy_test_base(Config, post).
 
 list_metadata_formats_no_format_error_get_test(Config) ->
     list_metadata_formats_no_format_error_test_base(Config, get).
@@ -433,18 +484,23 @@ list_identifiers_wrong_date_format_error3_get_test(Config) ->
 list_identifiers_wrong_date_format_error3_post_test(Config) ->
     list_identifiers_wrong_date_format_error_test_base(Config, post, undefined, <<"1111-13-25T65:01:25">>).
 
-list_records_no_set_error_get_test(Config) ->
-    list_records_no_set_error_test_base(Config, get).
+list_records_no_records_match_error1_get_test(Config) ->
+    list_records_no_records_match_error_test_base(Config, get, 10, 11, 15).
 
-list_records_no_set_error_post_test(Config) ->
-    list_records_no_set_error_test_base(Config, post).
+list_records_no_records_match_error1_post_test(Config) ->
+    list_records_no_records_match_error_test_base(Config, post, 10, 11, 15).
+
+list_records_no_records_match_error2_get_test(Config) ->
+    list_records_no_records_match_error_test_base(Config, get, 10, -11, -5).
+
+list_records_no_records_match_error2_post_test(Config) ->
+    list_records_no_records_match_error_test_base(Config, post, 10, -11, -5).
 
 %%%===================================================================
 %%% Test base functions
 %%%===================================================================
 
 identify_test_base(Config, Method) ->
-
     [Node | _] = ?config(oz_worker_nodes, Config),
     Path = ?config(oai_pmh_path, Config),
     ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
@@ -455,7 +511,7 @@ identify_test_base(Config, Method) ->
     {ok, ShareId} = oz_test_utils:create_share(
         Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
     ),
-    HSId = create_handle_service(Config, User),
+    {HSId, _} = create_handle_service(Config, User),
     Timestamp = ?CURRENT_DATETIME(),
     create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
         ?DC_METADATA_XML, Timestamp),
@@ -473,7 +529,6 @@ identify_test_base(Config, Method) ->
     ?assert(check_identify(200, [], Method, ExpResponseContent, Config)).
 
 identify_change_earliest_datestamp_test_base(Config, Method) ->
-
     [Node | _] = ?config(oz_worker_nodes, Config),
     Path = ?config(oai_pmh_path, Config),
     ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
@@ -481,7 +536,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     {ok, User} = oz_test_utils:create_user(Config),
     SpaceIds = create_spaces(Config, ?SPACE_NAMES(2), ?USER(User)),
     [ShareId1, ShareId2] = create_shares(Config, SpaceIds),
-    HSId = create_handle_service(Config, User),
+    {HSId, _} = create_handle_service(Config, User),
     Timestamp1 = ?CURRENT_DATETIME(),
     Timestamp2 = increase_timestamp(Timestamp1, 1),
     Timestamp3 = increase_timestamp(Timestamp2, 1),
@@ -516,16 +571,14 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     ],
     ?assert(check_identify(200, [], Method, ExpResponseContent2, Config)).
 
-
 get_record_test_base(Config, Method) ->
-
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     ShareId = datastore_key:new(),
     {ok, ShareId} = oz_test_utils:create_share(
         Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
     ),
-    HSId = create_handle_service(Config, User),
+    {HSId, _} = create_handle_service(Config, User),
     Timestamp = ?CURRENT_DATETIME(),
     Identifier = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
         ?DC_METADATA_XML, Timestamp),
@@ -538,43 +591,14 @@ get_record_test_base(Config, Method) ->
     ],
 
     ExpResponseContent = [
-        #xmlElement{name = record, content = [
-            #xmlElement{
-                name = header,
-                content = [
-                    #xmlElement{
-                        name = identifier,
-                        content = [#xmlText{
-                            value = binary_to_list(oai_identifier(Config, Identifier))
-                        }]
-                    },
-                    #xmlElement{
-                        name = datestamp,
-                        content = [#xmlText{
-                            value = to_datestamp(Timestamp)
-                        }]
-                    }
-                ]
-            },
-            #xmlElement{
-                name = metadata,
-                content = [
-                    #xmlElement{
-                        name = 'oai_dc:dc',
-                        content = ExpectedDCMetadata
-                    }
-                ]
-            }
-        ]}
+        expected_oai_record_xml(Config, Identifier, Timestamp, ExpectedDCMetadata)
     ],
     ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config)).
 
-
 get_record_with_bad_metadata_test_base(Config, Method) ->
-
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    HSId = create_handle_service(Config, User),
+    {HSId, _} = create_handle_service(Config, User),
     Timestamp = ?CURRENT_DATETIME(),
 
     BadMetadataExamples = [
@@ -595,42 +619,14 @@ get_record_with_bad_metadata_test_base(Config, Method) ->
             {<<"metadataPrefix">>, ?DC_METADATA_PREFIX}
         ],
 
+        % Badly formatted metadata should result in only
+        % dc:identifiers being present in the OAI output
+        ExpectedDCMetadata = expected_dc_identifiers(Config, Identifier),
         ExpResponseContent = [
-            #xmlElement{name = record, content = [
-                #xmlElement{
-                    name = header,
-                    content = [
-                        #xmlElement{
-                            name = identifier,
-                            content = [#xmlText{
-                                value = binary_to_list(oai_identifier(Config, Identifier))
-                            }]
-                        },
-                        #xmlElement{
-                            name = datestamp,
-                            content = [#xmlText{
-                                value = to_datestamp(Timestamp)
-                            }]
-                        }
-                    ]
-                },
-                #xmlElement{
-                    name = metadata,
-                    content = [
-                        #xmlElement{
-                            name = 'oai_dc:dc',
-                            % Badly formatted metadata should result in only
-                            % dc:identifiers being present in the OAI output
-                            content = expected_dc_identifiers(Config, Identifier)
-                        }
-                    ]
-                }
-            ]}
+            expected_oai_record_xml(Config, Identifier, Timestamp, ExpectedDCMetadata)
         ],
         ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config))
     end, BadMetadataExamples).
-
-
 
 list_metadata_formats_test_base(Config, Method) ->
     ExpResponseContent = [
@@ -656,83 +652,25 @@ list_metadata_formats_test_base(Config, Method) ->
     ?assert(check_list_metadata_formats(200, [], Method, ExpResponseContent, Config)).
 
 list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
-
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
 
     Identifiers = setup_test_for_harvesting(
         Config, IdentifiersNum, BeginTime, TimeOffsets, ?DC_METADATA_XML
     ),
-
-    From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
-    Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
-    Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
-
-    IdsAndTimestamps =
-        ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset),
-
-    ExpResponseContent = lists:map(fun({Id, TimeOffset}) ->
-        #xmlElement{
-            name = header,
-            content = [
-                #xmlElement{
-                    name = identifier,
-                    content = [#xmlText{
-                        value = binary_to_list(oai_identifier(Config, Id))
-                    }]
-                },
-                #xmlElement{
-                    name = datestamp,
-                    content = [#xmlText{
-                        value = to_datestamp(increase_timestamp(BeginTime, TimeOffset))
-                    }]
-                }
-            ]
-        }
-    end, IdsAndTimestamps),
-
-    ?assert(check_list_identifiers(200, Args, Method, ExpResponseContent, Config)).
+    list_with_time_offsets_test_base(Config, Method, identifiers, Identifiers, TimeOffsets, BeginTime, FromOffset, UntilOffset).
 
 list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     FromOffset, UntilOffset, IdentifiersToBeModified) ->
 
     %% IdentifiersToBeModified is number of identifiers that will be modified
     %% so that their timestamps will be set to Until + 1 (if Until is undefined
-
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
-
     Identifiers = setup_test_for_harvesting(
         Config, IdentifiersNum, BeginTime, TimeOffsets, ?DC_METADATA_XML
     ),
-
-    From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
-    Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
-    Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
-
-    IdsAndTimestamps =
-        ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset),
-
-    ExpResponseContent = lists:map(fun({Id, TimeOffset}) ->
-        #xmlElement{
-            name = header,
-            content = [
-                #xmlElement{
-                    name = identifier,
-                    content = [#xmlText{
-                        value = binary_to_list(oai_identifier(Config, Id))
-                    }]
-                },
-                #xmlElement{
-                    name = datestamp,
-                    content = [#xmlText{
-                        value = to_datestamp(increase_timestamp(BeginTime, TimeOffset))
-                    }]
-                }
-            ]
-        }
-    end, IdsAndTimestamps),
-    ?assert(check_list_identifiers(200, Args, Method, ExpResponseContent, Config)),
+    list_with_time_offsets_test_base(Config, Method, identifiers, Identifiers, TimeOffsets, BeginTime, FromOffset, UntilOffset),
 
     TimeOffsets2 = lists:map(fun({T, N}) ->
         case N =< IdentifiersToBeModified of
@@ -740,87 +678,17 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
             _ -> T
         end
     end, lists:zip(TimeOffsets, lists:seq(1, length(TimeOffsets)))),
-
-    Identifiers = modify_handles_with_mocked_timestamp(Config, Identifiers,
-        BeginTime, TimeOffsets2, ?DC_METADATA_XML),
-
-    IdsAndTimestamps2 =
-        ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets2, FromOffset, UntilOffset),
-
-    ExpResponseContent2 = lists:map(fun({Id, TimeOffset}) ->
-        #xmlElement{
-            name = header,
-            content = [
-                #xmlElement{
-                    name = identifier,
-                    content = [#xmlText{
-                        value = binary_to_list(oai_identifier(Config, Id))
-                    }]
-                },
-                #xmlElement{
-                    name = datestamp,
-                    content = [#xmlText{
-                        value = to_datestamp(increase_timestamp(BeginTime, TimeOffset))
-                    }]
-                }
-            ]
-        }
-    end, IdsAndTimestamps2),
-    ?assert(check_list_identifiers(200, Args, Method, ExpResponseContent2, Config)).
-
+    modify_handles_with_mocked_timestamp(Config, Identifiers, BeginTime, TimeOffsets2, ?DC_METADATA_XML),
+    list_with_time_offsets_test_base(Config, Method, identifiers, Identifiers, TimeOffsets2, BeginTime, FromOffset, UntilOffset).
 
 list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
-
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
 
-    Identifiers =
-        setup_test_for_harvesting(Config, IdentifiersNum, BeginTime, TimeOffsets,
-            ?DC_METADATA_XML),
-
-    From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
-    Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
-    Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
-
-    IdsAndTimestamps =
-        ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset),
-
-    ExpResponseContent = lists:map(fun({Id, TimeOffset}) ->
-        ExpectedDCMetadata = expected_dc_metadata(Config, Id, ?DC_METADATA_XML),
-        #xmlElement{
-            name = record,
-            content = [
-                #xmlElement{
-                    name = header,
-                    content = [
-                        #xmlElement{
-                            name = identifier,
-                            content = [#xmlText{
-                                value = binary_to_list(oai_identifier(Config, Id))
-                            }]
-                        },
-                        #xmlElement{
-                            name = datestamp,
-                            content = [#xmlText{
-                                value = to_datestamp(increase_timestamp(BeginTime, TimeOffset))
-                            }]
-                        }
-                    ]
-                },
-                #xmlElement{
-                    name = metadata,
-                    content = [
-                        #xmlElement{
-                            name = 'oai_dc:dc',
-                            content = ExpectedDCMetadata
-                        }
-                    ]
-                }
-            ]
-        }
-    end, IdsAndTimestamps),
-
-    ?assert(check_list_records(200, Args, Method, ExpResponseContent, Config)).
+    Identifiers = setup_test_for_harvesting(
+        Config, IdentifiersNum, BeginTime, TimeOffsets, ?DC_METADATA_XML
+    ),
+    list_with_time_offsets_test_base(Config, Method, records, Identifiers, TimeOffsets, BeginTime, FromOffset, UntilOffset).
 
 list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     FromOffset, UntilOffset, IdentifiersToBeModified) ->
@@ -831,52 +699,10 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
 
-    Identifiers =
-        setup_test_for_harvesting(Config, IdentifiersNum, BeginTime, TimeOffsets,
-            ?DC_METADATA_XML),
-
-    From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
-    Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
-    Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
-
-    IdsAndTimestamps =
-        ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset),
-
-    ExpResponseContent = lists:map(fun({Id, TimeOffset}) ->
-        ExpectedDCMetadata = expected_dc_metadata(Config, Id, ?DC_METADATA_XML),
-        #xmlElement{
-            name = record,
-            content = [
-                #xmlElement{
-                    name = header,
-                    content = [
-                        #xmlElement{
-                            name = identifier,
-                            content = [#xmlText{
-                                value = binary_to_list(oai_identifier(Config, Id))
-                            }]
-                        },
-                        #xmlElement{
-                            name = datestamp,
-                            content = [#xmlText{
-                                value = to_datestamp(increase_timestamp(BeginTime, TimeOffset))
-                            }]
-                        }
-                    ]
-                },
-                #xmlElement{
-                    name = metadata,
-                    content = [
-                        #xmlElement{
-                            name = 'oai_dc:dc',
-                            content = ExpectedDCMetadata
-                        }
-                    ]
-                }
-            ]
-        }
-    end, IdsAndTimestamps),
-    ?assert(check_list_records(200, Args, Method, ExpResponseContent, Config)),
+    Identifiers = setup_test_for_harvesting(
+        Config, IdentifiersNum, BeginTime, TimeOffsets, ?DC_METADATA_XML
+    ),
+    list_with_time_offsets_test_base(Config, Method, records, Identifiers, TimeOffsets, BeginTime, FromOffset, UntilOffset),
 
     TimeOffsets2 = lists:map(fun({T, N}) ->
         case N =< IdentifiersToBeModified of
@@ -884,49 +710,89 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
             _ -> T
         end
     end, lists:zip(TimeOffsets, lists:seq(1, length(TimeOffsets)))),
+    modify_handles_with_mocked_timestamp(Config, Identifiers, BeginTime, TimeOffsets2, ?DC_METADATA_XML),
+    list_with_time_offsets_test_base(Config, Method, records, Identifiers, TimeOffsets2, BeginTime, FromOffset, UntilOffset).
 
-    Identifiers = modify_handles_with_mocked_timestamp(Config, Identifiers,
-        BeginTime, TimeOffsets2, ?DC_METADATA_XML),
+list_with_time_offsets_test_base(Config, Method, ListedObjects, Identifiers, TimeOffsets, BeginTime, FromOffset, UntilOffset) ->
+    BuildExpectedObject = fun(HandleId, TimeOffset) ->
+        Timestamp = increase_timestamp(BeginTime, TimeOffset),
+        case ListedObjects of
+            identifiers ->
+                expected_oai_header_xml(Config, HandleId, Timestamp);
+            records ->
+                ExpectedDCMetadata = expected_dc_metadata(Config, HandleId, ?DC_METADATA_XML),
+                expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedDCMetadata)
+        end
+    end,
 
-    IdsAndTimestamps2 =
-        ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets2, FromOffset, UntilOffset),
+    From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
+    Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
+    Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
 
-    ExpResponseContent2 = lists:map(fun({Id, TimeOffset}) ->
-        ExpectedDCMetadata = expected_dc_metadata(Config, Id, ?DC_METADATA_XML),
-        #xmlElement{
-            name = record,
-            content = [
-                #xmlElement{
-                    name = header,
-                    content = [
-                        #xmlElement{
-                            name = identifier,
-                            content = [#xmlText{
-                                value = binary_to_list(oai_identifier(Config, Id))
-                            }]
-                        },
-                        #xmlElement{
-                            name = datestamp,
-                            content = [#xmlText{
-                                value = to_datestamp(increase_timestamp(BeginTime, TimeOffset))
-                            }]
-                        }
-                    ]
-                },
-                #xmlElement{
-                    name = metadata,
-                    content = [
-                        #xmlElement{
-                            name = 'oai_dc:dc',
-                            content = ExpectedDCMetadata
-                        }
-                    ]
-                }
-            ]
-        }
-    end, IdsAndTimestamps2),
-    ?assert(check_list_records(200, Args, Method, ExpResponseContent2, Config)).
+    IdsAndTimestamps = ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset),
 
+    ExpResponseContent = lists:map(fun({HandleId, TimeOffset}) ->
+        BuildExpectedObject(HandleId, TimeOffset)
+    end, IdsAndTimestamps),
+    case ListedObjects of
+        identifiers ->
+            ?assert(check_list_identifiers(200, Args, Method, ExpResponseContent, Config));
+        records ->
+            ?assert(check_list_records(200, Args, Method, ExpResponseContent, Config))
+    end,
+
+    % check filtering by sets
+    {ok, HandleServices} = oz_test_utils:list_handle_services(Config),
+    lists:foreach(fun(HandleServiceId) ->
+        ExpResponseBySetContent = lists:filtermap(fun({HandleId, TimeOffset}) ->
+            case lookup_handle_service_of_handle(Config, HandleId) of
+                HandleServiceId ->
+                    {true, BuildExpectedObject(HandleId, TimeOffset)};
+                _ ->
+                    false
+            end
+        end, IdsAndTimestamps),
+        ArgsWithSet = [{<<"set">>, HandleServiceId} | Args],
+        case {ExpResponseBySetContent, ListedObjects} of
+            {[], identifiers} ->
+                ?assert(check_list_identifiers_no_records_match_error(200, ArgsWithSet, Method, [], Config));
+            {_, identifiers} ->
+                ?assert(check_list_identifiers(200, ArgsWithSet, Method, ExpResponseBySetContent, Config));
+            {[], records} ->
+                ?assert(check_list_records_no_records_match_error(200, ArgsWithSet, Method, [], Config));
+            {_, records} ->
+                ?assert(check_list_records(200, ArgsWithSet, Method, ExpResponseBySetContent, Config))
+        end
+    end, HandleServices).
+
+list_sets_test_base(Config, Method) ->
+    {ok, User} = oz_test_utils:create_user(Config),
+
+    ExpectedHandleServiceIdsAndNames = lists:sort(lists:map(fun(_) ->
+        create_handle_service(Config, User)
+    end, lists:seq(1, rand:uniform(10)))),
+
+    ExpResponseContent = lists:map(fun({HandleServiceId, HandleServiceName}) ->
+        #xmlElement{name = set, content = [
+            #xmlElement{
+                name = setSpec,
+                content = [#xmlText{
+                    value = binary_to_list(HandleServiceId)
+                }]
+            },
+            #xmlElement{
+                name = setName,
+                content = [#xmlText{
+                    value = binary_to_list(HandleServiceName)
+                }]
+            }
+        ]}
+    end, ExpectedHandleServiceIdsAndNames),
+
+    ?assert(check_list_sets(200, Method, ExpResponseContent, Config)).
+
+list_sets_empty_repository_test_base(Config, Method) ->
+    ?assert(check_list_sets(200, Method, [], Config)).
 
 no_verb_test_base(Config, Method) ->
     ?assert(check_no_verb_error(200, [], Method, [], Config)).
@@ -960,7 +826,7 @@ cannot_disseminate_format_test_base(Config, Method) ->
     {ok, ShareId} = oz_test_utils:create_share(
         Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
     ),
-    HSId = create_handle_service(Config, User),
+    {HSId, _} = create_handle_service(Config, User),
     Identifier = create_handle(Config, User, HSId, ShareId, ?DC_METADATA_XML),
 
     Args = [
@@ -969,9 +835,6 @@ cannot_disseminate_format_test_base(Config, Method) ->
     ],
     ?assert(check_cannot_disseminate_format_error(200, Args, Method, [], Config)).
 
-no_set_hierarchy_test_base(Config, Method) ->
-    ?assert(check_no_set_hierarchy_error(200, [], Method, [], Config)).
-
 list_metadata_formats_no_format_error_test_base(Config, Method) ->
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
@@ -979,7 +842,7 @@ list_metadata_formats_no_format_error_test_base(Config, Method) ->
     {ok, ShareId} = oz_test_utils:create_share(
         Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
     ),
-    HSId = create_handle_service(Config, User),
+    {HSId, _} = create_handle_service(Config, User),
     Identifier = create_handle(Config, User, HSId, ShareId, ?DC_METADATA_XML),
     % Modify handle metadata to undefined (this should not occur in normal
     % conditions because entity logic won't accept undefined metadata,
@@ -1026,9 +889,19 @@ list_identifiers_wrong_date_format_error_test_base(Config, Method, From, Until) 
     Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
     ?assert(check_list_identifiers_bad_argument_error(200, Args, Method, [], Config)).
 
-list_records_no_set_error_test_base(Config, Method) ->
-    Args = prepare_harvesting_args(?DC_METADATA_PREFIX, undefined, undefined, <<"some_set">>),
-    ?assert(check_list_records_no_set_error(200, Args, Method, [], Config)).
+list_records_no_records_match_error_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
+
+    BeginTime = ?CURRENT_DATETIME(),
+    TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
+
+    setup_test_for_harvesting(Config, IdentifiersNum, BeginTime,
+        TimeOffsets, ?DC_METADATA_XML),
+
+    From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
+    Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
+    Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
+
+    ?assert(check_list_records_no_records_match_error(200, Args, Method, [], Config)).
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -1074,6 +947,10 @@ check_get_record(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"GetRecord">>, Args, Method, ExpResponseContent,
         'GetRecord', Config).
 
+check_list_sets(Code, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"ListSets">>, [], Method, ExpResponseContent,
+        'ListSets', Config).
+
 check_no_verb_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, none, Args, Method, ExpResponseContent,
         {error, badVerb}, Config).
@@ -1102,10 +979,6 @@ check_cannot_disseminate_format_error(Code, Args, Method, ExpResponseContent, Co
     check_oai_request(Code, <<"GetRecord">>, Args, Method, ExpResponseContent,
         {error, cannotDisseminateFormat}, Config).
 
-check_no_set_hierarchy_error(Code, Args, Method, ExpResponseContent, Config) ->
-    check_oai_request(Code, <<"ListSets">>, Args, Method, ExpResponseContent,
-        {error, noSetHierarchy}, Config).
-
 check_list_metadata_formats(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListMetadataFormats">>, Args, Method,
         ExpResponseContent, 'ListMetadataFormats', Config).
@@ -1130,9 +1003,9 @@ check_list_records(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListRecords">>, Args, Method,
         ExpResponseContent, 'ListRecords', Config).
 
-check_list_records_no_set_error(Code, Args, Method, ExpResponseContent, Config) ->
+check_list_records_no_records_match_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListRecords">>, Args, Method,
-        ExpResponseContent, {error, noSetHierarchy}, Config).
+        ExpResponseContent, {error, noRecordsMatch}, Config).
 
 check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Config) ->
 
@@ -1277,11 +1150,10 @@ ensure_atom(Arg) when is_binary(Arg) -> binary_to_atom(Arg, latin1);
 ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
 
 create_spaces(Config, SpacesNames, Client) ->
-    Result = lists:map(fun(SpaceName) ->
+    lists:map(fun(SpaceName) ->
         {ok, SpaceId} = oz_test_utils:create_space(Config, Client, SpaceName),
         SpaceId
-    end, SpacesNames),
-    Result.
+    end, SpacesNames).
 
 create_shares(Config, SpaceIds) ->
     ShareIds = ?SHARE_IDS(length(SpaceIds)),
@@ -1291,6 +1163,12 @@ create_shares(Config, SpaceIds) ->
         ),
         ShareId
     end, lists:zip(ShareIds, SpaceIds)).
+
+create_handle_services(Config, User, Count) ->
+    lists:map(fun(_) ->
+        {HSId, _} = create_handle_service(Config, User),
+        HSId
+    end, lists:seq(1, Count)).
 
 modify_handles_with_mocked_timestamp(Config, Identifiers, BeginTime, TimeOffsets,
     Metadata) ->
@@ -1315,28 +1193,34 @@ setup_test_for_harvesting(Config, RecordsNum, BeginTime, TimeOffsets, Metadata) 
     {ok, User} = oz_test_utils:create_user(Config),
     SpaceIds = create_spaces(Config, ?SPACE_NAMES(RecordsNum), ?USER(User)),
     ShareIds = create_shares(Config, SpaceIds),
-    HSId = create_handle_service(Config, User),
-    create_handles_with_mocked_timestamps(Config, User, HSId, ShareIds, BeginTime,
-        TimeOffsets, Metadata).
+    HandleServices = create_handle_services(Config, User, rand:uniform(RecordsNum)),
+    create_handles_with_mocked_timestamps(
+        Config, User, HandleServices, ShareIds, BeginTime, TimeOffsets, Metadata
+    ).
 
 %% for each SpaceId in SpaceIds creates share,
-%% adds metadata to this share and mock timestamp
-create_handles_with_mocked_timestamps(Config, User, HSId, ResourceIds, BeginTime,
-    TimeOffsets, Metadata) ->
-
+%% adds metadata to this share and mock timestamp,
+%% randomizing one of available handle services
+create_handles_with_mocked_timestamps(Config, User, HandleServices, ResourceIds, BeginTime, TimeOffsets, Metadata) ->
     lists:map(fun({ResourceId, TimeOffset}) ->
         MockedTimestamp = increase_timestamp(BeginTime, TimeOffset),
-        create_handle_with_mocked_timestamp(Config, User, HSId, ResourceId, Metadata, MockedTimestamp)
+        HandleServiceId = lists_utils:random_element(HandleServices),
+        create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId, Metadata, MockedTimestamp)
     end, lists:zip(ResourceIds, TimeOffsets)).
 
 create_handle_service(Config, User) ->
     ok = oz_test_utils:user_set_oz_privileges(Config, User, [
         ?OZ_HANDLE_SERVICES_CREATE
     ], []),
+    Name = str_utils:rand_hex(16),
     {ok, HSId} = oz_test_utils:create_handle_service(Config, ?USER(User),
-        ?DOI_NAME, ?PROXY_ENDPOINT, ?DOI_SERVICE_PROPERTIES
+        Name, ?PROXY_ENDPOINT, ?DOI_SERVICE_PROPERTIES
     ),
-    HSId.
+    {HSId, Name}.
+
+lookup_handle_service_of_handle(Config, HandleId) ->
+    {ok, #od_handle{handle_service = HandleServiceId}} = oz_test_utils:get_handle(Config, HandleId),
+    HandleServiceId.
 
 create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId, Metadata, Timestamp) ->
     Nodes = ?config(oz_worker_nodes, Config),
@@ -1455,8 +1339,46 @@ expected_dc_identifiers(Config, HandleId) ->
         }
     ].
 
-
 expected_admin_emails(Config) ->
     oz_test_utils:get_env(Config, admin_emails).
+
+expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedDCMetadata) ->
+    #xmlElement{name = record, content = [
+        expected_oai_header_xml(Config, HandleId, Timestamp),
+        #xmlElement{
+            name = metadata,
+            content = [
+                #xmlElement{
+                    name = 'oai_dc:dc',
+                    content = ExpectedDCMetadata
+                }
+            ]
+        }
+    ]}.
+
+expected_oai_header_xml(Config, HandleId, Timestamp) ->
+    #xmlElement{
+        name = header,
+        content = [
+            #xmlElement{
+                name = identifier,
+                content = [#xmlText{
+                    value = binary_to_list(oai_identifier(Config, HandleId))
+                }]
+            },
+            #xmlElement{
+                name = datestamp,
+                content = [#xmlText{
+                    value = to_datestamp(Timestamp)
+                }]
+            },
+            #xmlElement{
+                name = setSpec,
+                content = [#xmlText{
+                    value = binary_to_list(lookup_handle_service_of_handle(Config, HandleId))
+                }]
+            }
+        ]
+    }.
 
 
