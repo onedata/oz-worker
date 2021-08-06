@@ -18,7 +18,8 @@
 
 -record(oai_header, {
     identifier :: oai_id(),
-    datestamp :: binary()
+    datestamp :: binary(),
+    set_spec :: oai_set_spec()
 }).
 
 -record(oai_metadata_format, {
@@ -46,6 +47,12 @@
     about :: oai_about() | undefined
 }).
 
+% NOTE: handles in Onedata are grouped into sets, where every handle service is a separate set.
+-record(oai_set, {
+    set_spec :: oai_set_spec(),
+    set_name :: binary()
+}).
+
 -record(oai_error, {
     code :: oai_error_code(),
     description :: binary()
@@ -64,9 +71,12 @@
 -type oai_metadata() :: #oai_metadata{}.
 -type oai_about() :: #oai_about{}.
 -type oai_record() :: #oai_record{}.
+-type oai_set() :: #oai_set{}.
+-type oai_set_spec() :: od_handle_service:id().
 -type oai_error() :: #oai_error{}.
 -type oai_response() :: binary() | [binary()] |
                         oai_record() | [oai_record()] |
+                        [oai_set()] |
                         oai_header() | [oai_header()] |
                         oai_metadata_format() | [oai_metadata_format()].
 
