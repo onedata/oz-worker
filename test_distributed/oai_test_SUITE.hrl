@@ -13,7 +13,7 @@
     <<"<?xml version=\"1.0\"?>",
     "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
     "<dc:title>Test dataset<\/dc:title>",
-    "<dc:creator>John Johnson<\/dc:creator>",
+    "<dc:creator>John Johnson _πœę ßþą_śðæŋ-əłżź.ćńµジ<\/dc:creator>"/utf8,
     "<dc:creator>Jane Doe<\/dc:creator>",
     "<dc:subject>Test of datacite<\/dc:subject>",
     "<dc:description>Lorem ipsum lorem ipusm<\/dc:description>",

@@ -54,7 +54,7 @@ oai_identifier_decode(OAIId) ->
             throw({illegalId, OAIId})
     end.
 
--spec build_oai_header(oai_id(), od_handle:header()) -> #oai_header{}.
+-spec build_oai_header(oai_id(), od_handle:record()) -> #oai_header{}.
 build_oai_header(OaiId, Handle) ->
     #oai_header{
         identifier = OaiId,
@@ -143,7 +143,7 @@ harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, SetSpec, HarvestingFun) -
     end, Identifiers),
     case HarvestedMetadata of
         [] ->
-            throw({noRecordsMatch, FromDatestamp, UntilDatestamp, MetadataPrefix, SetSpec});
+            throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
         _ -> HarvestedMetadata
     end.
 

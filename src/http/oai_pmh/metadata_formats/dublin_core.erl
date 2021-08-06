@@ -114,7 +114,18 @@ encode(Metadata, AdditionalIdentifiers) ->
 
     MetadataContent = try xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]) of
         {#xmlElement{content = Content}, _} ->
-            Content
+            %% Xmerl works on strings in UTF8 (essentially the result of binary_to_list(<<_/utf8>>),
+            %% not unicode erlang-strings! However, its output IS expressed in unicode erlang-strings!
+            %% This is why we need to transform the resulting unicode strings to UTF8
+            %% strings before encoding and sending back to the client.
+            lists:map(fun
+                (#xmlElement{content = [#xmlText{value = Value} = Text]} = Element) when is_list(Value) ->
+                    Element#xmlElement{content = [
+                        Text#xmlText{value = binary_to_list(str_utils:unicode_list_to_binary(Value))}
+                    ]};
+                (Other) ->
+                    Other
+            end, Content)
     catch Type:Reason ->
         ?debug_stacktrace(
             "Cannot parse dublin core metadata due to ~p:~p, identifiers: ~p",

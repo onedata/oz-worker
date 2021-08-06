@@ -72,7 +72,7 @@
 -type oai_about() :: #oai_about{}.
 -type oai_record() :: #oai_record{}.
 -type oai_set() :: #oai_set{}.
--type oai_set_spec() :: oai_id().
+-type oai_set_spec() :: od_handle_service:id().
 -type oai_error() :: #oai_error{}.
 -type oai_response() :: binary() | [binary()] |
                         oai_record() | [oai_record()] |
