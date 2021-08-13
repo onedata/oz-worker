@@ -58,6 +58,7 @@ fetch_entity(_) ->
 operation_supported(get, configuration, _) -> true;
 operation_supported(get, test_image, _) -> true;
 operation_supported(get, privileges, _) -> true;
+operation_supported(get, health, _) -> true;
 operation_supported(get, {gui_message, _}, _) -> true;
 operation_supported(update, {gui_message, _}, _) -> true;
 
@@ -148,7 +149,12 @@ get(#el_req{gri = #gri{aspect = {gui_message, MessageId}}}, _) ->
     case gui_message:get(MessageId) of
         {ok, #document{value = Message}} -> {ok, Message};
         {error, not_found} -> throw(?ERROR_NOT_FOUND)
-    end.
+    end;
+
+get(#el_req{gri = #gri{aspect = health}}, _) ->
+    {ok, #{
+        <<"status">> => <<"healthy">>
+    }}.
 
 
 %%--------------------------------------------------------------------
@@ -209,6 +215,9 @@ authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
 
 authorize(#el_req{operation = get, gri = #gri{aspect = {gui_message, _}}}, _) ->
+    true;
+
+authorize(#el_req{operation = get, gri = #gri{aspect = health}}, _) ->
     true;
 
 authorize(#el_req{operation = update, gri = #gri{aspect = {gui_message, _}}}, _) ->

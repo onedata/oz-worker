@@ -41,6 +41,13 @@ routes() -> [
         produces = [<<"image/png">>],
         b_gri = #b_gri{type = oz_worker, id = undefined, aspect = test_image}
     }},
+    %% Perform healthckeck
+    %% This operation requires one of the following privileges:
+    {<<"/health">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = oz_worker, id = undefined, aspect = health}
+    }},
     %% List all admin privileges.
     %% This operation requires one of the following privileges:
     {<<"/privileges">>, #rest_req{
