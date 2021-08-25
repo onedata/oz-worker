@@ -152,9 +152,10 @@ get(#el_req{gri = #gri{aspect = {gui_message, MessageId}}}, _) ->
     end;
 
 get(#el_req{gri = #gri{aspect = health}}, _) ->
-    {ok, #{
-        <<"status">> => <<"healthy">>
-    }}.
+    case node_manager:is_cluster_healthy() of
+        true -> {ok, #{<<"status">> => <<"healthy">>}};
+        false -> throw(?ERROR_INTERNAL_SERVER_ERROR)
+    end.
 
 
 %%--------------------------------------------------------------------
