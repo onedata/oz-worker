@@ -50,6 +50,7 @@
 %%    <<"spaceId">> => binary(),
 %%    <<"fileName">> => binary(),
 %%    <<"operation">> := binary(), %% <<"submit">> | <<"delete">>
+%%    <<"datasetId">> := binary(),
 %%    <<"seq">> := pos_integer(),
 %%    <<"payload">> := #{
 %%        <<"json">> => binary(),
@@ -61,7 +62,7 @@
 -type batch() :: [batch_entry()].
 -type payload() :: #{binary => binary() | json_utils:json_map()}.
 -type metadata_type() :: json | xattrs | rdf.
--type file_details() :: fileName | fileType | spaceId | metadataExistenceFlags | datasetInfo.
+-type file_details() :: fileName | fileType | spaceId | metadataExistenceFlags | datasetInfo | archiveInfo.
 
 -type index_submit_response() :: ok | {error, SuccessfulSeq :: pos_integer() | undefined,
     FailedSeq :: pos_integer(), ErrorMsg :: binary()}.
@@ -164,7 +165,7 @@ all_metadata_types() ->
 
 -spec all_file_details() -> [file_details()].
 all_file_details() ->
-    [fileName, fileType, spaceId, metadataExistenceFlags, datasetInfo].
+    [fileName, fileType, spaceId, metadataExistenceFlags, datasetInfo, archiveInfo].
 
 %%%===================================================================
 %%% datastore_model callbacks
