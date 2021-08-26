@@ -821,7 +821,7 @@ prepare_internal_fields_schema(_, Map) ->
     Map.
 
 
--spec get_es_schema_type(text | boolean) -> map().
+-spec get_es_schema_type(text | boolean | integer) -> map().
 get_es_schema_type(text) ->
     #{
         <<"type">> => <<"text">>,

@@ -51,6 +51,9 @@
 %%    <<"fileName">> => binary(),
 %%    <<"operation">> := binary(), %% <<"submit">> | <<"delete">>
 %%    <<"datasetId">> := binary(),
+%%    <<"archiveId">> := binary(),
+%%    <<"archiveDescription">> := binary(),
+%%    <<"archiveCreationTime">> := non_neg_integer(),
 %%    <<"seq">> := pos_integer(),
 %%    <<"payload">> := #{
 %%        <<"json">> => binary(),
