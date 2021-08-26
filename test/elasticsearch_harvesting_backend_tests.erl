@@ -487,7 +487,7 @@ parse_batch_result_test_base(ExpectedWithIgnore, ExpectedWithoutIgnore, BatchRes
 prepare_internal_fields_schema_test() ->
     TextEsType = elasticsearch_harvesting_backend:get_es_schema_type(text),
     BooleanEsType = elasticsearch_harvesting_backend:get_es_schema_type(boolean),
-    IntegerEsType = elasticsearch_harvesting_backend:get_es_schema_type(integer),
+    DateEsType = elasticsearch_harvesting_backend:get_es_schema_type(date),
     ?assertEqual(
         #{<<"rdf">> => TextEsType},
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
@@ -594,7 +594,7 @@ prepare_internal_fields_schema_test() ->
         #{
             <<"archiveId">> => TextEsType,
             <<"archiveDescription">> => TextEsType,
-            <<"archiveCreationTime">> => IntegerEsType
+            <<"archiveCreationTime">> => DateEsType
         },
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
             #harvester_index{

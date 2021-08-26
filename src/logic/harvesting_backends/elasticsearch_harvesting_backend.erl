@@ -795,7 +795,7 @@ prepare_internal_fields_schema(
     #harvester_index{include_file_details = [archiveInfo | FileDetailsTail]} = IndexInfo, Map
 ) ->
     NewMap = kv_utils:put([<<"archiveId">>], get_es_schema_type(text), Map),
-    NewMap1 = kv_utils:put([<<"archiveCreationTime">>], get_es_schema_type(integer), NewMap),
+    NewMap1 = kv_utils:put([<<"archiveCreationTime">>], get_es_schema_type(date), NewMap),
     NewMap2 = kv_utils:put([<<"archiveDescription">>], get_es_schema_type(text), NewMap1),
     prepare_internal_fields_schema(IndexInfo#harvester_index{include_file_details = FileDetailsTail}, NewMap2);
 prepare_internal_fields_schema(
@@ -821,7 +821,7 @@ prepare_internal_fields_schema(_, Map) ->
     Map.
 
 
--spec get_es_schema_type(text | boolean | integer) -> map().
+-spec get_es_schema_type(text | boolean | date) -> map().
 get_es_schema_type(text) ->
     #{
         <<"type">> => <<"text">>,
@@ -836,9 +836,10 @@ get_es_schema_type(boolean) ->
     #{
         <<"type">> => <<"boolean">>
     };
-get_es_schema_type(integer) ->
+get_es_schema_type(date) ->
     #{
-        <<"type">> => <<"integer">>
+        <<"type">> => <<"date">>,
+        <<"format">> => <<"strict_date_optional_time||epoch_second">>
     }.
 
 
