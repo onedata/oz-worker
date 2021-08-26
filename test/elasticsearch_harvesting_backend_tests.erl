@@ -487,6 +487,7 @@ parse_batch_result_test_base(ExpectedWithIgnore, ExpectedWithoutIgnore, BatchRes
 prepare_internal_fields_schema_test() ->
     TextEsType = elasticsearch_harvesting_backend:get_es_schema_type(text),
     BooleanEsType = elasticsearch_harvesting_backend:get_es_schema_type(boolean),
+    DateEsType = elasticsearch_harvesting_backend:get_es_schema_type(date),
     ?assertEqual(
         #{<<"rdf">> => TextEsType},
         elasticsearch_harvesting_backend:prepare_internal_fields_schema(
@@ -586,6 +587,19 @@ prepare_internal_fields_schema_test() ->
             #harvester_index{
                 include_metadata = [],
                 include_file_details = [fileType, datasetInfo]
+            },
+            #{}
+        )),
+    ?assertEqual(
+        #{
+            <<"archiveId">> => TextEsType,
+            <<"archiveDescription">> => TextEsType,
+            <<"archiveCreationTime">> => DateEsType
+        },
+        elasticsearch_harvesting_backend:prepare_internal_fields_schema(
+            #harvester_index{
+                include_metadata = [],
+                include_file_details = [archiveInfo]
             },
             #{}
         )),
@@ -790,6 +804,9 @@ call_prepare_data(Payload, IndexInfo, RejectedFields) ->
         <<"fileName">> => <<"fileName">>,
         <<"fileType">> => <<"fileType">>,
         <<"datasetId">> => <<"datasetId">>,
+        <<"archiveId">> => <<"archiveId">>,
+        <<"archiveCreationTime">> => 8,
+        <<"archiveDescription">> => <<"archiveDescription">>,
         <<"payload">> => Payload,
         <<"spaceId">> => <<"spaceId">>
     }, IndexInfo, {RejectedFields, RejectionReason}).
@@ -799,6 +816,12 @@ expected_file_details(datasetInfo) ->
     #{
         <<"datasetId">> =>  <<"datasetId">>,
         <<"isDataset">> => true
+    };
+expected_file_details(archiveInfo) ->
+    #{
+        <<"archiveId">> => <<"archiveId">>,
+        <<"archiveCreationTime">> => 8,
+        <<"archiveDescription">> => <<"archiveDescription">>
     };
 expected_file_details(FileDetail) ->
     BinaryFileDetail = atom_to_binary(FileDetail, utf8),

@@ -428,10 +428,8 @@ prepare_data(BatchEntry, IndexInfo, {RejectedFields, _RejectionReason} = RI) ->
     FileDetailsToInclude = atoms_to_binaries(IndexInfo#harvester_index.include_file_details),
 
     InternalParams = maps:with(FileDetailsToInclude, BatchEntry),
-    InternalParams1 = case lists:member(datasetInfo, IndexInfo#harvester_index.include_file_details) of
-        true -> maps:merge(InternalParams, add_dataset_info(BatchEntry));
-        false -> InternalParams
-    end,
+    InternalParams1 = maps:merge(
+        InternalParams, select_info_from_entry(IndexInfo#harvester_index.include_file_details, BatchEntry)),
 
     Payload = maps:with(MetadataTypesToInclude, maps:get(<<"payload">>, BatchEntry, #{})),
     {IsJsonHarvestable, JsonMetadata} = normalize_json_metadata(maps:get(<<"json">>, Payload, #{})),
@@ -453,15 +451,30 @@ prepare_data(BatchEntry, IndexInfo, {RejectedFields, _RejectionReason} = RI) ->
 
 
 %% @private
--spec add_dataset_info(od_harvester:batch_entry()) -> map().
-add_dataset_info(BatchEntry) ->
+-spec select_info_from_entry([od_harvester:file_details()], od_harvester:batch_entry()) -> map().
+select_info_from_entry(FileDetailsToInclude, BatchEntry) ->
+    lists:foldl(fun(InfoType, Acc) ->
+        case lists:member(InfoType, FileDetailsToInclude) of
+            true -> maps:merge(Acc, prepare_info(InfoType, BatchEntry));
+            false -> Acc
+        end
+    end, #{}, [archiveInfo, datasetInfo]).
+
+
+%% @private
+-spec prepare_info(od_harvester:file_details(), od_harvester:batch_entry()) -> map().
+prepare_info(datasetInfo, BatchEntry) ->
     case maps:find(<<"datasetId">>, BatchEntry) of
         {ok, DatasetId} -> #{
             <<"datasetId">> => DatasetId,
             <<"isDataset">> => true
         };
         error -> #{}
-    end.
+    end;
+prepare_info(archiveInfo, BatchEntry) ->
+    maps:with([<<"archiveId">>, <<"archiveDescription">>, <<"archiveCreationTime">>], BatchEntry);
+prepare_info(_, _BatchEntry) ->
+    #{}.
 
 
 %% @private
@@ -779,6 +792,13 @@ prepare_internal_fields_schema(
     NewMap1 = kv_utils:put([<<"isDataset">>], get_es_schema_type(boolean), NewMap),
     prepare_internal_fields_schema(IndexInfo#harvester_index{include_file_details = FileDetailsTail}, NewMap1);
 prepare_internal_fields_schema(
+    #harvester_index{include_file_details = [archiveInfo | FileDetailsTail]} = IndexInfo, Map
+) ->
+    NewMap = kv_utils:put([<<"archiveId">>], get_es_schema_type(text), Map),
+    NewMap1 = kv_utils:put([<<"archiveCreationTime">>], get_es_schema_type(date), NewMap),
+    NewMap2 = kv_utils:put([<<"archiveDescription">>], get_es_schema_type(text), NewMap1),
+    prepare_internal_fields_schema(IndexInfo#harvester_index{include_file_details = FileDetailsTail}, NewMap2);
+prepare_internal_fields_schema(
     #harvester_index{include_file_details = [FileDetail | FileDetailsTail]} = IndexInfo, Map
 ) ->
     NewMap = kv_utils:put([atom_to_binary(FileDetail, utf8)], get_es_schema_type(text), Map),
@@ -801,7 +821,7 @@ prepare_internal_fields_schema(_, Map) ->
     Map.
 
 
--spec get_es_schema_type(text | boolean) -> map().
+-spec get_es_schema_type(text | boolean | date) -> map().
 get_es_schema_type(text) ->
     #{
         <<"type">> => <<"text">>,
@@ -815,6 +835,11 @@ get_es_schema_type(text) ->
 get_es_schema_type(boolean) ->
     #{
         <<"type">> => <<"boolean">>
+    };
+get_es_schema_type(date) ->
+    #{
+        <<"type">> => <<"date">>,
+        <<"format">> => <<"strict_date_optional_time||epoch_second">>
     }.
 
 
