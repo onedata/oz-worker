@@ -41,7 +41,7 @@ routes() -> [
         produces = [<<"image/png">>],
         b_gri = #b_gri{type = oz_worker, id = undefined, aspect = test_image}
     }},
-    %% Perform healthckeck
+    %% Check cluster health
     %% This operation requires one of the following privileges:
     {<<"/health">>, #rest_req{
         method = 'GET',
