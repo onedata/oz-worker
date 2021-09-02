@@ -385,12 +385,12 @@ check_rest_call(Config, Headers, ExpResult) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 

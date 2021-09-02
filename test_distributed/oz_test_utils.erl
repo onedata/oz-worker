@@ -325,8 +325,8 @@ call_oz(Config, Module, Function, Args) ->
     FunWrapper = fun() ->
         try
             erlang:apply(Module, Function, Args)
-        catch Type:Reason ->
-            {crash, Type, Reason, lager:pr_stacktrace(erlang:get_stacktrace())}
+        catch Type:Reason:Stacktrace ->
+            {crash, Type, Reason, lager:pr_stacktrace(Stacktrace)}
         end
     end,
     Nodes = ?OZ_NODES(Config),
@@ -2922,6 +2922,16 @@ delete_storage(Config, StorageId) ->
     )).
 
 
+-spec list_atm_inventories(Config :: term()) -> {ok, [od_atm_inventory:id()]}.
+list_atm_inventories(Config) ->
+    ?assertMatch({ok, _}, call_oz(Config, atm_inventory_logic, list, [?ROOT])).
+
+
+-spec delete_atm_inventory(Config :: term(), od_atm_inventory:id()) -> ok.
+delete_atm_inventory(Config, AtmInventoryId) ->
+    ?assertMatch(ok, call_oz(Config, atm_inventory_logic, delete, [?ROOT, AtmInventoryId])).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Asserts that an invite token's usage limit was reached or not
@@ -3081,13 +3091,17 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     {ok, Groups} = list_groups(Config),
     {ok, Users} = list_users(Config),
     {ok, Harvesters} = list_harvesters(Config),
+    {ok, AtmInventories} = list_atm_inventories(Config),
     lists_utils:pforeach(fun(PId) -> delete_provider(Config, PId) end, Providers),
     lists_utils:pforeach(fun(HId) -> delete_handle(Config, HId) end, Handles),
     lists_utils:pforeach(fun(ShId) -> delete_share(Config, ShId) end, Shares),
     lists_utils:pforeach(fun(SpId) -> delete_space(Config, SpId) end, Spaces),
     lists_utils:pforeach(fun(HSId) -> delete_handle_service(Config, HSId) end, HServices),
     lists_utils:pforeach(fun(HId) -> delete_harvester(Config, HId) end, Harvesters),
+    lists_utils:pforeach(fun(AIId) -> delete_atm_inventory(Config, AIId) end, AtmInventories),
     % Clusters and storages are removed together with providers
+    % Workflow schemas are removed together with Inventories
+    % Atm Lambdas are removed when all their linked inventories are
 
     % Check if predefined groups should be removed too.
     GroupsToDelete = case RemovePredefinedGroups of
@@ -3304,12 +3318,12 @@ timestamp_seconds(Config) ->
 %%--------------------------------------------------------------------
 -spec freeze_time(Config :: term()) -> ok.
 freeze_time(Config) ->
-    clock_freezer_mock:setup_on_nodes(?OZ_NODES(Config), [global_clock]).
+    clock_freezer_mock:setup_for_ct(?OZ_NODES(Config), [global_clock]).
 
 
 -spec unfreeze_time(Config :: term()) -> ok.
 unfreeze_time(Config) ->
-    clock_freezer_mock:teardown_on_nodes(?OZ_NODES(Config)).
+    clock_freezer_mock:teardown_for_ct(?OZ_NODES(Config)).
 
 
 -spec get_frozen_time_seconds() -> time:seconds().
@@ -3394,7 +3408,7 @@ read_auth_config(Config) ->
 -spec overwrite_config(TestConfig :: term(), ConfigFileEnv :: atom(), ConfigData :: term()) -> ok.
 overwrite_config(TestConfig, ConfigFileEnv, ConfigData) ->
     ConfigPath = get_env(TestConfig, ConfigFileEnv),
-    rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [
+    utils:rpc_multicall(?OZ_NODES(TestConfig), file, write_file, [
         ConfigPath, io_lib:format("~tp.~n", [ConfigData])
     ]),
     ok.
@@ -3408,7 +3422,7 @@ overwrite_config(TestConfig, ConfigFileEnv, ConfigData) ->
 -spec overwrite_auth_config(TestConfig :: term(), auth_config:config_v2_or_later()) -> ok.
 overwrite_auth_config(TestConfig, AuthConfigData) ->
     overwrite_config(TestConfig, auth_config_file, AuthConfigData#{version => ?CURRENT_CONFIG_VERSION}),
-    rpc:multicall(?OZ_NODES(TestConfig), auth_config, force_auth_config_reload, []),
+    utils:rpc_multicall(?OZ_NODES(TestConfig), auth_config, force_auth_config_reload, []),
     ok.
 
 
@@ -3431,9 +3445,9 @@ overwrite_test_auth_config(TestConfig, AuthConfigData) ->
 overwrite_compatibility_registry(TestConfig, Registry) ->
     CurrentRegistryPath = call_oz(TestConfig, ctool, get_env, [current_compatibility_registry_file]),
     DefaultRegistryPath = call_oz(TestConfig, ctool, get_env, [default_compatibility_registry_file]),
-    rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [CurrentRegistryPath, json_utils:encode(Registry)]),
-    rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [DefaultRegistryPath, json_utils:encode(Registry)]),
-    rpc:multicall(?OZ_NODES(TestConfig), compatibility, clear_registry_cache, []),
+    utils:rpc_multicall(?OZ_NODES(TestConfig), file, write_file, [CurrentRegistryPath, json_utils:encode(Registry)]),
+    utils:rpc_multicall(?OZ_NODES(TestConfig), file, write_file, [DefaultRegistryPath, json_utils:encode(Registry)]),
+    utils:rpc_multicall(?OZ_NODES(TestConfig), compatibility, clear_registry_cache, []),
     ok.
 
 
@@ -3578,7 +3592,7 @@ get_env(Config, Name, Default) ->
 %%--------------------------------------------------------------------
 -spec set_env(Config :: term(), Name :: atom(), Value :: term()) -> ok.
 set_env(Config, Name, Value) ->
-    {_, []} = rpc:multicall(?OZ_NODES(Config), oz_worker, set_env, [Name, Value]),
+    {_, []} = utils:rpc_multicall(?OZ_NODES(Config), oz_worker, set_env, [Name, Value]),
     ok.
 
 
@@ -3589,7 +3603,7 @@ set_env(Config, Name, Value) ->
 %%--------------------------------------------------------------------
 -spec set_app_env(Config :: term(), App :: atom(), Name :: atom(), Value :: term()) -> ok.
 set_app_env(Config, App, Name, Value) ->
-    {_, []} = rpc:multicall(?OZ_NODES(Config), application, set_env, [App, Name, Value]),
+    {_, []} = utils:rpc_multicall(?OZ_NODES(Config), application, set_env, [App, Name, Value]),
     ok.
 
 

@@ -767,7 +767,7 @@ list_spaces_test(Config) ->
             args = [auth, St1],
             expected_result = ?OK_LIST(ExpSpaces)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -1056,10 +1056,10 @@ modify_imported_storage_test(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().

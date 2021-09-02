@@ -59,8 +59,8 @@ handle(<<"POST">>, Req) ->
     catch
         throw:{error, _} = ThrownError ->
             ThrownError;
-        Type:Reason ->
-            ?error_stacktrace("Error while processing GUI upload - ~p:~p", [Type, Reason]),
+        Type:Reason:Stacktrace ->
+            ?error_stacktrace("Error while processing GUI upload - ~p:~p", [Type, Reason], Stacktrace),
             ?ERROR_INTERNAL_SERVER_ERROR
     end,
     case Result of
@@ -219,10 +219,12 @@ stream_and_deploy_package(Req, GuiType, GuiId, ServiceReleaseVersion) ->
             {error, _} = Error ->
                 Error
         end
-    catch Type:Message ->
-        ?error_stacktrace("Error while streaming GUI upload for ~s:~s - ~p:~p", [
-            GuiPrefix, GuiId, Type, Message
-        ]),
+    catch Type:Message:Stacktrace ->
+        ?error_stacktrace(
+            "Error while streaming GUI upload for ~s:~s - ~p:~p",
+            [GuiPrefix, GuiId, Type, Message],
+            Stacktrace
+        ),
         ?ERROR_INTERNAL_SERVER_ERROR
     after
         mochitemp:rmtempdir(TempDir)

@@ -97,7 +97,7 @@ all() -> ?ALL([
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     [{?LOAD_MODULES, [oz_test_utils, rest_test_utils, oidc_server_mock]} | Config].
 
 
@@ -121,7 +121,7 @@ end_per_testcase(_, Config) ->
     ok.
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 

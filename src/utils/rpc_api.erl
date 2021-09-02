@@ -50,8 +50,7 @@ apply(Function, Args) ->
     try
         erlang:apply(?MODULE, Function, Args)
     catch
-        throw:Error ->
-            Stacktrace = erlang:get_stacktrace(),
+        throw:Error:Stacktrace ->
             {badrpc, {'EXIT', {Error, Stacktrace}}}
     end.
 

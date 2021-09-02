@@ -359,12 +359,13 @@ get_authority_delegation_config(IdP, IdPConfig) ->
 %% Tries to match access token's prefix to any IdP by its configured prefix.
 %% @end
 %%--------------------------------------------------------------------
--spec find_openid_idp_by_access_token(idp_auth:access_token()) -> false | {true, idp()}.
+-spec find_openid_idp_by_access_token(idp_auth:access_token()) ->
+    false | {true, {idp(), TokenPrefix :: binary()}}.
 find_openid_idp_by_access_token(AccessTokenWithPrefix) ->
     find_openid_idp_by_access_token(AccessTokenWithPrefix, ?CFG_SUPPORTED_IDPS).
 
 -spec find_openid_idp_by_access_token(idp_auth:access_token(), [{idp(), config_section()}]) ->
-    false | {true, idp()}.
+    false | {true, {idp(), TokenPrefix :: binary()}}.
 find_openid_idp_by_access_token(_, []) ->
     false;
 find_openid_idp_by_access_token(AccessTokenWithPrefix, [{IdP, IdPConfig} | Rest]) ->
@@ -621,10 +622,13 @@ fetch_auth_config() ->
                 UpgradedCfg = upgrade_auth_config(FoundVersion, ?CURRENT_CONFIG_VERSION),
                 node_cache:put(cached_auth_config, UpgradedCfg, ?CONFIG_CACHE_TTL),
                 UpgradedCfg
-            catch Type:Reason ->
-                ?alert_stacktrace("Failed to upgrade auth.config / saml.config, the "
-                "login page will not work. Please upgrade the config manually. "
-                "Reason - ~p:~p", [Type, Reason]),
+            catch Type:Reason:Stacktrace ->
+                ?alert_stacktrace(
+                    "Failed to upgrade auth.config / saml.config, the login page "
+                    "will not work. Please upgrade the config manually. Reason - ~p:~p",
+                    [Type, Reason],
+                    Stacktrace
+                ),
                 #{}
             end;
         {error, enoent} ->

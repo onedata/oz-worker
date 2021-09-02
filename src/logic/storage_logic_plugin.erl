@@ -445,6 +445,14 @@ support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) ->
         end)
     end, Space#od_space.harvesters),
 
+    % provider supports are recalculated asynchronously - wait for it before
+    % returning to avoid race conditions when providers try to fetch the space
+    % entity, but they are not yet recognized as effective supporters and declined
+    utils:wait_until(fun() ->
+        space_logic:is_supported_by_provider(SpaceId, ProviderId) andalso
+            provider_logic:supports_space(ProviderId, SpaceId)
+    end),
+
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
     {ok, resource, {NewGRI, {SpaceData, Rev}}}.
 

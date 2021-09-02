@@ -108,7 +108,7 @@ list_test(Config) ->
             args = [auth],
             expected_result = ?OK_LIST(ExpHandles)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -210,7 +210,7 @@ create_test(Config) ->
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(Env, Data) ->
                 HService = maps:get(<<"handleServiceId">>, Data),
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/handles/">>]),
                     [HandleId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyResult(Env, HandleId, HService)
@@ -226,7 +226,7 @@ create_test(Config) ->
                 ?OK_TERM(fun(Result) -> VerifyResult(Env, Result, HService) end)
             end)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [
                 <<"handleServiceId">>, <<"resourceType">>,
@@ -392,7 +392,7 @@ get_test(Config) ->
             args = [auth, HandleId],
             expected_result = api_test_expect:protected_handle(logic, HandleId, HandleData, ?SUB(user, U1))
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
 
@@ -590,11 +590,11 @@ delete_test(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

@@ -69,11 +69,11 @@ init_per_suite(Config) ->
 
 init_per_testcase(_, Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     Config.
 
 end_per_testcase(_, _Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop(),
     ok.
 

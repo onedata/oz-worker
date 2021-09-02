@@ -111,7 +111,7 @@ list_handles_test(Config) ->
             args = [auth, G1],
             expected_result = ?OK_LIST(ExpHandles)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -184,7 +184,7 @@ create_handle_test(Config) ->
             path = [<<"/groups/">>, G1, <<"/handles">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(Env, _Data) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/groups/">>, G1, <<"/handles/">>]),
                     [HandleId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyResult(Env, HandleId)
@@ -327,7 +327,7 @@ get_handle_details_test(Config) ->
             args = [auth, G1, HandleId],
             expected_result = api_test_expect:protected_handle(logic, HandleId, HandleData, ?SUB(nobody))
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -388,7 +388,7 @@ leave_handle_test(Config) ->
             args = [auth, G1, handleId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
@@ -427,7 +427,7 @@ list_eff_handles_test(Config) ->
             args = [auth, G1],
             expected_result = ?OK_LIST(ExpHandles)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -474,7 +474,7 @@ get_eff_handle_details_test(Config) ->
                 args = [auth, G1, HandleId],
                 expected_result = api_test_expect:protected_handle(logic, HandleId, HandleData, ?SUB(nobody))
             }
-            % TODO gs
+            % TODO VFS-4520 Tests for GraphSync API
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
@@ -487,11 +487,11 @@ get_eff_handle_details_test(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

@@ -41,22 +41,22 @@
 %%--------------------------------------------------------------------
 -spec freeze_time() -> ok.
 freeze_time() ->
-    clock_freezer_mock:setup_on_nodes(ozt:get_nodes(), [global_clock]).
+    oz_test_utils:freeze_time(ozt:get_test_config()).
 
 
 -spec unfreeze_time() -> ok.
 unfreeze_time() ->
-    clock_freezer_mock:teardown_on_nodes(ozt:get_nodes()).
+    oz_test_utils:unfreeze_time(ozt:get_test_config()).
 
 
 -spec get_frozen_time_seconds() -> time:seconds() | no_return().
 get_frozen_time_seconds() ->
-    clock_freezer_mock:current_time_seconds().
+    oz_test_utils:get_frozen_time_seconds().
 
 
 -spec simulate_seconds_passing(time:seconds()) -> ok.
 simulate_seconds_passing(Seconds) ->
-    clock_freezer_mock:simulate_seconds_passing(Seconds).
+    oz_test_utils:simulate_seconds_passing(Seconds).
 
 
 %%--------------------------------------------------------------------

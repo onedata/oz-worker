@@ -909,7 +909,7 @@ list_records_no_records_match_error_test_base(Config, Method, IdentifiersNum, Fr
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     Posthook = fun(NewConfig) ->
         [Node1 | _] = ?config(oz_worker_nodes, NewConfig),
         [
@@ -932,7 +932,7 @@ end_per_testcase(_, Config) ->
     ok.
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 %%%===================================================================
@@ -1249,7 +1249,7 @@ mock_handle_proxy(Config) ->
     ok = test_utils:mock_new(Nodes, handle_proxy_client),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
         fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->
-            {ok, 201, [{<<"location">>, <<"/test_location">>}], <<"">>}
+            {ok, 201, [{?HDR_LOCATION, <<"/test_location">>}], <<"">>}
         end),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, patch,
         fun(?PROXY_ENDPOINT, <<"/handle", _/binary>>, _, _) ->

@@ -74,8 +74,8 @@ handle(<<"POST">>, Req) ->
             catch
                 throw:{error, _} = Error ->
                     ?ERROR_REPLY(Error, Req2);
-                Type:Message ->
-                    ?debug_stacktrace("Bad request in ~p - ~p:~p", [?MODULE, Type, Message]),
+                Type:Message:Stacktrace ->
+                    ?debug_stacktrace("Bad request in ~p - ~p:~p", [?MODULE, Type, Message], Stacktrace),
                     ?ERROR_REPLY(?ERROR_MALFORMED_DATA, Req2)
             end
     end.

@@ -37,7 +37,8 @@
     create_basic_doi_hservice_env/2,
     create_basic_handle_env/2,
     create_basic_harvester_env/2,
-    create_basic_cluster_env/2
+    create_basic_cluster_env/2,
+    create_basic_atm_inventory_env/1
 ]).
 -export([
     create_eff_parent_groups_env/1,
@@ -48,12 +49,14 @@
     create_handle_eff_users_env/1,
     create_harvester_eff_users_env/1,
     create_cluster_eff_users_env/1,
+    create_atm_inventory_eff_users_env/1,
     create_eff_spaces_env/1,
     create_eff_providers_env/1,
     create_harvester_eff_providers_env/1,
     create_eff_handle_services_env/1,
     create_eff_handles_env/1,
-    create_eff_harvesters_env/1
+    create_eff_harvesters_env/1,
+    create_eff_atm_inventories_env/1
 ]).
 
 
@@ -80,12 +83,12 @@ run_scenario(Function, Args) ->
     catch
         throw:fail ->
             false;
-        Type:Message ->
+        Type:Message:Stacktrace ->
             ct:pal(
                 "Unexpected error in ~p:run_scenario - ~p:~p~nStacktrace: ~s",
                 [
                     ?MODULE, Type, Message,
-                    lager:pr_stacktrace(erlang:get_stacktrace())
+                    lager:pr_stacktrace(Stacktrace)
                 ]
             ),
             false
@@ -760,6 +763,30 @@ create_basic_cluster_env(Config, Privs) ->
     {ClusterId, U1, U2, {ProviderId, ProviderToken}}.
 
 
+create_basic_atm_inventory_env(Privs) when not is_list(Privs) ->
+    create_basic_atm_inventory_env([Privs]);
+create_basic_atm_inventory_env(Privs) ->
+    %% Create environment with the following relations:
+    %%
+    %%                  AtmInventory
+    %%                    /     \
+    %%                   /       \
+    %%          [~privileges]  [privileges]
+    %%                 /           \
+    %% UserWithoutPrivileges  UserWithPrivileges
+
+    UserWithoutPrivileges = ozt_users:create(),
+    UserWithPrivileges = ozt_users:create(),
+
+    AllAtmInventoryPrivs = privileges:atm_inventory_privileges(),
+    AtmInventory = ozt_atm_inventories:create(),
+    ozt_atm_inventories:add_user(AtmInventory, UserWithoutPrivileges, AllAtmInventoryPrivs -- Privs),
+    ozt_atm_inventories:add_user(AtmInventory, UserWithPrivileges, Privs),
+    ozt:reconcile_entity_graph(),
+
+    {AtmInventory, UserWithoutPrivileges, UserWithPrivileges}.
+
+
 create_eff_parent_groups_env(Config) ->
     %% Create environment with the following relations:
     %%
@@ -1181,6 +1208,50 @@ create_cluster_eff_users_env(Config) ->
     {ClusterId, Groups, Users, {U1, U2, NonAdmin}, {ProviderId, ProviderToken}}.
 
 
+create_atm_inventory_eff_users_env(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%                AtmInventory
+    %%                 /  |  \
+    %%                /   |   \
+    %%   [~atm_inv_view]  |  [atm_inv_view]
+    %%           /        |        \
+    %%        User1     Group1    User2
+    %%                 /      \
+    %%                /        \
+    %%             Group6     Group2
+    %%              /         /    \
+    %%           User6       /     User3
+    %%                    Group3
+    %%                    /    \
+    %%                   /      \
+    %%                Group4  Group5
+    %%                 /          \
+    %%               User4      User5
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {
+        [{FirstGroup, _} | _] = Groups, Users
+    } = create_eff_child_groups_env(Config),
+
+    UserWithoutView = ozt_users:create(),
+    UserWithView = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+
+    AllAtmInventoryPrivs = privileges:atm_inventory_privileges(),
+    AtmInventory = ozt_atm_inventories:create(),
+    ozt_atm_inventories:add_user(AtmInventory, UserWithoutView, AllAtmInventoryPrivs -- [?ATM_INVENTORY_VIEW]),
+    ozt_atm_inventories:add_user(AtmInventory, UserWithView, [?ATM_INVENTORY_VIEW]),
+
+    ozt_atm_inventories:add_group(AtmInventory, FirstGroup),
+
+    ozt:reconcile_entity_graph(),
+
+    {AtmInventory, Groups, Users, {UserWithoutView, UserWithView, NonAdmin}}.
+
+
 create_eff_spaces_env(Config) ->
     %% Create environment with the following relations:
     %%
@@ -1436,6 +1507,7 @@ create_eff_handles_env(Config) ->
 
     {Handles, Groups, Users}.
 
+
 create_eff_harvesters_env(Config) ->
     %% Create environment with the following relations:
     %%
@@ -1477,3 +1549,44 @@ create_eff_harvesters_env(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {Harvesters, Groups, Users}.
+
+
+create_eff_atm_inventories_env(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%  AtmInventory4 AtmInventory5
+    %%          \     /
+    %%           \   /
+    %%          Group5   AtmInventory3
+    %%              \      /
+    %%               \    /
+    %%               Group4        AtmInventory2
+    %%                   \            /
+    %%                    \          /
+    %%                   Group3    Group2
+    %%                      \      /      AtmInventory1
+    %%                       \    /         /
+    %%                       Group1 --------
+    %%                      /      \
+    %%              [group_view]  [~group_view]
+    %%                   /            \
+    %%                User1          User2
+    %%
+    %%          <<user>>
+    %%          NonAdmin
+
+    {
+        [{G1, _}, {G2, _}, _, {G4, _}, {G5, _}] = Groups, Users
+    } = create_eff_parent_groups_env(Config),
+
+    AtmInventories = lists:map(
+        fun(GroupId) ->
+            AtmInventoryData = #{<<"name">> => ?UNIQUE_STRING},
+            AtmInventoryId = ozt_groups:create_atm_inventory_for(GroupId, AtmInventoryData),
+            {AtmInventoryId, AtmInventoryData}
+        end, [G1, G2, G4, G5, G5]
+    ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {AtmInventories, Groups, Users}.

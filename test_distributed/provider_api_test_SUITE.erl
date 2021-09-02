@@ -204,7 +204,7 @@ create_test(Config) ->
                 end)
             end)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [
                 <<"token">>, <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>
@@ -507,7 +507,7 @@ list_test(Config) ->
             args = [auth],
             expected_result = ?OK_LIST(ExpProviders)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -799,7 +799,7 @@ list_eff_users_test(Config) ->
             args = [auth, P1],
             expected_result = ?OK_LIST(ExpUsers)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -1041,7 +1041,7 @@ list_eff_groups_test(Config) ->
             args = [auth, P1],
             expected_result = ?OK_LIST(ExpGroups)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -1389,7 +1389,7 @@ list_eff_spaces_test(Config) ->
             args = [auth, P1],
             expected_result = ?OK_LIST(ExpSpaces)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -2375,7 +2375,7 @@ get_current_time_test(Config) ->
                 Result > 0
             end)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -2448,7 +2448,7 @@ verify_provider_identity_test(Config) ->
             args = [auth, data],
             expected_result = ?OK_RES
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [
                 <<"providerId">>, <<"token">>
@@ -2530,11 +2530,11 @@ last_activity_tracking(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(list_eff_harvesters_test, Config) ->

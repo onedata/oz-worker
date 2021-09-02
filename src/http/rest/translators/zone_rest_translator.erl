@@ -47,4 +47,7 @@ get_response(#gri{id = undefined, aspect = test_image}, TestImage) ->
     rest_translator:ok_body_reply(TestImage);
 
 get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
-    rest_translator:ok_body_reply(Privileges).
+    rest_translator:ok_body_reply(Privileges);
+
+get_response(#gri{id = undefined, aspect = health}, HealthInfo) ->
+    rest_translator:ok_body_reply(HealthInfo).

@@ -704,5 +704,73 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(cid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
+    }},
+    %% Create a new atm_inventory for given group
+    %% This operation requires one of the following privileges:
+    %% - group_add_atm_inventory
+    %% - oz_groups_add_relationships
+    %% - oz_atm_inventories_create
+    {<<"/groups/:id/atm_inventories">>, #rest_req{
+        method = 'POST',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_inventory, id = undefined, aspect = instance},
+        b_auth_hint = ?AS_GROUP(?BINDING(id))
+    }},
+    %% List group's atm_inventories
+    %% This operation requires one of the following privileges:
+    %% - group_view
+    %% - oz_groups_list_relationships
+    {<<"/groups/:id/atm_inventories">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = atm_inventories}
+    }},
+    %% Join atm_inventory by group
+    %% This operation requires one of the following privileges:
+    %% - group_add_atm_inventory
+    %% - oz_atm_inventories_add_relationships
+    %% - oz_groups_add_relationships
+    {<<"/groups/:id/atm_inventories/join">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_atm_inventory, id = undefined, aspect = join},
+        b_auth_hint = ?AS_GROUP(?BINDING(id))
+    }},
+    %% Get group's atm_inventory details
+    %% This operation requires one of the following privileges:
+    %% - group_view
+    %% - oz_atm_inventories_view
+    {<<"/groups/:id/atm_inventories/:aiid">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(aiid), aspect = instance, scope = protected},
+        b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
+    }},
+    %% Remove group from atm_inventory
+    %% This operation requires one of the following privileges:
+    %% - group_leave_atm_inventory
+    %% - oz_atm_inventories_remove_relationships
+    %% - oz_groups_remove_relationships
+    {<<"/groups/:id/atm_inventories/:aiid">>, #rest_req{
+        method = 'DELETE',
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {atm_inventory, ?BINDING(aiid)}}
+    }},
+    %% List effective group's atm_inventories
+    %% This operation requires one of the following privileges:
+    %% - group_view
+    %% - oz_groups_list_relationships
+    {<<"/groups/:id/effective_atm_inventories">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_atm_inventories}
+    }},
+    %% Get effective group atm_inventory details
+    %% This operation requires one of the following privileges:
+    %% - group_view
+    %% - oz_atm_inventories_view
+    {<<"/groups/:id/effective_atm_inventories/:aiid">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_inventory, id = ?BINDING(aiid), aspect = instance, scope = protected},
+        b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }}
 ].

@@ -112,6 +112,9 @@ operation_supported(get, eff_harvesters, private) -> true;
 operation_supported(get, clusters, private) -> true;
 operation_supported(get, eff_clusters, private) -> true;
 
+operation_supported(get, atm_inventories, private) -> true;
+operation_supported(get, eff_atm_inventories, private) -> true;
+
 operation_supported(update, instance, private) -> true;
 operation_supported(update, oz_privileges, private) -> true;
 operation_supported(update, {user_privileges, _}, private) -> true;
@@ -126,7 +129,8 @@ operation_supported(delete, {space, _}, private) -> true;
 operation_supported(delete, {handle_service, _}, private) -> true;
 operation_supported(delete, {handle, _}, private) -> true;
 operation_supported(delete, {harvester, _}, private) -> true;
-operation_supported(delete, {cluster, _}, private) -> true.
+operation_supported(delete, {cluster, _}, private) -> true;
+operation_supported(delete, {atm_inventory, _}, private) -> true.
 
 
 %%--------------------------------------------------------------------
@@ -153,6 +157,7 @@ is_subscribable({eff_user_privileges, _}, private) -> true;
 is_subscribable({eff_user_membership, _}, private) -> true;
 is_subscribable(spaces, private) -> true;
 is_subscribable(harvesters, private) -> true;
+is_subscribable(atm_inventories, private) -> true;
 is_subscribable(_, _) -> false.
 
 
@@ -374,7 +379,12 @@ get(#el_req{gri = #gri{aspect = eff_harvesters}}, Group) ->
 get(#el_req{gri = #gri{aspect = clusters}}, Group) ->
     {ok, entity_graph:get_relations(direct, top_down, od_cluster, Group)};
 get(#el_req{gri = #gri{aspect = eff_clusters}}, Group) ->
-    {ok, entity_graph:get_relations(effective, top_down, od_cluster, Group)}.
+    {ok, entity_graph:get_relations(effective, top_down, od_cluster, Group)};
+
+get(#el_req{gri = #gri{aspect = atm_inventories}}, Group) ->
+    {ok, entity_graph:get_relations(direct, top_down, od_atm_inventory, Group)};
+get(#el_req{gri = #gri{aspect = eff_atm_inventories}}, Group) ->
+    {ok, entity_graph:get_relations(effective, top_down, od_atm_inventory, Group)}.
 
 
 %%--------------------------------------------------------------------
@@ -482,6 +492,12 @@ delete(#el_req{gri = #gri{id = GroupId, aspect = {cluster, ClusterId}}}) ->
     entity_graph:remove_relation(
         od_group, GroupId,
         od_cluster, ClusterId
+    );
+
+delete(#el_req{gri = #gri{id = GroupId, aspect = {atm_inventory, AtmInventoryId}}}) ->
+    entity_graph:remove_relation(
+        od_group, GroupId,
+        od_atm_inventory, AtmInventoryId
     ).
 
 
@@ -518,6 +534,8 @@ exists(Req = #el_req{gri = GRI = #gri{aspect = instance, scope = shared}}, Group
             group_logic:has_eff_harvester(Group, HarvesterId);
         ?THROUGH_CLUSTER(ClusterId) ->
             group_logic:has_eff_cluster(Group, ClusterId);
+        ?THROUGH_ATM_INVENTORY(AtmInventoryId) ->
+            group_logic:has_eff_atm_inventory(Group, AtmInventoryId);
         undefined ->
             true;
         _ ->
@@ -565,6 +583,9 @@ exists(#el_req{gri = #gri{aspect = {harvester, HarvesterId}}}, Group) ->
 
 exists(#el_req{gri = #gri{aspect = {cluster, ClusterId}}}, Group) ->
     entity_graph:has_relation(direct, top_down, od_cluster, ClusterId, Group);
+
+exists(#el_req{gri = #gri{aspect = {atm_inventory, AtmInventoryId}}}, Group) ->
+    entity_graph:has_relation(direct, top_down, od_atm_inventory, AtmInventoryId, Group);
 
 % All other aspects exist if group record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_group{}) ->
@@ -704,6 +725,10 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             % Group's membership in cluster is checked in 'exists'
             cluster_logic:has_eff_privilege(ClusterId, ClientUserId, ?CLUSTER_VIEW);
 
+        {?USER(ClientUserId), ?THROUGH_ATM_INVENTORY(AtmInventoryId)} ->
+            % Group's membership in inventory is checked in 'exists'
+            atm_inventory_logic:has_eff_privilege(AtmInventoryId, ClientUserId, ?ATM_INVENTORY_VIEW);
+
         {?USER(ClientUserId), undefined} ->
             auth_by_membership(ClientUserId, Group);
 
@@ -785,6 +810,9 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {harvester, _}}}
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {cluster, _}}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_LEAVE_CLUSTER);
+
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {atm_inventory, _}}}, Group) ->
+    auth_by_privilege(Req, Group, ?GROUP_REMOVE_ATM_INVENTORY);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, _}}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_REMOVE_USER);
@@ -898,6 +926,11 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = clusters}
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_clusters}}) ->
     [?OZ_GROUPS_LIST_RELATIONSHIPS];
 
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = atm_inventories}}) ->
+    [?OZ_GROUPS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_atm_inventories}}) ->
+    [?OZ_GROUPS_LIST_RELATIONSHIPS];
+
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
     [?OZ_GROUPS_UPDATE];
 
@@ -925,6 +958,8 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {harve
     [?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_HARVESTERS_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {cluster, _}}}) ->
     [?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_CLUSTERS_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {atm_inventory, _}}}) ->
+    [?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_ATM_INVENTORIES_REMOVE_RELATIONSHIPS];
 
 required_admin_privileges(_) ->
     forbidden.
