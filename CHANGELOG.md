@@ -4,6 +4,8 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 20.02.13
+
 ### 20.02.12
 
 -   **VFS-8196** Add support for sets in OAI PMH. Every handle service
