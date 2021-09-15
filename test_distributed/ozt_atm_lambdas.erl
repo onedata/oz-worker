@@ -35,6 +35,7 @@
 -export([gen_example_operation_spec_json/0]).
 -export([gen_example_argument_spec_json/0, gen_example_argument_spec_json/3, gen_example_argument_specs_json/0]).
 -export([gen_example_result_spec_json/0, gen_example_result_specs_json/0]).
+-export([gen_example_resource_spec_json/0]).
 
 -compile({no_auto_import, [get/1]}).
 
@@ -162,7 +163,9 @@ gen_example_data_json() ->
 
         <<"operationSpec">> => gen_example_operation_spec_json(),
         <<"argumentSpecs">> => gen_example_argument_specs_json(),
-        <<"resultSpecs">> => gen_example_result_specs_json()
+        <<"resultSpecs">> => gen_example_result_specs_json(),
+
+        <<"resourceSpec">> => gen_example_resource_spec_json()
     }.
 
 
@@ -232,3 +235,17 @@ gen_example_result_spec_json() ->
 gen_example_result_specs_json() -> lists:map(fun(_) ->
     gen_example_result_spec_json()
 end, lists:seq(1, ?RAND_INT(0, 5))).
+
+
+-spec gen_example_resource_spec_json() -> json_utils:json_term().
+gen_example_resource_spec_json() ->
+    jsonable_record:to_json(#atm_resource_spec{
+        cpu_requested = lists_utils:random_element([undefined, rand:uniform() * 10]),
+        cpu_limit = lists_utils:random_element([undefined, rand:uniform() * 10]),
+
+        memory_requested = lists_utils:random_element([undefined, ?RAND_INT(10000, 1000000000)]),
+        memory_limit = lists_utils:random_element([undefined, ?RAND_INT(10000, 1000000000)]),
+
+        ephemeral_storage_requested = lists_utils:random_element([undefined, ?RAND_INT(1000, 10000000000)]),
+        ephemeral_storage_limit = lists_utils:random_element([undefined, ?RAND_INT(1000, 10000000000)])
+    }, atm_resource_spec).

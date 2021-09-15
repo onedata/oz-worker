@@ -74,6 +74,10 @@ create_test(Config) ->
         ExpOperationSpec = jsonable_record:from_json(maps:get(<<"operationSpec">>, Data), atm_lambda_operation_spec),
         ExpArgumentSpecs = jsonable_record:list_from_json(maps:get(<<"argumentSpecs">>, Data, []), atm_lambda_argument_spec),
         ExpResultSpecs = jsonable_record:list_from_json(maps:get(<<"resultSpecs">>, Data, []), atm_lambda_result_spec),
+        ExpResourceSpec = case maps:find(<<"resourceSpec">>, Data) of
+            {ok, ResourceSpecJson} -> jsonable_record:from_json(ResourceSpecJson, atm_resource_spec);
+            error -> #atm_resource_spec{}
+        end,
         ExpAtmInventories = [AtmInventoryId],
         ExpCreationTime = ozt_mocks:get_frozen_time_seconds(),
         ExpCreator = case CheckCreator of
@@ -89,6 +93,8 @@ create_test(Config) ->
             operation_spec = ExpOperationSpec,
             argument_specs = ExpArgumentSpecs,
             result_specs = ExpResultSpecs,
+
+            resource_spec = ExpResourceSpec,
 
             atm_inventories = ExpAtmInventories,
 
@@ -113,6 +119,7 @@ create_test(Config) ->
         {<<"operationSpec">>, DisallowedOperationSpec, DisallowedOperationSpecError},
         {<<"argumentSpecs">>, #{<<"bad">> => <<"object">>}, ?ERROR_BAD_DATA(<<"argumentSpecs">>)},
         {<<"resultSpecs">>, undefined, ?ERROR_BAD_DATA(<<"resultSpecs">>)},
+        {<<"resourceSpec">>, <<"bad">>, ?ERROR_BAD_DATA(<<"resourceSpec">>)},
         {<<"summary">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"summary">>)},
         {<<"summary">>, str_utils:rand_hex(250), ?ERROR_BAD_VALUE_BINARY_TOO_LARGE(<<"summary">>, 200)},
         {<<"description">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"description">>)},
@@ -171,7 +178,8 @@ create_test(Config) ->
             ],
             optional = [
                 <<"summary">>,
-                <<"description">>
+                <<"description">>,
+                <<"resourceSpec">>
             ],
             correct_values = #{
                 <<"atmInventoryId">> => [AtmInventoryId],
@@ -180,7 +188,8 @@ create_test(Config) ->
                 <<"argumentSpecs">> => [ozt_atm_lambdas:gen_example_argument_specs_json()],
                 <<"resultSpecs">> => [ozt_atm_lambdas:gen_example_result_specs_json()],
                 <<"summary">> => [ozt_atm:gen_example_summary()],
-                <<"description">> => [ozt_atm:gen_example_description()]
+                <<"description">> => [ozt_atm:gen_example_description()],
+                <<"resourceSpec">> => [ozt_atm_lambdas:gen_example_resource_spec_json()]
             },
             bad_values = lists:flatten([
                 {<<"atmInventoryId">>, 1234, ?ERROR_FORBIDDEN},

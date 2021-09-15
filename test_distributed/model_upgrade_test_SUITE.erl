@@ -39,6 +39,7 @@
     harvester_upgrade_test/1,
     cluster_upgrade_test/1,
     storage_upgrade_test/1,
+    atm_lambda_upgrade_test/1,
     dns_state_upgrade_test/1,
     macaroon_auth_upgrade_test/1,
     generate_cluster_for_a_legacy_provider_test/1
@@ -59,6 +60,7 @@ all() -> ?ALL([
     harvester_upgrade_test,
     cluster_upgrade_test,
     storage_upgrade_test,
+    atm_lambda_upgrade_test,
     dns_state_upgrade_test,
     macaroon_auth_upgrade_test,
     generate_cluster_for_a_legacy_provider_test
@@ -124,6 +126,10 @@ cluster_upgrade_test(Config) ->
 
 storage_upgrade_test(Config) ->
     test_record_upgrade(Config, od_storage).
+
+
+atm_lambda_upgrade_test(Config) ->
+    test_record_upgrade(Config, od_atm_lambda).
 
 
 dns_state_upgrade_test(Config) ->
@@ -1235,7 +1241,7 @@ get_record(od_group, 2) -> {od_group,
     [<<"parent1">>, <<"parent2">>],
     #{
         <<"child1">> => [?GROUP_VIEW, group_join_space, group_invite_group],
-        <<"child2">> =>  [?GROUP_UPDATE, ?GROUP_DELETE, group_remove_group]
+        <<"child2">> => [?GROUP_UPDATE, ?GROUP_DELETE, group_remove_group]
     },
     #{}, % eff_parents
     #{}, % eff_children
@@ -1271,7 +1277,7 @@ get_record(od_group, 3) -> {od_group,
     [<<"parent1">>, <<"parent2">>],
     #{
         <<"child1">> => [?GROUP_VIEW, group_join_space, group_invite_group],
-        <<"child2">> =>  [?GROUP_UPDATE, ?GROUP_DELETE, group_remove_group]
+        <<"child2">> => [?GROUP_UPDATE, ?GROUP_DELETE, group_remove_group]
     },
     #{},
     #{},
@@ -3543,6 +3549,94 @@ get_record(od_storage, 3) -> #od_storage{
 
     top_down_dirty = true,
     bottom_up_dirty = true
+};
+
+get_record(od_atm_lambda, 1) -> {od_atm_lambda,
+    <<"name">>,
+    <<"summary">>,
+    <<"description">>,
+
+    #atm_openfaas_operation_spec{
+        docker_image = <<"repo/image:v23">>,
+        docker_execution_options = #atm_docker_execution_options{
+            readonly = true,
+            mount_oneclient = true,
+            oneclient_mount_point = <<"/a/b/c/d">>,
+            oneclient_options = <<"-v 3">>
+        }
+    },
+    [
+        #atm_lambda_argument_spec{
+            name = <<"arg-name">>,
+            data_spec = #atm_data_spec{type = atm_integer_type},
+            is_batch = false,
+            is_optional = true,
+            default_value = undefined
+        }
+    ],
+    [
+        #atm_lambda_result_spec{
+            name = <<"res-name">>,
+            data_spec = #atm_data_spec{type = atm_string_type},
+            is_batch = true
+        }
+    ],
+
+    <<"2f7121dbebedd0edb48d7cb17715b1924d91cd36">>,
+
+    [<<"i1">>, <<"i2">>],
+    [<<"wf1">>, <<"wf2">>, <<"wf3">>],
+
+    ozt_mocks:get_frozen_time_seconds(),
+    ?SUB(nobody)
+};
+get_record(od_atm_lambda, 2) -> #od_atm_lambda{
+    name = <<"name">>,
+    summary = <<"summary">>,
+    description = <<"description">>,
+
+    operation_spec = #atm_openfaas_operation_spec{
+        docker_image = <<"repo/image:v23">>,
+        docker_execution_options = #atm_docker_execution_options{
+            readonly = true,
+            mount_oneclient = true,
+            oneclient_mount_point = <<"/a/b/c/d">>,
+            oneclient_options = <<"-v 3">>
+        }
+    },
+    argument_specs = [
+        #atm_lambda_argument_spec{
+            name = <<"arg-name">>,
+            data_spec = #atm_data_spec{type = atm_integer_type},
+            is_batch = false,
+            is_optional = true,
+            default_value = undefined
+        }
+    ],
+    result_specs = [
+        #atm_lambda_result_spec{
+            name = <<"res-name">>,
+            data_spec = #atm_data_spec{type = atm_string_type},
+            is_batch = true
+        }
+    ],
+
+    resource_spec = #atm_resource_spec{
+        cpu_requested = undefined,
+        cpu_limit = undefined,
+        memory_requested = undefined,
+        memory_limit = undefined,
+        ephemeral_storage_requested = undefined,
+        ephemeral_storage_limit = undefined
+    },
+
+    checksum = <<"2f7121dbebedd0edb48d7cb17715b1924d91cd36">>,
+
+    atm_inventories = [<<"i1">>, <<"i2">>],
+    atm_workflow_schemas = [<<"wf1">>, <<"wf2">>, <<"wf3">>],
+
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
+    creator = ?SUB(nobody)
 };
 
 get_record(dns_state, 1) -> {dns_state,
