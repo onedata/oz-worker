@@ -34,6 +34,7 @@
 %% @TODO VFS-7755 sanitize result's data specs - e.g. store and onedatafs credentials can only appear in arguments
 %% @TODO VFS-7755 check if storeSchemaId from recipe of single_value_store_content task arg builder points to single_value store
 %% @TODO VFS-7755 examine the workflows diagram and think what else should be validated
+%% @TODO VFS-7755 resource spec in lambdas/tasks should be limited for lambdas using OpenFaaS
 
 %%%===================================================================
 %%% API
