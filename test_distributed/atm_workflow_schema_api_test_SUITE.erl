@@ -501,7 +501,7 @@ dump_test(Config) ->
         <<"supplementaryAtmLambdas">> => lists:foldl(fun(AtmLambdaId, Acc) ->
             AtmLambda = ozt_atm_lambdas:get(AtmLambdaId),
             Acc#{AtmLambdaId => #{
-                <<"schemaFormatVersion">> => 1,
+                <<"schemaFormatVersion">> => 2,
 
                 <<"name">> => AtmLambda#od_atm_lambda.name,
                 <<"summary">> => AtmLambda#od_atm_lambda.summary,
@@ -510,6 +510,8 @@ dump_test(Config) ->
                 <<"operationSpec">> => jsonable_record:to_json(AtmLambda#od_atm_lambda.operation_spec, atm_lambda_operation_spec),
                 <<"argumentSpecs">> => jsonable_record:list_to_json(AtmLambda#od_atm_lambda.argument_specs, atm_lambda_argument_spec),
                 <<"resultSpecs">> => jsonable_record:list_to_json(AtmLambda#od_atm_lambda.result_specs, atm_lambda_result_spec),
+
+                <<"resourceSpec">> => jsonable_record:to_json(AtmLambda#od_atm_lambda.resource_spec, atm_resource_spec),
 
                 <<"checksum">> => AtmLambda#od_atm_lambda.checksum
             }}

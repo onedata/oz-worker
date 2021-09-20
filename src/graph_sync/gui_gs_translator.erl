@@ -51,7 +51,8 @@ handshake_attributes(_Client) ->
         <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle),
         <<"maxTemporaryTokenTtl">> => oz_worker:get_env(max_temporary_token_ttl, 604800), % 1 week
         <<"defaultHarvestingBackendType">> => utils:undefined_to_null(DefaultHarvestingBackendType),
-        <<"defaultHarvestingBackendEndpoint">> => utils:undefined_to_null(DefaultHarvestingBackendEndpoint)
+        <<"defaultHarvestingBackendEndpoint">> => utils:undefined_to_null(DefaultHarvestingBackendEndpoint),
+        <<"defaultAtmResourceSpec">> => oz_worker:get_env(default_atm_resource_spec)
     }.
 
 
@@ -1067,6 +1068,8 @@ translate_atm_lambda(GRI = #gri{aspect = instance, scope = private}, AtmLambda) 
         argument_specs = ArgumentSpecs,
         result_specs = ResultSpecs,
 
+        resource_spec = ResourceSpec,
+
         creation_time = CreationTime,
         creator = Creator
     } = AtmLambda,
@@ -1080,6 +1083,8 @@ translate_atm_lambda(GRI = #gri{aspect = instance, scope = private}, AtmLambda) 
         <<"operationSpec">> => jsonable_record:to_json(OperationSpec, atm_lambda_operation_spec),
         <<"argumentSpecs">> => jsonable_record:list_to_json(ArgumentSpecs, atm_lambda_argument_spec),
         <<"resultSpecs">> => jsonable_record:list_to_json(ResultSpecs, atm_lambda_result_spec),
+
+        <<"resourceSpec">> => jsonable_record:to_json(ResourceSpec, atm_resource_spec),
 
         <<"atmInventoryList">> => gri:serialize(GRI#gri{aspect = atm_inventories, scope = private}),
         <<"atmWorkflowSchemaList">> => gri:serialize(GRI#gri{aspect = atm_workflow_schemas, scope = private}),

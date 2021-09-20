@@ -464,6 +464,8 @@ translate_resource(_, #gri{type = od_atm_lambda, aspect = instance, scope = priv
         argument_specs = ArgumentSpecs,
         result_specs = ResultSpecs,
 
+        resource_spec = ResourceSpec,
+
         atm_inventories = AtmInventories
     } = AtmLambda,
     #{
@@ -474,6 +476,8 @@ translate_resource(_, #gri{type = od_atm_lambda, aspect = instance, scope = priv
         <<"operationSpec">> => jsonable_record:to_json(OperationSpec, atm_lambda_operation_spec),
         <<"argumentSpecs">> => jsonable_record:list_to_json(ArgumentSpecs, atm_lambda_argument_spec),
         <<"resultSpecs">> => jsonable_record:list_to_json(ResultSpecs, atm_lambda_result_spec),
+
+        <<"resourceSpec">> => jsonable_record:to_json(ResourceSpec, atm_resource_spec),
 
         <<"atmInventories">> => AtmInventories
     };

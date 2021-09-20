@@ -131,6 +131,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = parse, scope = public}}
     OperationSpec = maps:get(<<"operationSpec">>, Req#el_req.data),
     ArgumentSpecs = maps:get(<<"argumentSpecs">>, Req#el_req.data),
     ResultSpecs = maps:get(<<"resultSpecs">>, Req#el_req.data),
+    ResourceSpec = maps:get(<<"resourceSpec">>, Req#el_req.data, #atm_resource_spec{}),
 
     AtmLambdaWithoutChecksum = #od_atm_lambda{
         name = Name,
@@ -139,7 +140,9 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = parse, scope = public}}
 
         operation_spec = OperationSpec,
         argument_specs = ArgumentSpecs,
-        result_specs = ResultSpecs
+        result_specs = ResultSpecs,
+
+        resource_spec = ResourceSpec
     },
     AtmLambda = AtmLambdaWithoutChecksum#od_atm_lambda{
         checksum = od_atm_lambda:calculate_checksum(AtmLambdaWithoutChecksum)
@@ -349,7 +352,9 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
         },
         optional => #{
             <<"summary">> => {binary, {size_limit, ?SUMMARY_SIZE_LIMIT}},
-            <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}}
+            <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}},
+
+            <<"resourceSpec">> => {{jsonable_record, single, atm_resource_spec}, any}
         }
     };
 
