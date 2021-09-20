@@ -52,6 +52,8 @@ get_response(#gri{id = AtmLambdaId, aspect = instance, scope = private}, AtmLamb
         argument_specs = ArgumentSpecs,
         result_specs = ResultSpecs,
 
+        resource_spec = ResourceSpec,
+
         checksum = Checksum,
 
         creation_time = CreationTime,
@@ -67,6 +69,8 @@ get_response(#gri{id = AtmLambdaId, aspect = instance, scope = private}, AtmLamb
         <<"operationSpec">> => jsonable_record:to_json(OperationSpec, atm_lambda_operation_spec),
         <<"argumentSpecs">> => jsonable_record:list_to_json(ArgumentSpecs, atm_lambda_argument_spec),
         <<"resultSpecs">> => jsonable_record:list_to_json(ResultSpecs, atm_lambda_result_spec),
+
+        <<"resourceSpec">> => jsonable_record:to_json(ResourceSpec, atm_resource_spec),
 
         <<"checksum">> => Checksum,
 

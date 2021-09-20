@@ -487,6 +487,8 @@ private_atm_lambda(rest, Id, AtmLambdaData, Creator) ->
         <<"argumentSpecs">> => maps:get(<<"argumentSpecs">>, AtmLambdaData),
         <<"resultSpecs">> => maps:get(<<"resultSpecs">>, AtmLambdaData),
 
+        <<"resourceSpec">> => maps:get(<<"resourceSpec">>, AtmLambdaData),
+
         <<"checksum">> => (lambda_data_to_record(AtmLambdaData, Creator))#od_atm_lambda.checksum,
 
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
@@ -502,6 +504,8 @@ private_atm_lambda(gs, Id, AtmLambdaData, _Creator) ->
         <<"operationSpec">> => maps:get(<<"operationSpec">>, AtmLambdaData),
         <<"argumentSpecs">> => maps:get(<<"argumentSpecs">>, AtmLambdaData),
         <<"resultSpecs">> => maps:get(<<"resultSpecs">>, AtmLambdaData),
+
+        <<"resourceSpec">> => maps:get(<<"resourceSpec">>, AtmLambdaData),
 
         <<"atmInventories">> => [maps:get(<<"atmInventoryId">>, AtmLambdaData)]
     }).
@@ -638,6 +642,8 @@ lambda_data_to_record(AtmLambdaData, Creator) ->
         operation_spec = jsonable_record:from_json(maps:get(<<"operationSpec">>, AtmLambdaData), atm_lambda_operation_spec),
         argument_specs = jsonable_record:list_from_json(maps:get(<<"argumentSpecs">>, AtmLambdaData), atm_lambda_argument_spec),
         result_specs = jsonable_record:list_from_json(maps:get(<<"resultSpecs">>, AtmLambdaData), atm_lambda_result_spec),
+
+        resource_spec = jsonable_record:from_json(maps:get(<<"resourceSpec">>, AtmLambdaData), atm_resource_spec),
 
         atm_inventories = [maps:get(<<"atmInventoryId">>, AtmLambdaData)],
 

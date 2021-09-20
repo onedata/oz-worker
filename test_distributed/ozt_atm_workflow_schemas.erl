@@ -240,7 +240,8 @@ gen_example_lane_with_parallel_boxes_json(ParallelBoxes, StoreSchemaIds) ->
         id = ozt_atm:gen_example_id(),
         name = ozt_atm:gen_example_name(),
         parallel_boxes = ParallelBoxes,
-        store_iterator_spec = gen_example_store_iterator_spec(StoreSchemaIds)
+        store_iterator_spec = gen_example_store_iterator_spec(StoreSchemaIds),
+        max_retries = ?RAND_INT(0, 10)
     }, atm_lane_schema).
 
 -spec gen_example_lane_json([od_atm_lambda:id()], [automation:id()]) -> entity_logic:data().

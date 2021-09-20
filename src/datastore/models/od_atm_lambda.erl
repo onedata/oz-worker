@@ -25,7 +25,7 @@
 -export([dump_to_json/1]).
 
 %% datastore_model callbacks
--export([get_record_version/0, get_record_struct/1]).
+-export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
 
 -type id() :: binary().
 -type record() :: #od_atm_lambda{}.
@@ -126,7 +126,7 @@ calculate_checksum(AtmLambda) ->
 -spec dump_to_json(record()) -> json_utils:json_map().
 dump_to_json(AtmLambda) ->
     #{
-        <<"schemaFormatVersion">> => 1,
+        <<"schemaFormatVersion">> => 2,
 
         <<"name">> => AtmLambda#od_atm_lambda.name,
         <<"summary">> => AtmLambda#od_atm_lambda.summary,
@@ -135,6 +135,8 @@ dump_to_json(AtmLambda) ->
         <<"operationSpec">> => jsonable_record:to_json(AtmLambda#od_atm_lambda.operation_spec, atm_lambda_operation_spec),
         <<"argumentSpecs">> => jsonable_record:list_to_json(AtmLambda#od_atm_lambda.argument_specs, atm_lambda_argument_spec),
         <<"resultSpecs">> => jsonable_record:list_to_json(AtmLambda#od_atm_lambda.result_specs, atm_lambda_result_spec),
+
+        <<"resourceSpec">> => jsonable_record:to_json(AtmLambda#od_atm_lambda.resource_spec, atm_resource_spec),
 
         <<"checksum">> => AtmLambda#od_atm_lambda.checksum
     }.
@@ -145,7 +147,7 @@ dump_to_json(AtmLambda) ->
 
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    1.
+    2.
 
 -spec get_record_struct(datastore_model:record_version()) ->
     datastore_model:record_struct().
@@ -166,4 +168,72 @@ get_record_struct(1) ->
 
         {creation_time, integer},
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
+    ]};
+get_record_struct(2) ->
+    % new field - resource_spec
+    {record, [
+        {name, string},
+        {summary, string},
+        {description, string},
+
+        {operation_spec, {custom, string, {persistent_record, encode, decode, atm_lambda_operation_spec}}},
+        {argument_specs, [{custom, string, {persistent_record, encode, decode, atm_lambda_argument_spec}}]},
+        {result_specs, [{custom, string, {persistent_record, encode, decode, atm_lambda_result_spec}}]},
+
+        {resource_spec, {custom, string, {persistent_record, encode, decode, atm_resource_spec}}},
+
+        {checksum, string},
+
+        {atm_inventories, [string]},
+        {atm_workflow_schemas, [string]},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
     ]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades model's record from provided version to the next one.
+%% @end
+%%--------------------------------------------------------------------
+-spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
+    {datastore_model:record_version(), datastore_model:record()}.
+upgrade_record(1, AtmLambda) ->
+    {
+        od_atm_lambda,
+        Name,
+        Summary,
+        Description,
+
+        OperationSpec,
+        ArgumentSpecs,
+        ResultSpecs,
+
+        Checksum,
+
+        AtmInventories,
+        AtmWorkflowSchemas,
+
+        CreationTime,
+        Creator
+    } = AtmLambda,
+    {2, #od_atm_lambda{
+        name = Name,
+        summary = Summary,
+        description = Description,
+
+        operation_spec = OperationSpec,
+        argument_specs = ArgumentSpecs,
+        result_specs = ResultSpecs,
+
+        resource_spec = #atm_resource_spec{},
+
+        checksum = Checksum,
+
+        atm_inventories = AtmInventories,
+        atm_workflow_schemas = AtmWorkflowSchemas,
+
+        creation_time = CreationTime,
+        creator = Creator
+    }}.

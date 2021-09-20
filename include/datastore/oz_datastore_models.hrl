@@ -488,6 +488,8 @@ end).
     argument_specs = [] :: [atm_lambda_argument_spec:record()],
     result_specs = [] :: [atm_lambda_result_spec:record()],
 
+    resource_spec :: atm_resource_spec:record(),
+
     checksum = undefined :: undefined | od_atm_lambda:checksum(),
 
     atm_inventories = [] :: entity_graph:relations(od_atm_inventory:id()),
