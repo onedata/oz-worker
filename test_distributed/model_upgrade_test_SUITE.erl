@@ -3621,14 +3621,7 @@ get_record(od_atm_lambda, 2) -> #od_atm_lambda{
         }
     ],
 
-    resource_spec = #atm_resource_spec{
-        cpu_requested = undefined,
-        cpu_limit = undefined,
-        memory_requested = undefined,
-        memory_limit = undefined,
-        ephemeral_storage_requested = undefined,
-        ephemeral_storage_limit = undefined
-    },
+    resource_spec = ozt_atm_lambdas:default_resource_spec(),
 
     checksum = <<"2f7121dbebedd0edb48d7cb17715b1924d91cd36">>,
 

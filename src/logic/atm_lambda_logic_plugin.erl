@@ -131,7 +131,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = parse, scope = public}}
     OperationSpec = maps:get(<<"operationSpec">>, Req#el_req.data),
     ArgumentSpecs = maps:get(<<"argumentSpecs">>, Req#el_req.data),
     ResultSpecs = maps:get(<<"resultSpecs">>, Req#el_req.data),
-    ResourceSpec = maps:get(<<"resourceSpec">>, Req#el_req.data, #atm_resource_spec{}),
+    ResourceSpec = maps:get(<<"resourceSpec">>, Req#el_req.data, od_atm_lambda:default_resource_spec()),
 
     AtmLambdaWithoutChecksum = #od_atm_lambda{
         name = Name,

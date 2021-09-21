@@ -115,7 +115,6 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
             end
 
     end,
-    DefaultAtmResourceSpec = oz_worker:get_env(default_atm_resource_spec),
     {ok, #{
         <<"name">> => utils:undefined_to_null(oz_worker:get_name()),
         <<"version">> => Version,
@@ -126,8 +125,7 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
         <<"compatibilityRegistryRevision">> => CompatibilityRegistryRevision,
         <<"compatibleOneproviderVersions">> => CompatibleOpVersions,
         <<"openDataXrootdServerDomain">> => OpenDataXrootdServerDomain,
-        <<"bagitUploaderWorkflowSchemaId">> => BagitUploaderWorkflowSchemaId,
-        <<"defaultAtmResourceSpec">> => DefaultAtmResourceSpec
+        <<"bagitUploaderWorkflowSchemaId">> => BagitUploaderWorkflowSchemaId
     }};
 
 get(#el_req{gri = #gri{aspect = test_image}}, _) ->
