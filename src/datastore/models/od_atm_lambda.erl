@@ -23,6 +23,7 @@
 -export([critical_section/2]).
 -export([calculate_checksum/1]).
 -export([dump_to_json/1]).
+-export([default_resource_spec/0]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -141,6 +142,11 @@ dump_to_json(AtmLambda) ->
         <<"checksum">> => AtmLambda#od_atm_lambda.checksum
     }.
 
+
+-spec default_resource_spec() -> atm_resource_spec:record().
+default_resource_spec() ->
+    jsonable_record:from_json(oz_worker:get_env(default_atm_resource_spec), atm_resource_spec).
+
 %%%===================================================================
 %%% datastore_model callbacks
 %%%===================================================================
@@ -227,7 +233,7 @@ upgrade_record(1, AtmLambda) ->
         argument_specs = ArgumentSpecs,
         result_specs = ResultSpecs,
 
-        resource_spec = #atm_resource_spec{},
+        resource_spec = default_resource_spec(),
 
         checksum = Checksum,
 

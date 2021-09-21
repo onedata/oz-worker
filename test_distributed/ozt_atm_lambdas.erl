@@ -30,6 +30,7 @@
 -export([unlink_from_inventory/2]).
 -export([dump_schema_to_json/1]).
 -export([find_duplicate/2, find_all_duplicates/2]).
+-export([default_resource_spec/0]).
 %% Example data generation
 -export([gen_example_data_json/0]).
 -export([gen_example_operation_spec_json/0]).
@@ -150,6 +151,11 @@ find_all_duplicates(AtmLambdas, TargetAtmInventoryId) ->
         }
     end, #{}, AtmLambdas).
 
+
+-spec default_resource_spec() -> atm_resource_spec:record().
+default_resource_spec() ->
+    ozt:rpc(od_atm_lambda, default_resource_spec, []).
+
 %%%===================================================================
 %%% Example data generation
 %%%===================================================================
@@ -240,12 +246,12 @@ end, lists:seq(1, ?RAND_INT(0, 5))).
 -spec gen_example_resource_spec_json() -> json_utils:json_term().
 gen_example_resource_spec_json() ->
     jsonable_record:to_json(#atm_resource_spec{
-        cpu_requested = lists_utils:random_element([undefined, rand:uniform() * 10]),
+        cpu_requested = rand:uniform() * 10,
         cpu_limit = lists_utils:random_element([undefined, rand:uniform() * 10]),
 
-        memory_requested = lists_utils:random_element([undefined, ?RAND_INT(10000, 1000000000)]),
+        memory_requested = ?RAND_INT(10000, 1000000000),
         memory_limit = lists_utils:random_element([undefined, ?RAND_INT(10000, 1000000000)]),
 
-        ephemeral_storage_requested = lists_utils:random_element([undefined, ?RAND_INT(1000, 10000000000)]),
+        ephemeral_storage_requested = ?RAND_INT(1000, 10000000000),
         ephemeral_storage_limit = lists_utils:random_element([undefined, ?RAND_INT(1000, 10000000000)])
     }, atm_resource_spec).

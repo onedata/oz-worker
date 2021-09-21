@@ -76,7 +76,7 @@ create_test(Config) ->
         ExpResultSpecs = jsonable_record:list_from_json(maps:get(<<"resultSpecs">>, Data, []), atm_lambda_result_spec),
         ExpResourceSpec = case maps:find(<<"resourceSpec">>, Data) of
             {ok, ResourceSpecJson} -> jsonable_record:from_json(ResourceSpecJson, atm_resource_spec);
-            error -> #atm_resource_spec{}
+            error -> ozt_atm_lambdas:default_resource_spec()
         end,
         ExpAtmInventories = [AtmInventoryId],
         ExpCreationTime = ozt_mocks:get_frozen_time_seconds(),

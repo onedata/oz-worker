@@ -424,9 +424,6 @@ expected_configuration(Config) ->
             AtmWorkflowSchemaId
     end,
 
-    ExpectedDefaultAtmResourceSpec = ozt_atm_lambdas:gen_example_resource_spec_json(),
-    oz_test_utils:set_env(Config, default_atm_resource_spec, ExpectedDefaultAtmResourceSpec),
-
     #{
         <<"name">> => OZName,
         <<"domain">> => OZDomain,
@@ -440,8 +437,7 @@ expected_configuration(Config) ->
             undefined -> null;
             Url -> list_to_binary(Url)
         end,
-        <<"bagitUploaderWorkflowSchemaId">> => ExpectedBagitUploaderWorkflowSchemaId,
-        <<"defaultAtmResourceSpec">> => ExpectedDefaultAtmResourceSpec
+        <<"bagitUploaderWorkflowSchemaId">> => ExpectedBagitUploaderWorkflowSchemaId
     }.
 
 
