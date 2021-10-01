@@ -501,13 +501,13 @@ end).
 
 -record(od_atm_workflow_schema, {
     name :: automation:name(),
-    description :: automation:description(),
+    summary :: automation:name(),
 
-    stores = [] :: [atm_store_schema:record()],
-    lanes = [] :: [atm_lane_schema:record()],
+    revision_registry = atm_workflow_schema_revision_registry:empty() :: atm_workflow_schema_revision_registry:record(),
 
-    state :: automation:workflow_schema_state(),
-
+    % this field is set for workflow schemas that were created
+    % as a copy of another workflow schema (from a JSON dump)
+    original_atm_workflow_schema :: undefined | od_atm_workflow_schema:id(),
     atm_inventory :: undefined | od_atm_inventory:id(),  % undefined until a relation in entity graph is created
     atm_lambdas = [] :: [od_atm_lambda:id()],
 

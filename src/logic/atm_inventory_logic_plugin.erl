@@ -338,7 +338,7 @@ update(Req = #el_req{gri = #gri{id = AtmInventoryId, aspect = {group_privileges,
 delete(#el_req{gri = #gri{id = AtmInventoryId, aspect = instance}}) ->
     fun(#od_atm_inventory{atm_lambdas = AtmLambdas, atm_workflow_schemas = AtmWorkflowSchemas}) ->
         lists:foreach(fun(AtmWorkflowSchemaId) ->
-            ok = atm_workflow_schema_builder:delete(AtmWorkflowSchemaId)
+            ok = atm_workflow_schema_logic:delete(?ROOT, AtmWorkflowSchemaId)
         end, AtmWorkflowSchemas),
         % this will trigger lambda removal when a lambda has been used only in this inventory
         lists:foreach(fun(AtmLambdaId) ->

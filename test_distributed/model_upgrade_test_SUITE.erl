@@ -40,6 +40,7 @@
     cluster_upgrade_test/1,
     storage_upgrade_test/1,
     atm_lambda_upgrade_test/1,
+    atm_workflow_schema_upgrade_test/1,
     dns_state_upgrade_test/1,
     macaroon_auth_upgrade_test/1,
     generate_cluster_for_a_legacy_provider_test/1
@@ -61,6 +62,7 @@ all() -> ?ALL([
     cluster_upgrade_test,
     storage_upgrade_test,
     atm_lambda_upgrade_test,
+    atm_workflow_schema_upgrade_test,
     dns_state_upgrade_test,
     macaroon_auth_upgrade_test,
     generate_cluster_for_a_legacy_provider_test
@@ -130,6 +132,10 @@ storage_upgrade_test(Config) ->
 
 atm_lambda_upgrade_test(Config) ->
     test_record_upgrade(Config, od_atm_lambda).
+
+
+atm_workflow_schema_upgrade_test(Config) ->
+    test_record_upgrade(Config, od_atm_workflow_schema).
 
 
 dns_state_upgrade_test(Config) ->
@@ -3631,6 +3637,158 @@ get_record(od_atm_lambda, 2) -> #od_atm_lambda{
     creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(nobody)
 };
+
+get_record(od_atm_workflow_schema, 1) -> {od_atm_workflow_schema,
+    <<"workflow_schema_name">>,
+    <<"workflow_schema_description">>,
+
+    [
+        #atm_store_schema{
+            id = <<"store1">>,
+            name = <<"store1-name">>,
+            description = <<"store1-description">>,
+            type = list,
+            data_spec = #atm_data_spec{type = atm_string_type},
+            requires_initial_value = false,
+            default_initial_value = <<"DefaultInitialValue">>
+        },
+        #atm_store_schema{
+            id = <<"store2">>,
+            name = <<"store2-name">>,
+            description = <<"store2-description">>,
+            type = map,
+            data_spec = #atm_data_spec{type = atm_integer_type},
+            requires_initial_value = true,
+            default_initial_value = undefined
+        }
+    ],
+
+    [
+        #atm_lane_schema{
+            id = <<"lane1">>,
+            name = <<"lane1-name">>,
+            store_iterator_spec = #atm_store_iterator_spec{
+                store_schema_id = <<"store1">>,
+                strategy = #atm_store_iterator_serial_strategy{}
+            },
+            parallel_boxes = [
+                #atm_parallel_box_schema{
+                    id = <<"pbox1a">>,
+                    name = <<"pbox1a-name">>,
+                    tasks = [
+                        #atm_task_schema{
+                            id = <<"task1ax">>,
+                            name = <<"task1ax-name">>,
+                            lambda_id = <<"lambda-id">>,
+                            argument_mappings = [
+                                #atm_task_schema_argument_mapper{
+                                    argument_name = <<"arg-name">>,
+                                    value_builder = #atm_task_argument_value_builder{
+                                        type = iterated_item, recipe = [<<"key1">>]
+                                    }
+                                }
+                            ],
+                            result_mappings = [
+                                #atm_task_schema_result_mapper{
+                                    result_name = <<"res-name">>,
+                                    store_schema_id = <<"store2">>,
+                                    dispatch_function = add
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            max_retries = 0
+        }
+    ],
+
+    incomplete,
+
+    <<"intenvory1">>,
+    [<<"lambda-id">>],
+
+    ozt_mocks:get_frozen_time_seconds(),
+    ?SUB(user, <<"userId123">>)
+};
+get_record(od_atm_workflow_schema, 2) ->
+    #od_atm_workflow_schema{
+        name = <<"workflow_schema_name">>,
+        summary = ?DEFAULT_SUMMARY,
+
+        revision_registry = #atm_workflow_schema_revision_registry{registry = #{
+            1 => #atm_workflow_schema_revision{
+                description = <<"workflow_schema_description">>,
+                stores = [
+                    #atm_store_schema{
+                        id = <<"store1">>,
+                        name = <<"store1-name">>,
+                        description = <<"store1-description">>,
+                        type = list,
+                        data_spec = #atm_data_spec{type = atm_string_type},
+                        requires_initial_value = false,
+                        default_initial_value = <<"DefaultInitialValue">>
+                    },
+                    #atm_store_schema{
+                        id = <<"store2">>,
+                        name = <<"store2-name">>,
+                        description = <<"store2-description">>,
+                        type = map,
+                        data_spec = #atm_data_spec{type = atm_integer_type},
+                        requires_initial_value = true,
+                        default_initial_value = undefined
+                    }
+                ],
+                lanes = [
+                    #atm_lane_schema{
+                        id = <<"lane1">>,
+                        name = <<"lane1-name">>,
+                        store_iterator_spec = #atm_store_iterator_spec{
+                            store_schema_id = <<"store1">>,
+                            strategy = #atm_store_iterator_serial_strategy{}
+                        },
+                        parallel_boxes = [
+                            #atm_parallel_box_schema{
+                                id = <<"pbox1a">>,
+                                name = <<"pbox1a-name">>,
+                                tasks = [
+                                    #atm_task_schema{
+                                        id = <<"task1ax">>,
+                                        name = <<"task1ax-name">>,
+                                        lambda_id = <<"lambda-id">>,
+                                        argument_mappings = [
+                                            #atm_task_schema_argument_mapper{
+                                                argument_name = <<"arg-name">>,
+                                                value_builder = #atm_task_argument_value_builder{
+                                                    type = iterated_item, recipe = [<<"key1">>]
+                                                }
+                                            }
+                                        ],
+                                        result_mappings = [
+                                            #atm_task_schema_result_mapper{
+                                                result_name = <<"res-name">>,
+                                                store_schema_id = <<"store2">>,
+                                                dispatch_function = add
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ],
+                        max_retries = 0
+                    }
+                ],
+                state = draft
+            }
+        }},
+
+        original_atm_workflow_schema = undefined,
+        atm_inventory = <<"intenvory1">>,
+        atm_lambdas = [<<"lambda-id">>],
+
+        creation_time = ozt_mocks:get_frozen_time_seconds(),
+        creator = ?SUB(user, <<"userId123">>)
+    };
 
 get_record(dns_state, 1) -> {dns_state,
     #{<<"sub">> => <<"p1">>},

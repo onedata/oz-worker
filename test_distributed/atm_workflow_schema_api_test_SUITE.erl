@@ -24,6 +24,7 @@
 -include_lib("ctool/include/test/performance.hrl").
 -include_lib("ctool/include/errors.hrl").
 
+-include("ozt.hrl").
 -include("api_test_utils.hrl").
 
 -export([
@@ -36,12 +37,16 @@
     list_test/1,
     get_test/1,
     get_atm_lambdas_test/1,
+    merge_test/1,
     dump_test/1,
     update_test/1,
+    insert_revision_test/1,
+    delete_revision_test/1,
+    dump_revision_test/1,
     delete_test/1,
     recreate_atm_workflow_schema_in_the_same_inventory_test/1,
     recreate_atm_workflow_schema_in_different_inventory_test/1,
-    recreate_atm_workflow_schema_with_mixed_linked_and_duplicated_lambdas/1,
+    recreate_atm_workflow_schema_with_mixed_linked_and_duplicated_lambdas_test/1,
     bad_supplementary_lambdas_data_test/1
 ]).
 
@@ -51,15 +56,20 @@ all() ->
         list_test,
         get_test,
         get_atm_lambdas_test,
+        merge_test,
         dump_test,
         update_test,
+        insert_revision_test,
+        delete_revision_test,
+        dump_revision_test,
         delete_test,
         recreate_atm_workflow_schema_in_the_same_inventory_test,
         recreate_atm_workflow_schema_in_different_inventory_test,
-        recreate_atm_workflow_schema_with_mixed_linked_and_duplicated_lambdas,
+        recreate_atm_workflow_schema_with_mixed_linked_and_duplicated_lambdas_test,
         bad_supplementary_lambdas_data_test
     ]).
 
+-define(RAND_REV_NUMBER(), ?RAND_INT(1, 100)).
 
 %%%===================================================================
 %%% Test functions
@@ -76,7 +86,7 @@ create_test(Config) ->
     AnotherAtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
     AtmLambdasToBeLinked = maps:from_list(lists:map(fun(_) ->
         AtmLambdaId = ozt_atm_lambdas:create(AnotherAtmInventoryId),
-        {AtmLambdaId, ozt_atm_lambdas:dump_schema_to_json(AtmLambdaId)}
+        {AtmLambdaId, ozt_atm_lambdas:dump_to_json(AtmLambdaId)}
     end, lists:seq(1, rand:uniform(7)))),
     create_test_base(Config, Creator, {to_link, AtmLambdasToBeLinked}),
 
@@ -85,16 +95,13 @@ create_test(Config) ->
     UnrelatedAtmInventoryId = ozt_atm_inventories:create(),
     AtmLambdasToBeDuplicated = maps:from_list(lists:map(fun(_) ->
         AtmLambdaId = ozt_atm_lambdas:create(UnrelatedAtmInventoryId),
-        {AtmLambdaId, ozt_atm_lambdas:dump_schema_to_json(AtmLambdaId)}
+        {AtmLambdaId, ozt_atm_lambdas:dump_to_json(AtmLambdaId)}
     end, lists:seq(1, rand:uniform(7)))),
     create_test_base(Config, Creator, {to_duplicate, AtmLambdasToBeDuplicated}).
 
 create_test_base(Config, Creator, SupplementaryAtmLambdas) ->
     MemberWithNoPriv = ozt_users:create(),
     NonAdmin = ozt_users:create(),
-
-    StoreSchemas = ozt_atm_workflow_schemas:gen_example_stores_json(),
-    StoreSchemaIds = [StoreSchemaId || #{<<"id">> := StoreSchemaId} <- StoreSchemas],
 
     EnvSetUpFun = fun() ->
         AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
@@ -111,45 +118,54 @@ create_test_base(Config, Creator, SupplementaryAtmLambdas) ->
             available_atm_lambdas => case SupplementaryAtmLambdas of
                 none -> InventoryAtmLambdas;
                 {_, LambdaDefinitions} -> maps:keys(LambdaDefinitions)
-            end
+            end,
+            initial_revision_number => rand:uniform(100)
         }
     end,
 
-    VerifyFun = fun(AtmWorkflowSchemaId, #{atm_inventory_id := AtmInventoryId}, Data, CreatorType) ->
+    VerifyFun = fun(AtmWorkflowSchemaId, #{
+        atm_inventory_id := AtmInventoryId,
+        initial_revision_number := InitialRevisionNumber
+    }, Data, CreatorType) ->
         AtmWorkflowSchemaRecord = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
 
         ExpName = maps:get(<<"name">>, Data),
-        ExpDescription = maps:get(<<"description">>, Data, <<"Missing description">>),
+        ExpSummary = maps:get(<<"summary">>, Data, <<"Missing summary">>),
+        ExpOriginalAtmWorkflowSchemaId = maps:get(<<"originalAtmWorkflowSchemaId">>, Data, undefined),
 
-        ExpStores = jsonable_record:list_from_json(maps:get(<<"stores">>, Data, []), atm_store_schema),
-        RequestedLanes = jsonable_record:list_from_json(maps:get(<<"lanes">>, Data, []), atm_lane_schema),
-
-        ExpLanes = case SupplementaryAtmLambdas of
-            none ->
-                RequestedLanes;
-            {to_link, _} ->
-                RequestedLanes;
-            {to_duplicate, AtmLambdaDefinitions} ->
-                case CreatorType of
-                    root_or_admin ->
-                        % root and admin clients can always link the lambdas, so no duplicates should be created
-                        RequestedLanes;
-                    {regular, _} ->
-                        ReferencedLambdas = ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(RequestedLanes),
-                        ExpSubstitutedLambdas = lists_utils:intersect(ReferencedLambdas, maps:keys(AtmLambdaDefinitions)),
-                        ozt_atm_workflow_schemas:substitute_atm_lambdas_for_duplicates_in_lanes(
-                            RequestedLanes, ExpSubstitutedLambdas, AtmInventoryId
-                        )
+        ExpInitialRevision = case maps:find(<<"initialRevision">>, Data) of
+            error ->
+                undefined;
+            {ok, InitialRevisionData} ->
+                AtmWorkflowSchemaRevision = jsonable_record:from_json(
+                    maps:get(<<"schema">>, InitialRevisionData), atm_workflow_schema_revision
+                ),
+                case SupplementaryAtmLambdas of
+                    none ->
+                        AtmWorkflowSchemaRevision;
+                    {to_link, _} ->
+                        AtmWorkflowSchemaRevision;
+                    {to_duplicate, AtmLambdaDefinitions} ->
+                        case CreatorType of
+                            root_or_admin ->
+                                % root and admin clients can always link the lambdas, so no duplicates should be created
+                                AtmWorkflowSchemaRevision;
+                            {regular, _} ->
+                                ReferencedLambdas = atm_workflow_schema_revision:extract_referenced_atm_lambdas(AtmWorkflowSchemaRevision),
+                                ExpSubstitutedLambdas = lists_utils:intersect(ReferencedLambdas, maps:keys(AtmLambdaDefinitions)),
+                                ozt_atm_workflow_schemas:substitute_atm_lambdas_for_duplicates(
+                                    AtmWorkflowSchemaRevision, ExpSubstitutedLambdas, AtmInventoryId
+                                )
+                        end
                 end
         end,
 
-        ExpState = automation:workflow_schema_state_from_json(maps:get(<<"state">>, Data, case {ExpStores, ExpLanes} of
-            {[], _} -> <<"incomplete">>;
-            {_, []} -> <<"incomplete">>;
-            _ -> <<"ready">>
-        end)),
-
-        ExpAtmLambdas = ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(ExpLanes),
+        ExpAtmLambdas = case ExpInitialRevision of
+            undefined ->
+                [];
+            _ ->
+                atm_workflow_schema_revision:extract_referenced_atm_lambdas(ExpInitialRevision)
+        end,
 
         ExpCreationTime = ozt_mocks:get_frozen_time_seconds(),
         ExpCreator = case CreatorType of
@@ -159,13 +175,16 @@ create_test_base(Config, Creator, SupplementaryAtmLambdas) ->
 
         ?assertEqual(#od_atm_workflow_schema{
             name = ExpName,
-            description = ExpDescription,
+            summary = ExpSummary,
 
-            stores = ExpStores,
-            lanes = ExpLanes,
+            revision_registry = #atm_workflow_schema_revision_registry{registry = case ExpInitialRevision of
+                undefined ->
+                    #{};
+                _ ->
+                    #{InitialRevisionNumber => ExpInitialRevision}
+            end},
 
-            state = ExpState,
-
+            original_atm_workflow_schema = ExpOriginalAtmWorkflowSchemaId,
             atm_inventory = AtmInventoryId,
             atm_lambdas = lists:sort(ExpAtmLambdas),
 
@@ -230,53 +249,43 @@ create_test_base(Config, Creator, SupplementaryAtmLambdas) ->
         data_spec = DataSpec = #data_spec{
             required = lists:flatten([
                 <<"atmInventoryId">>,
-                <<"name">>,
-                case SupplementaryAtmLambdas of
-                    none -> [];
-                    _ -> [<<"supplementaryAtmLambdas">>]
-                end
+                <<"name">>
             ]),
             optional = [
-                <<"description">>,
-                <<"stores">>,
-                <<"state">>
+                <<"summary">>,
+                <<"initialRevision">>,
+                <<"originalAtmWorkflowSchemaId">>
             ],
             correct_values = #{
                 <<"atmInventoryId">> => [fun(#{atm_inventory_id := AtmInventoryId}) -> AtmInventoryId end],
                 <<"name">> => [ozt_atm:gen_example_name()],
-                <<"description">> => [ozt_atm:gen_example_description()],
-                <<"stores">> => [StoreSchemas],
-                <<"lanes">> => [fun(#{available_atm_lambdas := AvailableAtmLambdas}) ->
-                    ozt_atm_workflow_schemas:gen_example_lanes_json(AvailableAtmLambdas, StoreSchemaIds)
-                end],
-                <<"state">> => [ozt_atm_workflow_schemas:gen_example_state_json()],
-                <<"supplementaryAtmLambdas">> => [case SupplementaryAtmLambdas of
-                    none -> #{};
-                    {to_link, AtmLambdaDefinitions} -> AtmLambdaDefinitions;
-                    {to_duplicate, AtmLambdaDefinitions} -> AtmLambdaDefinitions
-                end]
+                <<"summary">> => [ozt_atm:gen_example_summary()],
+                <<"initialRevision">> => [fun(#{
+                    initial_revision_number := RevisionNumber,
+                    atm_inventory_id := AtmInventoryId,
+                    available_atm_lambdas := AvailableAtmLambdas
+                }) -> #{
+                    <<"originalRevisionNumber">> => RevisionNumber,
+                    <<"schema">> => ozt_atm_workflow_schemas:gen_example_revision_schema_json(AtmInventoryId, AvailableAtmLambdas),
+                    <<"supplementaryAtmLambdas">> => case SupplementaryAtmLambdas of
+                        none -> #{};
+                        {_, AtmLambdaDefinitions} -> AtmLambdaDefinitions
+                    end
+                } end],
+                <<"originalAtmWorkflowSchemaId">> => [?RAND_STR(16)]
             },
             bad_values = lists:flatten([
                 {<<"atmInventoryId">>, 1234, ?ERROR_FORBIDDEN},
                 {<<"atmInventoryId">>, <<"">>, ?ERROR_FORBIDDEN},
                 {<<"atmInventoryId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN},
-                create_update_bad_data_values()
+                {<<"initialRevision">>, bad_spec, ?ERROR_BAD_VALUE_JSON(<<"initialRevision">>)},
+                {<<"initialRevision">>, [1234], ?ERROR_BAD_VALUE_JSON(<<"initialRevision">>)},
+                {<<"originalAtmWorkflowSchemaId">>, [1234], ?ERROR_BAD_VALUE_BINARY(<<"originalAtmWorkflowSchemaId">>)},
+                {<<"originalAtmWorkflowSchemaId">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"originalAtmWorkflowSchemaId">>)},
+                name_summary_bad_data_values()
             ])
         }
     },
-    % lanes can only be provided if stores are, as they reference specific store schema ids
-    % first, test without lanes at all (see above spec), then mark stores as required
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, undefined)),
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec#api_test_spec{data_spec = DataSpec#data_spec{
-        required = DataSpec#data_spec.required ++ [
-            <<"stores">>
-        ],
-        optional = [
-            <<"description">>,
-            <<"state">>,
-            <<"lanes">>
-        ]
-    }}, EnvSetUpFun, EnvTearDownFun, undefined)),
 
     % Root client bypasses authorization checks,
     % hence wrong values of atmInventoryId
@@ -312,27 +321,17 @@ create_test_base(Config, Creator, SupplementaryAtmLambdas) ->
                 })
             end)
         },
-        data_spec = RootDataSpec = DataSpec#data_spec{
+        data_spec = DataSpec#data_spec{
             bad_values = lists:flatten([
                 {<<"atmInventoryId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
                 {<<"atmInventoryId">>, <<"asdq4ewfs">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
-                create_update_bad_data_values()
+                {<<"initialRevision">>, bad_spec, ?ERROR_BAD_VALUE_JSON(<<"initialRevision">>)},
+                {<<"initialRevision">>, [1234], ?ERROR_BAD_VALUE_JSON(<<"initialRevision">>)},
+                name_summary_bad_data_values()
             ])
         }
     },
-    % lanes can only be provided if stores are, as they reference specific store schema ids
-    % first, test without lanes at all (see above spec), then mark stores as required
-    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec, EnvSetUpFun, EnvTearDownFun, undefined)),
-    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec#api_test_spec{data_spec = RootDataSpec#data_spec{
-        required = RootDataSpec#data_spec.required ++ [
-            <<"stores">>
-        ],
-        optional = [
-            <<"description">>,
-            <<"state">>,
-            <<"lanes">>
-        ]
-    }}, EnvSetUpFun, EnvTearDownFun, undefined)).
+    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec, EnvSetUpFun, EnvTearDownFun, undefined)).
 
 
 list_test(Config) ->
@@ -448,7 +447,12 @@ get_atm_lambdas_test(Config) ->
     end, lists:seq(1, rand:uniform(7))),
 
     AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(AtmInventoryId),
-    ExpAtmLambdas = ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(maps:get(<<"lanes">>, AtmWorkflowSchemaData)),
+    ExpAtmLambdas = case maps:find(<<"initialRevision">>, AtmWorkflowSchemaData) of
+        error ->
+            [];
+        {ok, #{<<"schema">> := RevisionSchema}} ->
+            ozt_atm_workflow_schemas:extract_referenced_atm_lambdas_from_revision(RevisionSchema)
+    end,
     AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(AtmInventoryId, AtmWorkflowSchemaData),
 
     ApiTestSpec = #api_test_spec{
@@ -481,6 +485,220 @@ get_atm_lambdas_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
+merge_test(Config) ->
+    Creator = ozt_users:create(),
+
+    % test with no supplementary lambdas
+    merge_test_base(Config, Creator, none),
+
+    % test with supplementary lambdas that should be linked
+    % (available in different inventory where the used has privileges to manage lambdas)
+    AnotherAtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    AtmLambdasToBeLinked = maps:from_list(lists:map(fun(_) ->
+        AtmLambdaId = ozt_atm_lambdas:create(AnotherAtmInventoryId),
+        {AtmLambdaId, ozt_atm_lambdas:dump_to_json(AtmLambdaId)}
+    end, lists:seq(1, rand:uniform(7)))),
+    merge_test_base(Config, Creator, {to_link, AtmLambdasToBeLinked}),
+
+    % test with supplementary lambdas that should be duplicated
+    % (the user does not have access to them)
+    UnrelatedAtmInventoryId = ozt_atm_inventories:create(),
+    AtmLambdasToBeDuplicated = maps:from_list(lists:map(fun(_) ->
+        AtmLambdaId = ozt_atm_lambdas:create(UnrelatedAtmInventoryId),
+        {AtmLambdaId, ozt_atm_lambdas:dump_to_json(AtmLambdaId)}
+    end, lists:seq(1, rand:uniform(7)))),
+    merge_test_base(Config, Creator, {to_duplicate, AtmLambdasToBeDuplicated}).
+
+merge_test_base(Config, Creator, SupplementaryAtmLambdas) ->
+    merge_test_base(Config, Creator, SupplementaryAtmLambdas, {regular, Creator}),
+    merge_test_base(Config, Creator, SupplementaryAtmLambdas, root_or_admin).
+
+merge_test_base(Config, Creator, SupplementaryAtmLambdas, ClientType) ->
+    MemberWithNoPriv = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+
+    EnvSetUpFun = fun() ->
+        AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+        ozt_atm_inventories:add_user(
+            AtmInventoryId, MemberWithNoPriv, privileges:atm_inventory_admin() -- [?ATM_INVENTORY_MANAGE_WORKFLOW_SCHEMAS]
+        ),
+
+        InventoryAtmLambdas = lists:map(fun(_) ->
+            ozt_atm_lambdas:create(AtmInventoryId)
+        end, lists:seq(1, rand:uniform(7))),
+
+        InitialRevisionNumber = ?RAND_REV_NUMBER(),
+
+        InitialWorkflowSchemaDataWithoutInitialRevision = #{
+            <<"name">> => ozt_atm:gen_example_name(),
+            <<"summary">> => ozt_atm:gen_example_summary()
+        },
+        InitialWorkflowSchemaData = case ?RAND_BOOL() of
+            true ->
+                InitialWorkflowSchemaDataWithoutInitialRevision#{
+                    <<"initialRevision">> => #{
+                        <<"originalRevisionNumber">> => InitialRevisionNumber,
+                        <<"schema">> => ozt_atm_workflow_schemas:gen_example_revision_schema_json(AtmInventoryId)
+                    }
+                };
+            false ->
+                InitialWorkflowSchemaDataWithoutInitialRevision
+        end,
+
+        #{
+            atm_inventory_id => AtmInventoryId,
+            available_atm_lambdas => case SupplementaryAtmLambdas of
+                none -> InventoryAtmLambdas;
+                {_, LambdaDefinitions} -> maps:keys(LambdaDefinitions)
+            end,
+            initial_workflow_schema_data => InitialWorkflowSchemaData,
+            atm_workflow_schema_id => ozt_atm_workflow_schemas:create(AtmInventoryId, InitialWorkflowSchemaData),
+            initial_revision_number => InitialRevisionNumber
+        }
+    end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{
+        atm_inventory_id := AtmInventoryId,
+        initial_workflow_schema_data := InitialWorkflowSchemaData,
+        atm_workflow_schema_id := AtmWorkflowSchemaId
+    }, Data) ->
+        AtmWorkflowSchemaRecord = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
+
+        InitialName = maps:get(<<"name">>, InitialWorkflowSchemaData),
+        ExpName = case ShouldSucceed of
+            false -> InitialName;
+            true -> maps:get(<<"name">>, Data, InitialName)
+        end,
+
+        InitialSummary = maps:get(<<"summary">>, InitialWorkflowSchemaData, <<"Missing summary">>),
+        ExpSummary = case ShouldSucceed of
+            false -> InitialSummary;
+            true -> maps:get(<<"summary">>, Data, InitialSummary)
+        end,
+
+        InitialRevisionRegistry = case maps:find(<<"initialRevision">>, InitialWorkflowSchemaData) of
+            error ->
+                #{};
+            {ok, #{<<"originalRevisionNumber">> := InitialRevNumber, <<"schema">> := InitialRevSchema}} ->
+                #{
+                    InitialRevNumber => jsonable_record:from_json(InitialRevSchema, atm_workflow_schema_revision)
+                }
+        end,
+
+        ExpRevisionRegistry = case {ShouldSucceed, maps:find(<<"initialRevision">>, Data)} of
+            {false, _} ->
+                InitialRevisionRegistry;
+            {true, error} ->
+                InitialRevisionRegistry;
+            {true, {ok, InitialRevisionData}} ->
+                NewRevisionNumber = maps:get(<<"originalRevisionNumber">>, InitialRevisionData),
+                NewRevisionSchema = jsonable_record:from_json(
+                    maps:get(<<"schema">>, InitialRevisionData), atm_workflow_schema_revision
+                ),
+                InitialRevisionRegistry#{NewRevisionNumber => case SupplementaryAtmLambdas of
+                    none ->
+                        NewRevisionSchema;
+                    {to_link, _} ->
+                        NewRevisionSchema;
+                    {to_duplicate, AtmLambdaDefinitions} ->
+                        case ClientType of
+                            root_or_admin ->
+                                % root and admin clients can always link the lambdas, so no duplicates should be created
+                                NewRevisionSchema;
+                            {regular, _} ->
+                                ReferencedLambdas = atm_workflow_schema_revision:extract_referenced_atm_lambdas(NewRevisionSchema),
+                                ExpSubstitutedLambdas = lists_utils:intersect(ReferencedLambdas, maps:keys(AtmLambdaDefinitions)),
+                                ozt_atm_workflow_schemas:substitute_atm_lambdas_for_duplicates(
+                                    NewRevisionSchema, ExpSubstitutedLambdas, AtmInventoryId
+                                )
+                        end
+                end}
+        end,
+
+        ExpAtmLambdas = lists:usort(lists:flatmap(fun(AtmWorkflowSchemaRevision) ->
+            atm_workflow_schema_revision:extract_referenced_atm_lambdas(AtmWorkflowSchemaRevision)
+        end, maps:values(ExpRevisionRegistry))),
+
+        ?assertEqual(ExpName, AtmWorkflowSchemaRecord#od_atm_workflow_schema.name),
+        ?assertEqual(ExpSummary, AtmWorkflowSchemaRecord#od_atm_workflow_schema.summary),
+        ?assertEqual(
+            #atm_workflow_schema_revision_registry{registry = ExpRevisionRegistry},
+            AtmWorkflowSchemaRecord#od_atm_workflow_schema.revision_registry
+        ),
+        ?assertEqual(lists:sort(ExpAtmLambdas), lists:sort(AtmWorkflowSchemaRecord#od_atm_workflow_schema.atm_lambdas))
+    end,
+
+    EnvTearDownFun = fun(#{atm_inventory_id := AtmInventoryId}) ->
+        % clean up between tests as the lambdas that were linked / duplicated in the
+        % tested inventory may change the behaviour (it belongs to the same user as in all tests)
+        ozt_atm_inventories:delete(AtmInventoryId)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = case ClientType of
+                {regular, UserId} -> [
+                    {user, UserId}
+                ];
+                root_or_admin -> [
+                    root,
+                    {admin, [?OZ_ATM_INVENTORIES_UPDATE]}
+                ]
+            end,
+            unauthorized = [nobody],
+            forbidden = [
+                {user, MemberWithNoPriv},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = [<<"/atm_workflow_schemas/">>, atm_workflow_schema_id, <<"/merge">>],
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
+        logic_spec = #logic_spec{
+            module = atm_workflow_schema_logic,
+            function = merge,
+            args = [auth, atm_workflow_schema_id, data],
+            expected_result = ?OK_RES
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_atm_workflow_schema, id = atm_workflow_schema_id, aspect = merge},
+            expected_result = ?OK_RES
+        },
+        data_spec = #data_spec{
+            required = [
+                <<"name">>,
+                <<"summary">>,
+                <<"initialRevision">>
+            ],
+            correct_values = #{
+                <<"name">> => [ozt_atm:gen_example_name()],
+                <<"summary">> => [ozt_atm:gen_example_summary()],
+                <<"initialRevision">> => [fun(#{
+                    initial_revision_number := RevisionNumber,
+                    atm_inventory_id := AtmInventoryId,
+                    available_atm_lambdas := AvailableAtmLambdas
+                }) -> #{
+                    <<"originalRevisionNumber">> => lists_utils:random_element([RevisionNumber, ?RAND_REV_NUMBER()]),
+                    <<"schema">> => ozt_atm_workflow_schemas:gen_example_revision_schema_json(AtmInventoryId, AvailableAtmLambdas),
+                    <<"supplementaryAtmLambdas">> => case SupplementaryAtmLambdas of
+                        none -> #{};
+                        {_, AtmLambdaDefinitions} -> AtmLambdaDefinitions
+                    end
+                } end]
+            },
+            bad_values = lists:flatten([
+                {<<"initialRevision">>, bad_spec, ?ERROR_BAD_VALUE_JSON(<<"initialRevision">>)},
+                {<<"initialRevision">>, [1234], ?ERROR_BAD_VALUE_JSON(<<"initialRevision">>)},
+                name_summary_bad_data_values()
+            ])
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, VerifyEndFun)).
+
+
 dump_test(Config) ->
     Creator = ozt_users:create(),
     NonAdmin = ozt_users:create(),
@@ -488,16 +706,522 @@ dump_test(Config) ->
     AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
     ozt_atm_inventories:add_user(AtmInventoryId, AnotherMember, []),
 
-    AtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(AtmInventoryId),
+    RevisionNumber = ?RAND_REV_NUMBER(),
+    AtmWorkflowSchemaData = #{
+        <<"name">> => ozt_atm:gen_example_name(),
+        <<"summary">> => ozt_atm:gen_example_summary(),
+
+        <<"initialRevision">> => InitialRevisionData = #{
+            <<"originalRevisionNumber">> => RevisionNumber,
+            <<"schema">> => ozt_atm_workflow_schemas:gen_example_revision_schema_json(AtmInventoryId)
+        }
+    },
     AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(?USER(Creator), AtmInventoryId, AtmWorkflowSchemaData),
     AtmWorkflowSchema = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
-    ReferencedAtmLambdas = ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(
-        AtmWorkflowSchema#od_atm_workflow_schema.lanes
-    ),
+    ReferencedAtmLambdas = od_atm_workflow_schema:extract_all_referenced_atm_lambdas(AtmWorkflowSchema),
 
     ExpectedJsonDump = AtmWorkflowSchemaData#{
-        <<"schemaFormatVersion">> => 1,
-        <<"atmWorkflowSchemaId">> => AtmWorkflowSchemaId,
+        <<"schemaFormatVersion">> => 2,
+        <<"originalAtmWorkflowSchemaId">> => AtmWorkflowSchemaId,
+        <<"initialRevision">> => InitialRevisionData#{
+            <<"schemaFormatVersion">> => 2,
+            <<"supplementaryAtmLambdas">> => lists:foldl(fun(AtmLambdaId, Acc) ->
+                AtmLambda = ozt_atm_lambdas:get(AtmLambdaId),
+                Acc#{AtmLambdaId => #{
+                    <<"schemaFormatVersion">> => 2,
+
+                    <<"name">> => AtmLambda#od_atm_lambda.name,
+                    <<"summary">> => AtmLambda#od_atm_lambda.summary,
+                    <<"description">> => AtmLambda#od_atm_lambda.description,
+
+                    <<"operationSpec">> => jsonable_record:to_json(AtmLambda#od_atm_lambda.operation_spec, atm_lambda_operation_spec),
+                    <<"argumentSpecs">> => jsonable_record:list_to_json(AtmLambda#od_atm_lambda.argument_specs, atm_lambda_argument_spec),
+                    <<"resultSpecs">> => jsonable_record:list_to_json(AtmLambda#od_atm_lambda.result_specs, atm_lambda_result_spec),
+
+                    <<"resourceSpec">> => jsonable_record:to_json(AtmLambda#od_atm_lambda.resource_spec, atm_resource_spec),
+
+                    <<"checksum">> => AtmLambda#od_atm_lambda.checksum
+                }}
+            end, #{}, ReferencedAtmLambdas)
+        }
+    },
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_ATM_INVENTORIES_VIEW]},
+                {user, Creator},
+                {user, AnotherMember}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = [<<"/atm_workflow_schemas/">>, AtmWorkflowSchemaId, <<"/dump">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = ExpectedJsonDump
+        },
+        logic_spec = #logic_spec{
+            module = atm_workflow_schema_logic,
+            function = dump,
+            args = [auth, AtmWorkflowSchemaId, data],
+            expected_result = ?OK_MAP(ExpectedJsonDump)
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{
+                type = od_atm_workflow_schema, id = AtmWorkflowSchemaId,
+                aspect = dump, scope = private
+            },
+            expected_result = ?OK_MAP(ExpectedJsonDump)
+        },
+        data_spec = #data_spec{
+            required = [
+                <<"includeRevision">>
+            ],
+            correct_values = #{
+                <<"includeRevision">> => [RevisionNumber]
+            },
+            bad_values = [
+                {<<"includeRevision">>, #{<<"bad">> => <<"data">>}, ?ERROR_BAD_VALUE_INTEGER(<<"includeRevision">>)},
+                {<<"includeRevision">>, -7, ?ERROR_BAD_VALUE_TOO_LOW(<<"includeRevision">>, 1)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+update_test(Config) ->
+    Creator = ozt_users:create(),
+    MemberWithNoPriv = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+
+    EnvSetUpFun = fun() ->
+        AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+        ozt_atm_inventories:add_user(
+            AtmInventoryId, MemberWithNoPriv, privileges:atm_inventory_admin() -- [?ATM_INVENTORY_MANAGE_WORKFLOW_SCHEMAS]
+        ),
+        InitialWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(AtmInventoryId),
+        #{
+            initial_workflow_schema_data => InitialWorkflowSchemaData,
+            atm_workflow_schema_id => ozt_atm_workflow_schemas:create(AtmInventoryId, InitialWorkflowSchemaData)
+        }
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{
+        initial_workflow_schema_data := InitialWorkflowSchemaData,
+        atm_workflow_schema_id := AtmWorkflowSchemaId
+    }, Data) ->
+        AtmWorkflowSchemaRecord = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
+
+        InitialName = maps:get(<<"name">>, InitialWorkflowSchemaData),
+        ExpName = case ShouldSucceed of
+            false -> InitialName;
+            true -> maps:get(<<"name">>, Data, InitialName)
+        end,
+
+        InitialSummary = maps:get(<<"summary">>, InitialWorkflowSchemaData, <<"Missing summary">>),
+        ExpSummary = case ShouldSucceed of
+            false -> InitialSummary;
+            true -> maps:get(<<"summary">>, Data, InitialSummary)
+        end,
+        ?assertEqual(ExpName, AtmWorkflowSchemaRecord#od_atm_workflow_schema.name),
+        ?assertEqual(ExpSummary, AtmWorkflowSchemaRecord#od_atm_workflow_schema.summary)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_ATM_INVENTORIES_UPDATE]},
+                {user, Creator}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, MemberWithNoPriv},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = patch,
+            path = [<<"/atm_workflow_schemas/">>, atm_workflow_schema_id],
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
+        logic_spec = #logic_spec{
+            module = atm_workflow_schema_logic,
+            function = update,
+            args = [auth, atm_workflow_schema_id, data],
+            expected_result = ?OK_RES
+        },
+        gs_spec = #gs_spec{
+            operation = update,
+            gri = #gri{type = od_atm_workflow_schema, id = atm_workflow_schema_id, aspect = instance},
+            expected_result = ?OK_RES
+        },
+        data_spec = #data_spec{
+            at_least_one = [
+                <<"name">>,
+                <<"summary">>
+            ],
+            correct_values = #{
+                <<"name">> => [?CORRECT_NAME],
+                <<"summary">> => [<<"">>, str_utils:rand_hex(100)]
+            },
+            bad_values = name_summary_bad_data_values()
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+    )).
+
+
+insert_revision_test(Config) ->
+    Creator = ozt_users:create(),
+
+    % test with no supplementary lambdas
+    insert_revision_test_base(Config, Creator, none),
+
+    % test with supplementary lambdas that should be linked
+    % (available in different inventory where the user has privileges to manage lambdas)
+    AnotherAtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    AtmLambdasToBeLinked = maps:from_list(lists:map(fun(_) ->
+        AtmLambdaId = ozt_atm_lambdas:create(AnotherAtmInventoryId),
+        {AtmLambdaId, ozt_atm_lambdas:dump_to_json(AtmLambdaId)}
+    end, lists:seq(1, rand:uniform(7)))),
+    insert_revision_test_base(Config, Creator, {to_link, AtmLambdasToBeLinked}),
+
+    % test with supplementary lambdas that should be duplicated
+    % (the user does not have access to them)
+    UnrelatedAtmInventoryId = ozt_atm_inventories:create(),
+    AtmLambdasToBeDuplicated = maps:from_list(lists:map(fun(_) ->
+        AtmLambdaId = ozt_atm_lambdas:create(UnrelatedAtmInventoryId),
+        {AtmLambdaId, ozt_atm_lambdas:dump_to_json(AtmLambdaId)}
+    end, lists:seq(1, rand:uniform(7)))),
+    insert_revision_test_base(Config, Creator, {to_duplicate, AtmLambdasToBeDuplicated}).
+
+insert_revision_test_base(Config, Creator, SupplementaryAtmLambdas) ->
+    insert_revision_test_base(Config, Creator, SupplementaryAtmLambdas, {regular, Creator}),
+    insert_revision_test_base(Config, Creator, SupplementaryAtmLambdas, root_or_admin).
+
+insert_revision_test_base(Config, Creator, SupplementaryAtmLambdas, ClientType) ->
+    insert_revision_test_base(Config, Creator, SupplementaryAtmLambdas, ClientType, take_original_revision_number),
+    insert_revision_test_base(Config, Creator, SupplementaryAtmLambdas, ClientType, override_original_revision_number).
+
+insert_revision_test_base(Config, Creator, SupplementaryAtmLambdas, ClientType, RevisionNumberProvisionMode) ->
+    MemberWithNoPriv = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+
+    EnvSetUpFun = fun() ->
+        AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+        ozt_atm_inventories:add_user(
+            AtmInventoryId, MemberWithNoPriv, privileges:atm_inventory_admin() -- [?ATM_INVENTORY_MANAGE_WORKFLOW_SCHEMAS]
+        ),
+        AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(AtmInventoryId, #{
+            <<"name">> => ozt_atm:gen_example_name(),
+            <<"summary">> => ozt_atm:gen_example_summary()
+        }),
+        PreexistingRevisionNumbers = lists:usort(lists_utils:random_sublist([
+            ?RAND_REV_NUMBER(), ?RAND_REV_NUMBER(), ?RAND_REV_NUMBER(), ?RAND_REV_NUMBER(), ?RAND_REV_NUMBER()
+        ])),
+        lists:foreach(fun(RevisionNumber) ->
+            ozt_atm_workflow_schemas:insert_revision(AtmWorkflowSchemaId, RevisionNumber, #{
+                <<"schema">> => ozt_atm_workflow_schemas:gen_example_revision_schema_json(AtmInventoryId)
+            })
+        end, PreexistingRevisionNumbers),
+        RevisionNumberToInsert = lists_utils:random_element([?RAND_REV_NUMBER() | PreexistingRevisionNumbers]),
+        #{
+            atm_inventory_id => AtmInventoryId,
+            atm_workflow_schema_id => AtmWorkflowSchemaId,
+            preexisting_revision_numbers => PreexistingRevisionNumbers,
+            revision_number_to_insert => RevisionNumberToInsert,
+            target_revision_number_binary => case RevisionNumberProvisionMode of
+                take_original_revision_number -> <<"auto">>;
+                override_original_revision_number -> integer_to_binary(RevisionNumberToInsert)
+            end,
+            original_revision_number => case RevisionNumberProvisionMode of
+                take_original_revision_number -> RevisionNumberToInsert;
+                override_original_revision_number -> RevisionNumberToInsert + 13 % should be ignored
+            end
+        }
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{
+        atm_inventory_id := AtmInventoryId,
+        atm_workflow_schema_id := AtmWorkflowSchemaId,
+        preexisting_revision_numbers := PreexistingRevisionNumbers,
+        revision_number_to_insert := RevisionToInsert
+    }, Data) ->
+        #od_atm_workflow_schema{
+            revision_registry = #atm_workflow_schema_revision_registry{
+                registry = Registry
+            }
+        } = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
+
+        ExpectedFinalRevisionNumbers = case ShouldSucceed of
+            false ->
+                PreexistingRevisionNumbers;
+            true ->
+                case lists:member(RevisionToInsert, PreexistingRevisionNumbers) of
+                    true -> PreexistingRevisionNumbers;
+                    false -> [RevisionToInsert | PreexistingRevisionNumbers]
+                end
+        end,
+        ?assertEqual(lists:sort(ExpectedFinalRevisionNumbers), lists:sort(maps:keys(Registry))),
+
+        case ShouldSucceed of
+            false ->
+                ok;
+            true ->
+                ActualNewRevision = maps:get(RevisionToInsert, Registry),
+                RequestedNewRevision = jsonable_record:from_json(
+                    maps:get(<<"schema">>, Data), atm_workflow_schema_revision
+                ),
+                ExpectedNewRevision = case SupplementaryAtmLambdas of
+                    none ->
+                        RequestedNewRevision;
+                    {to_link, _} ->
+                        RequestedNewRevision;
+                    {to_duplicate, AtmLambdaDefinitions} ->
+                        case ClientType of
+                            root_or_admin ->
+                                % root and admin clients can always link the lambdas, so no duplicates should be created
+                                RequestedNewRevision;
+                            {regular, _} ->
+                                ReferencedLambdas = atm_workflow_schema_revision:extract_referenced_atm_lambdas(RequestedNewRevision),
+                                ExpSubstitutedLambdas = lists_utils:intersect(ReferencedLambdas, maps:keys(AtmLambdaDefinitions)),
+                                ozt_atm_workflow_schemas:substitute_atm_lambdas_for_duplicates(
+                                    RequestedNewRevision, ExpSubstitutedLambdas, AtmInventoryId
+                                )
+                        end
+                end,
+                ?assertEqual(ActualNewRevision, ExpectedNewRevision)
+        end
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = case ClientType of
+                {regular, UserId} -> [
+                    {user, UserId}
+                ];
+                root_or_admin -> [
+                    root,
+                    {admin, [?OZ_ATM_INVENTORIES_UPDATE]}
+                ]
+            end,
+            unauthorized = [nobody],
+            forbidden = [
+                {user, MemberWithNoPriv},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = put,
+            path = [<<"/atm_workflow_schemas/">>, atm_workflow_schema_id, <<"/revision/">>, target_revision_number_binary],
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
+        logic_spec = #logic_spec{
+            module = atm_workflow_schema_logic,
+            function = insert_revision,
+            args = [auth, atm_workflow_schema_id, target_revision_number_binary, data],
+            expected_result = ?OK_RES
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_atm_workflow_schema, id = atm_workflow_schema_id, aspect = {revision, target_revision_number_binary}},
+            expected_result = ?OK_RES
+        },
+        data_spec = #data_spec{
+            required = lists:flatten([
+                <<"schema">>,
+                case RevisionNumberProvisionMode of
+                    override_original_revision_number -> [];
+                    take_original_revision_number -> <<"originalRevisionNumber">>
+                end,
+                case SupplementaryAtmLambdas of
+                    none -> [];
+                    _ -> <<"supplementaryAtmLambdas">>
+                end
+            ]),
+            optional = lists:flatten([
+                case RevisionNumberProvisionMode of
+                    take_original_revision_number -> [];
+                    override_original_revision_number -> <<"originalRevisionNumber">>
+                end,
+                case SupplementaryAtmLambdas of
+                    none -> <<"supplementaryAtmLambdas">>;
+                    _ -> []
+                end
+            ]),
+            correct_values = #{
+                <<"originalRevisionNumber">> => [fun(#{original_revision_number := OriginalRevisionNumber}) ->
+                    OriginalRevisionNumber
+                end],
+                <<"schema">> => [fun(#{atm_inventory_id := AtmInventoryId}) ->
+                    ozt_atm_workflow_schemas:gen_example_revision_schema_json(AtmInventoryId)
+                end],
+                <<"supplementaryAtmLambdas">> => [case SupplementaryAtmLambdas of
+                    none -> #{};
+                    {_, AtmLambdaDefinitions} -> AtmLambdaDefinitions
+                end]
+            },
+            bad_values = lists:flatten([
+                case RevisionNumberProvisionMode of
+                    override_original_revision_number ->
+                        [];
+                    take_original_revision_number ->
+                        {<<"originalRevisionNumber">>, [<<"a">>], ?ERROR_BAD_VALUE_INTEGER(<<"originalRevisionNumber">>)}
+                end,
+                {<<"schema">>, #{<<"k">> => <<"v">>}, ?ERROR_BAD_DATA(<<"schema">>)},
+                {<<"supplementaryAtmLambdas">>, 987, ?ERROR_BAD_VALUE_JSON(<<"supplementaryAtmLambdas">>)}
+            ])
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+    )).
+
+
+delete_revision_test(Config) ->
+    delete_revision_test_base(Config, existent),
+    delete_revision_test_base(Config, nonexistent).
+
+delete_revision_test_base(Config, RevisionExistence) ->
+    Creator = ozt_users:create(),
+    MemberWithNoPriv = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+
+    EnvSetUpFun = fun() ->
+        AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+        ozt_atm_inventories:add_user(
+            AtmInventoryId, MemberWithNoPriv, privileges:atm_inventory_admin() -- [?ATM_INVENTORY_MANAGE_WORKFLOW_SCHEMAS]
+        ),
+        AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(AtmInventoryId, #{
+            <<"name">> => ozt_atm:gen_example_name(),
+            <<"summary">> => ozt_atm:gen_example_summary()
+        }),
+        PreexistingRevisionNumbers = lists:usort(lists_utils:random_sublist([
+            ?RAND_REV_NUMBER(), ?RAND_REV_NUMBER(), ?RAND_REV_NUMBER(), ?RAND_REV_NUMBER(), ?RAND_REV_NUMBER()
+        ], 1, all)),
+        lists:foreach(fun(RevisionNumber) ->
+            ozt_atm_workflow_schemas:insert_revision(AtmWorkflowSchemaId, RevisionNumber, #{
+                <<"schema">> => ozt_atm_workflow_schemas:gen_example_revision_schema_json(AtmInventoryId)
+            })
+        end, PreexistingRevisionNumbers),
+        RevisionNumberToDelete = case RevisionExistence of
+            existent ->
+                lists_utils:random_element(PreexistingRevisionNumbers);
+            nonexistent ->
+                lists_utils:random_element(lists:seq(1, 100) -- PreexistingRevisionNumbers)
+        end,
+        #{
+            atm_workflow_schema_id => AtmWorkflowSchemaId,
+            preexisting_revision_numbers => PreexistingRevisionNumbers,
+            revision_number_to_delete => RevisionNumberToDelete,
+            revision_number_to_delete_binary => integer_to_binary(RevisionNumberToDelete)
+        }
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{
+        atm_workflow_schema_id := AtmWorkflowSchemaId,
+        preexisting_revision_numbers := PreexistingRevisionNumbers,
+        revision_number_to_delete := RevisionNumberToDelete
+    }, _Data) ->
+        #od_atm_workflow_schema{
+            revision_registry = #atm_workflow_schema_revision_registry{
+                registry = Registry
+            }
+        } = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
+
+        ExpectedFinalRevisionNumbers = case {ShouldSucceed, RevisionExistence} of
+            {true, existent} ->
+                PreexistingRevisionNumbers -- [RevisionNumberToDelete];
+            {_, _} ->
+                PreexistingRevisionNumbers
+        end,
+        ?assertEqual(lists:sort(ExpectedFinalRevisionNumbers), lists:sort(maps:keys(Registry)))
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            % existence is checked before authorization - for a nonexistent resource,
+            % unauthenticated and unauthorized clients should get ERROR_NOT_FOUND too
+            correct = lists:flatten([
+                root,
+                {admin, [?OZ_ATM_INVENTORIES_UPDATE]},
+                {user, Creator},
+                case RevisionExistence of
+                    existent -> [];
+                    nonexistent -> [nobody, {user, MemberWithNoPriv}, {user, NonAdmin}]
+                end
+            ]),
+            unauthorized = lists:flatten(case RevisionExistence of
+                existent -> [nobody];
+                nonexistent -> []
+            end),
+            forbidden = lists:flatten([
+                case RevisionExistence of
+                    existent -> [{user, MemberWithNoPriv}, {user, NonAdmin}];
+                    nonexistent -> []
+                end
+            ])
+        },
+        rest_spec = #rest_spec{
+            method = delete,
+            path = [<<"/atm_workflow_schemas/">>, atm_workflow_schema_id, <<"/revision/">>, revision_number_to_delete_binary],
+            expected_code = case RevisionExistence of
+                existent -> ?HTTP_204_NO_CONTENT;
+                nonexistent -> ?HTTP_404_NOT_FOUND
+            end
+        },
+        logic_spec = #logic_spec{
+            module = atm_workflow_schema_logic,
+            function = delete_revision,
+            args = [auth, atm_workflow_schema_id, revision_number_to_delete],
+            expected_result = case RevisionExistence of
+                existent -> ?OK_RES;
+                nonexistent -> ?ERROR_REASON(?ERROR_NOT_FOUND)
+            end
+        },
+        gs_spec = #gs_spec{
+            operation = delete,
+            gri = #gri{type = od_atm_workflow_schema, id = atm_workflow_schema_id, aspect = {revision, revision_number_to_delete_binary}},
+            expected_result = case RevisionExistence of
+                existent -> ?OK_RES;
+                nonexistent -> ?ERROR_REASON(?ERROR_NOT_FOUND)
+            end
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+    )).
+
+
+dump_revision_test(Config) ->
+    Creator = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+    AnotherMember = ozt_users:create(),
+    AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
+    ozt_atm_inventories:add_user(AtmInventoryId, AnotherMember, []),
+
+    RevisionNumber = ?RAND_REV_NUMBER(),
+    RevisionNumberBin = integer_to_binary(RevisionNumber),
+    AtmWorkflowSchemaData = #{
+        <<"name">> => ozt_atm:gen_example_name(),
+        <<"summary">> => ozt_atm:gen_example_summary(),
+
+        <<"initialRevision">> => InitialRevisionData = #{
+            <<"originalRevisionNumber">> => RevisionNumber,
+            <<"schema">> => ozt_atm_workflow_schemas:gen_example_revision_schema_json(AtmInventoryId)
+        }
+    },
+    AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(?USER(Creator), AtmInventoryId, AtmWorkflowSchemaData),
+    AtmWorkflowSchema = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
+    ReferencedAtmLambdas = od_atm_workflow_schema:extract_all_referenced_atm_lambdas(AtmWorkflowSchema),
+
+    ExpectedJsonDump = InitialRevisionData#{
+        <<"schemaFormatVersion">> => 2,
         <<"supplementaryAtmLambdas">> => lists:foldl(fun(AtmLambdaId, Acc) ->
             AtmLambda = ozt_atm_lambdas:get(AtmLambdaId),
             Acc#{AtmLambdaId => #{
@@ -533,246 +1257,26 @@ dump_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = post,
-            path = [<<"/atm_workflow_schemas/">>, AtmWorkflowSchemaId, <<"/dump">>],
+            path = [<<"/atm_workflow_schemas/">>, AtmWorkflowSchemaId, <<"/revision/">>, RevisionNumberBin, <<"/dump">>],
             expected_code = ?HTTP_200_OK,
             expected_body = ExpectedJsonDump
         },
         logic_spec = #logic_spec{
             module = atm_workflow_schema_logic,
-            function = dump,
-            args = [auth, AtmWorkflowSchemaId],
+            function = dump_revision,
+            args = [auth, AtmWorkflowSchemaId, RevisionNumber],
             expected_result = ?OK_MAP(ExpectedJsonDump)
         },
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{
                 type = od_atm_workflow_schema, id = AtmWorkflowSchemaId,
-                aspect = dump, scope = private
+                aspect = {dump_revision, RevisionNumberBin}, scope = private
             },
             expected_result = ?OK_MAP(ExpectedJsonDump)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-
-update_test(Config) ->
-    Creator = ozt_users:create(),
-
-    % test with no supplementary lambdas
-    update_test_base(Config, Creator, none),
-
-    % test with supplementary lambdas that should be linked
-    % (available in different inventory where the used has privileges to manage lambdas)
-    AnotherAtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
-    AtmLambdasToBeLinked = maps:from_list(lists:map(fun(_) ->
-        AtmLambdaId = ozt_atm_lambdas:create(AnotherAtmInventoryId),
-        {AtmLambdaId, ozt_atm_lambdas:dump_schema_to_json(AtmLambdaId)}
-    end, lists:seq(1, rand:uniform(7)))),
-    update_test_base(Config, Creator, {to_link, AtmLambdasToBeLinked}),
-
-    % test with supplementary lambdas that should be duplicated
-    % (the user does not have access to them)
-    UnrelatedAtmInventoryId = ozt_atm_inventories:create(),
-    AtmLambdasToBeDuplicated = maps:from_list(lists:map(fun(_) ->
-        AtmLambdaId = ozt_atm_lambdas:create(UnrelatedAtmInventoryId),
-        {AtmLambdaId, ozt_atm_lambdas:dump_schema_to_json(AtmLambdaId)}
-    end, lists:seq(1, rand:uniform(7)))),
-    update_test_base(Config, Creator, {to_duplicate, AtmLambdasToBeDuplicated}).
-
-update_test_base(Config, Creator, SupplementaryAtmLambdas) ->
-    update_test_base(Config, Creator, SupplementaryAtmLambdas, {regular, Creator}),
-    update_test_base(Config, Creator, SupplementaryAtmLambdas, root_or_admin).
-
-update_test_base(Config, Creator, SupplementaryAtmLambdas, ClientType) ->
-    MemberWithNoPriv = ozt_users:create(),
-    NonAdmin = ozt_users:create(),
-
-    EnvSetUpFun = fun() ->
-        AtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
-        ozt_atm_inventories:add_user(
-            AtmInventoryId, MemberWithNoPriv, privileges:atm_inventory_admin() -- [?ATM_INVENTORY_MANAGE_WORKFLOW_SCHEMAS]
-        ),
-
-        InventoryAtmLambdas = lists:map(fun(_) ->
-            ozt_atm_lambdas:create(AtmInventoryId)
-        end, lists:seq(1, rand:uniform(7))),
-
-        InitialWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(AtmInventoryId),
-        StoreSchemas = maps:get(<<"stores">>, InitialWorkflowSchemaData),
-        StoreSchemaIds = [StoreSchemaId || #{<<"id">> := StoreSchemaId} <- StoreSchemas],
-
-        #{
-            atm_inventory_id => AtmInventoryId,
-            available_atm_lambdas => case SupplementaryAtmLambdas of
-                none -> InventoryAtmLambdas;
-                {_, LambdaDefinitions} -> maps:keys(LambdaDefinitions)
-            end,
-            store_schemas => StoreSchemas,
-            store_schema_ids => StoreSchemaIds,
-            initial_workflow_schema_data => InitialWorkflowSchemaData,
-            atm_workflow_schema_id => ozt_atm_workflow_schemas:create(AtmInventoryId, InitialWorkflowSchemaData)
-        }
-    end,
-
-    VerifyEndFun = fun(ShouldSucceed, #{
-        atm_inventory_id := AtmInventoryId,
-        initial_workflow_schema_data := InitialWorkflowSchemaData,
-        atm_workflow_schema_id := AtmWorkflowSchemaId
-    }, Data) ->
-        AtmWorkflowSchemaRecord = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
-
-        InitialName = maps:get(<<"name">>, InitialWorkflowSchemaData),
-        ExpName = case ShouldSucceed of
-            false -> InitialName;
-            true -> maps:get(<<"name">>, Data, InitialName)
-        end,
-
-        InitialDescription = maps:get(<<"description">>, InitialWorkflowSchemaData, <<"Missing description">>),
-        ExpDescription = case ShouldSucceed of
-            false -> InitialDescription;
-            true -> maps:get(<<"description">>, Data, InitialDescription)
-        end,
-
-        InitialStores = maps:get(<<"stores">>, InitialWorkflowSchemaData, []),
-        ExpStores = case ShouldSucceed of
-            false -> InitialStores;
-            true -> maps:get(<<"stores">>, Data, InitialStores)
-        end,
-
-        InitialLanes = maps:get(<<"lanes">>, InitialWorkflowSchemaData, []),
-        ExpLanes = case {ShouldSucceed, maps:find(<<"lanes">>, Data)} of
-            {false, _} ->
-                InitialLanes;
-            {true, error} ->
-                InitialLanes;
-            {true, {ok, RequestedLanes}} ->
-                case SupplementaryAtmLambdas of
-                    none ->
-                        RequestedLanes;
-                    {to_link, _} ->
-                        RequestedLanes;
-                    {to_duplicate, AtmLambdaDefinitions} ->
-                        case ClientType of
-                            root_or_admin ->
-                                % root and admin clients can always link the lambdas, so no duplicates should be created
-                                RequestedLanes;
-                            {regular, _} ->
-                                DecodedRequestedLanes = jsonable_record:list_from_json(RequestedLanes, atm_lane_schema),
-                                ReferencedLambdas = ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(DecodedRequestedLanes),
-                                ExpSubstitutedLambdas = lists_utils:intersect(ReferencedLambdas, maps:keys(AtmLambdaDefinitions)),
-                                DecodedExpLanes = ozt_atm_workflow_schemas:substitute_atm_lambdas_for_duplicates_in_lanes(
-                                    DecodedRequestedLanes, ExpSubstitutedLambdas, AtmInventoryId
-                                ),
-                                jsonable_record:list_to_json(DecodedExpLanes, atm_lane_schema)
-                        end
-                end
-        end,
-
-        InitialState = maps:get(<<"state">>, InitialWorkflowSchemaData, case {InitialStores, InitialLanes} of
-            {[], _} -> incomplete;
-            {_, []} -> incomplete;
-            _ -> ready
-        end),
-        ExpState = case ShouldSucceed of
-            false -> InitialState;
-            true -> maps:get(<<"state">>, Data, InitialState)
-        end,
-
-        ExpAtmLambdas = ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(ExpLanes),
-
-        ?assertEqual(ExpName, AtmWorkflowSchemaRecord#od_atm_workflow_schema.name),
-        ?assertEqual(ExpDescription, AtmWorkflowSchemaRecord#od_atm_workflow_schema.description),
-        ?assertEqual(ExpStores, jsonable_record:list_to_json(AtmWorkflowSchemaRecord#od_atm_workflow_schema.stores, atm_store_schema)),
-        ?assertEqual(ExpLanes, jsonable_record:list_to_json(AtmWorkflowSchemaRecord#od_atm_workflow_schema.lanes, atm_lane_schema)),
-        ?assertEqual(ExpState, automation:workflow_schema_state_to_json(AtmWorkflowSchemaRecord#od_atm_workflow_schema.state)),
-        ?assertEqual(lists:sort(ExpAtmLambdas), lists:sort(AtmWorkflowSchemaRecord#od_atm_workflow_schema.atm_lambdas))
-    end,
-
-    EnvTearDownFun = fun(#{atm_inventory_id := AtmInventoryId}) ->
-        % clean up between tests as the lambdas that were linked / duplicated in the
-        % tested inventory may change the behaviour (it belongs to the same user as in all tests)
-        ozt_atm_inventories:delete(AtmInventoryId)
-    end,
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = case ClientType of
-                {regular, UserId} -> [
-                    {user, UserId}
-                ];
-                root_or_admin -> [
-                    root,
-                    {admin, [?OZ_ATM_INVENTORIES_UPDATE]}
-                ]
-            end,
-            unauthorized = [nobody],
-            forbidden = [
-                {user, MemberWithNoPriv},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = patch,
-            path = [<<"/atm_workflow_schemas/">>, atm_workflow_schema_id],
-            expected_code = ?HTTP_204_NO_CONTENT
-        },
-        logic_spec = #logic_spec{
-            module = atm_workflow_schema_logic,
-            function = update,
-            args = [auth, atm_workflow_schema_id, data],
-            expected_result = ?OK_RES
-        },
-        gs_spec = #gs_spec{
-            operation = update,
-            gri = #gri{type = od_atm_workflow_schema, id = atm_workflow_schema_id, aspect = instance},
-            expected_result = ?OK_RES
-        },
-        data_spec = DataSpec = #data_spec{
-            at_least_one = [
-                <<"name">>,
-                <<"description">>,
-                <<"stores">>,
-                <<"state">>
-            ],
-            correct_values = #{
-                <<"name">> => [ozt_atm:gen_example_name()],
-                <<"description">> => [ozt_atm:gen_example_description()],
-                <<"stores">> => [fun(#{store_schemas := StoreSchemas}) ->
-                    StoreSchemas
-                end],
-                <<"lanes">> => [fun(#{available_atm_lambdas := AvailableAtmLambdas, store_schema_ids := StoreSchemaIds}) ->
-                    ozt_atm_workflow_schemas:gen_example_lanes_json(AvailableAtmLambdas, StoreSchemaIds)
-                end],
-                <<"state">> => [ozt_atm_workflow_schemas:gen_example_state_json()],
-                <<"supplementaryAtmLambdas">> => [case SupplementaryAtmLambdas of
-                    none -> #{};
-                    {to_link, AtmLambdaDefinitions} -> AtmLambdaDefinitions;
-                    {to_duplicate, AtmLambdaDefinitions} -> AtmLambdaDefinitions
-                end]
-            },
-            bad_values = create_update_bad_data_values()
-        }
-    },
-    % lanes can only be provided if stores are, as they reference specific store schema ids
-    % first, test without lanes at all (see above spec), then mark stores as required
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, VerifyEndFun)),
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec#api_test_spec{
-        data_spec = DataSpec#data_spec{
-            required = lists:flatten([
-                <<"stores">>,
-                case SupplementaryAtmLambdas of
-                    none -> [];
-                    _ -> [<<"supplementaryAtmLambdas">>]
-                end
-            ]),
-            at_least_one = [
-                <<"name">>,
-                <<"description">>,
-                <<"state">>,
-                <<"lanes">>
-            ]
-        }
-    }, EnvSetUpFun, EnvTearDownFun, VerifyEndFun)).
 
 
 delete_test(Config) ->
@@ -840,17 +1344,17 @@ recreate_atm_workflow_schema_in_the_same_inventory_test(_Config) ->
     OriginalAtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
     OriginalAtmWorkflowSchemaId = create_workflow_schema_with_nonempty_tasks(OriginalAtmInventoryId),
     OriginalAtmInventoryLambdas = ozt_atm_inventories:get_atm_lambdas(OriginalAtmInventoryId),
-    OriginalReferencedLambdas = ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(
-        (ozt_atm_workflow_schemas:get(OriginalAtmWorkflowSchemaId))#od_atm_workflow_schema.lanes
+    OriginalReferencedLambdas = od_atm_workflow_schema:extract_all_referenced_atm_lambdas(
+        ozt_atm_workflow_schemas:get(OriginalAtmWorkflowSchemaId)
     ),
-    DumpedAtmWorkflowSchema = ozt_atm_workflow_schemas:dump_schema_to_json(OriginalAtmWorkflowSchemaId),
+    DumpedAtmWorkflowSchema = ozt_atm_workflow_schemas:dump_to_json(OriginalAtmWorkflowSchemaId),
 
     % recreating the schema from a dump in the same inventory should result in exactly the same schema
     DuplicateAtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(OriginalAtmInventoryId, DumpedAtmWorkflowSchema),
     ?assertNotEqual(OriginalAtmWorkflowSchemaId, DuplicateAtmWorkflowSchemaId),
     ?assert(are_workflow_schema_dumps_equal(
         DumpedAtmWorkflowSchema,
-        ozt_atm_workflow_schemas:dump_schema_to_json(DuplicateAtmWorkflowSchemaId)
+        ozt_atm_workflow_schemas:dump_to_json(DuplicateAtmWorkflowSchemaId)
     )),
     ?assert(inventory_references_lambdas(OriginalAtmInventoryId, OriginalAtmInventoryLambdas)),
     ?assert(workflow_schema_references_lambdas(DuplicateAtmWorkflowSchemaId, OriginalReferencedLambdas)).
@@ -863,10 +1367,10 @@ recreate_atm_workflow_schema_in_different_inventory_test(_Config) ->
     OriginalAtmWorkflowSchemaId = create_workflow_schema_with_nonempty_tasks(OriginalAtmInventoryId),
     OriginalAtmInventoryLambdas = ozt_atm_inventories:get_atm_lambdas(OriginalAtmInventoryId),
     OriginalAtmWorkflowSchema = ozt_atm_workflow_schemas:get(OriginalAtmWorkflowSchemaId),
-    OriginalReferencedLambdas = ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(
-        OriginalAtmWorkflowSchema#od_atm_workflow_schema.lanes
+    OriginalReferencedLambdas = od_atm_workflow_schema:extract_all_referenced_atm_lambdas(
+        OriginalAtmWorkflowSchema
     ),
-    DumpedAtmWorkflowSchema = ozt_atm_workflow_schemas:dump_schema_to_json(OriginalAtmWorkflowSchemaId),
+    DumpedAtmWorkflowSchema = ozt_atm_workflow_schemas:dump_to_json(OriginalAtmWorkflowSchemaId),
 
     % 1) exactly the same schema if the creating user has privileges to manage
     %    used lambdas in both inventories (lambdas are linked to the target inventory)
@@ -877,14 +1381,13 @@ recreate_atm_workflow_schema_in_different_inventory_test(_Config) ->
     ?assertNotEqual(OriginalAtmWorkflowSchemaId, FirstAtmWorkflowSchemaId),
     ?assert(are_workflow_schema_dumps_equal(
         DumpedAtmWorkflowSchema,
-        ozt_atm_workflow_schemas:dump_schema_to_json(FirstAtmWorkflowSchemaId)
+        ozt_atm_workflow_schemas:dump_to_json(FirstAtmWorkflowSchemaId)
     )),
     ?assert(inventory_references_lambdas(FirstAtmInventoryId, OriginalReferencedLambdas)),
     ?assert(workflow_schema_references_lambdas(FirstAtmWorkflowSchemaId, OriginalReferencedLambdas)),
 
-    % 2) a schema referencing duplicated lambdas if the creating user does not
-    %    have privileges to manage lambdas in the original inventory, but does in
-    %    the target inventory
+    % 2) a schema referencing duplicated lambdas if the creating user does not have privileges
+    %    to manage lambdas in the original inventory, but does in the target inventory
     UserBeta = ozt_users:create(),
     AnotherAtmInventoryId = ozt_users:create_atm_inventory_for(UserBeta),
     SecondAtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(
@@ -892,20 +1395,25 @@ recreate_atm_workflow_schema_in_different_inventory_test(_Config) ->
     ),
     ?assertNotEqual(OriginalAtmWorkflowSchemaId, SecondAtmWorkflowSchemaId),
     ?assertNot(are_workflow_schema_dumps_equal(
-        DumpedAtmWorkflowSchema,
-        ozt_atm_workflow_schemas:dump_schema_to_json(SecondAtmWorkflowSchemaId)
+        ozt_atm_workflow_schemas:dump_to_json(SecondAtmWorkflowSchemaId),
+        DumpedAtmWorkflowSchema
     )),
-    SecondAtmWorkflowSchema = ozt_atm_workflow_schemas:get(SecondAtmWorkflowSchemaId),
+
     ?assert(are_workflow_schema_dumps_equal(
-        ozt_atm_workflow_schemas:dump_schema_to_json(SecondAtmWorkflowSchemaId),
-        ozt_atm_workflow_schemas:dump_schema_to_json(
-            SecondAtmWorkflowSchemaId,
-            SecondAtmWorkflowSchema#od_atm_workflow_schema{
-                lanes = ozt_atm_workflow_schemas:substitute_atm_lambdas_for_duplicates_in_lanes(
-                    OriginalAtmWorkflowSchema#od_atm_workflow_schema.lanes,
-                    AnotherAtmInventoryId
-                )
-            }
+        ozt_atm_workflow_schemas:dump_to_json(SecondAtmWorkflowSchemaId),
+        ozt_atm_workflow_schemas:dump_to_json(
+            OriginalAtmWorkflowSchemaId,
+            ozt_atm_workflow_schemas:update_revision_with(
+                OriginalAtmWorkflowSchema,
+                od_atm_workflow_schema:get_latest_revision_number(OriginalAtmWorkflowSchema),
+                fun(AtmWorkflowSchemaRevision) ->
+                    ozt_atm_workflow_schemas:substitute_atm_lambdas_for_duplicates(
+                        AtmWorkflowSchemaRevision,
+                        OriginalReferencedLambdas,
+                        AnotherAtmInventoryId
+                    )
+                end
+            )
         )
     )),
     SecondReferencedLambdas = maps:values(ozt_atm_lambdas:find_all_duplicates(
@@ -924,7 +1432,7 @@ recreate_atm_workflow_schema_in_different_inventory_test(_Config) ->
     ?assertNotEqual(OriginalAtmWorkflowSchemaId, ThirdAtmWorkflowSchemaId),
     ?assert(are_workflow_schema_dumps_equal(
         DumpedAtmWorkflowSchema,
-        ozt_atm_workflow_schemas:dump_schema_to_json(ThirdAtmWorkflowSchemaId)
+        ozt_atm_workflow_schemas:dump_to_json(ThirdAtmWorkflowSchemaId)
     )),
     ?assert(inventory_references_lambdas(OriginalAtmInventoryId, OriginalAtmInventoryLambdas)),
     ?assert(workflow_schema_references_lambdas(ThirdAtmWorkflowSchemaId, OriginalReferencedLambdas)),
@@ -939,11 +1447,11 @@ recreate_atm_workflow_schema_in_different_inventory_test(_Config) ->
     ?assertNotEqual(OriginalAtmWorkflowSchemaId, FourthAtmWorkflowSchemaId),
     ?assertNot(are_workflow_schema_dumps_equal(
         DumpedAtmWorkflowSchema,
-        ozt_atm_workflow_schemas:dump_schema_to_json(FourthAtmWorkflowSchemaId)
+        ozt_atm_workflow_schemas:dump_to_json(FourthAtmWorkflowSchemaId)
     )),
     ?assert(are_workflow_schema_dumps_equal(
-        ozt_atm_workflow_schemas:dump_schema_to_json(SecondAtmWorkflowSchemaId),
-        ozt_atm_workflow_schemas:dump_schema_to_json(FourthAtmWorkflowSchemaId)
+        ozt_atm_workflow_schemas:dump_to_json(SecondAtmWorkflowSchemaId),
+        ozt_atm_workflow_schemas:dump_to_json(FourthAtmWorkflowSchemaId)
     )),
     ?assert(inventory_references_lambdas(AnotherAtmInventoryId, SecondReferencedLambdas)),
     ?assert(workflow_schema_references_lambdas(FourthAtmWorkflowSchemaId, SecondReferencedLambdas)),
@@ -959,11 +1467,11 @@ recreate_atm_workflow_schema_in_different_inventory_test(_Config) ->
     ?assertNotEqual(OriginalAtmWorkflowSchemaId, FifthAtmWorkflowSchemaId),
     ?assertNot(are_workflow_schema_dumps_equal(
         DumpedAtmWorkflowSchema,
-        ozt_atm_workflow_schemas:dump_schema_to_json(FifthAtmWorkflowSchemaId)
+        ozt_atm_workflow_schemas:dump_to_json(FifthAtmWorkflowSchemaId)
     )),
     ?assert(are_workflow_schema_dumps_equal(
-        ozt_atm_workflow_schemas:dump_schema_to_json(SecondAtmWorkflowSchemaId),
-        ozt_atm_workflow_schemas:dump_schema_to_json(FifthAtmWorkflowSchemaId)
+        ozt_atm_workflow_schemas:dump_to_json(SecondAtmWorkflowSchemaId),
+        ozt_atm_workflow_schemas:dump_to_json(FifthAtmWorkflowSchemaId)
     )),
     ?assert(inventory_references_lambdas(DifferentAtmInventoryId, SecondReferencedLambdas)),
     ?assert(workflow_schema_references_lambdas(FifthAtmWorkflowSchemaId, SecondReferencedLambdas)),
@@ -980,14 +1488,14 @@ recreate_atm_workflow_schema_in_different_inventory_test(_Config) ->
     ).
 
 
-recreate_atm_workflow_schema_with_mixed_linked_and_duplicated_lambdas(_Config) ->
+recreate_atm_workflow_schema_with_mixed_linked_and_duplicated_lambdas_test(_Config) ->
     OriginalAtmInventoryId = ozt_atm_inventories:create(),
     AtmLambdaToLink = ozt_atm_lambdas:create(OriginalAtmInventoryId),
     AtmLambdaToDuplicate = ozt_atm_lambdas:create(OriginalAtmInventoryId),
     OriginalAtmWorkflowSchemaId = create_workflow_schema_with_tasks_including_lambdas(
         OriginalAtmInventoryId, [AtmLambdaToLink, AtmLambdaToDuplicate]
     ),
-    DumpedAtmWorkflowSchema = ozt_atm_workflow_schemas:dump_schema_to_json(OriginalAtmWorkflowSchemaId),
+    DumpedAtmWorkflowSchema = ozt_atm_workflow_schemas:dump_to_json(OriginalAtmWorkflowSchemaId),
 
     Creator = ozt_users:create(),
     TargetInventoryId = ozt_users:create_atm_inventory_for(Creator),
@@ -1003,21 +1511,25 @@ recreate_atm_workflow_schema_with_mixed_linked_and_duplicated_lambdas(_Config) -
     ),
     ?assertNotEqual(OriginalAtmWorkflowSchemaId, RecreatedAtmWorkflowSchemaId),
     ?assertNot(are_workflow_schema_dumps_equal(
-        DumpedAtmWorkflowSchema,
-        ozt_atm_workflow_schemas:dump_schema_to_json(RecreatedAtmWorkflowSchemaId)
+        ozt_atm_workflow_schemas:dump_to_json(RecreatedAtmWorkflowSchemaId),
+        DumpedAtmWorkflowSchema
     )),
-    RecreatedAtmWorkflowSchema = ozt_atm_workflow_schemas:get(RecreatedAtmWorkflowSchemaId),
+    OriginalAtmWorkflowSchema = ozt_atm_workflow_schemas:get(OriginalAtmWorkflowSchemaId),
     ?assert(are_workflow_schema_dumps_equal(
-        ozt_atm_workflow_schemas:dump_schema_to_json(RecreatedAtmWorkflowSchemaId),
-        ozt_atm_workflow_schemas:dump_schema_to_json(
-            RecreatedAtmWorkflowSchemaId,
-            RecreatedAtmWorkflowSchema#od_atm_workflow_schema{
-                lanes = ozt_atm_workflow_schemas:substitute_atm_lambdas_for_duplicates_in_lanes(
-                    RecreatedAtmWorkflowSchema#od_atm_workflow_schema.lanes,
-                    [AtmLambdaToDuplicate],
-                    TargetInventoryId
-                )
-            }
+        ozt_atm_workflow_schemas:dump_to_json(RecreatedAtmWorkflowSchemaId),
+        ozt_atm_workflow_schemas:dump_to_json(
+            OriginalAtmWorkflowSchemaId,
+            ozt_atm_workflow_schemas:update_revision_with(
+                OriginalAtmWorkflowSchema,
+                od_atm_workflow_schema:get_latest_revision_number(OriginalAtmWorkflowSchema),
+                fun(AtmWorkflowSchemaRevision) ->
+                    ozt_atm_workflow_schemas:substitute_atm_lambdas_for_duplicates(
+                        AtmWorkflowSchemaRevision,
+                        [AtmLambdaToDuplicate],
+                        TargetInventoryId
+                    )
+                end
+            )
         )
     )),
     ExpReferencedLambdas = [AtmLambdaToLink, ozt_atm_lambdas:find_duplicate(AtmLambdaToDuplicate, TargetInventoryId)],
@@ -1030,7 +1542,7 @@ bad_supplementary_lambdas_data_test(_Config) ->
     OriginalAtmInventoryId = ozt_users:create_atm_inventory_for(Creator),
     TheOnlyAtmLambdaId = ozt_atm_lambdas:create(OriginalAtmInventoryId),
     OriginalAtmWorkflowSchemaId = create_workflow_schema_with_nonempty_tasks(OriginalAtmInventoryId),
-    DumpedAtmWorkflowSchema = ozt_atm_workflow_schemas:dump_schema_to_json(OriginalAtmWorkflowSchemaId),
+    DumpedAtmWorkflowSchema = ozt_atm_workflow_schemas:dump_to_json(OriginalAtmWorkflowSchemaId),
 
     UserBeta = ozt_users:create(),
     AnotherAtmInventoryId = ozt_users:create_atm_inventory_for(UserBeta),
@@ -1045,7 +1557,9 @@ bad_supplementary_lambdas_data_test(_Config) ->
     ?assertEqual(ExpBadLambdaReferenceError, ozt_atm_workflow_schemas:try_create(
         ?USER(UserBeta),
         AnotherAtmInventoryId,
-        maps:without([<<"supplementaryAtmLambdas">>], DumpedAtmWorkflowSchema)
+        maps:update_with(<<"initialRevision">>, fun(InitialRevisionData) ->
+            maps:without([<<"supplementaryAtmLambdas">>], InitialRevisionData)
+        end, DumpedAtmWorkflowSchema)
     )),
 
     % providing invalid lambda definitions should cause data validation errors from lambda creation procedures
@@ -1054,11 +1568,13 @@ bad_supplementary_lambdas_data_test(_Config) ->
         ozt_atm_workflow_schemas:try_create(
             ?USER(UserBeta),
             AnotherAtmInventoryId,
-            maps:update_with(<<"supplementaryAtmLambdas">>, fun(SupplementaryAtmLambdas) ->
-                maps:map(fun(_AtmLambdaId, AtmLambdaData) ->
-                    % include ONLY the checksum field and drop the actual lambda data
-                    maps:with([<<"checksum">>], AtmLambdaData)
-                end, SupplementaryAtmLambdas)
+            maps:update_with(<<"initialRevision">>, fun(InitialRevisionData) ->
+                maps:update_with(<<"supplementaryAtmLambdas">>, fun(SupplementaryAtmLambdas) ->
+                    maps:map(fun(_AtmLambdaId, AtmLambdaData) ->
+                        % include ONLY the checksum field and drop the actual lambda data
+                        maps:with([<<"checksum">>], AtmLambdaData)
+                    end, SupplementaryAtmLambdas)
+                end, InitialRevisionData)
             end, DumpedAtmWorkflowSchema)
         )
     ).
@@ -1068,17 +1584,10 @@ bad_supplementary_lambdas_data_test(_Config) ->
 %%%===================================================================
 
 %% @private
-create_update_bad_data_values() ->
+name_summary_bad_data_values() ->
     lists:flatten([
-        {<<"description">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"description">>)},
-        {<<"description">>, str_utils:rand_hex(50001), ?ERROR_BAD_VALUE_BINARY_TOO_LARGE(<<"description">>, 100000)},
-        {<<"stores">>, bad_spec, ?ERROR_BAD_DATA(<<"stores">>)},
-        {<<"stores">>, [1234], ?ERROR_BAD_DATA(<<"stores">>)},
-        {<<"lanes">>, #{<<"bad">> => <<"object">>}, ?ERROR_BAD_DATA(<<"lanes">>)},
-        {<<"lanes">>, [<<"text">>], ?ERROR_BAD_DATA(<<"lanes">>)},
-        {<<"state">>, 78.4, ?ERROR_BAD_VALUE_ATOM(<<"state">>)},
-        {<<"state">>, bad, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"state">>, automation:all_workflow_schema_states())},
-        {<<"supplementaryAtmLambdas">>, <<"text">>, ?ERROR_BAD_VALUE_JSON(<<"supplementaryAtmLambdas">>)},
+        {<<"summary">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"summary">>)},
+        {<<"summary">>, str_utils:rand_hex(315), ?ERROR_BAD_VALUE_BINARY_TOO_LARGE(<<"summary">>, 200)},
         ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
     ]).
 
@@ -1087,7 +1596,7 @@ create_update_bad_data_values() ->
 create_workflow_schema_with_nonempty_tasks(AtmInventoryId) ->
     AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(AtmInventoryId),
     AtmWorkflowSchema = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
-    case ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(AtmWorkflowSchema#od_atm_workflow_schema.lanes) of
+    case AtmWorkflowSchema#od_atm_workflow_schema.atm_lambdas of
         [] ->
             % workflow schema is randomized and may have empty tasks; repeat if needed
             create_workflow_schema_with_nonempty_tasks(AtmInventoryId);
@@ -1099,10 +1608,7 @@ create_workflow_schema_with_nonempty_tasks(AtmInventoryId) ->
 %% @private
 create_workflow_schema_with_tasks_including_lambdas(AtmInventoryId, TargetAtmLambdas) ->
     AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(AtmInventoryId),
-    AtmWorkflowSchema = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
-    ReferencedAtmLambdas = ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(
-        AtmWorkflowSchema#od_atm_workflow_schema.lanes
-    ),
+    #od_atm_workflow_schema{atm_lambdas = ReferencedAtmLambdas} = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
     case lists:sort(TargetAtmLambdas) == lists:sort(ReferencedAtmLambdas) of
         true ->
             AtmWorkflowSchemaId;
@@ -1116,7 +1622,7 @@ create_workflow_schema_with_tasks_including_lambdas(AtmInventoryId, TargetAtmLam
 are_workflow_schema_dumps_equal(DumpA, DumpB) ->
     % the workflow schema id serves as an additional information and does not impact the
     % functional aspect of the workflow schema
-    maps:without([<<"atmWorkflowSchemaId">>], DumpA) == maps:without([<<"atmWorkflowSchemaId">>], DumpB).
+    maps:without([<<"originalAtmWorkflowSchemaId">>], DumpA) == maps:without([<<"originalAtmWorkflowSchemaId">>], DumpB).
 
 
 inventory_references_lambdas(AtmInventoryId, AtmLambdas) ->

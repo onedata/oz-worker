@@ -668,28 +668,39 @@ run_validation_test(#test_spec{schema_type = atm_workflow_schema} = TestSpec) ->
     AtmInventoryId = ozt_users:create_atm_inventory_for(UserId),
 
     CorrectAtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(AtmInventoryId),
+    InitialRevisionData = maps:get(<<"initialRevision">>, CorrectAtmWorkflowSchemaData),
     % repeat test data generation as needed to make sure that at least one store
     % and one lane is generated - otherwise, validation tests do not make sense
-    case CorrectAtmWorkflowSchemaData of
+    case maps:get(<<"schema">>, InitialRevisionData) of
         #{<<"stores">> := []} ->
             run_validation_test(TestSpec);
         #{<<"lanes">> := []} ->
             run_validation_test(TestSpec);
-        _ ->
-            {InvalidAtmWorkflowSchemaData, ExpectedError} = spoil_data_field(
-                TestSpec, CorrectAtmWorkflowSchemaData, AtmInventoryId
+        CorrectAtmWorkflowSchemaRevisionData ->
+            {InvalidAtmWorkflowSchemaRevisionData, ExpectedError} = spoil_data_field(
+                TestSpec, CorrectAtmWorkflowSchemaRevisionData, AtmInventoryId
             ),
+
+            InvalidAtmWorkflowSchemaData = kv_utils:update_with([<<"initialRevision">>, <<"schema">>], fun(_) ->
+                InvalidAtmWorkflowSchemaRevisionData
+            end, CorrectAtmWorkflowSchemaData),
 
             ?assertEqual(ExpectedError, ozt_atm_workflow_schemas:try_create(
                 ?USER(UserId), AtmInventoryId, InvalidAtmWorkflowSchemaData
             )),
 
-            % updating a valid schema with invalid values should fail as well
+            % merging a valid schema with invalid one should fail as well
             AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(
                 ?USER(UserId), AtmInventoryId, CorrectAtmWorkflowSchemaData
             ),
-            ?assertEqual(ExpectedError, ozt_atm_workflow_schemas:try_update(
+            ?assertEqual(ExpectedError, ozt_atm_workflow_schemas:try_merge(
                 ?USER(UserId), AtmWorkflowSchemaId, InvalidAtmWorkflowSchemaData
+            )),
+
+            % inserting an invalid revision into a workflow schema should fail as well
+            ?assertEqual(ExpectedError, ozt_atm_workflow_schemas:try_insert_revision(
+                ?USER(UserId), AtmWorkflowSchemaId, integer_to_binary(?RAND_INT(1, 100)),
+                maps:get(<<"initialRevision">>, InvalidAtmWorkflowSchemaData)
             ))
     end.
 

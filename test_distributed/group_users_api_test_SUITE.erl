@@ -241,6 +241,7 @@ add_user_test(Config) ->
     % to add himself to the group
     {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutAddUserPriv), ?GROUP_NAME2),
     {ok, SubGroup2} = oz_test_utils:group_add_group(Config, G1, SubGroup2),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     lists:foreach(fun({ClientClassification, SubjectUser}) ->
         VerifyEndFun = fun
@@ -323,6 +324,7 @@ add_user_with_privileges_test(Config) ->
     % he should NOT be able to add himself to the group with given privileges
     {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutAddUserPriv), ?GROUP_NAME2),
     {ok, SubGroup2} = oz_test_utils:group_add_group(Config, G1, SubGroup2),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     lists:foreach(fun({ClientClassification, SubjectUser}) ->
         VerifyEndFun = fun

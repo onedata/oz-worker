@@ -19,7 +19,7 @@
 -export([validate/2]).
 
 -record(validator_ctx, {
-    workflow_schema :: od_atm_workflow_schema:record(),
+    atm_workflow_schema_revision :: atm_workflow_schema_revision:record(),
     fetched_lambdas :: #{od_atm_lambda:id() => od_atm_lambda:record()}
 }).
 -type validator_ctx() :: #validator_ctx{}.
@@ -33,11 +33,11 @@
 %%% API
 %%%===================================================================
 
--spec validate(od_atm_workflow_schema:record(), #{od_atm_lambda:id() => od_atm_lambda:record()}) ->
+-spec validate(atm_workflow_schema_revision:record(), #{od_atm_lambda:id() => od_atm_lambda:record()}) ->
     ok | no_return().
-validate(AtmWorkflowSchema, FetchedLambdas) ->
+validate(AtmWorkflowSchemaRevision, FetchedLambdas) ->
     Ctx = #validator_ctx{
-        workflow_schema = AtmWorkflowSchema,
+        atm_workflow_schema_revision = AtmWorkflowSchemaRevision,
         fetched_lambdas = FetchedLambdas
     },
     atm_schema_validator:run_validation_procedures(Ctx, [
@@ -54,14 +54,18 @@ validate(AtmWorkflowSchema, FetchedLambdas) ->
 %% @private
 -spec validate_all_ids_in_lanes(validator_ctx()) ->
     ok | no_return().
-validate_all_ids_in_lanes(#validator_ctx{workflow_schema = #od_atm_workflow_schema{lanes = Lanes}}) ->
+validate_all_ids_in_lanes(#validator_ctx{
+    atm_workflow_schema_revision = #atm_workflow_schema_revision{
+        lanes = Lanes
+    } = AtmWorkflowSchemaRevision
+}) ->
     LaneIds = [L#atm_lane_schema.id || L <- Lanes],
     ParallelBoxIds = lists:flatmap(fun(#atm_lane_schema{parallel_boxes = ParallelBoxes}) ->
         [P#atm_parallel_box_schema.id || P <- ParallelBoxes]
     end, Lanes),
-    TaskIds = od_atm_workflow_schema:fold_tasks(fun(#atm_task_schema{id = Id}, Acc) ->
-        [Id | Acc]
-    end, [], Lanes),
+    TaskIds = atm_workflow_schema_revision:fold_tasks(fun(AtmTaskSchema, Acc) ->
+        [AtmTaskSchema#atm_task_schema.id | Acc]
+    end, [], AtmWorkflowSchemaRevision),
     atm_schema_validator:assert_unique_identifiers(id, LaneIds, <<"lanes">>),
     atm_schema_validator:assert_unique_identifiers(id, ParallelBoxIds, <<"parallelBoxes">>),
     atm_schema_validator:assert_unique_identifiers(id, TaskIds, <<"tasks">>).
@@ -70,7 +74,7 @@ validate_all_ids_in_lanes(#validator_ctx{workflow_schema = #od_atm_workflow_sche
 %% @private
 -spec validate_store_schemas(validator_ctx()) ->
     ok | no_return().
-validate_store_schemas(#validator_ctx{workflow_schema = #od_atm_workflow_schema{stores = Stores}}) ->
+validate_store_schemas(#validator_ctx{atm_workflow_schema_revision = #atm_workflow_schema_revision{stores = Stores}}) ->
     StoreIds = lists:map(fun(#atm_store_schema{
         id = Id, type = Type, default_initial_value = DefaultInitialValue, data_spec = DataSpec
     } = AtmStoreSchema) ->
@@ -128,9 +132,9 @@ sanitize_store_default_initial_value(_StoreType, DefaultInitialValue, DataSpec, 
 -spec validate_store_schema_references(validator_ctx()) ->
     ok | no_return().
 validate_store_schema_references(#validator_ctx{
-    workflow_schema = #od_atm_workflow_schema{
+    atm_workflow_schema_revision = #atm_workflow_schema_revision{
         stores = Stores
-    } = AtmWorkflowSchema
+    } = AtmWorkflowSchemaRevision
 }) ->
     StoreSchemaIds = [Store#atm_store_schema.id || Store <- Stores],
 
@@ -143,7 +147,7 @@ validate_store_schema_references(#validator_ctx{
             StoreSchemaId,
             StoreSchemaIds
         )
-    end, AtmWorkflowSchema),
+    end, AtmWorkflowSchemaRevision),
 
     foreach_task(fun(AtmTaskSchema = #atm_task_schema{id = TaskId}) ->
 
@@ -176,17 +180,17 @@ validate_store_schema_references(#validator_ctx{
             )
         end, AtmTaskSchema#atm_task_schema.result_mappings)
 
-    end, AtmWorkflowSchema).
+    end, AtmWorkflowSchemaRevision).
 
 
 %% @private
 -spec validate_argument_and_result_mappers(validator_ctx()) ->
     ok | no_return().
 validate_argument_and_result_mappers(#validator_ctx{
-    workflow_schema = #od_atm_workflow_schema{} = AtmWorkflowSchema,
+    atm_workflow_schema_revision = #atm_workflow_schema_revision{} = AtmWorkflowSchemaRevision,
     fetched_lambdas = FetchedLambdas
 }) ->
-    od_atm_workflow_schema:fold_tasks(fun(AtmTaskSchema = #atm_task_schema{
+    atm_workflow_schema_revision:fold_tasks(fun(AtmTaskSchema = #atm_task_schema{
         id = TaskId,
         lambda_id = AtmLambdaId
     }, FetchedLambdasAcc) ->
@@ -232,7 +236,7 @@ validate_argument_and_result_mappers(#validator_ctx{
         end, ArgumentSpecs),
 
         NewFetchedLambdasAcc
-    end, FetchedLambdas, AtmWorkflowSchema),
+    end, FetchedLambdas, AtmWorkflowSchemaRevision),
     ok.
 
 %%%===================================================================
@@ -240,19 +244,19 @@ validate_argument_and_result_mappers(#validator_ctx{
 %%%===================================================================
 
 %% @private
--spec foreach_lane(fun((atm_lane_schema:record()) -> any() | no_return()), od_atm_workflow_schema:record()) ->
+-spec foreach_lane(fun((atm_lane_schema:record()) -> any() | no_return()), atm_workflow_schema_revision:record()) ->
     ok | no_return().
-foreach_lane(Callback, AtmWorkflowSchema) ->
-    lists:foreach(Callback, AtmWorkflowSchema#od_atm_workflow_schema.lanes).
+foreach_lane(Callback, AtmWorkflowSchemaRevision) ->
+    lists:foreach(Callback, AtmWorkflowSchemaRevision#atm_workflow_schema_revision.lanes).
 
 
 %% @private
--spec foreach_task(fun((atm_task_schema:record()) -> any() | no_return()), od_atm_workflow_schema:record()) ->
+-spec foreach_task(fun((atm_task_schema:record()) -> any() | no_return()), atm_workflow_schema_revision:record()) ->
     ok | no_return().
-foreach_task(Callback, AtmWorkflowSchema) ->
-    od_atm_workflow_schema:fold_tasks(fun(AtmTaskSchema, _) ->
+foreach_task(Callback, AtmWorkflowSchemaRevision) ->
+    atm_workflow_schema_revision:fold_tasks(fun(AtmTaskSchema, _) ->
         Callback(AtmTaskSchema)
-    end, undefined, AtmWorkflowSchema),
+    end, undefined, AtmWorkflowSchemaRevision),
     ok.
 
 

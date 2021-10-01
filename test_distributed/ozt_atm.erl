@@ -22,6 +22,7 @@
 -export([gen_example_name/0]).
 -export([gen_example_summary/0]).
 -export([gen_example_description/0]).
+-export([gen_example_lifecycle_state_json/0]).
 -export([gen_example_store_type/0]).
 -export([gen_example_data_spec/0, gen_example_data_spec/1]).
 -export([gen_example_initial_value/1]).
@@ -47,6 +48,11 @@ gen_example_summary() ->
 -spec gen_example_description() -> automation:description().
 gen_example_description() ->
     lists_utils:random_element([<<>>, ?RAND_STR(rand:uniform(1000) + 50)]).
+
+
+-spec gen_example_lifecycle_state_json() -> json_utils:json_term().
+gen_example_lifecycle_state_json() ->
+    automation:lifecycle_state_to_json(lists_utils:random_element(automation:all_lifecycle_states())).
 
 
 -spec gen_example_store_type() -> automation:store_type().

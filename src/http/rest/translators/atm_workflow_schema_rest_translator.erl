@@ -34,6 +34,9 @@ create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id =
     rest_translator:created_reply_with_location([<<"atm_workflow_schemas">>, AtmWorkflowSchemaId]);
 
 create_response(#gri{aspect = dump}, _, value, JsonMap) ->
+    rest_translator:ok_body_reply(JsonMap);
+
+create_response(#gri{aspect = {dump_revision, _}}, _, value, JsonMap) ->
     rest_translator:ok_body_reply(JsonMap).
 
 %%--------------------------------------------------------------------
@@ -48,13 +51,11 @@ get_response(#gri{id = undefined, aspect = list}, AtmWorkflowSchemas) ->
 get_response(#gri{id = AtmWorkflowSchemaId, aspect = instance, scope = private}, AtmWorkflowSchema) ->
     #od_atm_workflow_schema{
         name = Name,
-        description = Description,
+        summary = Summary,
 
-        stores = Stores,
-        lanes = Lanes,
+        revision_registry = RevisionRegistry,
 
-        state = State,
-
+        original_atm_workflow_schema = OriginalAtmWorkflowSchemaId,
         atm_inventory = AtmInventoryId,
         atm_lambdas = AtmLambdaIds,
 
@@ -65,13 +66,11 @@ get_response(#gri{id = AtmWorkflowSchemaId, aspect = instance, scope = private},
         <<"atmWorkflowSchemaId">> => AtmWorkflowSchemaId,
 
         <<"name">> => Name,
-        <<"description">> => Description,
+        <<"summary">> => Summary,
 
-        <<"stores">> => jsonable_record:list_to_json(Stores, atm_store_schema),
-        <<"lanes">> => jsonable_record:list_to_json(Lanes, atm_lane_schema),
+        <<"revisionRegistry">> => jsonable_record:to_json(RevisionRegistry, atm_workflow_schema_revision_registry),
 
-        <<"state">> => automation:workflow_schema_state_to_json(State),
-
+        <<"originalAtmWorkflowSchemaId">> => utils:undefined_to_null(OriginalAtmWorkflowSchemaId),
         <<"atmInventoryId">> => AtmInventoryId,
         <<"atmLambdas">> => AtmLambdaIds,
 

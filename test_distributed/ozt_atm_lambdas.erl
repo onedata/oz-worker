@@ -28,7 +28,7 @@
 -export([get_atm_workflow_schemas/1]).
 -export([link_to_inventory/2]).
 -export([unlink_from_inventory/2]).
--export([dump_schema_to_json/1]).
+-export([dump_to_json/1]).
 -export([find_duplicate/2, find_all_duplicates/2]).
 -export([default_resource_spec/0]).
 %% Example data generation
@@ -114,11 +114,11 @@ unlink_from_inventory(AtmLambdaId, AtmInventoryId) ->
     ?assertMatch(ok, ozt:rpc(atm_lambda_logic, unlink_from_inventory, [?ROOT, AtmLambdaId, AtmInventoryId])).
 
 
--spec dump_schema_to_json(od_atm_lambda:id() | od_atm_lambda:record()) ->
+-spec dump_to_json(od_atm_lambda:id() | od_atm_lambda:record()) ->
     json_utils:json_term().
-dump_schema_to_json(AtmLambdaId) when is_binary(AtmLambdaId) ->
-    dump_schema_to_json(get(AtmLambdaId));
-dump_schema_to_json(AtmLambda) ->
+dump_to_json(AtmLambdaId) when is_binary(AtmLambdaId) ->
+    dump_to_json(get(AtmLambdaId));
+dump_to_json(AtmLambda) ->
     ozt:rpc(od_atm_lambda, dump_to_json, [AtmLambda]).
 
 

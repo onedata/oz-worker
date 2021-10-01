@@ -796,9 +796,10 @@ field_specs(storages) -> [
     {eff_groups, integer, 10, fun(Doc) -> maps:size(Doc#document.value#od_storage.eff_groups) end},
     {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_storage.creation_time end},
     {qos_params, text, 55, fun(#document{value = #od_storage{qos_parameters = QosParameters}}) ->
+        CustomQosParameters = maps:without([<<"storageId">>, <<"providerId">>], QosParameters),
         KeyValuePairs = lists:map(fun({Key, Value}) ->
             str_utils:format_bin("~ts=~ts", [Key, Value])
-        end, maps:to_list(QosParameters)),
+        end, maps:to_list(CustomQosParameters)),
         str_utils:join_binary(KeyValuePairs, <<", ">>)
     end}
 ];
@@ -833,23 +834,42 @@ field_specs(atm_workflow_schemas) -> [
     {name, text, 28, fun(Doc) -> Doc#document.value#od_atm_workflow_schema.name end},
     {atm_inventory_id, text, 38, fun(Doc) -> Doc#document.value#od_atm_workflow_schema.atm_inventory end},
     {used_lambdas, integer, 12, fun(Doc) -> length(Doc#document.value#od_atm_workflow_schema.atm_lambdas) end},
-    {stores, integer, 6, fun(Doc) -> length(Doc#document.value#od_atm_workflow_schema.stores) end},
-    {lanes, integer, 5, fun(Doc) -> length(Doc#document.value#od_atm_workflow_schema.lanes) end},
+    {revisions, 9, fun(#document{value = #od_atm_workflow_schema{revision_registry = RevisionRegistry}}) ->
+        atm_workflow_schema_revision_registry:size(RevisionRegistry)
+    end},
+    {stores, integer, 6, fun(Doc) -> length((latest_revision(Doc))#atm_workflow_schema_revision.stores) end},
+    {lanes, integer, 5, fun(Doc) -> length((latest_revision(Doc))#atm_workflow_schema_revision.lanes) end},
     {pboxes, integer, 6, fun(Doc) -> lists:sum(
         lists:map(fun(#atm_lane_schema{parallel_boxes = PBoxes}) ->
             length(PBoxes)
-        end, Doc#document.value#od_atm_workflow_schema.lanes)
+        end, (latest_revision(Doc))#atm_workflow_schema_revision.lanes)
     ) end},
     {tasks, integer, 5, fun(Doc) -> lists:sum(
         lists:flatmap(fun(#atm_lane_schema{parallel_boxes = PBoxes}) ->
             lists:map(fun(#atm_parallel_box_schema{tasks = Tasks}) ->
                 length(Tasks)
             end, PBoxes)
-        end, Doc#document.value#od_atm_workflow_schema.lanes)
+        end, (latest_revision(Doc))#atm_workflow_schema_revision.lanes)
     ) end},
-    {state, integer, 10, fun(Doc) -> length(Doc#document.value#od_atm_workflow_schema.lanes) end},
+    {state, integer, 10, fun(Doc) -> length((latest_revision(Doc))#atm_workflow_schema_revision.lanes) end},
     {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_atm_workflow_schema.creation_time end}
 ].
+
+
+%% @private
+-spec latest_revision(od_atm_workflow_schema:doc()) -> atm_workflow_schema_revision:record().
+latest_revision(#document{value = AtmWorkflowSchema = #od_atm_workflow_schema{revision_registry = RevisionRegistry}}) ->
+    case od_atm_workflow_schema:get_latest_revision_number(AtmWorkflowSchema) of
+        undefined ->
+            % return some dummy, empty revision to generate the row for the schema
+            #atm_workflow_schema_revision{
+                stores = [],
+                lanes = [],
+                state = draft
+            };
+        RevisionNumber ->
+            atm_workflow_schema_revision_registry:get_revision(RevisionNumber, RevisionRegistry)
+    end.
 
 
 %% @private

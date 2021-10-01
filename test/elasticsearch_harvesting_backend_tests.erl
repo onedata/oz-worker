@@ -25,12 +25,12 @@
 remove_field_test() ->
     ?assertEqual(#{}, elasticsearch_harvesting_backend:remove_field([a], #{a => b})),
     ?assertEqual([#{}], elasticsearch_harvesting_backend:remove_field([a], [#{a => b}])),
-    
+
     ?assertEqual(#{a => #{}}, elasticsearch_harvesting_backend:remove_field([a, b], #{a => #{b => c}})),
     ?assertEqual(#{a => [#{}]}, elasticsearch_harvesting_backend:remove_field([a, b], #{a => [#{b => c}]})),
     ?assertEqual(#{a => [[[#{}]]]}, elasticsearch_harvesting_backend:remove_field([a, b], #{a => [[[#{b => c}]]]})),
     ?assertEqual(#{a => [[[#{}]], #{}]}, elasticsearch_harvesting_backend:remove_field([a, b], #{a => [[[#{b => c}]], #{b => 8}]})),
-    
+
     ?assertEqual(#{a => #{d => e}, b => c}, elasticsearch_harvesting_backend:remove_field([a, b], #{a => #{b => c, d => e}, b => c})),
     ?assertEqual(#{a => [#{}, #{}]}, elasticsearch_harvesting_backend:remove_field([a, b], #{a => [#{b => c}, #{b => c}]})),
     ok.
@@ -81,11 +81,11 @@ prepare_data_test() ->
             <<"a">> => <<"B">>
         },
         call_prepare_data(
-            #{<<"json">> => <<"{\"a\":\"B\"}">>}, 
+            #{<<"json">> => <<"{\"a\":\"B\"}">>},
             IndexInfo, []
         )
     ),
-    
+
     ?assertEqual(
         #{
             <<"__onedata">> => #{
@@ -98,11 +98,11 @@ prepare_data_test() ->
             }
         },
         call_prepare_data(
-            #{<<"xattrs">> => #{<<"x">> => <<"y">>}}, 
+            #{<<"xattrs">> => #{<<"x">> => <<"y">>}},
             IndexInfo, []
         )
     ),
-    
+
     ?assertEqual(
         #{
             <<"__onedata">> => #{
@@ -158,11 +158,11 @@ prepare_data_with_rejected_fields_test() ->
             <<"c">> => <<"d">>
         },
         call_prepare_data(
-            #{<<"json">> => <<"{\"a\":\"B\", \"c\":\"d\"}">>, <<"xattrs">> => #{<<"x">> => <<"y">>}}, 
+            #{<<"json">> => <<"{\"a\":\"B\", \"c\":\"d\"}">>, <<"xattrs">> => #{<<"x">> => <<"y">>}},
             IndexInfo, [<<"a">>]
         )
     ),
-    
+
     ?assertEqual(
         #{
             <<"__onedata">> => #{
@@ -182,7 +182,7 @@ prepare_data_with_rejected_fields_test() ->
             <<"xattrs">> => #{<<"x">> => <<"y">>, <<"z">> => <<"b">>}
         }, IndexInfo, [<<"a">>, <<"x">>, <<"__onedata.xattrs.z">>])
     ),
-    
+
     ?assertEqual(
         #{
             <<"__onedata">> => #{
@@ -214,7 +214,7 @@ prepare_data_selective_metadata_test() ->
             <<"rdf">> => <<"some rdf">>
         }, #harvester_index{include_metadata = [json]}, [])
     ),
-    
+
     ?assertEqual(
         #{
             <<"__onedata">> => #{
@@ -227,7 +227,7 @@ prepare_data_selective_metadata_test() ->
             <<"rdf">> => <<"some rdf">>
         }, #harvester_index{include_metadata = [xattrs]}, [])
     ),
-    
+
     ?assertEqual(
         #{
             <<"__onedata">> => #{
@@ -251,10 +251,10 @@ prepare_data_without_rejection_reason_test() ->
             <<"json">> => <<"{\"a\":\"B\", \"c\":\"d\"}">>,
             <<"xattrs">> => #{<<"x">> => <<"y">>, <<"z">> => <<"b">>}
         },
-        #harvester_index{include_metadata = [json], include_rejection_reason = false},
-        all)
+            #harvester_index{include_metadata = [json], include_rejection_reason = false},
+            all)
     ),
-    
+
     ?assertEqual(
         #{
             <<"a">> => <<"B">>,
@@ -273,15 +273,15 @@ prepare_data_without_rejection_reason_test() ->
             {[<<"x">>], <<"Rejection reason">>}
         )
     ),
-    
+
     ?assertEqual(
         #{},
         call_prepare_data(#{
             <<"json">> => <<"{}">>,
             <<"xattrs">> => #{<<"x">> => <<"y">>, <<"z">> => <<"b">>}
         },
-        #harvester_index{include_metadata = [json], include_rejection_reason = false},
-        all)
+            #harvester_index{include_metadata = [json], include_rejection_reason = false},
+            all)
     ),
     ok.
 
@@ -297,7 +297,7 @@ prepare_data_not_a_json_object_test() ->
         <<"jsonMetadataExists">> => true,
         <<"spaceId">> => <<"spaceId">>
     },
-    
+
     ?assertEqual(
         #{
             <<"__onedata">> => ExpectedInternalMetadata#{
@@ -309,12 +309,12 @@ prepare_data_not_a_json_object_test() ->
             <<"__onedata.__rejected">> => <<"[{\"a\":\"B\"}]">>
         },
         call_prepare_data(#{
-                <<"json">> => <<"[{\"a\":\"B\"}]">>,
-                <<"xattrs">> => #{<<"x">> => <<"y">>},
-                <<"rdf">> => <<"some rdf">>
+            <<"json">> => <<"[{\"a\":\"B\"}]">>,
+            <<"xattrs">> => #{<<"x">> => <<"y">>},
+            <<"rdf">> => <<"some rdf">>
         }, IndexInfo, [])
     ),
-    
+
     ?assertEqual(
         #{
             <<"__onedata">> => ExpectedInternalMetadata#{
@@ -331,8 +331,8 @@ prepare_data_not_a_json_object_test() ->
             <<"rdf">> => <<"some rdf">>
         }, IndexInfo, [])
     ),
-    
-    
+
+
     % check that not harvestable json is not conflicting with xattrs rejection 
     ?assertEqual(
         #{
@@ -350,7 +350,7 @@ prepare_data_not_a_json_object_test() ->
             <<"rdf">> => <<"some rdf">>
         }, IndexInfo, [<<"__onedata.xattrs.z">>])
     ),
-    
+
     ?assertEqual(
         #{
             <<"__onedata">> => ExpectedInternalMetadata#{
@@ -361,7 +361,7 @@ prepare_data_not_a_json_object_test() ->
         },
         call_prepare_data(#{<<"json">> => []}, IndexInfo, [])
     ),
-    
+
     ?assertEqual(
         #{
             <<"__onedata">> => ExpectedInternalMetadata#{
@@ -372,7 +372,7 @@ prepare_data_not_a_json_object_test() ->
         },
         call_prepare_data(#{<<"json">> => <<"string_json">>}, IndexInfo, [])
     ),
-    
+
     ?assertEqual(
         #{
             <<"__onedata">> => ExpectedInternalMetadata#{
@@ -619,27 +619,27 @@ prepare_internal_fields_schema_test() ->
 
 unexpected_submit_failure_test() ->
     mock_do_submit_request(fun(_, _, _) -> error(unexpected_error) end),
-    ?assertEqual({ok, [{<<"indexId">>, undefined, 8, <<"internal server error - consult oz-worker logs">>}]}, 
+    ?assertEqual({ok, [{<<"indexId">>, undefined, 8, <<"internal server error - consult oz-worker logs">>}]},
         elasticsearch_harvesting_backend:submit_batch(
-        <<"endpoint">>,
-        <<"harvester_id">>,
-        #{<<"indexId">> =>
-        #harvester_index{
-            include_metadata = [rdf, json, xattrs],
-            include_file_details = [fileName, spaceId, metadataExistenceFlags],
-            retry_on_rejection = true,
-            include_rejection_reason = true
-        }
-        },
-        [#{
-            <<"seq">> => 8,
-            <<"operation">> => <<"submit">>,
-            <<"fileId">> => <<"fileId">>,
-            <<"fileName">> => <<"fileName">>,
-            <<"payload">> => #{<<"xattrs">> => #{<<"x">> => <<"y">>}},
-            <<"spaceId">> => <<"spaceId">>
-        }]
-    )),
+            <<"endpoint">>,
+            <<"harvester_id">>,
+            #{<<"indexId">> =>
+            #harvester_index{
+                include_metadata = [rdf, json, xattrs],
+                include_file_details = [fileName, spaceId, metadataExistenceFlags],
+                retry_on_rejection = true,
+                include_rejection_reason = true
+            }
+            },
+            [#{
+                <<"seq">> => 8,
+                <<"operation">> => <<"submit">>,
+                <<"fileId">> => <<"fileId">>,
+                <<"fileName">> => <<"fileName">>,
+                <<"payload">> => #{<<"xattrs">> => #{<<"x">> => <<"y">>}},
+                <<"spaceId">> => <<"spaceId">>
+            }]
+        )),
     unmock_do_submit_request(),
     ok.
 
@@ -674,7 +674,7 @@ es_submit_error_test() ->
             <<"spaceId">> => <<"spaceId">>
         }]
     )),
-    
+
     ?assertMatch(ok, elasticsearch_harvesting_backend:submit_to_index(
         <<"endpoint">>,
         <<"indexId">>,
@@ -689,7 +689,7 @@ es_submit_error_test() ->
             <<"spaceId">> => <<"spaceId">>
         }]
     )),
-    
+
     SubmitResultFun1 = fun(_, _, _) -> {error, <<"some error">>} end,
     unmock_do_submit_request(),
     mock_do_submit_request(SubmitResultFun1),
@@ -711,53 +711,54 @@ es_submit_error_test() ->
     ok.
 
 
-retry_test() ->
-    SubmitResultFun = fun(_, _, _) -> {ok,
-        #{
-            <<"errors">> => true,
-            <<"items">> => [#{<<"index">> => #{<<"error">> => #{
-                <<"type">> => <<"strict_dynamic_mapping_exception">>,
-                <<"reason">> => <<"mapper [a.b] of different type">>
-            }}}]
-        }
-    } end,
-    retry_test_base(SubmitResultFun, true, 4),
-    retry_test_base(SubmitResultFun, false, 1),
-    
-    ErrorBadKey = fun(Key) ->
-        #{
-            <<"errors">> => true,
-            <<"items">> => [#{<<"index">> => #{<<"error">> => #{
-                <<"type">> => <<"illegal_argument_exception">>,
-                <<"reason">> => <<"mapper [", Key/binary, "] of different type">>
-            }}}]
-        }
-    end,
-    
-    IsSubstring = fun(Substring, BatchString) ->
-        match == re:run(BatchString, Substring, [{capture, none}])
-    end,
-    
-    SubmitResultFun1 = fun(_, _, BatchString) ->
-        {ok, case IsSubstring(<<"\"__rejected\":\\[\"key_to_reject\"\\]">>, BatchString) of
-            false -> ErrorBadKey(<<"key_to_reject">>);
-            true -> #{}
-        end}
-    end,
-    retry_test_base(SubmitResultFun1, true, 2),
-    
-    SubmitResultFun2 = fun(_, _, BatchString) ->
-        {ok, case IsSubstring(<<"__rejected">>, BatchString) of
-            false -> ErrorBadKey(<<"key_to_reject">>);
-            true ->
-                case IsSubstring(<<"\"__rejected\":\\[\"key_to_reject\"\\]">>, BatchString) of
-                    true -> ErrorBadKey(<<"another_key_to_reject">>);
-                    false -> #{}
-                end
-        end}
-    end,
-    retry_test_base(SubmitResultFun2, true, 3),
-    ok.
+retry_test_() ->
+    {timeout, 60, fun() ->
+        SubmitResultFun = fun(_, _, _) -> {ok,
+            #{
+                <<"errors">> => true,
+                <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                    <<"type">> => <<"strict_dynamic_mapping_exception">>,
+                    <<"reason">> => <<"mapper [a.b] of different type">>
+                }}}]
+            }
+        } end,
+        retry_test_base(SubmitResultFun, true, 4),
+        retry_test_base(SubmitResultFun, false, 1),
+
+        ErrorBadKey = fun(Key) ->
+            #{
+                <<"errors">> => true,
+                <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                    <<"type">> => <<"illegal_argument_exception">>,
+                    <<"reason">> => <<"mapper [", Key/binary, "] of different type">>
+                }}}]
+            }
+        end,
+
+        IsSubstring = fun(Substring, BatchString) ->
+            match == re:run(BatchString, Substring, [{capture, none}])
+        end,
+
+        SubmitResultFun1 = fun(_, _, BatchString) ->
+            {ok, case IsSubstring(<<"\"__rejected\":\\[\"key_to_reject\"\\]">>, BatchString) of
+                false -> ErrorBadKey(<<"key_to_reject">>);
+                true -> #{}
+            end}
+        end,
+        retry_test_base(SubmitResultFun1, true, 2),
+
+        SubmitResultFun2 = fun(_, _, BatchString) ->
+            {ok, case IsSubstring(<<"__rejected">>, BatchString) of
+                false -> ErrorBadKey(<<"key_to_reject">>);
+                true ->
+                    case IsSubstring(<<"\"__rejected\":\\[\"key_to_reject\"\\]">>, BatchString) of
+                        true -> ErrorBadKey(<<"another_key_to_reject">>);
+                        false -> #{}
+                    end
+            end}
+        end,
+        retry_test_base(SubmitResultFun2, true, 3)
+    end}.
 
 retry_test_base(SubmitResultFun, RetryOnRejection, ExpectedNumCalls) ->
     mock_do_submit_request(SubmitResultFun),
@@ -775,7 +776,7 @@ retry_test_base(SubmitResultFun, RetryOnRejection, ExpectedNumCalls) ->
             <<"operation">> => <<"submit">>,
             <<"fileId">> => <<"fileId">>,
             <<"fileName">> => <<"filename">>,
-            <<"payload">> => #{<<"json">> => #{<<"another_key_to_reject">> => 8,<<"key_to_reject">> => 8}},
+            <<"payload">> => #{<<"json">> => #{<<"another_key_to_reject">> => 8, <<"key_to_reject">> => 8}},
             <<"spaceId">> => <<"spaceId">>
         }]
     )),
@@ -814,7 +815,7 @@ call_prepare_data(Payload, IndexInfo, RejectedFields) ->
 
 expected_file_details(datasetInfo) ->
     #{
-        <<"datasetId">> =>  <<"datasetId">>,
+        <<"datasetId">> => <<"datasetId">>,
         <<"isDataset">> => true
     };
 expected_file_details(archiveInfo) ->

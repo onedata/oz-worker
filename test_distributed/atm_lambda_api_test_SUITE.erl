@@ -759,8 +759,8 @@ gen_atm_workflow_schema_with_lambda(AtmInventoryId, AtmLambdaId) ->
     % and randomly reference them in task schemas, keep generating until the desired
     % lambda is referenced at least once
     AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(AtmInventoryId),
-    #od_atm_workflow_schema{lanes = Lanes} = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
-    case lists:member(AtmLambdaId, ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(Lanes)) of
+    AtmWorkflowSchema = ozt_atm_workflow_schemas:get(AtmWorkflowSchemaId),
+    case lists:member(AtmLambdaId, od_atm_workflow_schema:extract_all_referenced_atm_lambdas(AtmWorkflowSchema)) of
         true ->
             AtmWorkflowSchemaId;
         false ->

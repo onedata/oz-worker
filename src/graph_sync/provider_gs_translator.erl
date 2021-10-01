@@ -92,6 +92,9 @@ translate_value(_, #gri{type = od_token, id = undefined, aspect = {offline_user_
 translate_value(_, #gri{type = od_atm_workflow_schema, aspect = dump}, JsonMap) ->
     JsonMap;
 
+translate_value(_, #gri{type = od_atm_workflow_schema, aspect = {dump_revision, _}}, JsonMap) ->
+    JsonMap;
+
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n"
     "ProtocolVersion: ~p~n"
@@ -482,27 +485,21 @@ translate_resource(_, #gri{type = od_atm_lambda, aspect = instance, scope = priv
         <<"atmInventories">> => AtmInventories
     };
 
-translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, scope = private}, AtmLambda) ->
+translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, scope = private}, AtmWorkflowSchema) ->
     #od_atm_workflow_schema{
         name = Name,
-        description = Description,
+        summary = Summary,
 
-        stores = Stores,
-        lanes = Lanes,
-
-        state = State,
+        revision_registry = RevisionRegistry,
 
         atm_inventory = AtmInventoryId,
         atm_lambdas = AtmLambdas
-    } = AtmLambda,
+    } = AtmWorkflowSchema,
     #{
         <<"name">> => Name,
-        <<"description">> => Description,
+        <<"summary">> => Summary,
 
-        <<"stores">> => jsonable_record:list_to_json(Stores, atm_store_schema),
-        <<"lanes">> => jsonable_record:list_to_json(Lanes, atm_lane_schema),
-
-        <<"state">> => automation:workflow_schema_state_to_json(State),
+        <<"revisionRegistry">> => jsonable_record:to_json(RevisionRegistry, atm_workflow_schema_revision_registry),
 
         <<"atmInventoryId">> => AtmInventoryId,
         <<"atmLambdas">> => AtmLambdas

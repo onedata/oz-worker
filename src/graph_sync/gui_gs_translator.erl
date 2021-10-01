@@ -1111,13 +1111,12 @@ translate_atm_lambda(#gri{aspect = atm_workflow_schemas}, AtmWorkflowSchemas) ->
 translate_atm_workflow_schema(#gri{id = Id, aspect = instance, scope = private}, AtmLambda) ->
     #od_atm_workflow_schema{
         name = Name,
-        description = Description,
+        summary = Summary,
 
+        revision_registry = RevisionRegistry,
+
+        original_atm_workflow_schema = OriginalAtmWorkflowSchemaId,
         atm_inventory = AtmInventoryId,
-        stores = Stores,
-        lanes = Lanes,
-
-        state = State,
 
         creation_time = CreationTime,
         creator = Creator
@@ -1126,13 +1125,21 @@ translate_atm_workflow_schema(#gri{id = Id, aspect = instance, scope = private},
     #{
         <<"scope">> => <<"private">>,
         <<"name">> => Name,
-        <<"description">> => Description,
+        <<"summary">> => Summary,
 
-        <<"stores">> => jsonable_record:list_to_json(Stores, atm_store_schema),
-        <<"lanes">> => jsonable_record:list_to_json(Lanes, atm_lane_schema),
+        <<"revisionRegistry">> => jsonable_record:to_json(RevisionRegistry, atm_workflow_schema_revision_registry),
 
-        <<"state">> => automation:workflow_schema_state_to_json(State),
-
+        <<"originalAtmWorkflowSchemaId">> => case OriginalAtmWorkflowSchemaId of
+            undefined ->
+                null;
+            _ ->
+                gri:serialize(#gri{
+                type = od_atm_workflow_schema,
+                id = OriginalAtmWorkflowSchemaId,
+                aspect = instance,
+                scope = auto
+            })
+        end,
         <<"atmInventory">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = instance, scope = auto}),
         <<"atmLambdaList">> => gri:serialize(#gri{type = od_atm_workflow_schema, id = Id, aspect = atm_lambdas}),
 

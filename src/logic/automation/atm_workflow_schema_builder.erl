@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module handles creating and updating of workflow schemas, performing
+%%% This module handles management of workflow schema revisions, performing
 %%% validation as well as transformations required due to linking and creation
 %%% of supplementary lambdas (if provided).
 %%% @end
@@ -18,16 +18,17 @@
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
--export([create/2]).
--export([update/3]).
--export([delete/1]).
+-export([insert_revision/4]).
+-export([delete_revision/2]).
+-export([delete_all_revisions/1]).
 
 % map with atm_lambda ids and corresponding json encoded payload
 -type lambda_definitions() :: #{od_atm_lambda:id() => entity_logic:data()}.
 
 -record(builder_ctx, {
     auth :: aai:auth(),
-    atm_workflow_schema :: od_atm_workflow_schema:record(),
+    atm_workflow_schema_revision :: atm_workflow_schema_revision:record(),
+    target_atm_inventory_id :: od_atm_inventory:id(),
     target_atm_inventory = undefined :: undefined | od_atm_inventory:record(),
     can_manage_lambdas_in_target_inventory = false :: boolean(),
     % During workflow schema creation, one can supply additional information
@@ -48,109 +49,68 @@
 %%% API
 %%%===================================================================
 
--spec create(aai:auth(), entity_logic:data()) ->
-    od_atm_workflow_schema:id() | no_return().
-create(Auth, Data) ->
-    Name = maps:get(<<"name">>, Data),
-    Description = maps:get(<<"description">>, Data, ?DEFAULT_DESCRIPTION),
-
-    AtmInventoryId = maps:get(<<"atmInventoryId">>, Data),
-    Stores = maps:get(<<"stores">>, Data, []),
-    Lanes = maps:get(<<"lanes">>, Data, []),
-
-    SupplementaryAtmLambdas = maps:get(<<"supplementaryAtmLambdas">>, Data, #{}),
-
-    State = maps:get(<<"state">>, Data, case {Stores, Lanes} of
-        {[], _} -> incomplete;
-        {_, []} -> incomplete;
-        {_, _} -> ready
-    end),
-
-    AtmWorkflowSchema = #od_atm_workflow_schema{
-        name = Name,
-        description = Description,
-
-        stores = Stores,
-        lanes = Lanes,
-
-        state = State,
-
-        atm_inventory = AtmInventoryId,
-
-        creator = aai:normalize_subject(Auth#auth.subject),
-        creation_time = global_clock:timestamp_seconds()
-    },
-
-    FinalBuilderCtx = validate_schema_and_resolve_lambdas(#builder_ctx{
-        auth = Auth,
-        atm_workflow_schema = AtmWorkflowSchema,
-        supplementary_lambdas = SupplementaryAtmLambdas
-    }),
-
-    AtmWorkflowSchemaId = create_workflow_schema(FinalBuilderCtx),
-    FinalLanes = FinalBuilderCtx#builder_ctx.atm_workflow_schema#od_atm_workflow_schema.lanes,
-    % no need to lock; the newly generated schema id is not yet returned to the
-    % client so a race condition with update is not possible
-    reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, [], FinalLanes),
-    AtmWorkflowSchemaId.
-
-
--spec update(aai:auth(), od_atm_workflow_schema:id(), entity_logic:data()) ->
+-spec insert_revision(
+    aai:auth(),
+    od_atm_workflow_schema:id(),
+    atm_workflow_schema_revision:revision_number(),
+    entity_logic:data()
+) ->
     ok | no_return().
-update(Auth, AtmWorkflowSchemaId, Data) ->
+insert_revision(Auth, AtmWorkflowSchemaId, RevisionNumber, Data) ->
     od_atm_workflow_schema:critical_section(AtmWorkflowSchemaId, fun() ->
-        {ok, #document{value = PrevAtmWorkflowSchema}} = od_atm_workflow_schema:get(AtmWorkflowSchemaId),
+        {ok, #document{value = PreviousAtmWorkflowSchema}} = od_atm_workflow_schema:get(AtmWorkflowSchemaId),
 
-        ProposedAtmWorkflowSchema = PrevAtmWorkflowSchema#od_atm_workflow_schema{
-            name = maps:get(<<"name">>, Data, PrevAtmWorkflowSchema#od_atm_workflow_schema.name),
-            description = maps:get(<<"description">>, Data, PrevAtmWorkflowSchema#od_atm_workflow_schema.description),
-
-            stores = maps:get(<<"stores">>, Data, PrevAtmWorkflowSchema#od_atm_workflow_schema.stores),
-            lanes = maps:get(<<"lanes">>, Data, PrevAtmWorkflowSchema#od_atm_workflow_schema.lanes),
-
-            state = maps:get(<<"state">>, Data, PrevAtmWorkflowSchema#od_atm_workflow_schema.state)
-        },
         SupplementaryAtmLambdas = maps:get(<<"supplementaryAtmLambdas">>, Data, #{}),
+        AtmWorkflowSchemaRevision = maps:get(<<"schema">>, Data),
 
-        FinalBuilderCtx = validate_schema_and_resolve_lambdas(#builder_ctx{
+        FinalBuilderCtx = validate_revision_and_resolve_lambdas(#builder_ctx{
             auth = Auth,
-            atm_workflow_schema = ProposedAtmWorkflowSchema,
+            atm_workflow_schema_revision = AtmWorkflowSchemaRevision,
+            target_atm_inventory_id = PreviousAtmWorkflowSchema#od_atm_workflow_schema.atm_inventory,
             supplementary_lambdas = SupplementaryAtmLambdas
         }),
 
-        Diff = fun(_) -> {ok, FinalBuilderCtx#builder_ctx.atm_workflow_schema} end,
-        case od_atm_workflow_schema:update(AtmWorkflowSchemaId, Diff) of
-            {error, _} = Error ->
-                Error;
-            {ok, #document{value = #od_atm_workflow_schema{lanes = NewLanes}}} ->
-                OldLanes = PrevAtmWorkflowSchema#od_atm_workflow_schema.lanes,
-                reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, OldLanes, NewLanes)
-        end
+        update_revision_registry_unsafe(AtmWorkflowSchemaId, PreviousAtmWorkflowSchema, fun(RevisionRegistry) ->
+            {ok, atm_workflow_schema_revision_registry:insert_revision(
+                RevisionNumber, FinalBuilderCtx#builder_ctx.atm_workflow_schema_revision, RevisionRegistry
+            )}
+        end)
     end).
 
 
--spec delete(od_atm_workflow_schema:id()) -> ok.
-delete(AtmWorkflowSchemaId) ->
+-spec delete_revision(od_atm_workflow_schema:id(), atm_workflow_schema_revision:revision_number()) ->
+    ok | no_return().
+delete_revision(AtmWorkflowSchemaId, RevisionNumber) ->
     od_atm_workflow_schema:critical_section(AtmWorkflowSchemaId, fun() ->
-        {ok, #document{
-            value = #od_atm_workflow_schema{
-                lanes = PreviousLanes
-            }
-        }} = od_atm_workflow_schema:get(AtmWorkflowSchemaId),
-        reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, PreviousLanes, []),
-        entity_graph:delete_with_relations(od_atm_workflow_schema, AtmWorkflowSchemaId)
+        update_revision_registry_unsafe(AtmWorkflowSchemaId, fun(RevisionRegistry) ->
+            case atm_workflow_schema_revision_registry:take_revision(RevisionNumber, RevisionRegistry) of
+                error ->
+                    ?ERROR_NOT_FOUND;
+                {_, UpdatedRegistry} ->
+                    {ok, UpdatedRegistry}
+            end
+        end)
     end).
 
+
+-spec delete_all_revisions(od_atm_workflow_schema:id()) ->
+    ok | no_return().
+delete_all_revisions(AtmWorkflowSchemaId) ->
+    od_atm_workflow_schema:critical_section(AtmWorkflowSchemaId, fun() ->
+        update_revision_registry_unsafe(AtmWorkflowSchemaId, fun(_) ->
+            {ok, atm_workflow_schema_revision_registry:empty()}
+        end)
+    end).
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
 %% @private
--spec validate_schema_and_resolve_lambdas(builder_ctx()) -> builder_ctx().
-validate_schema_and_resolve_lambdas(Ctx1) ->
+-spec validate_revision_and_resolve_lambdas(builder_ctx()) -> builder_ctx().
+validate_revision_and_resolve_lambdas(Ctx1) ->
     Ctx2 = resolve_referenced_lambdas(Ctx1),
-    validate_workflow_schema(Ctx2),
+    validate_workflow_schema_revision(Ctx2),
     Ctx3 = create_missing_lambdas(Ctx2),
     link_referenced_lambdas(Ctx3),
     Ctx3.
@@ -160,10 +120,8 @@ validate_schema_and_resolve_lambdas(Ctx1) ->
 -spec resolve_referenced_lambdas(builder_ctx()) -> builder_ctx().
 resolve_referenced_lambdas(BuilderCtx = #builder_ctx{
     auth = Auth,
-    atm_workflow_schema = #od_atm_workflow_schema{
-        lanes = Lanes,
-        atm_inventory = AtmInventoryId
-    },
+    atm_workflow_schema_revision = AtmWorkflowSchemaRevision,
+    target_atm_inventory_id = AtmInventoryId,
     supplementary_lambdas = SupplementaryAtmLambdas
 }) ->
     {ok, #document{
@@ -171,8 +129,8 @@ resolve_referenced_lambdas(BuilderCtx = #builder_ctx{
             atm_lambdas = InventoryLambdas
         } = AtmInventory
     }} = od_atm_inventory:get(AtmInventoryId),
-    WorkflowLambdas = od_atm_workflow_schema:extract_atm_lambdas_from_lanes(Lanes),
-    MissingLambdas = lists_utils:subtract(WorkflowLambdas, InventoryLambdas),
+    RevisionLambdas = atm_workflow_schema_revision:extract_referenced_atm_lambdas(AtmWorkflowSchemaRevision),
+    MissingLambdas = lists_utils:subtract(RevisionLambdas, InventoryLambdas),
     case MissingLambdas of
         [] ->
             BuilderCtx;
@@ -306,10 +264,10 @@ try_creating_lambda_duplicate(BuilderCtx, AtmLambdaId, AtmLambdaData) ->
 
 
 %% @private
--spec validate_workflow_schema(builder_ctx()) -> ok.
-validate_workflow_schema(#builder_ctx{
+-spec validate_workflow_schema_revision(builder_ctx()) -> ok.
+validate_workflow_schema_revision(#builder_ctx{
     auth = Auth,
-    atm_workflow_schema = AtmWorkflowSchema,
+    atm_workflow_schema_revision = AtmWorkflowSchemaRevision,
     lambdas_to_create = LambdasToCreate
 }) ->
     ParsedLambdasToCreate = maps:map(fun(ProposedAtmLambdaId, AtmLambdaData) ->
@@ -323,14 +281,14 @@ validate_workflow_schema(#builder_ctx{
                 AtmLambda
         end
     end, LambdasToCreate),
-    atm_workflow_schema_validator:validate(AtmWorkflowSchema, ParsedLambdasToCreate).
+    atm_workflow_schema_validator:validate(AtmWorkflowSchemaRevision, ParsedLambdasToCreate).
 
 
 %% @private
 -spec create_missing_lambdas(builder_ctx()) -> builder_ctx().
 create_missing_lambdas(BuilderCtx = #builder_ctx{
     auth = Auth,
-    atm_workflow_schema = #od_atm_workflow_schema{atm_inventory = AtmInventoryId},
+    target_atm_inventory_id = AtmInventoryId,
     lambdas_to_create = LambdasToCreate
 }) ->
     maps:fold(fun(ProposedAtmLambdaId, AtmLambdaData, BuilderCtxAcc) ->
@@ -349,13 +307,13 @@ create_missing_lambdas(BuilderCtx = #builder_ctx{
 %% @private
 -spec link_referenced_lambdas(builder_ctx()) -> ok.
 link_referenced_lambdas(#builder_ctx{
-    atm_workflow_schema = #od_atm_workflow_schema{atm_inventory = AtmInventoryId},
+    target_atm_inventory_id = TargetAtmInventoryId,
     lambdas_to_link = LambdasToLink
 }) ->
     lists:foreach(fun(AtmLambdaId) ->
         % the client's auth to link the lambdas to the inventory has been already checked,
         % link with root auth to avoid race conditions
-        case atm_lambda_logic:link_to_inventory(?ROOT, AtmLambdaId, AtmInventoryId) of
+        case atm_lambda_logic:link_to_inventory(?ROOT, AtmLambdaId, TargetAtmInventoryId) of
             ok ->
                 ok;
             {error, _} = Error ->
@@ -365,30 +323,11 @@ link_referenced_lambdas(#builder_ctx{
 
 
 %% @private
--spec create_workflow_schema(builder_ctx()) -> od_atm_workflow_schema:id().
-create_workflow_schema(#builder_ctx{
-    atm_workflow_schema = AtmWorkflowSchema = #od_atm_workflow_schema{
-        atm_inventory = AtmInventoryId
-    }
-}) ->
-    od_atm_inventory:critical_section(AtmInventoryId, fun() ->
-        {ok, #document{key = AtmWorkflowSchemaId}} = od_atm_workflow_schema:create(#document{value = AtmWorkflowSchema}),
-        entity_graph:add_relation(
-            od_atm_workflow_schema, AtmWorkflowSchemaId,
-            od_atm_inventory, AtmInventoryId
-        ),
-        AtmWorkflowSchemaId
-    end).
-
-
-%% @private
 -spec find_linkable_lambda_duplicate(builder_ctx(), od_atm_lambda:checksum()) ->
     {ok, od_atm_lambda:id()} | error.
 find_linkable_lambda_duplicate(#builder_ctx{
     auth = ?USER(UserId) = Auth,
-    atm_workflow_schema = #od_atm_workflow_schema{
-        atm_inventory = TargetAtmInventoryId
-    }
+    target_atm_inventory_id = TargetAtmInventoryId
 }, Checksum) ->
     {ok, EffAtmInventories} = user_logic:get_eff_atm_inventories(Auth, UserId),
     lists_utils:foldl_while(fun(AtmInventoryId, _) ->
@@ -441,15 +380,15 @@ find_lambda_duplicate_in_inventory(Checksum, #od_atm_inventory{atm_lambdas = Atm
 %% @private
 -spec substitute_lambda_id(builder_ctx(), od_atm_lambda:id(), od_atm_lambda:id()) -> builder_ctx().
 substitute_lambda_id(BuilderCtx = #builder_ctx{
-    atm_workflow_schema = AtmWorkflowSchema
+    atm_workflow_schema_revision = AtmWorkflowSchemaRevision
 }, CurrentLambdaId, TargetLambdaId) ->
     BuilderCtx#builder_ctx{
-        atm_workflow_schema = od_atm_workflow_schema:map_tasks(fun
+        atm_workflow_schema_revision = atm_workflow_schema_revision:map_tasks(fun
             (#atm_task_schema{lambda_id = Id} = AtmTaskSchema) when Id == CurrentLambdaId ->
                 AtmTaskSchema#atm_task_schema{lambda_id = TargetLambdaId};
             (AtmTaskSchema) ->
                 AtmTaskSchema
-        end, AtmWorkflowSchema)
+        end, AtmWorkflowSchemaRevision)
     }.
 
 
@@ -478,6 +417,40 @@ can_manage_lambda(_, _) ->
     false.
 
 
+%% @private
+-spec update_revision_registry_unsafe(
+    od_atm_workflow_schema:id(),
+    fun((atm_workflow_schema_revision_registry:record()) -> atm_workflow_schema_revision_registry:record())
+) -> ok | no_return().
+update_revision_registry_unsafe(AtmWorkflowSchemaId, RevisionRegistryDiff) ->
+    {ok, #document{value = PreviousAtmWorkflowSchema}} = od_atm_workflow_schema:get(AtmWorkflowSchemaId),
+    update_revision_registry_unsafe(AtmWorkflowSchemaId, PreviousAtmWorkflowSchema, RevisionRegistryDiff).
+
+%% @private
+-spec update_revision_registry_unsafe(
+    od_atm_workflow_schema:id(),
+    od_atm_workflow_schema:record(),
+    fun((atm_workflow_schema_revision_registry:record()) -> atm_workflow_schema_revision_registry:record())
+) -> ok | no_return().
+update_revision_registry_unsafe(AtmWorkflowSchemaId, PreviousAtmWorkflowSchema, RevisionRegistryDiff) ->
+    DocDiff = fun(AtmWorkflowSchema = #od_atm_workflow_schema{
+        revision_registry = PreviousRevisionRegistry
+    }) ->
+        case RevisionRegistryDiff(PreviousRevisionRegistry) of
+            {ok, NewRegistry} ->
+                {ok, AtmWorkflowSchema#od_atm_workflow_schema{revision_registry = NewRegistry}};
+            {error, _} = ApplyDiffError ->
+                ApplyDiffError
+        end
+    end,
+    case od_atm_workflow_schema:update(AtmWorkflowSchemaId, DocDiff) of
+        {error, _} = UpdateError ->
+            throw(UpdateError);
+        {ok, #document{value = NewAtmWorkflowSchema}} ->
+            reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, PreviousAtmWorkflowSchema, NewAtmWorkflowSchema)
+    end.
+
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -487,12 +460,12 @@ can_manage_lambda(_, _) ->
 %%--------------------------------------------------------------------
 -spec reconcile_referenced_lambdas_unsafe(
     od_atm_workflow_schema:id(),
-    [atm_lane_schema:record()],
-    [atm_lane_schema:record()]
+    od_atm_workflow_schema:record(),
+    od_atm_workflow_schema:record()
 ) -> ok.
-reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, OldLanes, NewLanes) ->
-    OldAtmLambdas = od_atm_workflow_schema:extract_atm_lambdas_from_lanes(OldLanes),
-    NewAtmLambdas = od_atm_workflow_schema:extract_atm_lambdas_from_lanes(NewLanes),
+reconcile_referenced_lambdas_unsafe(AtmWorkflowSchemaId, PreviousAtmWorkflowSchema, NewAtmWorkflowSchema) ->
+    OldAtmLambdas = od_atm_workflow_schema:extract_all_referenced_atm_lambdas(PreviousAtmWorkflowSchema),
+    NewAtmLambdas = od_atm_workflow_schema:extract_all_referenced_atm_lambdas(NewAtmWorkflowSchema),
     ToAdd = lists_utils:subtract(NewAtmLambdas, OldAtmLambdas),
     ToDelete = lists_utils:subtract(OldAtmLambdas, NewAtmLambdas),
     lists:foreach(fun(AtmLambdaId) ->
