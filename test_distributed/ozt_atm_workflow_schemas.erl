@@ -217,7 +217,7 @@ gen_example_data_json(AtmInventoryId) when is_binary(AtmInventoryId) ->
         <<"name">> => ozt_atm:gen_example_name(),
         <<"summary">> => ozt_atm:gen_example_summary(),
 
-        <<"initialRevision">> => #{
+        <<"revision">> => #{
             <<"originalRevisionNumber">> => ?RAND_INT(1, 100),
             <<"schema">> => gen_example_revision_schema_json(AtmInventoryId)
         }

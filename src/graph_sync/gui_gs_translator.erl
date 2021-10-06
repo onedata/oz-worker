@@ -344,7 +344,7 @@ translate_group(#gri{aspect = instance, scope = shared}, Group) ->
     #{
         <<"name">> => Name,
         <<"type">> => Type,
-        <<"info">> =>  #{
+        <<"info">> => #{
             <<"creationTime">> => CreationTime
         },
         <<"scope">> => <<"shared">>
@@ -1134,11 +1134,11 @@ translate_atm_workflow_schema(#gri{id = Id, aspect = instance, scope = private},
                 null;
             _ ->
                 gri:serialize(#gri{
-                type = od_atm_workflow_schema,
-                id = OriginalAtmWorkflowSchemaId,
-                aspect = instance,
-                scope = auto
-            })
+                    type = od_atm_workflow_schema,
+                    id = OriginalAtmWorkflowSchemaId,
+                    aspect = instance,
+                    scope = auto
+                })
         end,
         <<"atmInventory">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = instance, scope = auto}),
         <<"atmLambdaList">> => gri:serialize(#gri{type = od_atm_workflow_schema, id = Id, aspect = atm_lambdas}),

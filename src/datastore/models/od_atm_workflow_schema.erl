@@ -123,16 +123,16 @@ dump_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevisionNumber) ->
         <<"name">> => AtmWorkflowSchema#od_atm_workflow_schema.name,
         <<"summary">> => AtmWorkflowSchema#od_atm_workflow_schema.summary,
 
-        <<"initialRevision">> => dump_revision_to_json(AtmWorkflowSchema, IncludedRevisionNumber)
+        <<"revision">> => dump_revision_to_json(AtmWorkflowSchema, IncludedRevisionNumber)
     }.
 
 
 -spec dump_revision_to_json(record(), atm_workflow_schema_revision:revision_number()) -> json_utils:json_map().
-dump_revision_to_json(#od_atm_workflow_schema{revision_registry = RevisionRegistry}, IncludedRevisionNumber) ->
-    IncludedRevision = atm_workflow_schema_revision_registry:get_revision(IncludedRevisionNumber, RevisionRegistry),
+dump_revision_to_json(#od_atm_workflow_schema{revision_registry = RevisionRegistry}, RevisionNumber) ->
+    IncludedRevision = atm_workflow_schema_revision_registry:get_revision(RevisionNumber, RevisionRegistry),
     #{
         <<"schemaFormatVersion">> => 2,
-        <<"originalRevisionNumber">> => IncludedRevisionNumber,
+        <<"originalRevisionNumber">> => RevisionNumber,
         <<"schema">> => jsonable_record:to_json(IncludedRevision, atm_workflow_schema_revision),
         <<"supplementaryAtmLambdas">> => lists:foldl(fun(AtmLambdaId, Acc) ->
             {ok, #document{value = AtmLambda}} = od_atm_lambda:get(AtmLambdaId),

@@ -67,14 +67,6 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_atm_workflow_schema, id = ?BINDING(id), aspect = instance}
     }},
-    %% Merge atm_workflow_schema with another
-    %% This operation requires one of the following privileges:
-    %% - atm_inventory_manage_workflow_schemas
-    %% - oz_atm_inventories_update
-    {<<"/atm_workflow_schemas/:id/merge">>, #rest_req{
-        method = 'POST',
-        b_gri = #b_gri{type = od_atm_workflow_schema, id = ?BINDING(id), aspect = merge}
-    }},
     %% Get atm_lambdas referenced by atm_workflow_schema
     %% This operation requires one of the following privileges:
     %% - oz_atm_inventories_view

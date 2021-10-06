@@ -837,28 +837,30 @@ field_specs(atm_workflow_schemas) -> [
     {revisions, 9, fun(#document{value = #od_atm_workflow_schema{revision_registry = RevisionRegistry}}) ->
         atm_workflow_schema_revision_registry:size(RevisionRegistry)
     end},
-    {stores, integer, 6, fun(Doc) -> length((latest_revision(Doc))#atm_workflow_schema_revision.stores) end},
-    {lanes, integer, 5, fun(Doc) -> length((latest_revision(Doc))#atm_workflow_schema_revision.lanes) end},
+    {stores, integer, 6, fun(Doc) -> length((latest_workflow_schema_revision(Doc))#atm_workflow_schema_revision.stores) end},
+    {lanes, integer, 5, fun(Doc) -> length((latest_workflow_schema_revision(Doc))#atm_workflow_schema_revision.lanes) end},
     {pboxes, integer, 6, fun(Doc) -> lists:sum(
         lists:map(fun(#atm_lane_schema{parallel_boxes = PBoxes}) ->
             length(PBoxes)
-        end, (latest_revision(Doc))#atm_workflow_schema_revision.lanes)
+        end, (latest_workflow_schema_revision(Doc))#atm_workflow_schema_revision.lanes)
     ) end},
     {tasks, integer, 5, fun(Doc) -> lists:sum(
         lists:flatmap(fun(#atm_lane_schema{parallel_boxes = PBoxes}) ->
             lists:map(fun(#atm_parallel_box_schema{tasks = Tasks}) ->
                 length(Tasks)
             end, PBoxes)
-        end, (latest_revision(Doc))#atm_workflow_schema_revision.lanes)
+        end, (latest_workflow_schema_revision(Doc))#atm_workflow_schema_revision.lanes)
     ) end},
-    {state, integer, 10, fun(Doc) -> length((latest_revision(Doc))#atm_workflow_schema_revision.lanes) end},
+    {state, integer, 10, fun(Doc) -> length((latest_workflow_schema_revision(Doc))#atm_workflow_schema_revision.lanes) end},
     {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_atm_workflow_schema.creation_time end}
 ].
 
 
 %% @private
--spec latest_revision(od_atm_workflow_schema:doc()) -> atm_workflow_schema_revision:record().
-latest_revision(#document{value = AtmWorkflowSchema = #od_atm_workflow_schema{revision_registry = RevisionRegistry}}) ->
+-spec latest_workflow_schema_revision(od_atm_workflow_schema:doc()) -> atm_workflow_schema_revision:record().
+latest_workflow_schema_revision(#document{value = AtmWorkflowSchema = #od_atm_workflow_schema{
+    revision_registry = RevisionRegistry
+}}) ->
     case od_atm_workflow_schema:get_latest_revision_number(AtmWorkflowSchema) of
         undefined ->
             % return some dummy, empty revision to generate the row for the schema

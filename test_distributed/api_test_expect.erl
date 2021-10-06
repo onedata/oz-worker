@@ -516,7 +516,7 @@ private_atm_workflow_schema(logic, _Id, AtmWorkflowSchemaData, Creator) ->
     #{
         <<"originalRevisionNumber">> := InitialRevisionNumber,
         <<"schema">> := InitialRevisionSchema
-    } = maps:get(<<"initialRevision">>, AtmWorkflowSchemaData),
+    } = maps:get(<<"revision">>, AtmWorkflowSchemaData),
     ?OK_TERM(fun(AtmWorkflowSchemaRecord) ->
         ?assertEqual(#od_atm_workflow_schema{
             name = maps:get(<<"name">>, AtmWorkflowSchemaData),
@@ -542,7 +542,7 @@ private_atm_workflow_schema(rest, Id, AtmWorkflowSchemaData, Creator) ->
     #{
         <<"originalRevisionNumber">> := InitialRevisionNumber,
         <<"schema">> := InitialRevisionSchema
-    } = maps:get(<<"initialRevision">>, AtmWorkflowSchemaData),
+    } = maps:get(<<"revision">>, AtmWorkflowSchemaData),
     #{
         <<"atmWorkflowSchemaId">> => Id,
         <<"name">> => maps:get(<<"name">>, AtmWorkflowSchemaData),
@@ -563,7 +563,7 @@ private_atm_workflow_schema(gs, Id, AtmWorkflowSchemaData, _Creator) ->
     #{
         <<"originalRevisionNumber">> := InitialRevisionNumber,
         <<"schema">> := InitialRevisionSchema
-    } = maps:get(<<"initialRevision">>, AtmWorkflowSchemaData),
+    } = maps:get(<<"revision">>, AtmWorkflowSchemaData),
     ?OK_MAP(#{
         <<"gri">> => gri:serialize(?GRI(od_atm_workflow_schema, Id, instance, private)),
         <<"name">> => maps:get(<<"name">>, AtmWorkflowSchemaData),

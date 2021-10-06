@@ -63,7 +63,6 @@ fetch_entity(#gri{id = AtmWorkflowSchemaId}) ->
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
 operation_supported(create, instance, private) -> true;
-operation_supported(create, merge, private) -> true;
 operation_supported(create, dump, private) -> true;
 operation_supported(create, {revision, _}, private) -> true;
 operation_supported(create, {dump_revision, _}, private) -> true;
@@ -114,7 +113,7 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = instance} = GRI,
     },
     {ok, #document{key = AtmWorkflowSchemaId}} = od_atm_workflow_schema:create(#document{value = AtmWorkflowSchema}),
 
-    case maps:find(<<"initialRevision">>, Data) of
+    case maps:find(<<"revision">>, Data) of
         error ->
             ok;
         {ok, InitialRevisionData} ->
@@ -136,23 +135,6 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = instance} = GRI,
 
     {true, {FetchedAtmWorkflowSchema, Rev}} = fetch_entity(#gri{aspect = instance, id = AtmWorkflowSchemaId}),
     {ok, resource, {GRI#gri{id = AtmWorkflowSchemaId}, {FetchedAtmWorkflowSchema, Rev}}};
-
-create(#el_req{auth = Auth, gri = #gri{id = AtmWorkflowSchemaId, aspect = merge}, data = Data}) ->
-    UpdateResult = od_atm_workflow_schema:update(AtmWorkflowSchemaId, fun(AtmWorkflowSchema) ->
-        {ok, AtmWorkflowSchema#od_atm_workflow_schema{
-            name = maps:get(<<"name">>, Data),
-            summary = maps:get(<<"summary">>, Data)
-        }}
-    end),
-    case UpdateResult of
-        {error, _} = Error ->
-            Error;
-        {ok, _} ->
-            InitialRevisionData = maps:get(<<"initialRevision">>, Data),
-            atm_workflow_schema_logic:insert_revision(
-                Auth, AtmWorkflowSchemaId, <<"auto">>, InitialRevisionData
-            )
-    end;
 
 create(#el_req{gri = #gri{id = AtmWorkflowSchemaId, aspect = dump}, data = Data}) ->
     case fetch_entity(#gri{id = AtmWorkflowSchemaId}) of
@@ -205,13 +187,22 @@ get(#el_req{gri = #gri{aspect = atm_lambdas}}, AtmWorkflowSchema) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
-update(#el_req{gri = #gri{id = AtmWorkflowSchemaId, aspect = instance}, data = Data}) ->
-    ?extract_ok(od_atm_workflow_schema:update(AtmWorkflowSchemaId, fun(AtmWorkflowSchema) ->
+update(#el_req{auth = Auth, gri = #gri{id = AtmWorkflowSchemaId, aspect = instance}, data = Data}) ->
+    UpdateResult = od_atm_workflow_schema:update(AtmWorkflowSchemaId, fun(AtmWorkflowSchema) ->
         {ok, AtmWorkflowSchema#od_atm_workflow_schema{
-            name = maps:get(<<"name">>, Data, AtmWorkflowSchema#od_atm_workflow_schema.name),
-            summary = maps:get(<<"summary">>, Data, AtmWorkflowSchema#od_atm_workflow_schema.summary)
+            name = maps:get(<<"name">>, Data),
+            summary = maps:get(<<"summary">>, Data)
         }}
-    end)).
+    end),
+    case UpdateResult of
+        {error, _} = Error ->
+            Error;
+        {ok, _} ->
+            InitialRevisionData = maps:get(<<"revision">>, Data),
+            atm_workflow_schema_logic:insert_revision(
+                Auth, AtmWorkflowSchemaId, <<"auto">>, InitialRevisionData
+            )
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -239,9 +230,9 @@ exists(#el_req{gri = #gri{aspect = {revision, RevisionNumberBin}}}, #od_atm_work
     revision_registry = RevisionRegistry
 }) ->
     atm_workflow_schema_revision_registry:has_revision(binary_to_integer(RevisionNumberBin), RevisionRegistry);
-exists(#el_req{gri = #gri{id = AtmWorkflowSchemaId}}, #od_atm_workflow_schema{}) ->
+exists(#el_req{}, FetchedAtmWorkflowSchema) ->
     % all other aspects exist if atm_workflow_schema record exists
-    AtmWorkflowSchemaId =/= undefined.
+    FetchedAtmWorkflowSchema =/= undefined.
 
 
 %%--------------------------------------------------------------------
@@ -254,9 +245,6 @@ exists(#el_req{gri = #gri{id = AtmWorkflowSchemaId}}, #od_atm_workflow_schema{})
 authorize(#el_req{auth = ?USER(UserId), operation = create, gri = #gri{id = undefined, aspect = instance}, data = Data}, _) ->
     AtmInventoryId = maps:get(<<"atmInventoryId">>, Data, <<"">>),
     can_manage_workflow_schemas(UserId, AtmInventoryId);
-
-authorize(#el_req{auth = ?USER(UserId), operation = create, gri = #gri{aspect = merge}}, AtmWorkflowSchema) ->
-    can_manage_workflow_schemas(UserId, AtmWorkflowSchema);
 
 authorize(#el_req{auth = ?USER(UserId), operation = create, gri = #gri{aspect = dump}}, AtmWorkflowSchema) ->
     is_inventory_member(UserId, AtmWorkflowSchema);
@@ -292,8 +280,6 @@ authorize(_, _) ->
 %%--------------------------------------------------------------------
 -spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
-    [?OZ_ATM_INVENTORIES_UPDATE];
-required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = merge}}) ->
     [?OZ_ATM_INVENTORIES_UPDATE];
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = dump}}) ->
     [?OZ_ATM_INVENTORIES_VIEW];
@@ -340,19 +326,10 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"summary">> => {binary, {size_limit, ?SUMMARY_SIZE_LIMIT}},
         % validation of revision data is performed when revision creation
         % is called from within the workflow schema creation procedure
-        <<"initialRevision">> => {json, any},
+        <<"revision">> => {json, any},
         % this can be an arbitrary string and is not verified, as for example a dump
         % from another Onezone may be used to create a workflow schema
         <<"originalAtmWorkflowSchemaId">> => {binary, non_empty}
-    }
-};
-validate(#el_req{operation = create, gri = #gri{aspect = merge}}) -> #{
-    required => #{
-        <<"name">> => {binary, name},
-        <<"summary">> => {binary, {size_limit, ?SUMMARY_SIZE_LIMIT}},
-        % validation of revision data is performed when revision creation
-        % is called from within the workflow schema creation procedure
-        <<"initialRevision">> => {json, any}
     }
 };
 validate(#el_req{operation = create, gri = #gri{aspect = dump}}) -> #{
@@ -361,16 +338,24 @@ validate(#el_req{operation = create, gri = #gri{aspect = dump}}) -> #{
     }
 };
 validate(#el_req{operation = create, gri = #gri{aspect = {revision, TargetRevisionNumber}}}) ->
+    % NOTE: the target revision is generally given in the aspect, but a special "auto"
+    % keyword is accepted to indicate that the original revision number should be taken
+    % and then originalRevisionNumber key is mandatory. This is used especially when
+    % creating a revision from a JSON dump (which includes the originalRevisionNumber).
     CommonRequired = #{
         {aspect, <<"targetRevisionNumber">>} => {any, fun
-            (<<"auto">>) -> true;
-            (Bin) when is_binary(Bin) -> (catch binary_to_integer(Bin)) > 0
+            (<<"auto">>) ->
+                true;
+            (Bin) when is_binary(Bin) ->
+                try
+                    binary_to_integer(Bin) > 0
+                catch _:_ ->
+                    false
+                end
         end},
         <<"schema">> => {{jsonable_record, single, atm_workflow_schema_revision}, any}
     },
 
-    % the target revision is generally given in the aspect, but a special "auto" keyword is accepted to indicate
-    % that the original revision number should be taken and then originalRevisionNumber key is mandatory
     #{
         required => case TargetRevisionNumber of
             <<"auto">> ->
@@ -394,7 +379,10 @@ validate(#el_req{operation = create, gri = #gri{aspect = {dump_revision, _}}}) -
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"summary">> => {binary, {size_limit, ?SUMMARY_SIZE_LIMIT}}
+        <<"summary">> => {binary, {size_limit, ?SUMMARY_SIZE_LIMIT}},
+        % validation of revision data is performed when revision creation
+        % is called from within the workflow schema creation procedure
+        <<"revision">> => {json, any}
     }
 }.
 

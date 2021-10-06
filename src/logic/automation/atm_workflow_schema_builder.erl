@@ -83,11 +83,11 @@ insert_revision(Auth, AtmWorkflowSchemaId, RevisionNumber, Data) ->
 delete_revision(AtmWorkflowSchemaId, RevisionNumber) ->
     od_atm_workflow_schema:critical_section(AtmWorkflowSchemaId, fun() ->
         update_revision_registry_unsafe(AtmWorkflowSchemaId, fun(RevisionRegistry) ->
-            case atm_workflow_schema_revision_registry:take_revision(RevisionNumber, RevisionRegistry) of
+            case atm_workflow_schema_revision_registry:delete_revision(RevisionNumber, RevisionRegistry) of
+                {ok, UpdatedRegistry} ->
+                    {ok, UpdatedRegistry};
                 error ->
-                    ?ERROR_NOT_FOUND;
-                {_, UpdatedRegistry} ->
-                    {ok, UpdatedRegistry}
+                    ?ERROR_NOT_FOUND
             end
         end)
     end).

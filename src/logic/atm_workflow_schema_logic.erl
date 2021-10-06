@@ -19,7 +19,6 @@
 
 -export([
     create/2,
-    merge/3,
     dump/3
 ]).
 -export([
@@ -58,27 +57,12 @@ create(Auth, Data) ->
     })).
 
 
--spec merge(
-    aai:auth(),
-    od_atm_workflow_schema:id(),
-    entity_logic:data() | atm_workflow_schema_revision:revision_number()
-) ->
-    ok | errors:error().
-merge(Auth, AtmWorkflowSchemaId, Data) ->
-    entity_logic:handle(#el_req{
-        operation = create,
-        auth = Auth,
-        gri = #gri{type = od_atm_workflow_schema, id = AtmWorkflowSchemaId, aspect = merge},
-        data = Data
-    }).
-
-
 -spec dump(
     aai:auth(),
     od_atm_workflow_schema:id(),
     entity_logic:data() | atm_workflow_schema_revision:revision_number()
 ) ->
-    {ok, json_utils:json_term()} | errors:error().
+    {ok, json_utils:json_map()} | errors:error().
 dump(Auth, AtmWorkflowSchemaId, Revision) when is_integer(Revision) ->
     dump(Auth, AtmWorkflowSchemaId, #{<<"includeRevision">> => Revision});
 dump(Auth, AtmWorkflowSchemaId, Data) ->
@@ -178,7 +162,7 @@ delete_revision(Auth, AtmWorkflowSchemaId, RevisionNumberBin) when is_binary(Rev
     od_atm_workflow_schema:id(),
     atm_workflow_schema_revision:revision_number() | binary()
 ) ->
-    ok | errors:error().
+    {ok, json_utils:json_map()} | errors:error().
 dump_revision(Auth, AtmWorkflowSchemaId, RevisionNumber) when is_integer(RevisionNumber) ->
     dump_revision(Auth, AtmWorkflowSchemaId, integer_to_binary(RevisionNumber));
 dump_revision(Auth, AtmWorkflowSchemaId, RevisionNumberBin) when is_binary(RevisionNumberBin) ->

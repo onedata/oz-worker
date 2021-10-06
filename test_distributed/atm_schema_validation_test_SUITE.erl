@@ -668,7 +668,7 @@ run_validation_test(#test_spec{schema_type = atm_workflow_schema} = TestSpec) ->
     AtmInventoryId = ozt_users:create_atm_inventory_for(UserId),
 
     CorrectAtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(AtmInventoryId),
-    InitialRevisionData = maps:get(<<"initialRevision">>, CorrectAtmWorkflowSchemaData),
+    InitialRevisionData = maps:get(<<"revision">>, CorrectAtmWorkflowSchemaData),
     % repeat test data generation as needed to make sure that at least one store
     % and one lane is generated - otherwise, validation tests do not make sense
     case maps:get(<<"schema">>, InitialRevisionData) of
@@ -681,7 +681,7 @@ run_validation_test(#test_spec{schema_type = atm_workflow_schema} = TestSpec) ->
                 TestSpec, CorrectAtmWorkflowSchemaRevisionData, AtmInventoryId
             ),
 
-            InvalidAtmWorkflowSchemaData = kv_utils:update_with([<<"initialRevision">>, <<"schema">>], fun(_) ->
+            InvalidAtmWorkflowSchemaData = kv_utils:update_with([<<"revision">>, <<"schema">>], fun(_) ->
                 InvalidAtmWorkflowSchemaRevisionData
             end, CorrectAtmWorkflowSchemaData),
 
@@ -700,7 +700,7 @@ run_validation_test(#test_spec{schema_type = atm_workflow_schema} = TestSpec) ->
             % inserting an invalid revision into a workflow schema should fail as well
             ?assertEqual(ExpectedError, ozt_atm_workflow_schemas:try_insert_revision(
                 ?USER(UserId), AtmWorkflowSchemaId, integer_to_binary(?RAND_INT(1, 100)),
-                maps:get(<<"initialRevision">>, InvalidAtmWorkflowSchemaData)
+                maps:get(<<"revision">>, InvalidAtmWorkflowSchemaData)
             ))
     end.
 
