@@ -24,7 +24,7 @@
 -export([get/1]).
 -export([get_atm_lambdas/1]).
 -export([exists/1]).
--export([try_merge/3]).
+-export([try_update/3]).
 -export([insert_revision/3, try_insert_revision/4]).
 -export([delete/1]).
 -export([dump_to_json/1, dump_to_json/2, dump_to_json/3]).
@@ -87,9 +87,9 @@ get_atm_lambdas(AtmInventoryId) ->
     Lambdas.
 
 
--spec try_merge(aai:auth(), od_atm_workflow_schema:id(), entity_logic:data()) -> ok | errors:error().
-try_merge(Auth, AtmWorkflowSchemaId, Data) ->
-    ozt:rpc(atm_workflow_schema_logic, merge, [Auth, AtmWorkflowSchemaId, Data]).
+-spec try_update(aai:auth(), od_atm_workflow_schema:id(), entity_logic:data()) -> ok | errors:error().
+try_update(Auth, AtmWorkflowSchemaId, Data) ->
+    ozt:rpc(atm_workflow_schema_logic, update, [Auth, AtmWorkflowSchemaId, Data]).
 
 
 -spec insert_revision(

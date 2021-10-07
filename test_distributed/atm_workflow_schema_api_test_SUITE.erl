@@ -762,7 +762,7 @@ update_test_base(Config, Creator, SupplementaryAtmLambdas, ClientType) ->
             expected_result = ?OK_RES
         },
         data_spec = #data_spec{
-            required = [
+            at_least_one = [
                 <<"name">>,
                 <<"summary">>,
                 <<"revision">>
@@ -1201,19 +1201,19 @@ dump_revision_test(Config) ->
                 {user, NonAdmin}
             ]
         },
-        rest_spec = #rest_spec{
+        rest_spec = RestSpec = #rest_spec{
             method = post,
             path = [<<"/atm_workflow_schemas/">>, AtmWorkflowSchemaId, <<"/revision/">>, RevisionNumberBin, <<"/dump">>],
             expected_code = ?HTTP_200_OK,
             expected_body = ExpectedJsonDump
         },
-        logic_spec = #logic_spec{
+        logic_spec = LogicSpec = #logic_spec{
             module = atm_workflow_schema_logic,
             function = dump_revision,
             args = [auth, AtmWorkflowSchemaId, RevisionNumber],
             expected_result = ?OK_MAP(ExpectedJsonDump)
         },
-        gs_spec = #gs_spec{
+        gs_spec = GsSpec = #gs_spec{
             operation = create,
             gri = #gri{
                 type = od_atm_workflow_schema, id = AtmWorkflowSchemaId,
@@ -1222,7 +1222,27 @@ dump_revision_test(Config) ->
             expected_result = ?OK_MAP(ExpectedJsonDump)
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % test validation of revision number in the aspect
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            path = [<<"/atm_workflow_schemas/">>, AtmWorkflowSchemaId, <<"/revision/">>, <<"null">>, <<"/dump">>],
+            expected_code = ?HTTP_400_BAD_REQUEST,
+            expected_body = undefined
+        },
+        logic_spec = LogicSpec#logic_spec{
+            args = [auth, AtmWorkflowSchemaId, 0],
+            expected_result = ?ERROR_REASON(?ERROR_BAD_DATA(<<"revisionNumber">>))
+        },
+        gs_spec = GsSpec#gs_spec{
+            gri = #gri{
+                type = od_atm_workflow_schema, id = AtmWorkflowSchemaId,
+                aspect = {dump_revision, <<"asdf">>}, scope = private
+            },
+            expected_result = ?ERROR_REASON(?ERROR_BAD_DATA(<<"revisionNumber">>))
+        }
+    })).
 
 
 delete_test(Config) ->

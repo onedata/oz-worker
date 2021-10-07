@@ -190,18 +190,22 @@ get(#el_req{gri = #gri{aspect = atm_lambdas}}, AtmWorkflowSchema) ->
 update(#el_req{auth = Auth, gri = #gri{id = AtmWorkflowSchemaId, aspect = instance}, data = Data}) ->
     UpdateResult = od_atm_workflow_schema:update(AtmWorkflowSchemaId, fun(AtmWorkflowSchema) ->
         {ok, AtmWorkflowSchema#od_atm_workflow_schema{
-            name = maps:get(<<"name">>, Data),
-            summary = maps:get(<<"summary">>, Data)
+            name = maps:get(<<"name">>, Data, AtmWorkflowSchema#od_atm_workflow_schema.name),
+            summary = maps:get(<<"summary">>, Data, AtmWorkflowSchema#od_atm_workflow_schema.summary)
         }}
     end),
     case UpdateResult of
         {error, _} = Error ->
             Error;
         {ok, _} ->
-            InitialRevisionData = maps:get(<<"revision">>, Data),
-            atm_workflow_schema_logic:insert_revision(
-                Auth, AtmWorkflowSchemaId, <<"auto">>, InitialRevisionData
-            )
+            case maps:find(<<"revision">>, Data) of
+                error ->
+                    ok;
+                {ok, RevisionData} ->
+                    atm_workflow_schema_logic:insert_revision(
+                        Auth, AtmWorkflowSchemaId, <<"auto">>, RevisionData
+                    )
+            end
     end.
 
 
@@ -371,7 +375,11 @@ validate(#el_req{operation = create, gri = #gri{aspect = {revision, TargetRevisi
 validate(#el_req{operation = create, gri = #gri{aspect = {dump_revision, _}}}) -> #{
     required => #{
         {aspect, <<"revisionNumber">>} => {any, fun(RevisionNumberBinary) ->
-            (catch binary_to_integer(RevisionNumberBinary)) > 0
+            try
+                binary_to_integer(RevisionNumberBinary) > 0
+            catch _:_ ->
+                false
+            end
         end}
     }
 };

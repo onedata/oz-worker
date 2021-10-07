@@ -693,7 +693,7 @@ run_validation_test(#test_spec{schema_type = atm_workflow_schema} = TestSpec) ->
             AtmWorkflowSchemaId = ozt_atm_workflow_schemas:create(
                 ?USER(UserId), AtmInventoryId, CorrectAtmWorkflowSchemaData
             ),
-            ?assertEqual(ExpectedError, ozt_atm_workflow_schemas:try_merge(
+            ?assertEqual(ExpectedError, ozt_atm_workflow_schemas:try_update(
                 ?USER(UserId), AtmWorkflowSchemaId, InvalidAtmWorkflowSchemaData
             )),
 
