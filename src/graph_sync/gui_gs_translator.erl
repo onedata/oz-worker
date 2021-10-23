@@ -511,9 +511,10 @@ translate_space(#gri{aspect = harvesters}, Harvesters) ->
 -spec translate_share(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_share(#gri{aspect = instance, scope = private}, Share) ->
-    #od_share{name = Name, file_type = FileType} = Share,
+    #od_share{name = Name, file_type = FileType, space = SpaceId} = Share,
     #{
         <<"name">> => Name,
+        <<"space">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto}),
         <<"fileType">> => FileType
     };
 translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name">> := Name}) ->
