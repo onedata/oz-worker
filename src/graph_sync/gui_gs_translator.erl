@@ -137,7 +137,13 @@ translate_value(_, #gri{type = od_token, aspect = verify_invite_token}, #{<<"sub
         <<"subject">> => aai:serialize_subject(Sub),
         <<"ttl">> => utils:undefined_to_null(TTL)
     };
+translate_value(_, #gri{type = od_atm_lambda, aspect = dump}, JsonMap) ->
+    JsonMap;
+translate_value(_, #gri{type = od_atm_lambda, aspect = {dump_revision, _}}, JsonMap) ->
+    JsonMap;
 translate_value(_, #gri{type = od_atm_workflow_schema, aspect = dump}, JsonMap) ->
+    JsonMap;
+translate_value(_, #gri{type = od_atm_workflow_schema, aspect = {dump_revision, _}}, JsonMap) ->
     JsonMap;
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n"
@@ -1061,15 +1067,9 @@ translate_atm_inventory(#gri{aspect = atm_workflow_schemas}, AtmWorkflowSchemas)
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_atm_lambda(GRI = #gri{aspect = instance, scope = private}, AtmLambda) ->
     #od_atm_lambda{
-        name = Name,
-        summary = Summary,
-        description = Description,
+        revision_registry = RevisionRegistry,
 
-        operation_spec = OperationSpec,
-        argument_specs = ArgumentSpecs,
-        result_specs = ResultSpecs,
-
-        resource_spec = ResourceSpec,
+        original_atm_lambda = OriginalAtmLambdaId,
 
         creation_time = CreationTime,
         creator = Creator
@@ -1077,16 +1077,20 @@ translate_atm_lambda(GRI = #gri{aspect = instance, scope = private}, AtmLambda) 
 
     #{
         <<"scope">> => <<"private">>,
-        <<"name">> => Name,
-        <<"summary">> => Summary,
-        <<"description">> => Description,
 
-        <<"operationSpec">> => jsonable_record:to_json(OperationSpec, atm_lambda_operation_spec),
-        <<"argumentSpecs">> => jsonable_record:list_to_json(ArgumentSpecs, atm_lambda_argument_spec),
-        <<"resultSpecs">> => jsonable_record:list_to_json(ResultSpecs, atm_lambda_result_spec),
+        <<"revisionRegistry">> => jsonable_record:to_json(RevisionRegistry, atm_lambda_revision_registry),
 
-        <<"resourceSpec">> => jsonable_record:to_json(ResourceSpec, atm_resource_spec),
-
+        <<"originalAtmLambdaId">> => case OriginalAtmLambdaId of
+            undefined ->
+                null;
+            _ ->
+                gri:serialize(#gri{
+                    type = od_atm_lambda,
+                    id = OriginalAtmLambdaId,
+                    aspect = instance,
+                    scope = auto
+                })
+        end,
         <<"atmInventoryList">> => gri:serialize(GRI#gri{aspect = atm_inventories, scope = private}),
         <<"atmWorkflowSchemaList">> => gri:serialize(GRI#gri{aspect = atm_workflow_schemas, scope = private}),
 

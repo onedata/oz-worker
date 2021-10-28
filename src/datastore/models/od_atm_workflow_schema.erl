@@ -23,8 +23,7 @@
 -export([critical_section/2]).
 
 -export([dump_to_json/3, dump_revision_to_json/2]).
--export([get_latest_revision_number/1]).
--export([extract_all_referenced_atm_lambdas/1]).
+-export([extract_all_atm_lambda_references/1]).
 
 %%% field encoding/decoding procedures
 -export([legacy_state_to_json/1, legacy_state_from_json/1]).
@@ -133,30 +132,27 @@ dump_revision_to_json(#od_atm_workflow_schema{revision_registry = RevisionRegist
     #{
         <<"schemaFormatVersion">> => 2,
         <<"originalRevisionNumber">> => RevisionNumber,
-        <<"schema">> => jsonable_record:to_json(IncludedRevision, atm_workflow_schema_revision),
-        <<"supplementaryAtmLambdas">> => lists:foldl(fun(AtmLambdaId, Acc) ->
+        <<"atmWorkflowSchemaRevision">> => jsonable_record:to_json(IncludedRevision, atm_workflow_schema_revision),
+        <<"supplementaryAtmLambdas">> => maps:map(fun(AtmLambdaId, ReferencedRevisionNumbers) ->
             {ok, #document{value = AtmLambda}} = od_atm_lambda:get(AtmLambdaId),
-            Acc#{
-                AtmLambdaId => od_atm_lambda:dump_to_json(AtmLambda)
-            }
-        end, #{}, atm_workflow_schema_revision:extract_referenced_atm_lambdas(IncludedRevision))
+            maps_utils:build_from_list(fun(ReferencedRevisionNumber) ->
+                Key = integer_to_binary(ReferencedRevisionNumber),
+                Value = od_atm_lambda:dump_to_json(AtmLambdaId, AtmLambda, ReferencedRevisionNumber),
+                {Key, Value}
+            end, ReferencedRevisionNumbers)
+        end, atm_workflow_schema_revision:extract_atm_lambda_references(IncludedRevision))
     }.
 
 
--spec get_latest_revision_number(od_atm_workflow_schema:id() | od_atm_workflow_schema:record()) ->
-    undefined | atm_workflow_schema_revision:revision_number().
-get_latest_revision_number(AtmWorkflowSchemaId) when is_binary(AtmWorkflowSchemaId) ->
-    {ok, #document{value = AtmWorkflowSchema}} = get(AtmWorkflowSchemaId),
-    get_latest_revision_number(AtmWorkflowSchema);
-get_latest_revision_number(#od_atm_workflow_schema{revision_registry = RevisionRegistry}) ->
-    atm_workflow_schema_revision_registry:get_latest_revision_number(RevisionRegistry).
-
-
--spec extract_all_referenced_atm_lambdas(record()) -> [od_atm_lambda:id()].
-extract_all_referenced_atm_lambdas(#od_atm_workflow_schema{revision_registry = RevisionRegistry}) ->
-    ordsets:to_list(atm_workflow_schema_revision_registry:fold_revisions(fun(AtmWorkflowSchemaRevision, Acc) ->
-        ordsets:union(Acc, atm_workflow_schema_revision:extract_referenced_atm_lambdas(AtmWorkflowSchemaRevision))
-    end, ordsets:new(), RevisionRegistry)).
+-spec extract_all_atm_lambda_references(record()) -> atm_workflow_schema_revision:atm_lambda_references().
+extract_all_atm_lambda_references(#od_atm_workflow_schema{revision_registry = RevisionRegistry}) ->
+    atm_workflow_schema_revision_registry:fold_revisions(fun(AtmWorkflowSchemaRevision, AccExternal) ->
+        maps:fold(fun(AtmLambdaId, CurrentReferencedRevisionNumbers, AccInternal) ->
+            maps:update_with(AtmLambdaId, fun(AllReferencedRevisionNumbers) ->
+                lists_utils:union(CurrentReferencedRevisionNumbers, AllReferencedRevisionNumbers)
+            end, CurrentReferencedRevisionNumbers, AccInternal)
+        end, AccExternal, atm_workflow_schema_revision:extract_atm_lambda_references(AtmWorkflowSchemaRevision))
+    end, #{}, RevisionRegistry).
 
 %%%===================================================================
 %%% field encoding/decoding procedures

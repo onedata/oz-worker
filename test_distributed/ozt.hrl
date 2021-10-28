@@ -34,6 +34,7 @@
 -define(RAND_STR(Bytes), str_utils:rand_hex(Bytes)).
 -define(RAND_BOOL(), lists_utils:random_element([true, false])).
 -define(RAND_INT(From, To), From + rand:uniform(To - From + 1) - 1).
+-define(RAND_REV_NUMBER(), ?RAND_INT(1, 100)).
 
 % Macro used to check the result in ensure_exists / ensure_member functions
 % (where an entity / relation should be created if it does not exist)

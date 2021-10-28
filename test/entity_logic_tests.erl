@@ -23,7 +23,7 @@
 %%%===================================================================
 
 name_normalization_test() ->
-    N = fun(Name) -> entity_logic:normalize_name(Name, ?UNKNOWN_ENTITY_NAME) end,
+    N = fun(Name) -> entity_logic_sanitizer:normalize_name(Name, ?UNKNOWN_ENTITY_NAME) end,
 
     ?assertEqual(<<"aaa---------a"/utf8>>, N(<<"aaa*&:|}{][,a"/utf8>>)),
     ?assertEqual(<<"aaa---------a"/utf8>>, N(<<"][aaa*&:|}{][,a]["/utf8>>)),
@@ -39,7 +39,7 @@ name_normalization_test() ->
 
 
 name_validation_test() ->
-    V = fun entity_logic:validate_name/1,
+    V = fun entity_logic_sanitizer:validate_name/1,
 
     ?assertEqual(false, V(<<"aaa*&:|}{][,a"/utf8>>)),
     ?assertEqual(false, V(<<"][aaa*&:|}{][,a]["/utf8>>)),

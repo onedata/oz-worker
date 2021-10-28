@@ -1586,7 +1586,7 @@ has_eff_atm_inventory(User, AtmInventoryId) ->
 %%--------------------------------------------------------------------
 -spec validate_full_name(binary()) -> boolean().
 validate_full_name(FullName) ->
-    entity_logic:validate_name(
+    entity_logic_sanitizer:validate_name(
         FullName, ?FULL_NAME_FIRST_CHARS_ALLOWED, ?FULL_NAME_MIDDLE_CHARS_ALLOWED,
         ?FULL_NAME_LAST_CHARS_ALLOWED, ?FULL_NAME_MAXIMUM_LENGTH
     ).
@@ -1594,7 +1594,7 @@ validate_full_name(FullName) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @see entity_logic:normalize_name/9.
+%% @see entity_logic_sanitizer:normalize_name/9.
 %% Normalizes user full_name to fit the allowed format.
 %% @end
 %%--------------------------------------------------------------------
@@ -1602,7 +1602,7 @@ validate_full_name(FullName) ->
 normalize_full_name(undefined) ->
     ?DEFAULT_FULL_NAME;
 normalize_full_name(FullName) ->
-    entity_logic:normalize_name(FullName,
+    entity_logic_sanitizer:normalize_name(FullName,
         ?FULL_NAME_FIRST_CHARS_ALLOWED, <<"">>,
         ?FULL_NAME_MIDDLE_CHARS_ALLOWED, <<"-">>,
         ?FULL_NAME_LAST_CHARS_ALLOWED, <<"">>,
@@ -1617,7 +1617,7 @@ normalize_full_name(FullName) ->
 %%--------------------------------------------------------------------
 -spec validate_username(od_user:username()) -> boolean().
 validate_username(Username) ->
-    entity_logic:validate_name(
+    entity_logic_sanitizer:validate_name(
         Username, ?USERNAME_FIRST_CHARS_ALLOWED, ?USERNAME_MIDDLE_CHARS_ALLOWED,
         ?USERNAME_LAST_CHARS_ALLOWED, ?USERNAME_MAXIMUM_LENGTH
     ).
@@ -1625,7 +1625,7 @@ validate_username(Username) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @see entity_logic:normalize_name/9.
+%% @see entity_logic_sanitizer:normalize_name/9.
 %% Normalizes username to fit the allowed format.
 %% @end
 %%--------------------------------------------------------------------
@@ -1633,7 +1633,7 @@ validate_username(Username) ->
 normalize_username(undefined) ->
     undefined;
 normalize_username(Username) ->
-    entity_logic:normalize_name(Username,
+    entity_logic_sanitizer:normalize_name(Username,
         ?USERNAME_FIRST_CHARS_ALLOWED, <<"">>,
         ?USERNAME_MIDDLE_CHARS_ALLOWED, <<"-">>,
         ?USERNAME_LAST_CHARS_ALLOWED, <<"">>,

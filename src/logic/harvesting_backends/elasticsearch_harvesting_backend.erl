@@ -197,7 +197,7 @@ query_index(Endpoint, IndexId, Data) ->
 %% {@link harvesting_backend_behaviour} callback query_validator/0.
 %% @end
 %%--------------------------------------------------------------------
--spec query_validator() -> entity_logic:validity_verificator().
+-spec query_validator() -> entity_logic_sanitizer:sanitizer_spec().
 query_validator() -> #{
     required => #{
         <<"method">> => {atom, [post, get]},

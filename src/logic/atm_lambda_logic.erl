@@ -19,7 +19,8 @@
 
 -export([
     create/2,
-    parse/2
+    parse_revision/2,
+    dump/3
 ]).
 -export([
     get/2,
@@ -28,7 +29,10 @@
     list/1
 ]).
 -export([
-    update/3
+    update/3,
+    add_revision/4,
+    update_revision_lifecycle_state/4,
+    dump_revision/3
 ]).
 -export([
     link_to_inventory/3,
@@ -56,13 +60,30 @@ create(Auth, Data) ->
     })).
 
 
--spec parse(aai:auth(), od_atm_lambda:name() | entity_logic:data()) ->
-    {ok, od_atm_lambda:record()} | errors:error().
-parse(Auth, Data) ->
+-spec parse_revision(aai:auth(), od_atm_lambda:name() | entity_logic:data()) ->
+    {ok, atm_lambda_revision:record()} | errors:error().
+parse_revision(Auth, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
         auth = Auth,
-        gri = #gri{type = od_atm_lambda, id = undefined, aspect = parse, scope = public},
+        gri = #gri{type = od_atm_lambda, id = undefined, aspect = parse_revision, scope = public},
+        data = Data
+    })).
+
+
+-spec dump(
+    aai:auth(),
+    od_atm_lambda:id(),
+    entity_logic:data() | atm_lambda_revision:revision_number()
+) ->
+    {ok, json_utils:json_map()} | errors:error().
+dump(Auth, AtmLambdaId, Revision) when is_integer(Revision) ->
+    dump(Auth, AtmLambdaId, #{<<"includeRevision">> => Revision});
+dump(Auth, AtmLambdaId, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_atm_lambda, id = AtmLambdaId, aspect = dump},
         data = Data
     })).
 
@@ -117,6 +138,70 @@ update(Auth, AtmLambdaId, Data) ->
         gri = #gri{type = od_atm_lambda, id = AtmLambdaId, aspect = instance},
         data = Data
     }).
+
+
+-spec add_revision(
+    aai:auth(),
+    od_atm_lambda:id(),
+    atm_lambda_revision:revision_number() | binary(),
+    entity_logic:data()
+) ->
+    ok | errors:error().
+add_revision(Auth, AtmLambdaId, TargetRevisionNumber, Data) when is_integer(TargetRevisionNumber) ->
+    add_revision(Auth, AtmLambdaId, integer_to_binary(TargetRevisionNumber), Data);
+add_revision(Auth, AtmLambdaId, TargetRevisionNumberBin, Data) when is_binary(TargetRevisionNumberBin) ->
+    entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{
+            type = od_atm_lambda,
+            id = AtmLambdaId,
+            aspect = {revision, TargetRevisionNumberBin}
+        },
+        data = Data
+    }).
+
+
+-spec update_revision_lifecycle_state(
+    aai:auth(),
+    od_atm_lambda:id(),
+    atm_lambda_revision:revision_number() | binary(),
+    entity_logic:data()
+) ->
+    ok | errors:error().
+update_revision_lifecycle_state(Auth, AtmLambdaId, RevisionNumber, Data) when is_integer(RevisionNumber) ->
+    update_revision_lifecycle_state(Auth, AtmLambdaId, integer_to_binary(RevisionNumber), Data);
+update_revision_lifecycle_state(Auth, AtmLambdaId, RevisionNumberBin, Data) when is_binary(RevisionNumberBin) ->
+    entity_logic:handle(#el_req{
+        operation = update,
+        auth = Auth,
+        gri = #gri{
+            type = od_atm_lambda,
+            id = AtmLambdaId,
+            aspect = {revision, RevisionNumberBin}
+        },
+        data = Data
+    }).
+
+
+-spec dump_revision(
+    aai:auth(),
+    od_atm_lambda:id(),
+    atm_lambda_revision:revision_number() | binary()
+) ->
+    {ok, json_utils:json_map()} | errors:error().
+dump_revision(Auth, AtmLambdaId, RevisionNumber) when is_integer(RevisionNumber) ->
+    dump_revision(Auth, AtmLambdaId, integer_to_binary(RevisionNumber));
+dump_revision(Auth, AtmLambdaId, RevisionNumberBin) when is_binary(RevisionNumberBin) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{
+            type = od_atm_lambda,
+            id = AtmLambdaId,
+            aspect = {dump_revision, RevisionNumberBin}
+        }
+    })).
 
 
 -spec link_to_inventory(aai:auth(), od_atm_lambda:id(), od_atm_inventory:id()) ->

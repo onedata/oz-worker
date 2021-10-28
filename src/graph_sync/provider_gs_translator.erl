@@ -89,6 +89,12 @@ translate_value(_, #gri{type = od_token, id = undefined, aspect = {offline_user_
     {ok, Serialized} = tokens:serialize(Token),
     Serialized;
 
+translate_value(_, #gri{type = od_atm_lambda, aspect = dump}, JsonMap) ->
+    JsonMap;
+
+translate_value(_, #gri{type = od_atm_lambda, aspect = {dump_revision, _}}, JsonMap) ->
+    JsonMap;
+
 translate_value(_, #gri{type = od_atm_workflow_schema, aspect = dump}, JsonMap) ->
     JsonMap;
 
@@ -459,28 +465,12 @@ translate_resource(_, #gri{type = od_atm_inventory, aspect = instance, scope = p
 
 translate_resource(_, #gri{type = od_atm_lambda, aspect = instance, scope = private}, AtmLambda) ->
     #od_atm_lambda{
-        name = Name,
-        summary = Summary,
-        description = Description,
-
-        operation_spec = OperationSpec,
-        argument_specs = ArgumentSpecs,
-        result_specs = ResultSpecs,
-
-        resource_spec = ResourceSpec,
+        revision_registry = RevisionRegistry,
 
         atm_inventories = AtmInventories
     } = AtmLambda,
     #{
-        <<"name">> => Name,
-        <<"summary">> => Summary,
-        <<"description">> => Description,
-
-        <<"operationSpec">> => jsonable_record:to_json(OperationSpec, atm_lambda_operation_spec),
-        <<"argumentSpecs">> => jsonable_record:list_to_json(ArgumentSpecs, atm_lambda_argument_spec),
-        <<"resultSpecs">> => jsonable_record:list_to_json(ResultSpecs, atm_lambda_result_spec),
-
-        <<"resourceSpec">> => jsonable_record:to_json(ResourceSpec, atm_resource_spec),
+        <<"revisionRegistry">> => jsonable_record:to_json(RevisionRegistry, atm_lambda_revision_registry),
 
         <<"atmInventories">> => AtmInventories
     };

@@ -21,8 +21,8 @@
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([critical_section/2]).
--export([calculate_checksum/1]).
--export([dump_to_json/1]).
+-export([dump_to_json/3]).
+-export([dump_revision_to_json/2]).
 -export([default_resource_spec/0]).
 
 %% datastore_model callbacks
@@ -33,13 +33,9 @@
 -type doc() :: datastore_doc:doc(record()).
 -type diff() :: datastore_doc:diff(record()).
 -type name() :: binary().
-% used to compare two lambdas - they are considered the same from the functional
-% point of view if their checksums are the same
--type checksum() :: binary().
 
--export_type([id/0, record/0]).
+-export_type([id/0, record/0, doc/0]).
 -export_type([name/0]).
--export_type([checksum/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -114,32 +110,24 @@ critical_section(AtmLambdaId, Fun) ->
     critical_section:run({?MODULE, ?FUNCTION_NAME, AtmLambdaId}, Fun).
 
 
--spec calculate_checksum(record()) -> checksum().
-calculate_checksum(AtmLambda) ->
-    str_utils:md5_digest([
-        AtmLambda#od_atm_lambda.name,
-        AtmLambda#od_atm_lambda.operation_spec,
-        AtmLambda#od_atm_lambda.argument_specs,
-        AtmLambda#od_atm_lambda.result_specs
-    ]).
-
-
--spec dump_to_json(record()) -> json_utils:json_map().
-dump_to_json(AtmLambda) ->
+-spec dump_to_json(id(), record(), atm_lambda_revision:revision_number()) -> json_utils:json_map().
+dump_to_json(AtmLambdaId, AtmLambda, IncludedRevisionNumber) ->
     #{
         <<"schemaFormatVersion">> => 2,
 
-        <<"name">> => AtmLambda#od_atm_lambda.name,
-        <<"summary">> => AtmLambda#od_atm_lambda.summary,
-        <<"description">> => AtmLambda#od_atm_lambda.description,
+        <<"originalAtmLambdaId">> => AtmLambdaId,
 
-        <<"operationSpec">> => jsonable_record:to_json(AtmLambda#od_atm_lambda.operation_spec, atm_lambda_operation_spec),
-        <<"argumentSpecs">> => jsonable_record:list_to_json(AtmLambda#od_atm_lambda.argument_specs, atm_lambda_argument_spec),
-        <<"resultSpecs">> => jsonable_record:list_to_json(AtmLambda#od_atm_lambda.result_specs, atm_lambda_result_spec),
+        <<"revision">> => dump_revision_to_json(AtmLambda, IncludedRevisionNumber)
+    }.
 
-        <<"resourceSpec">> => jsonable_record:to_json(AtmLambda#od_atm_lambda.resource_spec, atm_resource_spec),
 
-        <<"checksum">> => AtmLambda#od_atm_lambda.checksum
+-spec dump_revision_to_json(record(), atm_lambda_revision:revision_number()) -> json_utils:json_map().
+dump_revision_to_json(#od_atm_lambda{revision_registry = RevisionRegistry}, RevisionNumber) ->
+    IncludedRevision = atm_lambda_revision_registry:get_revision(RevisionNumber, RevisionRegistry),
+    #{
+        <<"schemaFormatVersion">> => 2,
+        <<"originalRevisionNumber">> => RevisionNumber,
+        <<"atmLambdaRevision">> => jsonable_record:to_json(IncludedRevision, atm_lambda_revision)
     }.
 
 
@@ -153,7 +141,7 @@ default_resource_spec() ->
 
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 -spec get_record_struct(datastore_model:record_version()) ->
     datastore_model:record_struct().
@@ -195,6 +183,20 @@ get_record_struct(2) ->
 
         {creation_time, integer},
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
+    ]};
+get_record_struct(3) ->
+    % * new field - original_atm_lambda
+    % * name, summary, description, operation_spec, argument_specs, result_specs and resource_spec
+    %   are now stored per revision in the revision registry
+    {record, [
+        {revision_registry, {custom, string, {persistent_record, encode, decode, atm_lambda_revision_registry}}},
+
+        {original_atm_lambda, string},
+        {atm_inventories, [string]},
+        {atm_workflow_schemas, [string]},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
     ]}.
 
 
@@ -206,8 +208,7 @@ get_record_struct(2) ->
 -spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
     {datastore_model:record_version(), datastore_model:record()}.
 upgrade_record(1, AtmLambda) ->
-    {
-        od_atm_lambda,
+    {od_atm_lambda,
         Name,
         Summary,
         Description,
@@ -224,19 +225,67 @@ upgrade_record(1, AtmLambda) ->
         CreationTime,
         Creator
     } = AtmLambda,
-    {2, #od_atm_lambda{
-        name = Name,
-        summary = Summary,
-        description = Description,
+    {2, {od_atm_lambda,
+        Name,
+        Summary,
+        Description,
 
-        operation_spec = OperationSpec,
-        argument_specs = ArgumentSpecs,
-        result_specs = ResultSpecs,
+        OperationSpec,
+        ArgumentSpecs,
+        ResultSpecs,
 
-        resource_spec = default_resource_spec(),
+        default_resource_spec(),
 
-        checksum = Checksum,
+        Checksum,
 
+        AtmInventories,
+        AtmWorkflowSchemas,
+
+        CreationTime,
+        Creator
+    }};
+upgrade_record(2, AtmLambda) ->
+    {
+        od_atm_lambda,
+        Name,
+        Summary,
+        Description,
+
+        OperationSpec,
+        ArgumentSpecs,
+        ResultSpecs,
+
+        ResourceSpec,
+
+        Checksum,
+
+        AtmInventories,
+        AtmWorkflowSchemas,
+
+        CreationTime,
+        Creator
+    } = AtmLambda,
+    {3, #od_atm_lambda{
+        revision_registry = atm_lambda_revision_registry:add_revision(
+            1,
+            #atm_lambda_revision{
+                name = Name,
+                summary = Summary,
+                description = Description,
+
+                operation_spec = OperationSpec,
+                argument_specs = ArgumentSpecs,
+                result_specs = ResultSpecs,
+
+                resource_spec = ResourceSpec,
+
+                checksum = Checksum,
+                state = stable
+            },
+            atm_lambda_revision_registry:empty()
+        ),
+
+        original_atm_lambda = undefined,
         atm_inventories = AtmInventories,
         atm_workflow_schemas = AtmWorkflowSchemas,
 

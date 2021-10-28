@@ -35,10 +35,10 @@
 
 -spec validate(atm_workflow_schema_revision:record(), #{od_atm_lambda:id() => od_atm_lambda:record()}) ->
     ok | no_return().
-validate(AtmWorkflowSchemaRevision, FetchedLambdas) ->
+validate(AtmWorkflowSchemaRevision, KnownAtmLambdas) ->
     Ctx = #validator_ctx{
         atm_workflow_schema_revision = AtmWorkflowSchemaRevision,
-        fetched_lambdas = FetchedLambdas
+        fetched_lambdas = KnownAtmLambdas
     },
     atm_schema_validator:run_validation_procedures(Ctx, [
         fun validate_all_ids_in_lanes/1,
@@ -192,7 +192,8 @@ validate_argument_and_result_mappers(#validator_ctx{
 }) ->
     atm_workflow_schema_revision:fold_tasks(fun(AtmTaskSchema = #atm_task_schema{
         id = TaskId,
-        lambda_id = AtmLambdaId
+        lambda_id = AtmLambdaId,
+        lambda_revision_number = LambdaRevisionNumber
     }, FetchedLambdasAcc) ->
         MapperArgumentNames = [S#atm_task_schema_argument_mapper.argument_name || S <- AtmTaskSchema#atm_task_schema.argument_mappings],
         MapperResultNames = [S#atm_task_schema_result_mapper.result_name || S <- AtmTaskSchema#atm_task_schema.result_mappings],
@@ -210,10 +211,11 @@ validate_argument_and_result_mappers(#validator_ctx{
                 {ok, #document{value = Record}} = od_atm_lambda:get(AtmTaskSchema#atm_task_schema.lambda_id),
                 FetchedLambdasAcc#{AtmLambdaId => Record}
         end,
-        #od_atm_lambda{
+        #od_atm_lambda{revision_registry = RevisionRegistry} = maps:get(AtmLambdaId, NewFetchedLambdasAcc),
+        #atm_lambda_revision{
             argument_specs = ArgumentSpecs,
             result_specs = ResultSpecs
-        } = maps:get(AtmLambdaId, NewFetchedLambdasAcc),
+        } = atm_lambda_revision_registry:get_revision(LambdaRevisionNumber, RevisionRegistry),
 
         SpecArgumentNames = [S#atm_lambda_argument_spec.name || S <- ArgumentSpecs],
         SpecResultNames = [S#atm_lambda_result_spec.name || S <- ResultSpecs],

@@ -61,7 +61,7 @@
 -export([inspect_carried_privileges/2]).
 -export([is_usage_limit_reached/1]).
 -export([increment_usage_count/1]).
--export([optional_invite_token_parameters/1]).
+-export([optional_invite_token_parameter_specs/1]).
 -export([default_invite_privileges/1]).
 
 %%%===================================================================
@@ -174,9 +174,8 @@ increment_usage_count(Metadata) ->
 %% Returns the possible optional parameters when creating a named invite token of given type.
 %% @end
 %%--------------------------------------------------------------------
--spec optional_invite_token_parameters(token_type:invite_type()) ->
-    #{Key :: binary() => {entity_logic:type_validator(), entity_logic:value_validator()}}.
-optional_invite_token_parameters(InviteType) ->
+-spec optional_invite_token_parameter_specs(token_type:invite_type()) -> entity_logic_sanitizer:parameter_specs().
+optional_invite_token_parameter_specs(InviteType) ->
     maps:merge(
         #{?USAGE_LIMIT_KEY => {integer_or_infinity, {not_lower_than, 1}}},
         case allowed_invite_privileges(InviteType) of

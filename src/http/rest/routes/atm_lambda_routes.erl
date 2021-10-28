@@ -100,5 +100,39 @@ routes() -> [
         method = 'GET',
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_atm_lambda, id = ?BINDING(id), aspect = atm_workflow_schemas, scope = private}
+    }},
+    %% Dump atm_lambda to JSON
+    %% This operation requires one of the following privileges:
+    %% - oz_atm_inventories_view
+    {<<"/atm_lambdas/:id/dump">>, #rest_req{
+        method = 'POST',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_lambda, id = ?BINDING(id), aspect = dump, scope = private}
+    }},
+    %% Add atm_lambda revision
+    %% This operation requires one of the following privileges:
+    %% - atm_inventory_manage_lambdas
+    %% - oz_atm_inventories_update
+    {<<"/atm_lambdas/:id/revision/:rid">>, #rest_req{
+        method = 'PUT',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_lambda, id = ?BINDING(id), aspect = {revision, ?BINDING(rid)}, scope = private}
+    }},
+    %% Update atm_lambda revision's lifecycle state
+    %% This operation requires one of the following privileges:
+    %% - atm_inventory_manage_lambdas
+    %% - oz_atm_inventories_update
+    {<<"/atm_lambdas/:id/revision/:rid">>, #rest_req{
+        method = 'PATCH',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_lambda, id = ?BINDING(id), aspect = {revision, ?BINDING(rid)}, scope = private}
+    }},
+    %% Dump atm_lambda revision to JSON
+    %% This operation requires one of the following privileges:
+    %% - oz_atm_inventories_view
+    {<<"/atm_lambdas/:id/revision/:rid/dump">>, #rest_req{
+        method = 'POST',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_lambda, id = ?BINDING(id), aspect = {dump_revision, ?BINDING(rid)}, scope = private}
     }}
 ].
