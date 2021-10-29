@@ -1080,7 +1080,7 @@ translate_atm_lambda(GRI = #gri{aspect = instance, scope = private}, AtmLambda) 
 
         <<"revisionRegistry">> => jsonable_record:to_json(RevisionRegistry, atm_lambda_revision_registry),
 
-        <<"originalAtmLambdaId">> => case OriginalAtmLambdaId of
+        <<"originalAtmLambda">> => case OriginalAtmLambdaId of
             undefined ->
                 null;
             _ ->
@@ -1134,7 +1134,7 @@ translate_atm_workflow_schema(#gri{id = Id, aspect = instance, scope = private},
 
         <<"revisionRegistry">> => jsonable_record:to_json(RevisionRegistry, atm_workflow_schema_revision_registry),
 
-        <<"originalAtmWorkflowSchemaId">> => case OriginalAtmWorkflowSchemaId of
+        <<"originalAtmWorkflowSchema">> => case OriginalAtmWorkflowSchemaId of
             undefined ->
                 null;
             _ ->
