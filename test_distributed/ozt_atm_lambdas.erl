@@ -31,7 +31,7 @@
 -export([link_to_inventory/2]).
 -export([unlink_from_inventory/2]).
 -export([dump_to_json/1, dump_to_json/2, dump_to_json/3]).
--export([get_latest_revision_number/1, get_latest_revision/1]).
+-export([get_largest_revision_number/1, get_revision_with_largest_number/1]).
 -export([find_duplicate/3]).
 -export([substitute_lambdas_for_duplicates/2, substitute_lambdas_for_duplicates/3]).
 -export([default_resource_spec/0]).
@@ -158,7 +158,7 @@ dump_to_json(AtmLambdaId) when is_binary(AtmLambdaId) ->
 dump_to_json(AtmLambdaId, IncludedRevisionNumber) when is_integer(IncludedRevisionNumber) ->
     dump_to_json(AtmLambdaId, get(AtmLambdaId), IncludedRevisionNumber);
 dump_to_json(AtmLambdaId, AtmLambda) ->
-    case get_latest_revision_number(AtmLambda) of
+    case get_largest_revision_number(AtmLambda) of
         undefined ->
             error(badarg);
         LatestRevisionNumber ->
@@ -177,20 +177,23 @@ dump_to_json(AtmLambdaId, AtmLambda, IncludedRevisionNumber) ->
     ]).
 
 
--spec get_latest_revision_number(od_atm_lambda:id() | od_atm_lambda:record()) ->
+-spec get_largest_revision_number(od_atm_lambda:id() | od_atm_lambda:record()) ->
     undefined | atm_lambda_revision:revision_number().
-get_latest_revision_number(AtmLambdaId) when is_binary(AtmLambdaId) ->
-    get_latest_revision_number(get(AtmLambdaId));
-get_latest_revision_number(#od_atm_lambda{revision_registry = RevisionRegistry}) ->
-    atm_lambda_revision_registry:get_latest_revision_number(RevisionRegistry).
+get_largest_revision_number(AtmLambdaId) when is_binary(AtmLambdaId) ->
+    get_largest_revision_number(get(AtmLambdaId));
+get_largest_revision_number(#od_atm_lambda{revision_registry = RevisionRegistry}) ->
+    case atm_lambda_revision_registry:get_all_revision_numbers(RevisionRegistry) of
+        [] -> undefined;
+        AllRevisionNumbers -> lists:max(AllRevisionNumbers)
+    end.
 
 
--spec get_latest_revision(od_atm_lambda:id() | od_atm_lambda:record()) ->
+-spec get_revision_with_largest_number(od_atm_lambda:id() | od_atm_lambda:record()) ->
     atm_lambda_revision:record().
-get_latest_revision(AtmLambdaId) when is_binary(AtmLambdaId) ->
-    get_latest_revision(get(AtmLambdaId));
-get_latest_revision(#od_atm_lambda{revision_registry = RevisionRegistry} = AtmLambda) ->
-    case get_latest_revision_number(AtmLambda) of
+get_revision_with_largest_number(AtmLambdaId) when is_binary(AtmLambdaId) ->
+    get_revision_with_largest_number(get(AtmLambdaId));
+get_revision_with_largest_number(#od_atm_lambda{revision_registry = RevisionRegistry} = AtmLambda) ->
+    case get_largest_revision_number(AtmLambda) of
         undefined ->
             error(badarg);
         RevisionNumber ->
@@ -254,7 +257,7 @@ substitute_lambdas_for_duplicates(OriginalLambdaReferences, TargetAtmInventoryId
 ) ->
     atm_workflow_schema_revision:lambda_references().
 substitute_lambdas_for_duplicates(OriginalLambdaReferences, AtmLambdasToSubstitute, TargetAtmInventoryId) ->
-    maps_utils:rebuild(fun(OriginalAtmLambdaId, ReferencedRevisionNumbers) ->
+    maps_utils:map_key_value(fun(OriginalAtmLambdaId, ReferencedRevisionNumbers) ->
         case lists:member(OriginalAtmLambdaId, AtmLambdasToSubstitute) of
             false ->
                 {OriginalAtmLambdaId, ReferencedRevisionNumbers};

@@ -29,7 +29,7 @@
 -export([insert_revision/3, try_insert_revision/4]).
 -export([delete/1]).
 -export([dump_to_json/1, dump_to_json/2, dump_to_json/3]).
--export([get_latest_revision_number/1]).
+-export([get_largest_revision_number/1]).
 -export([extract_referenced_atm_lambda_ids/1]).
 -export([update_revision_with/3]).
 -export([substitute_atm_lambdas_for_duplicates/2, substitute_atm_lambdas_for_duplicates/3]).
@@ -150,7 +150,7 @@ dump_to_json(AtmWorkflowSchemaId) when is_binary(AtmWorkflowSchemaId) ->
 dump_to_json(AtmWorkflowSchemaId, IncludedRevisionNumber) when is_integer(IncludedRevisionNumber) ->
     dump_to_json(AtmWorkflowSchemaId, get(AtmWorkflowSchemaId), IncludedRevisionNumber);
 dump_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema) ->
-    case get_latest_revision_number(AtmWorkflowSchema) of
+    case get_largest_revision_number(AtmWorkflowSchema) of
         undefined ->
             error(badarg);
         LatestRevisionNumber ->
@@ -169,12 +169,15 @@ dump_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevisionNumber) ->
     ]).
 
 
--spec get_latest_revision_number(od_atm_workflow_schema:id() | od_atm_workflow_schema:record()) ->
+-spec get_largest_revision_number(od_atm_workflow_schema:id() | od_atm_workflow_schema:record()) ->
     undefined | atm_workflow_schema_revision:revision_number().
-get_latest_revision_number(AtmWorkflowSchemaId) when is_binary(AtmWorkflowSchemaId) ->
-    get_latest_revision_number(get(AtmWorkflowSchemaId));
-get_latest_revision_number(#od_atm_workflow_schema{revision_registry = RevisionRegistry}) ->
-    atm_workflow_schema_revision_registry:get_latest_revision_number(RevisionRegistry).
+get_largest_revision_number(AtmWorkflowSchemaId) when is_binary(AtmWorkflowSchemaId) ->
+    get_largest_revision_number(get(AtmWorkflowSchemaId));
+get_largest_revision_number(#od_atm_workflow_schema{revision_registry = RevisionRegistry}) ->
+    case atm_workflow_schema_revision_registry:get_all_revision_numbers(RevisionRegistry) of
+        [] -> undefined;
+        AllRevisionNumbers -> lists:max(AllRevisionNumbers)
+    end.
 
 
 -spec extract_referenced_atm_lambda_ids(json_utils:json_map() | atm_workflow_schema_revision:record()) ->
@@ -358,6 +361,6 @@ example_task_schemas(AtmLambdas, StoreSchemaIds) ->
 %% @private
 -spec build_lambda_registries([od_atm_lambda:id()]) -> atm_test_utils:lambda_registries().
 build_lambda_registries(AtmLambdas) ->
-    maps_utils:build_from_list(fun(AtmLambdaId) ->
+    maps_utils:generate_from_list(fun(AtmLambdaId) ->
         {AtmLambdaId, (ozt_atm_lambdas:get(AtmLambdaId))#od_atm_lambda.revision_registry}
     end, AtmLambdas).

@@ -135,7 +135,7 @@ dump_revision_to_json(#od_atm_workflow_schema{revision_registry = RevisionRegist
         <<"atmWorkflowSchemaRevision">> => jsonable_record:to_json(IncludedRevision, atm_workflow_schema_revision),
         <<"supplementaryAtmLambdas">> => maps:map(fun(AtmLambdaId, ReferencedRevisionNumbers) ->
             {ok, #document{value = AtmLambda}} = od_atm_lambda:get(AtmLambdaId),
-            maps_utils:build_from_list(fun(ReferencedRevisionNumber) ->
+            maps_utils:generate_from_list(fun(ReferencedRevisionNumber) ->
                 Key = integer_to_binary(ReferencedRevisionNumber),
                 Value = od_atm_lambda:dump_to_json(AtmLambdaId, AtmLambda, ReferencedRevisionNumber),
                 {Key, Value}

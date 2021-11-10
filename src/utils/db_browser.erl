@@ -865,8 +865,8 @@ field_specs(atm_workflow_schemas) -> [
 %% @private
 -spec latest_lambda_revision(od_atm_lambda:doc()) -> atm_lambda_revision:record().
 latest_lambda_revision(#document{value = #od_atm_lambda{revision_registry = RevisionRegistry}}) ->
-    case atm_lambda_revision_registry:get_latest_revision_number(RevisionRegistry) of
-        undefined ->
+    case atm_lambda_revision_registry:get_all_revision_numbers(RevisionRegistry) of
+        [] ->
             % return some dummy, empty revision to generate the row for the schema
             #atm_lambda_revision{
                 name = <<"unknown">>,
@@ -886,24 +886,24 @@ latest_lambda_revision(#document{value = #od_atm_lambda{revision_registry = Revi
                 checksum = <<>>,
                 state = draft
             };
-        RevisionNumber ->
-            atm_lambda_revision_registry:get_revision(RevisionNumber, RevisionRegistry)
+        AllRevisionNumbers ->
+            atm_lambda_revision_registry:get_revision(lists:max(AllRevisionNumbers), RevisionRegistry)
     end.
 
 
 %% @private
 -spec latest_workflow_schema_revision(od_atm_workflow_schema:doc()) -> atm_workflow_schema_revision:record().
 latest_workflow_schema_revision(#document{value = #od_atm_workflow_schema{revision_registry = RevisionRegistry}}) ->
-    case atm_workflow_schema_revision_registry:get_latest_revision_number(RevisionRegistry) of
-        undefined ->
+    case atm_workflow_schema_revision_registry:get_all_revision_numbers(RevisionRegistry) of
+        [] ->
             % return some dummy, empty revision to generate the row for the schema
             #atm_workflow_schema_revision{
                 stores = [],
                 lanes = [],
                 state = draft
             };
-        RevisionNumber ->
-            atm_workflow_schema_revision_registry:get_revision(RevisionNumber, RevisionRegistry)
+        AllRevisionNumbers ->
+            atm_workflow_schema_revision_registry:get_revision(lists:max(AllRevisionNumbers), RevisionRegistry)
     end.
 
 

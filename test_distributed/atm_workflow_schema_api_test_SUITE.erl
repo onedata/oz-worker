@@ -1295,7 +1295,7 @@ bad_supplementary_lambdas_data_test(_Config) ->
 }).
 
 -record(recreate_test_spec, {
-    success_expected = true :: boolean(),
+    expected_result = ok :: ok | {error, forbidden | bad_data},
     creating_user :: od_user:id(),
     target_atm_inventory :: od_atm_inventory:id(),
     original_atm_workflow_schema :: od_atm_workflow_schema:id(),
@@ -1322,7 +1322,7 @@ recreate_atm_workflow_schema_from_dump_test_repeat() ->
     UserAlpha = ozt_users:create(),
     ozt_atm_inventories:add_user(OriginalAtmInventoryId, UserAlpha, []),
     recreate_atm_workflow_schema_from_dump_test_base(#recreate_test_spec{
-        success_expected = false,
+        expected_result = {error, forbidden},
         creating_user = UserAlpha,
         target_atm_inventory = OriginalAtmInventoryId,
         original_atm_workflow_schema = OriginalAtmWorkflowSchemaId
@@ -1330,7 +1330,7 @@ recreate_atm_workflow_schema_from_dump_test_repeat() ->
 
     ozt_atm_inventories:set_user_privileges(OriginalAtmInventoryId, UserAlpha, [?ATM_INVENTORY_MANAGE_WORKFLOW_SCHEMAS]),
     recreate_atm_workflow_schema_from_dump_test_base(#recreate_test_spec{
-        success_expected = true,
+        expected_result = ok,
         creating_user = UserAlpha,
         target_atm_inventory = OriginalAtmInventoryId,
         original_atm_workflow_schema = OriginalAtmWorkflowSchemaId
@@ -1400,7 +1400,7 @@ recreate_atm_workflow_schema_from_dump_test_repeat() ->
     AtmInventoryIdWithoutUserPrivileges = ozt_users:create_atm_inventory_for(UserOmega),
     ozt_atm_inventories:set_user_privileges(AtmInventoryIdWithoutUserPrivileges, UserOmega, [?ATM_INVENTORY_MANAGE_WORKFLOW_SCHEMAS]),
     recreate_atm_workflow_schema_from_dump_test_base(#recreate_test_spec{
-        success_expected = false,
+        expected_result = {error, bad_data},
         creating_user = UserOmega,
         target_atm_inventory = AtmInventoryIdWithoutUserPrivileges,
         original_atm_workflow_schema = OriginalAtmWorkflowSchemaId
@@ -1488,7 +1488,7 @@ recreate_atm_workflow_schema_from_dump_with_mixed_lambda_adjustments_test_repeat
 %% @end
 %%--------------------------------------------------------------------
 recreate_atm_workflow_schema_from_dump_test_base(#recreate_test_spec{
-    success_expected = false,
+    expected_result = {error, ExpectedErrorType},
     creating_user = CreatingUser,
     target_atm_inventory = TargetAtmInventoryId,
     original_atm_workflow_schema = OriginalAtmWorkflowSchemaId
@@ -1500,13 +1500,19 @@ recreate_atm_workflow_schema_from_dump_test_base(#recreate_test_spec{
     ),
     lists:foreach(fun(RevisionNumber) ->
         DumpedOriginalAtmWorkflowSchema = ozt_atm_workflow_schemas:dump_to_json(OriginalAtmWorkflowSchemaId, RevisionNumber),
-        ?assertEqual(?ERROR_FORBIDDEN, ozt_atm_workflow_schemas:try_create(
+        ErrorResult = ?assertMatch({error, _}, ozt_atm_workflow_schemas:try_create(
             ?USER(CreatingUser), TargetAtmInventoryId, DumpedOriginalAtmWorkflowSchema
-        ))
+        )),
+        case ExpectedErrorType of
+            forbidden ->
+                ?assertEqual(?ERROR_FORBIDDEN, ErrorResult);
+            bad_data ->
+                ?assertMatch(?ERROR_BAD_DATA(<<"tasks">>, <<"The lambda id '", _/binary>>), ErrorResult)
+        end
     end, AllRevisionNumbers);
 
 recreate_atm_workflow_schema_from_dump_test_base(#recreate_test_spec{
-    success_expected = true,
+    expected_result = ok,
     creating_user = CreatingUser,
     target_atm_inventory = TargetAtmInventoryId,
     original_atm_workflow_schema = OriginalAtmWorkflowSchemaId
@@ -1673,7 +1679,7 @@ resolve_expected_adjusted_lambdas(#recreate_test_spec{
 
 %% @private
 generate_supplementary_atm_lambdas(AtmInventoryId) ->
-    maps_utils:build_from_list(fun(_) ->
+    maps_utils:generate_from_list(fun(_) ->
         RevisionNumbers = lists_utils:random_sublist(lists:seq(1, 100), 1, 6),
         RevisionDataObjects = lists:map(fun(RevisionNumber) ->
             #{
@@ -1687,7 +1693,7 @@ generate_supplementary_atm_lambdas(AtmInventoryId) ->
         lists:foreach(fun(RevisionData) ->
             ozt_atm_lambdas:update(AtmLambdaId, RevisionData)
         end, tl(RevisionDataObjects)),
-        {AtmLambdaId, maps_utils:build_from_list(fun(RevisionNumber) ->
+        {AtmLambdaId, maps_utils:generate_from_list(fun(RevisionNumber) ->
             {integer_to_binary(RevisionNumber), ozt_atm_lambdas:dump_to_json(AtmLambdaId, RevisionNumber)}
         end, RevisionNumbers)}
     end, lists:seq(1, rand:uniform(7))).

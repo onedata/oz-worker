@@ -9,6 +9,38 @@
 %%% This module handles management of workflow schema revisions, performing
 %%% validation as well as transformations required due to linking and creation
 %%% of supplementary lambdas (if provided).
+%%%
+%%% When a new workflow schema revision is submitted (either a new one, or an
+%%% update of the existing one), this module handles verification of the request,
+%%% validation of the schema and resolving of all referenced lambdas. Especially
+%%% when the revision is created from a dump, it includes the "supplementaryAtmLambdas"
+%%% field, which provides self-contained definitions of all lambdas referenced by the
+%%% workflow schema revision. This field may be used to link or create missing lambdas
+%%% according to the following procedure (applied for each lambda):
+%%%
+%%%   1. If the original referenced lambda is available in the target inventory,
+%%%      it is used and the procedure finishes.
+%%%
+%%%   2. If there is a duplicate of the referenced lambda in the target inventory,
+%%%      it is used [*] and the procedure finishes.
+%%%
+%%%   3. If the original referenced lambda can be linked to the target inventory,
+%%%      it is linked and used and the procedure finishes.
+%%%
+%%%   4. If there is a duplicate of the referenced lambda in any user's inventory
+%%%      that can be linked to the target inventory,
+%%%      it is linked and used [*] and the procedure finishes.
+%%%
+%%%   5. Finally, the lambda is duplicated and the duplicate is used.
+%%%
+%%% [*] - if a suitable duplicate is found, but it is missing the referenced lambda revision,
+%%%       the missing revision is created.
+%%%
+%%% All steps of the procedure take into account if the user
+%%% has required privileges to do corresponding actions.
+%%%
+%%% Consult functions 'resolve_referenced_lambdas' and 'resolve_missing_lambdas' that
+%%% implement the above-mentioned mechanisms.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(atm_workflow_schema_builder).
@@ -189,16 +221,8 @@ resolve_missing_lambdas(BuilderCtx = #builder_ctx{
     builder_ctx().
 resolve_missing_lambda(BuilderCtx, AtmLambdaId, RevisionNumber, AtmLambdaData) ->
     LambdaSearchCtx = build_lambda_search_ctx(AtmLambdaId, RevisionNumber, AtmLambdaData),
-    SearchResult = lists_utils:searchmap(fun(Fun) ->
-        case Fun(BuilderCtx, LambdaSearchCtx) of
-            continue -> false;
-            {finish, NewBuilderCtx} -> {true, NewBuilderCtx}
-        end
-    end, [
+    SearchResult = lists_utils:searchmap(fun(Fun) -> Fun(BuilderCtx, LambdaSearchCtx) end, [
         fun try_reusing_lambda_duplicate_in_current_inventory/2,
-        % at least one lambda will have to be linked or created,
-        % skip further checks if the client is not authorized to do so
-        fun ensure_can_manage_lambdas_in_target_inventory/2,
         fun try_linking_referenced_lambda/2,
         fun try_linking_any_lambda_duplicate/2,
         fun try_qualifying_lambda_for_duplication/2
@@ -236,49 +260,47 @@ build_lambda_search_ctx(OriginalAtmLambdaId, RevisionNumber, AtmLambdaData) ->
 
 %% @private
 -spec try_reusing_lambda_duplicate_in_current_inventory(builder_ctx(), lambda_search_ctx()) ->
-    {finish, builder_ctx()} | continue.
+    {true, builder_ctx()} | false.
 try_reusing_lambda_duplicate_in_current_inventory(_BuilderCtx, #lambda_search_ctx{checksum = undefined}) ->
-    continue;
+    false;
 try_reusing_lambda_duplicate_in_current_inventory(BuilderCtx1, LambdaSearchCtx) ->
     case find_lambda_duplicate_in_inventory(BuilderCtx1#builder_ctx.target_atm_inventory, LambdaSearchCtx) of
         {ok, {Qualification, DuplicateLambdaId}} ->
             BuilderCtx2 = substitute_lambda_for_duplicate(BuilderCtx1, LambdaSearchCtx, DuplicateLambdaId),
             case Qualification of
                 exact_duplicate ->
-                    {finish, BuilderCtx2};
-                missing_revision ->
-                    {finish, mark_lambda_revision_for_duplication(BuilderCtx2, LambdaSearchCtx, DuplicateLambdaId)}
+                    {true, BuilderCtx2};
+                duplicate_without_referenced_revision when BuilderCtx1#builder_ctx.can_manage_lambdas_in_target_inventory ->
+                    {true, mark_lambda_revision_for_duplication(BuilderCtx2, LambdaSearchCtx, DuplicateLambdaId)};
+                duplicate_without_referenced_revision ->
+                    false
             end;
         error ->
-            continue
+            false
     end.
 
 
 %% @private
--spec ensure_can_manage_lambdas_in_target_inventory(builder_ctx(), lambda_search_ctx()) ->
-    continue | no_return().
-ensure_can_manage_lambdas_in_target_inventory(BuilderCtx, _LambdaSearchCtx) ->
-    BuilderCtx#builder_ctx.can_manage_lambdas_in_target_inventory orelse throw(?ERROR_FORBIDDEN),
-    continue.
-
-
-%% @private
 -spec try_linking_referenced_lambda(builder_ctx(), lambda_search_ctx()) ->
-    {finish, builder_ctx()} | continue.
+    {true, builder_ctx()} | false.
+try_linking_referenced_lambda(#builder_ctx{can_manage_lambdas_in_target_inventory = false}, _LambdaSearchCtx) ->
+    false;
 try_linking_referenced_lambda(BuilderCtx, #lambda_search_ctx{original_lambda_id = OriginalAtmLambdaId}) ->
     case can_manage_lambda(BuilderCtx#builder_ctx.auth, OriginalAtmLambdaId) of
         true ->
-            {finish, mark_lambda_for_linking(BuilderCtx, OriginalAtmLambdaId)};
+            {true, mark_lambda_for_linking(BuilderCtx, OriginalAtmLambdaId)};
         false ->
-            continue
+            false
     end.
 
 
 %% @private
 -spec try_linking_any_lambda_duplicate(builder_ctx(), lambda_search_ctx()) ->
-    {finish, builder_ctx()} | continue.
+    {true, builder_ctx()} | false.
+try_linking_any_lambda_duplicate(#builder_ctx{can_manage_lambdas_in_target_inventory = false}, _LambdaSearchCtx) ->
+    false;
 try_linking_any_lambda_duplicate(_BuilderCtx, #lambda_search_ctx{checksum = undefined}) ->
-    continue;
+    false;
 try_linking_any_lambda_duplicate(BuilderCtx1, LambdaSearchCtx) ->
     case find_linkable_lambda_duplicate(BuilderCtx1, LambdaSearchCtx) of
         {ok, {Qualification, DuplicateLambdaId}} ->
@@ -286,27 +308,29 @@ try_linking_any_lambda_duplicate(BuilderCtx1, LambdaSearchCtx) ->
             BuilderCtx3 = mark_lambda_for_linking(BuilderCtx2, DuplicateLambdaId),
             case Qualification of
                 exact_duplicate ->
-                    {finish, BuilderCtx3};
-                missing_revision ->
-                    {finish, mark_lambda_revision_for_duplication(BuilderCtx3, LambdaSearchCtx, DuplicateLambdaId)}
+                    {true, BuilderCtx3};
+                duplicate_without_referenced_revision ->
+                    {true, mark_lambda_revision_for_duplication(BuilderCtx3, LambdaSearchCtx, DuplicateLambdaId)}
             end;
         error ->
-            continue
+            false
     end.
 
 
 %% @private
 -spec try_qualifying_lambda_for_duplication(builder_ctx(), lambda_search_ctx()) ->
-    {finish, builder_ctx()} | continue.
+    {true, builder_ctx()} | false.
+try_qualifying_lambda_for_duplication(#builder_ctx{can_manage_lambdas_in_target_inventory = false}, _LambdaSearchCtx) ->
+    false;
 try_qualifying_lambda_for_duplication(_BuilderCtx, #lambda_search_ctx{json_dump = undefined}) ->
-    continue;
+    false;
 try_qualifying_lambda_for_duplication(BuilderCtx, LambdaSearchCtx) ->
-    {finish, mark_lambda_for_duplication(BuilderCtx, LambdaSearchCtx)}.
+    {true, mark_lambda_for_duplication(BuilderCtx, LambdaSearchCtx)}.
 
 
 %% @private
 -spec find_linkable_lambda_duplicate(builder_ctx(), lambda_search_ctx()) ->
-    {ok, {exact_duplicate | missing_revision, od_atm_lambda:id()}} | error.
+    {ok, {exact_duplicate | duplicate_without_referenced_revision, od_atm_lambda:id()}} | error.
 find_linkable_lambda_duplicate(#builder_ctx{
     auth = ?USER(UserId) = Auth,
     target_atm_inventory_id = TargetAtmInventoryId
@@ -331,7 +355,7 @@ find_linkable_lambda_duplicate(_, _) ->
 
 %% @private
 -spec find_linkable_lambda_duplicate_in_inventory(aai:auth(), od_atm_inventory:record(), lambda_search_ctx()) ->
-    {ok, {exact_duplicate | missing_revision, od_atm_lambda:id()}} | error.
+    {ok, {exact_duplicate | duplicate_without_referenced_revision, od_atm_lambda:id()}} | error.
 find_linkable_lambda_duplicate_in_inventory(Auth, AtmInventory, LambdaSearchCtx) ->
     case can_manage_lambdas_in_inventory(Auth, AtmInventory) of
         false ->
@@ -343,7 +367,7 @@ find_linkable_lambda_duplicate_in_inventory(Auth, AtmInventory, LambdaSearchCtx)
 
 %% @private
 -spec find_lambda_duplicate_in_inventory(od_atm_inventory:record(), lambda_search_ctx()) ->
-    {ok, {exact_duplicate | missing_revision, od_atm_lambda:id()}} | error.
+    {ok, {exact_duplicate | duplicate_without_referenced_revision, od_atm_lambda:id()}} | error.
 find_lambda_duplicate_in_inventory(AtmInventory, LambdaSearchCtx) ->
     % prefer lambdas that were created as a duplicate of the original lambda,
     % but fall back to any lambda that has the exact checksum
@@ -357,7 +381,7 @@ find_lambda_duplicate_in_inventory(AtmInventory, LambdaSearchCtx) ->
 
 %% @private
 -spec find_lambda_duplicate_in_inventory(by_original_reference | by_checksum, od_atm_inventory:record(), lambda_search_ctx()) ->
-    {ok, {exact_duplicate | missing_revision, od_atm_lambda:id()}} | error.
+    {ok, {exact_duplicate | duplicate_without_referenced_revision, od_atm_lambda:id()}} | error.
 find_lambda_duplicate_in_inventory(Strategy, AtmInventory, LambdaSearchCtx) ->
     lists_utils:searchmap(fun(AtmLambdaId) ->
         case od_atm_lambda:get(AtmLambdaId) of
@@ -371,7 +395,7 @@ find_lambda_duplicate_in_inventory(Strategy, AtmInventory, LambdaSearchCtx) ->
 
 %% @private
 -spec qualify_lambda_as_duplicate(by_original_reference | by_checksum, od_atm_lambda:doc(), lambda_search_ctx()) ->
-    {true, {exact_duplicate | missing_revision, od_atm_lambda:id()}} | false.
+    {true, {exact_duplicate | duplicate_without_referenced_revision, od_atm_lambda:id()}} | false.
 qualify_lambda_as_duplicate(by_original_reference, #document{key = AtmLambdaId, value = AtmLambda}, #lambda_search_ctx{
     original_lambda_id = OriginalAtmLambdaId,
     revision_number = RevisionNumber,
@@ -381,7 +405,7 @@ qualify_lambda_as_duplicate(by_original_reference, #document{key = AtmLambdaId, 
         #od_atm_lambda{original_atm_lambda = OriginalAtmLambdaId, revision_registry = RevisionRegistry} ->
             case atm_lambda_revision_registry:has_revision(RevisionNumber, RevisionRegistry) of
                 false ->
-                    {true, {missing_revision, AtmLambdaId}};
+                    {true, {duplicate_without_referenced_revision, AtmLambdaId}};
                 true ->
                     case atm_lambda_revision_registry:get_revision(RevisionNumber, RevisionRegistry) of
                         #atm_lambda_revision{checksum = Checksum} ->

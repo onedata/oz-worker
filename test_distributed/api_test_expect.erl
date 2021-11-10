@@ -646,7 +646,7 @@ json_dump_of_atm_workflow_schema_revision(rest, AtmWorkflowSchemaRevisionData, R
         <<"atmWorkflowSchemaRevision">> => AtmWorkflowSchemaRevisionData,
         <<"supplementaryAtmLambdas">> => maps:map(fun(AtmLambdaId, LambdaRevisionNumbers) ->
             AtmLambda = ozt_atm_lambdas:get(AtmLambdaId),
-            maps_utils:build_from_list(fun(LambdaRevisionNumber) ->
+            maps_utils:generate_from_list(fun(LambdaRevisionNumber) ->
                 AtmLambdaData = #{
                     <<"revision">> => #{
                         <<"originalRevisionNumber">> => LambdaRevisionNumbers,
