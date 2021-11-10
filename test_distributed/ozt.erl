@@ -21,7 +21,7 @@
     ozt, ozt_http, ozt_gs, ozt_tokens, ozt_mocks,
     ozt_users, ozt_groups, ozt_spaces, ozt_providers,
     ozt_handle_services, ozt_clusters, ozt_harvesters,
-    ozt_atm, ozt_atm_inventories, ozt_atm_lambdas, ozt_atm_workflow_schemas
+    ozt_atm_inventories, ozt_atm_lambdas, ozt_atm_workflow_schemas
 ]).
 
 -type ct_test_config() :: term().

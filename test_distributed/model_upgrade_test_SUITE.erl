@@ -3596,12 +3596,12 @@ get_record(od_atm_lambda, 1) -> {od_atm_lambda,
     ozt_mocks:get_frozen_time_seconds(),
     ?SUB(nobody)
 };
-get_record(od_atm_lambda, 2) -> #od_atm_lambda{
-    name = <<"name">>,
-    summary = <<"summary">>,
-    description = <<"description">>,
+get_record(od_atm_lambda, 2) -> {od_atm_lambda,
+    <<"name">>,
+    <<"summary">>,
+    <<"description">>,
 
-    operation_spec = #atm_openfaas_operation_spec{
+    #atm_openfaas_operation_spec{
         docker_image = <<"repo/image:v23">>,
         docker_execution_options = #atm_docker_execution_options{
             readonly = true,
@@ -3610,7 +3610,7 @@ get_record(od_atm_lambda, 2) -> #od_atm_lambda{
             oneclient_options = <<"-v 3">>
         }
     },
-    argument_specs = [
+    [
         #atm_lambda_argument_spec{
             name = <<"arg-name">>,
             data_spec = #atm_data_spec{type = atm_integer_type},
@@ -3619,7 +3619,7 @@ get_record(od_atm_lambda, 2) -> #od_atm_lambda{
             default_value = undefined
         }
     ],
-    result_specs = [
+    [
         #atm_lambda_result_spec{
             name = <<"res-name">>,
             data_spec = #atm_data_spec{type = atm_string_type},
@@ -3627,10 +3627,58 @@ get_record(od_atm_lambda, 2) -> #od_atm_lambda{
         }
     ],
 
-    resource_spec = ozt_atm_lambdas:default_resource_spec(),
+    ozt_atm_lambdas:default_resource_spec(),
 
-    checksum = <<"2f7121dbebedd0edb48d7cb17715b1924d91cd36">>,
+    <<"2f7121dbebedd0edb48d7cb17715b1924d91cd36">>,
 
+    [<<"i1">>, <<"i2">>],
+    [<<"wf1">>, <<"wf2">>, <<"wf3">>],
+
+    ozt_mocks:get_frozen_time_seconds(),
+    ?SUB(nobody)
+};
+get_record(od_atm_lambda, 3) -> #od_atm_lambda{
+    revision_registry = #atm_lambda_revision_registry{registry = #{
+        1 => #atm_lambda_revision{
+            name = <<"name">>,
+            summary = <<"summary">>,
+            description = <<"description">>,
+
+            operation_spec = #atm_openfaas_operation_spec{
+                docker_image = <<"repo/image:v23">>,
+                docker_execution_options = #atm_docker_execution_options{
+                    readonly = true,
+                    mount_oneclient = true,
+                    oneclient_mount_point = <<"/a/b/c/d">>,
+                    oneclient_options = <<"-v 3">>
+                }
+            },
+            argument_specs = [
+                #atm_lambda_argument_spec{
+                    name = <<"arg-name">>,
+                    data_spec = #atm_data_spec{type = atm_integer_type},
+                    is_batch = false,
+                    is_optional = true,
+                    default_value = undefined
+                }
+            ],
+            result_specs = [
+                #atm_lambda_result_spec{
+                    name = <<"res-name">>,
+                    data_spec = #atm_data_spec{type = atm_string_type},
+                    is_batch = true
+                }
+            ],
+
+            resource_spec = ozt_atm_lambdas:default_resource_spec(),
+
+            checksum = <<"2f7121dbebedd0edb48d7cb17715b1924d91cd36">>,
+
+            state = stable
+        }
+    }},
+
+    original_atm_lambda = undefined,
     atm_inventories = [<<"i1">>, <<"i2">>],
     atm_workflow_schemas = [<<"wf1">>, <<"wf2">>, <<"wf3">>],
 
@@ -3680,6 +3728,7 @@ get_record(od_atm_workflow_schema, 1) -> {od_atm_workflow_schema,
                             id = <<"task1ax">>,
                             name = <<"task1ax-name">>,
                             lambda_id = <<"lambda-id">>,
+                            lambda_revision_number = 1,
                             argument_mappings = [
                                 #atm_task_schema_argument_mapper{
                                     argument_name = <<"arg-name">>,
@@ -3756,6 +3805,7 @@ get_record(od_atm_workflow_schema, 2) ->
                                         id = <<"task1ax">>,
                                         name = <<"task1ax-name">>,
                                         lambda_id = <<"lambda-id">>,
+                                        lambda_revision_number = 1,
                                         argument_mappings = [
                                             #atm_task_schema_argument_mapper{
                                                 argument_name = <<"arg-name">>,

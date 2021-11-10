@@ -24,24 +24,23 @@
 -export([get/1]).
 -export([get_atm_lambdas/1]).
 -export([exists/1]).
+-export([update/3]).
 -export([try_update/3]).
 -export([insert_revision/3, try_insert_revision/4]).
 -export([delete/1]).
 -export([dump_to_json/1, dump_to_json/2, dump_to_json/3]).
--export([extract_referenced_atm_lambdas_from_revision/1]).
+-export([get_largest_revision_number/1]).
+-export([extract_referenced_atm_lambda_ids/1]).
 -export([update_revision_with/3]).
 -export([substitute_atm_lambdas_for_duplicates/2, substitute_atm_lambdas_for_duplicates/3]).
 %% Example data generation
--export([gen_example_data_json/1]).
--export([gen_example_revision_schema_json/1, gen_example_revision_schema_json/2]).
--export([gen_example_store_json/0, gen_example_store_json/1, gen_example_store_json/3, gen_example_stores_json/0]).
--export([gen_example_lane_with_parallel_boxes_json/2, gen_example_lane_json/2, gen_example_lanes_json/2]).
--export([gen_parallel_box_with_tasks/1, gen_example_parallel_box/2, gen_example_parallel_boxes/2]).
--export([gen_example_task/2, gen_example_tasks/2]).
--export([gen_example_argument_mappings_for_specs/2, gen_example_argument_mappings/2]).
--export([gen_example_result_mappings_for_specs/2, gen_example_result_mappings/2]).
--export([gen_example_argument_value_builder/1, gen_example_store_iterator_spec/1]).
--export([available_store_types_for_data_spec/1]).
+-export([example_data_json/1]).
+-export([example_revision_json/1]).
+-export([example_revision_with_nonempty_tasks_json/1]).
+-export([example_store_schema_json/0, example_store_schema_json/1, example_store_schema_json/3]).
+-export([example_lane_schema_with_parallel_boxes_json/2, example_lane_schema_json/2, example_lane_schemas_json/2]).
+-export([example_parallel_box_schema/2, example_parallel_box_schemas/2]).
+-export([example_task_schema/2, example_task_schemas/2]).
 
 -compile({no_auto_import, [get/1]}).
 
@@ -57,7 +56,17 @@ list() ->
 
 -spec create(od_atm_inventory:id()) -> od_atm_workflow_schema:id().
 create(AtmInventoryId) ->
-    create(AtmInventoryId, gen_example_data_json(AtmInventoryId)).
+    AtmWorkflowSchemaId = create(AtmInventoryId, #{
+        <<"name">> => atm_test_utils:example_name(),
+        <<"summary">> => atm_test_utils:example_summary()
+    }),
+    lists:foreach(fun(RevisionNumber) ->
+        insert_revision(AtmWorkflowSchemaId, RevisionNumber, #{
+            <<"originalRevisionNumber">> => RevisionNumber,
+            <<"atmWorkflowSchemaRevision">> => example_revision_json(AtmInventoryId)
+        })
+    end, lists_utils:random_sublist(lists:seq(1, 100), 1, 5)),
+    AtmWorkflowSchemaId.
 
 -spec create(od_atm_inventory:id(), entity_logic:data()) -> od_atm_workflow_schema:id().
 create(AtmInventoryId, Data) ->
@@ -85,6 +94,11 @@ get(AtmWorkflowSchemaId) ->
 get_atm_lambdas(AtmInventoryId) ->
     {ok, Lambdas} = ?assertMatch({ok, _}, ozt:rpc(atm_workflow_schema_logic, get_atm_lambdas, [?ROOT, AtmInventoryId])),
     Lambdas.
+
+
+-spec update(aai:auth(), od_atm_workflow_schema:id(), entity_logic:data()) -> ok | errors:error().
+update(Auth, AtmWorkflowSchemaId, Data) ->
+    ?assertMatch(ok, try_update(Auth, AtmWorkflowSchemaId, Data)).
 
 
 -spec try_update(aai:auth(), od_atm_workflow_schema:id(), entity_logic:data()) -> ok | errors:error().
@@ -136,7 +150,7 @@ dump_to_json(AtmWorkflowSchemaId) when is_binary(AtmWorkflowSchemaId) ->
 dump_to_json(AtmWorkflowSchemaId, IncludedRevisionNumber) when is_integer(IncludedRevisionNumber) ->
     dump_to_json(AtmWorkflowSchemaId, get(AtmWorkflowSchemaId), IncludedRevisionNumber);
 dump_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema) ->
-    case od_atm_workflow_schema:get_latest_revision_number(AtmWorkflowSchema) of
+    case get_largest_revision_number(AtmWorkflowSchema) of
         undefined ->
             error(badarg);
         LatestRevisionNumber ->
@@ -155,12 +169,23 @@ dump_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevisionNumber) ->
     ]).
 
 
--spec extract_referenced_atm_lambdas_from_revision(json_utils:json_map() | atm_workflow_schema_revision:record()) ->
+-spec get_largest_revision_number(od_atm_workflow_schema:id() | od_atm_workflow_schema:record()) ->
+    undefined | atm_workflow_schema_revision:revision_number().
+get_largest_revision_number(AtmWorkflowSchemaId) when is_binary(AtmWorkflowSchemaId) ->
+    get_largest_revision_number(get(AtmWorkflowSchemaId));
+get_largest_revision_number(#od_atm_workflow_schema{revision_registry = RevisionRegistry}) ->
+    case atm_workflow_schema_revision_registry:get_all_revision_numbers(RevisionRegistry) of
+        [] -> undefined;
+        AllRevisionNumbers -> lists:max(AllRevisionNumbers)
+    end.
+
+
+-spec extract_referenced_atm_lambda_ids(json_utils:json_map() | atm_workflow_schema_revision:record()) ->
     [od_atm_lambda:id()].
-extract_referenced_atm_lambdas_from_revision(Json) when is_map(Json) ->
-    extract_referenced_atm_lambdas_from_revision(jsonable_record:from_json(Json, atm_workflow_schema_revision));
-extract_referenced_atm_lambdas_from_revision(AtmWorkflowSchemaRevision) ->
-    atm_workflow_schema_revision:extract_referenced_atm_lambdas(AtmWorkflowSchemaRevision).
+extract_referenced_atm_lambda_ids(Json) when is_map(Json) ->
+    extract_referenced_atm_lambda_ids(jsonable_record:from_json(Json, atm_workflow_schema_revision));
+extract_referenced_atm_lambda_ids(AtmWorkflowSchemaRevision) ->
+    maps:keys(atm_workflow_schema_revision:extract_atm_lambda_references(AtmWorkflowSchemaRevision)).
 
 
 -spec update_revision_with(
@@ -183,25 +208,33 @@ update_revision_with(#od_atm_workflow_schema{
 
 
 % Tries to find duplicates of lambdas that belong to given inventory and replaces
-% their counterparts in given lanes.
--spec substitute_atm_lambdas_for_duplicates(atm_workflow_schema_revision:record(), od_atm_inventory:id()) ->
-    atm_workflow_schema_revision:record().
-substitute_atm_lambdas_for_duplicates(AtmWorkflowSchemaRevision, TargetAtmInventoryId) ->
-    AtmLambdas = atm_workflow_schema_revision:extract_referenced_atm_lambdas(AtmWorkflowSchemaRevision),
-    substitute_atm_lambdas_for_duplicates(AtmWorkflowSchemaRevision, AtmLambdas, TargetAtmInventoryId).
-
+% their counterparts in tasks.
 -spec substitute_atm_lambdas_for_duplicates(
-    atm_workflow_schema_revision:record(), [od_atm_lambda:id()], od_atm_inventory:id()
+    atm_workflow_schema_revision:record(), od_atm_inventory:id()
 ) ->
     atm_workflow_schema_revision:record().
-substitute_atm_lambdas_for_duplicates(AtmWorkflowSchemaRevision, AtmLambdasToSubstitute, TargetAtmInventoryId) ->
-    OriginalToDuplicate = ozt_atm_lambdas:find_all_duplicates(AtmLambdasToSubstitute, TargetAtmInventoryId),
-    atm_workflow_schema_revision:map_tasks(fun(Task = #atm_task_schema{lambda_id = OriginalAtmLambdaId}) ->
-        case lists:member(OriginalAtmLambdaId, AtmLambdasToSubstitute) of
+substitute_atm_lambdas_for_duplicates(AtmWorkflowSchemaRevision, TargetAtmInventoryId) ->
+    substitute_atm_lambdas_for_duplicates(
+        AtmWorkflowSchemaRevision,
+        atm_workflow_schema_revision:extract_atm_lambda_references(AtmWorkflowSchemaRevision),
+        TargetAtmInventoryId
+    ).
+
+-spec substitute_atm_lambdas_for_duplicates(
+    atm_workflow_schema_revision:record(), atm_workflow_schema_revision:atm_lambda_references(), od_atm_inventory:id()
+) ->
+    atm_workflow_schema_revision:record().
+substitute_atm_lambdas_for_duplicates(AtmWorkflowSchemaRevision, AtmLambdaReferencesToSubstitute, TargetAtmInventoryId) ->
+    atm_workflow_schema_revision:map_tasks(fun(Task = #atm_task_schema{
+        lambda_id = OriginalAtmLambdaId,
+        lambda_revision_number = RevisionNumber
+    }) ->
+        case maps:is_key(OriginalAtmLambdaId, AtmLambdaReferencesToSubstitute) of
             true ->
-                Task#atm_task_schema{
-                    lambda_id = maps:get(OriginalAtmLambdaId, OriginalToDuplicate)
-                };
+                {ok, DuplicateAtmLambdaId} = ?assertMatch({ok, _}, ozt_atm_lambdas:find_duplicate(
+                    OriginalAtmLambdaId, RevisionNumber, TargetAtmInventoryId
+                )),
+                Task#atm_task_schema{lambda_id = DuplicateAtmLambdaId};
             false ->
                 Task
         end
@@ -211,21 +244,21 @@ substitute_atm_lambdas_for_duplicates(AtmWorkflowSchemaRevision, AtmLambdasToSub
 %%% Example data generation
 %%%===================================================================
 
--spec gen_example_data_json(od_atm_inventory:id()) -> entity_logic:data().
-gen_example_data_json(AtmInventoryId) when is_binary(AtmInventoryId) ->
+-spec example_data_json(od_atm_inventory:id()) -> entity_logic:data().
+example_data_json(AtmInventoryId) when is_binary(AtmInventoryId) ->
     #{
-        <<"name">> => ozt_atm:gen_example_name(),
-        <<"summary">> => ozt_atm:gen_example_summary(),
+        <<"name">> => atm_test_utils:example_name(),
+        <<"summary">> => atm_test_utils:example_summary(),
 
         <<"revision">> => #{
             <<"originalRevisionNumber">> => ?RAND_INT(1, 100),
-            <<"schema">> => gen_example_revision_schema_json(AtmInventoryId)
+            <<"atmWorkflowSchemaRevision">> => example_revision_json(AtmInventoryId)
         }
     }.
 
 
--spec gen_example_revision_schema_json(od_atm_inventory:id() | atom()) -> entity_logic:data().
-gen_example_revision_schema_json(AtmInventoryId) when is_binary(AtmInventoryId) ->
+-spec example_revision_json(od_atm_inventory:id() | [od_atm_lambda:id()]) -> entity_logic:data().
+example_revision_json(AtmInventoryId) when is_binary(AtmInventoryId) ->
     % make sure there are some lambdas defined in the inventory
     AtmLambdas = case ozt_atm_inventories:get_atm_lambdas(AtmInventoryId) of
         [] ->
@@ -236,258 +269,98 @@ gen_example_revision_schema_json(AtmInventoryId) when is_binary(AtmInventoryId) 
         List ->
             List
     end,
-    gen_example_revision_schema_json(AtmInventoryId, AtmLambdas).
-
--spec gen_example_revision_schema_json(od_atm_inventory:id() | atom(), [od_atm_lambda:id()]) -> entity_logic:data().
-gen_example_revision_schema_json(AtmInventoryId, AtmLambdas) when is_binary(AtmInventoryId) ->
-    Stores = gen_example_stores_json(),
-    StoreSchemaIds = [StoreSchemaId || #{<<"id">> := StoreSchemaId} <- Stores],
+    example_revision_json(AtmLambdas);
+example_revision_json(AtmLambdas) when is_list(AtmLambdas) ->
+    StoresJson = jsonable_record:list_to_json(atm_test_utils:example_store_schemas(), atm_store_schema),
+    StoreSchemaIds = [StoreSchemaId || #{<<"id">> := StoreSchemaId} <- StoresJson],
     #{
-        <<"description">> => lists_utils:random_element([<<>>, ?RAND_STR()]),
-        <<"stores">> => Stores,
-        <<"lanes">> => gen_example_lanes_json(AtmLambdas, StoreSchemaIds),
-        <<"state">> => ozt_atm:gen_example_lifecycle_state_json()
+        <<"description">> => atm_test_utils:example_description(),
+        <<"stores">> => StoresJson,
+        <<"lanes">> => example_lane_schemas_json(AtmLambdas, StoreSchemaIds),
+        <<"state">> => automation:lifecycle_state_to_json(atm_test_utils:example_lifecycle_state())
     }.
 
 
--spec gen_example_store_json() -> entity_logic:data().
-gen_example_store_json() ->
-    DataSpec = ozt_atm:gen_example_data_spec(),
-    gen_example_store_json(DataSpec).
-
--spec gen_example_store_json(atm_data_spec:record()) -> entity_logic:data().
-gen_example_store_json(DataSpec) ->
-    StoreType = lists_utils:random_element(available_store_types_for_data_spec(DataSpec)),
-    DefaultInitialValue = case StoreType of
-        range ->
-            #{<<"start">> => ?RAND_INT(0, 10), <<"end">> => ?RAND_INT(10, 20), <<"step">> => ?RAND_INT(0, 5)};
-        list ->
-            case ?RAND_BOOL() of
-                true ->
-                    undefined;
-                false ->
-                    lists_utils:random_sublist(lists:filtermap(fun(_) ->
-                        case ozt_atm:gen_example_initial_value(DataSpec#atm_data_spec.type) of
-                            undefined -> false;
-                            Value -> {true, Value}
-                        end
-                    end, lists:seq(1, ?RAND_INT(0, 10))))
-            end;
+-spec example_revision_with_nonempty_tasks_json(od_atm_inventory:id() | atom()) -> entity_logic:data().
+example_revision_with_nonempty_tasks_json(AtmInventoryId) when is_binary(AtmInventoryId) ->
+    Candidate = example_revision_json(AtmInventoryId),
+    DecodedCandidate = jsonable_record:from_json(Candidate, atm_workflow_schema_revision),
+    case atm_workflow_schema_revision:extract_atm_lambda_references(DecodedCandidate) of
+        EmptyMap when map_size(EmptyMap) == 0 ->
+            example_revision_with_nonempty_tasks_json(AtmInventoryId);
         _ ->
-            lists_utils:random_element([undefined, ozt_atm:gen_example_initial_value(DataSpec#atm_data_spec.type)])
-    end,
-    gen_example_store_json(StoreType, DataSpec, DefaultInitialValue).
-
--spec gen_example_store_json(automation:store_type(), atm_data_spec:record(), term()) -> entity_logic:data().
-gen_example_store_json(StoreType, DataSpec, DefaultInitialValue) ->
-    jsonable_record:to_json(#atm_store_schema{
-        id = ozt_atm:gen_example_id(),
-        name = ozt_atm:gen_example_name(),
-        description = ozt_atm:gen_example_description(),
-        type = StoreType,
-        data_spec = DataSpec,
-        requires_initial_value = ?RAND_BOOL(),
-        default_initial_value = DefaultInitialValue
-    }, atm_store_schema).
-
--spec gen_example_stores_json() -> entity_logic:data().
-gen_example_stores_json() -> lists:map(fun(_) ->
-    gen_example_store_json()
-end, lists:seq(1, ?RAND_INT(0, 5))).
+            Candidate
+    end.
 
 
--spec gen_example_lane_with_parallel_boxes_json([atm_parallel_box_schema:record()], [automation:id()]) ->
+-spec example_store_schema_json() -> entity_logic:data().
+example_store_schema_json() ->
+    jsonable_record:to_json(atm_test_utils:example_store_schema(), atm_store_schema).
+
+-spec example_store_schema_json(atm_data_spec:record()) -> entity_logic:data().
+example_store_schema_json(DataSpec) ->
+    jsonable_record:to_json(atm_test_utils:example_store_schema(DataSpec), atm_store_schema).
+
+-spec example_store_schema_json(automation:store_type(), atm_data_spec:record(), term()) -> entity_logic:data().
+example_store_schema_json(StoreType, DataSpec, DefaultInitialValue) ->
+    jsonable_record:to_json(atm_test_utils:example_store_schema(StoreType, DataSpec, DefaultInitialValue), atm_store_schema).
+
+
+-spec example_lane_schema_with_parallel_boxes_json([atm_parallel_box_schema:record()], [automation:id()]) ->
     entity_logic:data().
-gen_example_lane_with_parallel_boxes_json(ParallelBoxes, StoreSchemaIds) ->
-    jsonable_record:to_json(#atm_lane_schema{
-        id = ozt_atm:gen_example_id(),
-        name = ozt_atm:gen_example_name(),
-        parallel_boxes = ParallelBoxes,
-        store_iterator_spec = gen_example_store_iterator_spec(StoreSchemaIds),
-        max_retries = ?RAND_INT(0, 10)
-    }, atm_lane_schema).
+example_lane_schema_with_parallel_boxes_json(ParallelBoxes, StoreSchemaIds) ->
+    jsonable_record:to_json(atm_test_utils:example_lane_schema_with_parallel_boxes(ParallelBoxes, StoreSchemaIds), atm_lane_schema).
 
--spec gen_example_lane_json([od_atm_lambda:id()], [automation:id()]) -> entity_logic:data().
-gen_example_lane_json(_AtmLambdas, []) ->
+-spec example_lane_schema_json([od_atm_lambda:id()], [automation:id()]) -> entity_logic:data().
+example_lane_schema_json(_AtmLambdas, []) ->
     error(empty_lambda_list);
-gen_example_lane_json([], _StoreSchemaIds) ->
+example_lane_schema_json([], _StoreSchemaIds) ->
     error(empty_store_schema_list);
-gen_example_lane_json(AtmLambdas, StoreSchemaIds) ->
-    ParallelBoxes = lists_utils:random_sublist(gen_example_parallel_boxes(AtmLambdas, StoreSchemaIds)),
-    gen_example_lane_with_parallel_boxes_json(ParallelBoxes, StoreSchemaIds).
+example_lane_schema_json(AtmLambdas, StoreSchemaIds) ->
+    ParallelBoxes = lists_utils:random_sublist(example_parallel_box_schemas(AtmLambdas, StoreSchemaIds)),
+    example_lane_schema_with_parallel_boxes_json(ParallelBoxes, StoreSchemaIds).
 
 
--spec gen_example_lanes_json([od_atm_lambda:id()], [automation:id()]) -> entity_logic:data().
-gen_example_lanes_json(_AtmLambdas, []) ->
+-spec example_lane_schemas_json([od_atm_lambda:id()], [automation:id()]) -> entity_logic:data().
+example_lane_schemas_json(_AtmLambdas, []) ->
     [];
-gen_example_lanes_json([], _StoreSchemaIds) ->
+example_lane_schemas_json([], _StoreSchemaIds) ->
     [];
-gen_example_lanes_json(AtmLambdas, StoreSchemaIds) -> lists:map(fun(_) ->
-    gen_example_lane_json(AtmLambdas, StoreSchemaIds)
-end, lists:seq(1, ?RAND_INT(0, 5))).
+example_lane_schemas_json(AtmLambdas, StoreSchemaIds) ->
+    lists_utils:generate(?RAND_INT(0, 5), fun() ->
+        example_lane_schema_json(AtmLambdas, StoreSchemaIds)
+    end).
 
 
--spec gen_parallel_box_with_tasks([atm_task_schema:record()]) -> atm_parallel_box_schema:record().
-gen_parallel_box_with_tasks(Tasks) ->
-    #atm_parallel_box_schema{
-        id = ozt_atm:gen_example_id(),
-        name = ozt_atm:gen_example_name(),
-        tasks = Tasks
-    }.
+-spec example_parallel_box_schema([od_atm_lambda:id()], [automation:id()]) -> atm_parallel_box_schema:record().
+example_parallel_box_schema(AtmLambdas, StoreSchemaIds) ->
+    atm_test_utils:example_parallel_box_schema_with_tasks(
+        lists_utils:random_sublist(example_task_schemas(AtmLambdas, StoreSchemaIds))
+    ).
 
--spec gen_example_parallel_box([od_atm_lambda:id()], [automation:id()]) -> atm_parallel_box_schema:record().
-gen_example_parallel_box(AtmLambdas, StoreSchemaIds) ->
-    gen_parallel_box_with_tasks(lists_utils:random_sublist(gen_example_tasks(AtmLambdas, StoreSchemaIds))).
-
--spec gen_example_parallel_boxes([od_atm_lambda:id()], [automation:id()]) -> [atm_parallel_box_schema:record()].
-gen_example_parallel_boxes(AtmLambdas, StoreSchemaIds) -> lists:map(fun(_) ->
-    gen_example_parallel_box(AtmLambdas, StoreSchemaIds)
-end, lists:seq(1, ?RAND_INT(0, 5))).
+-spec example_parallel_box_schemas([od_atm_lambda:id()], [automation:id()]) -> [atm_parallel_box_schema:record()].
+example_parallel_box_schemas(AtmLambdas, StoreSchemaIds) ->
+    lists_utils:generate(?RAND_INT(0, 5), fun() ->
+        example_parallel_box_schema(AtmLambdas, StoreSchemaIds)
+    end).
 
 
--spec gen_example_task([od_atm_lambda:id()], [automation:id()]) -> atm_task_schema:record().
-gen_example_task(AtmLambdas, StoreSchemaIds) ->
-    AtmLambdaId = lists_utils:random_element(AtmLambdas),
-    #atm_task_schema{
-        id = ozt_atm:gen_example_id(),
-        name = ozt_atm:gen_example_name(),
-        lambda_id = AtmLambdaId,
-        argument_mappings = gen_example_argument_mappings(AtmLambdaId, StoreSchemaIds),
-        result_mappings = gen_example_result_mappings(AtmLambdaId, StoreSchemaIds)
-    }.
-
--spec gen_example_tasks([od_atm_lambda:id()], [automation:id()]) -> [atm_task_schema:record()].
-gen_example_tasks(AtmLambdas, StoreSchemaIds) -> lists:map(fun(_) ->
-    gen_example_task(AtmLambdas, StoreSchemaIds)
-end, lists:seq(1, ?RAND_INT(0, 5))).
+-spec example_task_schema([od_atm_lambda:id()], [automation:id()]) -> atm_task_schema:record().
+example_task_schema(AtmLambdas, StoreSchemaIds) ->
+    atm_test_utils:example_task_schema(build_lambda_registries(AtmLambdas), StoreSchemaIds).
 
 
--spec gen_example_argument_mappings_for_specs([atm_lambda_argument_spec:record()], [automation:id()]) ->
-    [atm_task_schema_argument_mapper:record()].
-gen_example_argument_mappings_for_specs(ArgumentSpecs, StoreSchemaIds) ->
-    lists:map(fun(ArgumentSpec) ->
-        #atm_task_schema_argument_mapper{
-            argument_name = ArgumentSpec#atm_lambda_argument_spec.name,
-            value_builder = gen_example_argument_value_builder(StoreSchemaIds)
-        }
-    end, lists_utils:shuffle(ArgumentSpecs)).
+-spec example_task_schemas([od_atm_lambda:id()], [automation:id()]) -> [atm_task_schema:record()].
+example_task_schemas(AtmLambdas, StoreSchemaIds) ->
+    atm_test_utils:example_task_schemas(build_lambda_registries(AtmLambdas), StoreSchemaIds).
 
--spec gen_example_argument_mappings(od_atm_lambda:id(), [automation:id()]) ->
-    [atm_task_schema_argument_mapper:record()].
-gen_example_argument_mappings(AtmLambdaId, StoreSchemaIds) ->
-    #od_atm_lambda{argument_specs = ArgumentSpecs} = ozt_atm_lambdas:get(AtmLambdaId),
-    case ArgumentSpecs of
-        [] ->
-            [];
-        _ ->
-            {OptionalArgumentSpecs, RequiredArgumentSpecs} = lists:partition(fun(ArgumentSpec) ->
-                ArgumentSpec#atm_lambda_argument_spec.is_optional
-            end, ArgumentSpecs),
-            % randomly select what arguments are mapped, but ensuring that all required arguments are
-            ReferencedArgumentSpecs = RequiredArgumentSpecs ++ lists_utils:random_sublist(OptionalArgumentSpecs),
-            gen_example_argument_mappings_for_specs(ReferencedArgumentSpecs, StoreSchemaIds)
-    end.
+%%%===================================================================
+%%% Helper functions
+%%%===================================================================
 
-
--spec gen_example_result_mappings_for_specs([atm_lambda_resultspec:record()], [automation:id()]) ->
-    [atm_task_schema_result_mapper:record()].
-gen_example_result_mappings_for_specs(ResultSpecs, StoreSchemaIds) ->
-    lists:map(fun(ResultSpec) ->
-        #atm_task_schema_result_mapper{
-            result_name = ResultSpec#atm_lambda_result_spec.name,
-            store_schema_id = lists_utils:random_element([
-                ?CURRENT_TASK_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID,
-                ?WORKFLOW_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID
-                | StoreSchemaIds
-            ]),
-            dispatch_function = lists_utils:random_element(atm_task_schema_result_mapper:all_dispatch_functions())
-        }
-    end, lists_utils:shuffle(ResultSpecs)).
-
-
--spec gen_example_result_mappings(od_atm_lambda:id(), [automation:id()]) ->
-    [atm_task_schema_result_mapper:record()].
-gen_example_result_mappings(AtmLambdaId, StoreSchemaIds) ->
-    #od_atm_lambda{result_specs = ResultSpecs} = ozt_atm_lambdas:get(AtmLambdaId),
-    case {ResultSpecs, StoreSchemaIds} of
-        {[], _} ->
-            [];
-        {_, []} ->
-            [];
-        _ ->
-            ReferencedResultSpecs = lists:map(fun(_) ->
-                lists_utils:random_element(ResultSpecs)
-            end, lists:seq(1, ?RAND_INT(0, 5))),
-            gen_example_result_mappings_for_specs(ReferencedResultSpecs, StoreSchemaIds)
-    end.
-
-
--spec gen_example_argument_value_builder([automation:id()]) -> atm_task_argument_value_builder:record().
-gen_example_argument_value_builder(StoreSchemaIds) ->
-    case rand:uniform(6) of
-        1 -> #atm_task_argument_value_builder{
-            type = iterated_item, recipe = lists_utils:random_element([
-                undefined,
-                lists_utils:random_sublist([<<"key1">>, <<"key2">>, <<"key3">>, 0, 1, 2])
-            ])
-        };
-        2 -> #atm_task_argument_value_builder{
-            type = const, recipe = lists_utils:random_element([?RAND_STR(), 0, 151, 27.8])
-        };
-        3 -> #atm_task_argument_value_builder{
-            type = object, recipe = maps:from_list(lists:map(fun(_) ->
-                {?RAND_STR(), gen_example_argument_value_builder(StoreSchemaIds)}
-            end, lists:seq(1, rand:uniform(7))))
-        };
-        4 ->
-            % generated list of stores may be empty, in such case keep generating
-            % until there is no store_credentials builder type included
-            case StoreSchemaIds of
-                [] ->
-                    gen_example_argument_value_builder(StoreSchemaIds);
-                _ ->
-                    #atm_task_argument_value_builder{
-                        type = store_credentials, recipe = lists_utils:random_element(StoreSchemaIds)
-                    }
-            end;
-        5 ->
-            % generated list of stores may be empty, in such case keep generating
-            % until there is no single_value_store_content builder type included
-            case StoreSchemaIds of
-                [] ->
-                    gen_example_argument_value_builder(StoreSchemaIds);
-                _ ->
-                    #atm_task_argument_value_builder{
-                        type = single_value_store_content, recipe = lists_utils:random_element(StoreSchemaIds)
-                    }
-            end;
-        6 -> #atm_task_argument_value_builder{
-            type = onedatafs_credentials, recipe = undefined
-        }
-    end.
-
-
--spec gen_example_store_iterator_spec([automation:id()]) -> atm_store_iterator_spec:record().
-gen_example_store_iterator_spec(StoreSchemaIds) ->
-    lists_utils:random_element([
-        #atm_store_iterator_spec{
-            store_schema_id = lists_utils:random_element(StoreSchemaIds),
-            strategy = #atm_store_iterator_serial_strategy{}
-        },
-        #atm_store_iterator_spec{
-            store_schema_id = lists_utils:random_element(StoreSchemaIds),
-            strategy = #atm_store_iterator_batch_strategy{size = ?RAND_INT(1, 1000)}
-        }
-    ]).
-
-
--spec available_store_types_for_data_spec(atm_data_spec:record()) -> [automation:store_type()].
-available_store_types_for_data_spec(DataSpec) ->
-    case DataSpec#atm_data_spec.type of
-        atm_file_type -> automation:all_store_types() -- [range];
-        atm_dataset_type -> automation:all_store_types() -- [range];
-        atm_integer_type -> automation:all_store_types() -- [tree_forest];
-        _ -> automation:all_store_types() -- [range, tree_forest]
-    end.
-
-
+%% @private
+-spec build_lambda_registries([od_atm_lambda:id()]) -> atm_test_utils:lambda_registries().
+build_lambda_registries(AtmLambdas) ->
+    maps_utils:generate_from_list(fun(AtmLambdaId) ->
+        {AtmLambdaId, (ozt_atm_lambdas:get(AtmLambdaId))#od_atm_lambda.revision_registry}
+    end, AtmLambdas).

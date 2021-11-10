@@ -31,7 +31,13 @@
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
     {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> rest_handler:rest_resp().
 create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id = AtmLambdaId}, _}) ->
-    rest_translator:created_reply_with_location([<<"atm_lambdas">>, AtmLambdaId]).
+    rest_translator:created_reply_with_location([<<"atm_lambdas">>, AtmLambdaId]);
+
+create_response(#gri{aspect = dump}, _, value, JsonMap) ->
+    rest_translator:ok_body_reply(JsonMap);
+
+create_response(#gri{aspect = {dump_revision, _}}, _, value, JsonMap) ->
+    rest_translator:ok_body_reply(JsonMap).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -44,17 +50,7 @@ get_response(#gri{id = undefined, aspect = list}, AtmLambdas) ->
 
 get_response(#gri{id = AtmLambdaId, aspect = instance, scope = private}, AtmLambda) ->
     #od_atm_lambda{
-        name = Name,
-        summary = Summary,
-        description = Description,
-
-        operation_spec = OperationSpec,
-        argument_specs = ArgumentSpecs,
-        result_specs = ResultSpecs,
-
-        resource_spec = ResourceSpec,
-
-        checksum = Checksum,
+        revision_registry = RevisionRegistry,
 
         creation_time = CreationTime,
         creator = Creator
@@ -62,17 +58,7 @@ get_response(#gri{id = AtmLambdaId, aspect = instance, scope = private}, AtmLamb
     rest_translator:ok_body_reply(#{
         <<"atmLambdaId">> => AtmLambdaId,
 
-        <<"name">> => Name,
-        <<"summary">> => Summary,
-        <<"description">> => Description,
-
-        <<"operationSpec">> => jsonable_record:to_json(OperationSpec, atm_lambda_operation_spec),
-        <<"argumentSpecs">> => jsonable_record:list_to_json(ArgumentSpecs, atm_lambda_argument_spec),
-        <<"resultSpecs">> => jsonable_record:list_to_json(ResultSpecs, atm_lambda_result_spec),
-
-        <<"resourceSpec">> => jsonable_record:to_json(ResourceSpec, atm_resource_spec),
-
-        <<"checksum">> => Checksum,
+        <<"revisionRegistry">> => jsonable_record:to_json(RevisionRegistry, atm_lambda_revision_registry),
 
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
         <<"creationTime">> => CreationTime

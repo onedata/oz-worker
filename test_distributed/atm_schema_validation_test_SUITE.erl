@@ -107,8 +107,8 @@ atm_lambda_non_unique_argument_spec_names(_Config) ->
         schema_type = atm_lambda,
         tested_data_field = <<"argumentSpecs">>,
         spoil_data_field_fun = fun(ArgumentSpecsJson, _AtmInventoryId) ->
-            SpecAlpha = maps:merge(ozt_atm_lambdas:gen_example_argument_spec_json(), #{<<"name">> => <<"same name">>}),
-            SpecBeta = maps:merge(ozt_atm_lambdas:gen_example_argument_spec_json(), #{<<"name">> => <<"same name">>}),
+            SpecAlpha = maps:merge(ozt_atm_lambdas:example_argument_spec_json(), #{<<"name">> => <<"same name">>}),
+            SpecBeta = maps:merge(ozt_atm_lambdas:example_argument_spec_json(), #{<<"name">> => <<"same name">>}),
             {
                 lists_utils:shuffle([SpecAlpha, SpecBeta | ArgumentSpecsJson]),
                 ?ERROR_BAD_DATA(
@@ -126,8 +126,8 @@ atm_lambda_non_unique_result_spec_names(_Config) ->
         schema_type = atm_lambda,
         tested_data_field = <<"resultSpecs">>,
         spoil_data_field_fun = fun(ResultSpecsJson, _AtmInventoryId) ->
-            SpecAlpha = maps:merge(ozt_atm_lambdas:gen_example_result_spec_json(), #{<<"name">> => <<"same name">>}),
-            SpecBeta = maps:merge(ozt_atm_lambdas:gen_example_result_spec_json(), #{<<"name">> => <<"same name">>}),
+            SpecAlpha = maps:merge(ozt_atm_lambdas:example_result_spec_json(), #{<<"name">> => <<"same name">>}),
+            SpecBeta = maps:merge(ozt_atm_lambdas:example_result_spec_json(), #{<<"name">> => <<"same name">>}),
             {
                 lists_utils:shuffle([SpecAlpha, SpecBeta | ResultSpecsJson]),
                 ?ERROR_BAD_DATA(
@@ -147,7 +147,7 @@ atm_lambda_disallowed_default_value(_Config) ->
             true -> [InvalidDefaultValue];
             false -> InvalidDefaultValue
         end,
-        OffendingArgumentSpec = ozt_atm_lambdas:gen_example_argument_spec_json(DataSpec, IsBatch, SpecDefaultValue),
+        OffendingArgumentSpec = ozt_atm_lambdas:example_argument_spec_json(DataSpec, IsBatch, SpecDefaultValue),
         #{<<"name">> := ArgumentName} = OffendingArgumentSpec,
         run_validation_tests(#test_spec{
             schema_type = atm_lambda,
@@ -170,8 +170,8 @@ atm_workflow_schema_non_unique_store_ids(_Config) ->
         schema_type = atm_workflow_schema,
         tested_data_field = <<"stores">>,
         spoil_data_field_fun = fun(StoresJson, _AtmInventoryId) ->
-            StoreAlpha = maps:merge(ozt_atm_workflow_schemas:gen_example_store_json(), #{<<"id">> => <<"duplicate id">>}),
-            StoreBeta = maps:merge(ozt_atm_workflow_schemas:gen_example_store_json(), #{<<"id">> => <<"duplicate id">>}),
+            StoreAlpha = maps:merge(ozt_atm_workflow_schemas:example_store_schema_json(), #{<<"id">> => <<"duplicate id">>}),
+            StoreBeta = maps:merge(ozt_atm_workflow_schemas:example_store_schema_json(), #{<<"id">> => <<"duplicate id">>}),
             {
                 lists_utils:shuffle([StoreAlpha, StoreBeta | StoresJson]),
                 ?ERROR_BAD_DATA(
@@ -192,7 +192,7 @@ atm_workflow_schema_reserved_store_id(_Config) ->
                 ?CURRENT_TASK_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID,
                 ?WORKFLOW_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID
             ]),
-            BadStore = maps:merge(ozt_atm_workflow_schemas:gen_example_store_json(), #{
+            BadStore = maps:merge(ozt_atm_workflow_schemas:example_store_schema_json(), #{
                 <<"id">> => ReservedStoreId
             }),
             {
@@ -215,11 +215,11 @@ atm_workflow_schema_non_unique_lane_ids(_Config) ->
             StoreSchemaIds = extract_referenced_store_schemas_from_lanes_json(LanesJson),
 
             LaneAlpha = maps:merge(
-                ozt_atm_workflow_schemas:gen_example_lane_json(AtmLambdas, StoreSchemaIds),
+                ozt_atm_workflow_schemas:example_lane_schema_json(AtmLambdas, StoreSchemaIds),
                 #{<<"id">> => <<"duplicateId">>}
             ),
             LaneBeta = maps:merge(
-                ozt_atm_workflow_schemas:gen_example_lane_json(AtmLambdas, StoreSchemaIds),
+                ozt_atm_workflow_schemas:example_lane_schema_json(AtmLambdas, StoreSchemaIds),
                 #{<<"id">> => <<"duplicateId">>}
             ),
             {
@@ -242,15 +242,15 @@ atm_workflow_schema_non_unique_parallel_box_ids(_Config) ->
             StoreSchemaIds = extract_referenced_store_schemas_from_lanes_json(LanesJson),
 
             PBoxAlpha = (
-                ozt_atm_workflow_schemas:gen_example_parallel_box(AtmLambdas, StoreSchemaIds)
+                ozt_atm_workflow_schemas:example_parallel_box_schema(AtmLambdas, StoreSchemaIds)
             )#atm_parallel_box_schema{id = <<"the same">>},
             PBoxBeta = (
-                ozt_atm_workflow_schemas:gen_example_parallel_box(AtmLambdas, StoreSchemaIds)
+                ozt_atm_workflow_schemas:example_parallel_box_schema(AtmLambdas, StoreSchemaIds)
             )#atm_parallel_box_schema{id = <<"the same">>},
 
-            OffendingLane = ozt_atm_workflow_schemas:gen_example_lane_with_parallel_boxes_json(
+            OffendingLane = ozt_atm_workflow_schemas:example_lane_schema_with_parallel_boxes_json(
                 lists_utils:shuffle([
-                    PBoxAlpha, PBoxBeta | ozt_atm_workflow_schemas:gen_example_parallel_boxes(AtmLambdas, StoreSchemaIds)
+                    PBoxAlpha, PBoxBeta | ozt_atm_workflow_schemas:example_parallel_box_schemas(AtmLambdas, StoreSchemaIds)
                 ]),
                 StoreSchemaIds
             ),
@@ -274,10 +274,10 @@ atm_workflow_schema_non_unique_task_ids(_Config) ->
             StoreSchemaIds = extract_referenced_store_schemas_from_lanes_json(LanesJson),
 
             TaskAlpha = (
-                ozt_atm_workflow_schemas:gen_example_task(AtmLambdas, StoreSchemaIds)
+                ozt_atm_workflow_schemas:example_task_schema(AtmLambdas, StoreSchemaIds)
             )#atm_task_schema{id = <<"the same">>},
             TaskBeta = (
-                ozt_atm_workflow_schemas:gen_example_task(AtmLambdas, StoreSchemaIds)
+                ozt_atm_workflow_schemas:example_task_schema(AtmLambdas, StoreSchemaIds)
             )#atm_task_schema{id = <<"the same">>},
             OffendingLane = gen_lane_including_tasks([TaskAlpha, TaskBeta], AtmLambdas, StoreSchemaIds),
             {
@@ -293,7 +293,7 @@ atm_workflow_schema_non_unique_task_ids(_Config) ->
 
 atm_workflow_schema_disallowed_store_default_initial_value(_Config) ->
     lists:foreach(fun({StoreType, DataSpec, DefaultInitialValue, ExpError}) ->
-        OffendingStoreSchema = ozt_atm_workflow_schemas:gen_example_store_json(StoreType, DataSpec, DefaultInitialValue),
+        OffendingStoreSchema = ozt_atm_workflow_schemas:example_store_schema_json(StoreType, DataSpec, DefaultInitialValue),
         #{<<"id">> := StoreId} = OffendingStoreSchema,
         run_validation_tests(#test_spec{
             schema_type = atm_workflow_schema,
@@ -315,8 +315,8 @@ atm_workflow_schema_store_type_conflicting_with_data_spec(_Config) ->
     lists:foreach(fun({StoreType, DisallowedDataTypes}) ->
         lists:foreach(fun(DataType) ->
             DataTypeJson = atm_data_type:type_to_json(DataType),
-            DataSpec = ozt_atm:gen_example_data_spec(DataType),
-            CorrectStoreSchema = ozt_atm_workflow_schemas:gen_example_store_json(DataSpec),
+            DataSpec = atm_test_utils:example_data_spec(DataType),
+            CorrectStoreSchema = ozt_atm_workflow_schemas:example_store_schema_json(DataSpec),
             OffendingStoreSchema = CorrectStoreSchema#{
                 <<"type">> => automation:store_type_to_json(StoreType)
             },
@@ -345,7 +345,7 @@ atm_workflow_schema_bad_store_reference_in_iterator(_Config) ->
         tested_data_field = <<"lanes">>,
         spoil_data_field_fun = fun(LanesJson, AtmInventoryId) ->
             AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
-            OffendingLane = ozt_atm_workflow_schemas:gen_example_lane_json(AtmLambdas, [BadStoreSchemaId]),
+            OffendingLane = ozt_atm_workflow_schemas:example_lane_schema_json(AtmLambdas, [BadStoreSchemaId]),
             #{<<"id">> := LaneId} = OffendingLane,
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
@@ -366,14 +366,16 @@ atm_workflow_schema_bad_store_reference_in_argument_value_builder(_Config) ->
         spoil_data_field_fun = fun(LanesJson, AtmInventoryId) ->
             AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
             CorrectStoreSchemas = extract_referenced_store_schemas_from_lanes_json(LanesJson),
-            AtmLambdaData = ozt_atm_lambdas:gen_example_data_json(),
-            ReferencedArgumentSpec = #{<<"name">> := OffendingArgumentName} = ozt_atm_lambdas:gen_example_argument_spec_json(),
-            OtherArgumentSpecs = maps:get(<<"argumentSpecs">>, AtmLambdaData),
-            AtmLambdaId = ozt_atm_lambdas:create(AtmInventoryId, AtmLambdaData#{
+
+            AtmLambdaRevisionJson = ozt_atm_lambdas:example_revision_json(),
+            ReferencedArgumentSpec = #{<<"name">> := OffendingArgumentName} = ozt_atm_lambdas:example_argument_spec_json(),
+            OtherArgumentSpecs = maps:get(<<"argumentSpecs">>, AtmLambdaRevisionJson),
+            AtmLambdaId = create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson#{
                 <<"argumentSpecs">> => lists_utils:shuffle([ReferencedArgumentSpec | OtherArgumentSpecs])
             }),
+            AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
 
-            CorrectArgumentMappings = ozt_atm_workflow_schemas:gen_example_argument_mappings_for_specs(
+            CorrectArgumentMappings = atm_test_utils:example_argument_mappers_for_specs(
                 jsonable_record:list_from_json(OtherArgumentSpecs, atm_lambda_argument_spec), CorrectStoreSchemas
             ),
             OffendingArgumentMapping = #atm_task_schema_argument_mapper{
@@ -384,11 +386,12 @@ atm_workflow_schema_bad_store_reference_in_argument_value_builder(_Config) ->
             },
 
             OffendingTask = #atm_task_schema{
-                id = TaskId = ozt_atm:gen_example_id(),
-                name = ozt_atm:gen_example_name(),
+                id = TaskId = atm_test_utils:example_id(),
+                name = atm_test_utils:example_name(),
                 lambda_id = AtmLambdaId,
+                lambda_revision_number = ozt_atm_lambdas:get_largest_revision_number(AtmLambdaId),
                 argument_mappings = lists_utils:shuffle([OffendingArgumentMapping | CorrectArgumentMappings]),
-                result_mappings = ozt_atm_workflow_schemas:gen_example_result_mappings(AtmLambdaId, CorrectStoreSchemas)
+                result_mappings = atm_test_utils:example_result_mappers(AtmLambdaRevision, CorrectStoreSchemas)
             },
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemas),
             {
@@ -410,14 +413,16 @@ atm_workflow_schema_bad_store_reference_in_result_mapper(_Config) ->
         spoil_data_field_fun = fun(LanesJson, AtmInventoryId) ->
             AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
             CorrectStoreSchemas = extract_referenced_store_schemas_from_lanes_json(LanesJson),
-            AtmLambdaData = ozt_atm_lambdas:gen_example_data_json(),
-            ReferencedResultSpec = #{<<"name">> := OffendingResultName} = ozt_atm_lambdas:gen_example_result_spec_json(),
-            OtherResultSpecs = maps:get(<<"resultSpecs">>, AtmLambdaData),
-            AtmLambdaId = ozt_atm_lambdas:create(AtmInventoryId, AtmLambdaData#{
+
+            AtmLambdaRevisionJson = ozt_atm_lambdas:example_revision_json(),
+            ReferencedResultSpec = #{<<"name">> := OffendingResultName} = ozt_atm_lambdas:example_result_spec_json(),
+            OtherResultSpecs = maps:get(<<"resultSpecs">>, AtmLambdaRevisionJson),
+            AtmLambdaId = create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson#{
                 <<"resultSpecs">> => lists_utils:shuffle([ReferencedResultSpec | OtherResultSpecs])
             }),
+            AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
 
-            CorrectResultMappings = ozt_atm_workflow_schemas:gen_example_result_mappings_for_specs(
+            CorrectResultMappings = atm_test_utils:example_result_mappers_for_specs(
                 jsonable_record:list_from_json(OtherResultSpecs, atm_lambda_result_spec), CorrectStoreSchemas
             ),
             OffendingResultMapping = #atm_task_schema_result_mapper{
@@ -427,10 +432,11 @@ atm_workflow_schema_bad_store_reference_in_result_mapper(_Config) ->
             },
 
             OffendingTask = #atm_task_schema{
-                id = TaskId = ozt_atm:gen_example_id(),
-                name = ozt_atm:gen_example_name(),
+                id = TaskId = atm_test_utils:example_id(),
+                name = atm_test_utils:example_name(),
                 lambda_id = AtmLambdaId,
-                argument_mappings = ozt_atm_workflow_schemas:gen_example_argument_mappings(AtmLambdaId, CorrectStoreSchemas),
+                lambda_revision_number = ozt_atm_lambdas:get_largest_revision_number(AtmLambdaId),
+                argument_mappings = atm_test_utils:example_argument_mappers(AtmLambdaRevision, CorrectStoreSchemas),
                 result_mappings = lists_utils:shuffle([OffendingResultMapping | CorrectResultMappings])
             },
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemas),
@@ -455,7 +461,7 @@ atm_workflow_schema_bad_lambda_reference_in_task(_Config) ->
             AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
             CorrectStoreSchemas = extract_referenced_store_schemas_from_lanes_json(LanesJson),
 
-            OffendingTask = ozt_atm_workflow_schemas:gen_example_task([BadLambdaId], CorrectStoreSchemas),
+            OffendingTask = ozt_atm_workflow_schemas:example_task_schema([BadLambdaId], CorrectStoreSchemas),
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemas),
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
@@ -477,27 +483,29 @@ atm_workflow_schema_lambda_argument_mapped_more_than_once(_Config) ->
         spoil_data_field_fun = fun(LanesJson, AtmInventoryId) ->
             AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
             CorrectStoreSchemas = extract_referenced_store_schemas_from_lanes_json(LanesJson),
-            AtmLambdaData = ozt_atm_lambdas:gen_example_data_json(),
-            TwiceMappedArgumentSpec = ozt_atm_lambdas:gen_example_argument_spec_json(),
-            AllArgumentSpecs = [TwiceMappedArgumentSpec | maps:get(<<"argumentSpecs">>, AtmLambdaData)],
-            AtmLambdaId = ozt_atm_lambdas:create(AtmInventoryId, AtmLambdaData#{
+
+            AtmLambdaRevisionJson = ozt_atm_lambdas:example_revision_json(),
+            TwiceMappedArgumentSpec = ozt_atm_lambdas:example_argument_spec_json(),
+            AllArgumentSpecs = [TwiceMappedArgumentSpec | maps:get(<<"argumentSpecs">>, AtmLambdaRevisionJson)],
+            AtmLambdaId = create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson#{
                 <<"argumentSpecs">> => lists_utils:shuffle(AllArgumentSpecs)
             }),
+            AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
 
-            CorrectArgumentMappings = ozt_atm_workflow_schemas:gen_example_argument_mappings_for_specs(
+            CorrectArgumentMappings = atm_test_utils:example_argument_mappers_for_specs(
                 jsonable_record:list_from_json(AllArgumentSpecs, atm_lambda_argument_spec), CorrectStoreSchemas
             ),
             OffendingArgumentMapping = #atm_task_schema_argument_mapper{
                 argument_name = maps:get(<<"name">>, TwiceMappedArgumentSpec),
-                value_builder = ozt_atm_workflow_schemas:gen_example_argument_value_builder(CorrectStoreSchemas)
+                value_builder = atm_test_utils:example_argument_value_builder(CorrectStoreSchemas)
             },
 
             OffendingTask = #atm_task_schema{
-                id = TaskId = ozt_atm:gen_example_id(),
-                name = ozt_atm:gen_example_name(),
+                id = TaskId = atm_test_utils:example_id(),
+                name = atm_test_utils:example_name(),
                 lambda_id = AtmLambdaId,
                 argument_mappings = lists_utils:shuffle([OffendingArgumentMapping | CorrectArgumentMappings]),
-                result_mappings = ozt_atm_workflow_schemas:gen_example_result_mappings(AtmLambdaId, CorrectStoreSchemas)
+                result_mappings = atm_test_utils:example_result_mappers(AtmLambdaRevision, CorrectStoreSchemas)
             },
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemas),
             {
@@ -521,23 +529,25 @@ atm_workflow_schema_bad_argument_reference_in_mapper(_Config) ->
             AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
             CorrectStoreSchemas = extract_referenced_store_schemas_from_lanes_json(LanesJson),
             AtmLambdaId = lists_utils:random_element(AtmLambdas),
+            AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
 
-            CorrectArgumentMappings = ozt_atm_workflow_schemas:gen_example_argument_mappings(
-                AtmLambdaId, CorrectStoreSchemas
+            CorrectArgumentMappings = atm_test_utils:example_argument_mappers(
+                AtmLambdaRevision, CorrectStoreSchemas
             ),
             OffendingArgumentMappings = lists:map(fun(ArgumentName) ->
                 #atm_task_schema_argument_mapper{
                     argument_name = ArgumentName,
-                    value_builder = ozt_atm_workflow_schemas:gen_example_argument_value_builder(CorrectStoreSchemas)
+                    value_builder = atm_test_utils:example_argument_value_builder(CorrectStoreSchemas)
                 }
             end, [BadArgumentName1, BadArgumentName2]),
 
             OffendingTask = #atm_task_schema{
-                id = TaskId = ozt_atm:gen_example_id(),
-                name = ozt_atm:gen_example_name(),
+                id = TaskId = atm_test_utils:example_id(),
+                name = atm_test_utils:example_name(),
                 lambda_id = AtmLambdaId,
+                lambda_revision_number = ozt_atm_lambdas:get_largest_revision_number(AtmLambdaId),
                 argument_mappings = lists_utils:shuffle(OffendingArgumentMappings ++ CorrectArgumentMappings),
-                result_mappings = ozt_atm_workflow_schemas:gen_example_result_mappings(AtmLambdaId, CorrectStoreSchemas)
+                result_mappings = atm_test_utils:example_result_mappers(AtmLambdaRevision, CorrectStoreSchemas)
             },
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemas),
             OffendingNamesStr = <<BadArgumentName1/binary, ", ", BadArgumentName2/binary>>,
@@ -563,9 +573,10 @@ atm_workflow_schema_bad_result_reference_in_mapper(_Config) ->
             AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
             CorrectStoreSchemas = extract_referenced_store_schemas_from_lanes_json(LanesJson),
             AtmLambdaId = lists_utils:random_element(AtmLambdas),
+            AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
 
-            CorrectResultMappings = ozt_atm_workflow_schemas:gen_example_result_mappings(
-                AtmLambdaId, CorrectStoreSchemas
+            CorrectResultMappings = atm_test_utils:example_result_mappers(
+                AtmLambdaRevision, CorrectStoreSchemas
             ),
             OffendingResultMappings = lists:map(fun(ResultName) ->
                 #atm_task_schema_result_mapper{
@@ -576,10 +587,11 @@ atm_workflow_schema_bad_result_reference_in_mapper(_Config) ->
             end, [BadResultName1, BadResultName2, BadResultName3]),
 
             OffendingTask = #atm_task_schema{
-                id = TaskId = ozt_atm:gen_example_id(),
-                name = ozt_atm:gen_example_name(),
+                id = TaskId = atm_test_utils:example_id(),
+                name = atm_test_utils:example_name(),
                 lambda_id = AtmLambdaId,
-                argument_mappings = ozt_atm_workflow_schemas:gen_example_argument_mappings(AtmLambdaId, CorrectStoreSchemas),
+                lambda_revision_number = ozt_atm_lambdas:get_largest_revision_number(AtmLambdaId),
+                argument_mappings = atm_test_utils:example_argument_mappers(AtmLambdaRevision, CorrectStoreSchemas),
                 result_mappings = lists_utils:shuffle(OffendingResultMappings ++ CorrectResultMappings)
             },
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemas),
@@ -602,29 +614,32 @@ atm_workflow_schema_missing_required_argument_mapper(_Config) ->
         spoil_data_field_fun = fun(LanesJson, AtmInventoryId) ->
             AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
             CorrectStoreSchemas = extract_referenced_store_schemas_from_lanes_json(LanesJson),
-            AtmLambdaData = ozt_atm_lambdas:gen_example_data_json(),
+
+            AtmLambdaRevisionJson = ozt_atm_lambdas:example_revision_json(),
             MissingArgumentSpec = #{<<"name">> := MissingArgumentName} = maps:merge(
-                ozt_atm_lambdas:gen_example_argument_spec_json(),
+                ozt_atm_lambdas:example_argument_spec_json(),
                 #{
                     <<"isOptional">> => false,
                     <<"defaultValue">> => null
                 }
             ),
-            OtherArgumentSpecs = maps:get(<<"argumentSpecs">>, AtmLambdaData),
-            AtmLambdaId = ozt_atm_lambdas:create(AtmInventoryId, AtmLambdaData#{
+            OtherArgumentSpecs = maps:get(<<"argumentSpecs">>, AtmLambdaRevisionJson),
+            AtmLambdaId = create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson#{
                 <<"argumentSpecs">> => lists_utils:shuffle([MissingArgumentSpec | OtherArgumentSpecs])
             }),
+            AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
 
-            PresentArgumentMappings = ozt_atm_workflow_schemas:gen_example_argument_mappings_for_specs(
+            PresentArgumentMappings = atm_test_utils:example_argument_mappers_for_specs(
                 jsonable_record:list_from_json(OtherArgumentSpecs, atm_lambda_argument_spec), CorrectStoreSchemas
             ),
 
             OffendingTask = #atm_task_schema{
-                id = ozt_atm:gen_example_id(),
-                name = ozt_atm:gen_example_name(),
+                id = atm_test_utils:example_id(),
+                name = atm_test_utils:example_name(),
                 lambda_id = AtmLambdaId,
+                lambda_revision_number = ozt_atm_lambdas:get_largest_revision_number(AtmLambdaId),
                 argument_mappings = lists_utils:shuffle(PresentArgumentMappings),
-                result_mappings = ozt_atm_workflow_schemas:gen_example_result_mappings(AtmLambdaId, CorrectStoreSchemas)
+                result_mappings = atm_test_utils:example_result_mappers(AtmLambdaRevision, CorrectStoreSchemas)
             },
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemas),
             {
@@ -658,31 +673,45 @@ run_validation_tests(TestSpec) ->
 run_validation_test(#test_spec{schema_type = atm_lambda} = TestSpec) ->
     UserId = ozt_users:create(),
     AtmInventoryId = ozt_users:create_atm_inventory_for(UserId),
-    CorrectAtmLambdaData = ozt_atm_lambdas:gen_example_data_json(),
-    {InvalidAtmLambdaData, ExpectedError} = spoil_data_field(TestSpec, CorrectAtmLambdaData, AtmInventoryId),
+    CorrectAtmLambdaData = ozt_atm_lambdas:example_data_json(),
+    CorrectRevisionData = maps:get(<<"revision">>, CorrectAtmLambdaData),
+    CorrectAtmLambdaRevisionJson = maps:get(<<"atmLambdaRevision">>, CorrectRevisionData),
+    {InvalidAtmLambdaRevisionJson, ExpectedError} = spoil_data_field(
+        TestSpec, CorrectAtmLambdaRevisionJson, AtmInventoryId
+    ),
+    InvalidAtmLambdaData = kv_utils:update_with([<<"revision">>, <<"atmLambdaRevision">>], fun(_) ->
+        InvalidAtmLambdaRevisionJson
+    end, CorrectAtmLambdaData),
     ?assertEqual(ExpectedError, ozt_atm_lambdas:try_create(
         ?USER(UserId), AtmInventoryId, InvalidAtmLambdaData
+    )),
+
+    % inserting an invalid revision into a lambda should fail as well
+    AtmLambdaId = ozt_atm_lambdas:create(?USER(UserId), AtmInventoryId, CorrectAtmLambdaData),
+    ?assertEqual(ExpectedError, ozt_atm_lambdas:try_add_revision(
+        ?USER(UserId), AtmLambdaId, integer_to_binary(?RAND_INT(1, 100)),
+        maps:get(<<"revision">>, InvalidAtmLambdaData)
     ));
 run_validation_test(#test_spec{schema_type = atm_workflow_schema} = TestSpec) ->
     UserId = ozt_users:create(),
     AtmInventoryId = ozt_users:create_atm_inventory_for(UserId),
 
-    CorrectAtmWorkflowSchemaData = ozt_atm_workflow_schemas:gen_example_data_json(AtmInventoryId),
+    CorrectAtmWorkflowSchemaData = ozt_atm_workflow_schemas:example_data_json(AtmInventoryId),
     InitialRevisionData = maps:get(<<"revision">>, CorrectAtmWorkflowSchemaData),
     % repeat test data generation as needed to make sure that at least one store
     % and one lane is generated - otherwise, validation tests do not make sense
-    case maps:get(<<"schema">>, InitialRevisionData) of
+    case maps:get(<<"atmWorkflowSchemaRevision">>, InitialRevisionData) of
         #{<<"stores">> := []} ->
             run_validation_test(TestSpec);
         #{<<"lanes">> := []} ->
             run_validation_test(TestSpec);
-        CorrectAtmWorkflowSchemaRevisionData ->
-            {InvalidAtmWorkflowSchemaRevisionData, ExpectedError} = spoil_data_field(
-                TestSpec, CorrectAtmWorkflowSchemaRevisionData, AtmInventoryId
+        CorrectAtmWorkflowSchemaRevisionJson ->
+            {InvalidAtmWorkflowSchemaRevisionJson, ExpectedError} = spoil_data_field(
+                TestSpec, CorrectAtmWorkflowSchemaRevisionJson, AtmInventoryId
             ),
 
-            InvalidAtmWorkflowSchemaData = kv_utils:update_with([<<"revision">>, <<"schema">>], fun(_) ->
-                InvalidAtmWorkflowSchemaRevisionData
+            InvalidAtmWorkflowSchemaData = kv_utils:update_with([<<"revision">>, <<"atmWorkflowSchemaRevision">>], fun(_) ->
+                InvalidAtmWorkflowSchemaRevisionJson
             end, CorrectAtmWorkflowSchemaData),
 
             ?assertEqual(ExpectedError, ozt_atm_workflow_schemas:try_create(
@@ -735,7 +764,7 @@ example_invalid_data_specs_and_default_values() ->
 %% @private
 example_invalid_stores_and_default_initial_values() ->
     lists:map(fun({DataSpec, InvalidDefaultValue}) ->
-        StoreType = lists_utils:random_element(ozt_atm_workflow_schemas:available_store_types_for_data_spec(DataSpec)),
+        StoreType = lists_utils:random_element(atm_test_utils:available_store_types_for_data_spec(DataSpec)),
         case StoreType of
             list ->
                 {
@@ -777,6 +806,24 @@ invalid_data_types_for_store_type() ->
 
 
 %% @private
+expected_disallowed_initial_value_error_description(atm_store_credentials_type) ->
+    <<"Initial value for store credentials is disallowed">>;
+expected_disallowed_initial_value_error_description(atm_onedatafs_credentials_type) ->
+    <<"Initial value for OnedetaFS credentials is disallowed">>;
+expected_disallowed_initial_value_error_description(DataType) ->
+    <<"The provided initial value is invalid for type '", (atm_data_type:type_to_json(DataType))/binary, "'">>.
+
+
+create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson) ->
+    ozt_atm_lambdas:create(AtmInventoryId, #{
+        <<"revision">> => #{
+            <<"originalRevisionNumber">> => ?RAND_INT(1, 100),
+            <<"atmLambdaRevision">> => AtmLambdaRevisionJson
+        }
+    }).
+
+
+%% @private
 extract_referenced_store_schemas_from_lanes_json(LanesJson) ->
     lists:map(fun(#{<<"storeIteratorSpec">> := #{<<"storeSchemaId">> := StoreSchemaId}}) ->
         StoreSchemaId
@@ -785,24 +832,15 @@ extract_referenced_store_schemas_from_lanes_json(LanesJson) ->
 
 %% @private
 gen_lane_including_tasks(Tasks, AtmLambdas, StoreSchemaIds) ->
-    OffendingPBox = ozt_atm_workflow_schemas:gen_parallel_box_with_tasks(lists_utils:shuffle(
-        Tasks ++ ozt_atm_workflow_schemas:gen_example_tasks(AtmLambdas, StoreSchemaIds)
+    OffendingPBox = atm_test_utils:example_parallel_box_schema_with_tasks(lists_utils:shuffle(
+        Tasks ++ ozt_atm_workflow_schemas:example_task_schemas(AtmLambdas, StoreSchemaIds)
     )),
-    ozt_atm_workflow_schemas:gen_example_lane_with_parallel_boxes_json(
+    ozt_atm_workflow_schemas:example_lane_schema_with_parallel_boxes_json(
         lists_utils:shuffle([
-            OffendingPBox | ozt_atm_workflow_schemas:gen_example_parallel_boxes(AtmLambdas, StoreSchemaIds)
+            OffendingPBox | ozt_atm_workflow_schemas:example_parallel_box_schemas(AtmLambdas, StoreSchemaIds)
         ]),
         StoreSchemaIds
     ).
-
-
-%% @private
-expected_disallowed_initial_value_error_description(atm_store_credentials_type) ->
-    <<"Initial value for store credentials is disallowed">>;
-expected_disallowed_initial_value_error_description(atm_onedatafs_credentials_type) ->
-    <<"Initial value for OnedetaFS credentials is disallowed">>;
-expected_disallowed_initial_value_error_description(DataType) ->
-    <<"The provided initial value is invalid for type '", (atm_data_type:type_to_json(DataType))/binary, "'">>.
 
 %%%===================================================================
 %%% Setup/teardown functions

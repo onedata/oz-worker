@@ -1901,7 +1901,7 @@ ensure_entitlement_group(GroupId, Name, Type) ->
         true ->
             ok;
         false ->
-            case entity_logic:normalize_name(Name, undefined) of
+            case entity_logic_sanitizer:normalize_name(Name, undefined) of
                 undefined ->
                     ?ERROR_BAD_VALUE_NAME;
                 NormalizedName ->
@@ -1931,7 +1931,7 @@ ensure_entitlement_group(GroupId, Name, Type) ->
 -spec ensure_predefined_group(Id :: binary(), Name :: binary(),
     Privileges :: [privileges:oz_privilege()]) -> ok.
 ensure_predefined_group(GroupId, Name, Privileges) ->
-    NormalizedName = entity_logic:normalize_name(Name, ?UNKNOWN_ENTITY_NAME),
+    NormalizedName = entity_logic_sanitizer:normalize_name(Name, ?UNKNOWN_ENTITY_NAME),
     case exists(GroupId) of
         true ->
             ?info("Predefined group '~ts' already exists, refreshing name and privileges", [
