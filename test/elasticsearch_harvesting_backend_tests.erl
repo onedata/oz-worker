@@ -784,6 +784,166 @@ retry_test_base(SubmitResultFun, RetryOnRejection, ExpectedNumCalls) ->
     unmock_do_submit_request(),
     ok.
 
+check_submission_result_test() ->
+    ?assertEqual(
+        ok, 
+        elasticsearch_harvesting_backend:check_submission_result(
+            #{<<"items">> => [#{<<"index">> => #{<<"result">> => <<"ok">>}}]},
+            #harvester_index{retry_on_rejection = true, include_rejection_reason = true},
+            []
+        )
+    ),
+    ?assertEqual(
+        ok,
+        elasticsearch_harvesting_backend:check_submission_result(
+            #{<<"items">> => [#{<<"delete">> => #{<<"result">> => <<"ok">>}}]},
+            #harvester_index{retry_on_rejection = true, include_rejection_reason = true},
+            []
+        )
+    ),
+    ?assertEqual(
+        {retry, {[<<"rejected_field">>], <<"Existing mapping for [rejected_field] must">>}},
+        elasticsearch_harvesting_backend:check_submission_result(
+            #{
+                <<"errors">> => true,
+                <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                    <<"type">> => <<"mapper_parsing_exception">>,
+                    <<"reason">> => <<"Existing mapping for [rejected_field] must">>
+                }}}]
+            },
+            #harvester_index{retry_on_rejection = true, include_rejection_reason = true},
+            []
+        )
+    ),
+    ?assertEqual(
+        {retry, {[<<"rejected_field">>, <<"preexisting_rejected_field">>], <<"Existing mapping for [rejected_field] must">>}},
+        elasticsearch_harvesting_backend:check_submission_result(
+            #{
+                <<"errors">> => true,
+                <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                    <<"type">> => <<"mapper_parsing_exception">>,
+                    <<"reason">> => <<"Existing mapping for [rejected_field] must">>
+                }}}]
+            },
+            #harvester_index{retry_on_rejection = true, include_rejection_reason = true},
+            [<<"preexisting_rejected_field">>]
+        )
+    ),
+    ?assertEqual(
+        {retry, {all, <<"Existing mapping for [rejected_field] must">>}},
+        elasticsearch_harvesting_backend:check_submission_result(
+            #{
+                <<"errors">> => true, 
+                <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                    <<"type">> => <<"mapper_parsing_exception">>,
+                    <<"reason">> => <<"Existing mapping for [rejected_field] must">> 
+                }}}]
+            },
+            #harvester_index{retry_on_rejection = true, include_rejection_reason = true},
+            [<<"some">>, <<"preexisitng">>, <<"rejected">>, <<"fields">>, <<"over">>, <<"retries_num">>]
+        )
+    ),
+    ?assertEqual(
+        {retry, {all, <<"Existing mapping for [rejected_field] must">>}},
+        elasticsearch_harvesting_backend:check_submission_result(
+            #{
+                <<"errors">> => true,
+                <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                    <<"type">> => <<"mapper_parsing_exception">>,
+                    <<"reason">> => <<"Existing mapping for [rejected_field] must">>
+                }}}]
+            },
+            #harvester_index{retry_on_rejection = false, include_rejection_reason = true},
+            []
+        )
+    ),
+    ?assertEqual(
+        {retry, {[<<"rejected_field">>], <<"Existing mapping for [rejected_field] must">>}},
+        elasticsearch_harvesting_backend:check_submission_result(
+            #{
+                <<"errors">> => true,
+                <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                    <<"type">> => <<"mapper_parsing_exception">>,
+                    <<"reason">> => <<"Existing mapping for [rejected_field] must">>
+                }}}]
+            },
+            #harvester_index{retry_on_rejection = true, include_rejection_reason = false},
+            []
+        )
+    ),
+    ?assertEqual(
+        ok,
+        elasticsearch_harvesting_backend:check_submission_result(
+            #{
+                <<"errors">> => true,
+                <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                    <<"type">> => <<"mapper_parsing_exception">>,
+                    <<"reason">> => <<"Existing mapping for [rejected_field] must">>
+                }}}]
+            },
+            #harvester_index{retry_on_rejection = false, include_rejection_reason = false},
+            []
+        )
+    ),
+    ?assertEqual(
+        {retry, {all, <<"unknown_reason">>}},
+        elasticsearch_harvesting_backend:check_submission_result(
+            #{
+                <<"errors">> => true,
+                <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                    <<"type">> => <<"mapper_parsing_exception">>,
+                    <<"reason">> => <<"unknown_reason">>
+                }}}]
+            },
+            #harvester_index{retry_on_rejection = true, include_rejection_reason = true},
+            []
+        )
+    ),
+    ?assertEqual(
+        ok,
+        elasticsearch_harvesting_backend:check_submission_result(
+            #{
+                <<"errors">> => true,
+                <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                    <<"type">> => <<"mapper_parsing_exception">>,
+                    <<"reason">> => <<"unknown_reason">>
+                }}}]
+            },
+            #harvester_index{retry_on_rejection = false, include_rejection_reason = false},
+            []
+        )
+    ),
+    ?assertEqual(
+        {error, 1, <<"unknown_error: unknown_reason">>},
+        elasticsearch_harvesting_backend:check_submission_result(
+            #{
+                <<"errors">> => true,
+                <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                    <<"type">> => <<"unknown_error">>,
+                    <<"reason">> => <<"unknown_reason">>
+                }}}]
+            },
+            #harvester_index{retry_on_rejection = true, include_rejection_reason = true},
+            []
+        )
+    ),
+    ?assertEqual(
+        {error, 1, <<"unknown_error: unknown_reason">>},
+        elasticsearch_harvesting_backend:check_submission_result(
+            #{
+                <<"errors">> => true,
+                <<"items">> => [#{<<"index">> => #{<<"error">> => #{
+                    <<"type">> => <<"unknown_error">>,
+                    <<"reason">> => <<"unknown_reason">>
+                }}}]
+            },
+            #harvester_index{retry_on_rejection = false, include_rejection_reason = false},
+            []
+        )
+    ),
+    ok.
+
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================

@@ -246,9 +246,7 @@ submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {RejectedFields, _Reason} =
     % call using ?MODULE for mocking in tests
     case ?MODULE:do_submit_request(Endpoint, IndexId, PreparedEsBatch) of
         {ok, Res} ->
-            IgnoreSchemaErrors =
-                (not IndexInfo#harvester_index.retry_on_rejection) or (RejectedFields == all),
-            case check_submission_result(Res, IgnoreSchemaErrors, RejectedFields) of
+            case check_submission_result(Res, IndexInfo, RejectedFields) of
                 {retry, NewRejectionInfo} ->
                     submit_to_index(Endpoint, IndexId, IndexInfo, PrunedBatch, NewRejectionInfo);
                 {error, FailedEntryNum, ErrorMsg} ->
@@ -271,19 +269,28 @@ map_entry_num_to_seq(EntryNum, Batch) ->
 
 
 %% @private
--spec check_submission_result(map(), boolean(), rejected_fields()) ->
+-spec check_submission_result(map(), od_harvester:index(), rejected_fields()) ->
     ok | {error, pos_integer(), binary()} | {retry, rejection_info()}.
-check_submission_result(Result, IgnoreSchemaErrors, RejectedFields) ->
+check_submission_result(Result, IndexInfo, RejectedFields) ->
     case maps:get(<<"errors">>, Result, false) of
         false -> ok;
         true ->
-            case parse_batch_result(Result, IgnoreSchemaErrors) of
-                {rejected, Field, Reason} ->
+            #harvester_index{
+                retry_on_rejection = RetryOnRejection,
+                include_rejection_reason = IncludeRejectionReason
+            } = IndexInfo,
+            IgnoreSchemaErrors = (RejectedFields == all) orelse 
+                not (RetryOnRejection or IncludeRejectionReason),
+            case {parse_batch_result(Result, IgnoreSchemaErrors), RetryOnRejection} of
+                {{rejected, Field, Reason}, true} ->
                     case is_binary(Field) andalso length(RejectedFields) + 1 < ?MAX_SUBMIT_RETRIES of
                         true -> {retry, {[Field | RejectedFields], Reason}};
                         false -> {retry, {all, Reason}}
                     end;
-                Other -> Other
+                {{rejected, _Field, Reason}, false} ->
+                    {retry, {all, Reason}};
+                {Other, _} -> 
+                    Other
             end
     end.
 
