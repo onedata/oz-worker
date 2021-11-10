@@ -469,7 +469,8 @@ atm_workflow_schema_bad_lambda_reference_in_task(_Config) ->
                     <<"tasks">>,
                     <<"The lambda id '", BadLambdaId/binary, "' referenced by one of the tasks was not found or is "
                     "not available for the requesting client. Consider providing supplementary "
-                    "lambdas so that missing ones can be linked or created along with the workflow schema.">>
+                    "lambdas so that missing ones can be linked or created along with the workflow schema "
+                    "(however, this requires lambda management privileges in the target inventory).">>
                 )
             }
         end

@@ -1254,7 +1254,8 @@ bad_supplementary_lambdas_data_test(_Config) ->
         <<"tasks">>,
         <<"The lambda id '", TheOnlyAtmLambdaId/binary, "' referenced by one of the tasks was not found or is "
         "not available for the requesting client. Consider providing supplementary "
-        "lambdas so that missing ones can be linked or created along with the workflow schema.">>
+        "lambdas so that missing ones can be linked or created along with the workflow schema "
+        "(however, this requires lambda management privileges in the target inventory).">>
     ),
     ?assertEqual(ExpBadLambdaReferenceError, ozt_atm_workflow_schemas:try_create(
         ?USER(UserBeta),

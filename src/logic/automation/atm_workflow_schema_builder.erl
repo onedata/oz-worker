@@ -235,7 +235,8 @@ resolve_missing_lambda(BuilderCtx, AtmLambdaId, RevisionNumber, AtmLambdaData) -
                 <<"tasks">>,
                 "The lambda id '~s' referenced by one of the tasks was not found or is not "
                 "available for the requesting client. Consider providing supplementary lambdas "
-                "so that missing ones can be linked or created along with the workflow schema.",
+                "so that missing ones can be linked or created along with the workflow schema "
+                "(however, this requires lambda management privileges in the target inventory).",
                 [AtmLambdaId]
             )
     end.
