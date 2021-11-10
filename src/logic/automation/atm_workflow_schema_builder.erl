@@ -12,7 +12,7 @@
 %%%
 %%% When a new workflow schema revision is submitted (either a new one, or an
 %%% update of the existing one), this module handles verification of the request,
-%%% validation of the schema and resolving of all referenced lambdas. Especially
+%%% validation of the schema and resolution of all referenced lambdas. Especially
 %%% when the revision is created from a dump, it includes the "supplementaryAtmLambdas"
 %%% field, which provides self-contained definitions of all lambdas referenced by the
 %%% workflow schema revision. This field may be used to link or create missing lambdas
