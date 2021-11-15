@@ -603,8 +603,7 @@ private_atm_workflow_schema(gs, Id, AtmWorkflowSchemaData, _Creator) ->
             integer_to_binary(OriginalRevisionNumber) => InitialRevisionData
         },
 
-        <<"atmInventoryId">> => maps:get(<<"atmInventoryId">>, AtmWorkflowSchemaData),
-        <<"atmLambdas">> => ozt_atm_workflow_schemas:extract_referenced_atm_lambda_ids(InitialRevisionData)
+        <<"atmInventoryId">> => maps:get(<<"atmInventoryId">>, AtmWorkflowSchemaData)
     }).
 
 

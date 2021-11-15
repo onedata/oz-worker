@@ -482,8 +482,7 @@ translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, sco
 
         revision_registry = RevisionRegistry,
 
-        atm_inventory = AtmInventoryId,
-        atm_lambdas = AtmLambdas
+        atm_inventory = AtmInventoryId
     } = AtmWorkflowSchema,
     #{
         <<"name">> => Name,
@@ -491,8 +490,7 @@ translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, sco
 
         <<"revisionRegistry">> => jsonable_record:to_json(RevisionRegistry, atm_workflow_schema_revision_registry),
 
-        <<"atmInventoryId">> => AtmInventoryId,
-        <<"atmLambdas">> => AtmLambdas
+        <<"atmInventoryId">> => AtmInventoryId
     };
 
 translate_resource(ProtocolVersion, GRI, Data) ->
