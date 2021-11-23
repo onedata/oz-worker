@@ -3575,7 +3575,6 @@ get_record(od_atm_lambda, 1) -> {od_atm_lambda,
         #atm_lambda_argument_spec{
             name = <<"arg-name">>,
             data_spec = #atm_data_spec{type = atm_integer_type},
-            is_batch = false,
             is_optional = true,
             default_value = undefined
         }
@@ -3583,8 +3582,7 @@ get_record(od_atm_lambda, 1) -> {od_atm_lambda,
     [
         #atm_lambda_result_spec{
             name = <<"res-name">>,
-            data_spec = #atm_data_spec{type = atm_string_type},
-            is_batch = true
+            data_spec = #atm_data_spec{type = atm_string_type}
         }
     ],
 
@@ -3614,7 +3612,6 @@ get_record(od_atm_lambda, 2) -> {od_atm_lambda,
         #atm_lambda_argument_spec{
             name = <<"arg-name">>,
             data_spec = #atm_data_spec{type = atm_integer_type},
-            is_batch = false,
             is_optional = true,
             default_value = undefined
         }
@@ -3622,8 +3619,7 @@ get_record(od_atm_lambda, 2) -> {od_atm_lambda,
     [
         #atm_lambda_result_spec{
             name = <<"res-name">>,
-            data_spec = #atm_data_spec{type = atm_string_type},
-            is_batch = true
+            data_spec = #atm_data_spec{type = atm_string_type}
         }
     ],
 
@@ -3653,11 +3649,13 @@ get_record(od_atm_lambda, 3) -> #od_atm_lambda{
                     oneclient_options = <<"-v 3">>
                 }
             },
+
+            batch_mode = false,
+
             argument_specs = [
                 #atm_lambda_argument_spec{
                     name = <<"arg-name">>,
                     data_spec = #atm_data_spec{type = atm_integer_type},
-                    is_batch = false,
                     is_optional = true,
                     default_value = undefined
                 }
@@ -3665,8 +3663,7 @@ get_record(od_atm_lambda, 3) -> #od_atm_lambda{
             result_specs = [
                 #atm_lambda_result_spec{
                     name = <<"res-name">>,
-                    data_spec = #atm_data_spec{type = atm_string_type},
-                    is_batch = true
+                    data_spec = #atm_data_spec{type = atm_string_type}
                 }
             ],
 

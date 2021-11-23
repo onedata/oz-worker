@@ -142,12 +142,7 @@ atm_lambda_non_unique_result_spec_names(_Config) ->
 atm_lambda_disallowed_default_value(_Config) ->
     lists:foreach(fun({DataSpec, InvalidDefaultValue}) ->
         DataType = DataSpec#atm_data_spec.type,
-        IsBatch = ?RAND_BOOL(),
-        SpecDefaultValue = case IsBatch of
-            true -> [InvalidDefaultValue];
-            false -> InvalidDefaultValue
-        end,
-        OffendingArgumentSpec = ozt_atm_lambdas:example_argument_spec_json(DataSpec, IsBatch, SpecDefaultValue),
+        OffendingArgumentSpec = ozt_atm_lambdas:example_argument_spec_json(DataSpec, InvalidDefaultValue),
         #{<<"name">> := ArgumentName} = OffendingArgumentSpec,
         run_validation_tests(#test_spec{
             schema_type = atm_lambda,

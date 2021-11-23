@@ -56,20 +56,8 @@ sanitize_initial_values(#atm_lambda_revision{argument_specs = ArgumentSpecs}) ->
     lists:foreach(fun(#atm_lambda_argument_spec{
         name = Name,
         default_value = DefaultValue,
-        is_batch = IsBatch,
         data_spec = DataSpec
     }) ->
         DataKeyName = str_utils:format_bin("argumentSpecs[~s].defaultValue", [Name]),
-        case IsBatch of
-            false ->
-                atm_schema_validator:sanitize_initial_value(DefaultValue, DataSpec, DataKeyName);
-            true when DefaultValue == undefined ->
-                ok;
-            true when not is_list(DefaultValue) ->
-                atm_schema_validator:raise_validation_error(DataKeyName, "Expected a list of values (batch)");
-            true ->
-                lists:foreach(fun(Value) ->
-                    atm_schema_validator:sanitize_initial_value(Value, DataSpec, DataKeyName)
-                end, DefaultValue)
-        end
+        atm_schema_validator:sanitize_initial_value(DefaultValue, DataSpec, DataKeyName)
     end, ArgumentSpecs).

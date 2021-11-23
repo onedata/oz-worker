@@ -274,6 +274,7 @@ upgrade_record(2, AtmLambda) ->
                 description = Description,
 
                 operation_spec = OperationSpec,
+                batch_mode = false,
                 argument_specs = ArgumentSpecs,
                 result_specs = ResultSpecs,
 
