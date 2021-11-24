@@ -876,9 +876,9 @@ latest_lambda_revision(#document{value = #od_atm_lambda{revision_registry = Revi
                     docker_image = <<"unknown">>,
                     docker_execution_options = #atm_docker_execution_options{}
                 },
-                batch_mode = false,
                 argument_specs = [],
                 result_specs = [],
+                preferred_batch_size = 100,
                 resource_spec = #atm_resource_spec{
                     cpu_requested = 2.0, cpu_limit = 4.0,
                     memory_requested = 1000000000, memory_limit = 5000000000,

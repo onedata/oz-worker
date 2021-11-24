@@ -3650,8 +3650,6 @@ get_record(od_atm_lambda, 3) -> #od_atm_lambda{
                 }
             },
 
-            batch_mode = false,
-
             argument_specs = [
                 #atm_lambda_argument_spec{
                     name = <<"arg-name">>,
@@ -3666,6 +3664,7 @@ get_record(od_atm_lambda, 3) -> #od_atm_lambda{
                     data_spec = #atm_data_spec{type = atm_string_type}
                 }
             ],
+            preferred_batch_size = 100,
 
             resource_spec = ozt_atm_lambdas:default_resource_spec(),
 
@@ -3714,7 +3713,7 @@ get_record(od_atm_workflow_schema, 1) -> {od_atm_workflow_schema,
             name = <<"lane1-name">>,
             store_iterator_spec = #atm_store_iterator_spec{
                 store_schema_id = <<"store1">>,
-                strategy = #atm_store_iterator_serial_strategy{}
+                max_batch_size = 100
             },
             parallel_boxes = [
                 #atm_parallel_box_schema{
@@ -3791,7 +3790,7 @@ get_record(od_atm_workflow_schema, 2) ->
                         name = <<"lane1-name">>,
                         store_iterator_spec = #atm_store_iterator_spec{
                             store_schema_id = <<"store1">>,
-                            strategy = #atm_store_iterator_serial_strategy{}
+                            max_batch_size = 100
                         },
                         parallel_boxes = [
                             #atm_parallel_box_schema{
