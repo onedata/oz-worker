@@ -89,6 +89,7 @@ add_user_test(Config) ->
     % to add himself to the atm_inventory
     SubGroup2 = ozt_users:create_group_for(EffectiveUserWithoutAddUserPriv),
     ozt_atm_inventories:add_group(AtmInventory, SubGroup2, []),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     lists:foreach(fun({ClientClassification, SubjectUser}) ->
         VerifyEndFun = fun
@@ -161,6 +162,7 @@ add_user_with_privileges_test(Config) ->
     % to add himself to the atm_inventory
     SubGroup2 = ozt_users:create_group_for(EffectiveUserWithoutAddUserPriv),
     ozt_atm_inventories:add_group(AtmInventory, SubGroup2, []),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     lists:foreach(fun({ClientClassification, SubjectUser}) ->
         VerifyEndFun = fun

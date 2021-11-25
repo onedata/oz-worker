@@ -35,7 +35,9 @@
 -export([protected_harvester/4, shared_or_public_harvester/3]).
 -export([protected_atm_inventory/4]).
 -export([private_atm_lambda/4]).
+-export([json_dump_of_atm_lambda/4, json_dump_of_atm_lambda_revision/3]).
 -export([private_atm_workflow_schema/4]).
+-export([json_dump_of_atm_workflow_schema/4, json_dump_of_atm_workflow_schema_revision/3]).
 
 %%%===================================================================
 %%% API
@@ -210,7 +212,7 @@ private_share(rest, Id, ShareData, Creator) ->
         <<"spaceId">> => maps:get(<<"spaceId">>, ShareData),
         <<"rootFileId">> => element(2, {ok, _} = file_id:guid_to_objectid(maps:get(<<"rootFileId">>, ShareData))),
         <<"fileType">> => atom_to_binary(maps:get(<<"fileType">>, ShareData), utf8),
-        <<"handleId">> =>  utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
+        <<"handleId">> => utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
         <<"publicRestUrl">> => expected_public_share_rest_url(Id),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
@@ -224,7 +226,7 @@ private_share(gs, Id, ShareData, _Creator) ->
         <<"spaceId">> => maps:get(<<"spaceId">>, ShareData),
         <<"rootFileId">> => maps:get(<<"rootFileId">>, ShareData),
         <<"fileType">> => atom_to_binary(maps:get(<<"fileType">>, ShareData), utf8),
-        <<"handleId">> =>  utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
+        <<"handleId">> => utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
         <<"publicRestUrl">> => expected_public_share_rest_url(Id)
     }).
@@ -248,7 +250,7 @@ public_share(rest, Id, ShareData) ->
         <<"description">> => maps:get(<<"description">>, ShareData),
         <<"rootFileId">> => element(2, {ok, _} = file_id:guid_to_objectid(maps:get(<<"rootFileId">>, ShareData))),
         <<"fileType">> => atom_to_binary(maps:get(<<"fileType">>, ShareData), utf8),
-        <<"handleId">> =>  utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
+        <<"handleId">> => utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
         <<"publicRestUrl">> => expected_public_share_rest_url(Id),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
@@ -261,7 +263,7 @@ public_share(gs, Id, ShareData) ->
         <<"description">> => maps:get(<<"description">>, ShareData),
         <<"rootFileId">> => maps:get(<<"rootFileId">>, ShareData),
         <<"fileType">> => atom_to_binary(maps:get(<<"fileType">>, ShareData), utf8),
-        <<"handleId">> =>  utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
+        <<"handleId">> => utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
         <<"publicRestUrl">> => expected_public_share_rest_url(Id)
     }).
@@ -479,52 +481,86 @@ private_atm_lambda(logic, _Id, AtmLambdaData, Creator) ->
 private_atm_lambda(rest, Id, AtmLambdaData, Creator) ->
     #{
         <<"atmLambdaId">> => Id,
-        <<"name">> => maps:get(<<"name">>, AtmLambdaData),
-        <<"summary">> => maps:get(<<"summary">>, AtmLambdaData),
-        <<"description">> => maps:get(<<"description">>, AtmLambdaData),
 
-        <<"operationSpec">> => maps:get(<<"operationSpec">>, AtmLambdaData),
-        <<"argumentSpecs">> => maps:get(<<"argumentSpecs">>, AtmLambdaData),
-        <<"resultSpecs">> => maps:get(<<"resultSpecs">>, AtmLambdaData),
-
-        <<"resourceSpec">> => maps:get(<<"resourceSpec">>, AtmLambdaData),
-
-        <<"checksum">> => (lambda_data_to_record(AtmLambdaData, Creator))#od_atm_lambda.checksum,
+        <<"revisionRegistry">> => jsonable_record:to_json(
+            (lambda_data_to_record(AtmLambdaData, Creator))#od_atm_lambda.revision_registry,
+            atm_lambda_revision_registry
+        ),
 
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     };
-private_atm_lambda(gs, Id, AtmLambdaData, _Creator) ->
+private_atm_lambda(gs, Id, AtmLambdaData, Creator) ->
     ?OK_MAP(#{
         <<"gri">> => gri:serialize(?GRI(od_atm_lambda, Id, instance, private)),
-        <<"name">> => maps:get(<<"name">>, AtmLambdaData),
-        <<"summary">> => maps:get(<<"summary">>, AtmLambdaData),
-        <<"description">> => maps:get(<<"description">>, AtmLambdaData),
 
-        <<"operationSpec">> => maps:get(<<"operationSpec">>, AtmLambdaData),
-        <<"argumentSpecs">> => maps:get(<<"argumentSpecs">>, AtmLambdaData),
-        <<"resultSpecs">> => maps:get(<<"resultSpecs">>, AtmLambdaData),
-
-        <<"resourceSpec">> => maps:get(<<"resourceSpec">>, AtmLambdaData),
+        <<"revisionRegistry">> => jsonable_record:to_json(
+            (lambda_data_to_record(AtmLambdaData, Creator))#od_atm_lambda.revision_registry,
+            atm_lambda_revision_registry
+        ),
 
         <<"atmInventories">> => [maps:get(<<"atmInventoryId">>, AtmLambdaData)]
     }).
 
 
+-spec json_dump_of_atm_lambda(
+    interface(), od_atm_lambda:id(), map(), atm_lambda_revision:revision_number()
+) -> expectation().
+json_dump_of_atm_lambda(logic, AtmLambdaId, AtmLambdaData, RevisionNumber) ->
+    ?OK_MAP(json_dump_of_atm_lambda(rest, AtmLambdaId, AtmLambdaData, RevisionNumber));
+json_dump_of_atm_lambda(rest, AtmLambdaId, AtmLambdaData, RevisionNumber) ->
+    #{
+        <<"schemaFormatVersion">> => 2,
+
+        <<"originalAtmLambdaId">> => AtmLambdaId,
+
+        <<"revision">> => json_dump_of_atm_lambda_revision(
+            rest,
+            kv_utils:get([<<"revision">>, <<"atmLambdaRevision">>], AtmLambdaData),
+            RevisionNumber
+        )
+    };
+json_dump_of_atm_lambda(gs, AtmLambdaId, AtmLambdaData, RevisionNumber) ->
+    ?OK_MAP(json_dump_of_atm_lambda(rest, AtmLambdaId, AtmLambdaData, RevisionNumber)).
+
+
+-spec json_dump_of_atm_lambda_revision(
+    interface(), map(), atm_lambda_revision:revision_number()
+) -> expectation().
+json_dump_of_atm_lambda_revision(logic, RevisionData, RevisionNumber) ->
+    ?OK_MAP(json_dump_of_atm_lambda_revision(rest, RevisionData, RevisionNumber));
+json_dump_of_atm_lambda_revision(rest, RevisionData, RevisionNumber) ->
+    #{
+        <<"schemaFormatVersion">> => 2,
+        <<"originalRevisionNumber">> => RevisionNumber,
+        <<"atmLambdaRevision">> => RevisionData#{
+            <<"checksum">> => (jsonable_record:from_json(RevisionData, atm_lambda_revision))#atm_lambda_revision.checksum
+        }
+    };
+json_dump_of_atm_lambda_revision(gs, RevisionData, RevisionNumber) ->
+    ?OK_MAP(json_dump_of_atm_lambda_revision(rest, RevisionData, RevisionNumber)).
+
+
 -spec private_atm_workflow_schema(interface(), od_atm_workflow_schema:id(), map(), aai:subject()) -> expectation().
 private_atm_workflow_schema(logic, _Id, AtmWorkflowSchemaData, Creator) ->
+    #{
+        <<"originalRevisionNumber">> := OriginalRevisionNumber,
+        <<"atmWorkflowSchemaRevision">> := InitialRevisionData
+    } = maps:get(<<"revision">>, AtmWorkflowSchemaData),
     ?OK_TERM(fun(AtmWorkflowSchemaRecord) ->
         ?assertEqual(#od_atm_workflow_schema{
             name = maps:get(<<"name">>, AtmWorkflowSchemaData),
-            description = maps:get(<<"description">>, AtmWorkflowSchemaData),
+            summary = maps:get(<<"summary">>, AtmWorkflowSchemaData),
 
-            stores = jsonable_record:list_from_json(maps:get(<<"stores">>, AtmWorkflowSchemaData), atm_store_schema),
-            lanes = jsonable_record:list_from_json(maps:get(<<"lanes">>, AtmWorkflowSchemaData), atm_lane_schema),
+            revision_registry = #atm_workflow_schema_revision_registry{
+                registry = #{
+                    OriginalRevisionNumber => jsonable_record:from_json(InitialRevisionData, atm_workflow_schema_revision)
+                }
+            },
 
-            state = automation:workflow_schema_state_from_json(maps:get(<<"state">>, AtmWorkflowSchemaData)),
-
+            original_atm_workflow_schema = maps:get(<<"originalAtmWorkflowSchemaId">>, AtmWorkflowSchemaData, undefined),
             atm_inventory = maps:get(<<"atmInventoryId">>, AtmWorkflowSchemaData),
-            atm_lambdas = lists:sort(ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(maps:get(<<"lanes">>, AtmWorkflowSchemaData, []))),
+            atm_lambdas = lists:sort(ozt_atm_workflow_schemas:extract_referenced_atm_lambda_ids(InitialRevisionData)),
 
             creation_time = ozt_mocks:get_frozen_time_seconds(),
             creator = Creator
@@ -534,35 +570,102 @@ private_atm_workflow_schema(logic, _Id, AtmWorkflowSchemaData, Creator) ->
     end);
 private_atm_workflow_schema(rest, Id, AtmWorkflowSchemaData, Creator) ->
     #{
+        <<"originalRevisionNumber">> := OriginalRevisionNumber,
+        <<"atmWorkflowSchemaRevision">> := InitialRevisionData
+    } = maps:get(<<"revision">>, AtmWorkflowSchemaData),
+    #{
         <<"atmWorkflowSchemaId">> => Id,
         <<"name">> => maps:get(<<"name">>, AtmWorkflowSchemaData),
-        <<"description">> => maps:get(<<"description">>, AtmWorkflowSchemaData),
+        <<"summary">> => maps:get(<<"summary">>, AtmWorkflowSchemaData),
 
-        <<"stores">> => maps:get(<<"stores">>, AtmWorkflowSchemaData),
-        <<"lanes">> => maps:get(<<"lanes">>, AtmWorkflowSchemaData),
+        <<"revisionRegistry">> => #{
+            integer_to_binary(OriginalRevisionNumber) => InitialRevisionData
+        },
 
-        <<"state">> => maps:get(<<"state">>, AtmWorkflowSchemaData),
-
+        <<"originalAtmWorkflowSchemaId">> => maps:get(<<"originalAtmWorkflowSchemaId">>, AtmWorkflowSchemaData, null),
         <<"atmInventoryId">> => maps:get(<<"atmInventoryId">>, AtmWorkflowSchemaData),
-        <<"atmLambdas">> => ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(maps:get(<<"lanes">>, AtmWorkflowSchemaData, [])),
+        <<"atmLambdas">> => ozt_atm_workflow_schemas:extract_referenced_atm_lambda_ids(InitialRevisionData),
 
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     };
 private_atm_workflow_schema(gs, Id, AtmWorkflowSchemaData, _Creator) ->
+    #{
+        <<"originalRevisionNumber">> := OriginalRevisionNumber,
+        <<"atmWorkflowSchemaRevision">> := InitialRevisionData
+    } = maps:get(<<"revision">>, AtmWorkflowSchemaData),
     ?OK_MAP(#{
         <<"gri">> => gri:serialize(?GRI(od_atm_workflow_schema, Id, instance, private)),
         <<"name">> => maps:get(<<"name">>, AtmWorkflowSchemaData),
-        <<"description">> => maps:get(<<"description">>, AtmWorkflowSchemaData),
+        <<"summary">> => maps:get(<<"summary">>, AtmWorkflowSchemaData),
 
-        <<"stores">> => maps:get(<<"stores">>, AtmWorkflowSchemaData),
-        <<"lanes">> => maps:get(<<"lanes">>, AtmWorkflowSchemaData),
+        <<"revisionRegistry">> => #{
+            integer_to_binary(OriginalRevisionNumber) => InitialRevisionData
+        },
 
-        <<"state">> => maps:get(<<"state">>, AtmWorkflowSchemaData),
-
-        <<"atmInventoryId">> => maps:get(<<"atmInventoryId">>, AtmWorkflowSchemaData),
-        <<"atmLambdas">> => ozt_atm_workflow_schemas:extract_atm_lambdas_from_lanes(maps:get(<<"lanes">>, AtmWorkflowSchemaData, []))
+        <<"atmInventoryId">> => maps:get(<<"atmInventoryId">>, AtmWorkflowSchemaData)
     }).
+
+
+-spec json_dump_of_atm_workflow_schema(
+    interface(), od_atm_workflow_schema:id(), map(), atm_workflow_schema_revision:revision_number()
+) -> expectation().
+json_dump_of_atm_workflow_schema(logic, AtmWorkflowSchemaId, AtmWorkflowSchemaData, RevisionNumber) ->
+    ?OK_MAP(json_dump_of_atm_workflow_schema(rest, AtmWorkflowSchemaId, AtmWorkflowSchemaData, RevisionNumber));
+json_dump_of_atm_workflow_schema(rest, AtmWorkflowSchemaId, AtmWorkflowSchemaData, RevisionNumber) ->
+    #{
+        <<"schemaFormatVersion">> => 2,
+
+        <<"originalAtmWorkflowSchemaId">> => AtmWorkflowSchemaId,
+
+        <<"name">> => maps:get(<<"name">>, AtmWorkflowSchemaData),
+        <<"summary">> => maps:get(<<"summary">>, AtmWorkflowSchemaData),
+
+        <<"revision">> => json_dump_of_atm_workflow_schema_revision(
+            rest,
+            kv_utils:get([<<"revision">>, <<"atmWorkflowSchemaRevision">>], AtmWorkflowSchemaData),
+            RevisionNumber
+        )
+    };
+json_dump_of_atm_workflow_schema(gs, AtmWorkflowSchemaId, AtmWorkflowSchemaData, RevisionNumber) ->
+    ?OK_MAP(json_dump_of_atm_workflow_schema(rest, AtmWorkflowSchemaId, AtmWorkflowSchemaData, RevisionNumber)).
+
+
+-spec json_dump_of_atm_workflow_schema_revision(
+    interface(), od_atm_workflow_schema:id(), workflow_schema_revision:revision_number()
+) -> expectation().
+json_dump_of_atm_workflow_schema_revision(logic, AtmWorkflowSchemaRevisionData, RevisionNumber) ->
+    ?OK_MAP(json_dump_of_atm_workflow_schema_revision(rest, AtmWorkflowSchemaRevisionData, RevisionNumber));
+json_dump_of_atm_workflow_schema_revision(rest, AtmWorkflowSchemaRevisionData, RevisionNumber) ->
+    AtmWorkflowSchemaRevision = jsonable_record:from_json(AtmWorkflowSchemaRevisionData, atm_workflow_schema_revision),
+    AtmLambdaReferences = atm_workflow_schema_revision:extract_atm_lambda_references(AtmWorkflowSchemaRevision),
+    #{
+        <<"schemaFormatVersion">> => 2,
+        <<"originalRevisionNumber">> => RevisionNumber,
+        <<"atmWorkflowSchemaRevision">> => AtmWorkflowSchemaRevisionData,
+        <<"supplementaryAtmLambdas">> => maps:map(fun(AtmLambdaId, LambdaRevisionNumbers) ->
+            AtmLambda = ozt_atm_lambdas:get(AtmLambdaId),
+            maps_utils:generate_from_list(fun(LambdaRevisionNumber) ->
+                AtmLambdaData = #{
+                    <<"revision">> => #{
+                        <<"originalRevisionNumber">> => LambdaRevisionNumbers,
+                        <<"atmLambdaRevision">> => jsonable_record:to_json(
+                            atm_lambda_revision_registry:get_revision(
+                                LambdaRevisionNumber, AtmLambda#od_atm_lambda.revision_registry
+                            ),
+                            atm_lambda_revision
+                        )
+                    }
+                },
+                AtmLambdaJsonDump = json_dump_of_atm_lambda(
+                    rest, AtmLambdaId, AtmLambdaData, LambdaRevisionNumber
+                ),
+                {integer_to_binary(LambdaRevisionNumber), AtmLambdaJsonDump}
+            end, LambdaRevisionNumbers)
+        end, AtmLambdaReferences)
+    };
+json_dump_of_atm_workflow_schema_revision(gs, RevisionData, RevisionNumber) ->
+    ?OK_MAP(json_dump_of_atm_workflow_schema_revision(rest, RevisionData, RevisionNumber)).
 
 %%%===================================================================
 %%% helpers
@@ -634,22 +737,21 @@ expected_cluster_creation_time(?ONEPROVIDER) ->
 
 %% @private
 lambda_data_to_record(AtmLambdaData, Creator) ->
-    ExpectedRecord = #od_atm_lambda{
-        name = maps:get(<<"name">>, AtmLambdaData),
-        summary = maps:get(<<"summary">>, AtmLambdaData),
-        description = maps:get(<<"description">>, AtmLambdaData),
-
-        operation_spec = jsonable_record:from_json(maps:get(<<"operationSpec">>, AtmLambdaData), atm_lambda_operation_spec),
-        argument_specs = jsonable_record:list_from_json(maps:get(<<"argumentSpecs">>, AtmLambdaData), atm_lambda_argument_spec),
-        result_specs = jsonable_record:list_from_json(maps:get(<<"resultSpecs">>, AtmLambdaData), atm_lambda_result_spec),
-
-        resource_spec = jsonable_record:from_json(maps:get(<<"resourceSpec">>, AtmLambdaData), atm_resource_spec),
-
+    #{
+        <<"originalRevisionNumber">> := OriginalRevisionNumber,
+        <<"atmLambdaRevision">> := InitialRevisionData
+    } = maps:get(<<"revision">>, AtmLambdaData),
+    ExpectedRecordWithoutRevisionRegistry = #od_atm_lambda{
+        original_atm_lambda = maps:get(<<"originalAtmLambdaId">>, AtmLambdaData, undefined),
         atm_inventories = [maps:get(<<"atmInventoryId">>, AtmLambdaData)],
 
         creation_time = ozt_mocks:get_frozen_time_seconds(),
         creator = Creator
     },
-    ExpectedRecord#od_atm_lambda{
-        checksum = od_atm_lambda:calculate_checksum(ExpectedRecord)
+    ExpectedRecordWithoutRevisionRegistry#od_atm_lambda{
+        revision_registry = #atm_lambda_revision_registry{
+            registry = #{
+                OriginalRevisionNumber => jsonable_record:from_json(InitialRevisionData, atm_lambda_revision)
+            }
+        }
     }.

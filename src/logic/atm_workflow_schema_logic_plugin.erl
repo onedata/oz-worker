@@ -64,6 +64,8 @@ fetch_entity(#gri{id = AtmWorkflowSchemaId}) ->
     entity_logic:scope()) -> boolean().
 operation_supported(create, instance, private) -> true;
 operation_supported(create, dump, private) -> true;
+operation_supported(create, {revision, _}, private) -> true;
+operation_supported(create, {dump_revision, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
 operation_supported(get, instance, private) -> true;
@@ -72,6 +74,7 @@ operation_supported(get, atm_lambdas, private) -> true;
 operation_supported(update, instance, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
+operation_supported(delete, {revision, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -95,17 +98,60 @@ is_subscribable(_, _) -> false.
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = instance} = GRI, data = Data}) ->
-    AtmWorkflowSchemaId = atm_workflow_schema_builder:create(Auth, Data),
+    Name = maps:get(<<"name">>, Data),
+    Summary = maps:get(<<"summary">>, Data, ?DEFAULT_SUMMARY),
+    OriginalAtmWorkflowSchemaId = maps:get(<<"originalAtmWorkflowSchemaId">>, Data, undefined),
+    AtmInventoryId = maps:get(<<"atmInventoryId">>, Data),
+
+    AtmWorkflowSchema = #od_atm_workflow_schema{
+        name = Name,
+        summary = Summary,
+        original_atm_workflow_schema = OriginalAtmWorkflowSchemaId,
+        atm_inventory = AtmInventoryId,
+        creator = aai:normalize_subject(Auth#auth.subject),
+        creation_time = global_clock:timestamp_seconds()
+    },
+    {ok, #document{key = AtmWorkflowSchemaId}} = od_atm_workflow_schema:create(#document{value = AtmWorkflowSchema}),
+
+    case lookup_and_sanitize_revision_data(Data) of
+        false ->
+            ok;
+        {true, InitialRevisionData} ->
+            case insert_revision(Auth, AtmWorkflowSchemaId, <<"auto">>, InitialRevisionData) of
+                ok ->
+                    ok;
+                {error, _} = Error ->
+                    od_atm_workflow_schema:force_delete(AtmWorkflowSchemaId),
+                    throw(Error)
+            end
+    end,
+
+    od_atm_inventory:critical_section(AtmInventoryId, fun() ->
+        entity_graph:add_relation(
+            od_atm_workflow_schema, AtmWorkflowSchemaId,
+            od_atm_inventory, AtmInventoryId
+        )
+    end),
 
     {true, {FetchedAtmWorkflowSchema, Rev}} = fetch_entity(#gri{aspect = instance, id = AtmWorkflowSchemaId}),
     {ok, resource, {GRI#gri{id = AtmWorkflowSchemaId}, {FetchedAtmWorkflowSchema, Rev}}};
 
-create(#el_req{gri = #gri{id = AtmWorkflowSchemaId, aspect = dump}}) ->
-    case fetch_entity(#gri{id = AtmWorkflowSchemaId}) of
-        {error, _} = Error ->
-            Error;
-        {true, {AtmWorkflowSchema, _}} ->
-            {ok, value, od_atm_workflow_schema:dump_schema_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema)}
+create(#el_req{gri = #gri{id = AtmWorkflowSchemaId, aspect = dump}, data = Data}) ->
+    fun(AtmWorkflowSchema) ->
+        IncludedRevision = maps:get(<<"includeRevision">>, Data),
+        {ok, value, od_atm_workflow_schema:dump_to_json(
+            AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevision
+        )}
+    end;
+
+create(#el_req{auth = Auth, gri = #gri{id = AtmWorkflowSchemaId, aspect = {revision, RevisionNumberBinary}}, data = Data}) ->
+    insert_revision(Auth, AtmWorkflowSchemaId, RevisionNumberBinary, Data);
+
+create(#el_req{gri = #gri{aspect = {dump_revision, RevisionNumberBinary}}}) ->
+    fun(AtmWorkflowSchema) ->
+        {ok, value, od_atm_workflow_schema:dump_revision_to_json(
+            AtmWorkflowSchema, binary_to_integer(RevisionNumberBinary)
+        )}
     end.
 
 
@@ -135,7 +181,23 @@ get(#el_req{gri = #gri{aspect = atm_lambdas}}, AtmWorkflowSchema) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{auth = Auth, gri = #gri{id = AtmWorkflowSchemaId, aspect = instance}, data = Data}) ->
-    atm_workflow_schema_builder:update(Auth, AtmWorkflowSchemaId, Data).
+    InsertRevisionResult = case lookup_and_sanitize_revision_data(Data) of
+        false ->
+            ok;
+        {true, RevisionData} ->
+            insert_revision(Auth, AtmWorkflowSchemaId, <<"auto">>, RevisionData)
+    end,
+    case InsertRevisionResult of
+        {error, _} = Error ->
+            Error;
+        ok ->
+            ?extract_ok(od_atm_workflow_schema:update(AtmWorkflowSchemaId, fun(AtmWorkflowSchema) ->
+                {ok, AtmWorkflowSchema#od_atm_workflow_schema{
+                    name = maps:get(<<"name">>, Data, AtmWorkflowSchema#od_atm_workflow_schema.name),
+                    summary = maps:get(<<"summary">>, Data, AtmWorkflowSchema#od_atm_workflow_schema.summary)
+                }}
+            end))
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -145,7 +207,11 @@ update(#el_req{auth = Auth, gri = #gri{id = AtmWorkflowSchemaId, aspect = instan
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = AtmWorkflowSchemaId, aspect = instance}}) ->
-    atm_workflow_schema_builder:delete(AtmWorkflowSchemaId).
+    atm_workflow_schema_builder:delete_all_revisions(AtmWorkflowSchemaId),
+    entity_graph:delete_with_relations(od_atm_workflow_schema, AtmWorkflowSchemaId);
+
+delete(#el_req{gri = #gri{id = AtmWorkflowSchemaId, aspect = {revision, RevisionNumberBinary}}}) ->
+    atm_workflow_schema_builder:delete_revision(AtmWorkflowSchemaId, binary_to_integer(RevisionNumberBinary)).
 
 
 %%--------------------------------------------------------------------
@@ -155,9 +221,14 @@ delete(#el_req{gri = #gri{id = AtmWorkflowSchemaId, aspect = instance}}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
-exists(#el_req{gri = #gri{id = Id}}, #od_atm_workflow_schema{}) ->
-    % All aspects exist if atm_workflow_schema record exists.
-    Id =/= undefined.
+exists(#el_req{gri = #gri{aspect = {revision, RevisionNumberBin}}}, #od_atm_workflow_schema{
+    revision_registry = RevisionRegistry
+}) ->
+    atm_workflow_schema_revision_registry:has_revision(binary_to_integer(RevisionNumberBin), RevisionRegistry);
+
+exists(#el_req{}, FetchedAtmWorkflowSchema) ->
+    % all other aspects exist if atm_workflow_schema record exists
+    FetchedAtmWorkflowSchema =/= undefined.
 
 
 %%--------------------------------------------------------------------
@@ -174,6 +245,12 @@ authorize(#el_req{auth = ?USER(UserId), operation = create, gri = #gri{id = unde
 authorize(#el_req{auth = ?USER(UserId), operation = create, gri = #gri{aspect = dump}}, AtmWorkflowSchema) ->
     is_inventory_member(UserId, AtmWorkflowSchema);
 
+authorize(#el_req{auth = ?USER(UserId), operation = create, gri = #gri{aspect = {revision, _}}}, AtmWorkflowSchema) ->
+    can_manage_workflow_schemas(UserId, AtmWorkflowSchema);
+
+authorize(#el_req{auth = ?USER(UserId), operation = create, gri = #gri{aspect = {dump_revision, _}}}, AtmWorkflowSchema) ->
+    is_inventory_member(UserId, AtmWorkflowSchema);
+
 authorize(#el_req{auth = ?USER(UserId), operation = get}, AtmWorkflowSchema) ->
     is_inventory_member(UserId, AtmWorkflowSchema);
 
@@ -184,6 +261,9 @@ authorize(#el_req{auth = ?USER(UserId), operation = update, gri = #gri{aspect = 
     can_manage_workflow_schemas(UserId, AtmWorkflowSchema);
 
 authorize(#el_req{auth = ?USER(UserId), operation = delete, gri = #gri{aspect = instance}}, AtmWorkflowSchema) ->
+    can_manage_workflow_schemas(UserId, AtmWorkflowSchema);
+
+authorize(#el_req{auth = ?USER(UserId), operation = delete, gri = #gri{aspect = {revision, _}}}, AtmWorkflowSchema) ->
     can_manage_workflow_schemas(UserId, AtmWorkflowSchema);
 
 authorize(_, _) ->
@@ -199,6 +279,10 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = instan
     [?OZ_ATM_INVENTORIES_UPDATE];
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = dump}}) ->
     [?OZ_ATM_INVENTORIES_VIEW];
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {revision, _}}}) ->
+    [?OZ_ATM_INVENTORIES_UPDATE];
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {dump_revision, _}}}) ->
+    [?OZ_ATM_INVENTORIES_VIEW];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
     [?OZ_ATM_INVENTORIES_VIEW];
@@ -211,6 +295,8 @@ required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instan
     [?OZ_ATM_INVENTORIES_UPDATE];
 
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance}}) ->
+    [?OZ_ATM_INVENTORIES_UPDATE];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {revision, _}}}) ->
     [?OZ_ATM_INVENTORIES_UPDATE];
 
 required_admin_privileges(_) ->
@@ -226,44 +312,117 @@ required_admin_privileges(_) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+-spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"atmInventoryId">> => {binary, {exists, fun atm_inventory_logic:exists/1}},
         <<"name">> => {binary, name}
     },
     optional => #{
-        <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}},
-
-        <<"stores">> => {{jsonable_record, list, atm_store_schema}, any},
-        <<"lanes">> => {{jsonable_record, list, atm_lane_schema}, any},
-
-        <<"state">> => {atom, automation:all_workflow_schema_states()},
-
-        <<"supplementaryAtmLambdas">> => {json, any}  % validation is performed by atm_workflow_schema_builder
+        <<"summary">> => {binary, {size_limit, ?SUMMARY_SIZE_LIMIT}},
+        % validation of revision data is performed during the workflow schema creation procedure
+        <<"revision">> => {json, any},
+        % this can be an arbitrary string and is not verified, as for example a dump
+        % from another Onezone may be used to create a workflow schema
+        <<"originalAtmWorkflowSchemaId">> => {binary, non_empty}
     }
 };
+
 validate(#el_req{operation = create, gri = #gri{aspect = dump}}) -> #{
+    required => #{
+        <<"includeRevision">> => {integer, {not_lower_than, 1}}
+    }
+};
+
+validate(#el_req{operation = create, gri = #gri{aspect = {revision, TargetRevisionNumber}}}) ->
+    revision_sanitizer_spec(TargetRevisionNumber);
+
+validate(#el_req{operation = create, gri = #gri{aspect = {dump_revision, _}}}) -> #{
+    required => #{
+        {aspect, <<"revisionNumber">>} => {any, fun(RevisionNumberBinary) ->
+            try
+                binary_to_integer(RevisionNumberBinary) > 0
+            catch _:_ ->
+                false
+            end
+        end}
+    }
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}},
-
-        <<"stores">> => {{jsonable_record, list, atm_store_schema}, any},
-        <<"lanes">> => {{jsonable_record, list, atm_lane_schema}, any},
-
-        <<"state">> => {atom, automation:all_workflow_schema_states()},
-
-        <<"supplementaryAtmLambdas">> => {json, any}  % validation is performed by atm_workflow_schema_builder
+        <<"summary">> => {binary, {size_limit, ?SUMMARY_SIZE_LIMIT}},
+        % validation of revision data is performed during the workflow schema update procedure
+        <<"revision">> => {json, any}
     }
 }.
-
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%% @private
+-spec revision_sanitizer_spec(binary()) -> entity_logic_sanitizer:sanitizer_spec().
+revision_sanitizer_spec(TargetRevisionNumber) ->
+    % NOTE: the target revision is generally given in the aspect, but a special "auto"
+    % keyword is accepted to indicate that the original revision number should be taken
+    % and then originalRevisionNumber key is mandatory. This is used especially when
+    % creating a revision from a JSON dump (which includes the originalRevisionNumber).
+    CommonRequired = #{
+        {aspect, <<"targetRevisionNumber">>} => {any, fun
+            (<<"auto">>) ->
+                true;
+            (Bin) when is_binary(Bin) ->
+                try
+                    binary_to_integer(Bin) > 0
+                catch _:_ ->
+                    false
+                end
+        end},
+        <<"atmWorkflowSchemaRevision">> => {{jsonable_record, single, atm_workflow_schema_revision}, any}
+    },
+
+    #{
+        required => case TargetRevisionNumber of
+            <<"auto">> ->
+                CommonRequired#{<<"originalRevisionNumber">> => {integer, {not_lower_than, 1}}};
+            _ ->
+                CommonRequired
+        end,
+        optional => #{
+            <<"supplementaryAtmLambdas">> => {json, any}  % validation is performed by atm_workflow_schema_builder
+        }
+    }.
+
+
+%% @private
+-spec lookup_and_sanitize_revision_data(entity_logic:data()) ->
+    {true, entity_logic:sanitized_data()} | false | no_return().
+lookup_and_sanitize_revision_data(Data) ->
+    case maps:find(<<"revision">>, Data) of
+        error ->
+            false;
+        {ok, RevisionData} ->
+            SanitizedRevisionData = entity_logic_sanitizer:ensure_valid(
+                revision_sanitizer_spec(<<"auto">>),
+                {revision, <<"auto">>},
+                RevisionData
+            ),
+            {true, SanitizedRevisionData}
+    end.
+
+
+%% @private
+-spec insert_revision(aai:auth(), od_atm_workflow_schema:id(), binary(), entity_logic:sanitized_data()) ->
+    ok | errors:error().
+insert_revision(Auth, AtmWorkflowSchemaId, RevisionNumberBinary, RevisionData) ->
+    RevisionNumber = case RevisionNumberBinary of
+        <<"auto">> -> maps:get(<<"originalRevisionNumber">>, RevisionData);
+        _ -> binary_to_integer(RevisionNumberBinary)
+    end,
+    atm_workflow_schema_builder:insert_revision(Auth, AtmWorkflowSchemaId, RevisionNumber, RevisionData).
+
 
 %% @private
 -spec can_manage_workflow_schemas(od_user:id(), od_atm_workflow_schema:record() | od_atm_inventory:id()) -> boolean().

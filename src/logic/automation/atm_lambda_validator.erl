@@ -21,9 +21,9 @@
 %%% API
 %%%===================================================================
 
--spec validate(od_atm_lambda:record()) -> ok | no_return().
-validate(AtmLambda) ->
-    atm_schema_validator:run_validation_procedures(AtmLambda, [
+-spec validate(atm_lambda_revision:record()) -> ok | no_return().
+validate(AtmLambdaRevision) ->
+    atm_schema_validator:run_validation_procedures(AtmLambdaRevision, [
         fun validate_argument_names/1,
         fun validate_result_names/1,
         fun sanitize_initial_values/1
@@ -34,25 +34,25 @@ validate(AtmLambda) ->
 %%%===================================================================
 
 %% @private
--spec validate_argument_names(od_atm_lambda:record()) ->
+-spec validate_argument_names(atm_lambda_revision:record()) ->
     ok | errors:error().
-validate_argument_names(#od_atm_lambda{argument_specs = ArgumentSpecs}) ->
+validate_argument_names(#atm_lambda_revision{argument_specs = ArgumentSpecs}) ->
     ArgumentNames = [S#atm_lambda_argument_spec.name || S <- ArgumentSpecs],
     atm_schema_validator:assert_unique_identifiers(name, ArgumentNames, <<"argumentSpecs">>).
 
 
 %% @private
--spec validate_result_names(od_atm_lambda:record()) ->
+-spec validate_result_names(atm_lambda_revision:record()) ->
     ok | errors:error().
-validate_result_names(#od_atm_lambda{result_specs = ResultSpecs}) ->
+validate_result_names(#atm_lambda_revision{result_specs = ResultSpecs}) ->
     ResultNames = [S#atm_lambda_result_spec.name || S <- ResultSpecs],
     atm_schema_validator:assert_unique_identifiers(name, ResultNames, <<"resultSpecs">>).
 
 
 %% @private
--spec sanitize_initial_values(od_atm_lambda:record()) ->
+-spec sanitize_initial_values(atm_lambda_revision:record()) ->
     ok | errors:error().
-sanitize_initial_values(#od_atm_lambda{argument_specs = ArgumentSpecs}) ->
+sanitize_initial_values(#atm_lambda_revision{argument_specs = ArgumentSpecs}) ->
     lists:foreach(fun(#atm_lambda_argument_spec{
         name = Name,
         default_value = DefaultValue,

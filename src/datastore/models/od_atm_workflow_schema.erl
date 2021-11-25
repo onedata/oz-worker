@@ -22,11 +22,13 @@
 -export([entity_logic_plugin/0]).
 -export([critical_section/2]).
 
--export([dump_schema_to_json/2]).
--export([fold_tasks/3, map_tasks/2, extract_atm_lambdas_from_lanes/1]).
+-export([dump_to_json/3, dump_revision_to_json/2]).
+-export([extract_all_atm_lambda_references/1]).
 
+%%% field encoding/decoding procedures
+-export([legacy_state_to_json/1, legacy_state_from_json/1]).
 %% datastore_model callbacks
--export([get_record_version/0, get_record_struct/1]).
+-export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
 
 -type id() :: binary().
 -type record() :: #od_atm_workflow_schema{}.
@@ -34,7 +36,7 @@
 -type diff() :: datastore_doc:diff(record()).
 -type name() :: binary().
 
--export_type([id/0, record/0]).
+-export_type([id/0, record/0, doc/0]).
 -export_type([name/0]).
 
 -define(CTX, #{
@@ -110,72 +112,64 @@ critical_section(AtmWorkflowSchemaId, Fun) ->
     critical_section:run({?MODULE, ?FUNCTION_NAME, AtmWorkflowSchemaId}, Fun).
 
 
--spec dump_schema_to_json(id(), record()) -> json_utils:json_map().
-dump_schema_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema) ->
+-spec dump_to_json(id(), record(), atm_workflow_schema_revision:revision_number()) -> json_utils:json_map().
+dump_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevisionNumber) ->
     #{
-        <<"schemaFormatVersion">> => 1,
+        <<"schemaFormatVersion">> => 2,
 
-        <<"atmWorkflowSchemaId">> => AtmWorkflowSchemaId,
+        <<"originalAtmWorkflowSchemaId">> => AtmWorkflowSchemaId,
 
         <<"name">> => AtmWorkflowSchema#od_atm_workflow_schema.name,
-        <<"description">> => AtmWorkflowSchema#od_atm_workflow_schema.description,
+        <<"summary">> => AtmWorkflowSchema#od_atm_workflow_schema.summary,
 
-        <<"stores">> => jsonable_record:list_to_json(AtmWorkflowSchema#od_atm_workflow_schema.stores, atm_store_schema),
-        <<"lanes">> => jsonable_record:list_to_json(AtmWorkflowSchema#od_atm_workflow_schema.lanes, atm_lane_schema),
-
-        <<"state">> => automation:workflow_schema_state_to_json(AtmWorkflowSchema#od_atm_workflow_schema.state),
-
-        <<"supplementaryAtmLambdas">> => lists:foldl(fun(AtmLambdaId, Acc) ->
-            {ok, #document{value = AtmLambda}} = od_atm_lambda:get(AtmLambdaId),
-            Acc#{
-                AtmLambdaId => od_atm_lambda:dump_to_json(AtmLambda)
-            }
-        end, #{}, extract_atm_lambdas_from_lanes(AtmWorkflowSchema#od_atm_workflow_schema.lanes))
+        <<"revision">> => dump_revision_to_json(AtmWorkflowSchema, IncludedRevisionNumber)
     }.
 
 
--spec fold_tasks(
-    fun((atm_task_schema:record(), AccIn :: term()) -> AccOut :: term()),
-    InitialAcc :: term(),
-    od_atm_workflow_schema:record() | [atm_lane_schema:record()]
-) -> FinalAcc :: term().
-fold_tasks(Callback, InitialAcc, #od_atm_workflow_schema{lanes = Lanes}) ->
-    fold_tasks(Callback, InitialAcc, Lanes);
-fold_tasks(Callback, InitialAcc, Lanes) ->
-    lists:foldl(fun(#atm_lane_schema{parallel_boxes = ParallelBoxes}, TopAcc) ->
-        lists:foldl(fun(#atm_parallel_box_schema{tasks = Tasks}, MiddleAcc) ->
-            lists:foldl(fun(#atm_task_schema{} = AtmTaskSchema, BottomAcc) ->
-                Callback(AtmTaskSchema, BottomAcc)
-            end, MiddleAcc, Tasks)
-        end, TopAcc, ParallelBoxes)
-    end, InitialAcc, Lanes).
+-spec dump_revision_to_json(record(), atm_workflow_schema_revision:revision_number()) -> json_utils:json_map().
+dump_revision_to_json(#od_atm_workflow_schema{revision_registry = RevisionRegistry}, RevisionNumber) ->
+    IncludedRevision = atm_workflow_schema_revision_registry:get_revision(RevisionNumber, RevisionRegistry),
+    #{
+        <<"schemaFormatVersion">> => 2,
+        <<"originalRevisionNumber">> => RevisionNumber,
+        <<"atmWorkflowSchemaRevision">> => jsonable_record:to_json(IncludedRevision, atm_workflow_schema_revision),
+        <<"supplementaryAtmLambdas">> => maps:map(fun(AtmLambdaId, ReferencedRevisionNumbers) ->
+            {ok, #document{value = AtmLambda}} = od_atm_lambda:get(AtmLambdaId),
+            maps_utils:generate_from_list(fun(ReferencedRevisionNumber) ->
+                Key = integer_to_binary(ReferencedRevisionNumber),
+                Value = od_atm_lambda:dump_to_json(AtmLambdaId, AtmLambda, ReferencedRevisionNumber),
+                {Key, Value}
+            end, ReferencedRevisionNumbers)
+        end, atm_workflow_schema_revision:extract_atm_lambda_references(IncludedRevision))
+    }.
 
 
--spec map_tasks(
-    fun((atm_task_schema:record()) -> atm_task_schema:record()),
-    od_atm_workflow_schema:record() | [atm_lane_schema:record()]
-) -> od_atm_workflow_schema:record() | [atm_lane_schema:record()].
-map_tasks(MappingFunction, #od_atm_workflow_schema{lanes = Lanes} = AtmWorkflowSchema) ->
-    AtmWorkflowSchema#od_atm_workflow_schema{
-        lanes = map_tasks(MappingFunction, Lanes)
-    };
-map_tasks(MappingFunction, Lanes) ->
-    lists:map(fun(Lane = #atm_lane_schema{parallel_boxes = ParallelBoxes}) ->
-        Lane#atm_lane_schema{
-            parallel_boxes = lists:map(fun(ParallelBox = #atm_parallel_box_schema{tasks = Tasks}) ->
-                ParallelBox#atm_parallel_box_schema{
-                    tasks = lists:map(MappingFunction, Tasks)
-                }
-            end, ParallelBoxes)
-        }
-    end, Lanes).
+-spec extract_all_atm_lambda_references(record()) -> atm_workflow_schema_revision:atm_lambda_references().
+extract_all_atm_lambda_references(#od_atm_workflow_schema{revision_registry = RevisionRegistry}) ->
+    atm_workflow_schema_revision_registry:fold_revisions(fun(AtmWorkflowSchemaRevision, AccExternal) ->
+        maps:fold(fun(AtmLambdaId, CurrentReferencedRevisionNumbers, AccInternal) ->
+            maps:update_with(AtmLambdaId, fun(AllReferencedRevisionNumbers) ->
+                lists_utils:union(CurrentReferencedRevisionNumbers, AllReferencedRevisionNumbers)
+            end, CurrentReferencedRevisionNumbers, AccInternal)
+        end, AccExternal, atm_workflow_schema_revision:extract_atm_lambda_references(AtmWorkflowSchemaRevision))
+    end, #{}, RevisionRegistry).
+
+%%%===================================================================
+%%% field encoding/decoding procedures
+%%%===================================================================
+
+%% NOTE: used only in record version 1
+-spec legacy_state_to_json(atom()) -> json_utils:json_term().
+legacy_state_to_json(incomplete) -> <<"incomplete">>;
+legacy_state_to_json(ready) -> <<"ready">>;
+legacy_state_to_json(deprecated) -> <<"deprecated">>.
 
 
--spec extract_atm_lambdas_from_lanes([atm_lane_schema:record()]) -> [od_atm_lambda:id()].
-extract_atm_lambdas_from_lanes(Lanes) ->
-    ordsets:to_list(fold_tasks(fun(#atm_task_schema{lambda_id = LambdaId}, Acc) ->
-        ordsets:add_element(LambdaId, Acc)
-    end, ordsets:new(), Lanes)).
+%% NOTE: used only in record version 1
+-spec legacy_state_from_json(json_utils:json_term()) -> atom().
+legacy_state_from_json(<<"incomplete">>) -> incomplete;
+legacy_state_from_json(<<"ready">>) -> ready;
+legacy_state_from_json(<<"deprecated">>) -> deprecated.
 
 %%%===================================================================
 %%% datastore_model callbacks
@@ -183,7 +177,7 @@ extract_atm_lambdas_from_lanes(Lanes) ->
 
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    1.
+    2.
 
 -spec get_record_struct(datastore_model:record_version()) ->
     datastore_model:record_struct().
@@ -195,11 +189,80 @@ get_record_struct(1) ->
         {stores, [{custom, string, {persistent_record, encode, decode, atm_store_schema}}]},
         {lanes, [{custom, string, {persistent_record, encode, decode, atm_lane_schema}}]},
 
-        {state, {custom, string, {automation, workflow_schema_state_to_json, workflow_schema_state_from_json}}},
+        {state, {custom, string, {?MODULE, legacy_state_to_json, legacy_state_from_json}}},
 
         {atm_inventory, string},
         {atm_lambdas, [string]},
 
         {creation_time, integer},
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
+    ]};
+get_record_struct(2) ->
+    % new field - summary
+    % new field - original_atm_workflow_schema
+    % description, stores, lane and state are now stored per revision in the revision registry
+    {record, [
+        {name, string},
+        {summary, string},
+
+        {revision_registry, {custom, string, {persistent_record, encode, decode, atm_workflow_schema_revision_registry}}},
+
+        {original_atm_workflow_schema, string},
+        {atm_inventory, string},
+        {atm_lambdas, [string]},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
     ]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades model's record from provided version to the next one.
+%% @end
+%%--------------------------------------------------------------------
+-spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
+    {datastore_model:record_version(), datastore_model:record()}.
+upgrade_record(1, OdAtmWorkflowSchema) ->
+    {
+        od_atm_workflow_schema,
+        Name,
+        Description,
+
+        Stores,
+        Lanes,
+
+        State,
+
+        AtmInventory,
+        AtmLambdas,
+
+        CreationTime,
+        Creator
+    } = OdAtmWorkflowSchema,
+    {2, #od_atm_workflow_schema{
+        name = Name,
+        summary = ?DEFAULT_SUMMARY,
+
+        revision_registry = atm_workflow_schema_revision_registry:insert_revision(
+            1,
+            #atm_workflow_schema_revision{
+                description = Description,
+                stores = Stores,
+                lanes = Lanes,
+                state = case State of
+                    incomplete -> draft;
+                    ready -> stable;
+                    deprecated -> deprecated
+                end
+            },
+            atm_workflow_schema_revision_registry:empty()
+        ),
+
+        original_atm_workflow_schema = undefined,
+        atm_inventory = AtmInventory,
+        atm_lambdas = AtmLambdas,
+
+        creation_time = CreationTime,
+        creator = Creator
+    }}.

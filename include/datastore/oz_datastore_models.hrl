@@ -480,18 +480,11 @@ end).
 }).
 
 -record(od_atm_lambda, {
-    name :: automation:name(),
-    summary :: automation:summary(),
-    description :: automation:description(),
+    revision_registry = atm_lambda_revision_registry:empty() :: atm_lambda_revision_registry:record(),
 
-    operation_spec :: atm_lambda_operation_spec:record(),
-    argument_specs = [] :: [atm_lambda_argument_spec:record()],
-    result_specs = [] :: [atm_lambda_result_spec:record()],
-
-    resource_spec :: atm_resource_spec:record(),
-
-    checksum = undefined :: undefined | od_atm_lambda:checksum(),
-
+    % this field is set for lambdas that were created
+    % as a copy of another lambda (from a JSON dump)
+    original_atm_lambda :: undefined | od_atm_lambda:id(),
     atm_inventories = [] :: entity_graph:relations(od_atm_inventory:id()),
     atm_workflow_schemas = [] :: entity_graph:relations(od_atm_workflow_schema:id()),
 
@@ -501,13 +494,13 @@ end).
 
 -record(od_atm_workflow_schema, {
     name :: automation:name(),
-    description :: automation:description(),
+    summary :: automation:name(),
 
-    stores = [] :: [atm_store_schema:record()],
-    lanes = [] :: [atm_lane_schema:record()],
+    revision_registry = atm_workflow_schema_revision_registry:empty() :: atm_workflow_schema_revision_registry:record(),
 
-    state :: automation:workflow_schema_state(),
-
+    % this field is set for workflow schemas that were created
+    % as a copy of another workflow schema (from a JSON dump)
+    original_atm_workflow_schema :: undefined | od_atm_workflow_schema:id(),
     atm_inventory :: undefined | od_atm_inventory:id(),  % undefined until a relation in entity graph is created
     atm_lambdas = [] :: [od_atm_lambda:id()],
 

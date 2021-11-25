@@ -82,5 +82,31 @@ routes() -> [
         method = 'POST',
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_atm_workflow_schema, id = ?BINDING(id), aspect = dump, scope = private}
+    }},
+    %% Insert atm_workflow_schema revision
+    %% This operation requires one of the following privileges:
+    %% - atm_inventory_manage_workflow_schemas
+    %% - oz_atm_inventories_update
+    {<<"/atm_workflow_schemas/:id/revision/:rid">>, #rest_req{
+        method = 'PUT',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_workflow_schema, id = ?BINDING(id), aspect = {revision, ?BINDING(rid)}, scope = private}
+    }},
+    %% Delete atm_workflow_schema revision
+    %% This operation requires one of the following privileges:
+    %% - atm_inventory_manage_workflow_schemas
+    %% - oz_atm_inventories_update
+    {<<"/atm_workflow_schemas/:id/revision/:rid">>, #rest_req{
+        method = 'DELETE',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_workflow_schema, id = ?BINDING(id), aspect = {revision, ?BINDING(rid)}, scope = private}
+    }},
+    %% Dump atm_workflow_schema revision to JSON
+    %% This operation requires one of the following privileges:
+    %% - oz_atm_inventories_view
+    {<<"/atm_workflow_schemas/:id/revision/:rid/dump">>, #rest_req{
+        method = 'POST',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_atm_workflow_schema, id = ?BINDING(id), aspect = {dump_revision, ?BINDING(rid)}, scope = private}
     }}
 ].

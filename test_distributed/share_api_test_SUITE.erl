@@ -353,13 +353,14 @@ update_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    InitialName = <<"Share name">>,
     InitialDescription = <<"This is a share">>,
     EnvSetUpFun = fun() ->
         ShareId = ?UNIQUE_STRING,
         {ok, ShareId} = oz_test_utils:create_share(
             Config, ?ROOT, #{
                 <<"shareId">> => ShareId,
-                <<"name">> => ?SHARE_NAME1,
+                <<"name">> => InitialName,
                 <<"description">> => InitialDescription,
                 <<"rootFileId">> => ?ROOT_FILE_ID,
                 <<"spaceId">> => S1
@@ -370,8 +371,8 @@ update_test(Config) ->
     VerifyEndFun = fun(ShouldSucceed, #{shareId := ShareId}, Data) ->
         {ok, Share} = oz_test_utils:get_share(Config, ShareId),
         ExpName = case ShouldSucceed of
-            false -> ?SHARE_NAME1;
-            true -> maps:get(<<"name">>, Data)
+            false -> InitialName;
+            true -> maps:get(<<"name">>, Data, InitialName)
         end,
         ExpDescription = case ShouldSucceed of
             false -> InitialDescription;
@@ -412,8 +413,10 @@ update_test(Config) ->
             expected_result = ?OK_RES
         },
         data_spec = #data_spec{
-            required = [<<"name">>],
-            optional = [<<"description">>],
+            at_least_one = [
+                <<"name">>,
+                <<"description">>
+            ],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"description">> => [<<"">>, str_utils:rand_hex(1397)]

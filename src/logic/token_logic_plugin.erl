@@ -430,7 +430,7 @@ required_admin_privileges(_) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+-spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
 validate(#el_req{operation = create, gri = #gri{aspect = examine}}) -> #{
     required => #{
         <<"token">> => {token, any}
@@ -485,7 +485,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 %%%===================================================================
 
 %% @private
--spec validate_verify_operation(OptionalParams :: map()) -> entity_logic:validity_verificator().
+-spec validate_verify_operation(OptionalParams :: map()) -> entity_logic_sanitizer:sanitizer_spec().
 validate_verify_operation(OptionalParams) -> #{
     required => #{
         <<"token">> => {token, any}
@@ -499,13 +499,13 @@ validate_verify_operation(OptionalParams) -> #{
 
 %% @private
 -spec validate_create_operation(named | temporary, aai:subject(), entity_logic:data()) ->
-    entity_logic:validity_verificator().
+    entity_logic_sanitizer:sanitizer_spec().
 validate_create_operation(named, Subject, Data) -> #{
     required => #{
         <<"name">> => {binary, name}
     },
     optional => maps:merge(
-        optional_invite_token_params(Data),
+        optional_invite_token_parameter_specs(Data),
         #{
             <<"type">> => {token_type, fun(Type) -> validate_type(Subject, named, Type, Data) end},
             <<"caveats">> => {caveats, any},
@@ -529,13 +529,12 @@ validate_create_operation(temporary, Subject, Data) -> #{
 %% token type is specified in the data parameters.
 %% @end
 %%--------------------------------------------------------------------
--spec optional_invite_token_params(entity_logic:data()) ->
-    #{Key :: binary() => {entity_logic:type_validator(), entity_logic:value_validator()}}.
-optional_invite_token_params(#{<<"type">> := JSON} = Data) when is_map(JSON) ->
-    optional_invite_token_params(Data#{<<"type">> := token_type:from_json(JSON)});
-optional_invite_token_params(#{<<"type">> := ?INVITE_TOKEN(InviteType, _)}) ->
-    token_metadata:optional_invite_token_parameters(InviteType);
-optional_invite_token_params(_) ->
+-spec optional_invite_token_parameter_specs(entity_logic:data()) -> entity_logic_sanitizer:parameter_specs().
+optional_invite_token_parameter_specs(#{<<"type">> := JSON} = Data) when is_map(JSON) ->
+    optional_invite_token_parameter_specs(Data#{<<"type">> := token_type:from_json(JSON)});
+optional_invite_token_parameter_specs(#{<<"type">> := ?INVITE_TOKEN(InviteType, _)}) ->
+    token_metadata:optional_invite_token_parameter_specs(InviteType);
+optional_invite_token_parameter_specs(_) ->
     #{}.
 
 
