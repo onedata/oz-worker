@@ -28,7 +28,7 @@
 %%% field encoding/decoding procedures
 -export([legacy_state_to_json/1, legacy_state_from_json/1]).
 %% datastore_model callbacks
--export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
+-export([get_record_version/0, get_record_struct/1]).
 
 -type id() :: binary().
 -type record() :: #od_atm_workflow_schema{}.
@@ -177,30 +177,11 @@ legacy_state_from_json(<<"deprecated">>) -> deprecated.
 
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    1.
 
 -spec get_record_struct(datastore_model:record_version()) ->
     datastore_model:record_struct().
 get_record_struct(1) ->
-    {record, [
-        {name, string},
-        {description, string},
-
-        {stores, [{custom, string, {persistent_record, encode, decode, atm_store_schema}}]},
-        {lanes, [{custom, string, {persistent_record, encode, decode, atm_lane_schema}}]},
-
-        {state, {custom, string, {?MODULE, legacy_state_to_json, legacy_state_from_json}}},
-
-        {atm_inventory, string},
-        {atm_lambdas, [string]},
-
-        {creation_time, integer},
-        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
-    ]};
-get_record_struct(2) ->
-    % new field - summary
-    % new field - original_atm_workflow_schema
-    % description, stores, lane and state are now stored per revision in the revision registry
     {record, [
         {name, string},
         {summary, string},
@@ -214,55 +195,3 @@ get_record_struct(2) ->
         {creation_time, integer},
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
     ]}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Upgrades model's record from provided version to the next one.
-%% @end
-%%--------------------------------------------------------------------
--spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
-    {datastore_model:record_version(), datastore_model:record()}.
-upgrade_record(1, OdAtmWorkflowSchema) ->
-    {
-        od_atm_workflow_schema,
-        Name,
-        Description,
-
-        Stores,
-        Lanes,
-
-        State,
-
-        AtmInventory,
-        AtmLambdas,
-
-        CreationTime,
-        Creator
-    } = OdAtmWorkflowSchema,
-    {2, #od_atm_workflow_schema{
-        name = Name,
-        summary = ?DEFAULT_SUMMARY,
-
-        revision_registry = atm_workflow_schema_revision_registry:insert_revision(
-            1,
-            #atm_workflow_schema_revision{
-                description = Description,
-                stores = Stores,
-                lanes = Lanes,
-                state = case State of
-                    incomplete -> draft;
-                    ready -> stable;
-                    deprecated -> deprecated
-                end
-            },
-            atm_workflow_schema_revision_registry:empty()
-        ),
-
-        original_atm_workflow_schema = undefined,
-        atm_inventory = AtmInventory,
-        atm_lambdas = AtmLambdas,
-
-        creation_time = CreationTime,
-        creator = Creator
-    }}.
