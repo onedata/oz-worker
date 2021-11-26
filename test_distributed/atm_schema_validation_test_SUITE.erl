@@ -36,7 +36,7 @@
 -export([
     atm_lambda_non_unique_argument_spec_names/1,
     atm_lambda_non_unique_result_spec_names/1,
-    atm_lambda_disallowed_default_value/1,
+    atm_lambda_disallowed_argument_default_value/1,
     atm_workflow_schema_non_unique_store_ids/1,
     atm_workflow_schema_reserved_store_id/1,
     atm_workflow_schema_non_unique_lane_ids/1,
@@ -58,7 +58,7 @@ all() ->
     ?ALL([
         atm_lambda_non_unique_argument_spec_names,
         atm_lambda_non_unique_result_spec_names,
-        atm_lambda_disallowed_default_value,
+        atm_lambda_disallowed_argument_default_value,
         atm_workflow_schema_non_unique_store_ids,
         atm_workflow_schema_reserved_store_id,
         atm_workflow_schema_non_unique_lane_ids,
@@ -139,21 +139,18 @@ atm_lambda_non_unique_result_spec_names(_Config) ->
     }).
 
 
-atm_lambda_disallowed_default_value(_Config) ->
+atm_lambda_disallowed_argument_default_value(_Config) ->
     lists:foreach(fun({DataSpec, InvalidDefaultValue}) ->
-        DataType = DataSpec#atm_data_spec.type,
         OffendingArgumentSpec = ozt_atm_lambdas:example_argument_spec_json(DataSpec, InvalidDefaultValue),
         #{<<"name">> := ArgumentName} = OffendingArgumentSpec,
+        DataKeyName = <<"argumentSpecs[", ArgumentName/binary, "].defaultValue">>,
         run_validation_tests(#test_spec{
             schema_type = atm_lambda,
             tested_data_field = <<"argumentSpecs">>,
             spoil_data_field_fun = fun(ArgumentSpecsJson, _AtmInventoryId) ->
                 {
                     lists_utils:shuffle([OffendingArgumentSpec | ArgumentSpecsJson]),
-                    ?ERROR_BAD_DATA(
-                        <<"argumentSpecs[", ArgumentName/binary, "].defaultValue">>,
-                        expected_disallowed_initial_value_error_description(DataType)
-                    )
+                    exp_disallowed_initial_value_error(DataKeyName, DataSpec, InvalidDefaultValue)
                 }
             end
         })
@@ -287,23 +284,21 @@ atm_workflow_schema_non_unique_task_ids(_Config) ->
 
 
 atm_workflow_schema_disallowed_store_default_initial_value(_Config) ->
+    StoreId = ?RAND_STR(16),
+    DataKeyName = <<"stores[", StoreId/binary, "].defaultInitialValue">>,
     lists:foreach(fun({StoreType, DataSpec, DefaultInitialValue, ExpError}) ->
         OffendingStoreSchema = ozt_atm_workflow_schemas:example_store_schema_json(StoreType, DataSpec, DefaultInitialValue),
-        #{<<"id">> := StoreId} = OffendingStoreSchema,
         run_validation_tests(#test_spec{
             schema_type = atm_workflow_schema,
             tested_data_field = <<"stores">>,
             spoil_data_field_fun = fun(StoresJson, _AtmInventoryId) ->
                 {
-                    lists_utils:shuffle([OffendingStoreSchema | StoresJson]),
-                    ?ERROR_BAD_DATA(
-                        <<"stores[", StoreId/binary, "].defaultInitialValue">>,
-                        ExpError
-                    )
+                    lists_utils:shuffle([OffendingStoreSchema#{<<"id">> => StoreId} | StoresJson]),
+                    ExpError
                 }
             end
         })
-    end, example_invalid_stores_and_default_initial_values()).
+    end, example_invalid_stores_and_default_initial_values(DataKeyName)).
 
 
 atm_workflow_schema_store_type_conflicting_with_data_spec(_Config) ->
@@ -753,44 +748,80 @@ example_invalid_data_specs_and_default_values() ->
             type = atm_store_credentials_type,
             value_constraints = #{store_type => lists_utils:random_element(automation:all_store_types())}
         }, 13},
-        {#atm_data_spec{type = atm_onedatafs_credentials_type}, #{<<"token">> => <<"123">>}}
+        {#atm_data_spec{type = atm_onedatafs_credentials_type}, #{<<"token">> => <<"123">>}},
+        {#atm_data_spec{
+            type = atm_array_type,
+            value_constraints = #{item_data_spec => #atm_data_spec{type = atm_string_type}}
+        }, <<"string">>},
+        {#atm_data_spec{
+            type = atm_array_type,
+            value_constraints = #{item_data_spec => #atm_data_spec{type = atm_string_type}}
+        }, [123456]},
+        {#atm_data_spec{
+            type = atm_array_type,
+            value_constraints = #{item_data_spec => #atm_data_spec{
+                type = atm_array_type,
+                value_constraints = #{item_data_spec => #atm_data_spec{type = atm_string_type}}
+            }}
+        }, [[<<"string">>, <<"string">>], #{<<"not-a">> => <<"list">>}]},
+        {#atm_data_spec{
+            type = atm_array_type,
+            value_constraints = #{item_data_spec => #atm_data_spec{
+                type = atm_array_type,
+                value_constraints = #{item_data_spec => #atm_data_spec{type = atm_string_type}}
+            }}
+        }, [[<<"string">>, <<"string">>], [#{<<"not-a">> => <<"string">>}]]}
     ].
 
 
 %% @private
-example_invalid_stores_and_default_initial_values() ->
-    lists:map(fun({DataSpec, InvalidDefaultValue}) ->
+example_invalid_stores_and_default_initial_values(DataKeyName) ->
+    lists:flatten(lists:map(fun({DataSpec, InvalidDefaultValue}) ->
         StoreType = lists_utils:random_element(atm_test_utils:available_store_types_for_data_spec(DataSpec)),
         case StoreType of
             list ->
-                {
-                    StoreType,
-                    DataSpec,
-                    InvalidDefaultValue,
-                    case InvalidDefaultValue of
-                        List when is_list(List) ->
-                            expected_disallowed_initial_value_error_description(DataSpec#atm_data_spec.type);
-                        _ ->
-                            <<"List store requires default initial value to be a list">>
-                    end
-                };
+                [
+                    case is_list(InvalidDefaultValue) of
+                        false ->
+                            {
+                                StoreType,
+                                DataSpec,
+                                InvalidDefaultValue,
+                                ?ERROR_BAD_DATA(
+                                    DataKeyName,
+                                    <<"List store requires default initial value to be a list">>
+                                )
+                            };
+                        true ->
+                            []
+                    end,
+                    {
+                        StoreType,
+                        DataSpec,
+                        [InvalidDefaultValue],
+                        exp_disallowed_initial_value_error(DataKeyName, DataSpec, InvalidDefaultValue)
+                    }
+                ];
             range ->
                 {
                     StoreType,
                     DataSpec,
                     InvalidDefaultValue,
-                    <<"Range store requires default initial value as an object with the following fields: "
-                    "\"end\" (required), \"start\" (optional), \"step\" (optional)">>
+                    ?ERROR_BAD_DATA(
+                        DataKeyName,
+                        <<"Range store requires default initial value as an object with the following fields: "
+                        "\"end\" (required), \"start\" (optional), \"step\" (optional)">>
+                    )
                 };
             _ ->
                 {
                     StoreType,
                     DataSpec,
                     InvalidDefaultValue,
-                    expected_disallowed_initial_value_error_description(DataSpec#atm_data_spec.type)
+                    exp_disallowed_initial_value_error(DataKeyName, DataSpec, InvalidDefaultValue)
                 }
         end
-    end, example_invalid_data_specs_and_default_values()).
+    end, example_invalid_data_specs_and_default_values())).
 
 
 %% @private
@@ -802,12 +833,46 @@ invalid_data_types_for_store_type() ->
 
 
 %% @private
-expected_disallowed_initial_value_error_description(atm_store_credentials_type) ->
-    <<"Initial value for store credentials is disallowed">>;
-expected_disallowed_initial_value_error_description(atm_onedatafs_credentials_type) ->
-    <<"Initial value for OnedetaFS credentials is disallowed">>;
-expected_disallowed_initial_value_error_description(DataType) ->
-    <<"The provided initial value is invalid for type '", (atm_data_type:type_to_json(DataType))/binary, "'">>.
+exp_disallowed_initial_value_error(DataKeyName, #atm_data_spec{type = atm_store_credentials_type}, _) ->
+    ?ERROR_BAD_DATA(DataKeyName, <<"Initial value for store credentials is disallowed">>);
+exp_disallowed_initial_value_error(DataKeyName, #atm_data_spec{type = atm_onedatafs_credentials_type}, _) ->
+    ?ERROR_BAD_DATA(DataKeyName, <<"Initial value for OnedetaFS credentials is disallowed">>);
+exp_disallowed_initial_value_error(DataKeyName, #atm_data_spec{type = atm_array_type} = AtmDataSpec, Values) ->
+    case is_list(Values) of
+        false ->
+            ?ERROR_BAD_DATA(
+                DataKeyName,
+                <<"The provided initial value for type 'array' must be a list">>
+            );
+        true ->
+            #atm_data_spec{
+                type = NestedItemDataType
+            } = NestedItemDataSpec = maps:get(item_data_spec, AtmDataSpec#atm_data_spec.value_constraints),
+            {ok, ExpError} = lists_utils:searchmap(fun({Index, Value}) ->
+                case atm_data_type:is_instance(NestedItemDataType, Value) of
+                    true when NestedItemDataType =/= atm_array_type ->
+                        false;
+                    _ ->
+                        try
+                            {true, exp_disallowed_initial_value_error(
+                                <<DataKeyName/binary, "[", (integer_to_binary(Index - 1))/binary, "]">>,
+                                NestedItemDataSpec,
+                                Value
+                            )}
+                        catch _:_ ->
+                            % currently checked Value may be okay in case of array type
+                            % in such case, keep searching
+                            false
+                        end
+                end
+            end, lists_utils:enumerate(Values)),
+            ExpError
+    end;
+exp_disallowed_initial_value_error(DataKeyName, #atm_data_spec{type = DataType}, _) ->
+    ?ERROR_BAD_DATA(
+        DataKeyName,
+        <<"The provided initial value is invalid for type '", (atm_data_type:type_to_json(DataType))/binary, "'">>
+    ).
 
 
 create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson) ->

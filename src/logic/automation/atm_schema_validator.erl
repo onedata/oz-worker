@@ -105,6 +105,24 @@ sanitize_initial_value(_Value, #atm_data_spec{type = atm_store_credentials_type}
     raise_validation_error(DataKeyName, "Initial value for store credentials is disallowed");
 sanitize_initial_value(_Value, #atm_data_spec{type = atm_onedatafs_credentials_type}, DataKeyName) ->
     raise_validation_error(DataKeyName, "Initial value for OnedetaFS credentials is disallowed");
+sanitize_initial_value(Array, #atm_data_spec{type = atm_array_type} = AtmDataSpec, DataKeyName) ->
+    #atm_data_spec{
+        type = DataType,
+        value_constraints = #{item_data_spec := ItemDataSpec}
+    } = AtmDataSpec,
+    case atm_data_type:is_instance(DataType, Array) of
+        true ->
+            lists:foreach(fun({Index, Value}) ->
+                NestedDataKeyName = str_utils:format_bin("~s[~B]", [
+                    DataKeyName, Index - 1  % count from 0 rather than 1 (as Erlang does)
+                ]),
+                sanitize_initial_value(Value, ItemDataSpec, NestedDataKeyName)
+            end, lists_utils:enumerate(Array));
+        false ->
+            raise_validation_error(DataKeyName, "The provided initial value for type '~s' must be a list", [
+                atm_data_type:type_to_json(DataType)
+            ])
+    end;
 sanitize_initial_value(Value, #atm_data_spec{type = DataType}, DataKeyName) ->
     case atm_data_type:is_instance(DataType, Value) of
         true ->
