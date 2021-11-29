@@ -789,7 +789,7 @@ example_invalid_stores_and_default_initial_values(DataKeyName) ->
                                 InvalidDefaultValue,
                                 ?ERROR_BAD_DATA(
                                     DataKeyName,
-                                    <<"List store requires default initial value to be a list">>
+                                    <<"List store requires default initial value to be an array of values">>
                                 )
                             };
                         true ->
@@ -842,7 +842,7 @@ exp_disallowed_initial_value_error(DataKeyName, #atm_data_spec{type = atm_array_
         false ->
             ?ERROR_BAD_DATA(
                 DataKeyName,
-                <<"The provided initial value for type 'array' must be a list">>
+                <<"The provided initial value for type 'array' must be an array of values">>
             );
         true ->
             #atm_data_spec{
