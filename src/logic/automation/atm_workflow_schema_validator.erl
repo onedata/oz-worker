@@ -121,7 +121,7 @@ sanitize_store_default_initial_value(list, DefaultInitialValue, DataSpec, DataKe
         _ ->
             atm_schema_validator:raise_validation_error(
                 DataKeyName,
-                "List store requires default initial value to be a list"
+                "List store requires default initial value to be an array of values"
             )
     end;
 sanitize_store_default_initial_value(_StoreType, DefaultInitialValue, DataSpec, DataKeyName) ->
