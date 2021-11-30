@@ -4,6 +4,43 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha23
+
+-   **VFS-8681** Added a new data type to automation machinery - the
+    array type, with recursive specification of the data type of its
+    elements.
+-   **VFS-8638** All lambdas now work in batch mode - the lambda creator
+    must handle the input with batch arguments and produce an output
+    with batch results. The batch size used during workflow execution is
+    controlled by the parameters \`maxBatchSize\` in lane schema
+    definitions and \`preferredBatchSize\` in lambda definitions.
+-   **VFS-8348** Web GUI: added links to transferred files on transfers
+    view and information about their membership in archive and dataset.
+-   **VFS-8288** It is now possible to specify requested resources and
+    resource limits on the lambda and task level for OpenFaaS functions.
+-   **VFS-8263** Added blocking modal when user tries to exit editor
+    with unsaved workflow.
+-   **VFS-8247** Added new option to harverster\'s indices that allow
+    for harvesting details about archives (archiveId, archiveDescription
+    and archiveCreationTime).
+-   **VFS-8172** Add \`/health\` endpoints to REST APIs of all services.
+-   **VFS-8073** Upgrade folly, wangle and proxygen libraries to version
+    2021.01.04.00.
+-   **VFS-7900** Added the possibility to unlink unused lambdas from an
+    automation inventory. Upon unlinking from its last inventory, the
+    lambda is automatically removed.
+-   **VFS-7898** Web GUI: added self-shortening links to files with
+    support for files inside archives.
+-   **VFS-7728** Introduced versioning of lambdas and workflow schemas.
+    Users may create subsequent revisions of the above models and modify
+    their statuses (draft, stable, deprecated) to simplify management
+    and retain backward compatibility of definitions that are already in
+    use.
+-   **VFS-7633** UX improvements in web GUI concerning navigation
+    between files, datasets and archives using hyperlinks.
+-   **VFS-7629** Web GUI: added new datasets panel with archives browser
+    in file browser.
+
 ### 21.02.0-alpha22
 
 ### 21.02.0-alpha21
