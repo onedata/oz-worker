@@ -406,7 +406,7 @@ check_forbidden_service_when_creating_scenarios(RequestSpec) ->
                     ?ERROR_TOKEN_SERVICE_FORBIDDEN(ForbiddenService),
                     ozt_tokens:try_create(Persistence, EligibleSubject, #{
                         <<"type">> => ?ACCESS_TOKEN,
-                        <<"caveats">> =>  [#cv_service{whitelist = [ForbiddenService]}]
+                        <<"caveats">> => [#cv_service{whitelist = [ForbiddenService]}]
                     })
                 ),
                 Token = ozt_tokens:create(Persistence, EligibleSubject),
@@ -533,13 +533,44 @@ check_token_caveats_handling(RequestSpec) ->
                 RandUnverifiedCaveats = lists_utils:random_sublist(gen_unverified_caveats(RequestSpec, RequestContext)),
                 ClientAuth = gen_client_auth(EligibleSubject, Persistence, RandCorrectCaveats ++ RandUnverifiedCaveats),
                 Result = make_request(RequestSpec, RequestContext, ClientAuth),
-                case RandUnverifiedCaveats of
-                    [] ->
-                        ?assertMatch(ok, Result);
-                    _ ->
-                        ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_)), Result),
+                % These tests cover only a subset of combinations and possibly
+                % there are some combinations wrongly handled by the test framework
+                % or backend implementation (hopefully, the former).
+                % If the result is not as expected, dump some verbose information to help in later debugging.
+                ShouldRequestSucceed = (RandUnverifiedCaveats =:= []),
+                TestPassed = case {ShouldRequestSucceed, Result} of
+                    {true, ok} ->
+                        true;
+                    {true, _UnsuccessfulResult} ->
+                        false;
+                    {false, ok} ->
+                        false;
+                    {false, ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_))} ->
                         ?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiedCaveat)) = Result,
-                        ?assert(lists:member(UnverifiedCaveat, RandUnverifiedCaveats))
+                        lists:member(UnverifiedCaveat, RandUnverifiedCaveats)
+                end,
+                case TestPassed of
+                    true ->
+                        ok;
+                    false ->
+                        ct:pal("Token caveats handling test failed!"),
+                        ct:pal("RequestSpec: ~p", [RequestSpec]),
+                        ct:pal("Persistence: ~p", [Persistence]),
+                        ct:pal("EligibleSubject: ~p", [EligibleSubject]),
+                        ct:pal("EligibleSubjectData: ~p", [case EligibleSubject of
+                            ?SUB(user, UserId) ->
+                                ozt_users:get(UserId);
+                            ?SUB(?ONEPROVIDER, ProviderId) ->
+                                ozt_providers:get(ProviderId);
+                            _ ->
+                                <<"none">>
+                        end ]),
+                        ct:pal("RequestContext: ~p", [RequestContext]),
+                        ct:pal("RandCorrectCaveats: ~p", [RandCorrectCaveats]),
+                        ct:pal("RandUnverifiedCaveats: ~p", [RandUnverifiedCaveats]),
+                        ct:pal("ClientAuth: ~p", [ClientAuth]),
+                        ct:pal("Result: ~p", [Result]),
+                        error(test_failed)
                 end
             end, lists:seq(1, ?CAVEAT_RANDOMIZATION_REPEATS))
         end, RequestSpec#request_spec.eligible_subjects)
