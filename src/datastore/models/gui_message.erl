@@ -42,6 +42,7 @@
 -define(ALLOWED_IDS, [
     <<"cookie_consent_notification">>,
     <<"privacy_policy">>,
+    <<"terms_of_use">>,
     <<"signin_notification">>
 ]).
 

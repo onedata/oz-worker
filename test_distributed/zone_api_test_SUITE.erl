@@ -445,6 +445,7 @@ expected_configuration(Config) ->
 gui_message_ids() -> [
     <<"cookie_consent_notification">>,
     <<"privacy_policy">>,
+    <<"terms_of_use">>,
     <<"signin_notification">>
 ].
 
