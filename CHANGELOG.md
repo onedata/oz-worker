@@ -4,6 +4,11 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 20.02.15
+
+-   **VFS-8630** Added support for displaying optional Terms of Use
+    document.
+
 ### 20.02.14
 
 -   **VFS-8482** Added dedicated page for privacy policy content.
