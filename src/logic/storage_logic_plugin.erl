@@ -426,8 +426,12 @@ support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) ->
     case is_imported_storage(Storage) of
         true -> 
             ensure_storage_not_supporting_any_space(Storage),
-            ensure_space_not_supported_by_imported_storage(SpaceId);
-        _ -> ok
+            case oz_worker:get_env(allow_multiple_imported_storages_supports, false) of
+                true -> ok;
+                false -> ensure_space_not_supported_by_imported_storage(SpaceId)
+            end;
+        _ -> 
+            ok
     end,
     
     entity_graph:add_relation(
