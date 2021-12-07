@@ -870,8 +870,8 @@ support_with_imported_storage_test(Config) ->
     % add some supports with not imported storages
     AddMultipleNotImportedSupportsFun(),
     
-    % support space with imported storage
     {ok, ImportedStorageP2} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
+    % support space with imported storage
     {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(P1), ImportedStorageP1, S1),
     
     % check that adding next support with imported storage fails
@@ -894,15 +894,42 @@ support_with_imported_storage_test(Config) ->
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
             correct_values = #{
-                <<"token">> => [CreateTokenFun(S1)],
+                <<"token">> => [fun() -> CreateTokenFun(S1) end],
                 <<"size">> => [MinSupportSize]
             }
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
     
+    % but after enabling multi imported storage support in app.config it should be possible
+    oz_test_utils:set_env(Config, allow_multiple_imported_storages_supports, true),
+    
+    EnvSetUpFun = fun() ->
+        {ok, ImportedStorage} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
+        #{storageId => ImportedStorage}
+    end,
+    ApiTestSpec1 = ApiTestSpec#api_test_spec{
+        logic_spec = #logic_spec{
+            module = storage_logic,
+            function = support_space,
+            args = [auth, storageId, data],
+            expected_result = ?OK_BINARY(S1)
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_storage, id = storageId, aspect = support},
+            expected_result = ?OK_MAP_CONTAINS(#{
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = SpaceId} = gri:deserialize(EncodedGri),
+                    ?assertEqual(S1, SpaceId)
+                end
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec1, EnvSetUpFun, undefined, undefined)),
+    
     % supporting second space with imported storage also should fail
-    ApiTestSpec1 = #api_test_spec{
+    ApiTestSpec2 = #api_test_spec{
         client_spec = #client_spec{
             correct = [{provider, P1, P1Token}]
         },
@@ -926,7 +953,7 @@ support_with_imported_storage_test(Config) ->
             }
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec1)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
     
     % check that space still can be supported with not imported storages
     AddMultipleNotImportedSupportsFun().
