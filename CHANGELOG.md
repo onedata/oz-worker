@@ -4,6 +4,12 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha24
+
+-   **VFS-7724** Web GUI: redesigned datasets and archives browser to
+    browse datasets tree and archives in single splitted view.
+
+
 ### 21.02.0-alpha23
 
 -   **VFS-8681** Added a new data type to automation machinery - the
