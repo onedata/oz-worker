@@ -1475,7 +1475,7 @@ check_multi_use_named_token(Tc = #testcase{token_type = TokenType}) ->
     ?assertMatch({ok, _}, consume_token(Tc, ConsumerAlpha, SingleUseToken)),
     ?assertMatch(?ERROR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, ConsumerBeta, SingleUseToken)),
 
-    UsageLimit = 17,
+    UsageLimit = 12,
     MultiUseToken = ozt_tokens:create(named, EligibleSubject, #{
         <<"type">> => TokenType, <<"usageLimit">> => UsageLimit
     }),

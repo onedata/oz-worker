@@ -37,7 +37,7 @@
 -export([example_data_json/1]).
 -export([example_revision_json/1]).
 -export([example_revision_with_nonempty_tasks_json/1]).
--export([example_store_schema_json/0, example_store_schema_json/1, example_store_schema_json/3]).
+-export([example_store_schema_json/0, example_store_schema_json/3]).
 -export([example_lane_schema_with_parallel_boxes_json/2, example_lane_schema_json/2, example_lane_schemas_json/2]).
 -export([example_parallel_box_schema/2, example_parallel_box_schemas/2]).
 -export([example_task_schema/2, example_task_schemas/2]).
@@ -297,13 +297,9 @@ example_revision_with_nonempty_tasks_json(AtmInventoryId) when is_binary(AtmInve
 example_store_schema_json() ->
     jsonable_record:to_json(atm_test_utils:example_store_schema(), atm_store_schema).
 
--spec example_store_schema_json(atm_data_spec:record()) -> entity_logic:data().
-example_store_schema_json(DataSpec) ->
-    jsonable_record:to_json(atm_test_utils:example_store_schema(DataSpec), atm_store_schema).
-
 -spec example_store_schema_json(automation:store_type(), atm_data_spec:record(), term()) -> entity_logic:data().
-example_store_schema_json(StoreType, DataSpec, DefaultInitialValue) ->
-    jsonable_record:to_json(atm_test_utils:example_store_schema(StoreType, DataSpec, DefaultInitialValue), atm_store_schema).
+example_store_schema_json(StoreType, StoreConfig, DefaultInitialContent) ->
+    jsonable_record:to_json(atm_test_utils:example_store_schema(StoreType, StoreConfig, DefaultInitialContent), atm_store_schema).
 
 
 -spec example_lane_schema_with_parallel_boxes_json([atm_parallel_box_schema:record()], [automation:id()]) ->

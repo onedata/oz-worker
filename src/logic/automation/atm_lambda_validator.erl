@@ -26,7 +26,7 @@ validate(AtmLambdaRevision) ->
     atm_schema_validator:run_validation_procedures(AtmLambdaRevision, [
         fun validate_argument_names/1,
         fun validate_result_names/1,
-        fun sanitize_initial_values/1
+        fun sanitize_default_values/1
     ]).
 
 %%%===================================================================
@@ -50,14 +50,14 @@ validate_result_names(#atm_lambda_revision{result_specs = ResultSpecs}) ->
 
 
 %% @private
--spec sanitize_initial_values(atm_lambda_revision:record()) ->
+-spec sanitize_default_values(atm_lambda_revision:record()) ->
     ok | errors:error().
-sanitize_initial_values(#atm_lambda_revision{argument_specs = ArgumentSpecs}) ->
+sanitize_default_values(#atm_lambda_revision{argument_specs = ArgumentSpecs}) ->
     lists:foreach(fun(#atm_lambda_argument_spec{
         name = Name,
         default_value = DefaultValue,
         data_spec = DataSpec
     }) ->
         DataKeyName = str_utils:format_bin("argumentSpecs[~s].defaultValue", [Name]),
-        atm_schema_validator:sanitize_initial_value(DefaultValue, DataSpec, DataKeyName)
+        atm_schema_validator:sanitize_predefined_value(DefaultValue, DataSpec, DataKeyName)
     end, ArgumentSpecs).

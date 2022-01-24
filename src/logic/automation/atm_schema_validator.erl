@@ -19,7 +19,7 @@
 -export([raise_validation_error/2, raise_validation_error/3]).
 -export([assert_unique_identifiers/3]).
 -export([assert_known_names/3]).
--export([sanitize_initial_value/3]).
+-export([sanitize_predefined_value/3]).
 
 % Name of the key in data object
 -type data_key_name() :: binary().
@@ -92,20 +92,20 @@ assert_known_names(NamesToCheck, KnownNames, DataKeyName) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Ensures that the initial value is valid in relation to given data spec.
-%% @TODO VFS-7683 Limit the size of values inserted into atm_stores or default values
-%% @TODO VFS-7755 Check if the default value's being an array corresponds to is_batch flag
+%% Ensures that the predefined value is valid in relation to given data spec.
+%% @TODO VFS-7683 Limit the size of values inserted into atm_stores or initial contents
+%% @TODO VFS-7755 Check if the predefined value's being an array corresponds to is_batch flag
 %% @end
 %%--------------------------------------------------------------------
--spec sanitize_initial_value(json_utils:json_term(), atm_data_spec:record(), data_key_name()) ->
+-spec sanitize_predefined_value(json_utils:json_term(), atm_data_spec:record(), data_key_name()) ->
     ok | no_return().
-sanitize_initial_value(undefined, _DataSpec, _DataKeyName) ->
+sanitize_predefined_value(undefined, _DataSpec, _DataKeyName) ->
     ok;
-sanitize_initial_value(_Value, #atm_data_spec{type = atm_store_credentials_type}, DataKeyName) ->
-    raise_validation_error(DataKeyName, "Initial value for store credentials is disallowed");
-sanitize_initial_value(_Value, #atm_data_spec{type = atm_onedatafs_credentials_type}, DataKeyName) ->
-    raise_validation_error(DataKeyName, "Initial value for OnedetaFS credentials is disallowed");
-sanitize_initial_value(Array, #atm_data_spec{type = atm_array_type} = AtmDataSpec, DataKeyName) ->
+sanitize_predefined_value(_Value, #atm_data_spec{type = atm_store_credentials_type}, DataKeyName) ->
+    raise_validation_error(DataKeyName, "Predefined value for store credentials is disallowed");
+sanitize_predefined_value(_Value, #atm_data_spec{type = atm_onedatafs_credentials_type}, DataKeyName) ->
+    raise_validation_error(DataKeyName, "Predefined value for OnedetaFS credentials is disallowed");
+sanitize_predefined_value(Array, #atm_data_spec{type = atm_array_type} = AtmDataSpec, DataKeyName) ->
     case atm_data_type:is_instance(atm_array_type, Array) of
         true ->
             ItemDataSpec = maps:get(item_data_spec, AtmDataSpec#atm_data_spec.value_constraints),
@@ -113,21 +113,21 @@ sanitize_initial_value(Array, #atm_data_spec{type = atm_array_type} = AtmDataSpe
                 NestedDataKeyName = str_utils:format_bin("~s[~B]", [
                     DataKeyName, Index - 1  % count from 0 rather than 1 (as Erlang does)
                 ]),
-                sanitize_initial_value(Value, ItemDataSpec, NestedDataKeyName)
+                sanitize_predefined_value(Value, ItemDataSpec, NestedDataKeyName)
             end, lists_utils:enumerate(Array));
         false ->
             raise_validation_error(
                 DataKeyName,
-                "The provided initial value for type '~s' must be an array of values",
+                "The provided predefined value for type '~s' must be an array of values",
                 [atm_data_type:type_to_json(atm_array_type)]
             )
     end;
-sanitize_initial_value(Value, #atm_data_spec{type = DataType}, DataKeyName) ->
+sanitize_predefined_value(Value, #atm_data_spec{type = DataType}, DataKeyName) ->
     case atm_data_type:is_instance(DataType, Value) of
         true ->
             ok;
         false ->
-            raise_validation_error(DataKeyName, "The provided initial value is invalid for type '~s'", [
+            raise_validation_error(DataKeyName, "The provided predefined value is invalid for type '~s'", [
                 atm_data_type:type_to_json(DataType)
             ])
     end.

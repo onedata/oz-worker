@@ -76,56 +76,89 @@ validate_all_ids_in_lanes(#validator_ctx{
     ok | no_return().
 validate_store_schemas(#validator_ctx{atm_workflow_schema_revision = #atm_workflow_schema_revision{stores = Stores}}) ->
     StoreIds = lists:map(fun(#atm_store_schema{
-        id = Id, type = Type, default_initial_value = DefaultInitialValue, data_spec = DataSpec
-    } = AtmStoreSchema) ->
+        id = Id, type = Type, config = Config, default_initial_content = DefaultInitialContent
+    }) ->
         lists:member(Id, ?PREDEFINED_SYSTEM_AUDIT_LOG_STORE_SCHEMA_IDS) andalso
             atm_schema_validator:raise_validation_error(
                 str_utils:format_bin("stores[~s].id", [Id]),
                 "The provided store schema Id is reserved and cannot be used in store schema definitions"
             ),
-        sanitize_store_type_and_data_spec(AtmStoreSchema),
-        DataKeyName = str_utils:format_bin("stores[~s].defaultInitialValue", [Id]),
-        sanitize_store_default_initial_value(Type, DefaultInitialValue, DataSpec, DataKeyName),
+        DataKeyName = str_utils:format_bin("stores[~s].defaultInitialContent", [Id]),
+        sanitize_store_default_initial_content(Type, Config, DefaultInitialContent, DataKeyName),
         Id
     end, Stores),
     atm_schema_validator:assert_unique_identifiers(id, StoreIds, <<"stores">>).
 
 
 %% @private
--spec sanitize_store_default_initial_value(
+-spec sanitize_store_default_initial_content(
     automation:store_type(),
+    atm_store_config:record(),
     json_utils:json_term(),
-    atm_data_spec:record(),
     atm_schema_validator:data_key_name()
 ) -> ok | no_return().
 %% @TODO VFS-7755 proper checks for other store types
-sanitize_store_default_initial_value(range, DefaultInitialValue, _DataSpec, DataKeyName) ->
-    case DefaultInitialValue of
+sanitize_store_default_initial_content(_StoreType, _Config, undefined, _DataKeyName) ->
+    % any store can have undefined default initial content
+    % time_series and audit_log stores have it implicitly set to undefined
+    ok;
+sanitize_store_default_initial_content(single_value, Config, DefaultInitialContent, DataKeyName) ->
+    atm_schema_validator:sanitize_predefined_value(
+        DefaultInitialContent, Config#atm_single_value_store_config.data_spec, DataKeyName
+    );
+sanitize_store_default_initial_content(list, Config, DefaultInitialContent, DataKeyName) ->
+    case DefaultInitialContent of
+        List when is_list(List) ->
+            lists:foreach(fun(Element) ->
+                atm_schema_validator:sanitize_predefined_value(
+                    Element, Config#atm_list_store_config.data_spec, DataKeyName
+                )
+            end, DefaultInitialContent);
+        _ ->
+            atm_schema_validator:raise_validation_error(
+                DataKeyName,
+                "List store requires default initial content to be an array of values"
+            )
+    end;
+sanitize_store_default_initial_content(map, Config, DefaultInitialContent, DataKeyName) ->
+    case DefaultInitialContent of
+        Map when is_map(Map) ->
+            maps:foreach(fun(_Key, Value) ->
+                atm_schema_validator:sanitize_predefined_value(
+                    Value, Config#atm_map_store_config.data_spec, DataKeyName
+                )
+            end, DefaultInitialContent);
+        _ ->
+            atm_schema_validator:raise_validation_error(
+                DataKeyName,
+                "Map store requires default initial content to be a map of values"
+            )
+    end;
+sanitize_store_default_initial_content(tree_forest, Config, DefaultInitialContent, DataKeyName) ->
+    case DefaultInitialContent of
+        List when is_list(List) ->
+            lists:foreach(fun(Element) ->
+                atm_schema_validator:sanitize_predefined_value(
+                    Element, Config#atm_tree_forest_store_config.data_spec, DataKeyName
+                )
+            end, DefaultInitialContent);
+        _ ->
+        atm_schema_validator:raise_validation_error(
+            DataKeyName,
+            "Tree forest store requires default initial content to be an array of values"
+        )
+    end;
+sanitize_store_default_initial_content(range, _Config, DefaultInitialContent, DataKeyName) ->
+    case DefaultInitialContent of
         #{<<"end">> := Index} when is_integer(Index) ->
             ok;
         _ ->
             atm_schema_validator:raise_validation_error(
                 DataKeyName,
-                "Range store requires default initial value as an object with the following fields: "
+                "Range store requires default initial content to be an object with the following fields: "
                 "\"end\" (required), \"start\" (optional), \"step\" (optional)"
             )
-    end;
-sanitize_store_default_initial_value(list, DefaultInitialValue, DataSpec, DataKeyName) ->
-    case DefaultInitialValue of
-        undefined ->
-            ok;
-        List when is_list(List) ->
-            lists:foreach(fun(Element) ->
-                atm_schema_validator:sanitize_initial_value(Element, DataSpec, DataKeyName)
-            end, DefaultInitialValue);
-        _ ->
-            atm_schema_validator:raise_validation_error(
-                DataKeyName,
-                "List store requires default initial value to be an array of values"
-            )
-    end;
-sanitize_store_default_initial_value(_StoreType, DefaultInitialValue, DataSpec, DataKeyName) ->
-    atm_schema_validator:sanitize_initial_value(DefaultInitialValue, DataSpec, DataKeyName).
+    end.
 
 
 %% @private
@@ -263,23 +296,6 @@ foreach_task(Callback, AtmWorkflowSchemaRevision) ->
 
 
 %% @private
--spec sanitize_store_type_and_data_spec(atm_store_schema:record()) -> ok | no_return().
-sanitize_store_type_and_data_spec(#atm_store_schema{type = tree_forest, data_spec = AtmDataSpec, id = Id}) ->
-    case AtmDataSpec of
-        #atm_data_spec{type = atm_file_type} -> ok;
-        #atm_data_spec{type = atm_dataset_type} -> ok;
-        #atm_data_spec{type = AtmDataType} -> raise_conflicting_store_and_data_type(Id, AtmDataType)
-    end;
-sanitize_store_type_and_data_spec(#atm_store_schema{type = range, data_spec = AtmDataSpec, id = Id}) ->
-    case AtmDataSpec of
-        #atm_data_spec{type = atm_integer_type} -> ok;
-        #atm_data_spec{type = AtmDataType} -> raise_conflicting_store_and_data_type(Id, AtmDataType)
-    end;
-sanitize_store_type_and_data_spec(#atm_store_schema{}) ->
-    ok.
-
-
-%% @private
 -spec assert_allowed_store_schema_reference(atm_schema_validator:data_key_name(), automation:id(), [automation:id()]) ->
     ok | no_return().
 assert_allowed_store_schema_reference(DataKeyName, StoreSchemaId, AllowedStoreSchemaIds) ->
@@ -298,14 +314,4 @@ raise_missing_required_argument_mapper_error(ArgumentName) ->
         <<"argumentMappings">>,
         "Missing argument mapper for required argument '~s'",
         [ArgumentName]
-    ).
-
-
-%% @private
--spec raise_conflicting_store_and_data_type(automation:id(), atm_data_type:type()) -> no_return().
-raise_conflicting_store_and_data_type(StoreId, AtmDataType) ->
-    atm_schema_validator:raise_validation_error(
-        str_utils:format_bin("stores[~s].type", [StoreId]),
-        "Provided store type is disallowed for data type ~s",
-        [atm_data_type:type_to_json(AtmDataType)]
     ).
