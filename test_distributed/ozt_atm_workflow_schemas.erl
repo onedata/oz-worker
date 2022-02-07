@@ -37,7 +37,7 @@
 -export([example_data_json/1]).
 -export([example_revision_json/1]).
 -export([example_revision_with_nonempty_tasks_json/1]).
--export([example_store_schema_json/0, example_store_schema_json/3]).
+-export([example_store_schema_json/0, example_store_schema_json/1, example_store_schema_json/3]).
 -export([example_lane_schema_with_parallel_boxes_json/2, example_lane_schema_json/2, example_lane_schemas_json/2]).
 -export([example_parallel_box_schema/2, example_parallel_box_schemas/2]).
 -export([example_task_schema/2, example_task_schemas/2]).
@@ -271,12 +271,12 @@ example_revision_json(AtmInventoryId) when is_binary(AtmInventoryId) ->
     end,
     example_revision_json(AtmLambdas);
 example_revision_json(AtmLambdas) when is_list(AtmLambdas) ->
-    StoresJson = jsonable_record:list_to_json(atm_test_utils:example_store_schemas(), atm_store_schema),
-    StoreSchemaIds = [StoreSchemaId || #{<<"id">> := StoreSchemaId} <- StoresJson],
+    StoreSchemas = atm_test_utils:example_store_schemas(),
+    StoreSchemasJson = jsonable_record:list_to_json(StoreSchemas, atm_store_schema),
     #{
         <<"description">> => atm_test_utils:example_description(),
-        <<"stores">> => StoresJson,
-        <<"lanes">> => example_lane_schemas_json(AtmLambdas, StoreSchemaIds),
+        <<"stores">> => StoreSchemasJson,
+        <<"lanes">> => example_lane_schemas_json(AtmLambdas, StoreSchemas),
         <<"state">> => automation:lifecycle_state_to_json(atm_test_utils:example_lifecycle_state())
     }.
 
@@ -297,34 +297,48 @@ example_revision_with_nonempty_tasks_json(AtmInventoryId) when is_binary(AtmInve
 example_store_schema_json() ->
     jsonable_record:to_json(atm_test_utils:example_store_schema(), atm_store_schema).
 
+-spec example_store_schema_json(automation:store_type()) -> entity_logic:data().
+example_store_schema_json(StoreType) ->
+    jsonable_record:to_json(atm_test_utils:example_store_schema(StoreType), atm_store_schema).
+
 -spec example_store_schema_json(automation:store_type(), atm_data_spec:record(), term()) -> entity_logic:data().
 example_store_schema_json(StoreType, StoreConfig, DefaultInitialContent) ->
-    jsonable_record:to_json(atm_test_utils:example_store_schema(StoreType, StoreConfig, DefaultInitialContent), atm_store_schema).
+    jsonable_record:to_json(
+        atm_test_utils:example_store_schema(StoreType, StoreConfig, DefaultInitialContent),
+        atm_store_schema
+    ).
 
 
--spec example_lane_schema_with_parallel_boxes_json([atm_parallel_box_schema:record()], [automation:id()]) ->
+-spec example_lane_schema_with_parallel_boxes_json([atm_parallel_box_schema:record()], [atm_store_schema:record()]) ->
     entity_logic:data().
-example_lane_schema_with_parallel_boxes_json(ParallelBoxes, StoreSchemaIds) ->
-    jsonable_record:to_json(atm_test_utils:example_lane_schema_with_parallel_boxes(ParallelBoxes, StoreSchemaIds), atm_lane_schema).
+example_lane_schema_with_parallel_boxes_json(ParallelBoxes, StoreSchemas) ->
+    ViableStoreSchemas = [S || S <- StoreSchemas, S#atm_store_schema.type /= time_series, S#atm_store_schema.type /= audit_log],
+    ViableStoreSchemas == [] andalso error(no_viable_stores),
+    ViableStoreSchemaIds = [S#atm_store_schema.id || S <- ViableStoreSchemas],
+    jsonable_record:to_json(
+        atm_test_utils:example_lane_schema_with_parallel_boxes(ParallelBoxes, ViableStoreSchemaIds),
+        atm_lane_schema
+    ).
 
--spec example_lane_schema_json([od_atm_lambda:id()], [automation:id()]) -> entity_logic:data().
+-spec example_lane_schema_json([od_atm_lambda:id()], [atm_store_schema:record()]) -> entity_logic:data().
 example_lane_schema_json(_AtmLambdas, []) ->
     error(empty_lambda_list);
-example_lane_schema_json([], _StoreSchemaIds) ->
+example_lane_schema_json([], _StoreSchemas) ->
     error(empty_store_schema_list);
-example_lane_schema_json(AtmLambdas, StoreSchemaIds) ->
+example_lane_schema_json(AtmLambdas, StoreSchemas) ->
+    StoreSchemaIds = [S#atm_store_schema.id || S <- StoreSchemas],
     ParallelBoxes = lists_utils:random_sublist(example_parallel_box_schemas(AtmLambdas, StoreSchemaIds)),
-    example_lane_schema_with_parallel_boxes_json(ParallelBoxes, StoreSchemaIds).
+    example_lane_schema_with_parallel_boxes_json(ParallelBoxes, StoreSchemas).
 
 
--spec example_lane_schemas_json([od_atm_lambda:id()], [automation:id()]) -> entity_logic:data().
+-spec example_lane_schemas_json([od_atm_lambda:id()], [atm_store_schema:record()]) -> entity_logic:data().
 example_lane_schemas_json(_AtmLambdas, []) ->
     [];
-example_lane_schemas_json([], _StoreSchemaIds) ->
+example_lane_schemas_json([], _StoreSchemas) ->
     [];
-example_lane_schemas_json(AtmLambdas, StoreSchemaIds) ->
+example_lane_schemas_json(AtmLambdas, StoreSchemas) ->
     lists_utils:generate(fun() ->
-        example_lane_schema_json(AtmLambdas, StoreSchemaIds)
+        example_lane_schema_json(AtmLambdas, StoreSchemas)
     end, ?RAND_INT(0, 5)).
 
 
