@@ -44,6 +44,7 @@ handshake_attributes(_Client) ->
     DefaultHarvestingBackendType = oz_worker:get_env(default_harvesting_backend_type, undefined),
     DefaultHarvestingBackendEndpoint = oz_worker:get_env(default_harvesting_backend_endpoint, undefined),
     #{
+        <<"globalTimeSeconds">> => global_clock:timestamp_seconds(),
         <<"zoneName">> => utils:undefined_to_null(oz_worker:get_name()),
         <<"zoneDomain">> => oz_worker:get_domain(),
         <<"serviceVersion">> => oz_worker:get_release_version(),
