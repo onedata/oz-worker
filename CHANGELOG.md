@@ -4,6 +4,8 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha25
+
 ### 21.02.0-alpha24
 
 -   **VFS-7724** Web GUI: redesigned datasets and archives browser to
