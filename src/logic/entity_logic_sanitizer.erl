@@ -425,16 +425,22 @@ sanitize_type(list_of_ipv4_addresses, Key, ListOfIPs) ->
 sanitize_type({jsonable_record, single, RecordType}, Key, Value) ->
     try
         jsonable_record:from_json(Value, RecordType)
-    catch _:_ ->
-        throw(?ERROR_BAD_DATA(Key))
+    catch
+        throw:{error, _} = Error ->
+            throw(Error);
+        _:_ ->
+            throw(?ERROR_BAD_DATA(Key))
     end;
 sanitize_type({jsonable_record, list, RecordType}, Key, Values) ->
     try
         lists:map(fun(Value) ->
             sanitize_type({jsonable_record, single, RecordType}, Key, Value)
         end, Values)
-    catch _:_ ->
-        throw(?ERROR_BAD_DATA(Key))
+    catch
+        throw:{error, _} = Error ->
+            throw(Error);
+        _:_ ->
+            throw(?ERROR_BAD_DATA(Key))
     end;
 sanitize_type(Rule, Key, _) ->
     ?error("Unknown type rule: ~p for key: ~p", [Rule, Key]),

@@ -69,6 +69,8 @@ run_tests(Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, undefined) ->
         Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, fun default_verify_fun/3
     );
 run_tests(Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, VerifyFun) ->
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     #api_test_spec{
         client_spec = ClientSpec,
         rest_spec = RestSpec,

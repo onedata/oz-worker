@@ -1475,7 +1475,7 @@ check_multi_use_named_token(Tc = #testcase{token_type = TokenType}) ->
     ?assertMatch({ok, _}, consume_token(Tc, ConsumerAlpha, SingleUseToken)),
     ?assertMatch(?ERROR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, ConsumerBeta, SingleUseToken)),
 
-    UsageLimit = 17,
+    UsageLimit = 18,
     MultiUseToken = ozt_tokens:create(named, EligibleSubject, #{
         <<"type">> => TokenType, <<"usageLimit">> => UsageLimit
     }),
@@ -1941,22 +1941,23 @@ consume_token(Auth, ConsumeRequest) ->
         not_available -> [logic, graphsync];
         _ -> [logic, graphsync, rest]
     end,
-    case lists_utils:random_element(AvailableInterfaces) of
-        logic -> consume_by_logic_call(ConsumeRequest);
-        graphsync -> consume_by_graphsync_request(Auth, ConsumeRequest);
-        rest -> consume_by_rest_call(Auth, ConsumeRequest)
+    Interface = lists_utils:random_element(AvailableInterfaces),
+    case consume_token_using_interface(Interface, Auth, ConsumeRequest) of
+        {error, timeout} ->
+            % retry once in case of timeouts, which can happen on slow machines
+            consume_token_using_interface(Interface, Auth, ConsumeRequest);
+        OtherResult ->
+            OtherResult
     end.
 
 
-consume_by_logic_call(#consume_request{logic_call_args = {Module, Function, Args}}) ->
-    ozt:rpc(Module, Function, Args).
+consume_token_using_interface(logic, _, #consume_request{logic_call_args = {Module, Function, Args}}) ->
+    ozt:rpc(Module, Function, Args);
 
+consume_token_using_interface(rest, Auth, #consume_request{rest_call_args = {UrnTokens, Data}}) ->
+    ozt_http:rest_call(auth_to_client_auth(Auth), post, UrnTokens, Data);
 
-consume_by_rest_call(Auth, #consume_request{rest_call_args = {UrnTokens, Data}}) ->
-    ozt_http:rest_call(auth_to_client_auth(Auth), post, UrnTokens, Data).
-
-
-consume_by_graphsync_request(Auth, #consume_request{graph_sync_args = {GRI, AuthHint, Data}}) ->
+consume_token_using_interface(graphsync, Auth, #consume_request{graph_sync_args = {GRI, AuthHint, Data}}) ->
     Endpoint = case Auth of
         ?PROVIDER(_) -> oneprovider;
         _ -> gui

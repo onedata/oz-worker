@@ -30,10 +30,6 @@
 % Time caveat is required in temporary tokens, a default one is added if there isn't any
 -define(DEFAULT_TEMP_CAVEAT_TTL, 36000).
 
--define(RAND_STR(), ?RAND_STR(16)).
--define(RAND_STR(Bytes), str_utils:rand_hex(Bytes)).
--define(RAND_BOOL(), lists_utils:random_element([true, false])).
--define(RAND_INT(From, To), From + rand:uniform(To - From + 1) - 1).
 -define(RAND_REV_NUMBER(), ?RAND_INT(1, 100)).
 
 % Macro used to check the result in ensure_exists / ensure_member functions
