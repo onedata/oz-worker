@@ -66,8 +66,7 @@ end_per_suite(_Config) ->
 % Number of members in each (applicable) entity
 -define(MEMBERS_COUNT, 5).
 
--define(RAND_SUBLIST(List), lists_utils:random_sublist(List)).
--define(RAND_SUBLIST(List, Len), lists_utils:random_sublist(List, Len, Len)).
+-define(RAND_SUBLIST(List, Len), ?RAND_SUBLIST(List, Len, Len)).
 
 -define(NAMES_A, [
     <<"Amazing">>, <<"Competent">>, <<"Ecstatic">>, <<"Flamboyant">>,
