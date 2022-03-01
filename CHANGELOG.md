@@ -4,6 +4,8 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 20.02.16
+
 ### 20.02.15
 
 -   **VFS-8630** Added support for displaying optional Terms of Use
