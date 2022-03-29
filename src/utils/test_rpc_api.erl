@@ -22,6 +22,7 @@
     simulate_downtime/1,
     timestamp_seconds/0,
     get_env/1,
+    set_env/2,
     get_domain/0,
 
     add_user_to_cluster/4,
@@ -75,6 +76,11 @@ timestamp_seconds() ->
 -spec get_env(Key :: atom()) -> term() | no_return().
 get_env(Env) ->
     oz_worker:get_env(Env).
+
+
+-spec set_env(Key :: atom(), term()) -> ok.
+set_env(Env, Value) ->
+    oz_worker:set_env(Env, Value).
 
 
 -spec get_domain() -> binary().
