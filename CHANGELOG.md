@@ -6,6 +6,12 @@ CHANGELOG
 
 ### 20.02.16
 
+-   **VFS-9182** Improved EGI group mapping for special COU groups
+    \"admins\" and \"members\"; their names are now concatenated with
+    parent group names for better presentation. Additionally, \"admins\"
+    groups now get admin privileges in their parent groups instead of
+    default member privileges.
+
 ### 20.02.15
 
 -   **VFS-8630** Added support for displaying optional Terms of Use
