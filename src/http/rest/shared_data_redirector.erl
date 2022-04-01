@@ -58,15 +58,15 @@ handle(ObjectId, Req) ->
                 end
         end
     catch
-        Type:Reason ->
-            ?debug_stacktrace("Error while redirecting to public share - ~p:~p", [Type, Reason]),
+        Type:Reason:Stacktrace ->
+            ?debug_stacktrace("Error while redirecting to public share - ~p:~p", [Type, Reason], Stacktrace),
             ?ERROR_INTERNAL_SERVER_ERROR
     end,
 
     case Result of
         {ok, ProviderId} ->
             #rest_resp{code = ?HTTP_307_TEMPORARY_REDIRECT, headers = #{
-                <<"location">> => build_provider_rest_endpoint(ProviderId, ObjectId, Req)
+                ?HDR_LOCATION => build_provider_rest_endpoint(ProviderId, ObjectId, Req)
             }};
         {error, _} = Error ->
             rest_translator:response(undefined, Error)

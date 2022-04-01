@@ -337,7 +337,7 @@ expired_sessions_cleanup_test_base(Config, AdjustTimeFun, CauseCleanupFun) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     Posthook = fun(NewConfig) ->
         oz_test_utils:freeze_time(NewConfig),
         mock_user_connected_callback(NewConfig),
@@ -347,7 +347,7 @@ init_per_suite(Config) ->
 
 
 end_per_suite(Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop(),
     oz_test_utils:unfreeze_time(Config),
     unmock_user_connected_callback(Config),
@@ -384,7 +384,7 @@ start_gs_connection(Config, Token, Cookie) ->
     % Prevent exiting GS connections from killing the test master
     process_flag(trap_exit, true),
     Nodes = ?config(oz_worker_nodes, Config),
-    rpc:multicall(Nodes, oz_worker, set_env, [mocked_pid, self()]),
+    utils:rpc_multicall(Nodes, oz_worker, set_env, [mocked_pid, self()]),
     {ok, ClientPid, #gs_resp_handshake{identity = Identity}} = gs_client:start_link(
         oz_test_utils:graph_sync_url(Config, gui),
         case Cookie of

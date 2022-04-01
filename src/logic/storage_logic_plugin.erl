@@ -355,7 +355,7 @@ required_admin_privileges(_) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+-spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"name">> => {binary, name}
@@ -426,8 +426,12 @@ support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) ->
     case is_imported_storage(Storage) of
         true -> 
             ensure_storage_not_supporting_any_space(Storage),
-            ensure_space_not_supported_by_imported_storage(SpaceId);
-        _ -> ok
+            case oz_worker:get_env(allow_multiple_imported_storages_supports, false) of
+                true -> ok;
+                false -> ensure_space_not_supported_by_imported_storage(SpaceId)
+            end;
+        _ -> 
+            ok
     end,
     
     entity_graph:add_relation(
@@ -444,6 +448,14 @@ support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) ->
             harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, false)
         end)
     end, Space#od_space.harvesters),
+
+    % provider supports are recalculated asynchronously - wait for it before
+    % returning to avoid race conditions when providers try to fetch the space
+    % entity, but they are not yet recognized as effective supporters and declined
+    utils:wait_until(fun() ->
+        space_logic:is_supported_by_provider(SpaceId, ProviderId) andalso
+            provider_logic:supports_space(ProviderId, SpaceId)
+    end),
 
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
     {ok, resource, {NewGRI, {SpaceData, Rev}}}.

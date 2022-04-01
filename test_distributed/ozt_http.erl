@@ -73,8 +73,8 @@ rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson) 
     ]),
     Opts = [
         {ssl_options, ssl_opts()},
-        {connect_timeout, timer:seconds(30)},
-        {recv_timeout, timer:seconds(30)}
+        {connect_timeout, timer:seconds(60)},
+        {recv_timeout, timer:seconds(60)}
     ],
     case http_client:request(Method, Url, Headers, json_utils:encode(DataJson), Opts) of
         {ok, OkCode, _, Body} when OkCode >= 200 andalso OkCode < 300 ->

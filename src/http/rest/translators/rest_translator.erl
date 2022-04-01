@@ -14,6 +14,7 @@
 
 -include("http/rest.hrl").
 -include("registered_names.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([response/2]).
 
@@ -96,7 +97,7 @@ created_reply_with_body(Body) ->
 %%--------------------------------------------------------------------
 -spec created_reply_with_location(PathTokens :: [binary()]) -> rest_handler:rest_resp().
 created_reply_with_location(PathTokens) ->
-    LocationHeader = #{<<"Location">> => oz_worker:get_rest_uri(filename:join(["/" | PathTokens]))},
+    LocationHeader = #{?HDR_LOCATION => oz_worker:get_rest_uri(filename:join(["/" | PathTokens]))},
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
 
 
@@ -166,4 +167,7 @@ entity_type_to_translator(od_harvester) -> harvester_rest_translator;
 entity_type_to_translator(od_cluster) -> cluster_rest_translator;
 entity_type_to_translator(od_token) -> token_rest_translator;
 entity_type_to_translator(temporary_token_secret) -> token_rest_translator;
+entity_type_to_translator(od_atm_inventory) -> atm_inventory_rest_translator;
+entity_type_to_translator(od_atm_lambda) -> atm_lambda_rest_translator;
+entity_type_to_translator(od_atm_workflow_schema) -> atm_workflow_schema_rest_translator;
 entity_type_to_translator(oz_worker) -> zone_rest_translator.

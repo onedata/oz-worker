@@ -58,6 +58,7 @@ fetch_entity(_) ->
 operation_supported(get, configuration, _) -> true;
 operation_supported(get, test_image, _) -> true;
 operation_supported(get, privileges, _) -> true;
+operation_supported(get, health, _) -> true;
 operation_supported(get, {gui_message, _}, _) -> true;
 operation_supported(update, {gui_message, _}, _) -> true;
 
@@ -99,6 +100,21 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
     SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
     CompatibilityRegistryRevision = query_compatibility_registry(peek_current_registry_revision, [Resolver]),
     CompatibleOpVersions = query_compatibility_registry(get_compatible_versions, [Resolver, ?ONEZONE, Version, ?ONEPROVIDER]),
+    OpenDataXrootdServerDomain = case oz_worker:get_env(open_data_xrootd_server_domain, undefined) of
+        undefined -> null;
+        Domain -> str_utils:to_binary(Domain)
+    end,
+    BagitUploaderWorkflowSchemaId = case oz_worker:get_env(bagit_uploader_workflow_schema_id, undefined) of
+        undefined ->
+            null;
+        IdStr ->
+            Id = str_utils:to_binary(IdStr),
+            case atm_workflow_schema_logic:exists(Id) of
+                true -> Id;
+                false -> null
+            end
+
+    end,
     {ok, #{
         <<"name">> => utils:undefined_to_null(oz_worker:get_name()),
         <<"version">> => Version,
@@ -107,7 +123,9 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
         <<"subdomainDelegationSupported">> => SubdomainDelegationSupported,
         <<"supportedIdPs">> => auth_config:get_supported_idps_in_configuration_format(),
         <<"compatibilityRegistryRevision">> => CompatibilityRegistryRevision,
-        <<"compatibleOneproviderVersions">> => CompatibleOpVersions
+        <<"compatibleOneproviderVersions">> => CompatibleOpVersions,
+        <<"openDataXrootdServerDomain">> => OpenDataXrootdServerDomain,
+        <<"bagitUploaderWorkflowSchemaId">> => BagitUploaderWorkflowSchemaId
     }};
 
 get(#el_req{gri = #gri{aspect = test_image}}, _) ->
@@ -131,6 +149,12 @@ get(#el_req{gri = #gri{aspect = {gui_message, MessageId}}}, _) ->
     case gui_message:get(MessageId) of
         {ok, #document{value = Message}} -> {ok, Message};
         {error, not_found} -> throw(?ERROR_NOT_FOUND)
+    end;
+
+get(#el_req{gri = #gri{aspect = health}}, _) ->
+    case node_manager:is_cluster_healthy() of
+        true -> {ok, #{<<"status">> => <<"healthy">>}};
+        false -> throw(?ERROR_INTERNAL_SERVER_ERROR)
     end.
 
 
@@ -194,6 +218,9 @@ authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
 authorize(#el_req{operation = get, gri = #gri{aspect = {gui_message, _}}}, _) ->
     true;
 
+authorize(#el_req{operation = get, gri = #gri{aspect = health}}, _) ->
+    true;
+
 authorize(#el_req{operation = update, gri = #gri{aspect = {gui_message, _}}}, _) ->
     % only root (onepanel) can perform this operation
     false;
@@ -220,7 +247,7 @@ required_admin_privileges(_) -> forbidden.
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+-spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
 validate(#el_req{operation = update, gri = #gri{aspect = {gui_message, _}}}) ->
     #{
         optional => #{

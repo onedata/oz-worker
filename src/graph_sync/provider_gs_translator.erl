@@ -89,11 +89,23 @@ translate_value(_, #gri{type = od_token, id = undefined, aspect = {offline_user_
     {ok, Serialized} = tokens:serialize(Token),
     Serialized;
 
+translate_value(_, #gri{type = od_atm_lambda, aspect = dump}, JsonMap) ->
+    JsonMap;
+
+translate_value(_, #gri{type = od_atm_lambda, aspect = {dump_revision, _}}, JsonMap) ->
+    JsonMap;
+
+translate_value(_, #gri{type = od_atm_workflow_schema, aspect = dump}, JsonMap) ->
+    JsonMap;
+
+translate_value(_, #gri{type = od_atm_workflow_schema, aspect = {dump_revision, _}}, JsonMap) ->
+    JsonMap;
+
 translate_value(ProtocolVersion, GRI, Data) ->
-    ?error("Cannot translate graph sync create result for:~n
-    ProtocolVersion: ~p~n
-    GRI: ~p~n
-    Data: ~p~n", [
+    ?error("Cannot translate graph sync create result for:~n"
+    "ProtocolVersion: ~p~n"
+    "GRI: ~p~n"
+    "Data: ~p~n", [
         ProtocolVersion, GRI, Data
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
@@ -132,6 +144,7 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         <<"effectiveSpaces">> => entity_graph:get_relations(effective, top_down, od_space, User),
         <<"effectiveHandles">> => entity_graph:get_relations(effective, top_down, od_handle, User),
         <<"effectiveHandleServices">> => entity_graph:get_relations(effective, top_down, od_handle_service, User),
+        <<"effectiveAtmInventories">> => entity_graph:get_relations(effective, top_down, od_atm_inventory, User),
 
         % TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"defaultSpaceId">> => null,
@@ -274,6 +287,7 @@ translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, sco
 
 translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = public}, ShareData) ->
     #{
+        <<"spaceId">> := SpaceId,
         <<"name">> := Name,
         <<"description">> := Description,
         <<"rootFileId">> := RootFileId,
@@ -281,11 +295,13 @@ translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, sco
         <<"handleId">> := HandleId
     } = ShareData,
     #{
+        <<"spaceId">> => SpaceId,
         <<"name">> => Name,
         <<"description">> => Description,
         <<"publicUrl">> => share_logic:build_public_url(ShareId),
         <<"publicRestUrl">> => share_logic:build_public_rest_url(ShareId),
-        <<"rootFileId">> => RootFileId, <<"fileType">> => FileType,
+        <<"rootFileId">> => RootFileId,
+        <<"fileType">> => FileType,
         <<"handleId">> => utils:undefined_to_null(HandleId)
     };
 
@@ -438,6 +454,44 @@ translate_resource(_, #gri{type = od_token, aspect = instance, scope = shared}, 
 
 translate_resource(_, #gri{type = temporary_token_secret, scope = shared}, Generation) ->
     #{<<"generation">> => Generation};
+
+translate_resource(_, #gri{type = od_atm_inventory, aspect = instance, scope = private}, AtmInventory) ->
+    #{
+        <<"name">> => AtmInventory#od_atm_inventory.name,
+
+        <<"atmLambdas">> => AtmInventory#od_atm_inventory.atm_lambdas,
+        <<"atmWorkflowSchemas">> => AtmInventory#od_atm_inventory.atm_workflow_schemas
+    };
+
+translate_resource(_, #gri{type = od_atm_lambda, aspect = instance, scope = private}, AtmLambda) ->
+    #od_atm_lambda{
+        revision_registry = RevisionRegistry,
+
+        atm_inventories = AtmInventories
+    } = AtmLambda,
+    #{
+        <<"revisionRegistry">> => jsonable_record:to_json(RevisionRegistry, atm_lambda_revision_registry),
+
+        <<"atmInventories">> => AtmInventories
+    };
+
+translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, scope = private}, AtmWorkflowSchema) ->
+    #od_atm_workflow_schema{
+        name = Name,
+        summary = Summary,
+
+        revision_registry = RevisionRegistry,
+
+        atm_inventory = AtmInventoryId
+    } = AtmWorkflowSchema,
+    #{
+        <<"name">> => Name,
+        <<"summary">> => Summary,
+
+        <<"revisionRegistry">> => jsonable_record:to_json(RevisionRegistry, atm_workflow_schema_revision_registry),
+
+        <<"atmInventoryId">> => AtmInventoryId
+    };
 
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync get result for:~n

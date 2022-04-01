@@ -39,7 +39,7 @@
     update_test/1,
     delete_test/1,
 
-    list_shares_test/1,
+    get_shares_test/1,
     get_share_test/1,
 
     list_storages_test/1,
@@ -60,7 +60,7 @@ all() ->
         update_test,
         delete_test,
 
-        list_shares_test,
+        get_shares_test,
         get_share_test,
 
         list_storages_test,
@@ -102,7 +102,7 @@ create_test(Config) ->
             method = post,
             path = <<"/spaces">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 BaseURL = ?URL(Config, [<<"/spaces/">>]),
                 [SpaceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(SpaceId)
@@ -172,7 +172,7 @@ list_test(Config) ->
             args = [auth],
             expected_result = ?OK_LIST(ExpSpaces)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -482,7 +482,7 @@ delete_test(Config) ->
     )).
 
 
-list_shares_test(Config) ->
+get_shares_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
@@ -523,7 +523,7 @@ list_shares_test(Config) ->
             args = [auth, S1],
             expected_result = ?OK_LIST(ExpShares)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -634,7 +634,7 @@ list_storages_test(Config) ->
             args = [auth, S1],
             expected_result = ?OK_LIST(ExpStorages)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -688,7 +688,7 @@ create_space_support_token(Config) ->
             args = [auth, S1],
             expected_result = ?OK_TERM(VerifyFun)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -741,7 +741,7 @@ remove_storage_test(Config) ->
             args = [auth, S1, storageId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
@@ -807,7 +807,7 @@ remove_provider_test(Config) ->
             args = [auth, S1, P1],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
@@ -862,7 +862,7 @@ list_effective_providers_test(Config) ->
             args = [auth, S1],
             expected_result = ?OK_LIST(ExpProviders)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -958,11 +958,11 @@ get_eff_provider_test(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

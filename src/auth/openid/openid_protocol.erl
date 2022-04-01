@@ -95,10 +95,11 @@ authenticate_by_idp_access_token(AccessTokenWithPrefix) ->
                     ?ERROR_UNAUTHORIZED(?ERROR_BAD_IDP_ACCESS_TOKEN(IdP));
                 throw:?ERROR_BAD_IDP_RESPONSE(_, 403, _, _) ->
                     ?ERROR_UNAUTHORIZED(?ERROR_BAD_IDP_ACCESS_TOKEN(IdP));
-                Type:Reason ->
+                Type:Reason:Stacktrace ->
                     ?error_stacktrace(
                         "Unexpected error during authentication by IdP access token - ~p:~p",
-                        [Type, Reason]
+                        [Type, Reason],
+                        Stacktrace
                     ),
                     ?ERROR_UNAUTHORIZED(?ERROR_INTERNAL_SERVER_ERROR)
             end
@@ -143,7 +144,7 @@ request_idp(Method, ExpCode, Endpoint, Headers, Parameters) ->
 request_idp(Method, ExpCode, Endpoint, Headers, Parameters, Opts) ->
     {Url, Body} = case Method of
         get -> {http_utils:append_url_parameters(Endpoint, Parameters), <<"">>};
-        post -> {Endpoint, http_utils:encode_http_parameters(Parameters)}
+        post -> {Endpoint, {form, maps:to_list(Parameters)}}
     end,
     case http_client:request(Method, Url, Headers, Body, Opts) of
         {ok, ExpCode, ResultHeaders, ResultBody} ->

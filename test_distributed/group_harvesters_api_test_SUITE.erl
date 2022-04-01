@@ -98,7 +98,7 @@ list_harvesters_test(Config) ->
             args = [auth, G1],
             expected_result = ?OK_LIST(ExpHarvesters)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -190,7 +190,7 @@ create_harvester_test(Config) ->
             method = post,
             path = [<<"/groups/">>, G1, <<"/harvesters">>],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 BaseURL = ?URL(Config, [<<"/groups/">>, G1, <<"/harvesters/">>]),
                 [HarvesterId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(HarvesterId)
@@ -271,7 +271,7 @@ join_harvester_test(Config) ->
             path = [<<"/groups/">>, G1, <<"/harvesters/join">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{harvesterId := HarvesterId} = _Env, _) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config,
                         [<<"/groups/">>, G1, <<"/harvesters/">>, HarvesterId]
                     ),
@@ -288,7 +288,7 @@ join_harvester_test(Config) ->
                 ?OK_BINARY(HarvesterId)
             end)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"token">>],
             correct_values = #{
@@ -336,7 +336,7 @@ join_harvester_test(Config) ->
             args = [auth, G1, data],
             expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_group, G1, od_harvester, Harvester))
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"token">>],
             correct_values = #{<<"token">> => [Serialized2]}
@@ -397,7 +397,7 @@ leave_harvester_test(Config) ->
             args = [auth, G1, harvesterId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -437,7 +437,7 @@ list_eff_harvesters_test(Config) ->
             args = [auth, G1],
             expected_result = ?OK_LIST(ExpHarvesters)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -498,11 +498,11 @@ get_eff_harvester_details_test(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

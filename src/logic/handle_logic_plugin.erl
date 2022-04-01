@@ -306,14 +306,15 @@ update(Req = #el_req{gri = #gri{id = HandleId, aspect = {group_privileges, Group
 delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
     try
         handle_proxy:unregister_handle(HandleId)
-    catch Type:Reason ->
+    catch Type:Reason:Stacktrace ->
         {ok, #document{value = #od_handle{
             public_handle = PublicHandle,
             handle_service = HandleService
         }}} = od_handle:get(HandleId),
         ?warning_stacktrace(
             "Handle ~s (~s) was removed but it failed to be unregistered from handle service ~s - ~w:~p",
-            [HandleId, PublicHandle, HandleService, Type, Reason]
+            [HandleId, PublicHandle, HandleService, Type, Reason],
+            Stacktrace
         )
     end,
     entity_graph:delete_with_relations(od_handle, HandleId);
@@ -557,7 +558,7 @@ required_admin_privileges(_) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+-spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"handleServiceId">> => {any, {exists, fun(Value) ->

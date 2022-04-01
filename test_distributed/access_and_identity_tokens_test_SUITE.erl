@@ -124,7 +124,7 @@ all() -> ?ALL([
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 init_per_testcase(_, Config) ->
@@ -140,7 +140,7 @@ end_per_testcase(_, _Config) ->
     ok.
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 %%%===================================================================
@@ -313,9 +313,9 @@ run_test_repeat(RequestSpec, RepeatNum) ->
         % This must be run with last repeat as it deletes the eligible subjects
         RepeatNum == ?TEST_REPEATS andalso check_subject_deleted_scenarios(RequestSpec),
         true
-    catch Type:Reason ->
+    catch Type:Reason:Stacktrace ->
         ct:pal("Access tokens test failed due to ~p:~p~nStacktrace: ~s", [
-            Type, Reason, lager:pr_stacktrace(erlang:get_stacktrace())
+            Type, Reason, lager:pr_stacktrace(Stacktrace)
         ]),
         false
     end.

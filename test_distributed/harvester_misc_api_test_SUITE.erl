@@ -120,7 +120,7 @@ create_test(Config) ->
             path = <<"/harvesters">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, Data) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/harvesters/">>]),
                     [HarvesterId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(HarvesterId, Data)
@@ -207,7 +207,7 @@ list_test(Config) ->
             args = [auth],
             expected_result = ?OK_LIST(ExpHarvesters)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -809,7 +809,7 @@ create_index_test(Config) ->
             path = [<<"/harvesters/">>, H1, <<"/indices">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, Data) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/harvesters/">>, H1, <<"/indices/">>]),
                     [IndexId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(IndexId, Data)
@@ -1551,11 +1551,11 @@ submit_batch_index_stats_test(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

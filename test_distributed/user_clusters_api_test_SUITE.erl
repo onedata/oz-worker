@@ -112,7 +112,7 @@ list_clusters_test(Config) ->
             args = [auth, U1],
             expected_result = ?OK_LIST(ExpClusters)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
@@ -195,7 +195,7 @@ create_provider_registration_token_test(Config) ->
             args = [auth, U1],
             expected_result = ?OK_TERM(VerifyFun)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -236,7 +236,7 @@ join_cluster_test(Config) ->
             path = <<"/user/clusters/join">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{clusterId := ClusterId} = _Env, _) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config, [<<"/user/clusters/">>, ClusterId]),
                     ?assertEqual(ExpLocation, Location),
                     true
@@ -280,7 +280,7 @@ join_cluster_test(Config) ->
                 ?OK_BINARY(ClusterId)
             end)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
@@ -311,7 +311,7 @@ join_cluster_test(Config) ->
             args = [auth, U1, data],
             expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_user, U1, od_cluster, NewCluster))
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"token">>],
             correct_values = #{<<"token">> => [Serialized2]}
@@ -371,7 +371,7 @@ get_cluster_test(Config) ->
             args = [auth, U1, ClusterId],
             expected_result = api_test_expect:protected_cluster(logic, ClusterId, ?ONEPROVIDER, ?SUB(user, U1))
         }
-        % @todo gs
+        % @TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
@@ -427,7 +427,7 @@ leave_cluster_test(Config) ->
             args = [auth, U1, clusterId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity, [
         Config, ApiTestSpec2, EnvSetUpFun, VerifyEndFun, DeleteEntityFun
@@ -493,7 +493,7 @@ list_eff_clusters_test(Config) ->
             args = [auth, U2],
             expected_result = ?OK_LIST(ExpClusters)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
@@ -569,7 +569,7 @@ get_eff_cluster_test(Config) ->
                 args = [auth, U1, ClusterId],
                 expected_result = api_test_expect:protected_cluster(logic, ClusterId, Type, Creator)
             }
-            % @todo gs
+            % @TODO VFS-4520 Tests for GraphSync API
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
 
@@ -582,11 +582,11 @@ get_eff_cluster_test(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

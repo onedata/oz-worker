@@ -74,160 +74,180 @@ all() ->
 
 
 add_user_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, Creator} = oz_test_utils:create_user(Config),
     {ok, EffectiveUser} = oz_test_utils:create_user(Config),
-    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUserWithoutAddUserPriv} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+    oz_test_utils:user_set_oz_privileges(Config, Creator, [?OZ_HARVESTERS_CREATE], []),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(Creator), ?HARVESTER_CREATE_DATA),
 
     % EffectiveUser belongs to harvester H1 effectively via SubGroup1, with the
-    % effective privilege to INVITE_USER, so he should be able to join the harvester as a user
+    % effective privilege to ADD_USER, so he should be able to add himself to the harvester
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:harvester_add_group(Config, H1, SubGroup1),
     oz_test_utils:harvester_set_group_privileges(Config, H1, SubGroup1, [?HARVESTER_ADD_USER], []),
 
-    % EffectiveUserWithoutInvitePriv belongs to group H1 effectively via SubGroup2,
-    % but without the effective privilege to INVITE_USER, so he should NOT be able
-    % to join the parent group as a user
-    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
+    % EffectiveUserWithoutAddUserPriv belongs to group H1 effectively via SubGroup2,
+    % but without the effective privilege to ADD_USER, so he should NOT be able
+    % to add himself to the harvester
+    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutAddUserPriv), ?GROUP_NAME2),
     {ok, SubGroup2} = oz_test_utils:harvester_add_group(Config, H1, SubGroup2),
 
-    VerifyEndFun = fun
-        (true = _ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:harvester_get_users(Config, H1),
-            ?assert(lists:member(EffectiveUser, Users)),
-            oz_test_utils:harvester_remove_user(Config, H1, EffectiveUser);
-        (false = _ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:harvester_get_users(Config, H1),
-            ?assertNot(lists:member(EffectiveUser, Users))
-    end,
+    lists:foreach(fun({ClientClassification, SubjectUser}) ->
+        VerifyEndFun = fun
+            (true = _ShouldSucceed, _, _) ->
+                {ok, Users} = oz_test_utils:harvester_get_users(Config, H1),
+                ?assert(lists:member(SubjectUser, Users)),
+                oz_test_utils:harvester_remove_user(Config, H1, SubjectUser);
+            (false = _ShouldSucceed, _, _) ->
+                {ok, Users} = oz_test_utils:harvester_get_users(Config, H1),
+                ?assertNot(lists:member(SubjectUser, Users))
+        end,
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_HARVESTERS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin}
-            ]
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = lists:flatten([
+                    root,
+                    {admin, [?OZ_HARVESTERS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]},
+                    case ClientClassification of
+                        correct -> {user, SubjectUser};
+                        forbidden -> []
+                    end
+                ]),
+                unauthorized = [nobody],
+                forbidden = lists:flatten([
+                    {user, Creator},
+                    {user, NonAdmin},
+                    case ClientClassification of
+                        correct -> [];
+                        forbidden -> {user, SubjectUser}
+                    end
+                ])
+            },
+            rest_spec = #rest_spec{
+                method = put,
+                path = [<<"/harvesters/">>, H1, <<"/users/">>, SubjectUser],
+                expected_code = ?HTTP_201_CREATED,
+                expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
+                    ExpLocation = ?URL(Config, [<<"/harvesters/">>, H1, <<"/users/">>, SubjectUser]),
+                    ?assertEqual(ExpLocation, Location),
+                    true
+                end
+            },
+            logic_spec = #logic_spec{
+                module = harvester_logic,
+                function = add_user,
+                args = [auth, H1, SubjectUser, data],
+                expected_result = ?OK_BINARY(SubjectUser)
+            },
+            % TODO VFS-4520 Tests for GraphSync API
+            data_spec = #data_spec{
+                required = [],
+                correct_values = #{},
+                bad_values = []
+            }
         },
-        rest_spec = #rest_spec{
-            method = put,
-            path = [<<"/harvesters/">>, H1, <<"/users/">>, EffectiveUser],
-            expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/harvesters/">>, H1, <<"/users/">>, EffectiveUser]),
-                ?assertEqual(ExpLocation, Location),
-                true
-            end
-        },
-        logic_spec = #logic_spec{
-            module = harvester_logic,
-            function = add_user,
-            args = [auth, H1, EffectiveUser, data],
-            expected_result = ?OK_BINARY(EffectiveUser)
-        },
-        % TODO gs
-        data_spec = #data_spec{
-            required = [],
-            correct_values = #{},
-            bad_values = []
-        }
-    },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, undefined, undefined, VerifyEndFun
-    )).
+        ?assert(api_test_utils:run_tests(
+            Config, ApiTestSpec, undefined, undefined, VerifyEndFun
+        ))
+    end, [{correct, EffectiveUser}, {forbidden, EffectiveUserWithoutAddUserPriv}]).
 
 
 add_user_with_privileges_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, Creator} = oz_test_utils:create_user(Config),
     {ok, EffectiveUser} = oz_test_utils:create_user(Config),
-    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUserWithoutAddUserPriv} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+    oz_test_utils:user_set_oz_privileges(Config, Creator, [?OZ_HARVESTERS_CREATE], []),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(Creator), ?HARVESTER_CREATE_DATA),
 
     AllPrivs = privileges:harvester_privileges(),
 
     % EffectiveUser belongs to harvester H1 effectively via SubGroup1, with the
-    % effective privilege to INVITE_USER, so he should be able to join the harvester as a user
+    % effective privilege to ADD_USER, so he should be able to add himself to the harvester
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:harvester_add_group(Config, H1, SubGroup1),
     oz_test_utils:harvester_set_group_privileges(Config, H1, SubGroup1, [?HARVESTER_ADD_USER, ?HARVESTER_SET_PRIVILEGES], []),
 
-    % EffectiveUserWithoutInvitePriv belongs to group H1 effectively via SubGroup2,
-    % but without the effective privilege to INVITE_USER, so he should NOT be able
-    % to join the parent group as a user
-    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
+    % EffectiveUserWithoutAddUserPriv belongs to group H1 effectively via SubGroup2,
+    % but without the effective privilege to ADD_USER, so he should NOT be able
+    % to add himself to the harvester
+    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutAddUserPriv), ?GROUP_NAME2),
     {ok, SubGroup2} = oz_test_utils:harvester_add_group(Config, H1, SubGroup2),
 
-    VerifyEndFun = fun
-        (true = _ShouldSucceed, _, Data) ->
-            Privs = lists:sort(maps:get(<<"privileges">>, Data)),
-            {ok, ActualPrivs} = oz_test_utils:harvester_get_user_privileges(
-                Config, H1, EffectiveUser
-            ),
-            ?assertEqual(Privs, lists:sort(ActualPrivs)),
-            oz_test_utils:harvester_remove_user(Config, H1, EffectiveUser);
-        (false = ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:harvester_get_users(Config, H1),
-            ?assertEqual(lists:member(EffectiveUser, Users), ShouldSucceed)
-    end,
+    lists:foreach(fun({ClientClassification, SubjectUser}) ->
+        VerifyEndFun = fun
+            (true = _ShouldSucceed, _, Data) ->
+                Privs = lists:sort(maps:get(<<"privileges">>, Data)),
+                {ok, ActualPrivs} = oz_test_utils:harvester_get_user_privileges(
+                    Config, H1, SubjectUser
+                ),
+                ?assertEqual(Privs, lists:sort(ActualPrivs)),
+                oz_test_utils:harvester_remove_user(Config, H1, SubjectUser);
+            (false = ShouldSucceed, _, _) ->
+                {ok, Users} = oz_test_utils:harvester_get_users(Config, H1),
+                ?assertEqual(lists:member(SubjectUser, Users), ShouldSucceed)
+        end,
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_HARVESTERS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS, ?OZ_HARVESTERS_SET_PRIVILEGES]}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = put,
-            path = [<<"/harvesters/">>, H1, <<"/users/">>, EffectiveUser],
-            expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/harvesters/">>, H1, <<"/users/">>, EffectiveUser]),
-                ?assertEqual(ExpLocation, Location),
-                true
-            end
-        },
-        logic_spec = #logic_spec{
-            module = harvester_logic,
-            function = add_user,
-            args = [auth, H1, EffectiveUser, data],
-            expected_result = ?OK_BINARY(EffectiveUser)
-        },
-        % TODO gs
-        data_spec = #data_spec{
-            required = [<<"privileges">>],
-            correct_values = #{
-                <<"privileges">> => [
-                    [?HARVESTER_UPDATE],
-                    [?HARVESTER_VIEW]
-                ]
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = lists:flatten([
+                    root,
+                    {admin, [?OZ_HARVESTERS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS, ?OZ_HARVESTERS_SET_PRIVILEGES]},
+                    case ClientClassification of
+                        correct -> {user, SubjectUser};
+                        forbidden -> []
+                    end
+                ]),
+                unauthorized = [nobody],
+                forbidden = lists:flatten([
+                    {user, Creator},
+                    {user, NonAdmin},
+                    case ClientClassification of
+                        correct -> [];
+                        forbidden -> {user, SubjectUser}
+                    end
+                ])
             },
-            bad_values = [
-                {<<"privileges">>, <<"">>,
-                    ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
-                {<<"privileges">>, [?HARVESTER_VIEW, ?GROUP_VIEW],
-                    ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
-            ]
-        }
-    },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, undefined, undefined, VerifyEndFun
-    )).
+            rest_spec = #rest_spec{
+                method = put,
+                path = [<<"/harvesters/">>, H1, <<"/users/">>, SubjectUser],
+                expected_code = ?HTTP_201_CREATED,
+                expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
+                    ExpLocation = ?URL(Config, [<<"/harvesters/">>, H1, <<"/users/">>, SubjectUser]),
+                    ?assertEqual(ExpLocation, Location),
+                    true
+                end
+            },
+            logic_spec = #logic_spec{
+                module = harvester_logic,
+                function = add_user,
+                args = [auth, H1, SubjectUser, data],
+                expected_result = ?OK_BINARY(SubjectUser)
+            },
+            % TODO VFS-4520 Tests for GraphSync API
+            data_spec = #data_spec{
+                required = [<<"privileges">>],
+                correct_values = #{
+                    <<"privileges">> => [
+                        [?HARVESTER_UPDATE],
+                        [?HARVESTER_VIEW]
+                    ]
+                },
+                bad_values = [
+                    {<<"privileges">>, <<"">>,
+                        ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
+                    {<<"privileges">>, [?HARVESTER_VIEW, ?GROUP_VIEW],
+                        ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
+                ]
+            }
+        },
+        ?assert(api_test_utils:run_tests(
+            Config, ApiTestSpec, undefined, undefined, VerifyEndFun
+        ))
+    end, [{correct, EffectiveUser}, {forbidden, EffectiveUserWithoutAddUserPriv}]).
 
 
 create_user_invite_token_test(Config) ->
@@ -265,7 +285,7 @@ create_user_invite_token_test(Config) ->
             args = [auth, H1],
             expected_result = ?OK_TERM(VerifyFun)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -316,7 +336,7 @@ remove_user_test(Config) ->
             args = [auth, H1, userId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
@@ -362,7 +382,7 @@ list_users_test(Config) ->
             args = [auth, H1],
             expected_result = ?OK_LIST(ExpUsers)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -446,7 +466,7 @@ get_user_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:harvester_add_user(Config, H1, U3),
@@ -487,7 +507,7 @@ get_user_privileges_test(Config) ->
             args = [auth, H1, U3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
@@ -506,7 +526,7 @@ update_user_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to update user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:harvester_add_user(Config, H1, U3),
@@ -546,7 +566,7 @@ update_user_privileges_test(Config) ->
             args = [auth, H1, U3, data],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(update_privileges, [
@@ -587,7 +607,7 @@ list_eff_users_test(Config) ->
             args = [auth, H1],
             expected_result = ?OK_LIST(ExpUsers)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -682,10 +702,7 @@ get_eff_user_privileges_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    % User whose eff privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
-    % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, SubjectUser} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
@@ -694,8 +711,8 @@ get_eff_user_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:harvester_add_group(Config, H1, G1),
     {ok, G2} = oz_test_utils:harvester_add_group(Config, H1, G2),
     {ok, G3} = oz_test_utils:group_add_group(Config, G1, G3),
-    {ok, U3} = oz_test_utils:group_add_user(Config, G3, U3),
-    {ok, U3} = oz_test_utils:group_add_user(Config, G2, U3),
+    {ok, SubjectUser} = oz_test_utils:group_add_user(Config, G3, SubjectUser),
+    {ok, SubjectUser} = oz_test_utils:group_add_user(Config, G2, SubjectUser),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -727,7 +744,7 @@ get_eff_user_privileges_test(Config) ->
                 {admin, [?OZ_HARVESTERS_VIEW_PRIVILEGES]},
                 {user, U2},
                 % user can always see his own privileges
-                {user, U3}
+                {user, SubjectUser}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -738,7 +755,7 @@ get_eff_user_privileges_test(Config) ->
         rest_spec = #rest_spec{
             method = get,
             path = [
-                <<"/harvesters/">>, H1, <<"/effective_users/">>, U3,
+                <<"/harvesters/">>, H1, <<"/effective_users/">>, SubjectUser,
                 <<"/privileges">>
             ],
             expected_code = ?HTTP_200_OK,
@@ -747,15 +764,15 @@ get_eff_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_eff_user_privileges,
-            args = [auth, H1, U3],
+            args = [auth, H1, SubjectUser],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?HARVESTER_VIEW_PRIVILEGES, false, U3
+        {user, SubjectUser}, ?HARVESTER_VIEW_PRIVILEGES, false, SubjectUser
     ])).
 
 
@@ -864,11 +881,11 @@ get_eff_user_membership_intermediaries(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

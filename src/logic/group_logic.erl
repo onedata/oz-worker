@@ -45,6 +45,7 @@
     create_handle_service/5, create_handle_service/3,
     create_handle/6, create_handle/3,
     create_harvester/3, create_harvester/6,
+    create_atm_inventory/3,
 
     create_user_invite_token/2,
     create_group_invite_token/2,
@@ -54,6 +55,7 @@
     join_space/3,
     join_harvester/3,
     join_cluster/3,
+    join_atm_inventory/3,
 
     add_user/3, add_user/4,
     add_group/3, add_group/4,
@@ -89,6 +91,9 @@
     get_clusters/2, get_eff_clusters/2,
     get_cluster/3, get_eff_cluster/3,
 
+    get_atm_inventories/2, get_eff_atm_inventories/2,
+    get_atm_inventory/3, get_eff_atm_inventory/3,
+
     update_user_privileges/5, update_user_privileges/4,
     update_child_privileges/5, update_child_privileges/4,
 
@@ -98,6 +103,7 @@
     leave_handle/3,
     leave_harvester/3,
     leave_cluster/3,
+    leave_atm_inventory/3,
 
     remove_user/3,
     remove_group/3
@@ -114,6 +120,7 @@
     has_eff_handle/2,
     has_eff_harvester/2,
     has_eff_cluster/2,
+    has_eff_atm_inventory/2,
     has_eff_privilege/3
 ]).
 -export([
@@ -523,6 +530,20 @@ create_harvester(Auth, GroupId, Data) ->
     })).
 
 
+-spec create_atm_inventory(aai:auth(), od_group:id(), binary() | entity_logic:data()) ->
+    {ok, od_atm_inventory:id()} | errors:error().
+create_atm_inventory(Auth, GroupId, Name) when is_binary(Name) ->
+    create_atm_inventory(Auth, GroupId, #{<<"name">> => Name});
+create_atm_inventory(Auth, GroupId, Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_atm_inventory, id = undefined, aspect = instance},
+        auth_hint = ?AS_GROUP(GroupId),
+        data = Data
+    })).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a user invite token, which can be used by any user to join
@@ -687,6 +708,20 @@ join_cluster(Auth, GroupId, Data) when is_map(Data) ->
     }));
 join_cluster(Auth, GroupId, Token) ->
     join_cluster(Auth, GroupId, #{<<"token">> => Token}).
+
+
+-spec join_atm_inventory(aai:auth(), od_group:id(), tokens:serialized() | tokens:token() | entity_logic:data()) ->
+    {ok, od_atm_inventory:id()} | errors:error().
+join_atm_inventory(Auth, GroupId, Data) when is_map(Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_atm_inventory, id = undefined, aspect = join},
+        auth_hint = ?AS_GROUP(GroupId),
+        data = Data
+    }));
+join_atm_inventory(Auth, GroupId, Token) ->
+    join_atm_inventory(Auth, GroupId, #{<<"token">> => Token}).
 
 
 %%--------------------------------------------------------------------
@@ -1349,6 +1384,7 @@ get_eff_cluster(Auth, GroupId, ClusterId) ->
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Retrieves the list of harvesters of given group.
@@ -1408,6 +1444,48 @@ get_eff_harvester(Auth, GroupId, HarvesterId) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_GROUP(GroupId)
+    }).
+
+
+-spec get_atm_inventories(aai:auth(), od_group:id()) ->
+    {ok, [od_atm_inventory:id()]} | errors:error().
+get_atm_inventories(Auth, GroupId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_group, id = GroupId, aspect = atm_inventories}
+    }).
+
+
+-spec get_eff_atm_inventories(aai:auth(), od_group:id()) ->
+    {ok, [od_atm_inventory:id()]} | errors:error().
+get_eff_atm_inventories(Auth, GroupId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_group, id = GroupId, aspect = eff_atm_inventories}
+    }).
+
+
+-spec get_atm_inventory(aai:auth(), od_group:id(), od_atm_inventory:id()) ->
+    {ok, #{}} | errors:error().
+get_atm_inventory(Auth, GroupId, AtmInventoryId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_atm_inventory, id = AtmInventoryId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_GROUP(GroupId)
+    }).
+
+
+-spec get_eff_atm_inventory(aai:auth(), od_group:id(), od_atm_inventory:id()) ->
+    {ok, #{}} | errors:error().
+get_eff_atm_inventory(Auth, GroupId, AtmInventoryId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_atm_inventory, id = AtmInventoryId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
 
@@ -1543,7 +1621,7 @@ leave_handle(Auth, GroupId, HandleId) ->
 %% Leaves specified harvester on behalf of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec leave_harvester(Auth :: aai:auth(), GroupId :: od_user:id(),
+-spec leave_harvester(Auth :: aai:auth(), GroupId :: od_group:id(),
     HarvesterId :: od_harvester:id()) -> ok | errors:error().
 leave_harvester(Auth, GroupId, HarvesterId) ->
     entity_logic:handle(#el_req{
@@ -1558,13 +1636,23 @@ leave_harvester(Auth, GroupId, HarvesterId) ->
 %% Leaves specified cluster on behalf of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec leave_cluster(Auth :: aai:auth(), GroupId :: od_user:id(),
+-spec leave_cluster(Auth :: aai:auth(), GroupId :: od_group:id(),
     ClusterId :: od_cluster:id()) -> ok | errors:error().
 leave_cluster(Auth, GroupId, ClusterId) ->
     entity_logic:handle(#el_req{
         operation = delete,
         auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {cluster, ClusterId}}
+    }).
+
+
+-spec leave_atm_inventory(aai:auth(), od_group:id(), od_atm_inventory:id()) ->
+    ok | errors:error().
+leave_atm_inventory(Auth, GroupId, AtmInventoryId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        auth = Auth,
+        gri = #gri{type = od_group, id = GroupId, aspect = {atm_inventory, AtmInventoryId}}
     }).
 
 
@@ -1753,6 +1841,13 @@ has_eff_cluster(Group, ClusterId) ->
     entity_graph:has_relation(effective, top_down, od_cluster, ClusterId, Group).
 
 
+-spec has_eff_atm_inventory(od_group:id() | od_group:record(), od_atm_inventory:id()) -> boolean().
+has_eff_atm_inventory(GroupId, AtmInventoryId) when is_binary(GroupId) ->
+    entity_graph:has_relation(effective, top_down, od_atm_inventory, AtmInventoryId, od_group, GroupId);
+has_eff_atm_inventory(Group, AtmInventoryId) ->
+    entity_graph:has_relation(effective, top_down, od_atm_inventory, AtmInventoryId, Group).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Predicate saying whether specified effective user has specified
@@ -1806,7 +1901,7 @@ ensure_entitlement_group(GroupId, Name, Type) ->
         true ->
             ok;
         false ->
-            case entity_logic:normalize_name(Name, undefined) of
+            case entity_logic_sanitizer:normalize_name(Name, undefined) of
                 undefined ->
                     ?ERROR_BAD_VALUE_NAME;
                 NormalizedName ->
@@ -1836,7 +1931,7 @@ ensure_entitlement_group(GroupId, Name, Type) ->
 -spec ensure_predefined_group(Id :: binary(), Name :: binary(),
     Privileges :: [privileges:oz_privilege()]) -> ok.
 ensure_predefined_group(GroupId, Name, Privileges) ->
-    NormalizedName = entity_logic:normalize_name(Name, ?UNKNOWN_ENTITY_NAME),
+    NormalizedName = entity_logic_sanitizer:normalize_name(Name, ?UNKNOWN_ENTITY_NAME),
     case exists(GroupId) of
         true ->
             ?info("Predefined group '~ts' already exists, refreshing name and privileges", [

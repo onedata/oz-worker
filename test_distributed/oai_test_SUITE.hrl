@@ -4,7 +4,7 @@
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @doc
-%%% WRITEME
+%%% Macros used in OAI test suite.
 %%% @end
 %%%-------------------------------------------------------------------
 -author("Jakub Kudzia").
