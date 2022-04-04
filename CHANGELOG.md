@@ -9,7 +9,6 @@ CHANGELOG
 -   **VFS-7724** Web GUI: redesigned datasets and archives browser to
     browse datasets tree and archives in single splitted view.
 
-
 ### 21.02.0-alpha23
 
 -   **VFS-8681** Added a new data type to automation machinery - the
@@ -172,6 +171,14 @@ CHANGELOG
 -   **VFS-6566** Improved UX and fixed minor issues in share views.
     Fixed inability to open share hosted by Oneprovider 19.02.x using
     Onezone 20.02.x.
+
+### 20.02.16
+
+-   **VFS-9182** Improved EGI group mapping for special COU groups
+    \"admins\" and \"members\"; their names are now concatenated with
+    parent group names for better presentation. Additionally, \"admins\"
+    groups now get admin privileges in their parent groups instead of
+    default member privileges.
 
 ### 20.02.15
 
