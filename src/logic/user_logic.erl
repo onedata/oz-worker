@@ -1586,7 +1586,7 @@ has_eff_atm_inventory(User, AtmInventoryId) ->
 %%--------------------------------------------------------------------
 -spec validate_full_name(binary()) -> boolean().
 validate_full_name(FullName) ->
-    entity_logic_sanitizer:validate_name(
+    str_utils:validate_name(
         FullName, ?FULL_NAME_FIRST_CHARS_ALLOWED, ?FULL_NAME_MIDDLE_CHARS_ALLOWED,
         ?FULL_NAME_LAST_CHARS_ALLOWED, ?FULL_NAME_MAXIMUM_LENGTH
     ).
@@ -1617,7 +1617,7 @@ normalize_full_name(FullName) ->
 %%--------------------------------------------------------------------
 -spec validate_username(od_user:username()) -> boolean().
 validate_username(Username) ->
-    entity_logic_sanitizer:validate_name(
+    str_utils:validate_name(
         Username, ?USERNAME_FIRST_CHARS_ALLOWED, ?USERNAME_MIDDLE_CHARS_ALLOWED,
         ?USERNAME_LAST_CHARS_ALLOWED, ?USERNAME_MAXIMUM_LENGTH
     ).

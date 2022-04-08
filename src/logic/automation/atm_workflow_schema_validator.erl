@@ -28,6 +28,9 @@
     ?CURRENT_TASK_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID,
     ?WORKFLOW_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID
 ]).
+-define(RESERVED_STORE_SCHEMA_IDS, [
+    ?CURRENT_TASK_TIME_SERIES_STORE_SCHEMA_ID | ?PREDEFINED_SYSTEM_AUDIT_LOG_STORE_SCHEMA_IDS
+]).
 
 %%%===================================================================
 %%% API
@@ -78,7 +81,7 @@ validate_store_schemas(#validator_ctx{atm_workflow_schema_revision = #atm_workfl
     StoreIds = lists:map(fun(#atm_store_schema{
         id = Id, type = Type, config = Config, default_initial_content = DefaultInitialContent
     }) ->
-        lists:member(Id, ?PREDEFINED_SYSTEM_AUDIT_LOG_STORE_SCHEMA_IDS) andalso
+        lists:member(Id, ?RESERVED_STORE_SCHEMA_IDS) andalso
             atm_schema_validator:raise_validation_error(
                 str_utils:format_bin("stores[~s].id", [Id]),
                 "The provided store schema Id is reserved and cannot be used in store schema definitions"
@@ -129,10 +132,10 @@ sanitize_store_default_initial_content(tree_forest, Config, DefaultInitialConten
                 )
             end, DefaultInitialContent);
         _ ->
-        atm_schema_validator:raise_validation_error(
-            DataKeyName,
-            "Tree forest store requires default initial content to be an array of values"
-        )
+            atm_schema_validator:raise_validation_error(
+                DataKeyName,
+                "Tree forest store requires default initial content to be an array of values"
+            )
     end;
 sanitize_store_default_initial_content(range, _Config, DefaultInitialContent, DataKeyName) ->
     case DefaultInitialContent of
@@ -197,15 +200,28 @@ validate_store_schema_references(#validator_ctx{
             end
         end, AtmTaskSchema#atm_task_schema.argument_mappings),
 
+        % predefined store schemas are allowed in result mappers, but not in argument mappers
         lists:foreach(fun(#atm_task_schema_result_mapper{store_schema_id = StoreSchemaId, result_name = ResultName}) ->
-            assert_allowed_store_schema_reference(
-                str_utils:format_bin("tasks[~s].resultMappings[~s].storeSchemaId", [
-                    TaskId, ResultName
-                ]),
-                StoreSchemaId,
-                % predefined audit log store schemas are allowed only in result mappers
-                StoreSchemaIds ++ ?PREDEFINED_SYSTEM_AUDIT_LOG_STORE_SCHEMA_IDS
-            )
+            DataKeyName = str_utils:format_bin("tasks[~s].resultMappings[~s].storeSchemaId", [
+                TaskId, ResultName
+            ]),
+            case StoreSchemaId of
+                ?CURRENT_TASK_TIME_SERIES_STORE_SCHEMA_ID ->
+                    % predefined time series store for current task is allowed if its config was defined
+                    AtmTaskSchema#atm_task_schema.time_series_store_config /= undefined orelse
+                        atm_schema_validator:raise_validation_error(
+                            DataKeyName,
+                            "The time series store for current task cannot be referenced if its config is not defined "
+                            "in the task."
+                        );
+                _ ->
+                    % predefined audit log stores are created for each task and always allowed
+                    assert_allowed_store_schema_reference(
+                        DataKeyName,
+                        StoreSchemaId,
+                        StoreSchemaIds ++ ?PREDEFINED_SYSTEM_AUDIT_LOG_STORE_SCHEMA_IDS
+                    )
+            end
         end, AtmTaskSchema#atm_task_schema.result_mappings)
 
     end, AtmWorkflowSchemaRevision).
