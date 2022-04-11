@@ -262,9 +262,9 @@ example_revision_json(AtmInventoryId) when is_binary(AtmInventoryId) ->
     % make sure there are some lambdas defined in the inventory
     AtmLambdas = case ozt_atm_inventories:get_atm_lambdas(AtmInventoryId) of
         [] ->
-            lists:foreach(fun(_) ->
+            lists_utils:generate(fun() ->
                 ozt_atm_lambdas:create(AtmInventoryId)
-            end, lists:seq(1, ?RAND_INT(1, 5))),
+            end, ?RAND_INT(1, 4)),
             ozt_atm_inventories:get_atm_lambdas(AtmInventoryId);
         List ->
             List
@@ -339,7 +339,7 @@ example_lane_schemas_json([], _StoreSchemas) ->
 example_lane_schemas_json(AtmLambdas, StoreSchemas) ->
     lists_utils:generate(fun() ->
         example_lane_schema_json(AtmLambdas, StoreSchemas)
-    end, ?RAND_INT(0, 5)).
+    end, ?RAND_INT(0, 4)).
 
 
 -spec example_parallel_box_schema([od_atm_lambda:id()], [automation:id()]) -> atm_parallel_box_schema:record().
@@ -352,7 +352,7 @@ example_parallel_box_schema(AtmLambdas, StoreSchemaIds) ->
 example_parallel_box_schemas(AtmLambdas, StoreSchemaIds) ->
     lists_utils:generate(fun() ->
         example_parallel_box_schema(AtmLambdas, StoreSchemaIds)
-    end, ?RAND_INT(0, 5)).
+    end, ?RAND_INT(0, 4)).
 
 
 -spec example_task_schema([od_atm_lambda:id()], [automation:id()]) -> atm_task_schema:record().

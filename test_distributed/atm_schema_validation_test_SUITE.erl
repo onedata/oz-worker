@@ -47,6 +47,7 @@
     atm_workflow_schema_bad_store_reference_in_iterator/1,
     atm_workflow_schema_bad_store_reference_in_argument_value_builder/1,
     atm_workflow_schema_bad_store_reference_in_result_mapper/1,
+    atm_workflow_schema_bad_current_task_time_series_store_reference_in_result_mapper/1,
     atm_workflow_schema_bad_lambda_reference_in_task/1,
     atm_workflow_schema_lambda_argument_mapped_more_than_once/1,
     atm_workflow_schema_bad_argument_reference_in_mapper/1,
@@ -68,11 +69,12 @@ all() ->
         atm_workflow_schema_disallowed_iterated_store_type,
         atm_workflow_schema_bad_store_reference_in_iterator,
         atm_workflow_schema_bad_store_reference_in_argument_value_builder,
-%%        atm_workflow_schema_bad_store_reference_in_result_mapper,  % @TODO VFS-9147 adjust to new models
+        atm_workflow_schema_bad_store_reference_in_result_mapper,
+        atm_workflow_schema_bad_current_task_time_series_store_reference_in_result_mapper,
         atm_workflow_schema_bad_lambda_reference_in_task,
         atm_workflow_schema_lambda_argument_mapped_more_than_once,
         atm_workflow_schema_bad_argument_reference_in_mapper,
-%%        atm_workflow_schema_bad_result_reference_in_mapper,  % @TODO VFS-9147 adjust to new models
+        atm_workflow_schema_bad_result_reference_in_mapper,
         atm_workflow_schema_missing_required_argument_mapper
     ]).
 
@@ -186,7 +188,8 @@ atm_workflow_schema_reserved_store_id(_Config) ->
         spoil_data_field_fun = fun(StoresJson, _AtmInventoryId) ->
             ReservedStoreId = ?RAND_ELEMENT([
                 ?CURRENT_TASK_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID,
-                ?WORKFLOW_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID
+                ?WORKFLOW_SYSTEM_AUDIT_LOG_STORE_SCHEMA_ID,
+                ?CURRENT_TASK_TIME_SERIES_STORE_SCHEMA_ID
             ]),
             BadStore = maps:merge(ozt_atm_workflow_schemas:example_store_schema_json(), #{
                 <<"id">> => ReservedStoreId
@@ -415,41 +418,59 @@ atm_workflow_schema_bad_store_reference_in_result_mapper(_Config) ->
     run_validation_tests(#test_spec{
         schema_type = atm_workflow_schema,
         tested_data_field = <<"lanes">>,
-        spoil_data_field_fun = fun(LanesJson, #{<<"stores">> := CorrectStoreSchemasJson}, AtmInventoryId) ->
+        spoil_data_field_fun = fun(LanesJson, #{<<"stores">> := StoreSchemasJson}, AtmInventoryId) ->
             AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
-            CorrectStoreSchemaIds = store_schemas_json_to_ids(CorrectStoreSchemasJson),
+            CorrectStoreSchemaIds = store_schemas_json_to_ids(StoreSchemasJson),
 
-            AtmLambdaRevisionJson = ozt_atm_lambdas:example_revision_json(),
-            ReferencedResultSpec = #{<<"name">> := OffendingResultName} = ozt_atm_lambdas:example_result_spec_json(),
-            OtherResultSpecs = maps:get(<<"resultSpecs">>, AtmLambdaRevisionJson),
-            AtmLambdaId = create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson#{
-                <<"resultSpecs">> => lists_utils:shuffle([ReferencedResultSpec | OtherResultSpecs])
-            }),
-            AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
+            OffendingResultName = atm_test_utils:example_name(),
+            {AtmLambdaId, AtmLambdaRevision} = create_random_lambda_with_result_name(AtmInventoryId, OffendingResultName),
 
-            CorrectResultMappings = atm_test_utils:example_result_mappers_for_specs(
-                jsonable_record:list_from_json(OtherResultSpecs, atm_lambda_result_spec), CorrectStoreSchemaIds
+            OffendingTask = #atm_task_schema{id = TaskId} = gen_task_with_result_mapping(
+                AtmLambdaId, AtmLambdaRevision, CorrectStoreSchemaIds, #atm_task_schema_result_mapper{
+                    result_name = OffendingResultName,
+                    store_schema_id = [BadStoreSchemaId],
+                    store_content_update_options = ?RAND_ELEMENT(atm_test_utils:example_store_content_update_options_records())
+                }
             ),
-            OffendingResultMapping = #atm_task_schema_result_mapper{
-                result_name = maps:get(<<"name">>, ReferencedResultSpec),
-                store_schema_id = [BadStoreSchemaId] % @TODO VFS-9147 adjust to new models
-%%                dispatch_function = ?RAND_ELEMENT(atm_task_schema_result_mapper:all_dispatch_functions())
-            },
-
-            OffendingTask = #atm_task_schema{
-                id = TaskId = atm_test_utils:example_id(),
-                name = atm_test_utils:example_name(),
-                lambda_id = AtmLambdaId,
-                lambda_revision_number = ozt_atm_lambdas:get_largest_revision_number(AtmLambdaId),
-                argument_mappings = atm_test_utils:example_argument_mappers(AtmLambdaRevision, CorrectStoreSchemaIds),
-                result_mappings = lists_utils:shuffle([OffendingResultMapping | CorrectResultMappings])
-            },
-            OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemasJson),
+            OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, StoreSchemasJson),
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
                 ?ERROR_BAD_DATA(
                     <<"tasks[", TaskId/binary, "].resultMappings[", OffendingResultName/binary, "].storeSchemaId">>,
                     <<"The provided storeSchemaId = '", BadStoreSchemaId/binary, "' was not found among defined store schemas">>
+                )
+            }
+        end
+    }).
+
+
+atm_workflow_schema_bad_current_task_time_series_store_reference_in_result_mapper(_Config) ->
+    run_validation_tests(#test_spec{
+        schema_type = atm_workflow_schema,
+        tested_data_field = <<"lanes">>,
+        spoil_data_field_fun = fun(LanesJson, #{<<"stores">> := StoreSchemasJson}, AtmInventoryId) ->
+            AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
+            CorrectStoreSchemaIds = store_schemas_json_to_ids(StoreSchemasJson),
+
+            OffendingResultName = atm_test_utils:example_name(),
+            {AtmLambdaId, AtmLambdaRevision} = create_random_lambda_with_result_name(AtmInventoryId, OffendingResultName),
+
+            ExampleTask = #atm_task_schema{id = TaskId} = gen_task_with_result_mapping(
+                AtmLambdaId, AtmLambdaRevision, CorrectStoreSchemaIds, #atm_task_schema_result_mapper{
+                    result_name = OffendingResultName,
+                    store_schema_id = ?CURRENT_TASK_TIME_SERIES_STORE_SCHEMA_ID,
+                    store_content_update_options = ?RAND_ELEMENT(atm_test_utils:example_store_content_update_options_records())
+                }
+            ),
+            OffendingTask = ExampleTask#atm_task_schema{
+                time_series_store_config = undefined
+            },
+            OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, StoreSchemasJson),
+            {
+                lists_utils:shuffle([OffendingLane | LanesJson]),
+                ?ERROR_BAD_DATA(
+                    <<"tasks[", TaskId/binary, "].resultMappings[", OffendingResultName/binary, "].storeSchemaId">>,
+                    <<"The time series store for current task cannot be referenced if its config is not defined in the task.">>
                 )
             }
         end
@@ -587,8 +608,8 @@ atm_workflow_schema_bad_result_reference_in_mapper(_Config) ->
             OffendingResultMappings = lists:map(fun(ResultName) ->
                 #atm_task_schema_result_mapper{
                     result_name = ResultName,
-                    store_schema_id = ?RAND_ELEMENT(CorrectStoreSchemaIds) % @TODO VFS-9147 adjust to new models
-%%                    dispatch_function = ?RAND_ELEMENT(atm_task_schema_result_mapper:all_dispatch_functions())
+                    store_schema_id = ?RAND_ELEMENT(CorrectStoreSchemaIds),
+                    store_content_update_options = ?RAND_ELEMENT(atm_test_utils:example_store_content_update_options_records())
                 }
             end, [BadResultName1, BadResultName2, BadResultName3]),
 
@@ -945,6 +966,33 @@ create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson) ->
             <<"atmLambdaRevision">> => AtmLambdaRevisionJson
         }
     }).
+
+
+%% @private
+create_random_lambda_with_result_name(AtmInventoryId, OffendingResultName) ->
+    AtmLambdaRevisionJson = ozt_atm_lambdas:example_revision_json(),
+    ResultSpec = maps:merge(ozt_atm_lambdas:example_result_spec_json(), #{<<"name">> => OffendingResultName}),
+    OtherResultSpecs = maps:get(<<"resultSpecs">>, AtmLambdaRevisionJson),
+    AtmLambdaId = create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson#{
+        <<"resultSpecs">> => lists_utils:shuffle([ResultSpec | OtherResultSpecs])
+    }),
+    AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
+    {AtmLambdaId, AtmLambdaRevision}.
+
+
+%% @private
+gen_task_with_result_mapping(AtmLambdaId, AtmLambdaRevision, CorrectStoreSchemaIds, ResultMapping) ->
+    OtherResultMappings = atm_test_utils:example_result_mappers_for_specs(
+        AtmLambdaRevision#atm_lambda_revision.result_specs, CorrectStoreSchemaIds
+    ),
+    #atm_task_schema{
+        id = atm_test_utils:example_id(),
+        name = atm_test_utils:example_name(),
+        lambda_id = AtmLambdaId,
+        lambda_revision_number = ozt_atm_lambdas:get_largest_revision_number(AtmLambdaId),
+        argument_mappings = atm_test_utils:example_argument_mappers(AtmLambdaRevision, CorrectStoreSchemaIds),
+        result_mappings = lists_utils:shuffle([ResultMapping | OtherResultMappings])
+    }.
 
 
 %% @private

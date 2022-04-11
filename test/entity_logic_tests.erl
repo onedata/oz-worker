@@ -38,31 +38,4 @@ name_normalization_test() ->
     ?assertEqual(<<"µńż_źć-21.3(1)"/utf8>>, N(<<"µńż_źć-21.3(1)"/utf8>>)).
 
 
-name_validation_test() ->
-    V = fun entity_logic_sanitizer:validate_name/1,
-
-    ?assertEqual(false, V(<<"aaa*&:|}{][,a"/utf8>>)),
-    ?assertEqual(false, V(<<"][aaa*&:|}{][,a]["/utf8>>)),
-    ?assertEqual(false, V(<<"A">>)),
-    ?assertEqual(false, V(<<"|group_name">>)),
-    ?assertEqual(false, V(<<"group_name|">>)),
-    ?assertEqual(false, V(<<"-group_name">>)),
-    ?assertEqual(false, V(<<".group_name">>)),
-    ?assertEqual(false, V(<<" group_name">>)),
-    ?assertEqual(false, V(<<"group_name-">>)),
-    ?assertEqual(false, V(<<"group_name.">>)),
-    ?assertEqual(false, V(<<"group_name ">>)),
-    ?assertEqual(false, V(?TOO_LONG_NAME)),
-    ?assertEqual(true, V(<<"AB">>)),
-    ?assertEqual(true, V(<<"_group_name">>)),
-    ?assertEqual(true, V(<<"group_name_">>)),
-    ?assertEqual(true, V(<<"group_name">>)),
-    ?assertEqual(true, V(<<"_group-name_">>)),
-    ?assertEqual(true, V(<<"(group_name)">>)),
-    ?assertEqual(true, V(<<"(group) (name)">>)),
-    ?assertEqual(true, V(<<"group.- _name">>)),
-    ?assertEqual(true, V(<<"My Group Name">>)),
-    ?assertEqual(true, V(<<"µńż_źć-21.3(1)"/utf8>>)).
-
-
 -endif.
