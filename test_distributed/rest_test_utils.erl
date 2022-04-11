@@ -17,6 +17,11 @@
 -include_lib("xmerl/include/xmerl.hrl").
 
 
+%% API
+-export([check_rest_call/2]).
+-export([compare_maps/2, contains_map/2]).
+
+
 % Use "Macaroon", "X-Auth-Token" and "Authorization: Bearer" headers variably,
 % as they all should be accepted.
 -define(ACCESS_TOKEN_HEADER(AccessToken), case rand:uniform(3) of
@@ -25,10 +30,10 @@
     3 -> #{?HDR_AUTHORIZATION => <<"Bearer ", AccessToken/binary>>}
 end).
 
-
-%% API
--export([check_rest_call/2]).
--export([compare_maps/2, contains_map/2]).
+-define(CONNECT_OPTS, [
+    {connect_timeout, 60000},
+    {recv_timeout, 60000}
+]).
 
 
 %%--------------------------------------------------------------------
@@ -167,7 +172,7 @@ check_rest_call(Config, ArgsMap) ->
             URL,
             HeadersPlusAuth,
             ReqBody,
-            CompleteOpts
+            ?CONNECT_OPTS ++ CompleteOpts
         ),
 
         % Check response code if specified

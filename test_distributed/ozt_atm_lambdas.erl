@@ -55,7 +55,7 @@ list() ->
 
 -spec create(od_atm_inventory:id()) -> od_atm_lambda:id().
 create(AtmInventoryId) ->
-    AllRevisionNumbers = lists_utils:random_sublist(lists:seq(1, 100), 1, 5),
+    AllRevisionNumbers = ?RAND_SUBLIST(lists:seq(1, 100), 1, 4),
     AtmLambdaId = create(AtmInventoryId, #{
         <<"revision">> => #{
             <<"originalRevisionNumber">> => hd(AllRevisionNumbers),
