@@ -781,7 +781,7 @@ example_invalid_data_specs_and_predefined_values() ->
         {#atm_data_spec{type = atm_string_type}, 167.87},
         {#atm_data_spec{type = atm_object_type}, <<"text">>},
         {#atm_data_spec{
-            type = atm_time_series_measurements_type,
+            type = atm_time_series_measurement_type,
             value_constraints = #{specs => lists_utils:random_sublist(atm_test_utils:example_time_series_measurements_specs())}
         }, #{<<"key">> => <<"val">>}},
         {#atm_data_spec{type = atm_file_type}, -9},
