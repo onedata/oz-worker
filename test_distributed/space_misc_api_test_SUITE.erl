@@ -33,6 +33,7 @@
 ]).
 -export([
     create_test/1,
+    create_with_custom_id_generator_seed_test/1,
     list_test/1,
     list_privileges_test/1,
     get_test/1,
@@ -51,9 +52,11 @@
     get_eff_provider_test/1
 ]).
 
+
 all() ->
     ?ALL([
         create_test,
+        create_with_custom_id_generator_seed_test,
         list_test,
         list_privileges_test,
         get_test,
@@ -132,6 +135,41 @@ create_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+create_with_custom_id_generator_seed_test(Config) ->
+    SpaceCount = 100,
+    OzNodes = ?config(oz_worker_nodes, Config),
+    IdGeneratorSeed = ?RAND_STR(),
+    Data = #{
+        <<"name">> => ?RAND_STR(),
+        <<"idGeneratorSeed">> => IdGeneratorSeed
+    },
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, U4} = oz_test_utils:create_user(Config),
+    Auths = [?USER(U1), ?USER(U2), ?USER(U3), ?USER(U4), ?ROOT],
+
+    Results = lists_utils:pmap(fun(_) ->
+        case ?RAND_ELEMENT(Auths) of
+            ?ROOT ->
+                rpc:call(?RAND_ELEMENT(OzNodes), space_logic, create, [?ROOT, Data]);
+            ?USER(UserId) ->
+                rpc:call(?RAND_ELEMENT(OzNodes), user_logic, create_space, [?USER(UserId), UserId, Data])
+        end
+    end, lists:seq(1, SpaceCount)),
+
+    {ok, {ok, SpaceId}} = lists_utils:find(fun
+        ({ok, _}) -> true;
+        (_) -> false
+    end, Results),
+
+    ?assertEqual(SpaceId, datastore_key:new_from_digest([<<"customSpaceIdGeneratorSeed">>, IdGeneratorSeed])),
+
+    ErrorResults = lists:delete({ok, SpaceId}, Results),
+    ?assertEqual(lists:duplicate(SpaceCount - 1, ?ERROR_ALREADY_EXISTS), ErrorResults).
 
 
 list_test(Config) ->
