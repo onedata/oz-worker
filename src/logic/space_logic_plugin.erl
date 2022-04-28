@@ -152,13 +152,26 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     #{<<"name">> := Name} = Req#el_req.data,
-    {ok, #document{key = SpaceId}} = od_space:create(#document{
+    ProposedSpaceId = case maps:find(<<"idGeneratorSeed">>, Req#el_req.data) of
+        {ok, IdGeneratorSeed} ->
+            datastore_key:new_from_digest([<<"customSpaceIdGeneratorSeed">>, IdGeneratorSeed]);
+        error ->
+            undefined
+    end,
+    SpaceDoc = #document{
+        key = ProposedSpaceId,
         value = #od_space{
             name = Name,
             creator = aai:normalize_subject(Auth#auth.subject),
             creation_time = global_clock:timestamp_seconds()
         }
-    }),
+    },
+    SpaceId = case od_space:create(SpaceDoc) of
+        {ok, #document{key = Key}} ->
+            Key;
+        {error, already_exists} ->
+            throw(?ERROR_ALREADY_EXISTS)
+    end,
     case Req#el_req.auth_hint of
         ?AS_USER(UserId) ->
             entity_graph:add_relation(
@@ -937,6 +950,9 @@ required_admin_privileges(_) ->
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"name">> => {binary, name}
+    },
+    optional => #{
+        <<"idGeneratorSeed">> => {binary, any}
     }
 };
 
