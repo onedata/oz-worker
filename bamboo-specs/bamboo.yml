@@ -290,7 +290,7 @@ _Unit Test:
     required: false
   requirements: *requirements
   artifact-subscriptions: *oz-worker
-access_and_identity_tokens:
+access_and_identity_tokens: &ct-job
   key: AT
   other: *common-opts
   tasks:
@@ -337,1159 +337,455 @@ access_and_identity_tokens:
     shared: true
     required: false
   requirements: *requirements
-  artifact-subcriptions: *oz-worker
+  artifact-subscriptions: *oz-worker
 atm_inventory_groups_api:
+  <<: *ct-job
   key: AIGA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_atm_inventory_groups_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 atm_inventory_misc_api:
+  <<: *ct-job
   key: AIMA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_atm_inventory_misc_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 atm_inventory_users_api:
+  <<: *ct-job
   key: AIUI
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_atm_inventory_users_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 atm_lambda_api:
+  <<: *ct-job
   key: ALA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_atm_lambda_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 atm_schema_validation:
+  <<: *ct-job
   key: ASV
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_atm_schema_validation.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 atm_workflow_schema_api:
+  <<: *ct-job
   key: AWSA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_atm_workflow_schema_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 basic_auth:
+  <<: *ct-job
   key: US
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_basic_auth.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 cluster_groups_api:
+  <<: *ct-job
   key: CGA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_cluster_groups_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 cluster_misc_api:
+  <<: *ct-job
   key: CMA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_cluster_misc_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 cluster_upgrade:
+  <<: *ct-job
   key: CLUP
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_cluster_upgrade.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 cluster_users_api:
+  <<: *ct-job
   key: CUA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_cluster_users_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 connection:
+  <<: *ct-job
   key: CON
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_connection.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 db_browser:
+  <<: *ct-job
   key: DBBRWS
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_db_browser.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 dns:
+  <<: *ct-job
   key: DNS
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_dns.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 entities_setup:
+  <<: *ct-job
   key: GROUP
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_entities_setup.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 entitlement_mapping:
+  <<: *ct-job
   key: EM
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_entitlement_mapping.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 group_atm_inventories_api:
+  <<: *ct-job
   key: GAIA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_group_atm_inventories_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 group_children_api:
+  <<: *ct-job
   key: GRCHILDREN
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_group_children_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 group_clusters_api:
+  <<: *ct-job
   key: GCA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_group_clusters_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 group_handles_api:
+  <<: *ct-job
   key: GRHANDLES
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_group_handles_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 group_harvesters_api:
+  <<: *ct-job
   key: GHA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_group_harvesters_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 group_hservice_api:
+  <<: *ct-job
   key: GRHS
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_group_hservice_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 group_misc_api:
+  <<: *ct-job
   key: GRBASIC
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_group_misc_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 group_parents_api:
+  <<: *ct-job
   key: GRPARENTS
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_group_parents_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 group_spaces_api:
+  <<: *ct-job
   key: GRSPACES
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_group_spaces_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 group_users_api:
+  <<: *ct-job
   key: GRUSERS
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_group_users_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 gui_static_distribution:
+  <<: *ct-job
   key: GSD
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_gui_static_distribution.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 gui_tokens:
+  <<: *ct-job
   key: TOK
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_gui_tokens.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 handle_groups_api:
+  <<: *ct-job
   key: HANGROUPS
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_handle_groups_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 handle_misc_api:
+  <<: *ct-job
   key: HANBASIC
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_handle_misc_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 handle_users_api:
+  <<: *ct-job
   key: HANUSERS
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_handle_users_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 harvester_groups_api:
+  <<: *ct-job
   key: HGA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_harvester_groups_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 harvester_misc_api:
+  <<: *ct-job
   key: HAR
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_harvester_misc_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 harvester_spaces_api:
+  <<: *ct-job
   key: HSA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_harvester_spaces_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 harvester_users_api:
+  <<: *ct-job
   key: HUA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_harvester_users_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 hservice_groups_api:
+  <<: *ct-job
   key: HSERGROUPS
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_hservice_groups_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 hservice_misc_api:
+  <<: *ct-job
   key: HSERBASIC
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_hservice_misc_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 hservice_users_api:
+  <<: *ct-job
   key: HSERUSERS
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_hservice_users_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 invite_tokens:
+  <<: *ct-job
   key: IT
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_invite_tokens.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 model_upgrade:
+  <<: *ct-job
   key: RC12TOR
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_model_upgrade.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 oai:
+  <<: *ct-job
   key: OAI
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_oai.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 openid:
+  <<: *ct-job
   key: OPID
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_openid.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 provider_api:
+  <<: *ct-job
   key: PRED
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_provider_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 rest_auth:
+  <<: *ct-job
   key: RESTA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_rest_auth.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 session:
+  <<: *ct-job
   key: SES
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_session.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 share_api:
+  <<: *ct-job
   key: SHAR
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_share_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 space_groups_api:
+  <<: *ct-job
   key: SPGROUPS
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_space_groups_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 space_harvesters_api:
+  <<: *ct-job
   key: SHA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_space_harvesters_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 space_lifecycle:
+  <<: *ct-job
   key: SPLI
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_space_lifecycle.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 space_misc_api:
+  <<: *ct-job
   key: SPAC
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_space_misc_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 space_owners:
+  <<: *ct-job
   key: SPOW
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_space_owners.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 space_users_api:
+  <<: *ct-job
   key: SPUSERS
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_space_users_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 storage_misc_api:
+  <<: *ct-job
   key: STOR
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_storage_misc_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 token_api:
+  <<: *ct-job
   key: TAP
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_token_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 user_atm_inventories_api:
+  <<: *ct-job
   key: UAIA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_user_atm_inventories_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 user_clusters_api:
+  <<: *ct-job
   key: UCA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_user_clusters_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 user_groups_api:
+  <<: *ct-job
   key: USGROUPS
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_user_groups_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 user_handles_api:
+  <<: *ct-job
   key: USHANDLES
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_user_handles_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 user_harvesters_api:
+  <<: *ct-job
   key: UHA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_user_harvesters_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 user_hservice_api:
+  <<: *ct-job
   key: USHSERV
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_user_hservice_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 user_misc_api:
+  <<: *ct-job
   key: USA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_user_misc_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 user_privileges_api:
+  <<: *ct-job
   key: UPA
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_user_privileges_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 user_spaces_api:
+  <<: *ct-job
   key: USSPACES
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_user_spaces_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 zone_api:
+  <<: *ct-job
   key: ZON
-  other: *common-opts
-  tasks:
-  - checkout: *fake-checkout
-  - script: *unpack
-  - script: *run-ct
-  final-tasks:
-  - test-parser: *parse-test-results
-  - script: *save-cover-results
-  - script: *pack-test-logs
-  - script: *clear-env
   artifacts:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_zone_api.tar.gz
-  requirements: *requirements
-  artifact-subcriptions: *oz-worker
 Coverage report:
   key: CR
   other: *common-opts
@@ -1599,6 +895,7 @@ Coverage report:
   - artifact: cover_ct_provider_api.tar.gz
   - artifact: cover_ct_rest_auth.tar.gz
   - artifact: cover_ct_session.tar.gz
+  - artifact: cover_ct_share_api.tar.gz
   - artifact: cover_ct_space_groups_api.tar.gz
   - artifact: cover_ct_space_harvesters_api.tar.gz
   - artifact: cover_ct_space_lifecycle.tar.gz
