@@ -337,7 +337,7 @@ access_and_identity_tokens:
     shared: true
     required: false
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 atm_inventory_groups_api:
   key: AIGA
   other: *common-opts
@@ -355,7 +355,7 @@ atm_inventory_groups_api:
   - <<: *cover_ct
     name: cover_ct_atm_inventory_groups_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 atm_inventory_misc_api:
   key: AIMA
   other: *common-opts
@@ -373,7 +373,7 @@ atm_inventory_misc_api:
   - <<: *cover_ct
     name: cover_ct_atm_inventory_misc_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 atm_inventory_users_api:
   key: AIUI
   other: *common-opts
@@ -391,7 +391,7 @@ atm_inventory_users_api:
   - <<: *cover_ct
     name: cover_ct_atm_inventory_users_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 atm_lambda_api:
   key: ALA
   other: *common-opts
@@ -409,7 +409,7 @@ atm_lambda_api:
   - <<: *cover_ct
     name: cover_ct_atm_lambda_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 atm_schema_validation:
   key: ASV
   other: *common-opts
@@ -427,7 +427,7 @@ atm_schema_validation:
   - <<: *cover_ct
     name: cover_ct_atm_schema_validation.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 atm_workflow_schema_api:
   key: AWSA
   other: *common-opts
@@ -445,7 +445,7 @@ atm_workflow_schema_api:
   - <<: *cover_ct
     name: cover_ct_atm_workflow_schema_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 basic_auth:
   key: US
   other: *common-opts
@@ -463,7 +463,7 @@ basic_auth:
   - <<: *cover_ct
     name: cover_ct_basic_auth.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 cluster_groups_api:
   key: CGA
   other: *common-opts
@@ -481,7 +481,7 @@ cluster_groups_api:
   - <<: *cover_ct
     name: cover_ct_cluster_groups_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 cluster_misc_api:
   key: CMA
   other: *common-opts
@@ -499,7 +499,7 @@ cluster_misc_api:
   - <<: *cover_ct
     name: cover_ct_cluster_misc_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 cluster_upgrade:
   key: CLUP
   other: *common-opts
@@ -517,7 +517,7 @@ cluster_upgrade:
   - <<: *cover_ct
     name: cover_ct_cluster_upgrade.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 cluster_users_api:
   key: CUA
   other: *common-opts
@@ -535,7 +535,7 @@ cluster_users_api:
   - <<: *cover_ct
     name: cover_ct_cluster_users_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 connection:
   key: CON
   other: *common-opts
@@ -553,7 +553,7 @@ connection:
   - <<: *cover_ct
     name: cover_ct_connection.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 db_browser:
   key: DBBRWS
   other: *common-opts
@@ -571,7 +571,7 @@ db_browser:
   - <<: *cover_ct
     name: cover_ct_db_browser.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 dns:
   key: DNS
   other: *common-opts
@@ -589,7 +589,7 @@ dns:
   - <<: *cover_ct
     name: cover_ct_dns.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 entities_setup:
   key: GROUP
   other: *common-opts
@@ -607,7 +607,7 @@ entities_setup:
   - <<: *cover_ct
     name: cover_ct_entities_setup.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 entitlement_mapping:
   key: EM
   other: *common-opts
@@ -625,7 +625,7 @@ entitlement_mapping:
   - <<: *cover_ct
     name: cover_ct_entitlement_mapping.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 group_atm_inventories_api:
   key: GAIA
   other: *common-opts
@@ -643,7 +643,7 @@ group_atm_inventories_api:
   - <<: *cover_ct
     name: cover_ct_group_atm_inventories_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 group_children_api:
   key: GRCHILDREN
   other: *common-opts
@@ -661,7 +661,7 @@ group_children_api:
   - <<: *cover_ct
     name: cover_ct_group_children_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 group_clusters_api:
   key: GCA
   other: *common-opts
@@ -679,7 +679,7 @@ group_clusters_api:
   - <<: *cover_ct
     name: cover_ct_group_clusters_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 group_handles_api:
   key: GRHANDLES
   other: *common-opts
@@ -697,7 +697,7 @@ group_handles_api:
   - <<: *cover_ct
     name: cover_ct_group_handles_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 group_harvesters_api:
   key: GHA
   other: *common-opts
@@ -715,7 +715,7 @@ group_harvesters_api:
   - <<: *cover_ct
     name: cover_ct_group_harvesters_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 group_hservice_api:
   key: GRHS
   other: *common-opts
@@ -733,7 +733,7 @@ group_hservice_api:
   - <<: *cover_ct
     name: cover_ct_group_hservice_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 group_misc_api:
   key: GRBASIC
   other: *common-opts
@@ -751,7 +751,7 @@ group_misc_api:
   - <<: *cover_ct
     name: cover_ct_group_misc_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 group_parents_api:
   key: GRPARENTS
   other: *common-opts
@@ -769,7 +769,7 @@ group_parents_api:
   - <<: *cover_ct
     name: cover_ct_group_parents_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 group_spaces_api:
   key: GRSPACES
   other: *common-opts
@@ -787,7 +787,7 @@ group_spaces_api:
   - <<: *cover_ct
     name: cover_ct_group_spaces_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 group_users_api:
   key: GRUSERS
   other: *common-opts
@@ -805,7 +805,7 @@ group_users_api:
   - <<: *cover_ct
     name: cover_ct_group_users_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 gui_static_distribution:
   key: GSD
   other: *common-opts
@@ -823,7 +823,7 @@ gui_static_distribution:
   - <<: *cover_ct
     name: cover_ct_gui_static_distribution.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 gui_tokens:
   key: TOK
   other: *common-opts
@@ -841,7 +841,7 @@ gui_tokens:
   - <<: *cover_ct
     name: cover_ct_gui_tokens.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 handle_groups_api:
   key: HANGROUPS
   other: *common-opts
@@ -859,7 +859,7 @@ handle_groups_api:
   - <<: *cover_ct
     name: cover_ct_handle_groups_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 handle_misc_api:
   key: HANBASIC
   other: *common-opts
@@ -877,7 +877,7 @@ handle_misc_api:
   - <<: *cover_ct
     name: cover_ct_handle_misc_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 handle_users_api:
   key: HANUSERS
   other: *common-opts
@@ -895,7 +895,7 @@ handle_users_api:
   - <<: *cover_ct
     name: cover_ct_handle_users_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 harvester_groups_api:
   key: HGA
   other: *common-opts
@@ -913,7 +913,7 @@ harvester_groups_api:
   - <<: *cover_ct
     name: cover_ct_harvester_groups_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 harvester_misc_api:
   key: HAR
   other: *common-opts
@@ -931,7 +931,7 @@ harvester_misc_api:
   - <<: *cover_ct
     name: cover_ct_harvester_misc_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 harvester_spaces_api:
   key: HSA
   other: *common-opts
@@ -949,7 +949,7 @@ harvester_spaces_api:
   - <<: *cover_ct
     name: cover_ct_harvester_spaces_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 harvester_users_api:
   key: HUA
   other: *common-opts
@@ -967,7 +967,7 @@ harvester_users_api:
   - <<: *cover_ct
     name: cover_ct_harvester_users_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 hservice_groups_api:
   key: HSERGROUPS
   other: *common-opts
@@ -985,7 +985,7 @@ hservice_groups_api:
   - <<: *cover_ct
     name: cover_ct_hservice_groups_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 hservice_misc_api:
   key: HSERBASIC
   other: *common-opts
@@ -1003,7 +1003,7 @@ hservice_misc_api:
   - <<: *cover_ct
     name: cover_ct_hservice_misc_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 hservice_users_api:
   key: HSERUSERS
   other: *common-opts
@@ -1021,7 +1021,7 @@ hservice_users_api:
   - <<: *cover_ct
     name: cover_ct_hservice_users_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 invite_tokens:
   key: IT
   other: *common-opts
@@ -1039,7 +1039,7 @@ invite_tokens:
   - <<: *cover_ct
     name: cover_ct_invite_tokens.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 model_upgrade:
   key: RC12TOR
   other: *common-opts
@@ -1057,7 +1057,7 @@ model_upgrade:
   - <<: *cover_ct
     name: cover_ct_model_upgrade.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 oai:
   key: OAI
   other: *common-opts
@@ -1075,7 +1075,7 @@ oai:
   - <<: *cover_ct
     name: cover_ct_oai.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 openid:
   key: OPID
   other: *common-opts
@@ -1093,7 +1093,7 @@ openid:
   - <<: *cover_ct
     name: cover_ct_openid.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 provider_api:
   key: PRED
   other: *common-opts
@@ -1111,7 +1111,7 @@ provider_api:
   - <<: *cover_ct
     name: cover_ct_provider_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 rest_auth:
   key: RESTA
   other: *common-opts
@@ -1129,7 +1129,7 @@ rest_auth:
   - <<: *cover_ct
     name: cover_ct_rest_auth.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 session:
   key: SES
   other: *common-opts
@@ -1147,7 +1147,7 @@ session:
   - <<: *cover_ct
     name: cover_ct_session.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 share_api:
   key: SHAR
   other: *common-opts
@@ -1165,7 +1165,7 @@ share_api:
   - <<: *cover_ct
     name: cover_ct_share_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 space_groups_api:
   key: SPGROUPS
   other: *common-opts
@@ -1183,7 +1183,7 @@ space_groups_api:
   - <<: *cover_ct
     name: cover_ct_space_groups_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 space_harvesters_api:
   key: SHA
   other: *common-opts
@@ -1201,7 +1201,7 @@ space_harvesters_api:
   - <<: *cover_ct
     name: cover_ct_space_harvesters_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 space_lifecycle:
   key: SPLI
   other: *common-opts
@@ -1219,7 +1219,7 @@ space_lifecycle:
   - <<: *cover_ct
     name: cover_ct_space_lifecycle.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 space_misc_api:
   key: SPAC
   other: *common-opts
@@ -1237,7 +1237,7 @@ space_misc_api:
   - <<: *cover_ct
     name: cover_ct_space_misc_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 space_owners:
   key: SPOW
   other: *common-opts
@@ -1255,7 +1255,7 @@ space_owners:
   - <<: *cover_ct
     name: cover_ct_space_owners.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 space_users_api:
   key: SPUSERS
   other: *common-opts
@@ -1273,7 +1273,7 @@ space_users_api:
   - <<: *cover_ct
     name: cover_ct_space_users_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 storage_misc_api:
   key: STOR
   other: *common-opts
@@ -1291,7 +1291,7 @@ storage_misc_api:
   - <<: *cover_ct
     name: cover_ct_storage_misc_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 token_api:
   key: TAP
   other: *common-opts
@@ -1309,7 +1309,7 @@ token_api:
   - <<: *cover_ct
     name: cover_ct_token_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 user_atm_inventories_api:
   key: UAIA
   other: *common-opts
@@ -1327,7 +1327,7 @@ user_atm_inventories_api:
   - <<: *cover_ct
     name: cover_ct_user_atm_inventories_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 user_clusters_api:
   key: UCA
   other: *common-opts
@@ -1345,7 +1345,7 @@ user_clusters_api:
   - <<: *cover_ct
     name: cover_ct_user_clusters_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 user_groups_api:
   key: USGROUPS
   other: *common-opts
@@ -1363,7 +1363,7 @@ user_groups_api:
   - <<: *cover_ct
     name: cover_ct_user_groups_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 user_handles_api:
   key: USHANDLES
   other: *common-opts
@@ -1381,7 +1381,7 @@ user_handles_api:
   - <<: *cover_ct
     name: cover_ct_user_handles_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 user_harvesters_api:
   key: UHA
   other: *common-opts
@@ -1399,7 +1399,7 @@ user_harvesters_api:
   - <<: *cover_ct
     name: cover_ct_user_harvesters_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 user_hservice_api:
   key: USHSERV
   other: *common-opts
@@ -1417,7 +1417,7 @@ user_hservice_api:
   - <<: *cover_ct
     name: cover_ct_user_hservice_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 user_misc_api:
   key: USA
   other: *common-opts
@@ -1435,7 +1435,7 @@ user_misc_api:
   - <<: *cover_ct
     name: cover_ct_user_misc_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 user_privileges_api:
   key: UPA
   other: *common-opts
@@ -1453,7 +1453,7 @@ user_privileges_api:
   - <<: *cover_ct
     name: cover_ct_user_privileges_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 user_spaces_api:
   key: USSPACES
   other: *common-opts
@@ -1471,7 +1471,7 @@ user_spaces_api:
   - <<: *cover_ct
     name: cover_ct_user_spaces_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 zone_api:
   key: ZON
   other: *common-opts
@@ -1489,7 +1489,7 @@ zone_api:
   - <<: *cover_ct
     name: cover_ct_zone_api.tar.gz
   requirements: *requirements
-  artifacts-subscriptions: *oz-worker
+  artifact-subcriptions: *oz-worker
 Coverage report:
   key: CR
   other: *common-opts
