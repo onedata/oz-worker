@@ -213,12 +213,15 @@ translate_user(GRI = #gri{type = od_user, id = UserId, aspect = instance, scope 
         full_name = FullName,
         username = Username
     } = User,
+    CanInviteProviders = open =:= oz_worker:get_env(provider_registration_policy, open) orelse
+        user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_INVITE),
     #{
         <<"scope">> => <<"private">>,
         <<"basicAuthEnabled">> => BasicAuthEnabled,
         <<"hasPassword">> => PasswordHash /= undefined,
         <<"fullName">> => FullName,
         <<"username">> => utils:undefined_to_null(Username),
+        <<"canInviteProviders">> => CanInviteProviders,
         <<"tokenList">> => gri:serialize(#gri{type = od_token, id = undefined, aspect = {user_named_tokens, UserId}}),
         <<"linkedAccountList">> => gri:serialize(GRI#gri{aspect = linked_accounts, scope = private}),
         <<"groupList">> => gri:serialize(GRI#gri{aspect = eff_groups, scope = private}),
