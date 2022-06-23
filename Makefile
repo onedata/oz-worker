@@ -162,4 +162,7 @@ pkgclean:
 artifact:
 	cd ..; find oz_worker | grep -v '.git$$' | grep -v '/.git/' > tar.lst; \
 	find oz_worker | grep oz_worker/.git >> tar.lst; \
-	tar -czf oz_worker.tar.gz --no-recursion -T tar.lst 
+	tar -czf oz_worker.tar.gz --no-recursion -T tar.lst
+
+codetag-tracker:
+	@echo "Skipping codetag-tracker for release version 20.02.*"
