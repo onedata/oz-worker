@@ -174,6 +174,13 @@ CHANGELOG
     Fixed inability to open share hosted by Oneprovider 19.02.x using
     Onezone 20.02.x.
 
+### 20.02.17
+
+-   **VFS-9475** Web GUI: Better handling of the restricted registration
+    policy in the tokens generator web tool.
+-   **VFS-9474** Improved behaviour of the Oneprovider deployment page
+    in Spaces GUI when the registration policy is set to restricted.
+
 ### 20.02.16
 
 -   **VFS-9182** Improved EGI group mapping for special COU groups
