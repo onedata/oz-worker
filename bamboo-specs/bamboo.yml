@@ -147,6 +147,20 @@ Build:
           integration: custom
         buildHangingConfig.enabled: 'false'
   tasks:
+  - script:
+      interpreter: SHELL
+      scripts:
+      - |-
+        if [ ${bamboo_planRepository_branch} != "develop" ]; then
+          if [ -z ${bamboo_ManualBuildTriggerReason_userName+x} ]; then
+            echo "===========================================================================================================" >&2
+            echo "CAUTION: This branch (${bamboo_planRepository_branch}) should be run manually!" >&2
+            echo "Builds triggered automatically by changes in the repo will always fail." >&2
+            echo "===========================================================================================================" >&2
+            exit 1;
+          fi
+        fi
+      description: Trigger check    
   - checkout:
       path: oz_worker
       force-clean-build: 'true'
