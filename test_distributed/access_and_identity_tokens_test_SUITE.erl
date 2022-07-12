@@ -532,6 +532,10 @@ check_token_caveats_handling(RequestSpec) ->
                 RandCorrectCaveats = lists_utils:random_sublist(gen_correct_caveats(RequestSpec, RequestContext)),
                 RandUnverifiedCaveats = lists_utils:random_sublist(gen_unverified_caveats(RequestSpec, RequestContext)),
                 ClientAuth = gen_client_auth(EligibleSubject, Persistence, RandCorrectCaveats ++ RandUnverifiedCaveats),
+                % force entity graph reconciliation as some tests depend on
+                % effective memberships/privileges in groups/spaces etc,
+                % and some of these may be set up during caveats generation and be not yet recomputed
+                ozt:reconcile_entity_graph(),
                 Result = make_request(RequestSpec, RequestContext, ClientAuth),
                 % These tests cover only a subset of combinations and possibly
                 % there are some combinations wrongly handled by the test framework
