@@ -1,0 +1,859 @@
+---
+version: 2
+plan:
+  key: VFS-OZ
+plan-permissions:
+- users:
+  - plgdutka
+  - plglopiola
+  groups:
+  - plggveildev
+  permissions:
+  - view
+  - edit
+  - build
+  - clone
+  - admin
+---
+version: 2
+plan:
+  project-key: VFS
+  key: OZ
+  name: oz-worker
+variables:
+  coverOptionOverride: develop_only
+  version_major: '2'
+  version_minor: '1'
+repositories:
+- oz-worker:
+    scope: global
+branches:
+  create: for-new-branch
+  delete:
+    after-deleted-days: 30
+    after-inactive-days: 30
+  link-to-jira: true
+notifications: []
+labels: []
+dependencies:
+  require-all-stages-passing: false
+  enabled-for-branches: true
+  block-strategy: none
+  plans: []
+other:
+  concurrent-build-plugin: system-default
+  all-other-apps:
+    custom:
+      com.atlassian.bamboo.plugin.hungbuildkiller.stopped.enabled: 'true'
+      buildExpiryConfig:
+        period: weeks
+        expiryTypeBuildLog: 'false'
+        enabled: 'true'
+        expiryTypeArtifact: 'true'
+        duration: '1'
+        buildsToKeep: '1'
+stages:
+- Build:
+    manual: false
+    final: false
+    jobs:
+    - Build
+- Test:
+    manual: false
+    final: false
+    jobs:
+    - _Codetag Tracker
+    - _Dialyze
+    - _Unit Test
+    - access_and_identity_tokens
+    - basic_auth
+    - cluster_groups_api
+    - cluster_misc_api
+    - cluster_upgrade
+    - cluster_users_api
+    - connection
+    - db_browser
+    - dns
+    - entities_setup
+    - entitlement_mapping
+    - group_children_api
+    - group_clusters_api
+    - group_handles_api
+    - group_harvesters_api
+    - group_hservice_api
+    - group_misc_api
+    - group_parents_api
+    - group_spaces_api
+    - group_users_api
+    - gui_static_distribution
+    - gui_tokens
+    - handle_groups_api
+    - handle_misc_api
+    - handle_users_api
+    - harvester_groups_api
+    - harvester_misc_api
+    - harvester_spaces_api
+    - harvester_users_api
+    - hservice_groups_api
+    - hservice_misc_api
+    - hservice_users_api
+    - invite_tokens
+    - model_upgrade
+    - oai
+    - openid
+    - provider_api
+    - rest_auth
+    - session
+    - share_api
+    - space_groups_api
+    - space_harvesters_api
+    - space_lifecycle
+    - space_misc_api
+    - space_owners
+    - space_users_api
+    - storage_misc_api
+    - token_api
+    - user_clusters_api
+    - user_groups_api
+    - user_handles_api
+    - user_harvesters_api
+    - user_hservice_api
+    - user_misc_api
+    - user_privileges_api
+    - user_spaces_api
+    - zone_api
+- Coverage report:
+    manual: false
+    final: false
+    jobs:
+    - Coverage report
+Build:
+  key: BUILD
+  other:
+    clean-working-dir: true
+    all-other-apps:
+      custom:
+        auto: {}
+        clover:
+          useLocalLicenseKey: 'true'
+          integration: custom
+        buildHangingConfig.enabled: 'false'
+  tasks:
+  - script:
+      interpreter: SHELL
+      scripts:
+      - |-
+        if [ ${bamboo_planRepository_branch} != "develop" ]; then
+          if [ -z ${bamboo_ManualBuildTriggerReason_userName+x} ]; then
+            echo "===========================================================================================================" >&2
+            echo "CAUTION: This branch (${bamboo_planRepository_branch}) should be run manually!" >&2
+            echo "Builds triggered automatically by changes in the repo will always fail." >&2
+            echo "===========================================================================================================" >&2
+            exit 1;
+          fi
+        fi
+      description: Trigger check    
+  - checkout:
+      path: oz_worker
+      force-clean-build: 'true'
+      description: Checkout Default Repository
+  - script:
+      interpreter: SHELL
+      scripts:
+      - |-
+        cd oz_worker
+        git remote set-url origin ${bamboo.repository.git.repositoryUrl}
+        git remote -v
+        make submodules
+        cd ..
+      description: Init submodules
+  - script:
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - |
+        ./make.py -e REBAR_PROFILE=bamboo -r ${bamboo.agentWorkingDirectory} test_rel
+      environment: PREFER_STATIC_LINK=1
+      working-dir: oz_worker
+      description: Build
+  - script:
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - tar -czf oz_worker.tar.gz oz_worker/
+      description: Package
+  - script:
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - |-
+        ./oz_worker/bamboos/artifacts/push_artifact.py --hostname ${bamboo.artifactRepoHostname} --port ${bamboo.artifactRepoPort} \
+            --username ${bamboo.artifactRepoUsername} --branch ${bamboo.planRepository.branchName} --plan ${bamboo.planRepository.name} \
+            --artifact oz_worker.tar.gz
+      description: Push artifact
+  final-tasks:
+  - script: &clear-env
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - curl ${bamboo.OnedataFinalTasksURL} | bash -
+      description: Clear env
+  artifacts:
+  - name: oz_worker.tar.gz
+    pattern: oz_worker.tar.gz
+    shared: true
+    required: false
+  requirements: &requirements
+  - system.docker.executable
+  - onedata
+  artifact-subscriptions: []
+_Codetag Tracker:
+  key: CT
+  tasks:
+  - checkout: &fake-checkout       
+      conditions:
+      - variable:
+          exists: fake.var
+  - script: &unpack
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - tar -xzmf oz_worker.tar.gz
+      description: Unpack
+  - script:
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - ./make.py -r ${bamboo.agentWorkingDirectory} codetag-tracker BRANCH=${bamboo.planRepository.branchName}
+      working-dir: oz_worker
+      description: Codetag Tracker
+  - script: *clear-env
+  requirements: *requirements
+  artifact-subscriptions: &oz-worker
+  - artifact: oz_worker.tar.gz
+_Dialyze:
+  key: DIAL
+  other: &common-opts
+    clean-working-dir: true
+    all-other-apps:
+      custom:
+        auto: {}
+        buildHangingConfig.enabled: 'false'
+  tasks:
+  - checkout: *fake-checkout
+  - script: *unpack
+  - script:
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - ./make.py dialyzer
+      working-dir: oz_worker
+      description: Dialyze
+  final-tasks:
+  - script:
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - |
+        rm oz_worker.tar.gz
+        find oz_worker/ -maxdepth 1 -not -name '.dialyzer.plt' -not -path 'oz_worker/' -exec rm -rf '{}' +
+      description: Cleanup
+  - script: *clear-env
+  requirements: *requirements
+  artifact-subscriptions: *oz-worker
+_Unit Test:
+  key: UNIT
+  other: *common-opts
+  tasks:
+  - checkout: *fake-checkout
+  - script: *unpack
+  - script:
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - |-
+        if bamboos/scripts/should-skip-coverage.sh; then
+            echo "Running eunit tests without coverage..."
+            ./make.py -r ${bamboo.agentWorkingDirectory} eunit
+        else
+            echo "Running eunit tests with coverage..."
+            ./make.py -r ${bamboo.agentWorkingDirectory} eunit-with-cover
+        fi
+      working-dir: oz_worker
+      description: Run EUnit
+  final-tasks:
+  - script:
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - |-
+        mkdir -p cover_eunit
+        cp -r _build/test/cover/* cover_eunit
+        tar -czf cover_eunit.tar.gz cover_eunit/
+      working-dir: oz_worker
+      description: Save cover results
+  - test-parser:
+      type: junit
+      ignore-time: 'false'
+      test-results: oz_worker/test/eunit_results/TEST-*.xml
+      description: Parse test results
+  - script: *clear-env
+  artifacts:
+  - name: cover_eunit.tar.gz
+    location: oz_worker
+    pattern: cover_eunit.tar.gz
+    shared: true
+    required: false
+  requirements: *requirements
+  artifact-subscriptions: *oz-worker
+access_and_identity_tokens: &ct-job
+  key: AT
+  other: *common-opts
+  tasks:
+  - checkout: *fake-checkout
+  - script: *unpack
+  - script: &run-ct
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - ./ct_run.py --suite ${bamboo.shortJobName}_test_SUITE --cover
+      working-dir: oz_worker
+      description: Run CT
+  final-tasks:
+  - test-parser: &parse-test-results
+      type: junit
+      ignore-time: 'false'
+      test-results: oz_worker/test_distributed/logs/*/surefire.xml
+      description: Parse test results
+  - script: &save-cover-results
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - |-
+        mkdir -p cover_ct
+        cp test_distributed/logs/ct_run.*/*cover* cover_ct
+        cp test_distributed/logs/ct_run.*/*COVER* cover_ct
+        tar -czf cover_ct_${bamboo.shortJobName}.tar.gz cover_ct/
+      working-dir: oz_worker
+      description: Save cover results
+  - script: &pack-test-logs
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - tar -mczf ct_logs_${bamboo.shortJobName}.tar.gz oz_worker/test_distributed/logs/
+      description: Pack test logs
+  - script: *clear-env
+  artifacts:
+  - &ct_logs
+    name: ct_logs_${bamboo.shortJobName}.tar.gz
+    pattern: ct_logs_${bamboo.shortJobName}.tar.gz
+    shared: false
+    required: false
+  - &cover_ct
+    name: cover_ct_access_and_identity_tokens.tar.gz
+    location: oz_worker
+    pattern: cover_ct_${bamboo.shortJobName}.tar.gz
+    shared: true
+    required: false
+  requirements: *requirements
+  artifact-subscriptions: *oz-worker
+basic_auth:
+  <<: *ct-job
+  key: US
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_basic_auth.tar.gz
+cluster_groups_api:
+  <<: *ct-job
+  key: CGA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_cluster_groups_api.tar.gz
+cluster_misc_api:
+  <<: *ct-job
+  key: CMA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_cluster_misc_api.tar.gz
+cluster_upgrade:
+  <<: *ct-job
+  key: CLUP
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_cluster_upgrade.tar.gz
+cluster_users_api:
+  <<: *ct-job
+  key: CUA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_cluster_users_api.tar.gz
+connection:
+  <<: *ct-job
+  key: CON
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_connection.tar.gz
+db_browser:
+  <<: *ct-job
+  key: DBBRWS
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_db_browser.tar.gz
+dns:
+  <<: *ct-job
+  key: DNS
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_dns.tar.gz
+entities_setup:
+  <<: *ct-job
+  key: GROUP
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_entities_setup.tar.gz
+entitlement_mapping:
+  <<: *ct-job
+  key: EM
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_entitlement_mapping.tar.gz
+group_children_api:
+  <<: *ct-job
+  key: GRCHILDREN
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_group_children_api.tar.gz
+group_clusters_api:
+  <<: *ct-job
+  key: GCA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_group_clusters_api.tar.gz
+group_handles_api:
+  <<: *ct-job
+  key: GRHANDLES
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_group_handles_api.tar.gz
+group_harvesters_api:
+  <<: *ct-job
+  key: GHA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_group_harvesters_api.tar.gz
+group_hservice_api:
+  <<: *ct-job
+  key: GRHS
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_group_hservice_api.tar.gz
+group_misc_api:
+  <<: *ct-job
+  key: GRBASIC
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_group_misc_api.tar.gz
+group_parents_api:
+  <<: *ct-job
+  key: GRPARENTS
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_group_parents_api.tar.gz
+group_spaces_api:
+  <<: *ct-job
+  key: GRSPACES
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_group_spaces_api.tar.gz
+group_users_api:
+  <<: *ct-job
+  key: GRUSERS
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_group_users_api.tar.gz
+gui_static_distribution:
+  <<: *ct-job
+  key: GSD
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_gui_static_distribution.tar.gz
+gui_tokens:
+  <<: *ct-job
+  key: TOK
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_gui_tokens.tar.gz
+handle_groups_api:
+  <<: *ct-job
+  key: HANGROUPS
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_handle_groups_api.tar.gz
+handle_misc_api:
+  <<: *ct-job
+  key: HANBASIC
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_handle_misc_api.tar.gz
+handle_users_api:
+  <<: *ct-job
+  key: HANUSERS
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_handle_users_api.tar.gz
+harvester_groups_api:
+  <<: *ct-job
+  key: HGA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_harvester_groups_api.tar.gz
+harvester_misc_api:
+  <<: *ct-job
+  key: HAR
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_harvester_misc_api.tar.gz
+harvester_spaces_api:
+  <<: *ct-job
+  key: HSA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_harvester_spaces_api.tar.gz
+harvester_users_api:
+  <<: *ct-job
+  key: HUA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_harvester_users_api.tar.gz
+hservice_groups_api:
+  <<: *ct-job
+  key: HSERGROUPS
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_hservice_groups_api.tar.gz
+hservice_misc_api:
+  <<: *ct-job
+  key: HSERBASIC
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_hservice_misc_api.tar.gz
+hservice_users_api:
+  <<: *ct-job
+  key: HSERUSERS
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_hservice_users_api.tar.gz
+invite_tokens:
+  <<: *ct-job
+  key: IT
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_invite_tokens.tar.gz
+model_upgrade:
+  <<: *ct-job
+  key: RC12TOR
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_model_upgrade.tar.gz
+oai:
+  <<: *ct-job
+  key: OAI
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_oai.tar.gz
+openid:
+  <<: *ct-job
+  key: OPID
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_openid.tar.gz
+provider_api:
+  <<: *ct-job
+  key: PRED
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_provider_api.tar.gz
+rest_auth:
+  <<: *ct-job
+  key: RESTA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_rest_auth.tar.gz
+session:
+  <<: *ct-job
+  key: SES
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_session.tar.gz
+share_api:
+  <<: *ct-job
+  key: SHAR
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_share_api.tar.gz
+space_groups_api:
+  <<: *ct-job
+  key: SPGROUPS
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_space_groups_api.tar.gz
+space_harvesters_api:
+  <<: *ct-job
+  key: SHA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_space_harvesters_api.tar.gz
+space_lifecycle:
+  <<: *ct-job
+  key: SPLI
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_space_lifecycle.tar.gz
+space_misc_api:
+  <<: *ct-job
+  key: SPAC
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_space_misc_api.tar.gz
+space_owners:
+  <<: *ct-job
+  key: SPOW
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_space_owners.tar.gz
+space_users_api:
+  <<: *ct-job
+  key: SPUSERS
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_space_users_api.tar.gz
+storage_misc_api:
+  <<: *ct-job
+  key: STOR
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_storage_misc_api.tar.gz
+token_api:
+  <<: *ct-job
+  key: TAP
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_token_api.tar.gz
+user_clusters_api:
+  <<: *ct-job
+  key: UCA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_user_clusters_api.tar.gz
+user_groups_api:
+  <<: *ct-job
+  key: USGROUPS
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_user_groups_api.tar.gz
+user_handles_api:
+  <<: *ct-job
+  key: USHANDLES
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_user_handles_api.tar.gz
+user_harvesters_api:
+  <<: *ct-job
+  key: UHA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_user_harvesters_api.tar.gz
+user_hservice_api:
+  <<: *ct-job
+  key: USHSERV
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_user_hservice_api.tar.gz
+user_misc_api:
+  <<: *ct-job
+  key: USA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_user_misc_api.tar.gz
+user_privileges_api:
+  <<: *ct-job
+  key: UPA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_user_privileges_api.tar.gz
+user_spaces_api:
+  <<: *ct-job
+  key: USSPACES
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_user_spaces_api.tar.gz
+zone_api:
+  <<: *ct-job
+  key: ZON
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_zone_api.tar.gz
+Coverage report:
+  key: CR
+  other: *common-opts
+  tasks:
+  - checkout: *fake-checkout
+  - script:
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - |
+        tar -xzmf oz_worker.tar.gz
+        if oz_worker/bamboos/scripts/should-skip-coverage.sh; then
+          echo \"Skipping coverage report collection\"
+        else
+          LOG_PATH=oz_worker/test_distributed/logs
+          tar -xzmf cover_eunit.tar.gz
+          mkdir -p oz_worker/_build/test/cover
+          mv cover_eunit/* oz_worker/_build/test/cover
+          mkdir tmp
+          for archive in $(ls ct_logs_*.tar.gz)
+          do
+            cp ${archive} tmp
+            base=$(basename ${archive} .tar.gz)
+            cd tmp
+            tar -xzmf *.tar.gz
+            LOG_DIR=$(ls -dt ${LOG_PATH}/ct_run* | head -1)
+            echo $LOG_DIR
+            cp -r ${LOG_DIR} ../${LOG_DIR}_${base}
+            cd ..
+            rm -rf tmp/*
+          done
+          rm -rf tmp
+        fi
+      description: Unpack
+  - script:
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - |-
+        if bamboos/scripts/should-skip-coverage.sh; then
+            # generate some dummy artifact data so that the build can finish with success
+            mkdir test_coverage
+            echo "Test coverage was skipped. Run a custom build with coverOptionOverride set to true if you wish to collect a coverage report." > test_coverage/readme-coverage-skipped.txt
+        else
+            ./make.py on_bamboo=true coverage
+        fi
+      working-dir: oz_worker
+      description: Generate coverage reports
+  final-tasks:
+  - script:
+      interpreter: BINSH_OR_CMDEXE
+      scripts:
+      - |
+        tar -czf test_coverage.tar.gz oz_worker/test_coverage
+      description: Save coverage report
+  - script: *clear-env
+  artifacts:
+  - name: test_coverage.tar.gz
+    pattern: test_coverage.tar.gz
+    shared: false
+    required: false
+  requirements: *requirements
+  artifact-subscriptions:
+  - artifact: oz_worker.tar.gz
+  - artifact: cover_eunit.tar.gz
+  - artifact: cover_ct_access_and_identity_tokens.tar.gz
+  - artifact: cover_ct_basic_auth.tar.gz
+  - artifact: cover_ct_cluster_groups_api.tar.gz
+  - artifact: cover_ct_cluster_misc_api.tar.gz
+  - artifact: cover_ct_cluster_upgrade.tar.gz
+  - artifact: cover_ct_cluster_users_api.tar.gz
+  - artifact: cover_ct_connection.tar.gz
+  - artifact: cover_ct_db_browser.tar.gz
+  - artifact: cover_ct_dns.tar.gz
+  - artifact: cover_ct_entities_setup.tar.gz
+  - artifact: cover_ct_entitlement_mapping.tar.gz
+  - artifact: cover_ct_group_children_api.tar.gz
+  - artifact: cover_ct_group_clusters_api.tar.gz
+  - artifact: cover_ct_group_handles_api.tar.gz
+  - artifact: cover_ct_group_harvesters_api.tar.gz
+  - artifact: cover_ct_group_hservice_api.tar.gz
+  - artifact: cover_ct_group_misc_api.tar.gz
+  - artifact: cover_ct_group_parents_api.tar.gz
+  - artifact: cover_ct_group_spaces_api.tar.gz
+  - artifact: cover_ct_group_users_api.tar.gz
+  - artifact: cover_ct_gui_static_distribution.tar.gz
+  - artifact: cover_ct_gui_tokens.tar.gz
+  - artifact: cover_ct_handle_groups_api.tar.gz
+  - artifact: cover_ct_handle_misc_api.tar.gz
+  - artifact: cover_ct_handle_users_api.tar.gz
+  - artifact: cover_ct_harvester_groups_api.tar.gz
+  - artifact: cover_ct_harvester_misc_api.tar.gz
+  - artifact: cover_ct_harvester_spaces_api.tar.gz
+  - artifact: cover_ct_harvester_users_api.tar.gz
+  - artifact: cover_ct_hservice_groups_api.tar.gz
+  - artifact: cover_ct_hservice_misc_api.tar.gz
+  - artifact: cover_ct_hservice_users_api.tar.gz
+  - artifact: cover_ct_invite_tokens.tar.gz
+  - artifact: cover_ct_model_upgrade.tar.gz
+  - artifact: cover_ct_oai.tar.gz
+  - artifact: cover_ct_openid.tar.gz
+  - artifact: cover_ct_provider_api.tar.gz
+  - artifact: cover_ct_rest_auth.tar.gz
+  - artifact: cover_ct_session.tar.gz
+  - artifact: cover_ct_share_api.tar.gz
+  - artifact: cover_ct_space_groups_api.tar.gz
+  - artifact: cover_ct_space_harvesters_api.tar.gz
+  - artifact: cover_ct_space_lifecycle.tar.gz
+  - artifact: cover_ct_space_misc_api.tar.gz
+  - artifact: cover_ct_space_owners.tar.gz
+  - artifact: cover_ct_space_users_api.tar.gz
+  - artifact: cover_ct_storage_misc_api.tar.gz
+  - artifact: cover_ct_token_api.tar.gz
+  - artifact: cover_ct_user_clusters_api.tar.gz
+  - artifact: cover_ct_user_groups_api.tar.gz
+  - artifact: cover_ct_user_handles_api.tar.gz
+  - artifact: cover_ct_user_harvesters_api.tar.gz
+  - artifact: cover_ct_user_hservice_api.tar.gz
+  - artifact: cover_ct_user_misc_api.tar.gz
+  - artifact: cover_ct_user_privileges_api.tar.gz
+  - artifact: cover_ct_user_spaces_api.tar.gz
+  - artifact: cover_ct_zone_api.tar.gz
+...
