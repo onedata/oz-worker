@@ -12,7 +12,9 @@
 -module(rpc_api).
 -author("Wojciech Geisler").
 
+-include("datastore/oz_datastore_models.hrl").
 -include("entity_logic.hrl").
+-include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/oz/oz_users.hrl").
@@ -27,7 +29,7 @@
     cluster_get_eff_user_privileges/3, get_protected_cluster_data/2,
     get_eff_clusters_by_user_auth/1, cluster_logic_get_users/2,
     cluster_logic_get_eff_users/2, cluster_logic_get_groups/2,
-    cluster_logic_get_eff_groups/2, cluster_logic_create_invite_token_for_admin/2,
+    cluster_logic_get_eff_groups/2, cluster_logic_create_invite_token_to_onezone_for_admin/0,
     reconcile_dns_config/0, dns_config_get_ns_hosts/0,
     gui_message_exists/1, get_gui_message_as_map/1, update_gui_message/3
 ]).
@@ -197,18 +199,42 @@ cluster_logic_get_eff_groups(Auth, ClusterId) ->
     cluster_logic:get_eff_groups(Auth, ClusterId).
 
 
--spec cluster_logic_create_invite_token_for_admin(aai:auth(), od_cluster:id()) ->
+-spec cluster_logic_create_invite_token_to_onezone_for_admin() ->
     {ok, tokens:token()} | {error, term()}.
-cluster_logic_create_invite_token_for_admin(Auth, ClusterId) ->
-    ProviderId = ClusterId,
+cluster_logic_create_invite_token_to_onezone_for_admin() ->
+    % invitation must be issued by an existing user - try to find a suitable user among cluster members
+    {ok, Cluster} = cluster_logic:get(?ROOT, ?ONEZONE_CLUSTER_ID),
+    ExistingMemberWithPrivileges = lists_utils:foldl_while(fun(UserId, _) ->
+        case cluster_logic:has_eff_privilege(Cluster, UserId, ?CLUSTER_ADD_USER) andalso
+            cluster_logic:has_eff_privilege(Cluster, UserId, ?CLUSTER_SET_PRIVILEGES)
+        of
+            true -> {halt, UserId};
+            false -> {cont, undefined}
+        end
+    end, undefined, maps:keys(Cluster#od_cluster.eff_users)),
+    InvitingUserId = case ExistingMemberWithPrivileges of
+        undefined ->
+            % if there is no user in the Onezone cluster that can invite someone, create
+            % a "rescue" user that will be used only to issue an invitation, so that somebody
+            % can join the cluster and recover from this unwanted situation
+            {ok, RescueUserId} = user_logic:create(?ROOT, #{<<"fullName">> => <<"Temporary Rescue User">>}),
+            {ok, _} = cluster_logic:add_user(?ROOT, ?ONEZONE_CLUSTER_ID, RescueUserId, [
+                ?CLUSTER_ADD_USER, ?CLUSTER_SET_PRIVILEGES
+            ]),
+            entity_graph:ensure_up_to_date(),
+            RescueUserId;
+        UserId ->
+            UserId
+    end,
+
     TokenName = <<
         "admin invite to cluster ",
         (binary:part(time:seconds_to_iso8601(global_clock:timestamp_seconds()), 0, 10))/binary, " ",
         (str_utils:rand_hex(3))/binary
     >>,
-    token_logic:create_provider_named_token(Auth, ProviderId, #{
+    token_logic:create_user_named_token(?USER(InvitingUserId), InvitingUserId, #{
         <<"name">> => TokenName,
-        <<"type">> => ?INVITE_TOKEN(?USER_JOIN_CLUSTER, ClusterId),
+        <<"type">> => ?INVITE_TOKEN(?USER_JOIN_CLUSTER, ?ONEZONE_CLUSTER_ID),
         <<"usageLimit">> => 1,
         <<"privileges">> => privileges:cluster_admin()
     }).

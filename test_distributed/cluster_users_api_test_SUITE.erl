@@ -45,7 +45,9 @@
     list_eff_users_test/1,
     get_eff_user_test/1,
     get_eff_user_privileges_test/1,
-    get_eff_user_membership_intermediaries/1
+    get_eff_user_membership_intermediaries/1,
+
+    create_invite_token_for_to_onezone_admin/1
 ]).
 
 all() ->
@@ -63,7 +65,9 @@ all() ->
         list_eff_users_test,
         get_eff_user_test,
         get_eff_user_privileges_test,
-        get_eff_user_membership_intermediaries
+        get_eff_user_membership_intermediaries,
+
+        create_invite_token_for_to_onezone_admin
     ]).
 
 
@@ -889,6 +893,43 @@ get_eff_user_membership_intermediaries(Config) ->
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
     end, ExpectedMembershipIntermediaries).
 
+
+% tests the RPC function exported for use in Onepanel - rpc_api:cluster_logic_create_invite_token_to_onezone_for_admin
+create_invite_token_for_to_onezone_admin(_Config) ->
+    % if there is a suitable user in the cluster, he should be used as invitation issuer
+    Admin = ozt_users:create(),
+    ozt_clusters:add_user(?ONEZONE_CLUSTER_ID, Admin, privileges:cluster_admin()),
+    ozt:reconcile_entity_graph(),
+    ?assertMatch({ok, #token{subject = ?SUB(user, Admin)}}, ozt:rpc(
+        rpc_api, cluster_logic_create_invite_token_to_onezone_for_admin, []
+    )),
+
+
+    % if none of the users have required privileges, a temporary rescue user should be created
+    % with required privileges and be used as invitation issuer
+    ozt_clusters:set_user_privileges(?ONEZONE_CLUSTER_ID, Admin, []),
+    ozt:reconcile_entity_graph(),
+    {ok, #token{subject = ?SUB(user, TempRescueUserAlpha)}} = ?assertMatch({ok, _}, ozt:rpc(
+        rpc_api, cluster_logic_create_invite_token_to_onezone_for_admin, [])
+    ),
+    ?assertNotEqual(TempRescueUserAlpha, Admin),
+    ?assertEqual(
+        privileges:from_list([?CLUSTER_ADD_USER, ?CLUSTER_SET_PRIVILEGES]),
+        ozt_clusters:get_user_privileges(?ONEZONE_CLUSTER_ID, TempRescueUserAlpha)
+    ),
+
+    % similarly, a rescue user should be added if there are no users in the Onezone cluster
+    ozt_clusters:remove_user(?ONEZONE_CLUSTER_ID, Admin),
+    ozt_clusters:remove_user(?ONEZONE_CLUSTER_ID, TempRescueUserAlpha),
+    ozt:reconcile_entity_graph(),
+    {ok, #token{subject = ?SUB(user, TempRescueUserBeta)}} = ?assertMatch({ok, _}, ozt:rpc(
+        rpc_api, cluster_logic_create_invite_token_to_onezone_for_admin, [])
+    ),
+    ?assertNotEqual(TempRescueUserBeta, TempRescueUserAlpha),
+    ?assertEqual(
+        privileges:from_list([?CLUSTER_ADD_USER, ?CLUSTER_SET_PRIVILEGES]),
+        ozt_clusters:get_user_privileges(?ONEZONE_CLUSTER_ID, TempRescueUserBeta)
+    ).
 
 %%%===================================================================
 %%% Setup/teardown functions
