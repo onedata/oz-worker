@@ -62,6 +62,7 @@
 -export([
     exists/1,
     has_eff_privilege/3,
+    has_eff_privileges/3,
     has_eff_user/2,
     has_direct_user/2,
     has_eff_group/2,
@@ -183,7 +184,7 @@ get_public_data(Auth, ClusterId) ->
 -spec get_name(aai:auth(), od_cluster:id()) ->
     {ok, binary()} | {error, term()}.
 get_name(_Auth, ?ONEZONE_CLUSTER_ID) ->
-    <<"Onezone">>;
+    {ok, <<"Onezone">>};
 get_name(Auth, ClusterId) ->
     provider_logic:get_name(Auth, ClusterId).
 
@@ -768,6 +769,14 @@ has_eff_privilege(ClusterId, UserId, Privilege) when is_binary(ClusterId) ->
     entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, od_cluster, ClusterId);
 has_eff_privilege(Cluster, UserId, Privilege) ->
     entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, Cluster).
+
+
+-spec has_eff_privileges(od_cluster:id() | #od_cluster{}, od_user:id(), [privileges:cluster_privilege()]) ->
+    boolean().
+has_eff_privileges(ClusterOrId, UserId, Privileges) ->
+    lists:all(fun(Privilege) ->
+        has_eff_privilege(ClusterOrId, UserId, Privilege)
+    end, Privileges).
 
 
 %%--------------------------------------------------------------------

@@ -19,6 +19,7 @@
 %% API
 -export([add_user/2, add_user/3, ensure_member/2]).
 -export([get_user_privileges/2, get_group_privileges/2]).
+-export([set_user_privileges/3]).
 -export([remove_user/2]).
 -export([ensure_not_a_member/2]).
 
@@ -52,6 +53,14 @@ get_user_privileges(ClusterId, UserId) ->
 get_group_privileges(ClusterId, GroupId) ->
     {ok, Privs} = ?assertMatch({ok, _}, ozt:rpc(cluster_logic, get_group_privileges, [?ROOT, ClusterId, GroupId])),
     Privs.
+
+
+-spec set_user_privileges(od_cluster:id(), od_user:id(), [privileges:cluster_privilege()]) -> ok.
+set_user_privileges(ClusterId, UserId, Privileges) ->
+    ?assertMatch(ok, ozt:rpc(cluster_logic, update_user_privileges, [?ROOT, ClusterId, UserId, #{
+        <<"grant">> => Privileges,
+        <<"revoke">> => lists_utils:subtract(privileges:cluster_admin(), Privileges)
+    }])).
 
 
 -spec remove_user(od_cluster:id(), od_user:id()) -> ok.
