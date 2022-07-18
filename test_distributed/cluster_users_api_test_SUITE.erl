@@ -888,30 +888,30 @@ create_invite_token_for_to_onezone_admin(_Config) ->
     )),
 
 
-    % if none of the users have required privileges, a temporary rescue user should be created
+    % if none of the users have required privileges, a system rescue user should be created
     % with required privileges and be used as invitation issuer
     ozt_clusters:set_user_privileges(?ONEZONE_CLUSTER_ID, Admin, []),
     ozt:reconcile_entity_graph(),
-    {ok, #token{subject = ?SUB(user, TempRescueUserAlpha)}} = ?assertMatch({ok, _}, ozt:rpc(
+    {ok, #token{subject = ?SUB(user, RescueUserAlpha)}} = ?assertMatch({ok, _}, ozt:rpc(
         rpc_api, cluster_logic_create_invite_token_to_onezone_for_admin, [])
     ),
-    ?assertNotEqual(TempRescueUserAlpha, Admin),
+    ?assertNotEqual(RescueUserAlpha, Admin),
     ?assertEqual(
         privileges:from_list([?CLUSTER_ADD_USER, ?CLUSTER_SET_PRIVILEGES]),
-        ozt_clusters:get_user_privileges(?ONEZONE_CLUSTER_ID, TempRescueUserAlpha)
+        ozt_clusters:get_user_privileges(?ONEZONE_CLUSTER_ID, RescueUserAlpha)
     ),
 
     % similarly, a rescue user should be added if there are no users in the Onezone cluster
     ozt_clusters:remove_user(?ONEZONE_CLUSTER_ID, Admin),
-    ozt_clusters:remove_user(?ONEZONE_CLUSTER_ID, TempRescueUserAlpha),
+    ozt_clusters:remove_user(?ONEZONE_CLUSTER_ID, RescueUserAlpha),
     ozt:reconcile_entity_graph(),
-    {ok, #token{subject = ?SUB(user, TempRescueUserBeta)}} = ?assertMatch({ok, _}, ozt:rpc(
+    {ok, #token{subject = ?SUB(user, RescueUserBeta)}} = ?assertMatch({ok, _}, ozt:rpc(
         rpc_api, cluster_logic_create_invite_token_to_onezone_for_admin, [])
     ),
-    ?assertNotEqual(TempRescueUserBeta, TempRescueUserAlpha),
+    ?assertNotEqual(RescueUserBeta, RescueUserAlpha),
     ?assertEqual(
         privileges:from_list([?CLUSTER_ADD_USER, ?CLUSTER_SET_PRIVILEGES]),
-        ozt_clusters:get_user_privileges(?ONEZONE_CLUSTER_ID, TempRescueUserBeta)
+        ozt_clusters:get_user_privileges(?ONEZONE_CLUSTER_ID, RescueUserBeta)
     ).
 
 %%%===================================================================

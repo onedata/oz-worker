@@ -34,6 +34,8 @@
     gui_message_exists/1, get_gui_message_as_map/1, update_gui_message/3
 ]).
 
+-define(PRIVS_TO_INVITE_ADMIN, [?CLUSTER_ADD_USER, ?CLUSTER_SET_PRIVILEGES]).
+-define(SYSTEM_RESCUE_USER_NAME, <<"System Rescue User">>).
 
 %%%===================================================================
 %%% API entrypoint
@@ -200,15 +202,16 @@ cluster_logic_get_eff_groups(Auth, ClusterId) ->
     cluster_logic:get_eff_groups(Auth, ClusterId).
 
 
+% @TODO VFS-9647 Support direct addition of arbitrary users to Onezone
+% cluster when Entity management GUI in Onezone panel is implemented
+% (this mechanism will be then obsolete)
 -spec cluster_logic_create_invite_token_to_onezone_for_admin() ->
     {ok, tokens:token()} | {error, term()}.
 cluster_logic_create_invite_token_to_onezone_for_admin() ->
     % invitation must be issued by an existing user - try to find a suitable user among cluster members
     {ok, Cluster} = cluster_logic:get(?ROOT, ?ONEZONE_CLUSTER_ID),
     ExistingMemberWithPrivileges = lists_utils:foldl_while(fun(UserId, _) ->
-        case cluster_logic:has_eff_privilege(Cluster, UserId, ?CLUSTER_ADD_USER) andalso
-            cluster_logic:has_eff_privilege(Cluster, UserId, ?CLUSTER_SET_PRIVILEGES)
-        of
+        case cluster_logic:has_eff_privileges(Cluster, UserId, ?PRIVS_TO_INVITE_ADMIN) of
             true -> {halt, UserId};
             false -> {cont, undefined}
         end
@@ -218,10 +221,8 @@ cluster_logic_create_invite_token_to_onezone_for_admin() ->
             % if there is no user in the Onezone cluster that can invite someone, create
             % a "rescue" user that will be used only to issue an invitation, so that somebody
             % can join the cluster and recover from this unwanted situation
-            {ok, RescueUserId} = user_logic:create(?ROOT, #{<<"fullName">> => <<"Temporary Rescue User">>}),
-            {ok, _} = cluster_logic:add_user(?ROOT, ?ONEZONE_CLUSTER_ID, RescueUserId, [
-                ?CLUSTER_ADD_USER, ?CLUSTER_SET_PRIVILEGES
-            ]),
+            {ok, RescueUserId} = user_logic:create(?ROOT, #{<<"fullName">> => ?SYSTEM_RESCUE_USER_NAME}),
+            {ok, _} = cluster_logic:add_user(?ROOT, ?ONEZONE_CLUSTER_ID, RescueUserId, ?PRIVS_TO_INVITE_ADMIN),
             entity_graph:ensure_up_to_date(),
             RescueUserId;
         UserId ->
