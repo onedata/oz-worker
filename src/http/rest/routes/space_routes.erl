@@ -341,6 +341,14 @@ routes() -> [
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
     }},
+    %% fixme swagger
+    %% - the supportParameters options during space support (is it even in swagger?)
+    %% - support_parameters field in space model
+    %% - support_parameters update in space model
+    {<<"/spaces/:id/providers/:pid/support_parameters">>, #rest_req{
+        method = 'PATCH',
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {support_parameters, ?BINDING(pid)}}
+    }},
     %% List space harvesters
     %% This operation requires one of the following privileges:
     %% - space_view

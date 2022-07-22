@@ -258,11 +258,13 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
 translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected}, SpaceData) ->
     #{
         <<"name">> := Name,
-        <<"providers">> := Providers
+        <<"providers">> := Providers,
+        <<"supportParametersRegistry">> := SupportParametersRegistry
     } = SpaceData,
     #{
         <<"name">> => Name,
-        <<"providers">> => Providers
+        <<"providers">> => Providers,
+        <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry)
     };
 
 translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = private}, Share) ->

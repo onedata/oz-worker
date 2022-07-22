@@ -98,6 +98,7 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
     #{
         <<"name">> := Name,
         <<"providers">> := Providers,
+        <<"supportParametersRegistry">> := SupportParametersRegistry,
         <<"creator">> := Creator,
         <<"creationTime">> := CreationTime
     } = SpaceData,
@@ -105,6 +106,7 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
         <<"spaceId">> => SpaceId,
         <<"name">> => Name,
         <<"providers">> => Providers,
+        <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry),
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
         <<"creationTime">> => CreationTime
     });

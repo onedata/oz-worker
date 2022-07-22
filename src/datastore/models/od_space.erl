@@ -14,9 +14,10 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, exists/1, update/2, update_support_parameters_registry/3, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -80,6 +81,20 @@ exists(SpaceId) ->
 update(SpaceId, Diff) ->
     datastore_model:update(?CTX, SpaceId, Diff).
 
+
+-spec update_support_parameters_registry(id(), od_provider:id(), support_parameters:record()) ->
+    {ok, doc()} | {error, term()}.
+update_support_parameters_registry(SpaceId, ProviderId, SupportParametersOverlay) ->
+    update(SpaceId, fun(Space = #od_space{support_parameters_registry = PreviousRegistry}) ->
+        case support_parameters_registry:update_entry(ProviderId, SupportParametersOverlay, PreviousRegistry) of
+            {error, _} = Error ->
+                Error;
+            {ok, NewRegistry} ->
+                {ok, Space#od_space{support_parameters_registry = NewRegistry}}
+        end
+    end).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Deletes space by ID.
@@ -130,7 +145,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    13.
+    14.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -310,7 +325,34 @@ get_record_struct(12) ->
     get_record_struct(11);
 get_record_struct(13) ->
     % The structure does not change, but privileges concerning workflow execution were added.
-    get_record_struct(12).
+    get_record_struct(12);
+get_record_struct(14) ->
+    % The structure does not change, but privileges concerning workflow execution were added.
+    % new field - owners
+    {record, [
+        {name, string},
+
+        {owners, [string]},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {storages, #{string => integer}},
+        {shares, [string]},
+        {harvesters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => {integer, [{atom, string}]}}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {support_parameters_registry, {custom, string, {persistent_record, encode, decode, support_parameters_registry}}},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]}.
 
 
 %%--------------------------------------------------------------------
@@ -725,27 +767,27 @@ upgrade_record(8, Space) ->
         end
     end, SortedByPrivilegeCount),
 
-    {9, #od_space{
-        name = Name,
+    {9, {od_space,
+        Name,
 
-        owners = Owners,
+        Owners,
 
-        users = Users,
-        groups = Groups,
-        storages = Storages,
-        shares = Shares,
-        harvesters = Harvesters,
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
 
-        eff_users = EffUsers,
-        eff_groups = EffGroups,
-        eff_providers = EffProviders,
-        eff_harvesters = EffHarvesters,
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
 
-        creation_time = CreationTime,
-        creator = Creator,
+        CreationTime,
+        Creator,
 
-        top_down_dirty = TopDownDirty,
-        bottom_up_dirty = BottomUpDirty
+        TopDownDirty,
+        BottomUpDirty
     }};
 upgrade_record(9, Space) ->
     {
@@ -796,27 +838,27 @@ upgrade_record(9, Space) ->
         end, Field)
     end,
 
-    {10, #od_space{
-        name = Name,
+    {10, {od_space,
+        Name,
 
-        owners = Owners,
+        Owners,
 
-        users = UpgradeRelation(Users),
-        groups = UpgradeRelation(Groups),
-        storages = Storages,
-        shares = Shares,
-        harvesters = Harvesters,
+        UpgradeRelation(Users),
+        UpgradeRelation(Groups),
+        Storages,
+        Shares,
+        Harvesters,
 
-        eff_users = UpgradeRelation(EffUsers),
-        eff_groups = UpgradeRelation(EffGroups),
-        eff_providers = EffProviders,
-        eff_harvesters = EffHarvesters,
+        UpgradeRelation(EffUsers),
+        UpgradeRelation(EffGroups),
+        EffProviders,
+        EffHarvesters,
 
-        creation_time = CreationTime,
-        creator = Creator,
+        CreationTime,
+        Creator,
 
-        top_down_dirty = TopDownDirty,
-        bottom_up_dirty = BottomUpDirty
+        TopDownDirty,
+        BottomUpDirty
     }};
 upgrade_record(10, Space) ->
     {
@@ -884,27 +926,27 @@ upgrade_record(10, Space) ->
         end, Field)
     end,
 
-    {11, #od_space{
-        name = Name,
+    {11, {od_space,
+        Name,
 
-        owners = Owners,
+        Owners,
 
-        users = UpgradeRelation(Users),
-        groups = UpgradeRelation(Groups),
-        storages = Storages,
-        shares = Shares,
-        harvesters = Harvesters,
+        UpgradeRelation(Users),
+        UpgradeRelation(Groups),
+        Storages,
+        Shares,
+        Harvesters,
 
-        eff_users = UpgradeRelation(EffUsers),
-        eff_groups = UpgradeRelation(EffGroups),
-        eff_providers = EffProviders,
-        eff_harvesters = EffHarvesters,
+        UpgradeRelation(EffUsers),
+        UpgradeRelation(EffGroups),
+        EffProviders,
+        EffHarvesters,
 
-        creation_time = CreationTime,
-        creator = Creator,
+        CreationTime,
+        Creator,
 
-        top_down_dirty = TopDownDirty,
-        bottom_up_dirty = BottomUpDirty
+        TopDownDirty,
+        BottomUpDirty
     }};
 upgrade_record(11, Space) ->
     {
@@ -961,27 +1003,27 @@ upgrade_record(11, Space) ->
         end, Field)
     end,
 
-    {12, #od_space{
-        name = Name,
+    {12, {od_space,
+        Name,
 
-        owners = Owners,
+        Owners,
 
-        users = UpgradeRelation(Users),
-        groups = UpgradeRelation(Groups),
-        storages = Storages,
-        shares = Shares,
-        harvesters = Harvesters,
+        UpgradeRelation(Users),
+        UpgradeRelation(Groups),
+        Storages,
+        Shares,
+        Harvesters,
 
-        eff_users = UpgradeRelation(EffUsers),
-        eff_groups = UpgradeRelation(EffGroups),
-        eff_providers = EffProviders,
-        eff_harvesters = EffHarvesters,
+        UpgradeRelation(EffUsers),
+        UpgradeRelation(EffGroups),
+        EffProviders,
+        EffHarvesters,
 
-        creation_time = CreationTime,
-        creator = Creator,
+        CreationTime,
+        Creator,
 
-        top_down_dirty = TopDownDirty,
-        bottom_up_dirty = BottomUpDirty
+        TopDownDirty,
+        BottomUpDirty
     }};
 upgrade_record(12, Space) ->
     {
@@ -1036,25 +1078,81 @@ upgrade_record(12, Space) ->
         end, Field)
     end,
 
-    {13, #od_space{
-        name = Name,
+    {13, {od_space,
+        Name,
 
-        owners = Owners,
+        Owners,
 
-        users = UpgradeRelation(Users),
-        groups = UpgradeRelation(Groups),
-        storages = Storages,
-        shares = Shares,
-        harvesters = Harvesters,
+        UpgradeRelation(Users),
+        UpgradeRelation(Groups),
+        Storages,
+        Shares,
+        Harvesters,
 
-        eff_users = UpgradeRelation(EffUsers),
-        eff_groups = UpgradeRelation(EffGroups),
-        eff_providers = EffProviders,
-        eff_harvesters = EffHarvesters,
+        UpgradeRelation(EffUsers),
+        UpgradeRelation(EffGroups),
+        EffProviders,
+        EffHarvesters,
 
-        creation_time = CreationTime,
-        creator = Creator,
+        CreationTime,
+        Creator,
 
-        top_down_dirty = TopDownDirty,
-        bottom_up_dirty = BottomUpDirty
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(13, Space) ->
+    {od_space,
+        Name,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Space,
+
+    {14, {od_space,
+        Name,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        #support_parameters_registry{
+            registry = maps:map(fun(_ProviderId, _) ->
+                #support_parameters{
+                    accounting_enabled = false,
+                    dir_stats_service_enabled = false,
+                    dir_stats_service_status = disabled
+                }
+            end, EffProviders)
+        },
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
     }}.

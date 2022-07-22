@@ -43,7 +43,7 @@
     list_spaces_test/1,
 
     upgrade_legacy_support_test/1,
-    
+
     support_with_imported_storage_test/1,
     modify_imported_storage_test/1
 ]).
@@ -62,7 +62,7 @@ all() ->
         list_spaces_test,
 
         upgrade_legacy_support_test,
-    
+
         support_with_imported_storage_test,
         modify_imported_storage_test
     ]).
@@ -92,7 +92,7 @@ create_test_base(Config, ReadonlyValue) ->
         ?assertEqual(ExpectedReadonly, Storage#od_storage.readonly),
         true
     end,
-    ExpectedQosParams = fun(StorageId, QosParams) -> 
+    ExpectedQosParams = fun(StorageId, QosParams) ->
         QosParams#{
             <<"storageId">> => StorageId,
             <<"providerId">> => P1
@@ -415,10 +415,10 @@ update_test(Config, ReadonlyValue) ->
                 {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"qosParameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qosParameters">>)},
                 {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"qosParameters">>, #{<<"providerId">> => <<"not_correct_provider_id">>}, 
+                {<<"qosParameters">>, #{<<"providerId">> => <<"not_correct_provider_id">>},
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.providerId">>, [P1])},
                 {<<"qosParameters">>, #{<<"storageId">> => <<"not_correct_storage_id">>},
-                    fun(#{storageId := StorageId}) -> 
+                    fun(#{storageId := StorageId}) ->
                         ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.storageId">>, [StorageId])
                     end},
                 {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)},
@@ -479,14 +479,14 @@ delete_test(Config) ->
 support_space_test(Config) ->
     MinSupportSize = oz_test_utils:minimum_support_size(Config),
     {ok, U1} = oz_test_utils:create_user(Config),
-    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
-    {ok, {P2, P2Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME2),
-    {ok, Storage} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+    {ok, {SupportingProviderId, _}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
+    {ok, {OtherProviderId, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME2),
+    {ok, SupportingStorageId} = oz_test_utils:create_storage(Config, ?PROVIDER(SupportingProviderId), ?STORAGE_NAME1),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, BadInviteToken} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
     {ok, BadInviteTokenSerialized} = tokens:serialize(BadInviteToken),
 
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    ozt_providers:simulate_version(SupportingProviderId, ?LINE_21_02),
 
     % Reused in all specs
     BadValues = [
@@ -500,48 +500,62 @@ support_space_test(Config) ->
         {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
     ],
 
-    VerifyFun = fun(SpaceId) ->
+    VerifyFun = fun(SpaceId, Data) ->
         % Should return space id of the newly supported space
         {ok, #od_space{
-            storages = Storages
+            storages = Storages,
+            support_parameters_registry = SupportParametersRegistry
         }} = oz_test_utils:get_space(Config, SpaceId),
+
+        ?assertEqual(#support_parameters_registry{
+            registry = #{
+                SupportingProviderId => #support_parameters{
+                    accounting_enabled = kv_utils:get([<<"spaceSupportParameters">>, <<"accountingEnabled">>], Data, false),
+                    dir_stats_service_enabled = kv_utils:get([<<"spaceSupportParameters">>, <<"dirStatsServiceEnabled">>], Data, false),
+                    dir_stats_service_status = disabled
+                }
+            }
+        }, SupportParametersRegistry),
 
         % Test also storage_logic:supports_space fun
         oz_test_utils:call_oz(
-            Config, storage_logic, supports_space, [Storage, SpaceId]
-        ) andalso maps:is_key(Storage, Storages)
+            Config, storage_logic, supports_space, [SupportingStorageId, SpaceId]
+        ) andalso maps:is_key(SupportingStorageId, Storages)
 
     end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            % Only provider 1 is authorized to perform support operation on
-            % behalf of provider 1.
+            % Only the provider is authorized to perform support operation on behalf of itself.
             correct = [
-                {provider, P1, P1Token}
+                {provider, SupportingProviderId}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
-                {provider, P2, P2Token}
+                {provider, OtherProviderId}
             ]
         },
         rest_spec = undefined,
         logic_spec = #logic_spec{
             module = storage_logic,
             function = support_space,
-            args = [auth, Storage, data],
-            expected_result = ?OK_TERM(VerifyFun)
+            args = [auth, SupportingStorageId, data],
+            expected_result = ?OK_ENV(fun(_, Data) ->
+                ?OK_TERM(fun(SpaceId) -> VerifyFun(SpaceId, Data) end)
+            end)
         },
         gs_spec = #gs_spec{
             operation = create,
-            gri = #gri{type = od_storage, id = Storage, aspect = support},
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = SpaceId} = gri:deserialize(EncodedGri),
-                    VerifyFun(SpaceId)
-                end
-            })
+            gri = #gri{type = od_storage, id = SupportingStorageId, aspect = support},
+            expected_result = ?OK_ENV(fun(_, Data) ->
+                ?OK_MAP_CONTAINS(#{
+                    <<"gri">> => fun(EncodedGri) ->
+                        #gri{id = SpaceId} = gri:deserialize(EncodedGri),
+                        VerifyFun(SpaceId, Data)
+                    end
+                })
+            end)
         },
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
@@ -574,6 +588,7 @@ support_space_test(Config) ->
         gs_spec = undefined,
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
+            optional = [<<"spaceSupportParameters">>],
             correct_values = #{
                 <<"token">> => [fun() ->
                     % Create a new space and token for every test case
@@ -587,11 +602,20 @@ support_space_test(Config) ->
                     ),
                     SpInvProvToken
                 end],
-                <<"size">> => [MinSupportSize]
+                <<"size">> => [MinSupportSize],
+                <<"spaceSupportParameters">> => [fun() ->
+                    RandAccountingEnabled = ?RAND_BOOL(),
+                    #{
+                        <<"accountingEnabled">> => RandAccountingEnabled,
+                        <<"dirStatsServiceEnabled">> => RandAccountingEnabled orelse ?RAND_BOOL()
+                    }
+                end]
             },
             bad_values = BadValues ++ [
                 {<<"token">>, BadToken3, ?ERROR_BAD_VALUE_TOKEN(<<"token">>,
-                    ?ERROR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, S1)))}
+                    ?ERROR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, S1)))},
+                {<<"spaceSupportParameters">>, 23452, ?ERROR_BAD_DATA(<<"spaceSupportParameters">>)},
+                {<<"spaceSupportParameters">>, <<"bad-data">>, ?ERROR_BAD_DATA(<<"spaceSupportParameters">>)}
             ]
         }
     },
@@ -675,55 +699,69 @@ update_support_size_test(Config) ->
 
 revoke_support_test(Config) ->
     {ok, Cluster1Member} = oz_test_utils:create_user(Config),
-    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
+    {ok, {SupportingProviderId, _}} = oz_test_utils:create_provider(
         Config, Cluster1Member, ?PROVIDER_NAME1
     ),
-    {ok, {P2, P2Token}} = oz_test_utils:create_provider(
+    {ok, {OtherProviderId, _}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
-    {ok, St2} = oz_test_utils:create_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
+    {ok, SupportingStorageId} = oz_test_utils:create_storage(Config, ?PROVIDER(SupportingProviderId), ?STORAGE_NAME1),
+    {ok, OtherStorageId} = oz_test_utils:create_storage(Config, ?PROVIDER(OtherProviderId), ?STORAGE_NAME1),
     {ok, U1} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-        {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1),
-        {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P2), St2, S1),
+        {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+        {ok, SpaceId} = oz_test_utils:support_space(Config, ?PROVIDER(SupportingProviderId), SupportingStorageId, SpaceId),
+        {ok, SpaceId} = oz_test_utils:support_space(Config, ?PROVIDER(OtherProviderId), OtherStorageId, SpaceId),
 
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-        #{spaceId => S1}
+        #{spaceId => SpaceId}
     end,
     DeleteEntityFun = fun(#{spaceId := SpaceId} = _Env) ->
-        oz_test_utils:unsupport_space(Config, St1, SpaceId)
+        oz_test_utils:unsupport_space(Config, SupportingStorageId, SpaceId)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _Data) ->
         {ok, #od_space{
-            storages = Storages
+            storages = Storages,
+            support_parameters_registry = SupportParametersRegistry
         }} = oz_test_utils:get_space(Config, SpaceId),
-        ?assertEqual(not ShouldSucceed, maps:is_key(St1, Storages))
+        ?assertEqual(not ShouldSucceed, maps:is_key(SupportingStorageId, Storages)),
+        ExpectedSupportParametersEntry = case ShouldSucceed of
+            true ->
+                no_entry;
+            false ->
+                #support_parameters{
+                    accounting_enabled = false,
+                    dir_stats_service_enabled = false,
+                    dir_stats_service_status = disabled
+                }
+        end,
+        ?assertEqual(ExpectedSupportParametersEntry, maps:get(
+            SupportingProviderId, SupportParametersRegistry#support_parameters_registry.registry, no_entry
+        ))
     end,
 
     ApiTestSpec2 = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {provider, P1, P1Token}
+                {provider, SupportingProviderId}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
-                {provider, P2, P2Token}
+                {provider, OtherProviderId}
             ]
         },
         logic_spec = #logic_spec{
             module = storage_logic,
             function = revoke_support,
-            args = [auth, St1, spaceId],
+            args = [auth, SupportingStorageId, spaceId],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
             operation = delete,
-            gri = #gri{type = od_storage, id = St1, aspect = {space, spaceId}},
+            gri = #gri{type = od_storage, id = SupportingStorageId, aspect = {space, spaceId}},
             expected_result = ?OK
         }
     },
@@ -849,31 +887,31 @@ support_with_imported_storage_test(Config) ->
     {ok, ImportedStorageP1} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    
+
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    
+
     CreateTokenFun = fun(SpaceId) ->
         {ok, SpInvProvToken} = oz_test_utils:create_space_support_token(
             Config, ?USER(U1), SpaceId
         ),
         element(2, {ok, _} = tokens:serialize(SpInvProvToken))
     end,
-    
-    AddMultipleNotImportedSupportsFun = fun() -> 
+
+    AddMultipleNotImportedSupportsFun = fun() ->
         lists:foreach(fun(_) ->
             Provider = lists:nth(rand:uniform(length(Providers)), Providers),
             {ok, St} = oz_test_utils:create_storage(Config, ?PROVIDER(Provider), ?STORAGE_NAME1),
             {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(Provider), St, S1)
-        end, lists:seq(1,8))
+        end, lists:seq(1, 8))
     end,
-    
+
     % add some supports with not imported storages
     AddMultipleNotImportedSupportsFun(),
-    
+
     {ok, ImportedStorageP2} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
     % support space with imported storage
     {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(P1), ImportedStorageP1, S1),
-    
+
     % check that adding next support with imported storage fails
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -900,10 +938,10 @@ support_with_imported_storage_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-    
+
     % but after enabling multi imported storage support in app.config it should be possible
     oz_test_utils:set_env(Config, allow_multiple_imported_storages_supports, true),
-    
+
     EnvSetUpFun = fun() ->
         {ok, ImportedStorage} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
         #{storageId => ImportedStorage}
@@ -927,7 +965,7 @@ support_with_imported_storage_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec1, EnvSetUpFun, undefined, undefined)),
-    
+
     % supporting second space with imported storage also should fail
     ApiTestSpec2 = #api_test_spec{
         client_spec = #client_spec{
@@ -954,7 +992,7 @@ support_with_imported_storage_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-    
+
     % check that space still can be supported with not imported storages
     AddMultipleNotImportedSupportsFun().
 
@@ -964,13 +1002,13 @@ modify_imported_storage_test(Config) ->
     {ok, ImportedStorage} = oz_test_utils:create_imported_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, Storage} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    
+
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    
+
     % check that modifying imported storage value is prohibited when storage supports a space
     {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(P1), ImportedStorage, S1),
     {ok, _} = oz_test_utils:support_space(Config, ?PROVIDER(P1), Storage, S1),
-    
+
     ApiTestSpecFun = fun(St, IsImported) ->
         #api_test_spec{
             client_spec = #client_spec{
@@ -1001,7 +1039,7 @@ modify_imported_storage_test(Config) ->
 
     % check that modifying other values is allowed when storage supports a space
     % also check that not changing imported value will not generate error
-    ApiTestSpec1Fun = fun(St, IsImported) -> 
+    ApiTestSpec1Fun = fun(St, IsImported) ->
         #api_test_spec{
             client_spec = #client_spec{
                 correct = [
@@ -1031,15 +1069,15 @@ modify_imported_storage_test(Config) ->
                 }
             }
         }
-    end, 
+    end,
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec1Fun(ImportedStorage, true))),
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec1Fun(Storage, false))),
-    
+
     % check that imported value can be changed, if previously was set to unknown
     EnvSetUpFun = fun() ->
-        oz_test_utils:call_oz(Config, od_storage, update, 
+        oz_test_utils:call_oz(Config, od_storage, update,
             [Storage, fun(St) -> {ok, St#od_storage{imported = unknown}} end]),
-        #{}        
+        #{}
     end,
     VerifyEndFun = fun(ShouldSucceed, _Env, Data) ->
         {ok, St} = oz_test_utils:get_storage(Config, Storage),
@@ -1084,7 +1122,7 @@ modify_imported_storage_test(Config) ->
 init_per_suite(Config) ->
     ssl:start(),
     application:ensure_all_started(hackney),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
+    ozt:init_per_suite(Config).
 
 
 end_per_suite(_Config) ->

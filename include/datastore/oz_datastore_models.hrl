@@ -14,6 +14,7 @@
 
 -include("entity_logic.hrl").
 -include_lib("ctool/include/onedata.hrl").
+-include_lib("ctool/include/space_support/support_parameters.hrl").
 -include_lib("ctool/include/automation/automation.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_models.hrl").
 
@@ -260,6 +261,8 @@ end).
     % Effective harvesters contain only direct harvesters, but this is needed to
     % track changes in spaces and propagate them bottom-up.
     eff_harvesters = #{} :: entity_graph:eff_relations(od_provider:id()),
+
+    support_parameters_registry = #support_parameters_registry{} :: support_parameters_registry:record(),
 
     creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),

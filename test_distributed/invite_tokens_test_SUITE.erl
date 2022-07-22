@@ -429,13 +429,9 @@ support_space_token(_Config) ->
     % correctly (owners effectively have all the privileges)
     NonSpaceOwnerId = ozt_users:create(),
     ozt_spaces:add_user(SpaceId, NonSpaceOwnerId),
-    TokenDataWrite = lists_utils:random_element([global, none]),
-    TokenMetaReplication = lists_utils:random_element([eager, lazy, none]),
 
     ?assert(run_invite_token_tests(#testcase{
-        token_type = ?INVITE_TOKEN(
-            ?SUPPORT_SPACE, SpaceId, support_parameters:build(TokenDataWrite, TokenMetaReplication)
-        ),
+        token_type = ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId),
 
         eligible_to_invite = ?SUB(user, NonSpaceOwnerId),
         requires_privileges_to_invite = true,

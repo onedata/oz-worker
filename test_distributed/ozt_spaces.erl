@@ -26,10 +26,11 @@
 -export([remove_group/2]).
 -export([create_user_invite_token/2]).
 -export([create_group_invite_token/2]).
--export([create_support_token/2, create_support_token/3]).
+-export([create_support_token/2]).
 -export([create_share/2]).
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([set_user_privileges/3]).
+-export([set_support_parameters/3]).
 -export([delete/1]).
 -export([minimum_support_size/0]).
 
@@ -111,11 +112,7 @@ create_group_invite_token(SpaceId, UserId) ->
 
 -spec create_support_token(od_space:id(), od_user:id()) -> tokens:token().
 create_support_token(SpaceId, UserId) ->
-    create_support_token(SpaceId, UserId, support_parameters:build(global, eager)).
-
--spec create_support_token(od_space:id(), od_user:id(), support_parameters:parameters()) -> tokens:token().
-create_support_token(SpaceId, UserId, SupportParameters) ->
-    ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId, SupportParameters)).
+    ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId)).
 
 
 -spec create_share(od_space:id(), od_share:name()) -> od_share:id().
@@ -144,6 +141,13 @@ set_user_privileges(SpaceId, UserId, Privileges) ->
         <<"grant">> => Privileges,
         <<"revoke">> => lists_utils:subtract(privileges:space_admin(), Privileges)
     }])).
+
+
+-spec set_support_parameters(od_space:id(), od_user:id(), support_parameters:record()) -> ok.
+set_support_parameters(SpaceId, ProviderId, SupportParameters) ->
+    ?assertMatch(ok, ozt:rpc(space_logic, update_support_parameters, [
+        ?ROOT, SpaceId, ProviderId, jsonable_record:to_json(SupportParameters, support_parameters)
+    ])).
 
 
 -spec delete(od_space:id()) -> ok.

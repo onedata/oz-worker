@@ -70,6 +70,8 @@
     update_user_privileges/5, update_user_privileges/4,
     update_group_privileges/5, update_group_privileges/4,
 
+    update_support_parameters/4,
+
     remove_storage/3,
     remove_provider/3,
     remove_harvester/3,
@@ -853,6 +855,17 @@ update_group_privileges(Auth, SpaceId, GroupId, Data) ->
         operation = update,
         auth = Auth,
         gri = #gri{type = od_space, id = SpaceId, aspect = {group_privileges, GroupId}},
+        data = Data
+    }).
+
+
+-spec update_support_parameters(aai:auth(), od_space:id(), od_provider:id(), entity_logic:data()) ->
+    ok | errors:error().
+update_support_parameters(Auth, SpaceId, ProviderId, Data) ->
+    entity_logic:handle(#el_req{
+        operation = update,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = {support_parameters, ProviderId}},
         data = Data
     }).
 

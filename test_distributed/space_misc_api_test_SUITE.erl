@@ -49,9 +49,10 @@
     remove_provider_test/1,
 
     list_effective_providers_test/1,
-    get_eff_provider_test/1
-]).
+    get_eff_provider_test/1,
 
+    update_support_parameters_test/1
+]).
 
 all() ->
     ?ALL([
@@ -72,7 +73,9 @@ all() ->
         remove_provider_test,
 
         list_effective_providers_test,
-        get_eff_provider_test
+        get_eff_provider_test,
+
+        update_support_parameters_test
     ]).
 
 
@@ -349,7 +352,19 @@ get_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
 
     % Get and check protected data
-    SpaceData = #{<<"name">> => ?SPACE_NAME1, <<"providers">> => #{P1 => SupportSize}},
+    SpaceData = #{
+        <<"name">> => ?SPACE_NAME1,
+        <<"providers">> => #{P1 => SupportSize},
+        <<"supportParametersRegistry">> => #support_parameters_registry{
+            registry = #{
+                P1 => #support_parameters{
+                    accounting_enabled = false,
+                    dir_stats_service_enabled = false,
+                    dir_stats_service_status = disabled
+                }
+            }
+        }
+    },
     GetProtectedDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -989,6 +1004,207 @@ get_eff_provider_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+
+
+update_support_parameters_test(Config) ->
+    ClusterMemberWithPrivs = ozt_users:create(),
+    ClusterMemberWithoutPrivs = ozt_users:create(),
+    SpaceMemberWithPrivs = ozt_users:create(),
+    SpaceMemberWithoutPrivs = ozt_users:create(),
+    UnrelatedUser = ozt_users:create(),
+
+    SubjectProvider = ozt_providers:create_for_admin_user(ClusterMemberWithPrivs),
+    ozt_clusters:add_user(SubjectProvider, ClusterMemberWithoutPrivs, privileges:cluster_admin() -- [?CLUSTER_UPDATE]),
+    OtherProvider = ozt_providers:create(),
+
+    SubjectSpace = ozt_users:create_space_for(SpaceMemberWithPrivs),
+    ozt_spaces:add_user(SubjectSpace, SpaceMemberWithoutPrivs, privileges:space_admin() -- [?SPACE_UPDATE]),
+    ozt_providers:support_space(SubjectProvider, SubjectSpace),
+    ozt_providers:support_space(OtherProvider, SubjectSpace),
+
+    ozt_providers:simulate_version(SubjectProvider, ?LINE_21_02),
+    RandAccountingEnabled = ?RAND_BOOL(),
+    ozt_spaces:set_support_parameters(SubjectSpace, SubjectProvider, #support_parameters{
+        accounting_enabled = RandAccountingEnabled,
+        dir_stats_service_enabled = RandAccountingEnabled orelse ?RAND_BOOL(),
+        dir_stats_service_status = ?RAND_ELEMENT(support_parameters:all_dir_stats_service_statuses())
+    }),
+
+    EnvSetUpFun = fun() ->
+        #od_space{support_parameters_registry = #support_parameters_registry{registry = #{
+            SubjectProvider := SupportParameters
+        }}} = ozt_spaces:get(SubjectSpace),
+        #{
+            previous_support_parameters => SupportParameters
+        }
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, ClusterMemberWithoutPrivs},
+                {user, SpaceMemberWithoutPrivs},
+                {user, UnrelatedUser},
+                {provider, OtherProvider}
+            ]
+        },
+        rest_spec = RestSpec = #rest_spec{
+            method = patch,
+            path = [
+                <<"/spaces/">>, SubjectSpace, <<"/providers/">>, SubjectProvider, <<"/support_parameters">>
+            ],
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
+        logic_spec = LogicSpec = #logic_spec{
+            module = space_logic,
+            function = update_support_parameters,
+            args = [auth, SubjectSpace, SubjectProvider, data],
+            expected_result = ?OK_RES
+        },
+        gs_spec = GsSpec = #gs_spec{
+            operation = update,
+            gri = #gri{type = od_space, id = SubjectSpace, aspect = {support_parameters, SubjectProvider}},
+            expected_result = ?OK_RES
+        },
+        data_spec = DataSpec = #data_spec{
+            at_least_one = [<<"accountingEnabled">>, <<"dirStatsServiceEnabled">>, <<"dirStatsServiceStatus">>],
+            correct_values = #{
+                <<"accountingEnabled">> => [true, false],
+                <<"dirStatsServiceEnabled">> => [true, false],
+                <<"dirStatsServiceStatus">> => support_parameters:all_dir_stats_service_statuses()
+            },
+            bad_values = BadValues = [
+                {<<"accountingEnabled">>, atom, ?ERROR_BAD_VALUE_BOOLEAN(<<"accountingEnabled">>)},
+                {<<"dirStatsServiceEnabled">>, [1, 2, 3], ?ERROR_BAD_VALUE_BOOLEAN(<<"dirStatsServiceEnabled">>)},
+                {<<"dirStatsServiceStatus">>, <<"text">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(
+                    <<"dirStatsServiceStatus">>, [atom_to_binary(S) || S <- support_parameters:all_dir_stats_service_statuses()]
+                )}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, undefined)),
+
+    CorrectClients = [
+        root,
+        {admin, [?OZ_SPACES_UPDATE]},
+        {user, ClusterMemberWithPrivs},
+        {user, SpaceMemberWithPrivs},
+        {provider, SubjectProvider}
+    ],
+    ShouldBeAuthorized = fun(Client, Data) ->
+        case {Client, Data} of
+            {root, _} -> true;
+            {{admin, [?OZ_SPACES_UPDATE]}, #{<<"dirStatsServiceStatus">> := _}} -> false;
+            {{admin, [?OZ_SPACES_UPDATE]}, _} -> true;
+            {{user, ClusterMemberWithPrivs}, #{<<"dirStatsServiceStatus">> := _}} -> false;
+            {{user, ClusterMemberWithPrivs}, _} -> true;
+            {{user, SpaceMemberWithPrivs}, #{<<"accountingEnabled">> := _}} -> false;
+            {{user, SpaceMemberWithPrivs}, #{<<"dirStatsServiceStatus">> := _}} -> false;
+            {{user, SpaceMemberWithPrivs}, _} -> true;
+            {{provider, SubjectProvider}, _} -> true
+        end
+    end,
+    InferExpectedOutcome = fun(Client, PreviousSupportParameters, Data, <<MajorProviderVersion:2/binary, _/binary>>) ->
+        case ShouldBeAuthorized(Client, Data) of
+            false ->
+                {failure, ?ERROR_FORBIDDEN};
+            true ->
+                case binary_to_integer(MajorProviderVersion) >= 21 of
+                    true ->
+                        FinalAccountingEnabled = maps:get(
+                            <<"accountingEnabled">>, Data,
+                            PreviousSupportParameters#support_parameters.accounting_enabled
+                        ),
+                        FinalDirStatsServiceEnabled = maps:get(
+                            <<"dirStatsServiceEnabled">>, Data,
+                            PreviousSupportParameters#support_parameters.dir_stats_service_enabled
+                        ),
+                        case FinalAccountingEnabled =:= true andalso FinalDirStatsServiceEnabled =:= false of
+                            true ->
+                                {failure, ?ERROR_BAD_DATA(
+                                    <<"dirStatsServiceEnabled">>,
+                                    <<"Dir stats service must be enabled if accounting is enabled">>
+                                )};
+
+                            false ->
+                                success
+                        end;
+                    false ->
+                        {failure, ?ERROR_NOT_SUPPORTED}
+                end
+        end
+    end,
+
+    lists:foreach(fun(ProviderVersion) ->
+        ozt_providers:simulate_version(SubjectProvider, ProviderVersion),
+        lists:foreach(fun(CorrectClient) ->
+            VerifyEndFun = fun(ShouldSucceed, #{previous_support_parameters := PreviousSupportParameters}, Data) ->
+                ExpectedOutcome = InferExpectedOutcome(CorrectClient, PreviousSupportParameters, Data, ProviderVersion),
+                #od_space{support_parameters_registry = #support_parameters_registry{registry = #{
+                    SubjectProvider := ActualSupportParameters
+                }}} = ozt_spaces:get(SubjectSpace),
+                ExpectedSupportParameters = case {ExpectedOutcome, ShouldSucceed} of
+                    {{failure, _}, _} ->
+                        PreviousSupportParameters;
+                    {_, false} ->
+                        PreviousSupportParameters;
+                    {success, true} ->
+                        PreviousSupportParameters#support_parameters{
+                            accounting_enabled = maps:get(
+                                <<"accountingEnabled">>, Data, PreviousSupportParameters#support_parameters.accounting_enabled
+                            ),
+                            dir_stats_service_enabled = maps:get(
+                                <<"dirStatsServiceEnabled">>, Data, PreviousSupportParameters#support_parameters.dir_stats_service_enabled
+                            ),
+                            dir_stats_service_status = maps:get(
+                                <<"dirStatsServiceStatus">>, Data, PreviousSupportParameters#support_parameters.dir_stats_service_status
+                            )
+                        }
+                end,
+                ?assertEqual(ActualSupportParameters, ExpectedSupportParameters)
+            end,
+
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec#api_test_spec{
+                client_spec = #client_spec{
+                    correct = [CorrectClient]
+                },
+                rest_spec = RestSpec#rest_spec{
+                    expected_code = ?OK_ENV(fun(#{previous_support_parameters := PreviousSupportParameters}, Data) ->
+                        case InferExpectedOutcome(CorrectClient, PreviousSupportParameters, Data, ProviderVersion) of
+                            success -> ?HTTP_204_NO_CONTENT;
+                            {failure, Error} -> errors:to_http_code(Error)
+                        end
+                    end)
+                },
+                logic_spec = LogicSpec#logic_spec{
+                    expected_result = ?OK_ENV(fun(#{previous_support_parameters := PreviousSupportParameters}, Data) ->
+                        case InferExpectedOutcome(CorrectClient, PreviousSupportParameters, Data, ProviderVersion) of
+                            success -> ?OK_RES;
+                            {failure, Error} -> ?ERROR_REASON(Error)
+                        end
+                    end)
+                },
+                gs_spec = GsSpec#gs_spec{
+                    expected_result = ?OK_ENV(fun(#{previous_support_parameters := PreviousSupportParameters}, Data) ->
+                        case InferExpectedOutcome(CorrectClient, PreviousSupportParameters, Data, ProviderVersion) of
+                            success -> ?OK_RES;
+                            {failure, Error} -> ?ERROR_REASON(Error)
+                        end
+                    end)
+                },
+                data_spec = DataSpec#data_spec{
+                    bad_values = case CorrectClient of
+                        % test bad values only for root, for other clients authorization depends on the values and
+                        % it is impossible to handle these combinations using the test framework
+                        root -> BadValues;
+                        _ -> []
+                    end
+                }
+            }, EnvSetUpFun, undefined, VerifyEndFun))
+        end, CorrectClients)
+    end, [?LINE_19_02, ?LINE_20_02, ?LINE_21_02]).
 
 %%%===================================================================
 %%% Setup/teardown functions
