@@ -24,6 +24,8 @@ rel/files/vm.args
 /test_distributed/cover_tmp.spec
 test_coverage
 
+pkg-list.json
+
 # OS X
 .DS_Store
 ._*
