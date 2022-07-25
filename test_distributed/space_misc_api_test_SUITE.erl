@@ -1041,6 +1041,7 @@ update_support_parameters_test(Config) ->
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
+            % the invalid clients are tested first, the correct clients are tested further on
             correct = [],
             unauthorized = [nobody],
             forbidden = [

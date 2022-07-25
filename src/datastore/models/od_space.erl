@@ -269,7 +269,7 @@ get_record_struct(7) ->
     ]};
 get_record_struct(8) ->
     % the structure does not change, but privileges are updated
-    % (new privilege was added space_register_files)
+    % (new privilege was added: space_register_files)
     {record, [
         {name, string},
 
@@ -327,8 +327,7 @@ get_record_struct(13) ->
     % The structure does not change, but privileges concerning workflow execution were added.
     get_record_struct(12);
 get_record_struct(14) ->
-    % The structure does not change, but privileges concerning workflow execution were added.
-    % new field - owners
+    % new field - support_parameters_registry
     {record, [
         {name, string},
 

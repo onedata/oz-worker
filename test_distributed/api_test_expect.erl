@@ -178,7 +178,7 @@ protected_space(rest, Id, SpaceData, Creator) ->
         <<"name">> => maps:get(<<"name">>, SpaceData),
         <<"providers">> => maps:get(<<"providers">>, SpaceData, #{}),
         <<"supportParametersRegistry">> => jsonable_record:to_json(
-            maps:get(<<"supportParametersRegistry">>, SpaceData, #{}),
+            maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),
             support_parameters_registry
         ),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
@@ -190,7 +190,7 @@ protected_space(gs, Id, SpaceData, _Creator) ->
         <<"name">> => maps:get(<<"name">>, SpaceData),
         <<"providers">> => maps:get(<<"providers">>, SpaceData, #{}),
         <<"supportParametersRegistry">> => jsonable_record:to_json(
-            maps:get(<<"supportParametersRegistry">>, SpaceData, #{}),
+            maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),
             support_parameters_registry
         )
     }).
