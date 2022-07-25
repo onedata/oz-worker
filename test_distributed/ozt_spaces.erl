@@ -30,7 +30,7 @@
 -export([create_share/2]).
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([set_user_privileges/3]).
--export([set_support_parameters/3]).
+-export([random_support_parameters/0, set_support_parameters/3]).
 -export([delete/1]).
 -export([minimum_support_size/0]).
 
@@ -141,6 +141,16 @@ set_user_privileges(SpaceId, UserId, Privileges) ->
         <<"grant">> => Privileges,
         <<"revoke">> => lists_utils:subtract(privileges:space_admin(), Privileges)
     }])).
+
+
+-spec random_support_parameters() -> support_parameters:record().
+random_support_parameters() ->
+    RandAccountingEnabled = ?RAND_BOOL(),
+    #support_parameters{
+        accounting_enabled = RandAccountingEnabled,
+        dir_stats_service_enabled = RandAccountingEnabled orelse ?RAND_BOOL(),
+        dir_stats_service_status = ?RAND_ELEMENT(support_parameters:all_dir_stats_service_statuses())
+    }.
 
 
 -spec set_support_parameters(od_space:id(), od_user:id(), support_parameters:record()) -> ok.

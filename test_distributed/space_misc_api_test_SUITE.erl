@@ -272,9 +272,16 @@ get_test(Config) ->
     {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1, SupportSize),
 
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
+
+    RandSupportParameters = ozt_spaces:random_support_parameters(),
+    ozt_providers:simulate_version(P1, ?LINE_21_02),
+    ozt_spaces:set_support_parameters(S1, P1, RandSupportParameters),
+    ExpSupportParametersRegistry = #support_parameters_registry{
+        registry = #{
+            P1 => RandSupportParameters
+        }
+    },
 
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
@@ -303,6 +310,7 @@ get_test(Config) ->
                     harvesters = [],
                     eff_users = EffUsers, eff_groups = #{},
                     eff_providers = EffProviders,
+                    support_parameters_registry = SupportParametersRegistry,
                     top_down_dirty = false, bottom_up_dirty = false
                 }) ->
                     ?assertEqual(?SPACE_NAME1, Name),
@@ -317,6 +325,7 @@ get_test(Config) ->
                         U2 => {[?SPACE_VIEW], [{od_space, <<"self">>}]}
                     }),
                     ?assertEqual(Storages, #{St1 => SupportSize}),
+                    ?assertEqual(SupportParametersRegistry, ExpSupportParametersRegistry),
                     ?assertEqual(EffProviders, #{P1 => {SupportSize, [{od_storage, St1}]}})
                 end
             )
@@ -342,6 +351,9 @@ get_test(Config) ->
                     U2 => [<<"space_view">>]
                 },
                 <<"effectiveGroups">> => #{},
+                <<"supportParametersRegistry">> => jsonable_record:to_json(
+                    ExpSupportParametersRegistry, support_parameters_registry
+                ),
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(S1, Id)
@@ -355,15 +367,7 @@ get_test(Config) ->
     SpaceData = #{
         <<"name">> => ?SPACE_NAME1,
         <<"providers">> => #{P1 => SupportSize},
-        <<"supportParametersRegistry">> => #support_parameters_registry{
-            registry = #{
-                P1 => #support_parameters{
-                    accounting_enabled = false,
-                    dir_stats_service_enabled = false,
-                    dir_stats_service_status = disabled
-                }
-            }
-        }
+        <<"supportParametersRegistry">> => ExpSupportParametersRegistry
     },
     GetProtectedDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -1023,12 +1027,7 @@ update_support_parameters_test(Config) ->
     ozt_providers:support_space(OtherProvider, SubjectSpace),
 
     ozt_providers:simulate_version(SubjectProvider, ?LINE_21_02),
-    RandAccountingEnabled = ?RAND_BOOL(),
-    ozt_spaces:set_support_parameters(SubjectSpace, SubjectProvider, #support_parameters{
-        accounting_enabled = RandAccountingEnabled,
-        dir_stats_service_enabled = RandAccountingEnabled orelse ?RAND_BOOL(),
-        dir_stats_service_status = ?RAND_ELEMENT(support_parameters:all_dir_stats_service_statuses())
-    }),
+    ozt_spaces:set_support_parameters(SubjectSpace, SubjectProvider, ozt_spaces:random_support_parameters()),
 
     EnvSetUpFun = fun() ->
         #od_space{support_parameters_registry = #support_parameters_registry{registry = #{
