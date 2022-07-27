@@ -459,7 +459,10 @@ support_space_insecure(ProviderId, SpaceId, StorageId, Data) ->
         accounting_enabled = RequestedSpaceSupportParameters#support_parameters.accounting_enabled,
         dir_stats_service_enabled = RequestedSpaceSupportParameters#support_parameters.dir_stats_service_enabled
     },
-    ok = ?extract_ok(od_space:update_support_parameters_registry(SpaceId, ProviderId, PrunedSpaceSupportParameters)),
+    case od_space:update_support_parameters_registry(SpaceId, ProviderId, PrunedSpaceSupportParameters) of
+        {ok, _} -> ok;
+        {error, _} = Error -> throw(Error)
+    end,
 
     % provider supports are recalculated asynchronously - wait for it before
     % returning to avoid race conditions when providers try to fetch the space

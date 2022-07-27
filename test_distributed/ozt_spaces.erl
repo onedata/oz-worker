@@ -30,9 +30,12 @@
 -export([create_share/2]).
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([set_user_privileges/3]).
--export([random_support_parameters/0, set_support_parameters/3]).
+-export([random_support_parameters/0, set_support_parameters/3, get_support_parameters/2]).
 -export([delete/1]).
 -export([minimum_support_size/0]).
+
+-compile({no_auto_import,[get/1]}).
+
 
 %%%===================================================================
 %%% API
@@ -153,14 +156,20 @@ random_support_parameters() ->
     }.
 
 
--spec set_support_parameters(od_space:id(), od_user:id(), support_parameters:record()) -> ok.
+-spec set_support_parameters(od_space:id(), od_provider:id(), support_parameters:record()) -> ok.
 set_support_parameters(SpaceId, ProviderId, SupportParameters) ->
     ?assertMatch(ok, ozt:rpc(space_logic, update_support_parameters, [
         ?ROOT, SpaceId, ProviderId, jsonable_record:to_json(SupportParameters, support_parameters)
     ])).
 
 
--spec delete(od_space:id()) -> ok.
+-spec get_support_parameters(od_space:id(), od_provider:id()) -> support_parameters:record().
+get_support_parameters(SpaceId, ProviderId) ->
+    #od_space{support_parameters_registry = SupportParametersRegistry} = get(SpaceId),
+    support_parameters_registry:get_entry(ProviderId, SupportParametersRegistry).
+
+
+    -spec delete(od_space:id()) -> ok.
 delete(SpaceId) ->
     ?assertMatch(ok, ozt:rpc(space_logic, delete, [?ROOT, SpaceId])).
 

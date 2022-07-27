@@ -1030,11 +1030,8 @@ update_support_parameters_test(Config) ->
     ozt_spaces:set_support_parameters(SubjectSpace, SubjectProvider, ozt_spaces:random_support_parameters()),
 
     EnvSetUpFun = fun() ->
-        #od_space{support_parameters_registry = #support_parameters_registry{registry = #{
-            SubjectProvider := SupportParameters
-        }}} = ozt_spaces:get(SubjectSpace),
         #{
-            previous_support_parameters => SupportParameters
+            previous_support_parameters => ozt_spaces:get_support_parameters(SubjectSpace, SubjectProvider)
         }
     end,
 
@@ -1141,10 +1138,8 @@ update_support_parameters_test(Config) ->
         ozt_providers:simulate_version(SubjectProvider, ProviderVersion),
         lists:foreach(fun(CorrectClient) ->
             VerifyEndFun = fun(ShouldSucceed, #{previous_support_parameters := PreviousSupportParameters}, Data) ->
+                ActualSupportParameters = ozt_spaces:get_support_parameters(SubjectSpace, SubjectProvider),
                 ExpectedOutcome = InferExpectedOutcome(CorrectClient, PreviousSupportParameters, Data, ProviderVersion),
-                #od_space{support_parameters_registry = #support_parameters_registry{registry = #{
-                    SubjectProvider := ActualSupportParameters
-                }}} = ozt_spaces:get(SubjectSpace),
                 ExpectedSupportParameters = case {ExpectedOutcome, ShouldSucceed} of
                     {{failure, _}, _} ->
                         PreviousSupportParameters;

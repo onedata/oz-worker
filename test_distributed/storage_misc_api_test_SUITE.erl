@@ -486,6 +486,11 @@ support_space_test(Config) ->
     {ok, BadInviteToken} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
     {ok, BadInviteTokenSerialized} = tokens:serialize(BadInviteToken),
 
+    IllegalSupportParamsJson = jsonable_record:to_json(#support_parameters{
+        accounting_enabled = true,
+        dir_stats_service_enabled = false
+    }),
+
     ozt_providers:simulate_version(SupportingProviderId, ?LINE_21_02),
 
     % Reused in all specs
@@ -497,7 +502,12 @@ support_space_test(Config) ->
         {<<"size">>, <<"binary">>, ?ERROR_BAD_VALUE_INTEGER(<<"size">>)},
         {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
         {<<"size">>, -1000, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
-        {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
+        {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+        {<<"spaceSupportParameters">>, 23452, ?ERROR_BAD_DATA(<<"spaceSupportParameters">>)},
+        {<<"spaceSupportParameters">>, <<"bad-data">>, ?ERROR_BAD_DATA(<<"spaceSupportParameters">>)},
+        {<<"spaceSupportParameters">>, IllegalSupportParamsJson, ?ERROR_BAD_DATA(
+            <<"dirStatsServiceEnabled">>, <<"Dir stats service must be enabled if accounting is enabled">>
+        )}
     ],
 
     VerifyFun = fun(SpaceId, Data) ->
@@ -613,9 +623,7 @@ support_space_test(Config) ->
             },
             bad_values = BadValues ++ [
                 {<<"token">>, BadToken3, ?ERROR_BAD_VALUE_TOKEN(<<"token">>,
-                    ?ERROR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, S1)))},
-                {<<"spaceSupportParameters">>, 23452, ?ERROR_BAD_DATA(<<"spaceSupportParameters">>)},
-                {<<"spaceSupportParameters">>, <<"bad-data">>, ?ERROR_BAD_DATA(<<"spaceSupportParameters">>)}
+                    ?ERROR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, S1)))}
             ]
         }
     },
