@@ -169,7 +169,7 @@ get_support_parameters(SpaceId, ProviderId) ->
     support_parameters_registry:get_entry(ProviderId, SupportParametersRegistry).
 
 
-    -spec delete(od_space:id()) -> ok.
+-spec delete(od_space:id()) -> ok.
 delete(SpaceId) ->
     ?assertMatch(ok, ozt:rpc(space_logic, delete, [?ROOT, SpaceId])).
 
