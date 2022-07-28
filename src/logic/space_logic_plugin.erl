@@ -803,22 +803,25 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = {group_privilege
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {support_parameters, SubjectProviderId}}, data = Data}, Space) ->
     SubjectClusterId = SubjectProviderId,
-    maps_utils:all(fun(Parameter, _) ->
-        case {Parameter, Req#el_req.auth} of
-            {<<"accountingEnabled">>, ?USER(ClientUserId)} ->
+    maps_utils:all(fun(Parameter, Value) ->
+        case {Parameter, Value, Req#el_req.auth} of
+            {_, null, _} ->
+                true;
+
+            {<<"accountingEnabled">>, _, ?USER(ClientUserId)} ->
                 cluster_logic:has_eff_privilege(SubjectClusterId, ClientUserId, ?CLUSTER_UPDATE);
-            {<<"accountingEnabled">>, ?PROVIDER(ClientProviderId)} ->
+            {<<"accountingEnabled">>, _, ?PROVIDER(ClientProviderId)} ->
                 ClientProviderId =:= SubjectProviderId andalso auth_by_support(Req, Space);
 
-            {<<"dirStatsServiceEnabled">>, ?USER(ClientUserId)} ->
+            {<<"dirStatsServiceEnabled">>, _, ?USER(ClientUserId)} ->
                 auth_by_privilege(Req, Space, ?SPACE_UPDATE) orelse
                     cluster_logic:has_eff_privilege(SubjectClusterId, ClientUserId, ?CLUSTER_UPDATE);
-            {<<"dirStatsServiceEnabled">>, ?PROVIDER(ClientProviderId)} ->
+            {<<"dirStatsServiceEnabled">>, _, ?PROVIDER(ClientProviderId)} ->
                 ClientProviderId =:= SubjectProviderId andalso auth_by_support(Req, Space);
 
-            {<<"dirStatsServiceStatus">>, ?USER(_)} ->
+            {<<"dirStatsServiceStatus">>, _, ?USER(_)} ->
                 false;
-            {<<"dirStatsServiceStatus">>, ?PROVIDER(ClientProviderId)} ->
+            {<<"dirStatsServiceStatus">>, _, ?PROVIDER(ClientProviderId)} ->
                 ClientProviderId =:= SubjectProviderId andalso auth_by_support(Req, Space)
         end
     end, Data);

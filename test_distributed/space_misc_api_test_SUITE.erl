@@ -1070,13 +1070,13 @@ update_support_parameters_test(Config) ->
             correct_values = #{
                 <<"accountingEnabled">> => [true, false],
                 <<"dirStatsServiceEnabled">> => [true, false],
-                <<"dirStatsServiceStatus">> => support_parameters:all_dir_stats_service_statuses()
+                <<"dirStatsServiceStatus">> => [atom_to_binary(S) || S <- support_parameters:all_dir_stats_service_statuses()]
             },
             bad_values = BadValues = [
-                {<<"accountingEnabled">>, atom, ?ERROR_BAD_VALUE_BOOLEAN(<<"accountingEnabled">>)},
-                {<<"dirStatsServiceEnabled">>, [1, 2, 3], ?ERROR_BAD_VALUE_BOOLEAN(<<"dirStatsServiceEnabled">>)},
+                {<<"accountingEnabled">>, atom, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"accountingEnabled">>, [true, false, null])},
+                {<<"dirStatsServiceEnabled">>, [1, 2, 3], ?ERROR_BAD_VALUE_ATOM(<<"dirStatsServiceEnabled">>)},
                 {<<"dirStatsServiceStatus">>, <<"text">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(
-                    <<"dirStatsServiceStatus">>, [atom_to_binary(S) || S <- support_parameters:all_dir_stats_service_statuses()]
+                    <<"dirStatsServiceStatus">>, [null] ++ [atom_to_binary(S) || S <- support_parameters:all_dir_stats_service_statuses()]
                 )}
             ]
         }
@@ -1093,12 +1093,12 @@ update_support_parameters_test(Config) ->
     ShouldBeAuthorized = fun(Client, Data) ->
         case {Client, Data} of
             {root, _} -> true;
-            {{admin, [?OZ_SPACES_UPDATE]}, #{<<"dirStatsServiceStatus">> := _}} -> false;
+            {{admin, [?OZ_SPACES_UPDATE]}, #{<<"dirStatsServiceStatus">> := V}} when V /= null -> false;
             {{admin, [?OZ_SPACES_UPDATE]}, _} -> true;
-            {{user, ClusterMemberWithPrivs}, #{<<"dirStatsServiceStatus">> := _}} -> false;
+            {{user, ClusterMemberWithPrivs}, #{<<"dirStatsServiceStatus">> := V}} when V /= null -> false;
             {{user, ClusterMemberWithPrivs}, _} -> true;
-            {{user, SpaceMemberWithPrivs}, #{<<"accountingEnabled">> := _}} -> false;
-            {{user, SpaceMemberWithPrivs}, #{<<"dirStatsServiceStatus">> := _}} -> false;
+            {{user, SpaceMemberWithPrivs}, #{<<"accountingEnabled">> := V}} when V /= null -> false;
+            {{user, SpaceMemberWithPrivs}, #{<<"dirStatsServiceStatus">> := V}} when V /= null -> false;
             {{user, SpaceMemberWithPrivs}, _} -> true;
             {{provider, SubjectProvider}, _} -> true
         end
@@ -1153,9 +1153,10 @@ update_support_parameters_test(Config) ->
                             dir_stats_service_enabled = maps:get(
                                 <<"dirStatsServiceEnabled">>, Data, PreviousSupportParameters#support_parameters.dir_stats_service_enabled
                             ),
-                            dir_stats_service_status = maps:get(
-                                <<"dirStatsServiceStatus">>, Data, PreviousSupportParameters#support_parameters.dir_stats_service_status
-                            )
+                            dir_stats_service_status = case maps:find(<<"dirStatsServiceStatus">>, Data) of
+                                {ok, Value} -> binary_to_atom(Value);
+                                error -> PreviousSupportParameters#support_parameters.dir_stats_service_status
+                            end
                         })
                 end,
                 ?assertEqual(ActualSupportParameters, ExpectedSupportParameters)
