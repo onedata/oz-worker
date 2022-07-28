@@ -44,6 +44,7 @@
 
     upgrade_legacy_support_test/1,
 
+    parallel_supports_test/1,
     support_with_imported_storage_test/1,
     modify_imported_storage_test/1
 ]).
@@ -63,6 +64,7 @@ all() ->
 
         upgrade_legacy_support_test,
 
+        parallel_supports_test,
         support_with_imported_storage_test,
         modify_imported_storage_test
     ]).
@@ -478,12 +480,12 @@ delete_test(Config) ->
 
 support_space_test(Config) ->
     MinSupportSize = oz_test_utils:minimum_support_size(Config),
-    {ok, U1} = oz_test_utils:create_user(Config),
-    {ok, {SupportingProviderId, _}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
+    {ok, SpaceOwner} = oz_test_utils:create_user(Config),
+    {ok, {SupportingProviderId, _}} = oz_test_utils:create_provider(Config, SpaceOwner, ?PROVIDER_NAME1),
     {ok, {OtherProviderId, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME2),
     {ok, SupportingStorageId} = oz_test_utils:create_storage(Config, ?PROVIDER(SupportingProviderId), ?STORAGE_NAME1),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, BadInviteToken} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
+    {ok, UnrelatedSpaceId} = oz_test_utils:create_space(Config, ?USER(SpaceOwner), ?SPACE_NAME1),
+    {ok, BadInviteToken} = oz_test_utils:space_invite_user_token(Config, ?USER(SpaceOwner), UnrelatedSpaceId),
     {ok, BadInviteTokenSerialized} = tokens:serialize(BadInviteToken),
 
     IllegalSupportParamsJson = jsonable_record:to_json(#support_parameters{
@@ -498,7 +500,7 @@ support_space_test(Config) ->
         {<<"token">>, <<"bad-token">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
         {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
         {<<"token">>, BadInviteTokenSerialized, ?ERROR_BAD_VALUE_TOKEN(<<"token">>,
-            ?ERROR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, S1)))},
+            ?ERROR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, UnrelatedSpaceId)))},
         {<<"size">>, <<"binary">>, ?ERROR_BAD_VALUE_INTEGER(<<"size">>)},
         {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
         {<<"size">>, -1000, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
@@ -510,28 +512,62 @@ support_space_test(Config) ->
         )}
     ],
 
-    VerifyFun = fun(SpaceId, Data) ->
-        % Should return space id of the newly supported space
+    EnvSetUpFun = fun() -> #{
+        space_id => ozt_users:create_space_for(SpaceOwner)
+    } end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{space_id := SpaceId}, Data) ->
         {ok, #od_space{
             storages = Storages,
             support_parameters_registry = SupportParametersRegistry
         }} = oz_test_utils:get_space(Config, SpaceId),
 
-        ?assertEqual(#support_parameters_registry{
-            registry = #{
-                SupportingProviderId => ozt_spaces:expected_tweaked_support_parameters(#support_parameters{
-                    accounting_enabled = kv_utils:get([<<"spaceSupportParameters">>, <<"accountingEnabled">>], Data, false),
-                    dir_stats_service_enabled = kv_utils:get([<<"spaceSupportParameters">>, <<"dirStatsServiceEnabled">>], Data, false),
-                    dir_stats_service_status = disabled
-                })
-            }
-        }, SupportParametersRegistry),
+        ExpSupportParametersRegistry = #support_parameters_registry{
+            registry = case ShouldSucceed of
+                false ->
+                    #{};
+                true ->
+                    #{
+                        SupportingProviderId => ozt_spaces:expected_tweaked_support_parameters(#support_parameters{
+                            accounting_enabled = kv_utils:get([<<"spaceSupportParameters">>, <<"accountingEnabled">>], Data, false),
+                            dir_stats_service_enabled = kv_utils:get([<<"spaceSupportParameters">>, <<"dirStatsServiceEnabled">>], Data, false),
+                            dir_stats_service_status = disabled
+                        })
+                    }
+            end
+        },
+        ?assertEqual(ExpSupportParametersRegistry, SupportParametersRegistry),
 
+        ?assertEqual(ShouldSucceed, maps:is_key(SupportingStorageId, Storages)),
         % Test also storage_logic:supports_space fun
-        oz_test_utils:call_oz(
+        ?assertEqual(ShouldSucceed, oz_test_utils:call_oz(
             Config, storage_logic, supports_space, [SupportingStorageId, SpaceId]
-        ) andalso maps:is_key(SupportingStorageId, Storages)
+        ))
+    end,
 
+    GenSupportToken = fun
+        F(SpaceId, deserialized) -> ozt_spaces:create_support_token(SpaceId, SpaceOwner);
+        F(SpaceId, serialized) -> ozt_tokens:ensure_serialized(F(SpaceId, deserialized))
+    end,
+
+    GenDataSpec = fun(TokenFormat) -> #data_spec{
+        required = [<<"token">>, <<"size">>],
+        optional = [<<"spaceSupportParameters">>],
+        correct_values = #{
+            <<"token">> => [fun(#{space_id := SpaceId}) ->
+                GenSupportToken(SpaceId, TokenFormat)
+            end],
+            <<"size">> => [MinSupportSize],
+            <<"spaceSupportParameters">> => [fun() ->
+                RandAccountingEnabled = ?RAND_BOOL(),
+                #{
+                    <<"accountingEnabled">> => RandAccountingEnabled,
+                    <<"dirStatsServiceEnabled">> => RandAccountingEnabled orelse ?RAND_BOOL()
+                }
+            end]
+        },
+        bad_values = BadValues
+    }
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -542,7 +578,7 @@ support_space_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, U1},
+                {user, SpaceOwner},
                 {provider, OtherProviderId}
             ]
         },
@@ -551,83 +587,41 @@ support_space_test(Config) ->
             module = storage_logic,
             function = support_space,
             args = [auth, SupportingStorageId, data],
-            expected_result = ?OK_ENV(fun(_, Data) ->
-                ?OK_TERM(fun(SpaceId) -> VerifyFun(SpaceId, Data) end)
+            expected_result = ?OK_ENV(fun(#{space_id := SpaceId}, _Data) ->
+                ?OK_TERM(fun(SupportedSpaceId) -> ?assertEqual(SupportedSpaceId, SpaceId) end)
             end)
         },
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_storage, id = SupportingStorageId, aspect = support},
-            expected_result = ?OK_ENV(fun(_, Data) ->
+            expected_result = ?OK_ENV(fun(#{space_id := SpaceId}, _Data) ->
                 ?OK_MAP_CONTAINS(#{
                     <<"gri">> => fun(EncodedGri) ->
-                        #gri{id = SpaceId} = gri:deserialize(EncodedGri),
-                        VerifyFun(SpaceId, Data)
+                        #gri{id = SupportedSpaceId} = gri:deserialize(EncodedGri),
+                        ?assertEqual(SupportedSpaceId, SpaceId)
                     end
                 })
             end)
         },
-        data_spec = #data_spec{
-            required = [<<"token">>, <<"size">>],
-            correct_values = #{
-                <<"token">> => [fun() ->
-                    % Create a new space and token for every test case
-                    % (this value is reused multiple times as many cases of
-                    % the api test must be checked).
-                    {ok, Space} = oz_test_utils:create_space(
-                        Config, ?USER(U1), ?SPACE_NAME2
-                    ),
-                    {ok, SpInvProvToken} = oz_test_utils:create_space_support_token(
-                        Config, ?USER(U1), Space
-                    ),
-                    element(2, {ok, _} = tokens:serialize(SpInvProvToken))
-                end],
-                <<"size">> => [MinSupportSize]
-            },
-            bad_values = BadValues
-        }
+        data_spec = GenDataSpec(serialized)
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)),
 
     % storage_logic should also allow using non-serialized tokens, check it
     {ok, BadToken3} = oz_test_utils:space_invite_user_token(
-        Config, ?USER(U1), S1
+        Config, ?USER(SpaceOwner), UnrelatedSpaceId
     ),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         % client_spec and logic_spec are inherited from ApiTestSpec
         gs_spec = undefined,
-        data_spec = #data_spec{
-            required = [<<"token">>, <<"size">>],
-            optional = [<<"spaceSupportParameters">>],
-            correct_values = #{
-                <<"token">> => [fun() ->
-                    % Create a new space and token for every test case
-                    % (this value is reused multiple times as many cases of
-                    % the api test must be checked).
-                    {ok, Space} = oz_test_utils:create_space(
-                        Config, ?USER(U1), <<"space">>
-                    ),
-                    {ok, SpInvProvToken} = oz_test_utils:create_space_support_token(
-                        Config, ?USER(U1), Space
-                    ),
-                    SpInvProvToken
-                end],
-                <<"size">> => [MinSupportSize],
-                <<"spaceSupportParameters">> => [fun() ->
-                    RandAccountingEnabled = ?RAND_BOOL(),
-                    #{
-                        <<"accountingEnabled">> => RandAccountingEnabled,
-                        <<"dirStatsServiceEnabled">> => RandAccountingEnabled orelse ?RAND_BOOL()
-                    }
-                end]
-            },
+        data_spec = (GenDataSpec(deserialized))#data_spec{
             bad_values = BadValues ++ [
                 {<<"token">>, BadToken3, ?ERROR_BAD_VALUE_TOKEN(<<"token">>,
-                    ?ERROR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, S1)))}
+                    ?ERROR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, UnrelatedSpaceId)))}
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun)).
 
 
 update_support_size_test(Config) ->
@@ -1003,6 +997,65 @@ support_with_imported_storage_test(Config) ->
 
     % check that space still can be supported with not imported storages
     AddMultipleNotImportedSupportsFun().
+
+
+parallel_supports_test(_Config) ->
+    Repeats = 10,
+    lists:foreach(fun(_) ->
+        parallel_supports_test_retry()
+    end, lists:seq(1, Repeats)).
+
+parallel_supports_test_retry() ->
+    Parallelism = 20,
+
+    SpaceOwner = ozt_users:create(),
+    SubjectSpace = ozt_users:create_space_for(SpaceOwner),
+    SupportingProvider = ozt_providers:create(),
+    SupportingStorage = ozt_providers:create_storage(SupportingProvider),
+
+    SupportParamsSet = lists_utils:shuffle(lists:flatten([
+        % randomize some correct support params
+        lists_utils:generate(fun ozt_spaces:random_support_parameters/0, Parallelism div 2),
+        % add some bad (conflicting) support params that should cause support failures
+        lists_utils:generate(fun() -> #support_parameters{
+            accounting_enabled = true,
+            dir_stats_service_enabled = false
+        } end, Parallelism - (Parallelism div 2))
+    ])),
+
+    ResultsWithRequestedParams = lists_utils:pmap(fun(SupportParams) ->
+        Result = ozt:rpc(storage_logic, support_space, [
+            ?PROVIDER(SupportingProvider), SupportingStorage, #{
+                <<"token">> => ozt_spaces:create_support_token(SubjectSpace, SpaceOwner),
+                <<"size">> => ozt_spaces:minimum_support_size(),
+                <<"spaceSupportParameters">> => jsonable_record:to_json(SupportParams)
+            }
+        ]),
+        {Result, SupportParams}
+    end, SupportParamsSet),
+
+    IsSuccessResult = fun({Result, _RequestedParams}) -> case Result of
+        {ok, SubjectSpace} ->
+            true;
+        ?ERROR_RELATION_ALREADY_EXISTS(od_space, SubjectSpace, od_storage, SupportingStorage) ->
+            false;
+        ?ERROR_BAD_DATA(<<"dirStatsServiceEnabled">>, _) ->
+            false
+    end end,
+
+    % one of the supports should succeed and the parameters should be set as in the request
+    {OkResults, ErrorResults} = lists:partition(IsSuccessResult, ResultsWithRequestedParams),
+    ?assertEqual(1, length(OkResults)),
+    ?assertEqual(Parallelism - 1, length(ErrorResults)),
+
+    {ok, {{ok, SubjectSpace}, ExpectedSupportParams}} = lists_utils:find(IsSuccessResult, ResultsWithRequestedParams),
+    ?assertEqual(
+        ozt_spaces:expected_tweaked_support_parameters(ExpectedSupportParams#support_parameters{
+            dir_stats_service_status = disabled  % this field cannot be set during space support
+        }),
+        ozt_spaces:get_support_parameters(SubjectSpace, SupportingProvider)
+    ).
+
 
 modify_imported_storage_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),

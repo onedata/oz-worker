@@ -480,7 +480,7 @@ update(#el_req{gri = #gri{id = SpaceId, aspect = {support_parameters, ProviderId
     onedata:compare_release_line(ProviderVersion, ?LINE_21_02) =:= lower andalso throw(?ERROR_NOT_SUPPORTED),
 
     SupportParametersOverlay = jsonable_record:from_json(Data, support_parameters),
-    ?extract_ok(od_space:update_support_parameters_registry(SpaceId, ProviderId, SupportParametersOverlay)).
+    ?extract_ok(od_space:update_support_parameters(SpaceId, ProviderId, SupportParametersOverlay)).
 
 
 %%--------------------------------------------------------------------

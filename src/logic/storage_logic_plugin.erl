@@ -259,21 +259,14 @@ delete(#el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
             od_storage, StorageId
         ),
 
-        {ok, #document{value = #od_space{harvesters = Harvesters}}} = od_space:update(SpaceId, fun(Space) ->
-            {ok, Space#od_space{support_parameters_registry = support_parameters_registry:remove_entry(
-                ProviderId,
-                Space#od_space.support_parameters_registry
-            )}}
-        end),
-
-        {true, {#od_space{harvesters = Harvesters}, _}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
+        {ok, UpdatedDoc} = od_space:clear_support_parameters(SpaceId, ProviderId),
 
         lists:foreach(fun(HarvesterId) ->
             harvester_indices:update_stats(HarvesterId, all,
                 fun(ExistingStats) ->
                     harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
                 end)
-        end, Harvesters)
+        end, UpdatedDoc#document.value#od_space.harvesters)
     end.
 
 
@@ -435,6 +428,11 @@ support_space(ProviderId, SpaceId, StorageId, Data) ->
 support_space_insecure(ProviderId, SpaceId, StorageId, Data) ->
     {true, {Storage, _}} = fetch_entity(#gri{id = StorageId}),
 
+    % possible if multiple processes enter the critical section one after another
+    storage_logic:supports_space(Storage, SpaceId) andalso throw(
+        ?ERROR_RELATION_ALREADY_EXISTS(od_space, SpaceId, od_storage, StorageId)
+    ),
+
     case is_imported_storage(Storage) of
         true ->
             ensure_storage_not_supporting_any_space(Storage),
@@ -446,22 +444,29 @@ support_space_insecure(ProviderId, SpaceId, StorageId, Data) ->
             ok
     end,
 
-    SupportSize = maps:get(<<"size">>, Data),
-    entity_graph:add_relation(
-        od_space, SpaceId,
-        od_storage, StorageId,
-        SupportSize
-    ),
-
+    % start with setting the support parameters, which can fail if the provided data is not valid
+    % upon a failure, there is nothing changed yet that would need undoing to make the process transactional
     RequestedSpaceSupportParameters = maps:get(<<"spaceSupportParameters">>, Data, #support_parameters{}),
     PrunedSpaceSupportParameters = #support_parameters{
         % only the two parameters can be set during space support
         accounting_enabled = RequestedSpaceSupportParameters#support_parameters.accounting_enabled,
         dir_stats_service_enabled = RequestedSpaceSupportParameters#support_parameters.dir_stats_service_enabled
     },
-    case od_space:update_support_parameters_registry(SpaceId, ProviderId, PrunedSpaceSupportParameters) of
+    case od_space:update_support_parameters(SpaceId, ProviderId, PrunedSpaceSupportParameters) of
         {ok, _} -> ok;
-        {error, _} = Error -> throw(Error)
+        {error, _} = Error2 -> throw(Error2)
+    end,
+
+    try
+        SupportSize = maps:get(<<"size">>, Data),
+        entity_graph:add_relation(
+            od_space, SpaceId,
+            od_storage, StorageId,
+            SupportSize
+        )
+    catch throw:Error ->
+        {ok, _} = od_space:clear_support_parameters(SpaceId, ProviderId),
+        throw(Error)
     end,
 
     % provider supports are recalculated asynchronously - wait for it before

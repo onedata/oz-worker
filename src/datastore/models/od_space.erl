@@ -17,7 +17,8 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, get/1, exists/1, update/2, update_support_parameters_registry/3, force_delete/1, list/0]).
+-export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([update_support_parameters_registry/2, update_support_parameters/3, clear_support_parameters/2]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -82,19 +83,6 @@ update(SpaceId, Diff) ->
     datastore_model:update(?CTX, SpaceId, Diff).
 
 
--spec update_support_parameters_registry(id(), od_provider:id(), support_parameters:record()) ->
-    {ok, doc()} | {error, term()}.
-update_support_parameters_registry(SpaceId, ProviderId, SupportParametersOverlay) ->
-    update(SpaceId, fun(Space = #od_space{support_parameters_registry = PreviousRegistry}) ->
-        case support_parameters_registry:update_entry(ProviderId, SupportParametersOverlay, PreviousRegistry) of
-            {error, _} = Error ->
-                Error;
-            {ok, NewRegistry} ->
-                {ok, Space#od_space{support_parameters_registry = NewRegistry}}
-        end
-    end).
-
-
 %%--------------------------------------------------------------------
 %% @doc
 %% Deletes space by ID.
@@ -115,6 +103,39 @@ force_delete(SpaceId) ->
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
+
+-spec update_support_parameters_registry(
+    id(),
+    fun((support_parameters_registry:record()) -> {ok, support_parameters_registry:record()} | errors:error())
+) ->
+    {ok, doc()} | {error, term()}.
+update_support_parameters_registry(SpaceId, Diff) ->
+    update(SpaceId, fun(Space = #od_space{support_parameters_registry = PreviousRegistry}) ->
+        case Diff(PreviousRegistry) of
+            {error, _} = Error ->
+                Error;
+            {ok, NewRegistry} ->
+                {ok, Space#od_space{support_parameters_registry = NewRegistry}}
+        end
+    end).
+
+
+-spec update_support_parameters(id(), od_provider:id(), support_parameters:record()) ->
+    {ok, doc()} | {error, term()}.
+update_support_parameters(SpaceId, ProviderId, SupportParametersOverlay) ->
+    update_support_parameters_registry(SpaceId, fun(PreviousRegistry) ->
+        support_parameters_registry:update_entry(ProviderId, SupportParametersOverlay, PreviousRegistry)
+    end).
+
+
+-spec clear_support_parameters(id(), od_provider:id()) ->
+    {ok, doc()} | {error, term()}.
+clear_support_parameters(SpaceId, ProviderId) ->
+    update_support_parameters_registry(SpaceId, fun(PreviousRegistry) ->
+        support_parameters_registry:remove_entry(ProviderId, PreviousRegistry)
+    end).
+
 
 %%--------------------------------------------------------------------
 %% @doc
