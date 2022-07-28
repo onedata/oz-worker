@@ -13,6 +13,7 @@
 -define(API_TEST_UTILS_HRL, 1).
 
 -include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("gui/include/gui_session.hrl").
 
 %% @formatter:off
@@ -337,7 +338,7 @@ end).
     {<<"name">>, <<":asd">>, Error},
     {<<"name">>, <<"asd★">>, Error},
     {<<"name">>, <<"asd-">>, Error},
-    {<<"name">>, <<"very_very_very_long_name_with_at_least_128_characters_yes_indeed_more_than_one_hundred_twenty_eight_characters_that_should_not_be_allowed">>, Error},
+    {<<"name">>, ?TOO_LONG_NAME, Error},
     {<<"name">>, <<".asd">>, Error},
     {<<"name">>, <<"asd ">>, Error},
     {<<"name">>, <<" asd ">>, Error},
@@ -353,7 +354,7 @@ end).
     {<<"fullName">>, <<":Tom">>, Error},
     {<<"fullName">>, <<"Tom★">>, Error},
     {<<"fullName">>, <<"Tom-">>, Error},
-    {<<"fullName">>, <<"very_very_very_long_fullName_with_at_least_128_characters_yes_indeed_more_than_one_hundred_twenty_eight_characters_that_should_not_be_allowed">>, Error},
+    {<<"fullName">>, ?TOO_LONG_NAME, Error},
     {<<"fullName">>, <<".Tom">>, Error},
     {<<"fullName">>, <<"Tom ">>, Error},
     {<<"fullName">>, <<" Tom ">>, Error},
