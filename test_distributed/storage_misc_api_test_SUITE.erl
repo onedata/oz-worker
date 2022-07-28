@@ -519,11 +519,11 @@ support_space_test(Config) ->
 
         ?assertEqual(#support_parameters_registry{
             registry = #{
-                SupportingProviderId => #support_parameters{
+                SupportingProviderId => ozt_spaces:expected_tweaked_support_parameters(#support_parameters{
                     accounting_enabled = kv_utils:get([<<"spaceSupportParameters">>, <<"accountingEnabled">>], Data, false),
                     dir_stats_service_enabled = kv_utils:get([<<"spaceSupportParameters">>, <<"dirStatsServiceEnabled">>], Data, false),
                     dir_stats_service_status = disabled
-                }
+                })
             }
         }, SupportParametersRegistry),
 

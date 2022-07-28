@@ -30,11 +30,12 @@
 -export([create_share/2]).
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([set_user_privileges/3]).
--export([random_support_parameters/0, set_support_parameters/3, get_support_parameters/2]).
+-export([random_support_parameters/0, expected_tweaked_support_parameters/1]).
+-export([set_support_parameters/3, get_support_parameters/2]).
 -export([delete/1]).
 -export([minimum_support_size/0]).
 
--compile({no_auto_import,[get/1]}).
+-compile({no_auto_import, [get/1]}).
 
 
 %%%===================================================================
@@ -154,6 +155,19 @@ random_support_parameters() ->
         dir_stats_service_enabled = RandAccountingEnabled orelse ?RAND_BOOL(),
         dir_stats_service_status = ?RAND_ELEMENT(support_parameters:all_dir_stats_service_statuses())
     }.
+
+
+-spec expected_tweaked_support_parameters(support_parameters:record()) -> support_parameters:record().
+expected_tweaked_support_parameters(#support_parameters{
+    dir_stats_service_enabled = true, dir_stats_service_status = Status
+} = SP) when Status =:= disabled; Status =:= stopping ->
+    SP#support_parameters{dir_stats_service_status = initializing};
+expected_tweaked_support_parameters(#support_parameters{
+    dir_stats_service_enabled = false, dir_stats_service_status = Status
+} = SP) when Status =:= enabled;  Status =:= initializing ->
+    SP#support_parameters{dir_stats_service_status = stopping};
+expected_tweaked_support_parameters(SP) ->
+    SP.
 
 
 -spec set_support_parameters(od_space:id(), od_provider:id(), support_parameters:record()) -> ok.

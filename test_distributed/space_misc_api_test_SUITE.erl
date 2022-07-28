@@ -274,12 +274,12 @@ get_test(Config) ->
 
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
-    RandSupportParameters = ozt_spaces:random_support_parameters(),
     ozt_providers:simulate_version(P1, ?LINE_21_02),
-    ozt_spaces:set_support_parameters(S1, P1, RandSupportParameters),
+    ozt_spaces:set_support_parameters(S1, P1, ozt_spaces:random_support_parameters()),
     ExpSupportParametersRegistry = #support_parameters_registry{
         registry = #{
-            P1 => RandSupportParameters
+            % the parameters may have been tweaked during update, fetch them to ensure latest value
+            P1 => ozt_spaces:get_support_parameters(S1, P1)
         }
     },
 
@@ -1146,7 +1146,7 @@ update_support_parameters_test(Config) ->
                     {_, false} ->
                         PreviousSupportParameters;
                     {success, true} ->
-                        PreviousSupportParameters#support_parameters{
+                        ozt_spaces:expected_tweaked_support_parameters(PreviousSupportParameters#support_parameters{
                             accounting_enabled = maps:get(
                                 <<"accountingEnabled">>, Data, PreviousSupportParameters#support_parameters.accounting_enabled
                             ),
@@ -1156,7 +1156,7 @@ update_support_parameters_test(Config) ->
                             dir_stats_service_status = maps:get(
                                 <<"dirStatsServiceStatus">>, Data, PreviousSupportParameters#support_parameters.dir_stats_service_status
                             )
-                        }
+                        })
                 end,
                 ?assertEqual(ActualSupportParameters, ExpectedSupportParameters)
             end,
