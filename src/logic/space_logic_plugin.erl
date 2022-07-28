@@ -1080,9 +1080,9 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 validate(#el_req{operation = update, gri = #gri{aspect = {support_parameters, _}}}) ->
     #{
         at_least_one => #{
-            <<"accountingEnabled">> => {boolean, any},
-            <<"dirStatsServiceEnabled">> => {boolean, any},
-            <<"dirStatsServiceStatus">> => {binary, [atom_to_binary(S) || S <- support_parameters:all_dir_stats_service_statuses()]}
+            <<"accountingEnabled">> => {atom, [true, false, null]},
+            <<"dirStatsServiceEnabled">> => {atom, [true, false, null]},
+            <<"dirStatsServiceStatus">> => {any, [null] ++ [atom_to_binary(S) || S <- support_parameters:all_dir_stats_service_statuses()]}
         }
     }.
 
