@@ -133,7 +133,7 @@ update_support_parameters(SpaceId, ProviderId, SupportParametersOverlay) ->
     {ok, doc()} | {error, term()}.
 clear_support_parameters(SpaceId, ProviderId) ->
     update_support_parameters_registry(SpaceId, fun(PreviousRegistry) ->
-        support_parameters_registry:remove_entry(ProviderId, PreviousRegistry)
+        {ok, support_parameters_registry:remove_entry(ProviderId, PreviousRegistry)}
     end).
 
 
