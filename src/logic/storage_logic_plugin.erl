@@ -21,11 +21,13 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/errors.hrl").
 
--define(MINIMUM_SUPPORT_SIZE, oz_worker:get_env(minimum_space_support_size, 1000000)).
-
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
+
+
+-define(MINIMUM_SUPPORT_SIZE, oz_worker:get_env(minimum_space_support_size, 1000000)).
+
 
 %%%===================================================================
 %%% API
@@ -266,7 +268,9 @@ delete(#el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
                 fun(ExistingStats) ->
                     harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
                 end)
-        end, UpdatedDoc#document.value#od_space.harvesters)
+        end, UpdatedDoc#document.value#od_space.harvesters),
+
+        wait_for_eff_support_recalculation(ProviderId, SpaceId)
     end.
 
 
@@ -469,13 +473,7 @@ support_space_insecure(ProviderId, SpaceId, StorageId, Data) ->
         throw(Error)
     end,
 
-    % provider supports are recalculated asynchronously - wait for it before
-    % returning to avoid race conditions when providers try to fetch the space
-    % entity, but they are not yet recognized as effective supporters and declined
-    utils:wait_until(fun() ->
-        space_logic:is_supported_by_provider(SpaceId, ProviderId) andalso
-            provider_logic:supports_space(ProviderId, SpaceId)
-    end),
+    wait_for_eff_support_recalculation(ProviderId, SpaceId),
 
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {true, {Space, Rev}} = space_logic_plugin:fetch_entity(NewGRI),
@@ -591,3 +589,26 @@ add_implicit_qos_parameters(StorageId, ProviderId, QosParameters) ->
         <<"storageId">> => StorageId,
         <<"providerId">> => ProviderId
     }.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Provider supports are recalculated asynchronously - wait for it so that
+%% the information about current supports is up to date when this function returns.
+%% @end
+%%--------------------------------------------------------------------
+-spec wait_for_eff_support_recalculation(od_provider:id(), od_space:id()) -> ok.
+wait_for_eff_support_recalculation(ProviderId, SpaceId) ->
+    try
+        utils:wait_until(fun() ->
+            space_logic:is_supported_by_provider(SpaceId, ProviderId) andalso
+                provider_logic:supports_space(ProviderId, SpaceId)
+        end)
+    catch _:_ ->
+        % Do not fail upon timeout; if there are too many pending changes in the graph,
+        % this may take even longer. Worst case scenario is that the client will get
+        % a confirmation of support change operation, but the effective supports will
+        % not yet be recalculated. They will converge eventually though.
+        ok
+    end.
