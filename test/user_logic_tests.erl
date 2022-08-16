@@ -14,9 +14,9 @@
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
 -include("entity_logic.hrl").
 
--define(TOO_LONG_NAME, <<"very-very-very-looong-name-with-at-least-50-characters">>).
 
 %%%===================================================================
 %%% Tests functions
@@ -30,7 +30,10 @@ name_normalization_test() ->
     ?assertEqual(<<"Unnamed User">>, N(<<"A">>)),
     ?assertEqual(<<"user-name">>, N(<<"|user-name">>)),
     ?assertEqual(<<"user-name">>, N(<<"user-name|">>)),
-    ?assertEqual(string:slice(?TOO_LONG_NAME, 0, ?NAME_MAXIMUM_LENGTH), N(?TOO_LONG_NAME)),
+    ?assertEqual(
+        binary:replace(string:slice(?TOO_LONG_NAME, 0, ?NAME_MAXIMUM_LENGTH), <<"_">>, <<"-">>, [global]),
+        N(?TOO_LONG_NAME)
+    ),
     ?assertEqual(<<"Unnamed User">>, N(<<"--------------------------------------------------">>)),
     ?assertEqual(<<"µ,ń'żźć -21.31"/utf8>>, N(<<"µ,ń'żźć -21.31"/utf8>>)).
 

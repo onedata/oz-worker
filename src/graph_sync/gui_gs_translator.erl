@@ -419,7 +419,11 @@ translate_space(#gri{id = undefined, aspect = privileges, scope = private}, Priv
     Privileges;
 
 translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) ->
-    #od_space{name = Name, shares = Shares} = Space,
+    #od_space{
+        name = Name,
+        shares = Shares,
+        support_parameters_registry = SupportParametersRegistry
+    } = Space,
     fun(?USER(UserId)) -> #{
         <<"name">> => Name,
         <<"scope">> => <<"private">>,
@@ -435,6 +439,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
         <<"supportSizes">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_providers}),
         <<"harvesterList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = harvesters}),
+        <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry),
         <<"info">> => maps:merge(translate_creator(Space#od_space.creator), #{
             <<"creationTime">> => Space#od_space.creation_time,
             <<"sharesCount">> => length(Shares)
@@ -447,7 +452,8 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"providers">> := SupportSizes,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator,
-        <<"sharesCount">> := SharesCount
+        <<"sharesCount">> := SharesCount,
+        <<"supportParametersRegistry">> := SupportParametersRegistry
     } = SpaceData,
     {ok, #document{value = Space}} = od_space:get(SpaceId),
     fun(?USER(UserId)) -> #{
@@ -458,6 +464,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"currentUserEffPrivileges">> => entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Space),
         <<"supportSizes">> => SupportSizes,
         <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_providers}),
+        <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime,
             <<"sharesCount">> => SharesCount

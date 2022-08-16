@@ -26,12 +26,17 @@
 -export([remove_group/2]).
 -export([create_user_invite_token/2]).
 -export([create_group_invite_token/2]).
--export([create_support_token/2, create_support_token/3]).
+-export([create_support_token/2]).
 -export([create_share/2]).
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([set_user_privileges/3]).
+-export([random_support_parameters/0, expected_tweaked_support_parameters/1]).
+-export([set_support_parameters/3, get_support_parameters/2]).
 -export([delete/1]).
 -export([minimum_support_size/0]).
+
+-compile({no_auto_import, [get/1]}).
+
 
 %%%===================================================================
 %%% API
@@ -111,11 +116,7 @@ create_group_invite_token(SpaceId, UserId) ->
 
 -spec create_support_token(od_space:id(), od_user:id()) -> tokens:token().
 create_support_token(SpaceId, UserId) ->
-    create_support_token(SpaceId, UserId, support_parameters:build(global, eager)).
-
--spec create_support_token(od_space:id(), od_user:id(), support_parameters:parameters()) -> tokens:token().
-create_support_token(SpaceId, UserId, SupportParameters) ->
-    ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId, SupportParameters)).
+    ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId)).
 
 
 -spec create_share(od_space:id(), od_share:name()) -> od_share:id().
@@ -144,6 +145,42 @@ set_user_privileges(SpaceId, UserId, Privileges) ->
         <<"grant">> => Privileges,
         <<"revoke">> => lists_utils:subtract(privileges:space_admin(), Privileges)
     }])).
+
+
+-spec random_support_parameters() -> support_parameters:record().
+random_support_parameters() ->
+    RandAccountingEnabled = ?RAND_BOOL(),
+    #support_parameters{
+        accounting_enabled = RandAccountingEnabled,
+        dir_stats_service_enabled = RandAccountingEnabled orelse ?RAND_BOOL(),
+        dir_stats_service_status = ?RAND_ELEMENT(support_parameters:all_dir_stats_service_statuses())
+    }.
+
+
+-spec expected_tweaked_support_parameters(support_parameters:record()) -> support_parameters:record().
+expected_tweaked_support_parameters(#support_parameters{
+    dir_stats_service_enabled = true, dir_stats_service_status = Status
+} = SP) when Status =:= disabled; Status =:= stopping ->
+    SP#support_parameters{dir_stats_service_status = initializing};
+expected_tweaked_support_parameters(#support_parameters{
+    dir_stats_service_enabled = false, dir_stats_service_status = Status
+} = SP) when Status =:= enabled;  Status =:= initializing ->
+    SP#support_parameters{dir_stats_service_status = stopping};
+expected_tweaked_support_parameters(SP) ->
+    SP.
+
+
+-spec set_support_parameters(od_space:id(), od_provider:id(), support_parameters:record()) -> ok.
+set_support_parameters(SpaceId, ProviderId, SupportParameters) ->
+    ?assertMatch(ok, ozt:rpc(space_logic, update_support_parameters, [
+        ?ROOT, SpaceId, ProviderId, jsonable_record:to_json(SupportParameters, support_parameters)
+    ])).
+
+
+-spec get_support_parameters(od_space:id(), od_provider:id()) -> support_parameters:record().
+get_support_parameters(SpaceId, ProviderId) ->
+    #od_space{support_parameters_registry = SupportParametersRegistry} = get(SpaceId),
+    support_parameters_registry:get_entry(ProviderId, SupportParametersRegistry).
 
 
 -spec delete(od_space:id()) -> ok.

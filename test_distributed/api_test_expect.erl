@@ -167,6 +167,7 @@ protected_space(logic, _Id, SpaceData, Creator) ->
     ?OK_MAP(#{
         <<"name">> => maps:get(<<"name">>, SpaceData),
         <<"providers">> => maps:get(<<"providers">>, SpaceData, #{}),
+        <<"supportParametersRegistry">> => maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => Creator,
         <<"sharesCount">> => 0
@@ -176,6 +177,10 @@ protected_space(rest, Id, SpaceData, Creator) ->
         <<"spaceId">> => Id,
         <<"name">> => maps:get(<<"name">>, SpaceData),
         <<"providers">> => maps:get(<<"providers">>, SpaceData, #{}),
+        <<"supportParametersRegistry">> => jsonable_record:to_json(
+            maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),
+            support_parameters_registry
+        ),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     };
@@ -183,7 +188,11 @@ protected_space(gs, Id, SpaceData, _Creator) ->
     ?OK_MAP(#{
         <<"gri">> => gri:serialize(?GRI(od_space, Id, instance, protected)),
         <<"name">> => maps:get(<<"name">>, SpaceData),
-        <<"providers">> => maps:get(<<"providers">>, SpaceData, #{})
+        <<"providers">> => maps:get(<<"providers">>, SpaceData, #{}),
+        <<"supportParametersRegistry">> => jsonable_record:to_json(
+            maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),
+            support_parameters_registry
+        )
     }).
 
 

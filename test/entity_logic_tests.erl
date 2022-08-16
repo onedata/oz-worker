@@ -14,9 +14,9 @@
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
 -include("entity_logic.hrl").
 
--define(TOO_LONG_NAME, <<"very_very_very_looong_name_with_at_least_50_characters">>).
 
 %%%===================================================================
 %%% Tests functions
