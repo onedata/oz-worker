@@ -6,6 +6,8 @@ CHANGELOG
 
 ### 21.02.0-alpha27
 
+-   **VFS-9771** Web GUI: Added handling of the restricted registration
+    policy in the \"Add cluster\" page.
 -   **VFS-9637** Web GUI: Improved and unified look of audit log
     browsers.
 -   **VFS-8948** Introduced the concept of time series dashboard specs -
