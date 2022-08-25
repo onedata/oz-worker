@@ -1078,7 +1078,7 @@ upgrade_record(12, Space) ->
         ?SPACE_MANAGE_QOS, ?SPACE_REMOVE_ARCHIVES, ?SPACE_RECALL_ARCHIVES
     ]),
 
-    NewAdminPrivileges = [?SPACE_CANCEL_ATM_WORKFLOW_EXECUTIONS],
+    NewAdminPrivileges = [?SPACE_MANAGE_ATM_WORKFLOW_EXECUTIONS],
 
     UpgradePrivileges = fun(Privileges) ->
         % appropriate privileges concerning workflow executions are granted to

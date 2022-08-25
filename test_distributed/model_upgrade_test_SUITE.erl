@@ -2449,7 +2449,7 @@ get_record(od_space, 13) -> UpgradedRecord = {od_space,
             ?SPACE_VIEW_ATM_WORKFLOW_EXECUTIONS,
             ?SPACE_SCHEDULE_ATM_WORKFLOW_EXECUTIONS,
             % following privs should be added by the upgrade procedure
-            ?SPACE_CANCEL_ATM_WORKFLOW_EXECUTIONS
+            ?SPACE_MANAGE_ATM_WORKFLOW_EXECUTIONS
         ])
     },
     #{},
@@ -2556,7 +2556,7 @@ get_record(od_space, 14) -> #od_space{
             ?SPACE_VIEW_ATM_WORKFLOW_EXECUTIONS,
             ?SPACE_SCHEDULE_ATM_WORKFLOW_EXECUTIONS,
             % following privs should be added by the upgrade procedure
-            ?SPACE_CANCEL_ATM_WORKFLOW_EXECUTIONS
+            ?SPACE_MANAGE_ATM_WORKFLOW_EXECUTIONS
         ])
     },
     storages = #{},
