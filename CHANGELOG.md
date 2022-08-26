@@ -4,6 +4,21 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha27
+
+-   **VFS-9771** Web GUI: Added handling of the restricted registration
+    policy in the \"Add cluster\" page.
+-   **VFS-9637** Web GUI: Improved and unified look of audit log
+    browsers.
+-   **VFS-8948** Introduced the concept of time series dashboard specs -
+    structured recipes for transforming and displaying measurements in
+    charts, which can be organized into sections. Each time series
+    collection has a linked dashboard spec that will be used for
+    rendering the dashboard in GUI.
+-   **VFS-8903** Web GUI: Upgraded EmberJS to v3.4.
+-   **VFS-8716** Web GUI: Added complex data types editor to the
+    automation views.
+
 ### 21.02.0-alpha26
 
 -   **VFS-9207** Web GUI: Enforced loading fonts from server to avoid
