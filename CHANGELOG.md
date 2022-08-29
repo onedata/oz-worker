@@ -4,6 +4,12 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 20.02.18
+
+-   **VFS-9771** Web GUI: Added handling of the restricted registration
+    policy in the "Add cluster" page.
+
+
 ### 20.02.17
 
 -   **VFS-9474** Improved behaviour of the Oneprovider deployment page
