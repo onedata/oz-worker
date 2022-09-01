@@ -115,7 +115,7 @@ list_children_test(Config) ->
             args = [auth, G1],
             expected_result = ?OK_LIST(ExpChildren)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -157,7 +157,7 @@ create_group_invite_token_test(Config) ->
             args = [auth, G1],
             expected_result = ?OK_TERM(VerifyFun)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -199,7 +199,7 @@ create_child_test(Config) ->
                 ExpType = maps:get(<<"type">>, DataSet, ?DEFAULT_GROUP_TYPE),
                 BaseURL = ?URL(Config, [<<"/groups/">>, Parent, <<"/children/">>]),
 
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     [GroupId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(GroupId, ExpType)
                 end
@@ -214,7 +214,7 @@ create_child_test(Config) ->
                 ?OK_TERM(fun(GroupId) -> VerifyFun(GroupId, ExpType) end)
             end)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"name">>],
             optional = [<<"type">>],
@@ -339,7 +339,7 @@ add_child_test(Config) ->
             method = put,
             path = [<<"/groups/">>, ParentGroup, <<"/children/">>, ChildGroup],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 ExpLocation = ?URL(Config, [<<"/groups/">>, ParentGroup, <<"/children/">>, ChildGroup]),
                 ?assertEqual(ExpLocation, Location),
                 true
@@ -351,7 +351,7 @@ add_child_test(Config) ->
             args = [auth, ParentGroup, ChildGroup, data],
             expected_result = ?OK_BINARY(ChildGroup)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [],
             correct_values = #{},
@@ -411,7 +411,7 @@ add_child_with_privileges_test(Config) ->
             method = put,
             path = [<<"/groups/">>, ParentGroup, <<"/children/">>, ChildGroup],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 ExpLocation = ?URL(Config, [<<"/groups/">>, ParentGroup, <<"/children/">>, ChildGroup]),
                 ?assertEqual(ExpLocation, Location),
                 true
@@ -423,7 +423,7 @@ add_child_with_privileges_test(Config) ->
             args = [auth, ParentGroup, ChildGroup, data],
             expected_result = ?OK_BINARY(ChildGroup)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"privileges">>],
             correct_values = #{
@@ -491,7 +491,7 @@ remove_child_test(Config) ->
             args = [auth, G1, groupId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -509,7 +509,7 @@ get_child_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get group privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config),
     {ok, G2} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME2),
@@ -553,7 +553,7 @@ get_child_privileges_test(Config) ->
             args = [auth, G1, G2],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
@@ -572,7 +572,7 @@ update_child_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to update group privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config),
     {ok, G2} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME2),
@@ -618,7 +618,7 @@ update_child_privileges_test(Config) ->
             args = [auth, G1, G2, data],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(update_privileges, [
@@ -673,7 +673,7 @@ get_eff_children_test(Config) ->
             args = [auth, G1],
             expected_result = ?OK_LIST(ExpGroups)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -776,7 +776,7 @@ get_eff_child_privileges_test(Config) ->
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get group privileges and sometimes not)
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
@@ -848,7 +848,7 @@ get_eff_child_privileges_test(Config) ->
             args = [auth, G1, G3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
@@ -1001,11 +1001,11 @@ get_eff_child_membership_intermediaries(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

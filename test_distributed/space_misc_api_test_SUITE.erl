@@ -33,13 +33,14 @@
 ]).
 -export([
     create_test/1,
+    create_with_custom_id_generator_seed_test/1,
     list_test/1,
     list_privileges_test/1,
     get_test/1,
     update_test/1,
     delete_test/1,
 
-    list_shares_test/1,
+    get_shares_test/1,
     get_share_test/1,
 
     list_storages_test/1,
@@ -48,19 +49,22 @@
     remove_provider_test/1,
 
     list_effective_providers_test/1,
-    get_eff_provider_test/1
+    get_eff_provider_test/1,
+
+    update_support_parameters_test/1
 ]).
 
 all() ->
     ?ALL([
         create_test,
+        create_with_custom_id_generator_seed_test,
         list_test,
         list_privileges_test,
         get_test,
         update_test,
         delete_test,
 
-        list_shares_test,
+        get_shares_test,
         get_share_test,
 
         list_storages_test,
@@ -69,7 +73,9 @@ all() ->
         remove_provider_test,
 
         list_effective_providers_test,
-        get_eff_provider_test
+        get_eff_provider_test,
+
+        update_support_parameters_test
     ]).
 
 
@@ -102,7 +108,7 @@ create_test(Config) ->
             method = post,
             path = <<"/spaces">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 BaseURL = ?URL(Config, [<<"/spaces/">>]),
                 [SpaceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(SpaceId)
@@ -132,6 +138,41 @@ create_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+create_with_custom_id_generator_seed_test(Config) ->
+    SpaceCount = 100,
+    OzNodes = ?config(oz_worker_nodes, Config),
+    IdGeneratorSeed = ?RAND_STR(),
+    Data = #{
+        <<"name">> => ?RAND_STR(),
+        <<"idGeneratorSeed">> => IdGeneratorSeed
+    },
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, U4} = oz_test_utils:create_user(Config),
+    Auths = [?USER(U1), ?USER(U2), ?USER(U3), ?USER(U4), ?ROOT],
+
+    Results = lists_utils:pmap(fun(_) ->
+        case ?RAND_ELEMENT(Auths) of
+            ?ROOT ->
+                rpc:call(?RAND_ELEMENT(OzNodes), space_logic, create, [?ROOT, Data]);
+            ?USER(UserId) ->
+                rpc:call(?RAND_ELEMENT(OzNodes), user_logic, create_space, [?USER(UserId), UserId, Data])
+        end
+    end, lists:seq(1, SpaceCount)),
+
+    {ok, {ok, SpaceId}} = lists_utils:find(fun
+        ({ok, _}) -> true;
+        (_) -> false
+    end, Results),
+
+    ?assertEqual(SpaceId, datastore_key:new_from_digest([<<"customSpaceIdGeneratorSeed">>, IdGeneratorSeed])),
+
+    ErrorResults = lists:delete({ok, SpaceId}, Results),
+    ?assertEqual(lists:duplicate(SpaceCount - 1, ?ERROR_ALREADY_EXISTS), ErrorResults).
 
 
 list_test(Config) ->
@@ -172,7 +213,7 @@ list_test(Config) ->
             args = [auth],
             expected_result = ?OK_LIST(ExpSpaces)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -231,9 +272,16 @@ get_test(Config) ->
     {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1, SupportSize),
 
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
+
+    ozt_providers:simulate_version(P1, ?LINE_21_02),
+    ozt_spaces:set_support_parameters(S1, P1, ozt_spaces:random_support_parameters()),
+    ExpSupportParametersRegistry = #support_parameters_registry{
+        registry = #{
+            % the parameters may have been tweaked during update, fetch them to ensure latest value
+            P1 => ozt_spaces:get_support_parameters(S1, P1)
+        }
+    },
 
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
@@ -262,6 +310,7 @@ get_test(Config) ->
                     harvesters = [],
                     eff_users = EffUsers, eff_groups = #{},
                     eff_providers = EffProviders,
+                    support_parameters_registry = SupportParametersRegistry,
                     top_down_dirty = false, bottom_up_dirty = false
                 }) ->
                     ?assertEqual(?SPACE_NAME1, Name),
@@ -276,6 +325,7 @@ get_test(Config) ->
                         U2 => {[?SPACE_VIEW], [{od_space, <<"self">>}]}
                     }),
                     ?assertEqual(Storages, #{St1 => SupportSize}),
+                    ?assertEqual(SupportParametersRegistry, ExpSupportParametersRegistry),
                     ?assertEqual(EffProviders, #{P1 => {SupportSize, [{od_storage, St1}]}})
                 end
             )
@@ -301,6 +351,9 @@ get_test(Config) ->
                     U2 => [<<"space_view">>]
                 },
                 <<"effectiveGroups">> => #{},
+                <<"supportParametersRegistry">> => jsonable_record:to_json(
+                    ExpSupportParametersRegistry, support_parameters_registry
+                ),
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(S1, Id)
@@ -311,7 +364,11 @@ get_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
 
     % Get and check protected data
-    SpaceData = #{<<"name">> => ?SPACE_NAME1, <<"providers">> => #{P1 => SupportSize}},
+    SpaceData = #{
+        <<"name">> => ?SPACE_NAME1,
+        <<"providers">> => #{P1 => SupportSize},
+        <<"supportParametersRegistry">> => ExpSupportParametersRegistry
+    },
     GetProtectedDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -482,7 +539,7 @@ delete_test(Config) ->
     )).
 
 
-list_shares_test(Config) ->
+get_shares_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
@@ -523,7 +580,7 @@ list_shares_test(Config) ->
             args = [auth, S1],
             expected_result = ?OK_LIST(ExpShares)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -634,7 +691,7 @@ list_storages_test(Config) ->
             args = [auth, S1],
             expected_result = ?OK_LIST(ExpStorages)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -688,7 +745,7 @@ create_space_support_token(Config) ->
             args = [auth, S1],
             expected_result = ?OK_TERM(VerifyFun)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -741,7 +798,7 @@ remove_storage_test(Config) ->
             args = [auth, S1, storageId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
@@ -807,7 +864,7 @@ remove_provider_test(Config) ->
             args = [auth, S1, P1],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
@@ -862,7 +919,7 @@ list_effective_providers_test(Config) ->
             args = [auth, S1],
             expected_result = ?OK_LIST(ExpProviders)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -952,17 +1009,210 @@ get_eff_provider_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
+
+update_support_parameters_test(Config) ->
+    ClusterMemberWithPrivs = ozt_users:create(),
+    ClusterMemberWithoutPrivs = ozt_users:create(),
+    SpaceMemberWithPrivs = ozt_users:create(),
+    SpaceMemberWithoutPrivs = ozt_users:create(),
+    UnrelatedUser = ozt_users:create(),
+
+    SubjectProvider = ozt_providers:create_for_admin_user(ClusterMemberWithPrivs),
+    ozt_clusters:add_user(SubjectProvider, ClusterMemberWithoutPrivs, privileges:cluster_admin() -- [?CLUSTER_UPDATE]),
+    OtherProvider = ozt_providers:create(),
+
+    SubjectSpace = ozt_users:create_space_for(SpaceMemberWithPrivs),
+    ozt_spaces:add_user(SubjectSpace, SpaceMemberWithoutPrivs, privileges:space_admin() -- [?SPACE_UPDATE]),
+    ozt_providers:support_space(SubjectProvider, SubjectSpace),
+    ozt_providers:support_space(OtherProvider, SubjectSpace),
+
+    ozt_providers:simulate_version(SubjectProvider, ?LINE_21_02),
+    ozt_spaces:set_support_parameters(SubjectSpace, SubjectProvider, ozt_spaces:random_support_parameters()),
+
+    EnvSetUpFun = fun() ->
+        #{
+            previous_support_parameters => ozt_spaces:get_support_parameters(SubjectSpace, SubjectProvider)
+        }
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            % the invalid clients are tested first, the correct clients are tested further on
+            correct = [],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, ClusterMemberWithoutPrivs},
+                {user, SpaceMemberWithoutPrivs},
+                {user, UnrelatedUser},
+                {provider, OtherProvider}
+            ]
+        },
+        rest_spec = RestSpec = #rest_spec{
+            method = patch,
+            path = [
+                <<"/spaces/">>, SubjectSpace, <<"/providers/">>, SubjectProvider, <<"/support_parameters">>
+            ],
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
+        logic_spec = LogicSpec = #logic_spec{
+            module = space_logic,
+            function = update_support_parameters,
+            args = [auth, SubjectSpace, SubjectProvider, data],
+            expected_result = ?OK_RES
+        },
+        gs_spec = GsSpec = #gs_spec{
+            operation = update,
+            gri = #gri{type = od_space, id = SubjectSpace, aspect = {support_parameters, SubjectProvider}},
+            expected_result = ?OK_RES
+        },
+        data_spec = DataSpec = #data_spec{
+            at_least_one = [<<"accountingEnabled">>, <<"dirStatsServiceEnabled">>, <<"dirStatsServiceStatus">>],
+            correct_values = #{
+                <<"accountingEnabled">> => [true, false],
+                <<"dirStatsServiceEnabled">> => [true, false],
+                <<"dirStatsServiceStatus">> => [atom_to_binary(S) || S <- support_parameters:all_dir_stats_service_statuses()]
+            },
+            bad_values = BadValues = [
+                {<<"accountingEnabled">>, atom, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"accountingEnabled">>, [true, false, null])},
+                {<<"dirStatsServiceEnabled">>, [1, 2, 3], ?ERROR_BAD_VALUE_ATOM(<<"dirStatsServiceEnabled">>)},
+                {<<"dirStatsServiceStatus">>, <<"text">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(
+                    <<"dirStatsServiceStatus">>, [null] ++ [atom_to_binary(S) || S <- support_parameters:all_dir_stats_service_statuses()]
+                )}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, undefined)),
+
+    CorrectClients = [
+        root,
+        {admin, [?OZ_SPACES_UPDATE]},
+        {user, ClusterMemberWithPrivs},
+        {user, SpaceMemberWithPrivs},
+        {provider, SubjectProvider}
+    ],
+    ShouldBeAuthorized = fun(Client, Data) ->
+        case {Client, Data} of
+            {root, _} -> true;
+            {{admin, [?OZ_SPACES_UPDATE]}, #{<<"dirStatsServiceStatus">> := V}} when V /= null -> false;
+            {{admin, [?OZ_SPACES_UPDATE]}, _} -> true;
+            {{user, ClusterMemberWithPrivs}, #{<<"dirStatsServiceStatus">> := V}} when V /= null -> false;
+            {{user, ClusterMemberWithPrivs}, _} -> true;
+            {{user, SpaceMemberWithPrivs}, #{<<"accountingEnabled">> := V}} when V /= null -> false;
+            {{user, SpaceMemberWithPrivs}, #{<<"dirStatsServiceStatus">> := V}} when V /= null -> false;
+            {{user, SpaceMemberWithPrivs}, _} -> true;
+            {{provider, SubjectProvider}, _} -> true
+        end
+    end,
+    InferExpectedOutcome = fun(Client, PreviousSupportParameters, Data, <<MajorProviderVersion:2/binary, _/binary>>) ->
+        case ShouldBeAuthorized(Client, Data) of
+            false ->
+                {failure, ?ERROR_FORBIDDEN};
+            true ->
+                case binary_to_integer(MajorProviderVersion) >= 21 of
+                    true ->
+                        FinalAccountingEnabled = maps:get(
+                            <<"accountingEnabled">>, Data,
+                            PreviousSupportParameters#support_parameters.accounting_enabled
+                        ),
+                        FinalDirStatsServiceEnabled = maps:get(
+                            <<"dirStatsServiceEnabled">>, Data,
+                            PreviousSupportParameters#support_parameters.dir_stats_service_enabled
+                        ),
+                        case FinalAccountingEnabled =:= true andalso FinalDirStatsServiceEnabled =:= false of
+                            true ->
+                                {failure, ?ERROR_BAD_DATA(
+                                    <<"dirStatsServiceEnabled">>,
+                                    <<"Dir stats service must be enabled if accounting is enabled">>
+                                )};
+
+                            false ->
+                                success
+                        end;
+                    false ->
+                        {failure, ?ERROR_NOT_SUPPORTED}
+                end
+        end
+    end,
+
+    lists:foreach(fun(ProviderVersion) ->
+        ozt_providers:simulate_version(SubjectProvider, ProviderVersion),
+        lists:foreach(fun(CorrectClient) ->
+            VerifyEndFun = fun(ShouldSucceed, #{previous_support_parameters := PreviousSupportParameters}, Data) ->
+                ActualSupportParameters = ozt_spaces:get_support_parameters(SubjectSpace, SubjectProvider),
+                ExpectedOutcome = InferExpectedOutcome(CorrectClient, PreviousSupportParameters, Data, ProviderVersion),
+                ExpectedSupportParameters = case {ExpectedOutcome, ShouldSucceed} of
+                    {{failure, _}, _} ->
+                        PreviousSupportParameters;
+                    {_, false} ->
+                        PreviousSupportParameters;
+                    {success, true} ->
+                        ozt_spaces:expected_tweaked_support_parameters(PreviousSupportParameters#support_parameters{
+                            accounting_enabled = maps:get(
+                                <<"accountingEnabled">>, Data, PreviousSupportParameters#support_parameters.accounting_enabled
+                            ),
+                            dir_stats_service_enabled = maps:get(
+                                <<"dirStatsServiceEnabled">>, Data, PreviousSupportParameters#support_parameters.dir_stats_service_enabled
+                            ),
+                            dir_stats_service_status = case maps:find(<<"dirStatsServiceStatus">>, Data) of
+                                {ok, Value} -> binary_to_atom(Value);
+                                error -> PreviousSupportParameters#support_parameters.dir_stats_service_status
+                            end
+                        })
+                end,
+                ?assertEqual(ActualSupportParameters, ExpectedSupportParameters)
+            end,
+
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec#api_test_spec{
+                client_spec = #client_spec{
+                    correct = [CorrectClient]
+                },
+                rest_spec = RestSpec#rest_spec{
+                    expected_code = ?OK_ENV(fun(#{previous_support_parameters := PreviousSupportParameters}, Data) ->
+                        case InferExpectedOutcome(CorrectClient, PreviousSupportParameters, Data, ProviderVersion) of
+                            success -> ?HTTP_204_NO_CONTENT;
+                            {failure, Error} -> errors:to_http_code(Error)
+                        end
+                    end)
+                },
+                logic_spec = LogicSpec#logic_spec{
+                    expected_result = ?OK_ENV(fun(#{previous_support_parameters := PreviousSupportParameters}, Data) ->
+                        case InferExpectedOutcome(CorrectClient, PreviousSupportParameters, Data, ProviderVersion) of
+                            success -> ?OK_RES;
+                            {failure, Error} -> ?ERROR_REASON(Error)
+                        end
+                    end)
+                },
+                gs_spec = GsSpec#gs_spec{
+                    expected_result = ?OK_ENV(fun(#{previous_support_parameters := PreviousSupportParameters}, Data) ->
+                        case InferExpectedOutcome(CorrectClient, PreviousSupportParameters, Data, ProviderVersion) of
+                            success -> ?OK_RES;
+                            {failure, Error} -> ?ERROR_REASON(Error)
+                        end
+                    end)
+                },
+                data_spec = DataSpec#data_spec{
+                    bad_values = case CorrectClient of
+                        % test bad values only for root, for other clients authorization depends on the values and
+                        % it is impossible to handle these combinations using the test framework
+                        root -> BadValues;
+                        _ -> []
+                    end
+                }
+            }, EnvSetUpFun, undefined, VerifyEndFun))
+        end, CorrectClients)
+    end, [?LINE_19_02, ?LINE_20_02, ?LINE_21_02]).
+
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

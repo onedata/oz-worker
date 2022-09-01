@@ -103,6 +103,7 @@ operation_supported(get, storages, private) -> true;
 operation_supported(update, instance, private) -> true;
 operation_supported(update, {user_privileges, _}, private) -> true;
 operation_supported(update, {group_privileges, _}, private) -> true;
+operation_supported(update, {support_parameters, _}, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {owner, _}, private) -> true;
@@ -152,13 +153,26 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     #{<<"name">> := Name} = Req#el_req.data,
-    {ok, #document{key = SpaceId}} = od_space:create(#document{
+    ProposedSpaceId = case maps:find(<<"idGeneratorSeed">>, Req#el_req.data) of
+        {ok, IdGeneratorSeed} ->
+            datastore_key:new_from_digest([<<"customSpaceIdGeneratorSeed">>, IdGeneratorSeed]);
+        error ->
+            undefined
+    end,
+    SpaceDoc = #document{
+        key = ProposedSpaceId,
         value = #od_space{
             name = Name,
             creator = aai:normalize_subject(Auth#auth.subject),
             creation_time = global_clock:timestamp_seconds()
         }
-    }),
+    },
+    SpaceId = case od_space:create(SpaceDoc) of
+        {ok, #document{key = Key}} ->
+            Key;
+        {error, already_exists} ->
+            throw(?ERROR_ALREADY_EXISTS)
+    end,
     case Req#el_req.auth_hint of
         ?AS_USER(UserId) ->
             entity_graph:add_relation(
@@ -244,9 +258,7 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_group_token
 
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = space_support_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 20.02.*
-    token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(
-        ?SUPPORT_SPACE, SpaceId, support_parameters:build(global, eager)
-    ));
+    token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId));
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
     % this is run for the entity that was fetched at the beginning of the request processing
@@ -384,12 +396,14 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{
         name = Name,
         shares = Shares,
+        support_parameters_registry = SupportParametersRegistry,
         creation_time = CreationTime,
         creator = Creator
     } = Space,
     {ok, #{
         <<"name">> => Name,
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
+        <<"supportParametersRegistry">> => SupportParametersRegistry,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator,
         <<"sharesCount">> => length(Shares)
@@ -459,7 +473,14 @@ update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {group_privileges, GroupI
         od_group, GroupId,
         od_space, SpaceId,
         {PrivsToGrant, PrivsToRevoke}
-    ).
+    );
+
+update(#el_req{gri = #gri{id = SpaceId, aspect = {support_parameters, ProviderId}}, data = Data}) ->
+    {ok, ProviderVersion} = cluster_logic:get_worker_release_version(?ROOT, ProviderId),
+    onedata:compare_release_line(ProviderVersion, ?LINE_21_02) =:= lower andalso throw(?ERROR_NOT_SUPPORTED),
+
+    SupportParametersOverlay = jsonable_record:from_json(Data, support_parameters),
+    ?extract_ok(od_space:update_support_parameters(SpaceId, ProviderId, SupportParametersOverlay)).
 
 
 %%--------------------------------------------------------------------
@@ -780,6 +801,31 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = {user_privileges
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {group_privileges, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_SET_PRIVILEGES);
 
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = {support_parameters, SubjectProviderId}}, data = Data}, Space) ->
+    SubjectClusterId = SubjectProviderId,
+    maps_utils:all(fun(Parameter, Value) ->
+        case {Parameter, Value, Req#el_req.auth} of
+            {_, null, _} ->
+                true;
+
+            {<<"accountingEnabled">>, _, ?USER(ClientUserId)} ->
+                cluster_logic:has_eff_privilege(SubjectClusterId, ClientUserId, ?CLUSTER_UPDATE);
+            {<<"accountingEnabled">>, _, ?PROVIDER(ClientProviderId)} ->
+                ClientProviderId =:= SubjectProviderId andalso auth_by_support(Req, Space);
+
+            {<<"dirStatsServiceEnabled">>, _, ?USER(ClientUserId)} ->
+                auth_by_privilege(Req, Space, ?SPACE_UPDATE) orelse
+                    cluster_logic:has_eff_privilege(SubjectClusterId, ClientUserId, ?CLUSTER_UPDATE);
+            {<<"dirStatsServiceEnabled">>, _, ?PROVIDER(ClientProviderId)} ->
+                ClientProviderId =:= SubjectProviderId andalso auth_by_support(Req, Space);
+
+            {<<"dirStatsServiceStatus">>, _, ?USER(_)} ->
+                false;
+            {<<"dirStatsServiceStatus">>, _, ?PROVIDER(ClientProviderId)} ->
+                ClientProviderId =:= SubjectProviderId andalso auth_by_support(Req, Space)
+        end
+    end, Data);
+
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_DELETE);
 
@@ -904,6 +950,12 @@ required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = {user_
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = {group_privileges, _}}}) ->
     [?OZ_SPACES_SET_PRIVILEGES];
 
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = {support_parameters, _}}, data = Data}) ->
+    case maps:is_key(<<"dirStatsServiceStatus">>, Data) of
+        true -> forbidden;
+        false -> [?OZ_SPACES_UPDATE]
+    end;
+
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance}}) ->
     [?OZ_SPACES_DELETE];
 
@@ -924,6 +976,7 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {harve
 required_admin_privileges(_) ->
     forbidden.
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns validity verificators for given request.
@@ -933,10 +986,13 @@ required_admin_privileges(_) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+-spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"name">> => {binary, name}
+    },
+    optional => #{
+        <<"idGeneratorSeed">> => {binary, any}
     }
 };
 
@@ -1022,7 +1078,16 @@ validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}})
     };
 
 validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}}) ->
-    validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}}).
+    validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}});
+
+validate(#el_req{operation = update, gri = #gri{aspect = {support_parameters, _}}}) ->
+    #{
+        at_least_one => #{
+            <<"accountingEnabled">> => {atom, [true, false, null]},
+            <<"dirStatsServiceEnabled">> => {atom, [true, false, null]},
+            <<"dirStatsServiceStatus">> => {any, [null] ++ [atom_to_binary(S) || S <- support_parameters:all_dir_stats_service_statuses()]}
+        }
+    }.
 
 %%%===================================================================
 %%% Internal functions

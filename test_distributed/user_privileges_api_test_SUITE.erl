@@ -97,7 +97,7 @@ get_oz_privileges_test(Config) ->
             args = [auth, User],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
@@ -156,7 +156,7 @@ update_oz_privileges_test(Config) ->
             args = [auth, User, data],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(update_privileges, [
@@ -232,7 +232,7 @@ delete_oz_privileges_test(Config) ->
             args = [auth, User],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(delete_privileges, [
@@ -303,7 +303,7 @@ get_eff_oz_privileges_test(Config) ->
             args = [auth, User],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
@@ -363,10 +363,10 @@ set_oz_privs_fun(Config, User, User2) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().

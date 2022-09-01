@@ -1079,7 +1079,7 @@ has_group(Config, UserId, IdP, RawEntitlement, RelationType) ->
             privileges = Privileges
         } = expected_parsing_result(Config, IdP, RawEntitlement),
         #idp_group{name = Name, type = Type} = lists:last(Path),
-        NormalizedName = entity_logic:normalize_name(Name, undefined),
+        NormalizedName = entity_logic_sanitizer:normalize_name(Name, undefined),
         GroupId = idp_entitlement_to_group_id(IdPEntitlement),
 
         UserGroups = get_groups(Config, UserId, RelationType),
@@ -1130,8 +1130,8 @@ check_group_structure(Config, IdP, ParentRawEntitlement, ChildRawEntitlement, Re
         } = expected_parsing_result(Config, IdP, ChildRawEntitlement),
         #idp_group{name = ParentName, type = ParentType} = lists:last(ParentPath),
         #idp_group{name = ChildName, type = ChildType} = lists:last(ChildPath),
-        NormalizedParentName = entity_logic:normalize_name(ParentName, undefined),
-        NormalizedChildName = entity_logic:normalize_name(ChildName, undefined),
+        NormalizedParentName = entity_logic_sanitizer:normalize_name(ParentName, undefined),
+        NormalizedChildName = entity_logic_sanitizer:normalize_name(ChildName, undefined),
         ParentGroupId = idp_entitlement_to_group_id(ParentEntitlement),
         ChildGroupId = idp_entitlement_to_group_id(ChildEntitlement),
         % Check if names and types of groups are as expected
@@ -1265,7 +1265,7 @@ overwrite_config(IdP, Enabled, Parser, Opts) ->
 
     % Clear the admin group cache on all nodes, otherwise testcases might depend on each other
     OzNodes = ?config(oz_worker_nodes, Config),
-    rpc:multicall(OzNodes, node_cache, clear, [{admin_group, {IdP, str_utils:to_binary(AdminGroup)}}]),
+    utils:rpc_multicall(OzNodes, node_cache, clear, [{admin_group, {IdP, str_utils:to_binary(AdminGroup)}}]),
     ok.
 
 
@@ -1319,7 +1319,7 @@ parser_config(?CUSTOM_ENTITLEMENT_PARSER) -> #{
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 init_per_testcase(_, Config) ->
@@ -1337,7 +1337,7 @@ end_per_testcase(_, Config) ->
     ok.
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 mock_custom_entitlement_parser(Config) ->

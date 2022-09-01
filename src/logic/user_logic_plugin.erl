@@ -106,6 +106,9 @@ operation_supported(get, eff_handles, private) -> true;
 operation_supported(get, clusters, private) -> true;
 operation_supported(get, eff_clusters, private) -> true;
 
+operation_supported(get, atm_inventories, private) -> true;
+operation_supported(get, eff_atm_inventories, private) -> true;
+
 operation_supported(update, instance, private) -> true;
 operation_supported(update, password, private) -> true;
 operation_supported(update, basic_auth, private) -> true;
@@ -125,6 +128,7 @@ operation_supported(delete, {handle_service, _}, private) -> true;
 operation_supported(delete, {handle, _}, private) -> true;
 operation_supported(delete, {harvester, _}, private) -> true;
 operation_supported(delete, {cluster, _}, private) -> true;
+operation_supported(delete, {atm_inventory, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -148,6 +152,7 @@ is_subscribable(eff_spaces, private) -> true;
 is_subscribable(eff_providers, private) -> true;
 is_subscribable(eff_harvesters, private) -> true;
 is_subscribable(eff_clusters, private) -> true;
+is_subscribable(eff_atm_inventories, private) -> true;
 is_subscribable(_, _) -> false.
 
 %%--------------------------------------------------------------------
@@ -339,7 +344,12 @@ get(#el_req{gri = #gri{aspect = eff_harvesters}}, User) ->
 get(#el_req{gri = #gri{aspect = clusters}}, User) ->
     {ok, entity_graph:get_relations(direct, top_down, od_cluster, User)};
 get(#el_req{gri = #gri{aspect = eff_clusters}}, User) ->
-    {ok, entity_graph:get_relations(effective, top_down, od_cluster, User)}.
+    {ok, entity_graph:get_relations(effective, top_down, od_cluster, User)};
+
+get(#el_req{gri = #gri{aspect = atm_inventories}}, User) ->
+    {ok, entity_graph:get_relations(direct, top_down, od_atm_inventory, User)};
+get(#el_req{gri = #gri{aspect = eff_atm_inventories}}, User) ->
+    {ok, entity_graph:get_relations(effective, top_down, od_atm_inventory, User)}.
 
 
 %%--------------------------------------------------------------------
@@ -487,6 +497,12 @@ delete(#el_req{gri = #gri{id = UserId, aspect = {cluster, ClusterId}}}) ->
     entity_graph:remove_relation(
         od_user, UserId,
         od_cluster, ClusterId
+    );
+
+delete(#el_req{gri = #gri{id = UserId, aspect = {atm_inventory, AtmInventoryId}}}) ->
+    entity_graph:remove_relation(
+        od_user, UserId,
+        od_atm_inventory, AtmInventoryId
     ).
 
 
@@ -537,6 +553,11 @@ exists(Req = #el_req{gri = GRI = #gri{id = UserId, aspect = instance, scope = sh
                 {true, {Cluster, _}} = cluster_logic_plugin:fetch_entity(#gri{id = ClusterId}),
                 Cluster#od_cluster.creator =:= ?SUB(user, UserId)
             end;
+        ?THROUGH_ATM_INVENTORY(AtmInventoryId) ->
+            user_logic:has_eff_atm_inventory(User, AtmInventoryId) orelse begin
+                {true, {AtmInventory, _}} = atm_inventory_logic_plugin:fetch_entity(#gri{id = AtmInventoryId}),
+                AtmInventory#od_atm_inventory.creator =:= ?SUB(user, UserId)
+            end;
         _ ->
             exists(Req#el_req{gri = GRI#gri{scope = protected}}, User)
     end;
@@ -569,6 +590,9 @@ exists(#el_req{gri = #gri{aspect = {harvester, HarvesterId}}}, User) ->
 
 exists(#el_req{gri = #gri{aspect = {cluster, ClusterId}}}, User) ->
     entity_graph:has_relation(direct, top_down, od_cluster, ClusterId, User);
+
+exists(#el_req{gri = #gri{aspect = {atm_inventory, AtmInventoryId}}}, User) ->
+    entity_graph:has_relation(direct, top_down, od_atm_inventory, AtmInventoryId, User);
 
 % All other aspects exist if user record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_user{}) ->
@@ -689,6 +713,15 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
                     Cluster#od_cluster.creator =:= ?SUB(user, UserId)
             end;
 
+        {?USER(ClientUserId), ?THROUGH_ATM_INVENTORY(AtmInventoryId)} ->
+            {true, {AtmInventory, _}} = atm_inventory_logic_plugin:fetch_entity(#gri{id = AtmInventoryId}),
+            % UserId's membership in inventory is checked in 'exists'
+            atm_inventory_logic:has_eff_privilege(AtmInventory, ClientUserId, ?ATM_INVENTORY_VIEW) orelse begin
+            % Members of a inventory can see the shared data of its creator
+                atm_inventory_logic:has_eff_user(AtmInventory, ClientUserId) andalso
+                    AtmInventory#od_atm_inventory.creator =:= ?SUB(user, UserId)
+            end;
+
         {?PROVIDER(ProviderId), ?THROUGH_CLUSTER(ClusterId)} ->
             cluster_logic:is_provider_cluster(ClusterId, ProviderId);
 
@@ -755,6 +788,10 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = clusters}
     [?OZ_USERS_LIST_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_clusters}}) ->
     [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = atm_inventories}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_atm_inventories}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
     [?OZ_USERS_UPDATE];
@@ -782,6 +819,8 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {harve
     [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_HARVESTERS_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {cluster, _}}}) ->
     [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_CLUSTERS_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {atm_inventory, _}}}) ->
+    [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_ATM_INVENTORIES_REMOVE_RELATIONSHIPS];
 
 required_admin_privileges(_) ->
     forbidden.
@@ -796,7 +835,7 @@ required_admin_privileges(_) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+-spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}) ->
     case maps:is_key(<<"password">>, Data) of
         true -> #{

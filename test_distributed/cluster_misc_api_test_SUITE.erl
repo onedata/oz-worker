@@ -103,7 +103,7 @@ list_test(Config) ->
             args = [auth],
             expected_result = ?OK_LIST(ExpClusters)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -250,7 +250,7 @@ get_private_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectC
                 end
             )
         }
-        % @todo gs
+        % @TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -288,7 +288,7 @@ get_protected_data_test_base(Config, ClusterId, ClusterType, Creator, CorrectCli
             args = [auth, ClusterId],
             expected_result = api_test_expect:protected_cluster(logic, ClusterId, ClusterType, Creator)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -323,7 +323,7 @@ get_public_data_test_base(Config, ClusterId, ClusterType, CorrectClients, Forbid
             args = [auth, ClusterId],
             expected_result = api_test_expect:public_cluster(logic, ClusterId, ClusterType)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -552,11 +552,11 @@ update_version_info_test_base(Config, ClusterType, ServiceType) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

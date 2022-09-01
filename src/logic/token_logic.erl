@@ -419,10 +419,12 @@ migrate_user_tokens() ->
         lists:foldl(fun(Serialized, Counter) ->
             try
                 migrate_user_token(UserId, Serialized, Counter)
-            catch Type:Message ->
-                ?warning_stacktrace("Failed to migrate user token, UserId: ~s, Token: ~s... - ~p:~p", [
-                    UserId, binary:part(Serialized, 0, 30), Type, Message
-                ])
+            catch Type:Message:Stacktrace ->
+                ?warning_stacktrace(
+                    "Failed to migrate user token, UserId: ~s, Token: ~s... - ~p:~p",
+                    [UserId, binary:part(Serialized, 0, 30), Type, Message],
+                    Stacktrace
+                )
             end
         end, 1, ClientTokens)
     end, UserDocs).
@@ -435,10 +437,12 @@ migrate_provider_root_tokens() ->
     lists:foreach(fun(#document{key = ProviderId, value = #od_provider{root_token = RootTokenId}}) ->
         try
             migrate_provider_root_token(ProviderId, RootTokenId)
-        catch Type:Message ->
-            ?warning_stacktrace("Failed to migrate provider root token, ProviderId: ~s, Id: ~s - ~p:~p", [
-                ProviderId, RootTokenId, Type, Message
-            ])
+        catch Type:Message:Stacktrace ->
+            ?warning_stacktrace(
+                "Failed to migrate provider root token, ProviderId: ~s, Id: ~s - ~p:~p",
+                [ProviderId, RootTokenId, Type, Message],
+                Stacktrace
+            )
         end
     end, ProviderDocs).
 
@@ -528,7 +532,13 @@ gen_invite_token_name(?GROUP_JOIN_HARVESTER, HarvesterId) ->
     format_invite_token_name(<<"group invite to harvester">>, Name);
 gen_invite_token_name(?SPACE_JOIN_HARVESTER, HarvesterId) ->
     {ok, Name} = harvester_logic:get_name(?ROOT, HarvesterId),
-    format_invite_token_name(<<"space invite to harvester">>, Name).
+    format_invite_token_name(<<"space invite to harvester">>, Name);
+gen_invite_token_name(?USER_JOIN_ATM_INVENTORY, AtmInventoryId) ->
+    {ok, Name} = atm_inventory_logic:get_name(?ROOT, AtmInventoryId),
+    format_invite_token_name(<<"user invite to atm inventory">>, Name);
+gen_invite_token_name(?GROUP_JOIN_ATM_INVENTORY, AtmInventoryId) ->
+    {ok, Name} = atm_inventory_logic:get_name(?ROOT, AtmInventoryId),
+    format_invite_token_name(<<"group invite to atm inventory">>, Name).
 
 
 %% @private

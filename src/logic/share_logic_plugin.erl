@@ -24,7 +24,7 @@
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
--define(DESCRIPTION_SIZE_LIMIT, 100000).
+-define(SHARE_DESCRIPTION_SIZE_LIMIT, 100000).
 
 %%%===================================================================
 %%% API
@@ -140,12 +140,14 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Share) ->
     {ok, Share};
 get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
     #od_share{
+        space = SpaceId,
         name = Name, description = Description,
         handle = HandleId,
         root_file = RootFileId, file_type = FileType,
         creation_time = CreationTime
     } = Share,
     {ok, #{
+        <<"spaceId">> => SpaceId,
         <<"name">> => Name, <<"description">> => Description,
         <<"rootFileId">> => RootFileId,
         <<"fileType">> => FileType,
@@ -269,7 +271,7 @@ required_admin_privileges(_) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+-spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"shareId">> => {binary, {not_exists, fun(Value) ->
@@ -283,14 +285,14 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     },
     optional => #{
         <<"fileType">> => {atom, [file, dir]},
-        <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}}
+        <<"description">> => {binary, {size_limit, ?SHARE_DESCRIPTION_SIZE_LIMIT}}
     }
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"description">> => {binary, {size_limit, ?DESCRIPTION_SIZE_LIMIT}}
+        <<"description">> => {binary, {size_limit, ?SHARE_DESCRIPTION_SIZE_LIMIT}}
     }
 }.
 

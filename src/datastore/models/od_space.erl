@@ -14,9 +14,11 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([update_support_parameters_registry/2, update_support_parameters/3, clear_support_parameters/2]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -80,6 +82,7 @@ exists(SpaceId) ->
 update(SpaceId, Diff) ->
     datastore_model:update(?CTX, SpaceId, Diff).
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Deletes space by ID.
@@ -100,6 +103,39 @@ force_delete(SpaceId) ->
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
+
+-spec update_support_parameters_registry(
+    id(),
+    fun((support_parameters_registry:record()) -> {ok, support_parameters_registry:record()} | errors:error())
+) ->
+    {ok, doc()} | {error, term()}.
+update_support_parameters_registry(SpaceId, Diff) ->
+    update(SpaceId, fun(Space = #od_space{support_parameters_registry = PreviousRegistry}) ->
+        case Diff(PreviousRegistry) of
+            {error, _} = Error ->
+                Error;
+            {ok, NewRegistry} ->
+                {ok, Space#od_space{support_parameters_registry = NewRegistry}}
+        end
+    end).
+
+
+-spec update_support_parameters(id(), od_provider:id(), support_parameters:record()) ->
+    {ok, doc()} | {error, term()}.
+update_support_parameters(SpaceId, ProviderId, SupportParametersOverlay) ->
+    update_support_parameters_registry(SpaceId, fun(PreviousRegistry) ->
+        support_parameters_registry:update_entry(ProviderId, SupportParametersOverlay, PreviousRegistry)
+    end).
+
+
+-spec clear_support_parameters(id(), od_provider:id()) ->
+    {ok, doc()} | {error, term()}.
+clear_support_parameters(SpaceId, ProviderId) ->
+    update_support_parameters_registry(SpaceId, fun(PreviousRegistry) ->
+        {ok, support_parameters_registry:remove_entry(ProviderId, PreviousRegistry)}
+    end).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -130,7 +166,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    9.
+    14.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -254,7 +290,7 @@ get_record_struct(7) ->
     ]};
 get_record_struct(8) ->
     % the structure does not change, but privileges are updated
-    % (new privilege was added space_register_files)
+    % (new privilege was added: space_register_files)
     {record, [
         {name, string},
 
@@ -292,6 +328,44 @@ get_record_struct(9) ->
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
         {eff_providers, #{string => {integer, [{atom, string}]}}},
         {eff_harvesters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(10) ->
+    % The structure does not change, but privileges concerning datasets were added.
+    get_record_struct(9);
+get_record_struct(11) ->
+    % The structure does not change, but privileges concerning archives were added.
+    get_record_struct(10);
+get_record_struct(12) ->
+    % The structure does not change, but privileges concerning workflow execution were added.
+    get_record_struct(11);
+get_record_struct(13) ->
+    % The structure does not change, but privileges concerning workflow execution were added.
+    get_record_struct(12);
+get_record_struct(14) ->
+    % new field - support_parameters_registry
+    {record, [
+        {name, string},
+
+        {owners, [string]},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {storages, #{string => integer}},
+        {shares, [string]},
+        {harvesters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => {integer, [{atom, string}]}}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {support_parameters_registry, {custom, string, {persistent_record, encode, decode, support_parameters_registry}}},
 
         {creation_time, integer},
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
@@ -623,12 +697,19 @@ upgrade_record(7, Space) ->
         _BottomUpDirty
     } = Space,
 
-    PreviousManagerPrivs = privileges:space_manager() -- [?SPACE_REGISTER_FILES],
+    PrevManagerPrivs = privileges:from_list([
+        ?SPACE_VIEW, ?SPACE_READ_DATA, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS,
+        ?SPACE_VIEW_PRIVILEGES, ?SPACE_ADD_USER, ?SPACE_REMOVE_USER, ?SPACE_ADD_GROUP,
+        ?SPACE_REMOVE_GROUP, ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+        ?SPACE_MANAGE_SHARES, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS,
+        ?SPACE_VIEW_STATISTICS, ?SPACE_VIEW_CHANGES_STREAM,
+        ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS
+    ]),
     UpgradePrivileges = fun(Privileges) ->
         % the ?SPACE_REGISTER_FILES is granted to all members that had at least
         % manager privileges before the upgrade
-        case lists_utils:intersect(PreviousManagerPrivs, Privileges) of
-            PreviousManagerPrivs -> privileges:from_list([?SPACE_REGISTER_FILES | Privileges]);
+        case lists_utils:intersect(PrevManagerPrivs, Privileges) of
+            PrevManagerPrivs -> privileges:from_list([?SPACE_REGISTER_FILES | Privileges]);
             _ -> Privileges
         end
     end,
@@ -706,25 +787,392 @@ upgrade_record(8, Space) ->
         end
     end, SortedByPrivilegeCount),
 
-    {9, #od_space{
-        name = Name,
+    {9, {od_space,
+        Name,
 
-        owners = Owners,
+        Owners,
 
-        users = Users,
-        groups = Groups,
-        storages = Storages,
-        shares = Shares,
-        harvesters = Harvesters,
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
 
-        eff_users = EffUsers,
-        eff_groups = EffGroups,
-        eff_providers = EffProviders,
-        eff_harvesters = EffHarvesters,
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
 
-        creation_time = CreationTime,
-        creator = Creator,
+        CreationTime,
+        Creator,
 
-        top_down_dirty = TopDownDirty,
-        bottom_up_dirty = BottomUpDirty
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(9, Space) ->
+    {
+        od_space,
+        Name,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Space,
+
+    PreviousManagerPrivs = privileges:from_list([
+        ?SPACE_VIEW, ?SPACE_READ_DATA, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS,
+        ?SPACE_VIEW_PRIVILEGES, ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+        ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP, ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+        ?SPACE_REGISTER_FILES, ?SPACE_MANAGE_SHARES, ?SPACE_VIEW_VIEWS,
+        ?SPACE_QUERY_VIEWS, ?SPACE_VIEW_STATISTICS, ?SPACE_VIEW_CHANGES_STREAM,
+        ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS
+    ]),
+    UpgradePrivileges = fun(Privileges) ->
+        % the ?SPACE_MANAGE_DATASETS is granted to all members that had at least
+        % manager privileges before the upgrade
+        case lists_utils:intersect(PreviousManagerPrivs, Privileges) of
+            PreviousManagerPrivs -> privileges:from_list([?SPACE_MANAGE_DATASETS | Privileges]);
+            _ -> Privileges
+        end
+    end,
+
+    UpgradeRelation = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Relation}) -> {UpgradePrivileges(Privs), Relation};
+            (_, Privs) -> UpgradePrivileges(Privs)
+        end, Field)
+    end,
+
+    {10, {od_space,
+        Name,
+
+        Owners,
+
+        UpgradeRelation(Users),
+        UpgradeRelation(Groups),
+        Storages,
+        Shares,
+        Harvesters,
+
+        UpgradeRelation(EffUsers),
+        UpgradeRelation(EffGroups),
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(10, Space) ->
+    {
+        od_space,
+        Name,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Space,
+
+    PreviousManagerPrivs = privileges:from_list([
+        ?SPACE_VIEW, ?SPACE_READ_DATA, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS,
+        ?SPACE_VIEW_PRIVILEGES, ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+        ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP, ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+        ?SPACE_REGISTER_FILES, ?SPACE_MANAGE_SHARES, ?SPACE_VIEW_VIEWS,
+        ?SPACE_QUERY_VIEWS, ?SPACE_VIEW_STATISTICS, ?SPACE_VIEW_CHANGES_STREAM,
+        ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS, ?SPACE_MANAGE_DATASETS
+    ]),
+
+    PreviousAdminPrivs = privileges:from_list(PreviousManagerPrivs ++ [
+        ?SPACE_UPDATE, ?SPACE_DELETE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+        ?SPACE_MANAGE_VIEWS, ?SPACE_CANCEL_REPLICATION, ?SPACE_SCHEDULE_EVICTION, ?SPACE_CANCEL_EVICTION,
+        ?SPACE_MANAGE_QOS
+    ]),
+
+    NewManagerPrivileges = [?SPACE_VIEW_ARCHIVES, ?SPACE_CREATE_ARCHIVES],
+    NewAdminPrivileges = NewManagerPrivileges ++ [?SPACE_REMOVE_ARCHIVES, ?SPACE_RECALL_ARCHIVES],
+
+    UpgradePrivileges = fun(Privileges) ->
+        % appropriate privileges concerning archives are granted to all members that had at least
+        % manager or admin privileges before the upgrade
+        case lists_utils:intersect(PreviousAdminPrivs, Privileges) of
+            PreviousAdminPrivs ->
+                privileges:from_list(NewAdminPrivileges ++ Privileges);
+            _ ->
+                case lists_utils:intersect(PreviousManagerPrivs, Privileges) of
+                    PreviousManagerPrivs ->
+                        privileges:from_list(NewManagerPrivileges ++ Privileges);
+                    _ ->
+                        Privileges
+                end
+        end
+    end,
+
+    UpgradeRelation = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Relation}) -> {UpgradePrivileges(Privs), Relation};
+            (_, Privs) -> UpgradePrivileges(Privs)
+        end, Field)
+    end,
+
+    {11, {od_space,
+        Name,
+
+        Owners,
+
+        UpgradeRelation(Users),
+        UpgradeRelation(Groups),
+        Storages,
+        Shares,
+        Harvesters,
+
+        UpgradeRelation(EffUsers),
+        UpgradeRelation(EffGroups),
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(11, Space) ->
+    {
+        od_space,
+        Name,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Space,
+
+    PreviousManagerPrivs = privileges:from_list([
+        ?SPACE_VIEW, ?SPACE_READ_DATA, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS,
+        ?SPACE_VIEW_PRIVILEGES, ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+        ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP, ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+        ?SPACE_REGISTER_FILES, ?SPACE_MANAGE_SHARES, ?SPACE_VIEW_VIEWS,
+        ?SPACE_QUERY_VIEWS, ?SPACE_VIEW_STATISTICS, ?SPACE_VIEW_CHANGES_STREAM,
+        ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS, ?SPACE_MANAGE_DATASETS,
+        ?SPACE_VIEW_ARCHIVES, ?SPACE_CREATE_ARCHIVES
+    ]),
+
+    NewManagerPrivileges = [?SPACE_VIEW_ATM_WORKFLOW_EXECUTIONS, ?SPACE_SCHEDULE_ATM_WORKFLOW_EXECUTIONS],
+
+    UpgradePrivileges = fun(Privileges) ->
+        % appropriate privileges concerning workflow executions are granted to
+        % all members that had at least manager privileges before the upgrade
+        case lists_utils:intersect(PreviousManagerPrivs, Privileges) of
+            PreviousManagerPrivs ->
+                privileges:from_list(NewManagerPrivileges ++ Privileges);
+            _ ->
+                Privileges
+        end
+    end,
+
+    UpgradeRelation = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Relation}) -> {UpgradePrivileges(Privs), Relation};
+            (_, Privs) -> UpgradePrivileges(Privs)
+        end, Field)
+    end,
+
+    {12, {od_space,
+        Name,
+
+        Owners,
+
+        UpgradeRelation(Users),
+        UpgradeRelation(Groups),
+        Storages,
+        Shares,
+        Harvesters,
+
+        UpgradeRelation(EffUsers),
+        UpgradeRelation(EffGroups),
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(12, Space) ->
+    {
+        od_space,
+        Name,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Space,
+
+    PreviousAdminPrivs = privileges:from_list([
+        ?SPACE_UPDATE, ?SPACE_DELETE, ?SPACE_SET_PRIVILEGES,
+        ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+        ?SPACE_MANAGE_VIEWS, ?SPACE_CANCEL_REPLICATION,
+        ?SPACE_SCHEDULE_EVICTION, ?SPACE_CANCEL_EVICTION,
+        ?SPACE_MANAGE_QOS, ?SPACE_REMOVE_ARCHIVES, ?SPACE_RECALL_ARCHIVES
+    ]),
+
+    NewAdminPrivileges = [?SPACE_MANAGE_ATM_WORKFLOW_EXECUTIONS],
+
+    UpgradePrivileges = fun(Privileges) ->
+        % appropriate privileges concerning workflow executions are granted to
+        % all members that had at least admin privileges before the upgrade
+        case lists_utils:intersect(PreviousAdminPrivs, Privileges) of
+            PreviousAdminPrivs ->
+                privileges:from_list(NewAdminPrivileges ++ Privileges);
+            _ ->
+                Privileges
+        end
+    end,
+
+    UpgradeRelation = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Relation}) -> {UpgradePrivileges(Privs), Relation};
+            (_, Privs) -> UpgradePrivileges(Privs)
+        end, Field)
+    end,
+
+    {13, {od_space,
+        Name,
+
+        Owners,
+
+        UpgradeRelation(Users),
+        UpgradeRelation(Groups),
+        Storages,
+        Shares,
+        Harvesters,
+
+        UpgradeRelation(EffUsers),
+        UpgradeRelation(EffGroups),
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(13, Space) ->
+    {od_space,
+        Name,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Space,
+
+    {14, {od_space,
+        Name,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        #support_parameters_registry{
+            registry = maps:map(fun(_ProviderId, _) ->
+                #support_parameters{
+                    accounting_enabled = false,
+                    dir_stats_service_enabled = false,
+                    dir_stats_service_status = disabled
+                }
+            end, EffProviders)
+        },
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
     }}.

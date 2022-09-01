@@ -151,11 +151,16 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
         {ok, lists_utils:pmap(fun({IndexId, IndexInfo}) ->
             {IndexId, submit_to_index(Endpoint, IndexId, IndexInfo, Batch)}
         end, maps:to_list(Indices))}
-    catch error:{parallel_call_failed, {failed_processes, Errors}} ->
-        ?error_stacktrace(?prepare_log("Submit batch in harvester ~p failed due to: ~p",
-            [HarvesterId, Errors])),
-        {ok, lists:map(fun(IndexId) -> 
-            {IndexId, undefined, map_entry_num_to_seq(1, Batch), <<"internal server error - consult oz-worker logs">>} 
+    catch error:{parallel_call_failed, {failed_processes, Errors}}:Stacktrace ->
+        ?error_stacktrace(
+            ?prepare_log(
+                "Submit batch in harvester ~p failed due to: ~p",
+                [HarvesterId, Errors]
+            ),
+            Stacktrace
+        ),
+        {ok, lists:map(fun(IndexId) ->
+            {IndexId, undefined, map_entry_num_to_seq(1, Batch), <<"internal server error - consult oz-worker logs">>}
         end, maps:keys(Indices))}
     end.
 
@@ -192,7 +197,7 @@ query_index(Endpoint, IndexId, Data) ->
 %% {@link harvesting_backend_behaviour} callback query_validator/0.
 %% @end
 %%--------------------------------------------------------------------
--spec query_validator() -> entity_logic:validity_verificator().
+-spec query_validator() -> entity_logic_sanitizer:sanitizer_spec().
 query_validator() -> #{
     required => #{
         <<"method">> => {atom, [post, get]},
@@ -212,7 +217,7 @@ query_validator() -> #{
 %% @doc
 %% @equiv submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {[], <<>>}).
 %% @end
--spec submit_to_index(od_harvester:endpoint(), od_harvester:index_id(), od_harvester:index(), 
+-spec submit_to_index(od_harvester:endpoint(), od_harvester:index_id(), od_harvester:index(),
     od_harvester:batch()) -> od_harvester:index_submit_response().
 submit_to_index(Endpoint, IndexId, IndexInfo, Batch) ->
     submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {[], <<>>}).
@@ -241,9 +246,7 @@ submit_to_index(Endpoint, IndexId, IndexInfo, Batch, {RejectedFields, _Reason} =
     % call using ?MODULE for mocking in tests
     case ?MODULE:do_submit_request(Endpoint, IndexId, PreparedEsBatch) of
         {ok, Res} ->
-            IgnoreSchemaErrors =
-                (not IndexInfo#harvester_index.retry_on_rejection) or (RejectedFields == all),
-            case check_submission_result(Res, IgnoreSchemaErrors, RejectedFields) of
+            case check_submission_result(Res, IndexInfo, RejectedFields) of
                 {retry, NewRejectionInfo} ->
                     submit_to_index(Endpoint, IndexId, IndexInfo, PrunedBatch, NewRejectionInfo);
                 {error, FailedEntryNum, ErrorMsg} ->
@@ -266,19 +269,28 @@ map_entry_num_to_seq(EntryNum, Batch) ->
 
 
 %% @private
--spec check_submission_result(map(), boolean(), rejected_fields()) ->
+-spec check_submission_result(map(), od_harvester:index(), rejected_fields()) ->
     ok | {error, pos_integer(), binary()} | {retry, rejection_info()}.
-check_submission_result(Result, IgnoreSchemaErrors, RejectedFields) ->
+check_submission_result(Result, IndexInfo, RejectedFields) ->
     case maps:get(<<"errors">>, Result, false) of
         false -> ok;
         true ->
-            case parse_batch_result(Result, IgnoreSchemaErrors) of
-                {rejected, Field, Reason} ->
+            #harvester_index{
+                retry_on_rejection = RetryOnRejection,
+                include_rejection_reason = IncludeRejectionReason
+            } = IndexInfo,
+            IgnoreSchemaErrors = (RejectedFields == all) orelse 
+                not (RetryOnRejection or IncludeRejectionReason),
+            case {parse_batch_result(Result, IgnoreSchemaErrors), RetryOnRejection} of
+                {{rejected, Field, Reason}, true} ->
                     case is_binary(Field) andalso length(RejectedFields) + 1 < ?MAX_SUBMIT_RETRIES of
                         true -> {retry, {[Field | RejectedFields], Reason}};
                         false -> {retry, {all, Reason}}
                     end;
-                Other -> Other
+                {{rejected, _Field, Reason}, false} ->
+                    {retry, {all, Reason}};
+                {Other, _} -> 
+                    Other
             end
     end.
 
@@ -421,32 +433,63 @@ prepare_elasticsearch_batch(Batch, IndexInfo, RejectionInfo) ->
 prepare_data(BatchEntry, IndexInfo, {RejectedFields, _RejectionReason} = RI) ->
     MetadataTypesToInclude = atoms_to_binaries(IndexInfo#harvester_index.include_metadata),
     FileDetailsToInclude = atoms_to_binaries(IndexInfo#harvester_index.include_file_details),
-    
+
     InternalParams = maps:with(FileDetailsToInclude, BatchEntry),
+    InternalParams1 = maps:merge(
+        InternalParams, select_info_from_entry(IndexInfo#harvester_index.include_file_details, BatchEntry)),
+
     Payload = maps:with(MetadataTypesToInclude, maps:get(<<"payload">>, BatchEntry, #{})),
     {IsJsonHarvestable, JsonMetadata} = normalize_json_metadata(maps:get(<<"json">>, Payload, #{})),
-    InternalParams1 = lists:foldl(fun(MetadataTypeBinary, PartialInternalParams) ->
+    InternalParams2 = lists:foldl(fun(MetadataTypeBinary, PartialInternalParams) ->
         add_to_internal_params(
             MetadataTypeBinary, IndexInfo, Payload, RejectedFields, PartialInternalParams)
-    end, InternalParams, MetadataTypesToInclude),
+    end, InternalParams1, MetadataTypesToInclude),
     {RejectedFields1, RejectionReason1} = case IsJsonHarvestable of
         true -> RI;
         false -> {all, <<"Provided JSON is not harvestable - only JSON objects are accepted">>}
     end,
-    InternalParams2 = maybe_add_rejection_info(
-        InternalParams1, RejectedFields1, RejectionReason1, IndexInfo),
+    InternalParams3 = maybe_add_rejection_info(
+        InternalParams2, RejectedFields1, RejectionReason1, IndexInfo),
     ResultJson = prepare_json(JsonMetadata, RejectedFields1),
-    case maps:size(InternalParams2) == 0 of
+    case maps:size(InternalParams3) == 0 of
         true -> ResultJson;
-        false -> ResultJson#{?INTERNAL_METADATA_KEY => InternalParams2}
+        false -> ResultJson#{?INTERNAL_METADATA_KEY => InternalParams3}
     end.
 
 
+%% @private
+-spec select_info_from_entry([od_harvester:file_details()], od_harvester:batch_entry()) -> map().
+select_info_from_entry(FileDetailsToInclude, BatchEntry) ->
+    lists:foldl(fun(InfoType, Acc) ->
+        case lists:member(InfoType, FileDetailsToInclude) of
+            true -> maps:merge(Acc, prepare_info(InfoType, BatchEntry));
+            false -> Acc
+        end
+    end, #{}, [archiveInfo, datasetInfo]).
+
+
+%% @private
+-spec prepare_info(od_harvester:file_details(), od_harvester:batch_entry()) -> map().
+prepare_info(datasetInfo, BatchEntry) ->
+    case maps:find(<<"datasetId">>, BatchEntry) of
+        {ok, DatasetId} -> #{
+            <<"datasetId">> => DatasetId,
+            <<"isDataset">> => true
+        };
+        error -> #{}
+    end;
+prepare_info(archiveInfo, BatchEntry) ->
+    maps:with([<<"archiveId">>, <<"archiveDescription">>, <<"archiveCreationTime">>], BatchEntry);
+prepare_info(_, _BatchEntry) ->
+    #{}.
+
+
+%% @private
 -spec normalize_json_metadata(map() | binary() | any()) -> {boolean(), map() | binary()}.
 normalize_json_metadata(JsonMap) when is_map(JsonMap) ->
     {true, JsonMap};
 normalize_json_metadata(String) when is_binary(String) ->
-    try 
+    try
         DecodedJson = json_utils:decode(String),
         normalize_json_metadata(DecodedJson)
     catch _:invalid_json ->
@@ -591,7 +634,7 @@ normalize_xattrs(Xattrs) ->
     Sorted = lists:sort(fun({K1, _, _}, {K2, _, _}) -> length(K1) > length(K2) end, AsList),
     lists:foldl(fun({KeyList, OriginalKey, Value}, Map) ->
         ExtendedKeyList = KeyList ++ [<<"__value">>],
-        
+
         try put_xattr_value(ExtendedKeyList, Value, Map) catch
             throw:rejected ->
                 RejectedList = maps:get(?REJECTED_METADATA_KEY, Map, []),
@@ -741,21 +784,32 @@ extend_schema(IndexInfo, DecodedSchema) ->
 
 -spec prepare_internal_fields_schema(od_harvester:index(), map()) -> map().
 prepare_internal_fields_schema(
-    #harvester_index{include_file_details = [_ | _] = IncludeFileDetails} = IndexInfo, Map
+    #harvester_index{include_file_details = [metadataExistenceFlags | FileDetailsTail]} = IndexInfo, Map
 ) ->
-    NewMap = case lists:member(metadataExistenceFlags, IncludeFileDetails) of
-        true ->
-            IncludeMetadata = atoms_to_binaries(IndexInfo#harvester_index.include_metadata),
-            lists:foldl(fun(MetadataType, Acc) ->
-                kv_utils:put([<<MetadataType/binary, (?METADATA_EXISTENCE_FLAG_SUFFIX)/binary>>],
-                    get_es_schema_type(boolean), Acc)
-            end, Map, IncludeMetadata);
-        false -> Map
-    end,
-    NewMap1 = lists:foldl(fun(FileDetail, Acc) ->
-        kv_utils:put([FileDetail], get_es_schema_type(text), Acc)
-    end, NewMap, atoms_to_binaries(lists:delete(metadataExistenceFlags, IncludeFileDetails))),
-    prepare_internal_fields_schema(IndexInfo#harvester_index{include_file_details = []}, NewMap1);
+    IncludeMetadata = atoms_to_binaries(IndexInfo#harvester_index.include_metadata),
+    NewMap = lists:foldl(fun(MetadataType, Acc) ->
+        kv_utils:put([<<MetadataType/binary, (?METADATA_EXISTENCE_FLAG_SUFFIX)/binary>>],
+            get_es_schema_type(boolean), Acc)
+    end, Map, IncludeMetadata),
+    prepare_internal_fields_schema(IndexInfo#harvester_index{include_file_details = FileDetailsTail}, NewMap);
+prepare_internal_fields_schema(
+    #harvester_index{include_file_details = [datasetInfo | FileDetailsTail]} = IndexInfo, Map
+) ->
+    NewMap = kv_utils:put([<<"datasetId">>], get_es_schema_type(text), Map),
+    NewMap1 = kv_utils:put([<<"isDataset">>], get_es_schema_type(boolean), NewMap),
+    prepare_internal_fields_schema(IndexInfo#harvester_index{include_file_details = FileDetailsTail}, NewMap1);
+prepare_internal_fields_schema(
+    #harvester_index{include_file_details = [archiveInfo | FileDetailsTail]} = IndexInfo, Map
+) ->
+    NewMap = kv_utils:put([<<"archiveId">>], get_es_schema_type(text), Map),
+    NewMap1 = kv_utils:put([<<"archiveCreationTime">>], get_es_schema_type(date), NewMap),
+    NewMap2 = kv_utils:put([<<"archiveDescription">>], get_es_schema_type(text), NewMap1),
+    prepare_internal_fields_schema(IndexInfo#harvester_index{include_file_details = FileDetailsTail}, NewMap2);
+prepare_internal_fields_schema(
+    #harvester_index{include_file_details = [FileDetail | FileDetailsTail]} = IndexInfo, Map
+) ->
+    NewMap = kv_utils:put([atom_to_binary(FileDetail, utf8)], get_es_schema_type(text), Map),
+    prepare_internal_fields_schema(IndexInfo#harvester_index{include_file_details = FileDetailsTail}, NewMap);
 prepare_internal_fields_schema(
     #harvester_index{include_metadata = [_ | _] = IncludeMetadata} = IndexInfo, Map
 ) ->
@@ -774,7 +828,7 @@ prepare_internal_fields_schema(_, Map) ->
     Map.
 
 
--spec get_es_schema_type(text | boolean) -> map().
+-spec get_es_schema_type(text | boolean | date) -> map().
 get_es_schema_type(text) ->
     #{
         <<"type">> => <<"text">>,
@@ -788,6 +842,11 @@ get_es_schema_type(text) ->
 get_es_schema_type(boolean) ->
     #{
         <<"type">> => <<"boolean">>
+    };
+get_es_schema_type(date) ->
+    #{
+        <<"type">> => <<"date">>,
+        <<"format">> => <<"strict_date_optional_time||epoch_second">>
     }.
 
 

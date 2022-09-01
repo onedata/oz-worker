@@ -101,7 +101,7 @@ list_test(Config) ->
             args = [auth],
             expected_result = ?OK_LIST(ExpShares)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -353,13 +353,14 @@ update_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    InitialName = <<"Share name">>,
     InitialDescription = <<"This is a share">>,
     EnvSetUpFun = fun() ->
         ShareId = ?UNIQUE_STRING,
         {ok, ShareId} = oz_test_utils:create_share(
             Config, ?ROOT, #{
                 <<"shareId">> => ShareId,
-                <<"name">> => ?SHARE_NAME1,
+                <<"name">> => InitialName,
                 <<"description">> => InitialDescription,
                 <<"rootFileId">> => ?ROOT_FILE_ID,
                 <<"spaceId">> => S1
@@ -370,8 +371,8 @@ update_test(Config) ->
     VerifyEndFun = fun(ShouldSucceed, #{shareId := ShareId}, Data) ->
         {ok, Share} = oz_test_utils:get_share(Config, ShareId),
         ExpName = case ShouldSucceed of
-            false -> ?SHARE_NAME1;
-            true -> maps:get(<<"name">>, Data)
+            false -> InitialName;
+            true -> maps:get(<<"name">>, Data, InitialName)
         end,
         ExpDescription = case ShouldSucceed of
             false -> InitialDescription;
@@ -412,8 +413,10 @@ update_test(Config) ->
             expected_result = ?OK_RES
         },
         data_spec = #data_spec{
-            required = [<<"name">>],
-            optional = [<<"description">>],
+            at_least_one = [
+                <<"name">>,
+                <<"description">>
+            ],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"description">> => [<<"">>, str_utils:rand_hex(1397)]
@@ -510,7 +513,7 @@ get_shared_file_or_directory_data_test_base(Config, SubpathWithQs) ->
             {error, _} = Err1 -> errors:to_http_code(Err1)
         end,
         ExpectedHeaders = case ExpectedResult of
-            {ok, URL} -> fun(#{<<"location">> := Location}) -> Location =:= URL end;
+            {ok, URL} -> fun(#{?HDR_LOCATION := Location}) -> Location =:= URL end;
             {error, _} -> undefined
         end,
         ExpectedBody = case ExpectedResult of
@@ -747,7 +750,7 @@ check_shares_data_redirector(Config, ShareId, ProviderId, ProviderVersion, Subpa
         #{}, <<"">>, [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
     ),
     ParsedResult = case Result of
-        {ok, ?HTTP_307_TEMPORARY_REDIRECT, #{<<"location">> := Url}, _} ->
+        {ok, ?HTTP_307_TEMPORARY_REDIRECT, #{?HDR_LOCATION := Url}, _} ->
             {ok, Url};
         {ok, _, _, ErrorJson} ->
             errors:from_json(maps:get(<<"error">>, json_utils:decode(ErrorJson)))
@@ -800,11 +803,11 @@ clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(choose_provider_for_public_share_handling_test, Config) ->

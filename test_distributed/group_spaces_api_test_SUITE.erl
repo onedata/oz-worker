@@ -98,7 +98,7 @@ list_spaces_test(Config) ->
             args = [auth, G1],
             expected_result = ?OK_LIST(ExpSpaces)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -216,7 +216,7 @@ create_space_test(Config) ->
             method = post,
             path = [<<"/groups/">>, G1, <<"/spaces">>],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 BaseURL = ?URL(Config, [<<"/groups/">>, G1, <<"/spaces/">>]),
                 [SpaceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(SpaceId)
@@ -301,7 +301,7 @@ join_space_test(Config) ->
             path = [<<"/groups/">>, G1, <<"/spaces/join">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{spaceId := SpaceId} = _Env, _) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config,
                         [<<"/groups/">>, G1, <<"/spaces/">>, SpaceId]
                     ),
@@ -318,7 +318,7 @@ join_space_test(Config) ->
                 ?OK_BINARY(SpaceId)
             end)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"token">>],
             correct_values = #{
@@ -365,7 +365,7 @@ join_space_test(Config) ->
             args = [auth, G1, data],
             expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_group, G1, od_space, Space))
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"token">>],
             correct_values = #{<<"token">> => [Serialized2]}
@@ -426,7 +426,7 @@ leave_space_test(Config) ->
             args = [auth, G1, spaceId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -466,7 +466,7 @@ list_eff_spaces_test(Config) ->
             args = [auth, G1],
             expected_result = ?OK_LIST(ExpSpaces)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -538,11 +538,11 @@ get_eff_space_details_test(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

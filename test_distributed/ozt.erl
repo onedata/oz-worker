@@ -19,8 +19,9 @@
 -define(OZT_MODULES, [
     oz_test_utils, % Load the old utils until the migration is complete
     ozt, ozt_http, ozt_gs, ozt_tokens, ozt_mocks,
-    ozt_users, ozt_groups, ozt_spaces, ozt_providers, ozt_handle_services,
-    ozt_clusters, ozt_harvesters
+    ozt_users, ozt_groups, ozt_spaces, ozt_providers,
+    ozt_handle_services, ozt_clusters, ozt_harvesters,
+    ozt_atm_inventories, ozt_atm_lambdas, ozt_atm_workflow_schemas
 ]).
 
 -type ct_test_config() :: term().
@@ -82,8 +83,8 @@ rpc(Node, Module, Function, Args) ->
     FunWrapper = fun() ->
         try
             erlang:apply(Module, Function, Args)
-        catch Type:Reason ->
-            {crash, Type, Reason, lager:pr_stacktrace(erlang:get_stacktrace())}
+        catch Type:Reason:Stacktrace ->
+            {crash, Type, Reason, lager:pr_stacktrace(Stacktrace)}
         end
     end,
     case rpc:call(Node, erlang, apply, [FunWrapper, []]) of
@@ -98,7 +99,7 @@ rpc(Node, Module, Function, Args) ->
                 "Stacktrace: ~s",
                 [Node, Module, Function, Args, Type, Reason, Stacktrace]
             ),
-            {error, {badrpc, Reason}};
+            error({badrpc, Reason});
         {badrpc, Reason} ->
             ct:pal(
                 "badrpc in call to oz-worker!~n"

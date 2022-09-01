@@ -14,16 +14,16 @@
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
 -include("entity_logic.hrl").
 
--define(TOO_LONG_NAME, <<"very_very_very_looong_name_with_at_least_50_characters">>).
 
 %%%===================================================================
 %%% Tests functions
 %%%===================================================================
 
 name_normalization_test() ->
-    N = fun(Name) -> entity_logic:normalize_name(Name, ?UNKNOWN_ENTITY_NAME) end,
+    N = fun(Name) -> entity_logic_sanitizer:normalize_name(Name, ?UNKNOWN_ENTITY_NAME) end,
 
     ?assertEqual(<<"aaa---------a"/utf8>>, N(<<"aaa*&:|}{][,a"/utf8>>)),
     ?assertEqual(<<"aaa---------a"/utf8>>, N(<<"][aaa*&:|}{][,a]["/utf8>>)),
@@ -36,33 +36,6 @@ name_normalization_test() ->
     ?assertEqual(string:slice(?TOO_LONG_NAME, 0, ?NAME_MAXIMUM_LENGTH), N(?TOO_LONG_NAME)),
     ?assertEqual(?UNKNOWN_ENTITY_NAME, N(<<"--------------------------------------------------">>)),
     ?assertEqual(<<"µńż_źć-21.3(1)"/utf8>>, N(<<"µńż_źć-21.3(1)"/utf8>>)).
-
-
-name_validation_test() ->
-    V = fun entity_logic:validate_name/1,
-
-    ?assertEqual(false, V(<<"aaa*&:|}{][,a"/utf8>>)),
-    ?assertEqual(false, V(<<"][aaa*&:|}{][,a]["/utf8>>)),
-    ?assertEqual(false, V(<<"A">>)),
-    ?assertEqual(false, V(<<"|group_name">>)),
-    ?assertEqual(false, V(<<"group_name|">>)),
-    ?assertEqual(false, V(<<"-group_name">>)),
-    ?assertEqual(false, V(<<".group_name">>)),
-    ?assertEqual(false, V(<<" group_name">>)),
-    ?assertEqual(false, V(<<"group_name-">>)),
-    ?assertEqual(false, V(<<"group_name.">>)),
-    ?assertEqual(false, V(<<"group_name ">>)),
-    ?assertEqual(false, V(?TOO_LONG_NAME)),
-    ?assertEqual(true, V(<<"AB">>)),
-    ?assertEqual(true, V(<<"_group_name">>)),
-    ?assertEqual(true, V(<<"group_name_">>)),
-    ?assertEqual(true, V(<<"group_name">>)),
-    ?assertEqual(true, V(<<"_group-name_">>)),
-    ?assertEqual(true, V(<<"(group_name)">>)),
-    ?assertEqual(true, V(<<"(group) (name)">>)),
-    ?assertEqual(true, V(<<"group.- _name">>)),
-    ?assertEqual(true, V(<<"My Group Name">>)),
-    ?assertEqual(true, V(<<"µńż_źć-21.3(1)"/utf8>>)).
 
 
 -endif.

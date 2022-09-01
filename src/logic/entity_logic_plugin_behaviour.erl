@@ -118,4 +118,4 @@
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--callback validate(entity_logic:req()) -> entity_logic:validity_verificator().
+-callback validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().

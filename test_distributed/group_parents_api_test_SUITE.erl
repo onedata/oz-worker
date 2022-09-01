@@ -102,7 +102,7 @@ list_parents_test(Config) ->
             args = [auth, G1],
             expected_result = ?OK_LIST(ExpGroups)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -161,7 +161,7 @@ create_parent_test(Config) ->
             path = [<<"/groups/">>, Child, <<"/parents/">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, Data) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/groups/">>, Child, <<"/parents/">>]),
                     [ParentId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(ParentId, Data)
@@ -271,7 +271,7 @@ join_parent_test(Config) ->
             path = [<<"/groups/">>, Child, <<"/parents/join">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{groupId := GroupId} = _Env, _) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config,
                         [<<"/groups/">>, Child, <<"/parents/">>, GroupId]
                     ),
@@ -288,7 +288,7 @@ join_parent_test(Config) ->
                 ?OK_BINARY(GroupId)
             end)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"token">>],
             correct_values = #{
@@ -336,7 +336,7 @@ join_parent_test(Config) ->
             args = [auth, Child, data],
             expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_group, Child, od_group, Group))
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"token">>],
             correct_values = #{<<"token">> => [Serialized2]}
@@ -418,7 +418,7 @@ leave_parent_test(Config) ->
             args = [auth, Child, groupId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -508,7 +508,7 @@ list_eff_parents_test(Config) ->
             args = [auth, G1],
             expected_result = ?OK_LIST(ExpGroups)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -577,11 +577,11 @@ get_eff_parent_details_test(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

@@ -66,6 +66,12 @@ stages:
     - _Dialyze
     - _Unit Test
     - access_and_identity_tokens
+    - atm_inventory_groups_api
+    - atm_inventory_misc_api
+    - atm_inventory_users_api
+    - atm_lambda_api
+    - atm_schema_validation
+    - atm_workflow_schema_api
     - basic_auth
     - cluster_groups_api
     - cluster_misc_api
@@ -76,6 +82,7 @@ stages:
     - dns
     - entities_setup
     - entitlement_mapping
+    - group_atm_inventories_api
     - group_children_api
     - group_clusters_api
     - group_handles_api
@@ -113,6 +120,7 @@ stages:
     - space_users_api
     - storage_misc_api
     - token_api
+    - user_atm_inventories_api
     - user_clusters_api
     - user_groups_api
     - user_handles_api
@@ -221,6 +229,12 @@ _Codetag Tracker:
       - ./make.py -r ${bamboo.agentWorkingDirectory} codetag-tracker BRANCH=${bamboo.planRepository.branchName}
       working-dir: oz_worker
       description: Codetag Tracker
+  final-tasks:
+  - test-parser:
+      type: junit
+      ignore-time: 'false'
+      test-results: oz_worker/test/codetag_tracker_results/TEST-*.xml
+      description: Parse test results
   - script: *clear-env
   requirements: *requirements
   artifact-subscriptions: &oz-worker
@@ -243,6 +257,11 @@ _Dialyze:
       working-dir: oz_worker
       description: Dialyze
   final-tasks:
+  - test-parser:
+      type: junit
+      ignore-time: 'false'
+      test-results: oz_worker/test/dialyzer_results/TEST-*.xml
+      description: Parse test results
   - script:
       interpreter: BINSH_OR_CMDEXE
       scripts:
@@ -344,6 +363,48 @@ access_and_identity_tokens: &ct-job
     required: false
   requirements: *requirements
   artifact-subscriptions: *oz-worker
+atm_inventory_groups_api:
+  <<: *ct-job
+  key: AIGA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_atm_inventory_groups_api.tar.gz
+atm_inventory_misc_api:
+  <<: *ct-job
+  key: AIMA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_atm_inventory_misc_api.tar.gz
+atm_inventory_users_api:
+  <<: *ct-job
+  key: AIUI
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_atm_inventory_users_api.tar.gz
+atm_lambda_api:
+  <<: *ct-job
+  key: ALA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_atm_lambda_api.tar.gz
+atm_schema_validation:
+  <<: *ct-job
+  key: ASV
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_atm_schema_validation.tar.gz
+atm_workflow_schema_api:
+  <<: *ct-job
+  key: AWSA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_atm_workflow_schema_api.tar.gz
 basic_auth:
   <<: *ct-job
   key: US
@@ -414,6 +475,13 @@ entitlement_mapping:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_entitlement_mapping.tar.gz
+group_atm_inventories_api:
+  <<: *ct-job
+  key: GAIA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_group_atm_inventories_api.tar.gz
 group_children_api:
   <<: *ct-job
   key: GRCHILDREN
@@ -673,6 +741,13 @@ token_api:
   - *ct_logs
   - <<: *cover_ct
     name: cover_ct_token_api.tar.gz
+user_atm_inventories_api:
+  <<: *ct-job
+  key: UAIA
+  artifacts:
+  - *ct_logs
+  - <<: *cover_ct
+    name: cover_ct_user_atm_inventories_api.tar.gz
 user_clusters_api:
   <<: *ct-job
   key: UCA
@@ -800,6 +875,12 @@ Coverage report:
   - artifact: oz_worker.tar.gz
   - artifact: cover_eunit.tar.gz
   - artifact: cover_ct_access_and_identity_tokens.tar.gz
+  - artifact: cover_ct_atm_inventory_groups_api.tar.gz
+  - artifact: cover_ct_atm_inventory_misc_api.tar.gz
+  - artifact: cover_ct_atm_inventory_users_api.tar.gz
+  - artifact: cover_ct_atm_lambda_api.tar.gz
+  - artifact: cover_ct_atm_schema_validation.tar.gz
+  - artifact: cover_ct_atm_workflow_schema_api.tar.gz
   - artifact: cover_ct_basic_auth.tar.gz
   - artifact: cover_ct_cluster_groups_api.tar.gz
   - artifact: cover_ct_cluster_misc_api.tar.gz
@@ -810,6 +891,7 @@ Coverage report:
   - artifact: cover_ct_dns.tar.gz
   - artifact: cover_ct_entities_setup.tar.gz
   - artifact: cover_ct_entitlement_mapping.tar.gz
+  - artifact: cover_ct_group_atm_inventories_api.tar.gz
   - artifact: cover_ct_group_children_api.tar.gz
   - artifact: cover_ct_group_clusters_api.tar.gz
   - artifact: cover_ct_group_handles_api.tar.gz
@@ -847,6 +929,7 @@ Coverage report:
   - artifact: cover_ct_space_users_api.tar.gz
   - artifact: cover_ct_storage_misc_api.tar.gz
   - artifact: cover_ct_token_api.tar.gz
+  - artifact: cover_ct_user_atm_inventories_api.tar.gz
   - artifact: cover_ct_user_clusters_api.tar.gz
   - artifact: cover_ct_user_groups_api.tar.gz
   - artifact: cover_ct_user_handles_api.tar.gz

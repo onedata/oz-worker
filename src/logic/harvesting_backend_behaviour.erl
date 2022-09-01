@@ -74,5 +74,5 @@
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--callback query_validator() -> entity_logic:validity_verificator().
+-callback query_validator() -> entity_logic_sanitizer:sanitizer_spec().
 

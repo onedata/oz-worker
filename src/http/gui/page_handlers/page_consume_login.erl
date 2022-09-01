@@ -21,8 +21,11 @@
 -include("auth/auth_errors.hrl").
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([handle/2]).
+
+-define(LOGIN_DIAGNOSTICS_LOG_DIR, oz_worker:get_env(test_mode_logins_log_dir)).
 
 %%%===================================================================
 %%% API
@@ -38,9 +41,9 @@ handle(Method, Req) ->
     ValidateResult = idp_auth:validate_login(Method, Req),
     case idp_auth_test_mode:process_is_test_mode_enabled() of
         true ->
-            cowboy_req:reply(?HTTP_200_OK, #{
-                ?HDR_CONTENT_TYPE => <<"text/html">>
-            }, render_test_login_results(ValidateResult), Req);
+            TestLoginResults = render_test_login_results(ValidateResult),
+            dump_test_login_results_to_log(TestLoginResults),
+            cowboy_req:reply(?HTTP_200_OK, #{?HDR_CONTENT_TYPE => <<"text/html">>}, TestLoginResults, Req);
         false ->
             {NewReq, RedirectURL} = case ValidateResult of
                 {ok, UserId, RedirectAfterLogin} ->
@@ -60,7 +63,7 @@ handle(Method, Req) ->
             % This page is visited with a POST request, so use a 303 redirect in
             % response so that web browser switches to GET.
             cowboy_req:reply(?HTTP_303_SEE_OTHER, #{
-                <<"location">> => RedirectURL,
+                ?HDR_LOCATION => RedirectURL,
                 % Connection close is required, otherwise chrome/safari can get stuck
                 % stalled waiting for data.
                 ?HDR_CONNECTION => <<"close">>
@@ -98,7 +101,7 @@ format_error_reason(?ERROR_INTERNAL_SERVER_ERROR) ->
 
 %% @private
 -spec render_test_login_results({ok, od_user:id(), RedirectPage :: binary()} |
-{auth_error, {error, term()}, state_token:state_token(), RedirectPage :: binary()}) -> binary().
+    {auth_error, {error, term()}, state_token:state_token(), RedirectPage :: binary()}) -> binary().
 render_test_login_results(ValidateResult) ->
     StatusHeaders = case ValidateResult of
         {ok, _, _} ->
@@ -148,3 +151,21 @@ in the test mode. Use only for diagnostics.</i>
 </body>
 </html>
 ">>.
+
+
+%% @private
+-spec dump_test_login_results_to_log(binary()) -> ok.
+dump_test_login_results_to_log(TestLoginResults) ->
+    StateToken = idp_auth_test_mode:get_state_token(),
+    {{Year, Month, Day}, {Hour, Minute, Second}} = time:seconds_to_datetime(global_clock:timestamp_seconds()),
+    FileName = str_utils:format_bin("~4..0B-~2..0B-~2..0B_~2..0B-~2..0B-~2..0B.~s.html", [
+        Year, Month, Day, Hour, Minute, Second, StateToken
+    ]),
+    FilePath = filename:join(?LOGIN_DIAGNOSTICS_LOG_DIR, FileName),
+    Result = case {filelib:ensure_dir(FilePath), file:write_file(FilePath, TestLoginResults)} of
+        {ok, ok} -> ok;
+        {{error, _} = Error, _} -> Error;
+        {_, {error, _} = Error} -> Error
+    end,
+    Result == ok orelse ?warning("Cannot log test login attempt results due to ~w", [Result]),
+    Result.

@@ -102,7 +102,7 @@ elements() -> [
 -spec encode(#{} | binary(), AdditionalIdentifiers :: [binary()]) -> #xmlElement{}.
 encode(Metadata, AdditionalIdentifiers) ->
 
-    %% @TODO currently bare xml is saved in  handle
+    %% @TODO VFS-7454 currently bare xml is saved in  handle
     %%    MetadataXML = lists:flatmap(fun(Key) ->
     %%        case maps:get(Key, Metadata, undefined) of
     %%            undefined -> [];
@@ -126,10 +126,11 @@ encode(Metadata, AdditionalIdentifiers) ->
                 (Other) ->
                     Other
             end, Content)
-    catch Type:Reason ->
+    catch Type:Reason:Stacktrace ->
         ?debug_stacktrace(
             "Cannot parse dublin core metadata due to ~p:~p, identifiers: ~p",
-            [Type, Reason, AdditionalIdentifiers]
+            [Type, Reason, AdditionalIdentifiers],
+            Stacktrace
         ),
         []
     end,

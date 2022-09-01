@@ -174,10 +174,12 @@ create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
         {ok, {OnedataGroupId, _}} -> {ok, value, OnedataGroupId};
         {error, malformed} -> ?ERROR_BAD_DATA(<<"groupId">>)
     catch
-        Type:Reason ->
-            ?debug_stacktrace("Cannot map group '~s' from IdP '~p' due to ~p:~p", [
-                GroupId, IdP, Type, Reason
-            ]),
+        Type:Reason:Stacktrace ->
+            ?debug_stacktrace(
+                "Cannot map group '~s' from IdP '~p' due to ~p:~p",
+                [GroupId, IdP, Type, Reason],
+                Stacktrace
+            ),
             ?ERROR_MALFORMED_DATA
     end;
 
@@ -602,7 +604,7 @@ required_admin_privileges(_) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+-spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}) ->
     SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
     SubdomainDelegationParam = maps:get(<<"subdomainDelegation">>, Data, undefined),
@@ -852,8 +854,8 @@ create_provider(Auth, Data, ProviderId, GRI) ->
             {true, {Provider, Rev}} = fetch_entity(#gri{aspect = instance, id = ProviderId}),
             ?info("Provider '~ts' has registered (~s)", [Name, ProviderId]),
             {ok, resource, {GRI#gri{id = ProviderId}, {{Provider, RootToken}, Rev}}}
-        catch Type:Reason ->
-            ?error_stacktrace("Cannot create a new provider due to ~p:~p", [Type, Reason]),
+        catch Type:Reason:Stacktrace ->
+            ?error_stacktrace("Cannot create a new provider due to ~p:~p", [Type, Reason], Stacktrace),
             dns_state:remove_delegation_config(ProviderId),
             ?ERROR_INTERNAL_SERVER_ERROR
         end

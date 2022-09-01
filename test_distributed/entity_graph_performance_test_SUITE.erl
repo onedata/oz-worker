@@ -530,13 +530,13 @@ create_n_users(Config, Number) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     [{?LOAD_MODULES, [oz_test_utils, rest_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
     ssl:stop(),
-    hackney:stop(),
+    application:stop(hackney),
     ok.
 
 
@@ -574,7 +574,7 @@ split_into_sublists(List) ->
 create_group(Config, rpc, {User, _Token}, Name) ->
     oz_test_utils:create_group(Config, ?USER(User), Name);
 create_group(Config, rest, {_User, Token}, Name) ->
-    {ok, 201, #{<<"Location">> := Location}, _} = rest_req(
+    {ok, 201, #{?HDR_LOCATION := Location}, _} = rest_req(
         Config, Token, post, <<"/user/groups/">>, #{<<"name">> => Name}
     ),
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.
@@ -583,7 +583,7 @@ create_group(Config, rest, {_User, Token}, Name) ->
 group_add_user(Config, rpc, {User, _Token}, Group, NewUser) ->
     oz_test_utils:group_add_user(Config, ?USER(User), Group, NewUser);
 group_add_user(Config, rest, {_User, Token}, Group, NewUser) ->
-    {ok, 201, #{<<"Location">> := Location}, _} = rest_req(
+    {ok, 201, #{?HDR_LOCATION := Location}, _} = rest_req(
         Config, Token, put, [<<"/groups/">>, Group, <<"/users/">>, NewUser]
     ),
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.
@@ -592,7 +592,7 @@ group_add_user(Config, rest, {_User, Token}, Group, NewUser) ->
 group_add_group(Config, rpc, {User, _Token}, Group, ChildGroup) ->
     oz_test_utils:group_add_group(Config, ?USER(User), Group, ChildGroup);
 group_add_group(Config, rest, {_User, Token}, Group, ChildGroup) ->
-    {ok, 201, #{<<"Location">> := Location}, _} = rest_req(
+    {ok, 201, #{?HDR_LOCATION := Location}, _} = rest_req(
         Config, Token, put, [<<"/groups/">>, Group, <<"/children/">>, ChildGroup]
     ),
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.
@@ -613,7 +613,7 @@ group_set_user_privileges(Config, rest, {_ClientUser, Token}, Group, User, Privs
 create_space(Config, rpc, {User, _Token}, Name) ->
     oz_test_utils:create_space(Config, ?USER(User), Name);
 create_space(Config, rest, {_User, Token}, Name) ->
-    {ok, 201, #{<<"Location">> := Location}, _} = rest_req(
+    {ok, 201, #{?HDR_LOCATION := Location}, _} = rest_req(
         Config, Token, post, <<"/user/spaces/">>, #{<<"name">> => Name}
     ),
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.

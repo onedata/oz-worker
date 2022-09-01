@@ -111,9 +111,8 @@ before_init() ->
         oz_worker_sup:start_link(),
         ok
     catch
-        _:Error ->
-            ?error_stacktrace("Error in node_manager_plugin:before_init: ~p",
-                [Error]),
+        _:Error:Stacktrace ->
+            ?error_stacktrace("Error in node_manager_plugin:before_init: ~p", [Error], Stacktrace),
             {error, cannot_start_node_manager_plugin}
     end.
 
@@ -174,8 +173,8 @@ on_db_and_workers_ready() ->
                 group_logic:ensure_predefined_groups()
         end
     catch
-        _:Error ->
-            ?error_stacktrace("Error in node_manager_plugin:on_db_and_workers_ready: ~p", [Error]),
+        _:Error:Stacktrace ->
+            ?error_stacktrace("Error in node_manager_plugin:on_db_and_workers_ready: ~p", [Error], Stacktrace),
             {error, cannot_start_node_manager_plugin}
     end.
 
@@ -292,10 +291,12 @@ broadcast_dns_config() ->
         end, consistent_hashing:get_all_nodes()),
         ok
     catch
-        Type:Message ->
+        Type:Message:Stacktrace ->
             ?error_stacktrace(
                 "Error sending dns zone update, scheduling retry after ~p seconds: ~p:~p",
-                [?DNS_UPDATE_RETRY_INTERVAL div 1000, Type, Message]),
+                [?DNS_UPDATE_RETRY_INTERVAL div 1000, Type, Message],
+                Stacktrace
+            ),
             erlang:send_after(?DNS_UPDATE_RETRY_INTERVAL, self(), {timer, broadcast_dns_config}),
             error
     end.

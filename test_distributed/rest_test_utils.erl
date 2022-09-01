@@ -17,6 +17,11 @@
 -include_lib("xmerl/include/xmerl.hrl").
 
 
+%% API
+-export([check_rest_call/2]).
+-export([compare_maps/2, contains_map/2]).
+
+
 % Use "Macaroon", "X-Auth-Token" and "Authorization: Bearer" headers variably,
 % as they all should be accepted.
 -define(ACCESS_TOKEN_HEADER(AccessToken), case rand:uniform(3) of
@@ -25,10 +30,10 @@
     3 -> #{?HDR_AUTHORIZATION => <<"Bearer ", AccessToken/binary>>}
 end).
 
-
-%% API
--export([check_rest_call/2]).
--export([compare_maps/2, contains_map/2]).
+-define(CONNECT_OPTS, [
+    {connect_timeout, 60000},
+    {recv_timeout, 60000}
+]).
 
 
 %%--------------------------------------------------------------------
@@ -167,7 +172,7 @@ check_rest_call(Config, ArgsMap) ->
             URL,
             HeadersPlusAuth,
             ReqBody,
-            CompleteOpts
+            ?CONNECT_OPTS ++ CompleteOpts
         ),
 
         % Check response code if specified
@@ -193,11 +198,11 @@ check_rest_call(Config, ArgsMap) ->
                 Result = try
                     Fun(RespHeaders)
                 catch
-                    Type1:Message1 ->
+                    Type1:Message1:Stacktrace1 ->
                         ct:pal(
                             "Headers verification function crashed - ~p:~p~n"
                             "Stacktrace: ~s", [
-                                Type1, Message1, lager:pr_stacktrace(erlang:get_stacktrace())
+                                Type1, Message1, lager:pr_stacktrace(Stacktrace1)
                             ]),
                         false
                 end,
@@ -238,11 +243,11 @@ check_rest_call(Config, ArgsMap) ->
                 Result2 = try
                     Fun2(ActualBodyMap)
                 catch
-                    Type2:Message2 ->
+                    Type2:Message2:Stacktrace2 ->
                         ct:pal(
                             "Body verification function crashed - ~p:~p~n"
                             "Stacktrace: ~s", [
-                                Type2, Message2, lager:pr_stacktrace(erlang:get_stacktrace())
+                                Type2, Message2, lager:pr_stacktrace(Stacktrace2)
                             ]),
                         false
                 end,
@@ -322,11 +327,11 @@ check_rest_call(Config, ArgsMap) ->
                 {response, {Code, Headers, BodyMap}}
             };
         % Unexpected error
-        Type:Message ->
+        Type:Message:Stacktrace ->
             ct:pal(
                 "~p:check_rest_call failed with unexpected result - ~p:~p~n"
                 "Stacktrace: ~s", [
-                    ?MODULE, Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())
+                    ?MODULE, Type, Message, lager:pr_stacktrace(Stacktrace)
                 ]),
             false
     end.

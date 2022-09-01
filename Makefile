@@ -31,7 +31,7 @@ export ONEDATA_GIT_URL
 
 BUILD_VERSION := $(subst $(shell git describe --tags --abbrev=0)-,,$(shell git describe --tags --long))
 
-.PHONY: test deps upgrade generate package artifact
+.PHONY: test deps upgrade generate package
 
 all: test_rel
 
@@ -48,12 +48,12 @@ upgrade:
 compile:
 	$(REBAR) compile
 
-inject-gui:
+inject-gui: get-deps
 	$(LIB_DIR)/gui/pull-gui.sh gui-image.conf --target-path _build/default/lib/ozw_gui_static.tar.gz
 	$(LIB_DIR)/gui/pull-gui.sh default-harvester-gui-image.conf --target-path _build/default/lib/hrv_gui_static.tar.gz
 
 ## Generates a production release
-generate: template compile inject-gui
+generate: template inject-gui
 	$(REBAR) release $(OVERLAY_VARS)
 
 clean:
@@ -100,12 +100,12 @@ relclean:
 
 eunit:
 	$(REBAR) do eunit skip_deps=true --suite=${SUITES}
-## Rename all tests in order to remove duplicated names (add _(++i) suffix to each test)
+    ## Rename all tests in order to remove duplicated names (add _(++i) suffix to each test)
 	@for tout in `find test -name "TEST-*.xml"`; do awk '/testcase/{gsub("_[0-9]+\"", "_" ++i "\"")}1' $$tout > $$tout.tmp; mv $$tout.tmp $$tout; done
 
 eunit-with-cover:
 	$(REBAR) do eunit skip_deps=true --suite=${SUITES}, cover
-## Rename all tests in order to remove duplicated names (add _(++i) suffix to each test)
+    ## Rename all tests in order to remove duplicated names (add _(++i) suffix to each test)
 	@for tout in `find test -name "TEST-*.xml"`; do awk '/testcase/{gsub("_[0-9]+\"", "_" ++i "\"")}1' $$tout > $$tout.tmp; mv $$tout.tmp $$tout; done
 
 coverage:
@@ -117,7 +117,10 @@ coverage:
 
 # Dialyzes the project.
 dialyzer:
-	$(REBAR) dialyzer
+	@./bamboos/scripts/run-with-surefire-report.py \
+		--test-name Dialyze \
+		--report-path test/dialyzer_results/TEST-dialyzer.xml \
+		$(REBAR) dialyzer
 
 ##
 ## Packaging targets
@@ -155,14 +158,8 @@ package: check_distribution package/$(PKG_ID).tar.gz
 pkgclean:
 	rm -rf package
 
-##
-## Creating bamboo artifact
-##
-
-artifact:
-	cd ..; find oz_worker | grep -v '.git$$' | grep -v '/.git/' > tar.lst; \
-	find oz_worker | grep oz_worker/.git >> tar.lst; \
-	tar -czf oz_worker.tar.gz --no-recursion -T tar.lst
-
 codetag-tracker:
-	@echo "Skipping codetag-tracker for release version 20.02.*"
+	@./bamboos/scripts/run-with-surefire-report.py \
+		--test-name CodetagTracker \
+		--report-path test/codetag_tracker_results/TEST-codetag_tracker.xml \
+		./bamboos/scripts/codetag-tracker.sh --branch=${BRANCH} --excluded-dirs=node_package,locks

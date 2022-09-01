@@ -21,11 +21,13 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/errors.hrl").
 
--define(MINIMUM_SUPPORT_SIZE, oz_worker:get_env(minimum_space_support_size, 1000000)).
-
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
+
+
+-define(MINIMUM_SUPPORT_SIZE, oz_worker:get_env(minimum_space_support_size, 1000000)).
+
 
 %%%===================================================================
 %%% API
@@ -138,11 +140,10 @@ create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PRO
 
 create(#el_req{auth = Auth, gri = #gri{id = StorageId, aspect = support}, data = Data}) ->
     fun(#od_storage{provider = ProviderId}) ->
-        SupportSize = maps:get(<<"size">>, Data),
         Token = maps:get(<<"token">>, Data),
 
         invite_tokens:consume(Auth, Token, ?SUPPORT_SPACE, fun(SpaceId, _TokenParameters, _) ->
-            support_space(ProviderId, SpaceId, StorageId, SupportSize)
+            support_space(ProviderId, SpaceId, StorageId, Data)
         end)
     end;
 
@@ -153,7 +154,7 @@ create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_legacy_support, Spac
         {true, {VirtualStorage, _}} = fetch_entity(#gri{id = ProviderId}),
         SupportSize = entity_graph:get_relation_attrs(direct, bottom_up, od_space, SpaceId, VirtualStorage),
         try
-            support_space(ProviderId, SpaceId, StorageId, SupportSize)
+            support_space(ProviderId, SpaceId, StorageId, #{<<"size">> => SupportSize})
         catch
             _:(?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _)) -> ok
         end,
@@ -259,14 +260,17 @@ delete(#el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
             od_space, SpaceId,
             od_storage, StorageId
         ),
-        {true, {#od_space{harvesters = Harvesters}, _}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
+
+        {ok, UpdatedDoc} = od_space:clear_support_parameters(SpaceId, ProviderId),
 
         lists:foreach(fun(HarvesterId) ->
             harvester_indices:update_stats(HarvesterId, all,
                 fun(ExistingStats) ->
                     harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
                 end)
-        end, Harvesters)
+        end, UpdatedDoc#document.value#od_space.harvesters),
+
+        wait_for_eff_support_recalculation(ProviderId, SpaceId)
     end.
 
 
@@ -355,7 +359,7 @@ required_admin_privileges(_) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+-spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"name">> => {binary, name}
@@ -372,6 +376,11 @@ validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     required => #{
         <<"token">> => {invite_token, ?SUPPORT_SPACE},
         <<"size">> => {integer, {not_lower_than, ?MINIMUM_SUPPORT_SIZE}}
+    },
+    optional => #{
+        % support parameters are set per space x provider pair, not per storage, however this
+        % operation offers a shortcut for updating the parameters along with a new support
+        <<"spaceSupportParameters">> => {{jsonable_record, single, support_parameters}, any}
     }
 };
 
@@ -405,36 +414,66 @@ ensure_id(StorageId) -> StorageId.
 
 
 %% @private
--spec support_space(od_provider:id(), od_space:id(), od_storage:id(),
-    od_space:support_size()) -> entity_logic:create_result().
-support_space(ProviderId, SpaceId, StorageId, SupportSize) ->
+-spec support_space(od_provider:id(), od_space:id(), od_storage:id(), entity_logic:data()) ->
+    entity_logic:create_result().
+support_space(ProviderId, SpaceId, StorageId, Data) ->
     % critical section to avoid race condition with storage modification
     lock_on_storage(StorageId, fun() ->
         % critical section to avoid simultaneous supports by 2 providers with imported storage
-        lock_on_space_support(SpaceId, fun() -> 
-            support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) 
+        lock_on_space_support(SpaceId, fun() ->
+            support_space_insecure(ProviderId, SpaceId, StorageId, Data)
         end)
     end).
 
 
 %% @private
--spec support_space_insecure(od_provider:id(), od_space:id(), od_storage:id(),
-    od_space:support_size()) -> entity_logic:create_result().
-support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) ->
+-spec support_space_insecure(od_provider:id(), od_space:id(), od_storage:id(), entity_logic:data()) ->
+    entity_logic:create_result().
+support_space_insecure(ProviderId, SpaceId, StorageId, Data) ->
     {true, {Storage, _}} = fetch_entity(#gri{id = StorageId}),
-    
-    case is_imported_storage(Storage) of
-        true -> 
-            ensure_storage_not_supporting_any_space(Storage),
-            ensure_space_not_supported_by_imported_storage(SpaceId);
-        _ -> ok
-    end,
-    
-    entity_graph:add_relation(
-        od_space, SpaceId,
-        od_storage, StorageId,
-        SupportSize
+
+    % possible if multiple processes enter the critical section one after another
+    storage_logic:supports_space(Storage, SpaceId) andalso throw(
+        ?ERROR_RELATION_ALREADY_EXISTS(od_space, SpaceId, od_storage, StorageId)
     ),
+
+    case is_imported_storage(Storage) of
+        true ->
+            ensure_storage_not_supporting_any_space(Storage),
+            case oz_worker:get_env(allow_multiple_imported_storages_supports, false) of
+                true -> ok;
+                false -> ensure_space_not_supported_by_imported_storage(SpaceId)
+            end;
+        _ ->
+            ok
+    end,
+
+    % start with setting the support parameters, which can fail if the provided data is not valid
+    % upon a failure, there is nothing changed yet that would need undoing to make the process transactional
+    RequestedSpaceSupportParameters = maps:get(<<"spaceSupportParameters">>, Data, #support_parameters{}),
+    PrunedSpaceSupportParameters = #support_parameters{
+        % only the two parameters can be set during space support
+        accounting_enabled = RequestedSpaceSupportParameters#support_parameters.accounting_enabled,
+        dir_stats_service_enabled = RequestedSpaceSupportParameters#support_parameters.dir_stats_service_enabled
+    },
+    case od_space:update_support_parameters(SpaceId, ProviderId, PrunedSpaceSupportParameters) of
+        {ok, _} -> ok;
+        {error, _} = Error2 -> throw(Error2)
+    end,
+
+    try
+        SupportSize = maps:get(<<"size">>, Data),
+        entity_graph:add_relation(
+            od_space, SpaceId,
+            od_storage, StorageId,
+            SupportSize
+        )
+    catch throw:Error ->
+        {ok, _} = od_space:clear_support_parameters(SpaceId, ProviderId),
+        throw(Error)
+    end,
+
+    wait_for_eff_support_recalculation(ProviderId, SpaceId),
 
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {true, {Space, Rev}} = space_logic_plugin:fetch_entity(NewGRI),
@@ -453,7 +492,7 @@ support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) ->
 -spec ensure_space_not_supported_by_imported_storage(od_space:id()) -> ok | no_return().
 ensure_space_not_supported_by_imported_storage(SpaceId) ->
     {true, {#od_space{storages = StorageIds}, _}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
-    lists:foreach(fun (StorageId) ->
+    lists:foreach(fun(StorageId) ->
         is_imported_storage(StorageId)
             andalso throw(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(SpaceId, StorageId))
     end, maps:keys(StorageIds)).
@@ -500,7 +539,7 @@ get_spaces(StorageId) when is_binary(StorageId) ->
 supports_any_space(Storage) ->
     case get_spaces(Storage) of
         [] -> false;
-        [_|_] -> true
+        [_ | _] -> true
     end.
 
 
@@ -522,7 +561,7 @@ get_qos_parameters(Data, Default) ->
 %% unless it was previously `unknown` meaning that storage was created by legacy provider.
 %% @end
 %%--------------------------------------------------------------------
--spec check_imported_storage_value(PreviousValue :: boolean() | unknown, NewValue :: boolean(), 
+-spec check_imported_storage_value(PreviousValue :: boolean() | unknown, NewValue :: boolean(),
     SupportsAnySpace :: boolean()) -> ok | no_return().
 check_imported_storage_value(unknown = _PreviousValue, _NewValue, _SupportsAnySpace) -> ok;
 check_imported_storage_value(_PreviousValue, _NewValue, false = _SupportsAnySpace) -> ok;
@@ -531,7 +570,7 @@ check_imported_storage_value(_PreviousValue, _NewValue, _SupportsAnySpace) -> th
 
 
 %% @private
--spec check_readonly_value(ReadonlyValue :: boolean(), IsImportedStorage :: boolean(), od_storage:id()) -> 
+-spec check_readonly_value(ReadonlyValue :: boolean(), IsImportedStorage :: boolean(), od_storage:id()) ->
     ok | no_return().
 check_readonly_value(true = _ReadonlyValue, false = _IsImportedStorage, StorageId) ->
     throw(?ERROR_REQUIRES_IMPORTED_STORAGE(StorageId));
@@ -539,7 +578,7 @@ check_readonly_value(_ReadonlyValue, _IsImportedStorage, _StorageId) -> ok.
 
 
 %% @private
--spec add_implicit_qos_parameters(od_storage:id(), od_provider:id(), od_storage:qos_parameters()) -> 
+-spec add_implicit_qos_parameters(od_storage:id(), od_provider:id(), od_storage:qos_parameters()) ->
     od_storage:qos_parameters() | no_return().
 add_implicit_qos_parameters(_StorageId, ProviderId, #{<<"providerId">> := OtherProvider}) when ProviderId =/= OtherProvider ->
     throw(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.providerId">>, [ProviderId]));
@@ -550,3 +589,26 @@ add_implicit_qos_parameters(StorageId, ProviderId, QosParameters) ->
         <<"storageId">> => StorageId,
         <<"providerId">> => ProviderId
     }.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Provider supports are recalculated asynchronously - wait for it so that
+%% the information about current supports is up to date when this function returns.
+%% @end
+%%--------------------------------------------------------------------
+-spec wait_for_eff_support_recalculation(od_provider:id(), od_space:id()) -> ok.
+wait_for_eff_support_recalculation(ProviderId, SpaceId) ->
+    try
+        utils:wait_until(fun() ->
+            space_logic:is_supported_by_provider(SpaceId, ProviderId) andalso
+                provider_logic:supports_space(ProviderId, SpaceId)
+        end)
+    catch _:_ ->
+        % Do not fail upon timeout; if there are too many pending changes in the graph,
+        % this may take even longer. Worst case scenario is that the client will get
+        % a confirmation of support change operation, but the effective supports will
+        % not yet be recalculated. They will converge eventually though.
+        ok
+    end.

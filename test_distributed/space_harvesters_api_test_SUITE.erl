@@ -115,7 +115,7 @@ join_harvester_test(Config) ->
             path = [<<"/spaces/">>, S1, <<"/harvesters/join">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{harvesterId := HarvesterId} = _Env, _) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config,
                         [<<"/spaces/">>, S1, <<"/harvesters/">>, HarvesterId]
                     ),
@@ -132,7 +132,7 @@ join_harvester_test(Config) ->
                 ?OK_BINARY(HarvesterId)
             end)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"token">>],
             correct_values = #{
@@ -179,7 +179,7 @@ join_harvester_test(Config) ->
             args = [auth, S1, data],
             expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_harvester, Harvester, od_space, S1))
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"token">>],
             correct_values = #{<<"token">> => [Serialized2]}
@@ -241,7 +241,7 @@ remove_harvester_test(Config) ->
             args = [auth, S1, harvesterId],
             expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -300,7 +300,7 @@ list_harvesters_test(Config) ->
             args = [auth, S1],
             expected_result = ?OK_LIST(ExpHarvesters)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -628,11 +628,11 @@ harvester_index_nonempty_stats_test(Config) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 init_per_testcase(_, Config) ->

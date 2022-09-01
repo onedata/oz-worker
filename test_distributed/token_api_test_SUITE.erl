@@ -96,12 +96,12 @@ all() ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     ozt:init_per_suite(Config).
 
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 
@@ -219,16 +219,12 @@ end_per_testcase(_, _Config) ->
 -define(TYPES_TO_JSON(Types), [token_type:to_json(T) || T <- Types]).
 -define(CAVEATS_TO_JSON(Caveats), [caveats:to_json(C) || C <- Caveats]).
 
--define(SPACE_SUPPORT_PARAMS, support_parameters:build(
-    lists_utils:random_element([global, none]), lists_utils:random_element([eager, lazy, none])
-)).
-
 -define(INVITE_TOKEN_TYPE_EXAMPLES(GroupId, SpaceId, AdminUserId, ClusterId, HarvesterId), [
     ?INVITE_TOKEN(?USER_JOIN_GROUP, GroupId),
     ?INVITE_TOKEN(?GROUP_JOIN_GROUP, GroupId),
     ?INVITE_TOKEN(?USER_JOIN_SPACE, SpaceId),
     ?INVITE_TOKEN(?GROUP_JOIN_SPACE, SpaceId),
-    ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId, ?SPACE_SUPPORT_PARAMS),
+    ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId),
     ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, AdminUserId),
     ?INVITE_TOKEN(?USER_JOIN_CLUSTER, ClusterId),
     ?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, ClusterId),
@@ -312,7 +308,7 @@ end_per_testcase(_, _Config) ->
     {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_GROUP, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
     {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
     {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?SUPPORT_SPACE, <<"123">>, ?SPACE_SUPPORT_PARAMS)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?SUPPORT_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
     {<<"type">>, token_type:to_json(?INVITE_TOKEN(?REGISTER_ONEPROVIDER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
     {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_CLUSTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
     {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
@@ -1686,7 +1682,7 @@ verify_invite_token(_Config) ->
         true, {?SUB(?ONEPROVIDER, Provider), 2700}
     ),
 
-    TokenGamma = create_user_temporary_token(User, ?INVITE_TOKEN(?SUPPORT_SPACE, Space, ?SPACE_SUPPORT_PARAMS), [
+    TokenGamma = create_user_temporary_token(User, ?INVITE_TOKEN(?SUPPORT_SPACE, Space), [
         #cv_time{valid_until = ozt:timestamp_seconds() + 1200},
         #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]}
     ]),

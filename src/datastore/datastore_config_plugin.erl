@@ -37,6 +37,9 @@ get_models() -> [
     od_cluster,
     od_storage,
     od_token,
+    od_atm_inventory,
+    od_atm_lambda,
+    od_atm_workflow_schema,
 
     gs_server_state,
     entity_graph_state,
