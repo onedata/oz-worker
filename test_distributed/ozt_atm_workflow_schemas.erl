@@ -275,9 +275,10 @@ example_revision_json(AtmLambdas) when is_list(AtmLambdas) ->
     StoreSchemasJson = jsonable_record:list_to_json(StoreSchemas, atm_store_schema),
     #{
         <<"description">> => atm_test_utils:example_description(),
+        <<"state">> => automation:lifecycle_state_to_json(atm_test_utils:example_lifecycle_state()),
         <<"stores">> => StoreSchemasJson,
         <<"lanes">> => example_lane_schemas_json(AtmLambdas, StoreSchemas),
-        <<"state">> => automation:lifecycle_state_to_json(atm_test_utils:example_lifecycle_state())
+        <<"dashboardSpec">> => example_dashboard_spec_json()
     }.
 
 
@@ -374,3 +375,14 @@ build_lambda_registries(AtmLambdas) ->
     maps_utils:generate_from_list(fun(AtmLambdaId) ->
         {AtmLambdaId, (ozt_atm_lambdas:get(AtmLambdaId))#od_atm_lambda.revision_registry}
     end, AtmLambdas).
+
+
+%% @private
+-spec example_dashboard_spec_json() -> json_utils:json_term().
+example_dashboard_spec_json() ->
+    % generate an example once and reuse it to avoid overheads - repetitive generation could
+    % significantly slow down the tests
+    {ok, Example} = node_cache:acquire({?MODULE, ?FUNCTION_NAME}, fun() ->
+        {ok, jsonable_record:to_json(time_series_test_utils:example_dashboard_spec()), infinity}
+    end),
+    Example.
