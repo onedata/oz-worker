@@ -372,7 +372,7 @@ gui_upload_with_confined_or_no_token_returns_proper_error(Config) ->
 
     {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config),
     {OpGuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
-    ProviderCaveat = #cv_api{whitelist = [{?OZ_WORKER, get, ?GRI_PATTERN('*', '*', '*', '*')}]},
+    ProviderCaveat = #cv_api{whitelist = [{?OZ_WORKER, get, ?GRI_PATTERN('*', <<"*">>, <<"*">>, '*')}]},
     ConfinedProviderToken = tokens:confine(ProviderToken, ProviderCaveat),
     ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(ProviderCaveat)), perform_upload(
         Config, <<"opw">>, ProviderId, OpGuiPackage, #{?HDR_X_AUTH_TOKEN => ConfinedProviderToken}
