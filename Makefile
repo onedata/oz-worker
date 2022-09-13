@@ -171,4 +171,4 @@ codetag-tracker:
 	@./bamboos/scripts/run-with-surefire-report.py \
 		--test-name CodetagTracker \
 		--report-path test/codetag_tracker_results/TEST-codetag_tracker.xml \
-		@echo "Skipping codetag-tracker for release version 20.02.*"
+		echo "Skipping codetag-tracker for release version 20.02.*"

@@ -221,6 +221,12 @@ _Codetag Tracker:
       - ./make.py -r ${bamboo.agentWorkingDirectory} codetag-tracker BRANCH=${bamboo.planRepository.branchName}
       working-dir: oz_worker
       description: Codetag Tracker
+  final-tasks:
+  - test-parser:
+      type: junit
+      ignore-time: 'false'
+      test-results: oz_worker/test/codetag_tracker_results/TEST-*.xml
+      description: Parse test results
   - script: *clear-env
   requirements: *requirements
   artifact-subscriptions: &oz-worker
@@ -243,6 +249,11 @@ _Dialyze:
       working-dir: oz_worker
       description: Dialyze
   final-tasks:
+  - test-parser:
+      type: junit
+      ignore-time: 'false'
+      test-results: oz_worker/test/dialyzer_results/TEST-*.xml
+      description: Parse test results
   - script:
       interpreter: BINSH_OR_CMDEXE
       scripts:
