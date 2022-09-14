@@ -117,7 +117,10 @@ coverage:
 
 # Dialyzes the project.
 dialyzer:
-	$(REBAR) dialyzer
+	@./bamboos/scripts/run-with-surefire-report.py \
+		--test-name Dialyze \
+		--report-path test/dialyzer_results/TEST-dialyzer.xml \
+		$(REBAR) dialyzer
 
 ##
 ## Packaging targets
@@ -165,4 +168,7 @@ artifact:
 	tar -czf oz_worker.tar.gz --no-recursion -T tar.lst
 
 codetag-tracker:
-	@echo "Skipping codetag-tracker for release version 20.02.*"
+	@./bamboos/scripts/run-with-surefire-report.py \
+		--test-name CodetagTracker \
+		--report-path test/codetag_tracker_results/TEST-codetag_tracker.xml \
+		echo "Skipping codetag-tracker for release version 20.02.*"

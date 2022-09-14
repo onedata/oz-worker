@@ -257,7 +257,7 @@ end_per_testcase(_, _Config) ->
     ?CAVEATS_TO_JSON([
         #cv_time{valid_until = ozt:timestamp_seconds() + 560},
         #cv_api{whitelist = [
-            {?OZ_WORKER, all, ?GRI_PATTERN(od_user, <<"123">>, instance, private)}
+            {?OZ_WORKER, all, ?GRI_PATTERN(od_user, <<"123">>, <<"instance">>, private)}
         ]},
         #cv_data_readonly{},
         #cv_data_path{whitelist = [<<"/ab/cdef/g">>, <<"/1/2">>]},
@@ -277,8 +277,8 @@ end_per_testcase(_, _Config) ->
     ?CAVEATS_TO_JSON([
         #cv_time{valid_until = Now + 156},
         #cv_api{whitelist = [
-            {?OP_PANEL, create, ?GRI_PATTERN('*', '*', '*', '*')},
-            {all, get, ?GRI_PATTERN(od_user, '*', '*', private)}
+            {?OP_PANEL, create, ?GRI_PATTERN('*', <<"*">>, <<"*">>, '*')},
+            {all, get, ?GRI_PATTERN(od_user, <<"*">>, <<"*">>, private)}
         ]},
         #cv_data_readonly{},
         #cv_data_path{whitelist = [<<"/767t2r3g6asd78asd/13123/dir/file.txt">>]},
@@ -847,7 +847,7 @@ confine(_Config) ->
         #cv_scope{scope = identity_token},
         #cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)]},
         #cv_interface{interface = rest},
-        #cv_api{whitelist = [{oz_worker, get, ?GRI_PATTERN(od_space, '*', '*', private)}]},
+        #cv_api{whitelist = [{oz_worker, get, ?GRI_PATTERN(od_space, <<"*">>, <<"*">>, private)}]},
         #cv_data_readonly{},
         #cv_data_path{whitelist = [<<"/a/b/c/d">>]},
         #cv_data_objectid{whitelist = [?RAND_OBJECTID, ?RAND_OBJECTID, ?RAND_OBJECTID]}

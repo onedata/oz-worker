@@ -1647,7 +1647,7 @@ gen_unverified_caveats(Consumer) -> lists:flatten([
     % (should cause verification failure)
     #cv_interface{interface = graphsync},
     #cv_interface{interface = oneclient},
-    #cv_api{whitelist = [{all, all, ?GRI_PATTERN('*', '*', '*', '*')}]},
+    #cv_api{whitelist = [{all, all, ?GRI_PATTERN('*', <<"*">>, <<"*">>, '*')}]},
     #cv_data_readonly{},
     #cv_data_path{whitelist = [<<"/space/dir/file.txt">>]},
     #cv_data_objectid{whitelist = [element(2, {ok, _} = file_id:guid_to_objectid(
