@@ -211,6 +211,7 @@ Build:
     - system.docker.executable
     - onedata
   artifact-subscriptions: [ ]
+
 _Codetag Tracker:
   key: CT
   tasks:
@@ -230,7 +231,7 @@ _Codetag Tracker:
         working-dir: oz_worker
         description: Codetag Tracker
   final-tasks:
-    - test-parser:
+    - test-parser: &parse-test-results
         type: junit
         ignore-time: 'false'
         test-results: oz_worker/test/codetag_tracker_results/TEST-*.xml
@@ -239,6 +240,7 @@ _Codetag Tracker:
   requirements: *requirements
   artifact-subscriptions: &oz-worker
     - artifact: oz_worker.tar.gz
+
 _Dialyze:
   key: DIAL
   other: &common-opts
@@ -258,10 +260,8 @@ _Dialyze:
         description: Dialyze
   final-tasks:
     - test-parser:
-        type: junit
-        ignore-time: 'false'
+        <<: *parse-test-results
         test-results: oz_worker/test/dialyzer_results/TEST-*.xml
-        description: Parse test results
     - script:
         interpreter: BINSH_OR_CMDEXE
         scripts:
@@ -272,6 +272,7 @@ _Dialyze:
     - script: *clear-env
   requirements: *requirements
   artifact-subscriptions: *oz-worker
+
 _Unit Test:
   key: UNIT
   other: *common-opts
@@ -302,10 +303,8 @@ _Unit Test:
         working-dir: oz_worker
         description: Save cover results
     - test-parser:
-        type: junit
-        ignore-time: 'false'
+        <<: *parse-test-results
         test-results: oz_worker/test/eunit_results/TEST-*.xml
-        description: Parse test results
     - script: *clear-env
   artifacts:
     - name: cover_eunit.tar.gz
@@ -315,25 +314,24 @@ _Unit Test:
       required: false
   requirements: *requirements
   artifact-subscriptions: *oz-worker
+
 access_and_identity_tokens: &ct-job
   key: AT
   other: *common-opts
   tasks:
     - checkout: *fake-checkout
     - script: *unpack
-    - script: &run-ct
+    - script:
         interpreter: BINSH_OR_CMDEXE
         scripts:
           - ./ct_run.py --suite ${bamboo.shortJobName}_test_SUITE --cover
         working-dir: oz_worker
         description: Run CT
   final-tasks:
-    - test-parser: &parse-test-results
-        type: junit
-        ignore-time: 'false'
+    - test-parser:
+        <<: *parse-test-results
         test-results: oz_worker/test_distributed/logs/*/surefire.xml
-        description: Parse test results
-    - script: &save-cover-results
+    - script:
         interpreter: BINSH_OR_CMDEXE
         scripts:
           - |-
@@ -343,7 +341,7 @@ access_and_identity_tokens: &ct-job
             tar -czf cover_ct_${bamboo.shortJobName}.tar.gz cover_ct/
         working-dir: oz_worker
         description: Save cover results
-    - script: &pack-test-logs
+    - script:
         interpreter: BINSH_OR_CMDEXE
         scripts:
           - tar -mczf ct_logs_${bamboo.shortJobName}.tar.gz oz_worker/test_distributed/logs/
@@ -363,6 +361,7 @@ access_and_identity_tokens: &ct-job
       required: false
   requirements: *requirements
   artifact-subscriptions: *oz-worker
+
 atm_inventory_groups_api:
   <<: *ct-job
   key: AIGA
@@ -370,6 +369,7 @@ atm_inventory_groups_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_atm_inventory_groups_api.tar.gz
+
 atm_inventory_misc_api:
   <<: *ct-job
   key: AIMA
@@ -377,6 +377,7 @@ atm_inventory_misc_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_atm_inventory_misc_api.tar.gz
+
 atm_inventory_users_api:
   <<: *ct-job
   key: AIUI
@@ -384,6 +385,7 @@ atm_inventory_users_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_atm_inventory_users_api.tar.gz
+
 atm_lambda_api:
   <<: *ct-job
   key: ALA
@@ -391,6 +393,7 @@ atm_lambda_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_atm_lambda_api.tar.gz
+
 atm_schema_validation:
   <<: *ct-job
   key: ASV
@@ -398,6 +401,7 @@ atm_schema_validation:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_atm_schema_validation.tar.gz
+
 atm_workflow_schema_api:
   <<: *ct-job
   key: AWSA
@@ -405,6 +409,7 @@ atm_workflow_schema_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_atm_workflow_schema_api.tar.gz
+
 basic_auth:
   <<: *ct-job
   key: US
@@ -412,6 +417,7 @@ basic_auth:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_basic_auth.tar.gz
+
 cluster_groups_api:
   <<: *ct-job
   key: CGA
@@ -419,6 +425,7 @@ cluster_groups_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_cluster_groups_api.tar.gz
+
 cluster_misc_api:
   <<: *ct-job
   key: CMA
@@ -426,6 +433,7 @@ cluster_misc_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_cluster_misc_api.tar.gz
+
 cluster_upgrade:
   <<: *ct-job
   key: CLUP
@@ -433,6 +441,7 @@ cluster_upgrade:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_cluster_upgrade.tar.gz
+
 cluster_users_api:
   <<: *ct-job
   key: CUA
@@ -440,6 +449,7 @@ cluster_users_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_cluster_users_api.tar.gz
+
 connection:
   <<: *ct-job
   key: CON
@@ -447,6 +457,7 @@ connection:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_connection.tar.gz
+
 db_browser:
   <<: *ct-job
   key: DBBRWS
@@ -454,6 +465,7 @@ db_browser:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_db_browser.tar.gz
+
 dns:
   <<: *ct-job
   key: DNS
@@ -461,6 +473,7 @@ dns:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_dns.tar.gz
+
 entities_setup:
   <<: *ct-job
   key: GROUP
@@ -468,6 +481,7 @@ entities_setup:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_entities_setup.tar.gz
+
 entitlement_mapping:
   <<: *ct-job
   key: EM
@@ -475,6 +489,7 @@ entitlement_mapping:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_entitlement_mapping.tar.gz
+
 group_atm_inventories_api:
   <<: *ct-job
   key: GAIA
@@ -482,6 +497,7 @@ group_atm_inventories_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_group_atm_inventories_api.tar.gz
+
 group_children_api:
   <<: *ct-job
   key: GRCHILDREN
@@ -489,6 +505,7 @@ group_children_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_group_children_api.tar.gz
+
 group_clusters_api:
   <<: *ct-job
   key: GCA
@@ -496,6 +513,7 @@ group_clusters_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_group_clusters_api.tar.gz
+
 group_handles_api:
   <<: *ct-job
   key: GRHANDLES
@@ -503,6 +521,7 @@ group_handles_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_group_handles_api.tar.gz
+
 group_harvesters_api:
   <<: *ct-job
   key: GHA
@@ -510,6 +529,7 @@ group_harvesters_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_group_harvesters_api.tar.gz
+
 group_hservice_api:
   <<: *ct-job
   key: GRHS
@@ -517,6 +537,7 @@ group_hservice_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_group_hservice_api.tar.gz
+
 group_misc_api:
   <<: *ct-job
   key: GRBASIC
@@ -524,6 +545,7 @@ group_misc_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_group_misc_api.tar.gz
+
 group_parents_api:
   <<: *ct-job
   key: GRPARENTS
@@ -531,6 +553,7 @@ group_parents_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_group_parents_api.tar.gz
+
 group_spaces_api:
   <<: *ct-job
   key: GRSPACES
@@ -538,6 +561,7 @@ group_spaces_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_group_spaces_api.tar.gz
+
 group_users_api:
   <<: *ct-job
   key: GRUSERS
@@ -545,6 +569,7 @@ group_users_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_group_users_api.tar.gz
+
 gui_static_distribution:
   <<: *ct-job
   key: GSD
@@ -552,6 +577,7 @@ gui_static_distribution:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_gui_static_distribution.tar.gz
+
 gui_tokens:
   <<: *ct-job
   key: TOK
@@ -559,6 +585,7 @@ gui_tokens:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_gui_tokens.tar.gz
+
 handle_groups_api:
   <<: *ct-job
   key: HANGROUPS
@@ -566,6 +593,7 @@ handle_groups_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_handle_groups_api.tar.gz
+
 handle_misc_api:
   <<: *ct-job
   key: HANBASIC
@@ -573,6 +601,7 @@ handle_misc_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_handle_misc_api.tar.gz
+
 handle_users_api:
   <<: *ct-job
   key: HANUSERS
@@ -580,6 +609,7 @@ handle_users_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_handle_users_api.tar.gz
+
 harvester_groups_api:
   <<: *ct-job
   key: HGA
@@ -587,6 +617,7 @@ harvester_groups_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_harvester_groups_api.tar.gz
+
 harvester_misc_api:
   <<: *ct-job
   key: HAR
@@ -594,6 +625,7 @@ harvester_misc_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_harvester_misc_api.tar.gz
+
 harvester_spaces_api:
   <<: *ct-job
   key: HSA
@@ -601,6 +633,7 @@ harvester_spaces_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_harvester_spaces_api.tar.gz
+
 harvester_users_api:
   <<: *ct-job
   key: HUA
@@ -608,6 +641,7 @@ harvester_users_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_harvester_users_api.tar.gz
+
 hservice_groups_api:
   <<: *ct-job
   key: HSERGROUPS
@@ -615,6 +649,7 @@ hservice_groups_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_hservice_groups_api.tar.gz
+
 hservice_misc_api:
   <<: *ct-job
   key: HSERBASIC
@@ -622,6 +657,7 @@ hservice_misc_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_hservice_misc_api.tar.gz
+
 hservice_users_api:
   <<: *ct-job
   key: HSERUSERS
@@ -629,6 +665,7 @@ hservice_users_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_hservice_users_api.tar.gz
+
 invite_tokens:
   <<: *ct-job
   key: IT
@@ -636,6 +673,7 @@ invite_tokens:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_invite_tokens.tar.gz
+
 model_upgrade:
   <<: *ct-job
   key: RC12TOR
@@ -643,6 +681,7 @@ model_upgrade:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_model_upgrade.tar.gz
+
 oai:
   <<: *ct-job
   key: OAI
@@ -650,6 +689,7 @@ oai:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_oai.tar.gz
+
 openid:
   <<: *ct-job
   key: OPID
@@ -657,6 +697,7 @@ openid:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_openid.tar.gz
+
 provider_api:
   <<: *ct-job
   key: PRED
@@ -664,6 +705,7 @@ provider_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_provider_api.tar.gz
+
 rest_auth:
   <<: *ct-job
   key: RESTA
@@ -671,6 +713,7 @@ rest_auth:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_rest_auth.tar.gz
+
 session:
   <<: *ct-job
   key: SES
@@ -678,6 +721,7 @@ session:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_session.tar.gz
+
 share_api:
   <<: *ct-job
   key: SHAR
@@ -685,6 +729,7 @@ share_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_share_api.tar.gz
+
 space_groups_api:
   <<: *ct-job
   key: SPGROUPS
@@ -692,6 +737,7 @@ space_groups_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_space_groups_api.tar.gz
+
 space_harvesters_api:
   <<: *ct-job
   key: SHA
@@ -699,6 +745,7 @@ space_harvesters_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_space_harvesters_api.tar.gz
+
 space_lifecycle:
   <<: *ct-job
   key: SPLI
@@ -706,6 +753,7 @@ space_lifecycle:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_space_lifecycle.tar.gz
+
 space_misc_api:
   <<: *ct-job
   key: SPAC
@@ -713,6 +761,7 @@ space_misc_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_space_misc_api.tar.gz
+
 space_owners:
   <<: *ct-job
   key: SPOW
@@ -720,6 +769,7 @@ space_owners:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_space_owners.tar.gz
+
 space_users_api:
   <<: *ct-job
   key: SPUSERS
@@ -727,6 +777,7 @@ space_users_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_space_users_api.tar.gz
+
 storage_misc_api:
   <<: *ct-job
   key: STOR
@@ -734,6 +785,7 @@ storage_misc_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_storage_misc_api.tar.gz
+
 token_api:
   <<: *ct-job
   key: TAP
@@ -741,6 +793,7 @@ token_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_token_api.tar.gz
+
 user_atm_inventories_api:
   <<: *ct-job
   key: UAIA
@@ -748,6 +801,7 @@ user_atm_inventories_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_user_atm_inventories_api.tar.gz
+
 user_clusters_api:
   <<: *ct-job
   key: UCA
@@ -755,6 +809,7 @@ user_clusters_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_user_clusters_api.tar.gz
+
 user_groups_api:
   <<: *ct-job
   key: USGROUPS
@@ -762,6 +817,7 @@ user_groups_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_user_groups_api.tar.gz
+
 user_handles_api:
   <<: *ct-job
   key: USHANDLES
@@ -769,6 +825,7 @@ user_handles_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_user_handles_api.tar.gz
+
 user_harvesters_api:
   <<: *ct-job
   key: UHA
@@ -776,6 +833,7 @@ user_harvesters_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_user_harvesters_api.tar.gz
+
 user_hservice_api:
   <<: *ct-job
   key: USHSERV
@@ -783,6 +841,7 @@ user_hservice_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_user_hservice_api.tar.gz
+
 user_misc_api:
   <<: *ct-job
   key: USA
@@ -790,6 +849,7 @@ user_misc_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_user_misc_api.tar.gz
+
 user_privileges_api:
   <<: *ct-job
   key: UPA
@@ -797,6 +857,7 @@ user_privileges_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_user_privileges_api.tar.gz
+
 user_spaces_api:
   <<: *ct-job
   key: USSPACES
@@ -804,6 +865,7 @@ user_spaces_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_user_spaces_api.tar.gz
+
 zone_api:
   <<: *ct-job
   key: ZON
@@ -811,6 +873,7 @@ zone_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_zone_api.tar.gz
+
 Coverage report:
   key: CR
   other: *common-opts
