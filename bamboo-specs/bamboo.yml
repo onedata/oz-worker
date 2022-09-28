@@ -194,7 +194,7 @@ Build:
           - |-
             ./oz_worker/bamboos/artifacts/push_artifact.py --hostname ${bamboo.artifactRepoHostname} --port ${bamboo.artifactRepoPort} \
                 --username ${bamboo.artifactRepoUsername} --branch ${bamboo.planRepository.branchName} --plan ${bamboo.planRepository.name} \
-                --artifact oz_worker.tar.gz
+                --artifact-name oz_worker.tar.gz
         description: Push artifact
   final-tasks:
     - script: &clear-env
