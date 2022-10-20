@@ -31,7 +31,7 @@
 %% @TODO VFS-7755 check if argument has is_batch=true and if so, if the corresponding lane's iterator has batch strategy
 %% @TODO VFS-7755 check if const value builder is compatible with argument's data spec
 %% @TODO VFS-7755 consider built in audit log when validating referenced store schemas - do we need any other built in stores?
-%% @TODO VFS-7755 sanitize result's data specs - e.g. store and onedatafs credentials can only appear in arguments
+%% @TODO VFS-7755 sanitize result's data specs - e.g. store credentials can only appear in arguments
 %% @TODO VFS-7755 check if storeSchemaId from recipe of single_value_store_content task arg builder points to single_value store
 %% @TODO VFS-7755 examine the workflows diagram and think what else should be validated
 %% @TODO VFS-7755 resource spec in lambdas/tasks should be limited for lambdas using OpenFaaS
@@ -103,8 +103,6 @@ sanitize_predefined_value(undefined, _DataSpec, _DataKeyName) ->
     ok;
 sanitize_predefined_value(_Value, #atm_data_spec{type = atm_store_credentials_type}, DataKeyName) ->
     raise_validation_error(DataKeyName, "Predefined value for store credentials is disallowed");
-sanitize_predefined_value(_Value, #atm_data_spec{type = atm_onedatafs_credentials_type}, DataKeyName) ->
-    raise_validation_error(DataKeyName, "Predefined value for OnedetaFS credentials is disallowed");
 sanitize_predefined_value(Array, #atm_data_spec{type = atm_array_type} = AtmDataSpec, DataKeyName) ->
     case atm_data_type:is_instance(atm_array_type, Array) of
         true ->
