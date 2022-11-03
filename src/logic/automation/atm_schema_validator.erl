@@ -101,8 +101,6 @@ assert_known_names(NamesToCheck, KnownNames, DataKeyName) ->
     ok | no_return().
 sanitize_predefined_value(undefined, _DataSpec, _DataKeyName) ->
     ok;
-sanitize_predefined_value(_Value, #atm_data_spec{type = atm_store_credentials_type}, DataKeyName) ->
-    raise_validation_error(DataKeyName, "Predefined value for store credentials is disallowed");
 sanitize_predefined_value(Array, #atm_data_spec{type = atm_array_type} = AtmDataSpec, DataKeyName) ->
     case atm_data_type:is_instance(atm_array_type, Array) of
         true ->
