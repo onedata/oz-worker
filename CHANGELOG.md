@@ -4,6 +4,15 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha28
+
+-   **VFS-9614** Web GUI: Added archivisation audit log view.
+-   **VFS-9531** Web GUI: Improved UX of the automation stores browser.
+-   **VFS-9339** Web GUI: Added a new file info tab with REST API
+    samples.
+-   **VFS-10037** Web GUI: Added \"rate\" and \"timeDerivative\" time
+    series chart functions.
+
 ### 21.02.0-alpha27
 
 -   **VFS-9771** Web GUI: Added handling of the restricted registration
