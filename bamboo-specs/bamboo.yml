@@ -142,6 +142,7 @@ Build:
     - script:
         interpreter: SHELL
         scripts:
+          #!/bin/bash
           - |-
             if [[ ${bamboo_planRepository_branch} != "develop" && ! ${bamboo_planRepository_branch} =~ ^release/.* ]]; then
               if [ -z ${bamboo_ManualBuildTriggerReason_userName+x} ]; then
