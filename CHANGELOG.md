@@ -10,6 +10,8 @@ CHANGELOG
 -   **VFS-9531** Web GUI: Improved UX of the automation stores browser.
 -   **VFS-9339** Web GUI: Added a new file info tab with REST API
     samples.
+-   **VFS-10065** Web GUI: Fixed API samples tab in file details modal
+    for archived file.
 -   **VFS-10037** Web GUI: Added \"rate\" and \"timeDerivative\" time
     series chart functions.
 
