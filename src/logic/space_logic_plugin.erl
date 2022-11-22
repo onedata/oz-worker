@@ -76,6 +76,7 @@ operation_supported(create, harvest_metadata, private) -> true;
 
 operation_supported(get, list, private) -> true;
 operation_supported(get, privileges, _) -> true;
+operation_supported(get, api_samples, private) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
@@ -386,6 +387,9 @@ get(#el_req{gri = #gri{aspect = privileges}}, _) ->
         <<"manager">> => privileges:space_manager(),
         <<"admin">> => privileges:space_admin()
     }};
+
+get(#el_req{gri = #gri{id = SpaceId, aspect = api_samples}}, _) ->
+    {ok, space_api_samples:generate_for(SpaceId)};
 
 get(#el_req{gri = #gri{aspect = owners}}, #od_space{owners = Owners}) ->
     {ok, Owners};
@@ -718,6 +722,9 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = space_support_to
 authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
 
+authorize(#el_req{operation = get, gri = #gri{aspect = api_samples}, auth = ?USER(UserId)}, Space) ->
+    entity_graph:has_relation(direct, bottom_up, od_user, UserId, Space);
+
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse auth_by_support(Req, Space);
 
@@ -900,6 +907,9 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = group}
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
     [?OZ_SPACES_LIST];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = api_samples, scope = private}}) ->
+    [?OZ_SPACES_VIEW];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}) ->
     [?OZ_SPACES_VIEW];

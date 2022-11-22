@@ -418,6 +418,9 @@ translate_group(#gri{aspect = eff_atm_inventories}, AtmInventories) ->
 translate_space(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
     Privileges;
 
+translate_space(#gri{aspect = api_samples, scope = private}, ApiSamples) ->
+    ApiSamples;
+
 translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) ->
     #od_space{
         name = Name,

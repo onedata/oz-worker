@@ -66,6 +66,7 @@ stages:
         - _Dialyze
         - _Unit Test
         - access_and_identity_tokens
+        - api_samples
         - atm_inventory_groups_api
         - atm_inventory_misc_api
         - atm_inventory_users_api
@@ -362,6 +363,14 @@ access_and_identity_tokens: &ct-job
       required: false
   requirements: *requirements
   artifact-subscriptions: *oz-worker
+
+api_samples:
+  <<: *ct-job
+  key: APIS
+  artifacts:
+    - *ct_logs
+    - <<: *cover_ct
+      name: cover_ct_api_samples.tar.gz
 
 atm_inventory_groups_api:
   <<: *ct-job
@@ -939,6 +948,7 @@ Coverage report:
     - artifact: oz_worker.tar.gz
     - artifact: cover_eunit.tar.gz
     - artifact: cover_ct_access_and_identity_tokens.tar.gz
+    - artifact: cover_ct_api_samples.tar.gz
     - artifact: cover_ct_atm_inventory_groups_api.tar.gz
     - artifact: cover_ct_atm_inventory_misc_api.tar.gz
     - artifact: cover_ct_atm_inventory_users_api.tar.gz

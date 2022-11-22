@@ -122,6 +122,9 @@ translate_value(ProtocolVersion, GRI, Data) ->
 translate_resource(_, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->
     #{<<"timeMillis">> => TimeMillis};
 
+translate_resource(_, #gri{type = od_space, aspect = api_samples, scope = private}, ApiSamples) ->
+    ApiSamples;
+
 translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, User) ->
     #od_user{
         full_name = FullName,

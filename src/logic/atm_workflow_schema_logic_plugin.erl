@@ -139,6 +139,11 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = instance} = GRI,
 create(#el_req{gri = #gri{id = AtmWorkflowSchemaId, aspect = dump}, data = Data}) ->
     fun(AtmWorkflowSchema) ->
         IncludedRevision = maps:get(<<"includeRevision">>, Data),
+
+        atm_workflow_schema_revision_registry:has_revision(
+            IncludedRevision, AtmWorkflowSchema#od_atm_workflow_schema.revision_registry
+        ) orelse throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"includeRevision">>)),
+
         {ok, value, od_atm_workflow_schema:dump_to_json(
             AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevision
         )}
