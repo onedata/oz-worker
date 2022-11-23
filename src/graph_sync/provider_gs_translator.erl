@@ -123,6 +123,8 @@ translate_resource(_, #gri{type = od_provider, aspect = current_time}, TimeMilli
     #{<<"timeMillis">> => TimeMillis};
 
 translate_resource(_, #gri{type = od_space, aspect = api_samples, scope = private}, ApiSamples) ->
+    % @TODO VFS-4520 this translator is only added to enable GS API testing in the api framework
+    % (currently it supports only the provider GS API)
     ApiSamples;
 
 translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, User) ->

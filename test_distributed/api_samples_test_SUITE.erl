@@ -34,12 +34,12 @@
     init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
-    przymiarka_test/1
+    space_api_samples_test/1
 ]).
 
 all() ->
     ?ALL([
-        przymiarka_test
+        space_api_samples_test
     ]).
 
 
@@ -58,19 +58,19 @@ all() ->
 %%%===================================================================
 
 
-przymiarka_test(Config) ->
+space_api_samples_test(Config) ->
     Creator = ozt_users:create(),
     SpaceId = ozt_users:create_space_for(Creator),
 
     AnotherMember = ozt_users:create(),
     TestedUser = ozt_users:create(),
     ozt_spaces:add_user(SpaceId, AnotherMember, []),
-    ozt_spaces:add_user(SpaceId, TestedUser, []),
+    ozt_spaces:add_user(SpaceId, TestedUser, lists_utils:random_sublist(privileges:space_privileges())),
 
     TestedGroup = ozt_groups:create(),
-    ozt_spaces:add_group(SpaceId, TestedGroup, []),
+    ozt_spaces:add_group(SpaceId, TestedGroup, lists_utils:random_sublist(privileges:space_privileges())),
 
-    NonAdmin = ozt_users:create(),
+    NonMember = ozt_users:create(),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -82,7 +82,7 @@ przymiarka_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, NonAdmin}
+                {user, NonMember}
             ]
         },
         gs_spec = #gs_spec{
