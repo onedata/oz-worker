@@ -414,8 +414,7 @@ create(#el_req{auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch, 
         end,
         {ok, Res} = case Batch of
             [] -> {ok, lists:map(fun(IndexId) -> {IndexId, ok} end, IndicesToUpdate)};
-            _ ->
-                HarvestingBackend:submit_batch(Endpoint, HarvesterId, maps:with(IndicesToUpdate, ExistingIndices), Batch)
+            _ -> HarvestingBackend:submit_batch(Endpoint, HarvesterId, maps:with(IndicesToUpdate, ExistingIndices), Batch)
         end,
         harvester_indices:update_stats(HarvesterId, Res, fun
             (PreviousStats, ok) ->
@@ -1145,8 +1144,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = index}}) -> #{
                 orelse throw(?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(Key, od_harvester:all_metadata_types())),
             true
         end},
-        <<"includeFileDetails">> =>
-        {list_of_atoms, od_harvester:all_file_details()},
+        <<"includeFileDetails">> => {list_of_atoms, od_harvester:all_file_details()},
         <<"includeRejectionReason">> => {boolean, any},
         <<"retryOnRejection">> => {boolean, any}
     }
