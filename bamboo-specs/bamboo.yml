@@ -322,6 +322,15 @@ access_and_identity_tokens: &ct-job
   other: *common-opts
   tasks:
     - checkout: *fake-checkout
+    - script: *clear-env
+    # although oz-worker tests do not require minikube, restarting it clears any
+    # problems such us pods hung in Terminating state or NotReady k8s node, which
+    # can cause problems with starting a dockerized env_up environment
+    - script:
+        interpreter: BINSH_OR_CMDEXE
+        scripts:
+          - sudo ${HOME}/restart_minikube.sh
+        description: Restart minikube
     - script: *unpack
     - script:
         interpreter: BINSH_OR_CMDEXE
