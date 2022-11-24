@@ -28,7 +28,9 @@
 -export([create_group_invite_token/2]).
 -export([create_support_token/2]).
 -export([create_share/2]).
--export([get_user_privileges/2, get_group_privileges/2]).
+-export([get_users/1, get_groups/1, get_eff_users/1, get_eff_groups/1]).
+-export([get_user_privileges/2, get_group_privileges/2, get_eff_user_privileges/2, get_eff_group_privileges/2]).
+-export([get_shares/1]).
 -export([set_user_privileges/3]).
 -export([random_support_parameters/0, expected_tweaked_support_parameters/1]).
 -export([set_support_parameters/3, get_support_parameters/2]).
@@ -127,6 +129,30 @@ create_share(SpaceId, Name) ->
     ShareId.
 
 
+-spec get_users(od_space:id()) -> [od_user:id()].
+get_users(SpaceId) ->
+    {ok, Users} = ?assertMatch({ok, _}, ozt:rpc(space_logic, get_users, [?ROOT, SpaceId])),
+    Users.
+
+
+-spec get_groups(od_space:id()) -> [od_group:id()].
+get_groups(SpaceId) ->
+    {ok, Groups} = ?assertMatch({ok, _}, ozt:rpc(space_logic, get_groups, [?ROOT, SpaceId])),
+    Groups.
+
+
+-spec get_eff_users(od_space:id()) -> [od_user:id()].
+get_eff_users(SpaceId) ->
+    {ok, Users} = ?assertMatch({ok, _}, ozt:rpc(space_logic, get_eff_users, [?ROOT, SpaceId])),
+    Users.
+
+
+-spec get_eff_groups(od_space:id()) -> [od_group:id()].
+get_eff_groups(SpaceId) ->
+    {ok, Groups} = ?assertMatch({ok, _}, ozt:rpc(space_logic, get_eff_groups, [?ROOT, SpaceId])),
+    Groups.
+
+
 -spec get_user_privileges(od_space:id(), od_user:id()) -> [privileges:space_privilege()].
 get_user_privileges(SpaceId, UserId) ->
     {ok, Privs} = ?assertMatch({ok, _}, ozt:rpc(space_logic, get_user_privileges, [?ROOT, SpaceId, UserId])),
@@ -137,6 +163,24 @@ get_user_privileges(SpaceId, UserId) ->
 get_group_privileges(SpaceId, GroupId) ->
     {ok, Privs} = ?assertMatch({ok, _}, ozt:rpc(space_logic, get_group_privileges, [?ROOT, SpaceId, GroupId])),
     Privs.
+
+
+-spec get_eff_user_privileges(od_space:id(), od_user:id()) -> [privileges:space_privilege()].
+get_eff_user_privileges(SpaceId, UserId) ->
+    {ok, Privs} = ?assertMatch({ok, _}, ozt:rpc(space_logic, get_eff_user_privileges, [?ROOT, SpaceId, UserId])),
+    Privs.
+
+
+-spec get_eff_group_privileges(od_space:id(), od_group:id()) -> [privileges:space_privilege()].
+get_eff_group_privileges(SpaceId, GroupId) ->
+    {ok, Privs} = ?assertMatch({ok, _}, ozt:rpc(space_logic, get_eff_group_privileges, [?ROOT, SpaceId, GroupId])),
+    Privs.
+
+
+-spec get_shares(od_space:id()) -> [od_share:id()].
+get_shares(SpaceId) ->
+    {ok, Shares} = ?assertMatch({ok, _}, ozt:rpc(space_logic, get_shares, [?ROOT, SpaceId])),
+    Shares.
 
 
 -spec set_user_privileges(od_space:id(), od_user:id(), [privileges:space_privilege()]) -> ok.

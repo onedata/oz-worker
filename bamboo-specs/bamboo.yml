@@ -66,6 +66,7 @@ stages:
         - _Dialyze
         - _Unit Test
         - access_and_identity_tokens
+        - api_samples
         - atm_inventory_groups_api
         - atm_inventory_misc_api
         - atm_inventory_users_api
@@ -321,6 +322,15 @@ access_and_identity_tokens: &ct-job
   other: *common-opts
   tasks:
     - checkout: *fake-checkout
+    - script: *clear-env
+    # although oz-worker tests do not require minikube, restarting it clears any
+    # problems such us pods hung in Terminating state or NotReady k8s node, which
+    # can cause problems with starting a dockerized env_up environment
+    - script:
+        interpreter: BINSH_OR_CMDEXE
+        scripts:
+          - sudo ${HOME}/restart_minikube.sh
+        description: Restart minikube
     - script: *unpack
     - script:
         interpreter: BINSH_OR_CMDEXE
@@ -362,6 +372,14 @@ access_and_identity_tokens: &ct-job
       required: false
   requirements: *requirements
   artifact-subscriptions: *oz-worker
+
+api_samples:
+  <<: *ct-job
+  key: APIS
+  artifacts:
+    - *ct_logs
+    - <<: *cover_ct
+      name: cover_ct_api_samples.tar.gz
 
 atm_inventory_groups_api:
   <<: *ct-job
@@ -939,6 +957,7 @@ Coverage report:
     - artifact: oz_worker.tar.gz
     - artifact: cover_eunit.tar.gz
     - artifact: cover_ct_access_and_identity_tokens.tar.gz
+    - artifact: cover_ct_api_samples.tar.gz
     - artifact: cover_ct_atm_inventory_groups_api.tar.gz
     - artifact: cover_ct_atm_inventory_misc_api.tar.gz
     - artifact: cover_ct_atm_inventory_users_api.tar.gz
