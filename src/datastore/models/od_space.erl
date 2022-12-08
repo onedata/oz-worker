@@ -1161,13 +1161,7 @@ upgrade_record(13, Space) ->
         EffHarvesters,
 
         #support_parameters_registry{
-            registry = maps:map(fun(_ProviderId, _) ->
-                #support_parameters{
-                    accounting_enabled = false,
-                    dir_stats_service_enabled = false,
-                    dir_stats_service_status = disabled
-                }
-            end, EffProviders)
+            registry = maps:map(fun(_ProviderId, _) -> ?POST_SPACE_UPGRADE_SUPPORT_PARAMETERS end, EffProviders)
         },
 
         CreationTime,
