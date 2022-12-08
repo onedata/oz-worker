@@ -41,7 +41,10 @@ get_env(Key) ->
 
 -spec get_env(Key :: atom(), Default :: term()) -> term().
 get_env(Key, Default) ->
-    application:get_env(?APP_NAME, Key, Default).
+    case application:get_env(?APP_NAME, Key, Default) of
+        undefined -> Default;
+        Other -> Other
+    end.
 
 
 -spec set_env(Key :: atom(), Value :: term()) -> ok.
