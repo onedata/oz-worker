@@ -2577,8 +2577,8 @@ create_2_providers_and_5_supported_spaces(Config) ->
                 <<"providers">> => #{P1 => SupportSize, P2 => SupportSize},
                 <<"supportParametersRegistry">> => #support_parameters_registry{
                     registry = #{
-                        P1 => ?DEFAULT_SUPPORT_PARAMETERS,
-                        P2 => ?DEFAULT_SUPPORT_PARAMETERS
+                        P1 => ozt_spaces:expected_tweaked_support_parameters(?DEFAULT_SUPPORT_PARAMETERS),
+                        P2 => ozt_spaces:expected_tweaked_support_parameters(?DEFAULT_SUPPORT_PARAMETERS)
                     }
                 }
             },

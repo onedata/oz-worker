@@ -527,11 +527,15 @@ support_space_test(Config) ->
                 false ->
                     #{};
                 true ->
+                    DirStatsEnabled = kv_utils:get([<<"spaceSupportParameters">>, <<"dirStatsServiceEnabled">>], Data, true),
                     #{
                         SupportingProviderId => ozt_spaces:expected_tweaked_support_parameters(#support_parameters{
                             accounting_enabled = kv_utils:get([<<"spaceSupportParameters">>, <<"accountingEnabled">>], Data, false),
-                            dir_stats_service_enabled = kv_utils:get([<<"spaceSupportParameters">>, <<"dirStatsServiceEnabled">>], Data, false),
-                            dir_stats_service_status = disabled
+                            dir_stats_service_enabled = DirStatsEnabled,
+                            dir_stats_service_status = case DirStatsEnabled of
+                                true -> initializing;
+                                false -> disabled
+                            end
                         })
                     }
             end
@@ -734,8 +738,8 @@ revoke_support_test(Config) ->
             false ->
                 #support_parameters{
                     accounting_enabled = false,
-                    dir_stats_service_enabled = false,
-                    dir_stats_service_status = disabled
+                    dir_stats_service_enabled = true,
+                    dir_stats_service_status = initializing
                 }
         end,
         ?assertEqual(ExpectedSupportParametersEntry, maps:get(
