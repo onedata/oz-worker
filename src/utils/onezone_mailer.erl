@@ -8,12 +8,14 @@
 %%% @doc
 %%% Interface for sending emails. Uses a simple SMTP relay to send emails
 %%% using an external mailbox. Credentials are configured in env variables.
+%%% NOTE: the Subject in all emails is automatically prefixed with Onezone
+%%% domain for unified appearance.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(onezone_mailer).
 -author("Lukasz Opiola").
 
--include_lib("ctool/include/smtp_client.hrl").
+-include("utils/smtp_client.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/errors.hrl").
 
@@ -38,10 +40,18 @@
 %%% API
 %%%===================================================================
 
-
-%% @doc NOTE: the Subject is automatically prefixed with Onezone domain for unified appearance
--spec send([smtp_client:email_address()], binary(), binary()) -> ok | ?ERROR_INTERNAL_SERVER_ERROR.
+-spec send([smtp_client:email_address()], binary(), binary()) -> ok | ?ERROR_INTERNAL_SERVER_ERROR(_).
 send(RecipientAddresses, Subject, Body) ->
+    ?catch_exceptions(send_unsafe(RecipientAddresses, Subject, Body)).
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%% @private
+-spec send_unsafe([smtp_client:email_address()], binary(), binary()) ->
+    ok | ?ERROR_INTERNAL_SERVER_ERROR(_) | no_return().
+send_unsafe(RecipientAddresses, Subject, Body) ->
     EmailSpec = #email_spec{
         relay = ?RELAY,
         username = ?USERNAME,
@@ -57,25 +67,25 @@ send(RecipientAddresses, Subject, Body) ->
         {ok, ServerReply} ->
             ?info(
                 "Email successfully sent~n"
-                " To:        ~s~n"
-                " Subject:   ~s~n"
-                " Body:      ~B bytes~n"
-                " Srv reply: ~s",
+                "> To:        ~s~n"
+                "> Subject:   ~s~n"
+                "> Body:      ~B bytes~n"
+                "> Srv reply: ~s",
                 [
                     str_utils:join_binary(RecipientAddresses, <<", ">>),
                     Subject,
                     byte_size(Body),
-                    ServerReply
+                    string:trim(ServerReply)
                 ]
             );
         {error, {Type, Details}} ->
-            ?error(
+            ?report_internal_server_error(
                 "Email send error~n"
-                " To:       ~s~n"
-                " Subject:  ~s~n"
-                " Body:     ~B bytes~n"
-                " Err type: ~w~n"
-                " Details:  ~p",
+                "> To:       ~s~n"
+                "> Subject:  ~s~n"
+                "> Body:     ~B bytes~n"
+                "> Err type: ~w~n"
+                "> Details:  ~p",
                 [
                     str_utils:join_binary(RecipientAddresses, <<", ">>),
                     Subject,
@@ -83,6 +93,5 @@ send(RecipientAddresses, Subject, Body) ->
                     Type,
                     Details
                 ]
-            ),
-            ?ERROR_INTERNAL_SERVER_ERROR
+            )
     end.

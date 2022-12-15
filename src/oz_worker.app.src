@@ -25,6 +25,7 @@
         meck,
         esaml,
         gui,
+        gen_smtp,
         erldns,
         ctool,
         %% ctool already requires those apps below, but they are here
