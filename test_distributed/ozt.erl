@@ -52,16 +52,15 @@
 init_per_suite(Config) ->
     init_per_suite(Config, fun() -> ok end).
 
-%% @doc allows providing an extra CT posthook
 -spec init_per_suite(ct_test_config(), fun(() -> ok)) -> ct_test_config().
-init_per_suite(Config, ExtraPosthook) ->
-    Posthook = fun(NewConfig) ->
+init_per_suite(Config, Posthook) ->
+    EnvUpPosthook = fun(NewConfig) ->
         store_test_config(NewConfig),
-        ExtraPosthook(),
+        Posthook(),
         NewConfig
     end,
     ModulesToLoad = ?OZT_MODULES ++ proplists:get_value(?LOAD_MODULES, Config, []),
-    [{?ENV_UP_POSTHOOK, Posthook}, {?LOAD_MODULES, ModulesToLoad} | proplists:delete(?LOAD_MODULES, Config)].
+    [{?ENV_UP_POSTHOOK, EnvUpPosthook}, {?LOAD_MODULES, ModulesToLoad} | proplists:delete(?LOAD_MODULES, Config)].
 
 
 -spec store_test_config(ct_test_config()) -> ok.
