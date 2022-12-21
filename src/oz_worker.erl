@@ -30,18 +30,22 @@
 
 -spec get_env(Key :: atom()) -> term() | no_return().
 get_env(Key) ->
-    case application:get_env(?APP_NAME, Key) of
-        {ok, Value} ->
-            Value;
+    case get_env(Key, undefined) of
         undefined ->
-            ?alert("Could not find required env variable for oz-worker: ~p", [Key]),
-            error({missing_env_variable, Key})
+            ?alert("Could not find required env variable for ~w: ~w", [?APP_NAME, Key]),
+            error({missing_env_variable, Key});
+        Value ->
+            Value
     end.
 
 
 -spec get_env(Key :: atom(), Default :: term()) -> term().
 get_env(Key, Default) ->
-    application:get_env(?APP_NAME, Key, Default).
+    % undefined values are treated as if there was no env set at all
+    case application:get_env(?APP_NAME, Key, Default) of
+        undefined -> Default;
+        Other -> Other
+    end.
 
 
 -spec set_env(Key :: atom(), Value :: term()) -> ok.

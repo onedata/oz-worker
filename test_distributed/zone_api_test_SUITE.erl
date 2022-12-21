@@ -351,7 +351,7 @@ expected_configuration(Config) ->
 
     SubdomainDelegationSupported = false,
     OZDomain = oz_test_utils:oz_domain(Config),
-    OZName = case oz_test_utils:get_env(Config, oz_name) of
+    OZName = case oz_test_utils:get_env(Config, oz_name, undefined) of
         undefined -> null;
         OZNameString -> list_to_binary(OZNameString)
     end,
