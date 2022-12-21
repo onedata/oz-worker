@@ -4,6 +4,14 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-rc1
+
+-   **VFS-9162** Web GUI: Added api samples modal for space.
+-   **VFS-10235** Changed default value of `accountingEnabled` parameter
+    to `true` when requesting space support.
+-   **VFS-10128** Web GUI: Added possibility to map a lambda result to
+    many stores in an automation task definition.
+
 ### 21.02.0-alpha28
 
 -   **VFS-9614** Web GUI: Added archivisation audit log view.
