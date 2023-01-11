@@ -711,7 +711,7 @@ field_specs(shares) -> [
 field_specs(providers) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
     {last_activity, last_activity, 16, fun(Doc) -> provider_connections:get_last_activity(Doc#document.key) end},
-    {version, text, 14, fun(Doc) ->
+    {version, text, 15, fun(Doc) ->
         {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, Doc#document.key),
         Version
     end},

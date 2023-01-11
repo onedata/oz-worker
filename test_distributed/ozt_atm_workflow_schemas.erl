@@ -264,7 +264,7 @@ example_revision_json(AtmInventoryId) when is_binary(AtmInventoryId) ->
         [] ->
             lists_utils:generate(fun() ->
                 ozt_atm_lambdas:create(AtmInventoryId)
-            end, ?RAND_INT(1, 4)),
+            end, ?RAND_INT(1, 3)),
             ozt_atm_inventories:get_atm_lambdas(AtmInventoryId);
         List ->
             List
@@ -275,9 +275,10 @@ example_revision_json(AtmLambdas) when is_list(AtmLambdas) ->
     StoreSchemasJson = jsonable_record:list_to_json(StoreSchemas, atm_store_schema),
     #{
         <<"description">> => atm_test_utils:example_description(),
+        <<"state">> => automation:lifecycle_state_to_json(atm_test_utils:example_lifecycle_state()),
         <<"stores">> => StoreSchemasJson,
         <<"lanes">> => example_lane_schemas_json(AtmLambdas, StoreSchemas),
-        <<"state">> => automation:lifecycle_state_to_json(atm_test_utils:example_lifecycle_state())
+        <<"dashboardSpec">> => example_dashboard_spec_json()
     }.
 
 
@@ -339,7 +340,7 @@ example_lane_schemas_json([], _StoreSchemas) ->
 example_lane_schemas_json(AtmLambdas, StoreSchemas) ->
     lists_utils:generate(fun() ->
         example_lane_schema_json(AtmLambdas, StoreSchemas)
-    end, ?RAND_INT(0, 4)).
+    end, ?RAND_INT(0, 3)).
 
 
 -spec example_parallel_box_schema([od_atm_lambda:id()], [automation:id()]) -> atm_parallel_box_schema:record().
@@ -352,7 +353,7 @@ example_parallel_box_schema(AtmLambdas, StoreSchemaIds) ->
 example_parallel_box_schemas(AtmLambdas, StoreSchemaIds) ->
     lists_utils:generate(fun() ->
         example_parallel_box_schema(AtmLambdas, StoreSchemaIds)
-    end, ?RAND_INT(0, 4)).
+    end, ?RAND_INT(0, 3)).
 
 
 -spec example_task_schema([od_atm_lambda:id()], [automation:id()]) -> atm_task_schema:record().
@@ -374,3 +375,14 @@ build_lambda_registries(AtmLambdas) ->
     maps_utils:generate_from_list(fun(AtmLambdaId) ->
         {AtmLambdaId, (ozt_atm_lambdas:get(AtmLambdaId))#od_atm_lambda.revision_registry}
     end, AtmLambdas).
+
+
+%% @private
+-spec example_dashboard_spec_json() -> json_utils:json_term().
+example_dashboard_spec_json() ->
+    % generate an example once and reuse it to avoid overheads - repetitive generation could
+    % significantly slow down the tests
+    {ok, Example} = node_cache:acquire({?MODULE, ?FUNCTION_NAME}, fun() ->
+        {ok, jsonable_record:to_json(time_series_test_utils:example_dashboard_spec()), infinity}
+    end),
+    Example.

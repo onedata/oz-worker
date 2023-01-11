@@ -45,6 +45,7 @@
 % according to target entity type
 -type privileges_type() :: to_invite | to_set_privs | to_consume.
 -type privileges_modification() :: {grant | revoke, privileges_type()}.
+-type consumption_interface() :: logic | graphsync | rest.
 
 -record(consume_request, {
     logic_call_args :: {Module :: atom(), Function :: atom(), Args :: [term()]},
@@ -52,7 +53,7 @@
     graph_sync_args :: {gri:gri(), gs_protocol:auth_hint(), entity_logic:data()},
     % If specified, the function will be run after successful consumption and
     % should return if the system state is as expected.
-    validate_result_fun = undefined :: undefined | fun(() -> boolean())
+    validate_result_fun :: fun((consumption_interface(), ResultData :: term()) -> boolean())
 }).
 
 -record(testcase, {
@@ -210,7 +211,8 @@ user_join_group_token(_Config) ->
             #consume_request{
                 logic_call_args = {user_logic, join_group, [Auth, UserId, Data]},
                 rest_call_args = {<<"/user/groups/join">>, Data},
-                graph_sync_args = {?GRI(od_group, undefined, join, private), ?AS_USER(UserId), Data}
+                graph_sync_args = {?GRI(od_group, undefined, join, private), ?AS_USER(UserId), Data},
+                validate_result_fun = fun(_, _) -> ozt:rpc(user_logic, has_eff_group, [UserId, GroupId]) end
             }
         end,
 
@@ -281,7 +283,10 @@ group_join_group_token(_Config) ->
             #consume_request{
                 logic_call_args = {group_logic, join_group, [Auth, ChildGroupId, Data]},
                 rest_call_args = {[<<"/groups/">>, ChildGroupId, <<"/parents/join">>], Data},
-                graph_sync_args = {?GRI(od_group, undefined, join, private), ?AS_GROUP(ChildGroupId), Data}
+                graph_sync_args = {?GRI(od_group, undefined, join, private), ?AS_GROUP(ChildGroupId), Data},
+                validate_result_fun = fun(_, _) ->
+                    ozt:rpc(group_logic, has_eff_parent, [ChildGroupId, ParentGroupId])
+                end
             }
         end,
 
@@ -333,7 +338,8 @@ user_join_space_token(_Config) ->
             #consume_request{
                 logic_call_args = {user_logic, join_space, [Auth, UserId, Data]},
                 rest_call_args = {<<"/user/spaces/join">>, Data},
-                graph_sync_args = {?GRI(od_space, undefined, join, private), ?AS_USER(UserId), Data}
+                graph_sync_args = {?GRI(od_space, undefined, join, private), ?AS_USER(UserId), Data},
+                validate_result_fun = fun(_, _) -> ozt:rpc(user_logic, has_eff_space, [UserId, SpaceId]) end
             }
         end,
 
@@ -408,7 +414,8 @@ group_join_space_token(_Config) ->
             #consume_request{
                 logic_call_args = {group_logic, join_space, [Auth, GroupId, Data]},
                 rest_call_args = {[<<"/groups/">>, GroupId, <<"/spaces/join">>], Data},
-                graph_sync_args = {?GRI(od_space, undefined, join, private), ?AS_GROUP(GroupId), Data}
+                graph_sync_args = {?GRI(od_space, undefined, join, private), ?AS_GROUP(GroupId), Data},
+                validate_result_fun = fun(_, _) -> ozt:rpc(group_logic, has_eff_space, [GroupId, SpaceId]) end
             }
         end,
 
@@ -429,13 +436,9 @@ support_space_token(_Config) ->
     % correctly (owners effectively have all the privileges)
     NonSpaceOwnerId = ozt_users:create(),
     ozt_spaces:add_user(SpaceId, NonSpaceOwnerId),
-    TokenDataWrite = lists_utils:random_element([global, none]),
-    TokenMetaReplication = lists_utils:random_element([eager, lazy, none]),
 
     ?assert(run_invite_token_tests(#testcase{
-        token_type = ?INVITE_TOKEN(
-            ?SUPPORT_SPACE, SpaceId, support_parameters:build(TokenDataWrite, TokenMetaReplication)
-        ),
+        token_type = ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId),
 
         eligible_to_invite = ?SUB(user, NonSpaceOwnerId),
         requires_privileges_to_invite = true,
@@ -477,7 +480,10 @@ support_space_token(_Config) ->
             #consume_request{
                 logic_call_args = {storage_logic, support_space, [Auth, StorageId, Data]},
                 rest_call_args = not_available,
-                graph_sync_args = {?GRI(od_storage, StorageId, support, private), undefined, Data}
+                graph_sync_args = {?GRI(od_storage, StorageId, support, private), undefined, Data},
+                validate_result_fun = fun(_, _) ->
+                    ozt:rpc(space_logic, is_supported_by_provider, [SpaceId, ProviderId])
+                end
             }
         end,
 
@@ -549,7 +555,8 @@ harvester_join_space_token(_Config) ->
             #consume_request{
                 logic_call_args = {harvester_logic, join_space, [Auth, HarvesterId, Data]},
                 rest_call_args = {[<<"/harvesters/">>, HarvesterId, <<"/spaces/join">>], Data},
-                graph_sync_args = {?GRI(od_space, undefined, join, private), ?AS_HARVESTER(HarvesterId), Data}
+                graph_sync_args = {?GRI(od_space, undefined, join, private), ?AS_HARVESTER(HarvesterId), Data},
+                validate_result_fun = fun(_, _) -> ozt:rpc(harvester_logic, has_space, [HarvesterId, SpaceId]) end
             }
         end,
 
@@ -607,7 +614,15 @@ register_oneprovider_token(_Config) ->
             #consume_request{
                 logic_call_args = {provider_logic, create, [Auth, Data]},
                 rest_call_args = {<<"/providers/">>, Data},
-                graph_sync_args = {?GRI(od_provider, undefined, instance, private), undefined, Data}
+                graph_sync_args = {?GRI(od_provider, undefined, instance, private), undefined, Data},
+                validate_result_fun = fun(Interface, Result) ->
+                    ClusterId = case {Interface, Result} of
+                        {logic, {ProviderId, _RootToken}} -> ProviderId;
+                        {rest, #{<<"providerId">> := ProviderId}} -> ProviderId;
+                        {graphsync, #gs_resp_graph{data = #{<<"gri">> := GRI}}} -> (gri:deserialize(GRI))#gri.id
+                    end,
+                    ozt:rpc(cluster_logic, has_direct_user, [ClusterId, AdminUserId])
+                end
             }
         end,
 
@@ -659,7 +674,8 @@ user_join_cluster_token(_Config) ->
             #consume_request{
                 logic_call_args = {user_logic, join_cluster, [Auth, UserId, Data]},
                 rest_call_args = {<<"/user/clusters/join">>, Data},
-                graph_sync_args = {?GRI(od_cluster, undefined, join, private), ?AS_USER(UserId), Data}
+                graph_sync_args = {?GRI(od_cluster, undefined, join, private), ?AS_USER(UserId), Data},
+                validate_result_fun = fun(_, _) -> ozt:rpc(user_logic, has_eff_cluster, [UserId, ClusterId]) end
             }
         end,
 
@@ -739,7 +755,8 @@ group_join_cluster_token(_Config) ->
             #consume_request{
                 logic_call_args = {group_logic, join_cluster, [Auth, GroupId, Data]},
                 rest_call_args = {[<<"/groups/">>, GroupId, <<"/clusters/join">>], Data},
-                graph_sync_args = {?GRI(od_cluster, undefined, join, private), ?AS_GROUP(GroupId), Data}
+                graph_sync_args = {?GRI(od_cluster, undefined, join, private), ?AS_GROUP(GroupId), Data},
+                validate_result_fun = fun(_, _) -> ozt:rpc(group_logic, has_eff_cluster, [GroupId, ClusterId]) end
             }
         end,
 
@@ -799,7 +816,8 @@ user_join_harvester_token(_Config) ->
             #consume_request{
                 logic_call_args = {user_logic, join_harvester, [Auth, UserId, Data]},
                 rest_call_args = {<<"/user/harvesters/join">>, Data},
-                graph_sync_args = {?GRI(od_harvester, undefined, join, private), ?AS_USER(UserId), Data}
+                graph_sync_args = {?GRI(od_harvester, undefined, join, private), ?AS_USER(UserId), Data},
+                validate_result_fun = fun(_, _) -> ozt:rpc(user_logic, has_eff_harvester, [UserId, HarvesterId]) end
             }
         end,
 
@@ -870,7 +888,8 @@ group_join_harvester_token(_Config) ->
             #consume_request{
                 logic_call_args = {group_logic, join_harvester, [Auth, GroupId, Data]},
                 rest_call_args = {[<<"/groups/">>, GroupId, <<"/harvesters/join">>], Data},
-                graph_sync_args = {?GRI(od_harvester, undefined, join, private), ?AS_GROUP(GroupId), Data}
+                graph_sync_args = {?GRI(od_harvester, undefined, join, private), ?AS_GROUP(GroupId), Data},
+                validate_result_fun = fun(_, _) -> ozt:rpc(group_logic, has_eff_harvester, [GroupId, HarvesterId]) end
             }
         end,
 
@@ -942,7 +961,8 @@ space_join_harvester_token(_Config) ->
             #consume_request{
                 logic_call_args = {space_logic, join_harvester, [Auth, SpaceId, Data]},
                 rest_call_args = {[<<"/spaces/">>, SpaceId, <<"/harvesters/join">>], Data},
-                graph_sync_args = {?GRI(od_harvester, undefined, join, private), ?AS_SPACE(SpaceId), Data}
+                graph_sync_args = {?GRI(od_harvester, undefined, join, private), ?AS_SPACE(SpaceId), Data},
+                validate_result_fun = fun(_, _) -> ozt:rpc(space_logic, has_harvester, [SpaceId, HarvesterId]) end
             }
         end,
 
@@ -990,7 +1010,10 @@ user_join_atm_inventory_token(_Config) ->
             #consume_request{
                 logic_call_args = {user_logic, join_atm_inventory, [Auth, UserId, Data]},
                 rest_call_args = {<<"/user/atm_inventories/join">>, Data},
-                graph_sync_args = {?GRI(od_atm_inventory, undefined, join, private), ?AS_USER(UserId), Data}
+                graph_sync_args = {?GRI(od_atm_inventory, undefined, join, private), ?AS_USER(UserId), Data},
+                validate_result_fun = fun(_, _) ->
+                    ozt:rpc(user_logic, has_eff_atm_inventory, [UserId, AtmInventoryId])
+                end
             }
         end,
 
@@ -1061,7 +1084,10 @@ group_join_atm_inventory_token(_Config) ->
             #consume_request{
                 logic_call_args = {group_logic, join_atm_inventory, [Auth, GroupId, Data]},
                 rest_call_args = {[<<"/groups/">>, GroupId, <<"/atm_inventories/join">>], Data},
-                graph_sync_args = {?GRI(od_atm_inventory, undefined, join, private), ?AS_GROUP(GroupId), Data}
+                graph_sync_args = {?GRI(od_atm_inventory, undefined, join, private), ?AS_GROUP(GroupId), Data},
+                validate_result_fun = fun(_, _) ->
+                    ozt:rpc(group_logic, has_eff_atm_inventory, [GroupId, AtmInventoryId])
+                end
             }
         end,
 
@@ -1235,7 +1261,7 @@ check_valid_subject_scenarios(Tc = #testcase{token_type = TokenType}) ->
                     Consumer = create_consumer_by_type(EligibleConsumerType),
                     ?assertMatch(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, Consumer, Token)),
                     ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
-                    ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token))
+                    ?assertEqual(ok, consume_token(Tc, Consumer, Token))
                 end, Tc#testcase.eligible_consumer_types)
         end
     end, [named, temporary]).
@@ -1276,14 +1302,14 @@ check_valid_consumer_scenarios(Tc = #testcase{token_type = TokenType}) ->
             Consumer = create_consumer_by_type(EligibleConsumerType),
             case Tc#testcase.requires_privileges_to_consume of
                 false ->
-                    ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token)),
+                    ?assertEqual(ok, consume_token(Tc, Consumer, Token)),
                     Tc#testcase.supports_carried_privileges andalso
                         CheckPrivilegesFun(Consumer, Tc#testcase.default_carried_privileges);
                 true ->
                     ModifyPrivsFun(Consumer, {revoke, to_consume}),
                     ?assertMatch(?ERROR_FORBIDDEN, consume_token(Tc, Consumer, Token)),
                     ModifyPrivsFun(Consumer, {grant, to_consume}),
-                    ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token)),
+                    ?assertEqual(ok, consume_token(Tc, Consumer, Token)),
                     Tc#testcase.supports_carried_privileges andalso
                         CheckPrivilegesFun(Consumer, Tc#testcase.default_carried_privileges)
             end
@@ -1298,7 +1324,7 @@ check_valid_consumer_scenarios(Tc = #testcase{token_type = TokenType}) ->
             ozt_users:revoke_oz_privileges(UserId, [Tc#testcase.admin_privilege_to_consume]),
             ?assertMatch(?ERROR_FORBIDDEN, consume_token(Tc, Consumer, Token)),
             ozt_users:grant_oz_privileges(UserId, [Tc#testcase.admin_privilege_to_consume]),
-            ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token)),
+            ?assertEqual(ok, consume_token(Tc, Consumer, Token)),
             Tc#testcase.supports_carried_privileges andalso
                 CheckPrivilegesFun(Consumer, Tc#testcase.default_carried_privileges)
         end, Tc#testcase.eligible_consumer_types)
@@ -1307,7 +1333,7 @@ check_valid_consumer_scenarios(Tc = #testcase{token_type = TokenType}) ->
 
 check_user_blocking(Tc = #testcase{token_type = TokenType}) ->
     lists:foreach(fun(Persistence) ->
-        case  Tc#testcase.eligible_to_invite of
+        case Tc#testcase.eligible_to_invite of
             ?SUB(user, InvitingUserId) = EligibleSubject ->
                 ensure_privileges_to_invite(Tc, EligibleSubject),
                 lists:foreach(fun(EligibleConsumerType) ->
@@ -1318,7 +1344,7 @@ check_user_blocking(Tc = #testcase{token_type = TokenType}) ->
                     ?assertMatch(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, Consumer, Token)),
 
                     ozt_users:toggle_access_block(InvitingUserId, false),
-                    ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token))
+                    ?assertEqual(ok, consume_token(Tc, Consumer, Token))
                 end, Tc#testcase.eligible_consumer_types);
             _ ->
                 ok
@@ -1339,7 +1365,7 @@ check_adding_carried_privileges_to_temporary_token(Tc = #testcase{token_type = T
             <<"type">> => TokenType, <<"privileges">> => Tc#testcase.allowed_carried_privileges
         }),
         Consumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
-        ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token)),
+        ?assertEqual(ok, consume_token(Tc, Consumer, Token)),
         % Although higher privileges were requested, the temporary token should
         % only grant default ones (privileges should be ignored as they are
         % not supported by the endpoint).
@@ -1416,7 +1442,7 @@ check_adding_carried_privileges_to_named_token(Tc = #testcase{token_type = Token
         % identical to default, consuming is still possible
         case lists:sort(CustomPrivileges) =:= lists:sort(DefaultPrivileges) of
             true ->
-                ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token)),
+                ?assertEqual(ok, consume_token(Tc, Consumer, Token)),
                 ?assert(CheckPrivilegesFun(Consumer, CustomPrivileges));
             false ->
                 ModifyPrivsFun(EligibleSubject, {revoke, to_set_privs}),
@@ -1424,7 +1450,7 @@ check_adding_carried_privileges_to_named_token(Tc = #testcase{token_type = Token
                 % But it becomes valid again if the privileges are restored
                 ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
                 ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
-                ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token)),
+                ?assertEqual(ok, consume_token(Tc, Consumer, Token)),
                 ?assert(CheckPrivilegesFun(Consumer, CustomPrivileges))
         end
     end, Tc#testcase.eligible_consumer_types),
@@ -1454,7 +1480,7 @@ check_multi_use_temporary_token(Tc = #testcase{token_type = TokenType}) ->
     % the endpoint).
     lists:foreach(fun(_) ->
         Consumer = create_consumer_with_privs_to_consume(Tc, random_eligible),
-        ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token))
+        ?assertEqual(ok, consume_token(Tc, Consumer, Token))
     end, lists:seq(1, 7)).
 
 
@@ -1472,7 +1498,7 @@ check_multi_use_named_token(Tc = #testcase{token_type = TokenType}) ->
     }),
     ConsumerAlpha = create_consumer_with_privs_to_consume(Tc, random_eligible),
     ConsumerBeta = create_consumer_with_privs_to_consume(Tc, random_eligible),
-    ?assertMatch({ok, _}, consume_token(Tc, ConsumerAlpha, SingleUseToken)),
+    ?assertEqual(ok, consume_token(Tc, ConsumerAlpha, SingleUseToken)),
     ?assertMatch(?ERROR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, ConsumerBeta, SingleUseToken)),
 
     UsageLimit = 18,
@@ -1483,7 +1509,7 @@ check_multi_use_named_token(Tc = #testcase{token_type = TokenType}) ->
         create_consumer_with_privs_to_consume(Tc, random_eligible)
     end, lists:seq(1, UsageLimit)),
     lists_utils:pforeach(fun(Consumer) ->
-        ?assertMatch({ok, _}, consume_token(Tc, Consumer, MultiUseToken))
+        ?assertEqual(ok, consume_token(Tc, Consumer, MultiUseToken))
     end, ConsumersOfMultiUseToken),
     ConsumerGamma = create_consumer_with_privs_to_consume(Tc, random_eligible),
     ?assertMatch(?ERROR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, ConsumerGamma, MultiUseToken)),
@@ -1495,7 +1521,7 @@ check_multi_use_named_token(Tc = #testcase{token_type = TokenType}) ->
         create_consumer_with_privs_to_consume(Tc, random_eligible)
     end, lists:seq(1, 50)),
     lists_utils:pforeach(fun(Consumer) ->
-        ?assertMatch({ok, _}, consume_token(Tc, Consumer, InfiniteUseToken))
+        ?assertEqual(ok, consume_token(Tc, Consumer, InfiniteUseToken))
     end, ConsumersOfInfiniteUseToken).
 
 
@@ -1519,19 +1545,19 @@ check_multi_use_privileges_carrying_named_token(Tc = #testcase{token_type = Toke
     ConsumerAlpha = create_consumer_by_type(lists_utils:random_element(Tc#testcase.eligible_consumer_types)),
     case Tc#testcase.requires_privileges_to_consume of
         false ->
-            ?assertMatch({ok, _}, consume_token(Tc, ConsumerAlpha, Token));
+            ?assertEqual(ok, consume_token(Tc, ConsumerAlpha, Token));
         true ->
             ModifyPrivsFun(ConsumerAlpha, {revoke, to_consume}),
             ?assertMatch(?ERROR_FORBIDDEN, consume_token(Tc, ConsumerAlpha, Token)),
             ModifyPrivsFun(ConsumerAlpha, {grant, to_consume}),
-            ?assertMatch({ok, _}, consume_token(Tc, ConsumerAlpha, Token))
+            ?assertEqual(ok, consume_token(Tc, ConsumerAlpha, Token))
     end,
     CheckPrivilegesFun(ConsumerAlpha, CustomPrivileges),
     % There should be 2 uses left
     ConsumerBeta = create_consumer_with_privs_to_consume(Tc, random_eligible),
     case Tc#testcase.requires_privileges_to_set_privileges of
         false ->
-            ?assertMatch({ok, _}, consume_token(Tc, ConsumerBeta, Token)),
+            ?assertEqual(ok, consume_token(Tc, ConsumerBeta, Token)),
             CheckPrivilegesFun(ConsumerBeta, CustomPrivileges);
         true ->
             % Token becomes invalid when the subject loses privileges to set privileges,
@@ -1541,7 +1567,7 @@ check_multi_use_privileges_carrying_named_token(Tc = #testcase{token_type = Toke
                 true ->
                     ModifyPrivsFun(EligibleSubject, {revoke, to_set_privs}),
                     ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
-                    ?assertMatch({ok, _}, consume_token(Tc, ConsumerBeta, Token)),
+                    ?assertEqual(ok, consume_token(Tc, ConsumerBeta, Token)),
                     CheckPrivilegesFun(ConsumerBeta, CustomPrivileges),
                     ModifyPrivsFun(EligibleSubject, {grant, to_set_privs});
                 false ->
@@ -1549,7 +1575,7 @@ check_multi_use_privileges_carrying_named_token(Tc = #testcase{token_type = Toke
                     ?assertMatch(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, ConsumerBeta, Token)),
                     ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
                     ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
-                    ?assertMatch({ok, _}, consume_token(Tc, ConsumerBeta, Token)),
+                    ?assertEqual(ok, consume_token(Tc, ConsumerBeta, Token)),
                     CheckPrivilegesFun(ConsumerBeta, CustomPrivileges)
             end
     end,
@@ -1557,7 +1583,7 @@ check_multi_use_privileges_carrying_named_token(Tc = #testcase{token_type = Toke
     ConsumerGamma = create_consumer_by_type(lists_utils:random_element(Tc#testcase.eligible_consumer_types)),
     case Tc#testcase.requires_privileges_to_consume of
         false ->
-            ?assertMatch({ok, _}, consume_token(Tc, ConsumerGamma, Token));
+            ?assertEqual(ok, consume_token(Tc, ConsumerGamma, Token));
         true ->
             % Privileges are required only for user consumer type
             ?SUB(user, UserId) = ConsumerGamma,
@@ -1565,7 +1591,7 @@ check_multi_use_privileges_carrying_named_token(Tc = #testcase{token_type = Toke
             ozt_users:revoke_oz_privileges(UserId, [Tc#testcase.admin_privilege_to_consume]),
             ?assertMatch(?ERROR_FORBIDDEN, consume_token(Tc, ConsumerGamma, Token)),
             ozt_users:grant_oz_privileges(UserId, [Tc#testcase.admin_privilege_to_consume]),
-            ?assertMatch({ok, _}, consume_token(Tc, ConsumerGamma, Token))
+            ?assertEqual(ok, consume_token(Tc, ConsumerGamma, Token))
     end,
     CheckPrivilegesFun(ConsumerGamma, CustomPrivileges),
     % There should be no uses left
@@ -1583,7 +1609,7 @@ check_temporary_token_revocation(Tc = #testcase{token_type = TokenType}) ->
     lists:foreach(fun(_) ->
         lists:foreach(fun(Token) ->
             Consumer = create_consumer_with_privs_to_consume(Tc, random_eligible),
-            ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token))
+            ?assertEqual(ok, consume_token(Tc, Consumer, Token))
         end, [TokenAlpha, TokenBeta, TokenGamma])
     end, lists:seq(1, 9)),
     ozt_tokens:revoke_all_temporary_tokens(EligibleSubject),
@@ -1602,7 +1628,7 @@ check_named_token_revocation(Tc = #testcase{token_type = TokenType}) ->
     ozt_tokens:toggle_revoked(Token, true),
     ?assertMatch(?ERROR_TOKEN_REVOKED, consume_token(Tc, Consumer, Token)),
     ozt_tokens:toggle_revoked(Token, false),
-    ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token)),
+    ?assertEqual(ok, consume_token(Tc, Consumer, Token)),
     ozt_tokens:toggle_revoked(Token, true),
     ?assertMatch(?ERROR_TOKEN_REVOKED, consume_token(Tc, Consumer, Token)).
 
@@ -1623,10 +1649,10 @@ check_token_reuse(Tc = #testcase{token_type = TokenType}) ->
             TokenAlpha = ozt_tokens:create(Persistence, EligibleSubject, TokenType),
             TokenBeta = ozt_tokens:create(Persistence, EligibleSubject, TokenType),
             Consumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
-            ?assertMatch({ok, _}, consume_token(Tc, Consumer, TokenAlpha)),
+            ?assertEqual(ok, consume_token(Tc, Consumer, TokenAlpha)),
             case ExpectedReuseResultFun(Consumer) of
                 ok ->
-                    ?assertMatch({ok, _}, consume_token(Tc, Consumer, TokenBeta));
+                    ?assertEqual(ok, consume_token(Tc, Consumer, TokenBeta));
                 {error, _} = Error ->
                     ?assertEqual(Error, consume_token(Tc, Consumer, TokenBeta))
             end
@@ -1638,11 +1664,11 @@ check_token_reuse(Tc = #testcase{token_type = TokenType}) ->
             <<"type">> => TokenType, <<"usageLimit">> => UsageLimit
         }),
         AnotherConsumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
-        ?assertMatch({ok, _}, consume_token(Tc, AnotherConsumer, MultiUseToken)),
+        ?assertEqual(ok, consume_token(Tc, AnotherConsumer, MultiUseToken)),
         lists:foreach(fun(_) ->
             case ExpectedReuseResultFun(AnotherConsumer) of
                 ok ->
-                    ?assertMatch({ok, _}, consume_token(Tc, AnotherConsumer, MultiUseToken));
+                    ?assertEqual(ok, consume_token(Tc, AnotherConsumer, MultiUseToken));
                 {error, _} = Error ->
                     ?assertEqual(Error, consume_token(Tc, AnotherConsumer, MultiUseToken))
             end
@@ -1692,7 +1718,7 @@ check_token_caveats_handling(Tc = #testcase{token_type = TokenType}) ->
             Result = consume_token(Tc, Consumer, Token),
             case RandUnverifiedCaveats of
                 [] ->
-                    ?assertMatch({ok, _}, Result);
+                    ?assertEqual(ok, Result);
                 _ ->
                     ?assertMatch(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_), Result),
                     ?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiedCaveat) = Result,
@@ -1770,7 +1796,7 @@ gen_unverified_caveats(Consumer) -> lists:flatten([
     % (should cause verification failure)
     #cv_interface{interface = graphsync},
     #cv_interface{interface = oneclient},
-    #cv_api{whitelist = [{all, all, ?GRI_PATTERN('*', '*', '*', '*')}]},
+    #cv_api{whitelist = [{all, all, ?GRI_PATTERN('*', <<"*">>, <<"*">>, '*')}]},
     #cv_data_readonly{},
     #cv_data_path{whitelist = [<<"/space/dir/file.txt">>]},
     #cv_data_objectid{whitelist = [element(2, {ok, _} = file_id:guid_to_objectid(
@@ -1923,34 +1949,64 @@ all_consumer_types() -> [
 ].
 
 
+%% @private
+-spec consume_token(#testcase{}, aai:subject(), tokens:token()) -> ok | errors:error().
 consume_token(Tc, Consumer, Token) ->
     PrepareConsumeRequest = Tc#testcase.prepare_consume_request,
     Auth = #auth{subject = Consumer, peer_ip = ?PEER_IP},
     ConsumeRequest = PrepareConsumeRequest(Auth, Token),
-    Result = consume_token(Auth, ConsumeRequest),
-    case {Result, ConsumeRequest#consume_request.validate_result_fun} of
-        {{error, _}, _} -> ok;
-        {_, undefined} -> ok;
-        {{ok, _}, ValidateFun} -> ?assert(try ValidateFun() catch _:_ -> false end)
+    Interface = random_interface(ConsumeRequest),
+
+    ConsumeResult = case consume_token_using_interface(Interface, Auth, ConsumeRequest) of
+        {error, timeout} ->
+            % Retry once in case of timeouts, which can happen on slow machines.
+            % This however may cause the token to be used twice - if the first request
+            % is actually processed, but the response times out. For this reason,
+            % accept the expected reuse result as a successful one.
+            ExpectedReuseResult = try
+                ExpectedReuseResultFun = Tc#testcase.expected_reuse_result_fun,
+                ExpectedReuseResultFun(Consumer)
+            catch _:_ ->
+                % the consumer may not be eligible for consuming which will make
+                % the expected_reuse_result_fun crash
+                inapplicable
+            end,
+
+            case consume_token_using_interface(Interface, Auth, ConsumeRequest) of
+                ExpectedReuseResult ->
+                    reused;
+                OtherResult1 ->
+                    OtherResult1
+            end;
+        OtherResult2 ->
+            OtherResult2
     end,
-    Result.
+
+    case ConsumeResult of
+        reused ->
+            ok;
+        {error, _} = Error ->
+            Error;
+        {ok, SuccessResult} ->
+            ValidateFun = ConsumeRequest#consume_request.validate_result_fun,
+            ?assert(try ValidateFun(Interface, SuccessResult) catch T:M:S -> ?ct_dump(T), ?ct_dump(M), ?ct_dump(S), false end),
+            ok
+    end.
 
 
-consume_token(Auth, ConsumeRequest) ->
+%% @private
+-spec random_interface(#consume_request{}) -> consumption_interface().
+random_interface(ConsumeRequest) ->
     AvailableInterfaces = case ConsumeRequest#consume_request.rest_call_args of
         not_available -> [logic, graphsync];
         _ -> [logic, graphsync, rest]
     end,
-    Interface = lists_utils:random_element(AvailableInterfaces),
-    case consume_token_using_interface(Interface, Auth, ConsumeRequest) of
-        {error, timeout} ->
-            % retry once in case of timeouts, which can happen on slow machines
-            consume_token_using_interface(Interface, Auth, ConsumeRequest);
-        OtherResult ->
-            OtherResult
-    end.
+    lists_utils:random_element(AvailableInterfaces).
 
 
+%% @private
+-spec consume_token_using_interface(consumption_interface(), aai:auth(), #consume_request{}) ->
+    {ok, term()} | errors:error().
 consume_token_using_interface(logic, _, #consume_request{logic_call_args = {Module, Function, Args}}) ->
     ozt:rpc(Module, Function, Args);
 

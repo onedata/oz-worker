@@ -534,7 +534,8 @@ dump_test(Config) ->
             },
             bad_values = [
                 {<<"includeRevision">>, #{<<"bad">> => <<"data">>}, ?ERROR_BAD_VALUE_INTEGER(<<"includeRevision">>)},
-                {<<"includeRevision">>, -7, ?ERROR_BAD_VALUE_TOO_LOW(<<"includeRevision">>, 1)}
+                {<<"includeRevision">>, -7, ?ERROR_BAD_VALUE_TOO_LOW(<<"includeRevision">>, 1)},
+                {<<"includeRevision">>, 9999999, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"includeRevision">>)}
             ]
         }
     },

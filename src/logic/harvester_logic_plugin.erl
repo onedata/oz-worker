@@ -83,6 +83,7 @@ operation_supported(create, group, private) -> true;
 operation_supported(create, index, private) -> true;
 operation_supported(create, {submit_batch, _}, private) -> true;
 operation_supported(create, {query, _}, private) -> true;
+operation_supported(create, {gen_curl_query, _}, public) -> true;
 operation_supported(create, {gen_curl_query, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
@@ -180,7 +181,7 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
     % If any env is not defined, all values concerning harvesting backend are in Data (see validate/1)
     BackendType = maps:get(<<"harvestingBackendType">>, Data,
         oz_worker:get_env(default_harvesting_backend_type, undefined)),
-    BackendEndpoint = maps:get(<<"harvestingBackendEndpoint">>, Data, 
+    BackendEndpoint = maps:get(<<"harvestingBackendEndpoint">>, Data,
         oz_worker:get_env(default_harvesting_backend_endpoint, undefined)),
     Config = maps:get(<<"guiPluginConfig">>, Data, #{}),
 
@@ -343,7 +344,7 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
     Name = maps:get(<<"name">>, Data),
     Schema = maps:get(<<"schema">>, Data, undefined),
     GuiPluginName = utils:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
-    
+
     Index = #harvester_index{
         name = Name,
         schema = Schema,
@@ -384,12 +385,16 @@ create(#el_req{gri = #gri{aspect = {query, IndexId}}, data = Data}) ->
         end
     end;
 
-create(#el_req{gri = #gri{id = HarvesterId, aspect = {gen_curl_query, IndexId}}, data = Data}) ->
+create(#el_req{gri = #gri{id = HarvesterId, aspect = {gen_curl_query, IndexId}, scope = Scope}, data = Data}) ->
     Uri = oz_worker:get_rest_uri(
         <<"/harvesters/", HarvesterId/binary, "/indices/", IndexId/binary, "/query">>
     ),
-    HeadersTokens = [?HDR_X_AUTH_TOKEN, <<"$TOKEN">>, ?HDR_CONTENT_TYPE, <<"application/json">>],
-    PrefixWithHeaders = str_utils:format_bin("curl -X POST -H \"~s: ~s\" -H \"~s: ~s\" ", HeadersTokens),
+    AuthHeaderOpt = case Scope of
+        private -> str_utils:format_bin("-H \"~s: $TOKEN\"", [?HDR_X_AUTH_TOKEN]);
+        public -> <<"">>
+    end,
+    ContentTypeHeaderOpt = str_utils:format_bin("-H \"~s: application/json\"", [?HDR_CONTENT_TYPE]),
+    PrefixWithHeaders = str_utils:format_bin("curl -X POST ~s ~s ", [AuthHeaderOpt, ContentTypeHeaderOpt]),
     % escape all single quotation marks (') with backslashes (\)
     EncodedData = re:replace(json_utils:encode(Data), <<"'">>, <<"\\\\'">>, [{return, binary}, global]),
     {ok, value, <<PrefixWithHeaders/binary, Uri/binary, " -d '", EncodedData/binary, "'">>};
@@ -814,8 +819,10 @@ authorize(#el_req{operation = create, gri = #gri{aspect = {query, _}}, auth = Au
             Harvester#od_harvester.public
     end;
 
-authorize(#el_req{operation = create, gri = #gri{aspect = {gen_curl_query, _}}}, _) ->
-    true;
+authorize(#el_req{operation = create, gri = #gri{aspect = {gen_curl_query, _}, scope = public}}, Harvester) ->
+    Harvester#od_harvester.public;
+authorize(#el_req{operation = create, gri = #gri{aspect = {gen_curl_query, _}, scope = private}, auth = ?USER(UserId)}, Harvester) ->
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, Harvester);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
@@ -1092,26 +1099,26 @@ required_admin_privileges(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
-validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> 
+validate(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
     BackendValidityVerificator = #{
         <<"harvestingBackendType">> => {atom, ?HARVESTING_BACKENDS},
         <<"harvestingBackendEndpoint">> => {binary, non_empty}
     },
     {Required, Optional} = case lists:member(undefined, [
-        oz_worker:get_env(default_harvesting_backend_type, undefined), 
+        oz_worker:get_env(default_harvesting_backend_type, undefined),
         oz_worker:get_env(default_harvesting_backend_endpoint, undefined)
     ]) of
         true -> {BackendValidityVerificator, #{}};
         false -> {#{}, BackendValidityVerificator}
     end,
     #{
-    required => Required#{
-        <<"name">> => {binary, name}
-    },
-    optional => Optional#{
-        <<"guiPluginConfig">> => {json, any}
-    }
-};
+        required => Required#{
+            <<"name">> => {binary, name}
+        },
+        optional => Optional#{
+            <<"guiPluginConfig">> => {json, any}
+        }
+    };
 
 validate(#el_req{operation = create, gri = #gri{aspect = {submit_batch, _}}}) -> #{
     required => #{
@@ -1133,12 +1140,11 @@ validate(#el_req{operation = create, gri = #gri{aspect = index}}) -> #{
         <<"includeMetadata">> => {list_of_atoms, fun(Vals) ->
             Key = <<"includeMetadata">>,
             Vals == [] andalso throw(?ERROR_BAD_VALUE_EMPTY(Key)),
-            lists:all(fun(Val) -> lists:member(Val, od_harvester:all_metadata_types()) end, Vals) 
+            lists:all(fun(Val) -> lists:member(Val, od_harvester:all_metadata_types()) end, Vals)
                 orelse throw(?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(Key, od_harvester:all_metadata_types())),
             true
         end},
-        <<"includeFileDetails">> => 
-            {list_of_atoms, od_harvester:all_file_details()},
+        <<"includeFileDetails">> => {list_of_atoms, od_harvester:all_file_details()},
         <<"includeRejectionReason">> => {boolean, any},
         <<"retryOnRejection">> => {boolean, any}
     }

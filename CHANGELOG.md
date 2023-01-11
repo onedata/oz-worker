@@ -4,6 +4,32 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-alpha28
+
+-   **VFS-9614** Web GUI: Added archivisation audit log view.
+-   **VFS-9531** Web GUI: Improved UX of the automation stores browser.
+-   **VFS-9339** Web GUI: Added a new file info tab with REST API
+    samples.
+-   **VFS-10065** Web GUI: Fixed API samples tab in file details modal
+    for archived file.
+-   **VFS-10037** Web GUI: Added \"rate\" and \"timeDerivative\" time
+    series chart functions.
+
+### 21.02.0-alpha27
+
+-   **VFS-9771** Web GUI: Added handling of the restricted registration
+    policy in the \"Add cluster\" page.
+-   **VFS-9637** Web GUI: Improved and unified look of audit log
+    browsers.
+-   **VFS-8948** Introduced the concept of time series dashboard specs -
+    structured recipes for transforming and displaying measurements in
+    charts, which can be organized into sections. Each time series
+    collection has a linked dashboard spec that will be used for
+    rendering the dashboard in GUI.
+-   **VFS-8903** Web GUI: Upgraded EmberJS to v3.4.
+-   **VFS-8716** Web GUI: Added complex data types editor to the
+    automation views.
+
 ### 21.02.0-alpha26
 
 -   **VFS-9207** Web GUI: Enforced loading fonts from server to avoid
@@ -182,6 +208,21 @@ CHANGELOG
 -   **VFS-6566** Improved UX and fixed minor issues in share views.
     Fixed inability to open share hosted by Oneprovider 19.02.x using
     Onezone 20.02.x.
+
+### 20.02.19
+
+-   **VFS-9926** Web GUI: Opening Oneprovider view in Onezone GUI when
+    entering Oneprovider domain.
+-   **VFS-9730** Improve handling of api caveats related to API
+    operations concerning other components than Onezone - in some cases,
+    tokens with such caveats could be treated as invalid.
+-   **VFS-10012** Web GUI: Fixed hanging file upload bug when multiple
+    uploads have been scheduled.
+
+### 20.02.18
+
+-   **VFS-9771** Web GUI: Added handling of the restricted registration
+    policy in the "Add cluster" page.
 
 ### 20.02.17
 

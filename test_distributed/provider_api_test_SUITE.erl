@@ -132,6 +132,8 @@ create_test(Config) ->
     OZDomain = oz_test_utils:oz_domain(Config),
 
     VerifyFun = fun(ProviderId, ProviderToken, Data) ->
+        ProviderTokenDeserialized = ozt_tokens:ensure_deserialized(ProviderToken),
+        ExpRootTokenId = ProviderTokenDeserialized#token.id,
         ExpSubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
         ExpAdminEmail = maps:get(<<"adminEmail">>, Data),
         ExpLatitude = maps:get(<<"latitude">>, Data, 0.0),
@@ -147,6 +149,7 @@ create_test(Config) ->
 
         {ok, Provider} = oz_test_utils:get_provider(Config, ProviderId),
         ?assertEqual(ExpName, Provider#od_provider.name),
+        ?assertEqual(ExpRootTokenId, Provider#od_provider.root_token),
         ?assertEqual(ExpDomain, Provider#od_provider.domain),
         ?assertEqual(ExpSubdomainDelegation, Provider#od_provider.subdomain_delegation),
         ?assertEqual(ExpSubdomain, Provider#od_provider.subdomain),
@@ -2571,7 +2574,13 @@ create_2_providers_and_5_supported_spaces(Config) ->
             {ok, SpaceId} = oz_test_utils:support_space(Config, ?PROVIDER(P2), St2, SpaceId, SupportSize),
             SpaceDetails = #{
                 <<"name">> => Name,
-                <<"providers">> => #{P1 => SupportSize, P2 => SupportSize}
+                <<"providers">> => #{P1 => SupportSize, P2 => SupportSize},
+                <<"supportParametersRegistry">> => #support_parameters_registry{
+                    registry = #{
+                        P1 => ozt_spaces:expected_tweaked_support_parameters(?DEFAULT_SUPPORT_PARAMETERS),
+                        P2 => ozt_spaces:expected_tweaked_support_parameters(?DEFAULT_SUPPORT_PARAMETERS)
+                    }
+                }
             },
             {SpaceId, SpaceDetails}
         end, lists:seq(1, 5)

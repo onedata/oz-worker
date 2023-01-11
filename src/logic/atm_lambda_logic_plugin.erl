@@ -145,6 +145,11 @@ create(#el_req{gri = #gri{id = undefined, aspect = parse_revision, scope = publi
 create(#el_req{gri = #gri{id = AtmLambdaId, aspect = dump}, data = Data}) ->
     fun(AtmLambda) ->
         IncludedRevision = maps:get(<<"includeRevision">>, Data),
+
+        atm_lambda_revision_registry:has_revision(
+            IncludedRevision, AtmLambda#od_atm_lambda.revision_registry
+        ) orelse throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"includeRevision">>)),
+
         {ok, value, od_atm_lambda:dump_to_json(
             AtmLambdaId, AtmLambda, IncludedRevision
         )}

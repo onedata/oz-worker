@@ -31,6 +31,7 @@
 -export([create_for_admin_user/1, create_for_admin_user/2]).
 -export([create_as_support_for_user/1]).
 -export([create_as_support_for_space/1]).
+-export([simulate_version/2]).
 -export([get/1]).
 -export([set_up_support_for_user/2]).
 -export([get_root_token/1]).
@@ -79,6 +80,16 @@ create_as_support_for_space(SpaceId) ->
     support_space(ProviderId, SpaceId),
     ozt:reconcile_entity_graph(),
     ProviderId.
+
+
+-spec simulate_version(od_provider:id(), onedata:release_version()) -> ok.
+simulate_version(ProviderId, ReleaseVersion) ->
+    % this should finish with an error (bad GUI hash was given), but nevertheless set the release version
+    ?assertMatch(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"workerVersion.gui">>), ozt:rpc(cluster_logic, update_version_info, [
+        ?PROVIDER(ProviderId), ProviderId, ?WORKER,
+        {ReleaseVersion, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH}
+    ])),
+    ok.
 
 
 -spec get(od_provider:id()) -> od_provider:record().

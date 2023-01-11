@@ -219,16 +219,12 @@ end_per_testcase(_, _Config) ->
 -define(TYPES_TO_JSON(Types), [token_type:to_json(T) || T <- Types]).
 -define(CAVEATS_TO_JSON(Caveats), [caveats:to_json(C) || C <- Caveats]).
 
--define(SPACE_SUPPORT_PARAMS, support_parameters:build(
-    lists_utils:random_element([global, none]), lists_utils:random_element([eager, lazy, none])
-)).
-
 -define(INVITE_TOKEN_TYPE_EXAMPLES(GroupId, SpaceId, AdminUserId, ClusterId, HarvesterId), [
     ?INVITE_TOKEN(?USER_JOIN_GROUP, GroupId),
     ?INVITE_TOKEN(?GROUP_JOIN_GROUP, GroupId),
     ?INVITE_TOKEN(?USER_JOIN_SPACE, SpaceId),
     ?INVITE_TOKEN(?GROUP_JOIN_SPACE, SpaceId),
-    ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId, ?SPACE_SUPPORT_PARAMS),
+    ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId),
     ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, AdminUserId),
     ?INVITE_TOKEN(?USER_JOIN_CLUSTER, ClusterId),
     ?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, ClusterId),
@@ -257,7 +253,7 @@ end_per_testcase(_, _Config) ->
     ?CAVEATS_TO_JSON([
         #cv_time{valid_until = ozt:timestamp_seconds() + 560},
         #cv_api{whitelist = [
-            {?OZ_WORKER, all, ?GRI_PATTERN(od_user, <<"123">>, instance, private)}
+            {?OZ_WORKER, all, ?GRI_PATTERN(od_user, <<"123">>, <<"instance">>, private)}
         ]},
         #cv_data_readonly{},
         #cv_data_path{whitelist = [<<"/ab/cdef/g">>, <<"/1/2">>]},
@@ -277,8 +273,8 @@ end_per_testcase(_, _Config) ->
     ?CAVEATS_TO_JSON([
         #cv_time{valid_until = Now + 156},
         #cv_api{whitelist = [
-            {?OP_PANEL, create, ?GRI_PATTERN('*', '*', '*', '*')},
-            {all, get, ?GRI_PATTERN(od_user, '*', '*', private)}
+            {?OP_PANEL, create, ?GRI_PATTERN('*', <<"*">>, <<"*">>, '*')},
+            {all, get, ?GRI_PATTERN(od_user, <<"*">>, <<"*">>, private)}
         ]},
         #cv_data_readonly{},
         #cv_data_path{whitelist = [<<"/767t2r3g6asd78asd/13123/dir/file.txt">>]},
@@ -312,7 +308,7 @@ end_per_testcase(_, _Config) ->
     {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_GROUP, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
     {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
     {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?SUPPORT_SPACE, <<"123">>, ?SPACE_SUPPORT_PARAMS)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?SUPPORT_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
     {<<"type">>, token_type:to_json(?INVITE_TOKEN(?REGISTER_ONEPROVIDER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
     {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_CLUSTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
     {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
@@ -847,7 +843,7 @@ confine(_Config) ->
         #cv_scope{scope = identity_token},
         #cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)]},
         #cv_interface{interface = rest},
-        #cv_api{whitelist = [{oz_worker, get, ?GRI_PATTERN(od_space, '*', '*', private)}]},
+        #cv_api{whitelist = [{oz_worker, get, ?GRI_PATTERN(od_space, <<"*">>, <<"*">>, private)}]},
         #cv_data_readonly{},
         #cv_data_path{whitelist = [<<"/a/b/c/d">>]},
         #cv_data_objectid{whitelist = [?RAND_OBJECTID, ?RAND_OBJECTID, ?RAND_OBJECTID]}
@@ -1686,7 +1682,7 @@ verify_invite_token(_Config) ->
         true, {?SUB(?ONEPROVIDER, Provider), 2700}
     ),
 
-    TokenGamma = create_user_temporary_token(User, ?INVITE_TOKEN(?SUPPORT_SPACE, Space, ?SPACE_SUPPORT_PARAMS), [
+    TokenGamma = create_user_temporary_token(User, ?INVITE_TOKEN(?SUPPORT_SPACE, Space), [
         #cv_time{valid_until = ozt:timestamp_seconds() + 1200},
         #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]}
     ]),

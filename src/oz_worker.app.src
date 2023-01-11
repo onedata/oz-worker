@@ -11,7 +11,7 @@
 
 {application, oz_worker, [
     {description, "Onezone worker node."},
-    {vsn, "21.02.0-alpha26"},
+    {vsn, "21.02.0-alpha28"},
     {registered, [oz_worker_sup]},
     {applications, [
         kernel,
@@ -25,6 +25,7 @@
         meck,
         esaml,
         gui,
+        gen_smtp,
         erldns,
         ctool,
         %% ctool already requires those apps below, but they are here

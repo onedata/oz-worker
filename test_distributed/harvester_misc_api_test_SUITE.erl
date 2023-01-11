@@ -155,7 +155,7 @@ create_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-    
+
     % check that backend type and endpoint are optional when defaults are set in Onezone 
     oz_test_utils:set_env(Config, default_harvesting_backend_type, ?HARVESTER_MOCK_BACKEND),
     oz_test_utils:set_env(Config, default_harvesting_backend_endpoint, ?HARVESTER_ENDPOINT2),
@@ -826,7 +826,7 @@ create_index_test(Config) ->
         },
         data_spec = #data_spec{
             required = [<<"name">>],
-            optional = [<<"schema">>, <<"guiPluginName">>, <<"includeMetadata">>, 
+            optional = [<<"schema">>, <<"guiPluginName">>, <<"includeMetadata">>,
                 <<"includeFileDetails">>, <<"retryOnRejection">>, <<"includeRejectionReason">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
@@ -843,7 +843,7 @@ create_index_test(Config) ->
                 {<<"guiPluginName">>, 12321, ?ERROR_BAD_VALUE_BINARY(<<"guiPluginName">>)},
                 {<<"includeMetadata">>, json, ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"includeMetadata">>)},
                 {<<"includeMetadata">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"includeMetadata">>)},
-                {<<"includeMetadata">>, [asd], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeMetadata">>, 
+                {<<"includeMetadata">>, [asd], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeMetadata">>,
                     od_harvester:all_metadata_types())},
                 {<<"includeFileDetails">>, fileName, ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"includeFileDetails">>)},
                 {<<"includeFileDetails">>, [asd], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeFileDetails">>,
@@ -917,7 +917,7 @@ get_index_test(Config) ->
                     include_file_details = IncludeFileDetails,
                     include_rejection_reason = IncludeRejectionReason,
                     retry_on_rejection = RetryOnRejection
-                }) -> 
+                }) ->
                     ?assertEqual(?HARVESTER_INDEX_NAME, Name),
                     ?assertEqual(?HARVESTER_INDEX_SCHEMA, Schema),
                     ?assertEqual(undefined, GuiPluginName),
@@ -1226,11 +1226,11 @@ delete_index_metadata_test(Config) ->
 
 
 query_index_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
-    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, Member} = oz_test_utils:create_user(Config),
+    {ok, NonMember} = oz_test_utils:create_user(Config),
 
     {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
-    oz_test_utils:harvester_add_user(Config, H1, U1),
+    oz_test_utils:harvester_add_user(Config, H1, Member),
     {ok, IndexId} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -1239,12 +1239,12 @@ query_index_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1},
+                {user, Member},
                 {admin, [?OZ_HARVESTERS_VIEW]}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, U2}
+                {user, NonMember}
             ]
         },
         logic_spec = #logic_spec{
@@ -1278,45 +1278,70 @@ query_index_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % Test query request curl generation
-    ApiTestSpec1 = ApiTestSpec#api_test_spec{
+    PrivateHarvesterApiTestSpec = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
             correct = [
-                nobody,
-                {user, U1},
-                {user, U2}
+                {user, Member}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonMember}
             ]
         },
         rest_spec = undefined,
-        logic_spec = #logic_spec{
+        logic_spec = LogicSpec = #logic_spec{
             module = harvester_logic,
             function = gen_curl_query,
-            args = [auth, H1, IndexId, data],
+            args = [auth, H1, IndexId, private, data],
             expected_result = ?OK_BINARY
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec1)),
+    ?assert(api_test_utils:run_tests(Config, PrivateHarvesterApiTestSpec)),
 
-    % Test that anyone can query public harvester
+    % check that generated curl works properly
+    {ok, PrivateCurlBinary} = oz_test_utils:call_oz(Config, harvester_logic, gen_curl_query,
+        [?USER(Member), H1, IndexId, private, #{<<"method">> => <<"post">>, <<"path">> => <<"path">>}]),
+    PrivateCurlInsecure = binary:replace(PrivateCurlBinary, <<"curl">>, <<"curl -k -s">>),
+    {ok, AccessToken} = oz_test_utils:create_client_token(Config, Member),
+    PrivateCurlWithToken = binary:replace(PrivateCurlInsecure, <<"$TOKEN">>, AccessToken),
+    ?assertEqual(?HARVESTER_MOCKED_QUERY_DATA_MAP, json_utils:decode(os:cmd(binary_to_list(PrivateCurlWithToken)))),
+
+    % public curl query cannot be generated if the harvester is not public
+    ?assert(api_test_utils:run_tests(Config, PrivateHarvesterApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            unauthorized = [nobody],
+            forbidden = [
+                {user, Member},
+                {user, NonMember}
+            ]
+        },
+        logic_spec = LogicSpec#logic_spec{
+            args = [auth, H1, IndexId, public, data]
+        }
+    })),
+
+    % test that anyone can query a public harvester
     oz_test_utils:update_harvester(Config, H1, #{<<"public">> => true}),
 
-    PublicHarvesterApiTestSpec = ApiTestSpec#api_test_spec{
+    PublicHarvesterApiTestSpec = PrivateHarvesterApiTestSpec#api_test_spec{
         client_spec = #client_spec{
             correct = [
                 nobody,
-                {user, U1},
-                {user, U2}
+                {user, Member},
+                {user, NonMember}
             ]
+        },
+        logic_spec = LogicSpec#logic_spec{
+            args = [auth, H1, IndexId, public, data]
         }
     },
     ?assert(api_test_utils:run_tests(Config, PublicHarvesterApiTestSpec)),
 
     % check that generated curl works properly
-    {ok, CurlBinary} = oz_test_utils:call_oz(Config, harvester_logic, gen_curl_query,
-        [?ROOT, H1, IndexId, #{<<"method">> => <<"post">>, <<"path">> => <<"path">>}]),
-    CurlString = re:replace(CurlBinary, <<"curl">>, <<"curl -k -s">>, [{return, list}]),
-
-    Result = os:cmd(CurlString),
-    ?assertEqual(?HARVESTER_MOCKED_QUERY_DATA_MAP, json_utils:decode(Result)).
+    {ok, PublicCurlBinary} = oz_test_utils:call_oz(Config, harvester_logic, gen_curl_query,
+        [?NOBODY, H1, IndexId, public, #{<<"method">> => <<"post">>, <<"path">> => <<"path">>}]),
+    PublicCurlInsecure = binary:replace(PublicCurlBinary, <<"curl">>, <<"curl -k -s">>),
+    ?assertEqual(?HARVESTER_MOCKED_QUERY_DATA_MAP, json_utils:decode(os:cmd(binary_to_list(PublicCurlInsecure)))).
 
 
 list_indices_test(Config) ->

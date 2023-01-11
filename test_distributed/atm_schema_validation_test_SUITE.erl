@@ -785,12 +785,6 @@ example_invalid_data_specs_and_predefined_values() ->
             value_constraints = #{specs => lists_utils:random_sublist(atm_test_utils:example_time_series_measurement_specs())}
         }, #{<<"key">> => <<"val">>}},
         {#atm_data_spec{type = atm_file_type}, -9},
-        {#atm_data_spec{type = atm_archive_type}, [<<"a">>, <<"b">>, <<"c">>]},
-        {#atm_data_spec{
-            type = atm_store_credentials_type,
-            value_constraints = #{store_type => ?RAND_ELEMENT(automation:all_store_types())}
-        }, 13},
-        {#atm_data_spec{type = atm_onedatafs_credentials_type}, #{<<"token">> => <<"123">>}},
         {#atm_data_spec{
             type = atm_array_type,
             value_constraints = #{item_data_spec => #atm_data_spec{type = atm_string_type}}
@@ -919,8 +913,6 @@ example_invalid_default_initial_contents_for_store(_DataKeyName, audit_log) ->
 %% @private
 exp_disallowed_predefined_value_error(DataKeyName, #atm_data_spec{type = atm_store_credentials_type}, _) ->
     ?ERROR_BAD_DATA(DataKeyName, <<"Predefined value for store credentials is disallowed">>);
-exp_disallowed_predefined_value_error(DataKeyName, #atm_data_spec{type = atm_onedatafs_credentials_type}, _) ->
-    ?ERROR_BAD_DATA(DataKeyName, <<"Predefined value for OnedetaFS credentials is disallowed">>);
 exp_disallowed_predefined_value_error(DataKeyName, #atm_data_spec{type = atm_array_type} = AtmDataSpec, Values) ->
     case is_list(Values) of
         false ->

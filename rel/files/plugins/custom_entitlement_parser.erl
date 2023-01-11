@@ -66,7 +66,9 @@ type() ->
 parse(egi, Entitlement, ParserConfig) ->
     parse_egi_entitlement(Entitlement, ParserConfig);
 parse(plgrid, Entitlement, ParserConfig) ->
-    parse_plgrid_entitlement(Entitlement, ParserConfig).
+    parse_plgrid_entitlement(Entitlement, ParserConfig);
+parse(pracelab, Entitlement, ParserConfig) ->
+    parse_pracelab_entitlement(Entitlement, ParserConfig).
 
 
 %%--------------------------------------------------------------------
@@ -78,10 +80,11 @@ parse(plgrid, Entitlement, ParserConfig) ->
     [{auth_config:idp(), entitlement_mapping:raw_entitlement(), auth_config:parser_config(),
         entitlement_mapping:idp_entitlement() | {error, malformed}}].
 validation_examples() ->
-    lists:flatten(
+    lists:flatten([
         [{egi, Input, ParserConfig, Output} || {Input, ParserConfig, Output} <- egi_validation_examples()],
-        [{plgrid, Input, ParserConfig, Output} || {Input, ParserConfig, Output} <- plgrid_validation_examples()]
-    ).
+        [{plgrid, Input, ParserConfig, Output} || {Input, ParserConfig, Output} <- plgrid_validation_examples()],
+        [{pracelab, Input, ParserConfig, Output} || {Input, ParserConfig, Output} <- pracelab_validation_examples()]
+    ]).
 
 %%%===================================================================
 %%% Internal functions
@@ -169,6 +172,7 @@ parse_egi_entitlement(<<"urn:mace:egi.eu:group:", Group/binary>>, ParserConfig) 
         privileges = UserPrivileges
     }.
 
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -202,6 +206,55 @@ parse_plgrid_entitlement(RawEntitlement, ParserConfig) ->
 
     #idp_entitlement{
         idp = plgrid,
+        path = [#idp_group{type = GroupType, name = GroupName}],
+        privileges = member
+    }.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns an #idp_entitlement{} that represents user's group membership for PRACE-Lab project.
+%%
+%% Group format:
+%%      ^/PL\d{4,}[AEFO]?$
+%%          or
+%%      ^/PL\d{4,}-\d+[AEFO]?$
+%% Examples:
+%%      /PL4500
+%%      /PL4500A
+%%      /PL4500O
+%%      /PL4500E
+%%      /PL4500F
+%%      /PL450091
+%%      /PL450091E
+%%      /PL4500-1
+%%      /PL4500-1E
+%%      /PL4500-1A
+%%      /PL4500-1O
+%%      /PL4500-1F
+%%      /PL450091-1
+%%      /PL450091-1F
+%%
+%% The slash at the beginning should be ignored.
+%%
+%% Letters A, E, F, O represent roles in PRACE-Lab spaces. They are not a part of the
+%% group name (e.g. entitlement "PL4500F" should map to group "PL4500" and "PL4500-1E" to "PL4500-1".
+%%
+%% The letter "E" meas that the user is entitled to use the service represented by the group.
+%% Hence, only the entitlements ending with "E" should be considered and mapped to "member" privileges;
+%% others should be discarded.
+%% @end
+%%--------------------------------------------------------------------
+-spec parse_pracelab_entitlement(entitlement_mapping:raw_entitlement(), auth_config:parser_config()) ->
+    entitlement_mapping:idp_entitlement().
+parse_pracelab_entitlement(RawEntitlement, ParserConfig) ->
+    $E = binary:last(RawEntitlement),
+    match = re:run(RawEntitlement, "^\\/PL\\d{4,}([AEOF]|(\\-\\d+[AEOF]?))?$", [{capture, none}, unicode, ucp]),
+    GroupType = maps:get(groupType, ParserConfig, team),
+    GroupName = binary:part(RawEntitlement, 1, byte_size(RawEntitlement) - 2),
+    #idp_entitlement{
+        idp = pracelab,
         path = [#idp_group{type = GroupType, name = GroupName}],
         privileges = member
     }.
@@ -368,6 +421,108 @@ plgrid_validation_examples() -> [
         #idp_entitlement{idp = plgrid, path = [
             #idp_group{type = role_holders, name = <<"plgg-admin-group (Longer description)">>, privileges = member}
         ], privileges = member}
+    }
+].
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns entitlement mapping validation examples for PRACE-Lab.
+%% @end
+%%--------------------------------------------------------------------
+-spec pracelab_validation_examples() ->
+    [{entitlement_mapping:raw_entitlement(), auth_config:parser_config(), entitlement_mapping:idp_entitlement() | {error, malformed}}].
+pracelab_validation_examples() -> [
+    {
+        <<"fdglk;ajg987ayga9g">>,
+        #{},
+        {error, malformed}
+    },
+    {
+        <<"PL4500">>,
+        #{},
+        {error, malformed}
+    },
+    {
+        <<"/PL4500">>,
+        #{},
+        {error, malformed}
+    },
+    {
+        <<"/PL45009">>,
+        #{},
+        {error, malformed}
+    },
+    {
+        <<"/PL450091">>,
+        #{},
+        {error, malformed}
+    },
+    {
+        <<"/PL4500F">>,
+        #{groupType => unit},
+        {error, malformed}
+    },
+    {
+        <<"/PL4500E">>,
+        #{},
+        #idp_entitlement{idp = pracelab, path = [
+            #idp_group{type = team, name = <<"PL4500">>, privileges = member}
+        ], privileges = member}
+    },
+    {
+        <<"/PL45009E">>,
+        #{},
+        #idp_entitlement{idp = pracelab, path = [
+            #idp_group{type = team, name = <<"PL45009">>, privileges = member}
+        ], privileges = member}
+    },
+    {
+        <<"/PL450091E">>,
+        #{groupType => organization},
+        #idp_entitlement{idp = pracelab, path = [
+            #idp_group{type = organization, name = <<"PL450091">>, privileges = member}
+        ], privileges = member}
+    },
+    {
+        <<"/PL4500-7E">>,
+        #{groupType => unit},
+        #idp_entitlement{idp = pracelab, path = [
+            #idp_group{type = unit, name = <<"PL4500-7">>, privileges = member}
+        ], privileges = member}
+    },
+    {
+        <<"/PL450091-18E">>,
+        #{groupType => role_holders},
+        #idp_entitlement{idp = pracelab, path = [
+            #idp_group{type = role_holders, name = <<"PL450091-18">>, privileges = member}
+        ], privileges = member}
+    },
+    {
+        <<"/PL4500-18">>,
+        #{groupType => role_holders},
+        {error, malformed}
+    },
+    {
+        <<"/PL4500-18F">>,
+        #{groupType => role_holders},
+        {error, malformed}
+    },
+    {
+        <<"/PL4500F-E">>,
+        #{groupType => unit},
+        {error, malformed}
+    },
+    {
+        <<"/PL4500F-8E">>,
+        #{groupType => unit},
+        {error, malformed}
+    },
+    {
+        <<"/PL4500-8E8">>,
+        #{groupType => unit},
+        {error, malformed}
     }
 ].
 

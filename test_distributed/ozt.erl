@@ -27,7 +27,7 @@
 -type ct_test_config() :: term().
 
 %% API
--export([init_per_suite/1, get_test_config/0]).
+-export([init_per_suite/1, init_per_suite/2, get_test_config/0]).
 -export([rpc/3, rpc/4]).
 -export([timestamp_seconds/0]).
 -export([reconcile_entity_graph/0]).
@@ -50,12 +50,17 @@
 %%--------------------------------------------------------------------
 -spec init_per_suite(ct_test_config()) -> ct_test_config().
 init_per_suite(Config) ->
-    Posthook = fun(NewConfig) ->
+    init_per_suite(Config, fun() -> ok end).
+
+-spec init_per_suite(ct_test_config(), fun(() -> ok)) -> ct_test_config().
+init_per_suite(Config, Posthook) ->
+    EnvUpPosthook = fun(NewConfig) ->
         store_test_config(NewConfig),
+        Posthook(),
         NewConfig
     end,
     ModulesToLoad = ?OZT_MODULES ++ proplists:get_value(?LOAD_MODULES, Config, []),
-    [{?ENV_UP_POSTHOOK, Posthook}, {?LOAD_MODULES, ModulesToLoad} | proplists:delete(?LOAD_MODULES, Config)].
+    [{?ENV_UP_POSTHOOK, EnvUpPosthook}, {?LOAD_MODULES, ModulesToLoad} | proplists:delete(?LOAD_MODULES, Config)].
 
 
 -spec store_test_config(ct_test_config()) -> ok.

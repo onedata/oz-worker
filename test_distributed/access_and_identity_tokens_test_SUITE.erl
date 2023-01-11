@@ -765,12 +765,26 @@ available_methods_for_ctx(RequestContext) ->
         ?SUB(CType, _) -> CType
     end,
     DataAccessCaveatsPolicy = RequestContext#request_context.data_access_caveats_policy,
-    case {PeerIp, Interface} of
+    AvailableMethods = case {PeerIp, Interface} of
         {undefined, _} -> [logic];
         {_, undefined} -> [logic];
         {_, rest} -> methods_for_rest_ctx(SubjectType, ServiceType, ConsumerType, DataAccessCaveatsPolicy);
         {_, oneclient} -> methods_for_oneclient_ctx(SubjectType, ServiceType, ConsumerType, DataAccessCaveatsPolicy);
         {_, graphsync} -> methods_for_graphsync_ctx(SubjectType, ServiceType, ConsumerType, DataAccessCaveatsPolicy)
+    end,
+    case {RequestContext#request_context.consumer, RequestContext#request_context.service} of
+        {undefined, _} ->
+            % In case the consumer is not defined in the RequestContext, the request should not
+            % include any consumer indication. However, when op_gs_with_override is used and no
+            % consumer token is presented in auth override, the requesting Oneprovider becomes
+            % the consumer, which conflicts with the original assumption.
+            lists:delete(op_gs_with_override, AvailableMethods);
+        {?SUB(?ONEPROVIDER, ProviderId), ?SERVICE(ST, ProviderId)} when ST == ?OP_WORKER; ST == ?OP_PANEL ->
+            % For the same reason as above, if the requesting service is a Oneprovider service,
+            % the GS channel with auth override can be used to implicitly become the target consumer
+            lists_utils:union([op_gs_with_override], AvailableMethods);
+        _ ->
+            AvailableMethods
     end.
 
 
@@ -902,13 +916,22 @@ request_via_op_gs_with_override(RequestSpec, RequestContext, ClientAuth) ->
     ?SERVICE(OpService, ProviderId) = RequestContext#request_context.service,
     ProviderToken = ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, ProviderId)),
     OpServiceToken = tokens:add_oneprovider_service_indication(OpService, ozt_tokens:ensure_serialized(ProviderToken)),
+    ConsumerToken = case get_consumer_token_for_request(RequestContext) of
+        undefined -> undefined;
+        Token -> ozt_tokens:ensure_serialized(Token)
+    end,
     AuthOverride = #auth_override{
         client_auth = ozt_gs:normalize_client_auth(ClientAuth),
         interface = RequestContext#request_context.interface,
         peer_ip = RequestContext#request_context.ip,
-        consumer_token = case get_consumer_token_for_request(RequestContext) of
-            undefined -> undefined;
-            Token -> ozt_tokens:ensure_serialized(Token)
+        consumer_token = case RequestContext#request_context.consumer of
+            ?SUB(?ONEPROVIDER, ProviderId) ->
+                % If the requesting Oneprovider is the same as the target consumer, test also
+                % the possibility of becoming the consumer implicitly without presenting a token
+                % (which is the default behaviour on the GS channel with auth override).
+                lists_utils:random_element([undefined, ConsumerToken]);
+            _ ->
+                ConsumerToken
         end,
         data_access_caveats_policy = RequestContext#request_context.data_access_caveats_policy
     },
@@ -1315,10 +1338,19 @@ gen_correct_api_matchspec(Operation, #gri{type = Type, id = Id, aspect = Aspect,
     OperationPattern = lists_utils:random_element([all, Operation]),
     {ServicePattern, OperationPattern, #gri_pattern{
         type = lists_utils:random_element([Type, '*']),
-        id = lists_utils:random_element([Id, '*']),
-        aspect = lists_utils:random_element([Aspect] ++ case Aspect of
-            {A, B} -> ['*', {'*', B}, {A, '*'}, {'*', '*'}];
-            _ -> ['*']
+        id = lists_utils:random_element([Id, <<"*">>]),
+        aspect = lists_utils:random_element(case Aspect of
+            {A, B} -> [
+                <<"*">>,
+                {str_utils:to_binary(A), str_utils:to_binary(B)},
+                {<<"*">>, str_utils:to_binary(B)},
+                {str_utils:to_binary(A), <<"*">>},
+                {<<"*">>, <<"*">>}
+            ];
+            A -> [
+                str_utils:to_binary(A),
+                <<"*">>
+            ]
         end),
         scope = lists_utils:random_element([Scope, '*'])
     }}.
@@ -1338,6 +1370,11 @@ gen_unverified_api_matchspec(Operation, GRI = #gri{type = Type, aspect = Aspect,
         false -> CorrectOperationPattern
     end,
 
+    OrigAspectPattern = case Aspect of
+        {A, B} -> {str_utils:to_binary(A), str_utils:to_binary(B)};
+        A -> str_utils:to_binary(A)
+    end,
+
     GriPattern = #gri_pattern{
         type = case lists:member(type, UnverifiedFields) of
             true -> lists_utils:random_element([od_user, od_group, od_space, od_share] -- [Type]);
@@ -1348,7 +1385,7 @@ gen_unverified_api_matchspec(Operation, GRI = #gri{type = Type, aspect = Aspect,
             false -> CorrectGriPattern#gri_pattern.id
         end,
         aspect = case lists:member(aspect, UnverifiedFields) of
-            true -> lists_utils:random_element([instance, users, eff_groups] -- [Aspect]);
+            true -> lists_utils:random_element([<<"instance">>, <<"users">>, <<"eff_groups">>] -- [OrigAspectPattern]);
             false -> CorrectGriPattern#gri_pattern.aspect
         end,
         scope = case lists:member(scope, UnverifiedFields) of
