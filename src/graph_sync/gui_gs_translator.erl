@@ -53,7 +53,8 @@ handshake_attributes(_Client) ->
         <<"maxTemporaryTokenTtl">> => oz_worker:get_env(max_temporary_token_ttl, 604800), % 1 week
         <<"defaultHarvestingBackendType">> => utils:undefined_to_null(DefaultHarvestingBackendType),
         <<"defaultHarvestingBackendEndpoint">> => utils:undefined_to_null(DefaultHarvestingBackendEndpoint),
-        <<"defaultAtmResourceSpec">> => oz_worker:get_env(default_atm_resource_spec)
+        <<"defaultAtmResourceSpec">> => oz_worker:get_env(default_atm_resource_spec),
+        <<"availableMarketplaceTags">> => oz_worker:get_env(available_marketplace_tags)
     }.
 
 
