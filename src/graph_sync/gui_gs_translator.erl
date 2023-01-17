@@ -425,12 +425,22 @@ translate_space(#gri{aspect = api_samples, scope = private}, ApiSamples) ->
 translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) ->
     #od_space{
         name = Name,
+        advertised_in_marketplace = AdvertisedInMarketplace,
+        description = Description,
+        organization_name = OrganizationName,
+        tags = Tags,
+        marketplace_contact_email = MarketplaceContactEmail,
         shares = Shares,
         support_parameters_registry = SupportParametersRegistry
     } = Space,
     fun(?USER(UserId)) -> #{
         <<"name">> => Name,
         <<"scope">> => <<"private">>,
+        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
+        <<"description">> => Description,
+        <<"organizationName">> => OrganizationName,
+        <<"tags">> => Tags,
+        <<"marketplaceContactEmail">> => MarketplaceContactEmail,
         <<"directMembership">> => space_logic:has_direct_user(Space, UserId),
         <<"currentUserIsOwner">> => space_logic:is_owner(Space, UserId),
         <<"currentUserEffPrivileges">> => entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Space),
@@ -453,6 +463,11 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
 translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
     #{
         <<"name">> := Name,
+        <<"advertisedInMarketplace">> := AdvertisedInMarketplace,
+        <<"description">> := Description,
+        <<"organizationName">> := OrganizationName,
+        <<"tags">> := Tags,
+        <<"marketplaceContactEmail">> := MarketplaceContactEmail,
         <<"providers">> := SupportSizes,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator,
@@ -463,6 +478,11 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
     fun(?USER(UserId)) -> #{
         <<"name">> => Name,
         <<"scope">> => <<"protected">>,
+        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
+        <<"description">> => Description,
+        <<"organizationName">> => OrganizationName,
+        <<"tags">> => Tags,
+        <<"marketplaceContactEmail">> => MarketplaceContactEmail,
         <<"directMembership">> => space_logic:has_direct_user(Space, UserId),
         <<"currentUserIsOwner">> => space_logic:is_owner(Space, UserId),
         <<"currentUserEffPrivileges">> => entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Space),

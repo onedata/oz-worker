@@ -25,6 +25,10 @@
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
+-define(AVAILABLE_MARKETPLACE_TAGS, lists:flatten(maps:values(oz_worker:get_env(
+    available_marketplace_tags
+)))).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -164,6 +168,14 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         key = ProposedSpaceId,
         value = #od_space{
             name = Name,
+
+            %% TODO add to marketplace links tree ??
+            advertised_in_marketplace = maps:get(<<"advertisedInMarketplace">>, Req#el_req.data, false),
+            description = maps:get(<<"description">>, Req#el_req.data, <<"">>),
+            organization_name = maps:get(<<"organizationName">>, Req#el_req.data, <<"">>),
+            tags = maps:get(<<"tags">>, Req#el_req.data, []),
+            marketplace_contact_email = maps:get(<<"marketplaceContactEmail">>, Req#el_req.data, <<"">>),
+
             creator = aai:normalize_subject(Auth#auth.subject),
             creation_time = global_clock:timestamp_seconds()
         }
@@ -399,6 +411,11 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Space) ->
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{
         name = Name,
+        advertised_in_marketplace = AdvertisedInMarketplace,
+        description = Description,
+        organization_name = OrganizationName,
+        tags = Tags,
+        marketplace_contact_email = MarketplaceContactEmail,
         shares = Shares,
         support_parameters_registry = SupportParametersRegistry,
         creation_time = CreationTime,
@@ -406,6 +423,11 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     } = Space,
     {ok, #{
         <<"name">> => Name,
+        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
+        <<"description">> => Description,
+        <<"organizationName">> => OrganizationName,
+        <<"tags">> => Tags,
+        <<"marketplaceContactEmail">> => MarketplaceContactEmail,
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"supportParametersRegistry">> => SupportParametersRegistry,
         <<"creationTime">> => CreationTime,
@@ -455,6 +477,7 @@ get(#el_req{gri = #gri{aspect = storages}}, Space) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = SpaceId, aspect = instance}, data = Data}) ->
+    %% TODO implement
     NewName = maps:get(<<"name">>, Data),
     {ok, _} = od_space:update(SpaceId, fun(Space = #od_space{}) ->
         {ok, Space#od_space{name = NewName}}
@@ -997,14 +1020,31 @@ required_admin_privileges(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
-validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
-    required => #{
-        <<"name">> => {binary, name}
+validate(#el_req{operation = create, data = Data, gri = #gri{aspect = instance}}) ->
+    AlwaysRequired = #{<<"name">> => {binary, name}},
+    AlwaysOptional = #{<<"idGeneratorSeed">> => {binary, any}},
+    MarketplaceRelatedFields = #{
+        <<"advertisedInMarketplace">> => {boolean, any},
+        <<"description">> => {binary, any},
+        <<"organizationName">> => {binary, any},
+        <<"tags">> => {list_of_binaries, ?AVAILABLE_MARKETPLACE_TAGS},
+        <<"marketplaceContactEmail">> => {binary, email}
     },
-    optional => #{
-        <<"idGeneratorSeed">> => {binary, any}
-    }
-};
+
+    case maps:get(<<"advertisedInMarketplace">>, Data, false) of
+        true ->
+            #{
+                required => maps:merge(AlwaysRequired, MarketplaceRelatedFields),
+                optional => AlwaysOptional
+            };
+        false ->
+            #{
+                required => AlwaysRequired,
+                optional => maps:merge(AlwaysOptional, MarketplaceRelatedFields)
+            };
+        _ ->
+            throw(?ERROR_BAD_VALUE_BOOLEAN(<<"advertisedInMarketplace">>))
+    end;
 
 validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
     #{
@@ -1074,8 +1114,13 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = harvester}}) ->
     }});
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
-    required => #{
-        <<"name">> => {binary, name}
+    at_least_one => #{
+        <<"name">> => {binary, name},
+        <<"advertisedInMarketplace">> => {boolean, any},
+        <<"description">> => {binary, any},
+        <<"organizationName">> => {binary, any},
+        <<"tags">> => {list_of_binaries, ?AVAILABLE_MARKETPLACE_TAGS},
+        <<"marketplaceContactEmail">> => {binary, email}
     }
 };
 

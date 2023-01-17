@@ -32,8 +32,21 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
+% description in markdown (.md) format;
+% will be publicly visible if the space is advertised in the marketplace
+-type description() :: binary().
+% name of organization responsible for space management
+-type organization_name() :: binary().
+% a short keyword or phrase that helps to understand the purpose of a space and can be used for filtering;
+% will be publicly visible if the space is advertised in the marketplace
+-type tag() :: binary().
+% email address that will be used for notifying the person responsible for space management
+% in marketplace about new membership requests
+-type marketplace_contact_email() :: binary().
 -type support_size() :: pos_integer().
--export_type([name/0, support_size/0]).
+-export_type([
+    name/0, description/0, organization_name/0, tag/0, marketplace_contact_email/0, support_size/0
+]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -166,7 +179,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    14.
+    15.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -351,6 +364,43 @@ get_record_struct(14) ->
     % new field - support_parameters_registry
     {record, [
         {name, string},
+
+        {owners, [string]},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {storages, #{string => integer}},
+        {shares, [string]},
+        {harvesters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => {integer, [{atom, string}]}}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {support_parameters_registry, {custom, string, {persistent_record, encode, decode, support_parameters_registry}}},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(15) ->
+    % new fields:
+    % - advertised_in_marketplace
+    % - description
+    % - organization_name
+    % - tags
+    % - marketplace_contact_email
+    {record, [
+        {name, string},
+
+        {advertised_in_marketplace, boolean},
+        {description, string},
+        {organization_name, string},
+        {tags, [string]},
+        {marketplace_contact_email, string},
 
         {owners, [string]},
 
@@ -1163,6 +1213,62 @@ upgrade_record(13, Space) ->
         #support_parameters_registry{
             registry = maps:map(fun(_ProviderId, _) -> ?POST_SPACE_UPGRADE_SUPPORT_PARAMETERS end, EffProviders)
         },
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(14, Space) ->
+    {od_space,
+        Name,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        SupportParametersRegistry,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Space,
+
+    {15, {od_space,
+        Name,
+
+        false,
+        <<"">>,
+        <<"">>,
+        [],
+        <<"">>,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        SupportParametersRegistry,
 
         CreationTime,
         Creator,

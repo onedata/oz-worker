@@ -240,6 +240,12 @@ end).
 -record(od_space, {
     name = <<"">> :: od_space:name(),
 
+    advertised_in_marketplace = false :: boolean(),
+    description = <<"">> :: od_space:description(),
+    organization_name = <<"">> :: od_space:organization_name(),
+    tags = [] :: [od_space:tag()],
+    marketplace_contact_email = <<"">> :: od_space:marketplace_contact_email(),
+
     % The list of space owners - users that have absolute power regarding the
     % space API and files (analogical to "root", but in the scope of one space).
     % Being an owner means that user privileges are essentially ignored and all
