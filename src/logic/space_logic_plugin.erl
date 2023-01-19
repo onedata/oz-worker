@@ -39,7 +39,7 @@
     <<"advertisedInMarketplace">> => {boolean, any},
     <<"description">> => {binary, non_empty},
     <<"organizationName">> => {binary, non_empty},
-    <<"tags">> => {list_of_binaries, [non_empty, ?AVAILABLE_MARKETPLACE_TAGS]},
+    <<"tags">> => {list_of_binaries, {all, [non_empty, ?AVAILABLE_MARKETPLACE_TAGS]}},
     <<"marketplaceContactEmail">> => {binary, email}
 }).
 

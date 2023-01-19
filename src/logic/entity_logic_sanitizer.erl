@@ -43,7 +43,7 @@
 | email | name
 | full_name | username | password.
 
--type parameter_specs() :: #{key() | {aspect, binary()} => {type_spec(), value_spec() | [value_spec()]}}.
+-type parameter_specs() :: #{key() | {aspect, binary()} => {type_spec(), value_spec() | {all, [value_spec()]}}}.
 
 %% @formatter:off
 % The 'aspect' key word allows to validate the data provided in aspect
@@ -453,9 +453,9 @@ sanitize_type(Rule, Key, _) ->
 %% Performs simple value conversion (if possible) and checks the Value for Key.
 %% @end
 %%--------------------------------------------------------------------
--spec sanitize_value(type_spec(), value_spec() | [value_spec()], key(), value()) ->
+-spec sanitize_value(type_spec(), value_spec() | {all, [value_spec()]}, key(), value()) ->
     SanitizedValue :: value().
-sanitize_value(Type, Rules, Key, Value) when is_list(Rules) ->
+sanitize_value(Type, {all, Rules}, Key, Value) ->
     lists:foldl(fun(Rule, Acc) ->
         sanitize_value(Type, Rule, Key, Acc)
     end, Value, Rules);
