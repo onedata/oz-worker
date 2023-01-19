@@ -15,12 +15,16 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 -export([validate/2]).
 
+% in-memory cache to avoid excessive requests to DB
+-type fetched_lambdas() :: #{od_atm_lambda:id() => od_atm_lambda:record()}.
+
 -record(validator_ctx, {
     atm_workflow_schema_revision :: atm_workflow_schema_revision:record(),
-    fetched_lambdas :: #{od_atm_lambda:id() => od_atm_lambda:record()}
+    fetched_lambdas :: fetched_lambdas()
 }).
 -type validator_ctx() :: #validator_ctx{}.
 
@@ -47,7 +51,7 @@ validate(AtmWorkflowSchemaRevision, KnownAtmLambdas) ->
         fun validate_all_ids_in_lanes/1,
         fun validate_store_schemas/1,
         fun validate_store_schema_references/1,
-        fun validate_argument_and_result_mappers/1
+        fun validate_task_lambda_config_and_mappers/1
     ]).
 
 %%%===================================================================
@@ -228,62 +232,97 @@ validate_store_schema_references(#validator_ctx{
 
 
 %% @private
--spec validate_argument_and_result_mappers(validator_ctx()) ->
+-spec validate_task_lambda_config_and_mappers(validator_ctx()) ->
     ok | no_return().
-validate_argument_and_result_mappers(#validator_ctx{
+validate_task_lambda_config_and_mappers(#validator_ctx{
     atm_workflow_schema_revision = #atm_workflow_schema_revision{} = AtmWorkflowSchemaRevision,
     fetched_lambdas = FetchedLambdas
 }) ->
-    atm_workflow_schema_revision:fold_tasks(fun(AtmTaskSchema = #atm_task_schema{
-        id = TaskId,
+    atm_workflow_schema_revision:fold_tasks(fun(#atm_task_schema{
         lambda_id = AtmLambdaId,
         lambda_revision_number = LambdaRevisionNumber
-    }, FetchedLambdasAcc) ->
-        MapperArgumentNames = [S#atm_task_schema_argument_mapper.argument_name || S <- AtmTaskSchema#atm_task_schema.argument_mappings],
-        MapperResultNames = [S#atm_task_schema_result_mapper.result_name || S <- AtmTaskSchema#atm_task_schema.result_mappings],
-
-        % there may be not more that one mapper per argument name (hence the mapper names must be unique),
-        % but any number of result mappers per result name (so there is no need to check for uniqueness)
-        atm_schema_validator:assert_unique_identifiers(
-            name, MapperArgumentNames, str_utils:format_bin("tasks[~s].argumentMappings", [TaskId])
+    } = AtmTaskSchema, FetchedLambdasAcc) ->
+        {AtmLambda, NewFetchedLambdasAcc} = fetch_or_reuse_lambda(AtmLambdaId, FetchedLambdasAcc),
+        AtmLambdaRevision = atm_lambda_revision_registry:get_revision(
+            LambdaRevisionNumber, AtmLambda#od_atm_lambda.revision_registry
         ),
-
-        NewFetchedLambdasAcc = case maps:find(AtmLambdaId, FetchedLambdas) of
-            {ok, _} ->
-                FetchedLambdasAcc;
-            error ->
-                {ok, #document{value = Record}} = od_atm_lambda:get(AtmTaskSchema#atm_task_schema.lambda_id),
-                FetchedLambdasAcc#{AtmLambdaId => Record}
-        end,
-        #od_atm_lambda{revision_registry = RevisionRegistry} = maps:get(AtmLambdaId, NewFetchedLambdasAcc),
-        #atm_lambda_revision{
-            argument_specs = ArgumentSpecs,
-            result_specs = ResultSpecs
-        } = atm_lambda_revision_registry:get_revision(LambdaRevisionNumber, RevisionRegistry),
-
-        SpecArgumentNames = [S#atm_lambda_argument_spec.name || S <- ArgumentSpecs],
-        SpecResultNames = [S#atm_lambda_result_spec.name || S <- ResultSpecs],
-
-        atm_schema_validator:assert_known_names(
-            MapperArgumentNames, SpecArgumentNames, str_utils:format_bin("tasks[~s].argumentMappings", [TaskId])
-        ),
-        atm_schema_validator:assert_known_names(
-            MapperResultNames, SpecResultNames, str_utils:format_bin("tasks[~s].resultMappings", [TaskId])
-        ),
-
-        lists:foreach(fun(#atm_lambda_argument_spec{name = Name} = ArgumentSpec) ->
-            case {ArgumentSpec, lists:member(Name, MapperArgumentNames)} of
-                % the is_optional flag is ignored if the default_value is specified
-                {#atm_lambda_argument_spec{default_value = undefined, is_optional = false}, false} ->
-                    raise_missing_required_argument_mapper_error(Name);
-                {_, _} ->
-                    ok
-            end
-        end, ArgumentSpecs),
-
+        validate_task_lambda_config(AtmTaskSchema, AtmLambdaRevision),
+        validate_task_argument_mappers(AtmTaskSchema, AtmLambdaRevision),
+        validate_task_result_mappers(AtmTaskSchema, AtmLambdaRevision),
         NewFetchedLambdasAcc
     end, FetchedLambdas, AtmWorkflowSchemaRevision),
     ok.
+
+
+%% @private
+-spec validate_task_lambda_config(atm_task_schema:record(), atm_lambda_revision:record()) -> ok | no_return().
+validate_task_lambda_config(#atm_task_schema{
+    id = TaskId,
+    lambda_config = LambdaConfig
+}, #atm_lambda_revision{
+    config_spec = ConfigSpec
+}) ->
+    ReferencedConfigParameterNames = maps:keys(LambdaConfig),
+    ConfigParameterNames = [S#atm_parameter_spec.name || S <- ConfigSpec],
+    atm_schema_validator:assert_known_names(
+        ReferencedConfigParameterNames, ConfigParameterNames, str_utils:format_bin("tasks[~s].lambdaConfig", [TaskId])
+    ),
+
+    lists:foreach(fun(#atm_parameter_spec{name = Name} = ParameterSpec) ->
+        case {ParameterSpec, lists:member(Name, ReferencedConfigParameterNames)} of
+            % the is_optional flag is ignored if the default_value is specified
+            {#atm_parameter_spec{default_value = undefined, is_optional = false}, false} ->
+                raise_missing_required_config_parameter_error(Name);
+            {_, _} ->
+                ok
+        end
+    end, ConfigSpec).
+
+
+%% @private
+-spec validate_task_argument_mappers(atm_task_schema:record(), atm_lambda_revision:record()) -> ok | no_return().
+validate_task_argument_mappers(#atm_task_schema{
+    id = TaskId,
+    argument_mappings = ArgumentMappings
+}, #atm_lambda_revision{
+    argument_specs = ArgumentSpecs
+}) ->
+    MapperArgumentNames = [S#atm_task_schema_argument_mapper.argument_name || S <- ArgumentMappings],
+    % there may be not more that one mapper per argument name (hence the mapper names must be unique),
+    % but any number of result mappers per result name (so there is no need to check for uniqueness)
+    atm_schema_validator:assert_unique_identifiers(
+        name, MapperArgumentNames, str_utils:format_bin("tasks[~s].argumentMappings", [TaskId])
+    ),
+
+    SpecArgumentNames = [S#atm_parameter_spec.name || S <- ArgumentSpecs],
+    atm_schema_validator:assert_known_names(
+        MapperArgumentNames, SpecArgumentNames, str_utils:format_bin("tasks[~s].argumentMappings", [TaskId])
+    ),
+
+    lists:foreach(fun(#atm_parameter_spec{name = Name} = ArgumentSpec) ->
+        case {ArgumentSpec, lists:member(Name, MapperArgumentNames)} of
+            % the is_optional flag is ignored if the default_value is specified
+            {#atm_parameter_spec{default_value = undefined, is_optional = false}, false} ->
+                raise_missing_required_argument_mapper_error(Name);
+            {_, _} ->
+                ok
+        end
+    end, ArgumentSpecs).
+
+
+%% @private
+-spec validate_task_result_mappers(atm_task_schema:record(), atm_lambda_revision:record()) -> ok | no_return().
+validate_task_result_mappers(#atm_task_schema{
+    id = TaskId,
+    result_mappings = ResultMappings
+}, #atm_lambda_revision{
+    result_specs = ResultSpecs
+}) ->
+    MapperResultNames = [S#atm_task_schema_result_mapper.result_name || S <- ResultMappings],
+    SpecResultNames = [S#atm_lambda_result_spec.name || S <- ResultSpecs],
+    atm_schema_validator:assert_known_names(
+        MapperResultNames, SpecResultNames, str_utils:format_bin("tasks[~s].resultMappings", [TaskId])
+    ).
 
 %%%===================================================================
 %%% Helper functions
@@ -307,6 +346,19 @@ foreach_task(Callback, AtmWorkflowSchemaRevision) ->
 
 
 %% @private
+-spec fetch_or_reuse_lambda(od_atm_lambda:id(), fetched_lambdas()) -> {od_atm_lambda:record(), fetched_lambdas()}.
+fetch_or_reuse_lambda(AtmLambdaId, FetchedLambdas) ->
+    NewFetchedLambdas = case maps:find(AtmLambdaId, FetchedLambdas) of
+        {ok, _} ->
+            FetchedLambdas;
+        error ->
+            {ok, #document{value = Record}} = od_atm_lambda:get(AtmLambdaId),
+            FetchedLambdas#{AtmLambdaId => Record}
+    end,
+    {maps:get(AtmLambdaId, NewFetchedLambdas), NewFetchedLambdas}.
+
+
+%% @private
 -spec assert_allowed_store_schema_reference(atm_schema_validator:data_key_name(), automation:id(), [automation:id()]) ->
     ok | no_return().
 assert_allowed_store_schema_reference(DataKeyName, StoreSchemaId, AllowedStoreSchemaIds) ->
@@ -319,7 +371,17 @@ assert_allowed_store_schema_reference(DataKeyName, StoreSchemaId, AllowedStoreSc
 
 
 %% @private
--spec raise_missing_required_argument_mapper_error(automation:name()) -> no_return().
+-spec raise_missing_required_config_parameter_error(atm_parameter_spec:name()) -> no_return().
+raise_missing_required_config_parameter_error(ParameterName) ->
+    atm_schema_validator:raise_validation_error(
+        <<"lambdaConfig">>,
+        "Missing value for required lambda config parameter '~s'",
+        [ParameterName]
+    ).
+
+
+%% @private
+-spec raise_missing_required_argument_mapper_error(atm_parameter_spec:name()) -> no_return().
 raise_missing_required_argument_mapper_error(ArgumentName) ->
     atm_schema_validator:raise_validation_error(
         <<"argumentMappings">>,
