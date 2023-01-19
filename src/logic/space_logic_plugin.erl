@@ -94,6 +94,7 @@ operation_supported(create, {group, _}, private) -> true;
 operation_supported(create, group, private) -> true;
 operation_supported(create, harvest_metadata, private) -> true;
 
+operation_supported(get, list_marketplace, protected) -> true;
 operation_supported(get, list, private) -> true;
 operation_supported(get, privileges, _) -> true;
 operation_supported(get, api_samples, private) -> true;
@@ -409,6 +410,9 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
 %%--------------------------------------------------------------------
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
+get(#el_req{gri = #gri{aspect = list_marketplace}}, _) ->
+    space_marketplace:list_all();
+
 get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, SpaceDocs} = od_space:list(),
     {ok, [SpaceId || #document{key = SpaceId} <- SpaceDocs]};
@@ -786,6 +790,9 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = space_support_to
 authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
 
+authorize(#el_req{operation = get, gri = #gri{aspect = list_marketplace}, auth = ?USER}, _) ->
+    true;
+
 authorize(#el_req{operation = get, gri = #gri{aspect = api_samples}, auth = ?USER(UserId)}, Space) ->
     entity_graph:has_relation(direct, bottom_up, od_user, UserId, Space);
 
@@ -968,6 +975,9 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {group
 
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = group}}) ->
     [?OZ_GROUPS_CREATE, ?OZ_SPACES_ADD_RELATIONSHIPS];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list_marketplace}}) ->
+    [?OZ_SPACES_LIST];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
     [?OZ_SPACES_LIST];
