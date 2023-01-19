@@ -88,6 +88,9 @@ create_response(#gri{id = SpaceId, aspect = harvester}, _, resource, {#gri{id = 
 %% @end
 %%--------------------------------------------------------------------
 -spec get_response(entity_logic:gri(), Resource :: term()) -> rest_handler:rest_resp().
+get_response(#gri{id = undefined, aspect = list_marketplace}, Spaces) ->
+    rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
+
 get_response(#gri{id = undefined, aspect = list}, Spaces) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
 
@@ -110,6 +113,9 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
         <<"creationTime">> => CreationTime
     });
+
+get_response(#gri{id = SpaceId, aspect = marketplace_data, scope = protected}, MarketplaceData) ->
+    rest_translator:ok_body_reply(MarketplaceData#{<<"spaceId">> => SpaceId});
 
 get_response(#gri{aspect = owners}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});

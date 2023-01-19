@@ -419,6 +419,14 @@ translate_group(#gri{aspect = eff_atm_inventories}, AtmInventories) ->
 translate_space(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
     Privileges;
 
+translate_space(#gri{id = undefined, aspect = list_marketplace, scope = private}, SpaceIds) ->
+    #{
+        <<"list">> => ids_to_serialized_gris(
+            #gri{type = od_space, aspect = marketplace_data, scope = protected},
+            SpaceIds
+        )
+    };
+
 translate_space(#gri{aspect = api_samples, scope = private}, ApiSamples) ->
     ApiSamples;
 
@@ -495,6 +503,9 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         })
 
     } end;
+
+translate_space(#gri{aspect = marketplace_data, scope = protected}, MarketplaceData) ->
+    MarketplaceData;
 
 translate_space(#gri{aspect = As}, Users) when As =:= users; As =:= owners; As =:= eff_users ->
     #{

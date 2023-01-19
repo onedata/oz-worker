@@ -103,6 +103,8 @@ operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
 operation_supported(get, owners, private) -> true;
 
+operation_supported(get, marketplace_data, protected) -> true;
+
 operation_supported(get, users, private) -> true;
 operation_supported(get, eff_users, private) -> true;
 operation_supported(get, {user_privileges, _}, private) -> true;
@@ -149,6 +151,7 @@ operation_supported(_, _, _) -> false.
     boolean().
 is_subscribable(instance, _) -> true;
 is_subscribable(owners, private) -> true;
+is_subscribable(marketplace_data, protected) -> true;
 is_subscribable(users, private) -> true;
 is_subscribable(eff_users, private) -> true;
 is_subscribable(groups, private) -> true;
@@ -459,6 +462,36 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
         <<"sharesCount">> => length(Shares)
     }};
 
+get(#el_req{gri = #gri{aspect = marketplace_data, scope = protected}}, Space) ->
+    #od_space{
+        name = Name,
+        advertised_in_marketplace = AdvertisedInMarketplace,
+        description = Description,
+        organization_name = OrganizationName,
+        tags = Tags,
+        creation_time = CreationTime
+    } = Space,
+
+    {ProviderNames, TotalSupportSize} = lists:foldl(
+        fun({ProviderId, SupportSize}, {ProviderNamesAcc, SupportSizeAcc}) ->
+            {ok, #document{value = #od_provider{name = ProviderName}}} = od_provider:get(ProviderId),
+            [{[ProviderName | ProviderNamesAcc], SupportSize + SupportSizeAcc}]
+        end,
+        {[], 0},
+        maps:to_list(entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space))
+    ),
+
+    {ok, #{
+        <<"name">> => Name,
+        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
+        <<"description">> => Description,
+        <<"organizationName">> => OrganizationName,
+        <<"tags">> => Tags,
+        <<"creationTime">> => CreationTime,
+        <<"totalSuppportSize">> => TotalSupportSize,
+        <<"providerNames">> => ProviderNames
+    }};
+
 get(#el_req{gri = #gri{aspect = users}}, Space) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_user, Space)};
 get(#el_req{gri = #gri{aspect = eff_users}}, Space) ->
@@ -663,6 +696,11 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {harvester, HarvesterId}}}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
+exists(#el_req{gri = #gri{aspect = marketplace_data, scope = protected}}, #od_space{
+    advertised_in_marketplace = AdvertisedInMarketPlace
+}) ->
+    AdvertisedInMarketPlace;
+
 exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     case Req#el_req.auth_hint of
         ?THROUGH_USER(UserId) ->
@@ -795,6 +833,11 @@ authorize(#el_req{operation = get, gri = #gri{aspect = list_marketplace}, auth =
 
 authorize(#el_req{operation = get, gri = #gri{aspect = api_samples}, auth = ?USER(UserId)}, Space) ->
     entity_graph:has_relation(direct, bottom_up, od_user, UserId, Space);
+
+authorize(#el_req{operation = get, gri = #gri{aspect = marketplace_data}, auth = ?USER}, #od_space{
+    advertised_in_marketplace = AdvertisedInMarketplace
+}) ->
+    AdvertisedInMarketplace;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse auth_by_support(Req, Space);
@@ -983,6 +1026,9 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) -
     [?OZ_SPACES_LIST];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = api_samples, scope = private}}) ->
+    [?OZ_SPACES_VIEW];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = marketplace_data, scope = protected}}) ->
     [?OZ_SPACES_VIEW];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}) ->
