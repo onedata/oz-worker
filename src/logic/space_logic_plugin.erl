@@ -28,6 +28,20 @@
 -define(AVAILABLE_MARKETPLACE_TAGS, lists:flatten(maps:values(oz_worker:get_env(
     available_marketplace_tags
 )))).
+-define(OPTIONAL_MARKETPLACE_PARAMETERS_SPEC, #{
+    <<"advertisedInMarketplace">> => {boolean, any},
+    <<"description">> => {binary, any},
+    <<"organizationName">> => {binary, any},
+    <<"tags">> => {list_of_binaries, ?AVAILABLE_MARKETPLACE_TAGS},
+    <<"marketplaceContactEmail">> => {binary, any}
+}).
+-define(REQUIRED_MARKETPLACE_PARAMETERS_SPEC, #{
+    <<"advertisedInMarketplace">> => {boolean, any},
+    <<"description">> => {binary, non_empty},
+    <<"organizationName">> => {binary, non_empty},
+    <<"tags">> => {list_of_binaries, [non_empty, ?AVAILABLE_MARKETPLACE_TAGS]},
+    <<"marketplaceContactEmail">> => {binary, email}
+}).
 
 %%%===================================================================
 %%% API
@@ -166,26 +180,26 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     end,
     SpaceDoc = #document{
         key = ProposedSpaceId,
-        value = #od_space{
+        value = update_marketplace_data(Req#el_req.data, #od_space{
             name = Name,
-
-            %% TODO add to marketplace links tree ??
-            advertised_in_marketplace = maps:get(<<"advertisedInMarketplace">>, Req#el_req.data, false),
-            description = maps:get(<<"description">>, Req#el_req.data, <<"">>),
-            organization_name = maps:get(<<"organizationName">>, Req#el_req.data, <<"">>),
-            tags = maps:get(<<"tags">>, Req#el_req.data, []),
-            marketplace_contact_email = maps:get(<<"marketplaceContactEmail">>, Req#el_req.data, <<"">>),
 
             creator = aai:normalize_subject(Auth#auth.subject),
             creation_time = global_clock:timestamp_seconds()
-        }
+        })
     },
+
+    %% TODO <-- begin critical section
     SpaceId = case od_space:create(SpaceDoc) of
+        {ok, #document{key = Key, value = #od_space{advertised_in_marketplace = true}}} ->
+            %% TODO add to marketplace links tree
+            Key;
         {ok, #document{key = Key}} ->
             Key;
         {error, already_exists} ->
             throw(?ERROR_ALREADY_EXISTS)
     end,
+    %% TODO -- end critical section
+
     case Req#el_req.auth_hint of
         ?AS_USER(UserId) ->
             entity_graph:add_relation(
@@ -476,12 +490,40 @@ get(#el_req{gri = #gri{aspect = storages}}, Space) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
-update(#el_req{gri = #gri{id = SpaceId, aspect = instance}, data = Data}) ->
-    %% TODO implement
-    NewName = maps:get(<<"name">>, Data),
-    {ok, _} = od_space:update(SpaceId, fun(Space = #od_space{}) ->
-        {ok, Space#od_space{name = NewName}}
-    end),
+update(#el_req{gri = GRI = #gri{id = SpaceId, aspect = instance}, data = Data}) ->
+    %% TODO <-- begin critical section
+
+    {true, {Space, _}} = fetch_entity(GRI),
+    PrevName = Space#od_space.name,
+    NewName = maps:get(<<"name">>, Data, PrevName),
+    NewSpace = update_marketplace_data(Data, Space#od_space{name = NewName}),
+
+    case Space == NewSpace of
+        true ->
+            ok;
+        false ->
+            {ok, _} = od_space:update(SpaceId, fun(_) -> {ok, NewSpace} end),
+
+            PrevAdvertisedInMarketplace = Space#od_space.advertised_in_marketplace,
+            NewAdvertisedInMarketplace = NewSpace#od_space.advertised_in_marketplace,
+
+            case {PrevAdvertisedInMarketplace, NewAdvertisedInMarketplace, PrevName == NewName} of
+                {false, true, _} ->
+                    %% TODO Add to marketplace under NewName
+                    ok;
+                {true, false, _} ->
+                    %% TODO Remove from marketplace under PrevName
+                    ok;
+                {true, true, false} ->
+                    %% TODO Change PrevName to NewName in marketplace
+                    ok;
+                _ ->
+                    ok
+            end
+    end,
+
+    %% TODO -- end critical section
+
     ok;
 
 update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {user_privileges, UserId}}}) ->
@@ -1020,31 +1062,15 @@ required_admin_privileges(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
-validate(#el_req{operation = create, data = Data, gri = #gri{aspect = instance}}) ->
-    AlwaysRequired = #{<<"name">> => {binary, name}},
-    AlwaysOptional = #{<<"idGeneratorSeed">> => {binary, any}},
-    MarketplaceRelatedFields = #{
-        <<"advertisedInMarketplace">> => {boolean, any},
-        <<"description">> => {binary, any},
-        <<"organizationName">> => {binary, any},
-        <<"tags">> => {list_of_binaries, ?AVAILABLE_MARKETPLACE_TAGS},
-        <<"marketplaceContactEmail">> => {binary, email}
-    },
-
-    case maps:get(<<"advertisedInMarketplace">>, Data, false) of
-        true ->
-            #{
-                required => maps:merge(AlwaysRequired, MarketplaceRelatedFields),
-                optional => AlwaysOptional
-            };
-        false ->
-            #{
-                required => AlwaysRequired,
-                optional => maps:merge(AlwaysOptional, MarketplaceRelatedFields)
-            };
-        _ ->
-            throw(?ERROR_BAD_VALUE_BOOLEAN(<<"advertisedInMarketplace">>))
-    end;
+validate(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
+    #{
+        required => #{
+            <<"name">> => {binary, name}
+        },
+        optional => ?OPTIONAL_MARKETPLACE_PARAMETERS_SPEC#{
+            <<"idGeneratorSeed">> => {binary, any}
+        }
+    };
 
 validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
     #{
@@ -1114,14 +1140,7 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = harvester}}) ->
     }});
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
-    at_least_one => #{
-        <<"name">> => {binary, name},
-        <<"advertisedInMarketplace">> => {boolean, any},
-        <<"description">> => {binary, any},
-        <<"organizationName">> => {binary, any},
-        <<"tags">> => {list_of_binaries, ?AVAILABLE_MARKETPLACE_TAGS},
-        <<"marketplaceContactEmail">> => {binary, email}
-    }
+    at_least_one => ?OPTIONAL_MARKETPLACE_PARAMETERS_SPEC#{<<"name">> => {binary, name}}
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}) ->
@@ -1172,3 +1191,40 @@ auth_by_support(#el_req{auth = ?PROVIDER(ProviderId)}, Space) ->
     space_logic:is_supported_by_provider(Space, ProviderId);
 auth_by_support(_, _) ->
     false.
+
+
+%% @private
+-spec update_marketplace_data(json_utils:json_map(), od_space:record()) ->
+    od_space:record().
+update_marketplace_data(Diff, Space = #od_space{
+    advertised_in_marketplace = Advertised,
+    description = Description,
+    organization_name = OrganizationName,
+    tags = Tags,
+    marketplace_contact_email = ContactEmail
+}) ->
+    IsAdvertised = maps:get(<<"advertisedInMarketplace">>, Diff, Advertised),
+
+    DataSpec = case IsAdvertised of
+        true -> #{required => ?REQUIRED_MARKETPLACE_PARAMETERS_SPEC};
+        false -> #{optional => ?OPTIONAL_MARKETPLACE_PARAMETERS_SPEC}
+    end,
+    Data = lists:foldl(fun
+        ({_Key, _UndefinedValue, _UndefinedValue}, Acc) -> Acc;
+        ({Key, _Value, _UndefinedValue}, Acc) when is_map_key(Key, Acc) -> Acc;
+        ({Key, Value, _UndefinedValue}, Acc) -> Acc#{Key => Value}
+    end, Diff#{<<"advertisedInMarketplace">> => IsAdvertised}, [
+        {<<"description">>, Description, <<"">>},
+        {<<"organizationName">>, OrganizationName, <<"">>},
+        {<<"tags">>, Tags, []},
+        {<<"marketplaceContactEmail">>, ContactEmail, <<"">>}
+    ]),
+    SanitizedData = entity_logic_sanitizer:ensure_valid(DataSpec, undefined, Data),
+
+    Space#od_space{
+        advertised_in_marketplace = IsAdvertised,
+        description = maps:get(<<"description">>, SanitizedData, Description),
+        organization_name = maps:get(<<"organizationName">>, SanitizedData, OrganizationName),
+        tags = maps:get(<<"tags">>, SanitizedData, Tags),
+        marketplace_contact_email = maps:get(<<"marketplaceContactEmail">>, SanitizedData, ContactEmail)
+    }.
