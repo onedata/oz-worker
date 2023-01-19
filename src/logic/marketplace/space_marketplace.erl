@@ -64,12 +64,12 @@ delete(SpaceName, SpaceId) ->
     datastore_model:delete_links(?CTX, ?FOREST, ?TREE_ID, Index).
 
 
--spec list_all() -> {ok, [{index(), od_space:id()}]} | {error, term()}.
+-spec list_all() -> {ok, [od_space:id()]} | {error, term()}.
 list_all() ->
-    FoldFun = fun(Link, Acc) -> {ok, [{Link#link.name, Link#link.target} | Acc]} end,
+    FoldFun = fun(Link, Acc) -> {ok, [Link#link.target | Acc]} end,
 
     case datastore_model:fold_links(?CTX, ?FOREST, ?TREE_ID, FoldFun, [], #{}) of
-        {ok, Entries} -> {ok, lists:reverse(Entries)};
+        {ok, SpaceIds} -> {ok, lists:reverse(SpaceIds)};
         {error, _} = Error -> Error
     end.
 

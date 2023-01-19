@@ -43,6 +43,8 @@
     <<"marketplaceContactEmail">> => {binary, email}
 }).
 
+-define(SPACE_CRITICAL_SECTION_KEY(__SPACE_ID), {?MODULE, space, __SPACE_ID}).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -188,17 +190,21 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         })
     },
 
-    %% TODO <-- begin critical section
-    SpaceId = case od_space:create(SpaceDoc) of
-        {ok, #document{key = Key, value = #od_space{advertised_in_marketplace = true}}} ->
-            %% TODO add to marketplace links tree
-            Key;
-        {ok, #document{key = Key}} ->
-            Key;
-        {error, already_exists} ->
-            throw(?ERROR_ALREADY_EXISTS)
+    CriticalSectionFun = fun() ->
+        case od_space:create(SpaceDoc) of
+            {ok, #document{key = Key, value = #od_space{advertised_in_marketplace = true}}} ->
+                space_marketplace:add(Name, Key),
+                Key;
+            {ok, #document{key = Key}} ->
+                Key;
+            {error, already_exists} ->
+                throw(?ERROR_ALREADY_EXISTS)
+        end
     end,
-    %% TODO -- end critical section
+    SpaceId = case ProposedSpaceId of
+        undefined -> CriticalSectionFun();
+        _ -> critical_section:run(?SPACE_CRITICAL_SECTION_KEY(ProposedSpaceId), CriticalSectionFun)
+    end,
 
     case Req#el_req.auth_hint of
         ?AS_USER(UserId) ->
@@ -491,40 +497,33 @@ get(#el_req{gri = #gri{aspect = storages}}, Space) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = GRI = #gri{id = SpaceId, aspect = instance}, data = Data}) ->
-    %% TODO <-- begin critical section
+    critical_section:run(?SPACE_CRITICAL_SECTION_KEY(SpaceId), fun() ->
+        {true, {Space, _}} = fetch_entity(GRI),
+        PrevName = Space#od_space.name,
+        NewName = maps:get(<<"name">>, Data, PrevName),
+        NewSpace = update_marketplace_data(Data, Space#od_space{name = NewName}),
 
-    {true, {Space, _}} = fetch_entity(GRI),
-    PrevName = Space#od_space.name,
-    NewName = maps:get(<<"name">>, Data, PrevName),
-    NewSpace = update_marketplace_data(Data, Space#od_space{name = NewName}),
+        case Space == NewSpace of
+            true ->
+                ok;
+            false ->
+                {ok, _} = od_space:update(SpaceId, fun(_) -> {ok, NewSpace} end),
 
-    case Space == NewSpace of
-        true ->
-            ok;
-        false ->
-            {ok, _} = od_space:update(SpaceId, fun(_) -> {ok, NewSpace} end),
+                PrevAdvertisedInMarketplace = Space#od_space.advertised_in_marketplace,
+                NewAdvertisedInMarketplace = NewSpace#od_space.advertised_in_marketplace,
 
-            PrevAdvertisedInMarketplace = Space#od_space.advertised_in_marketplace,
-            NewAdvertisedInMarketplace = NewSpace#od_space.advertised_in_marketplace,
-
-            case {PrevAdvertisedInMarketplace, NewAdvertisedInMarketplace, PrevName == NewName} of
-                {false, true, _} ->
-                    %% TODO Add to marketplace under NewName
-                    ok;
-                {true, false, _} ->
-                    %% TODO Remove from marketplace under PrevName
-                    ok;
-                {true, true, false} ->
-                    %% TODO Change PrevName to NewName in marketplace
-                    ok;
-                _ ->
-                    ok
-            end
-    end,
-
-    %% TODO -- end critical section
-
-    ok;
+                case {PrevAdvertisedInMarketplace, NewAdvertisedInMarketplace, PrevName == NewName} of
+                    {false, true, _} ->
+                        ok = space_marketplace:add(NewName, SpaceId);
+                    {true, false, _} ->
+                        ok = space_marketplace:delete(PrevName, SpaceId);
+                    {true, true, false} ->
+                        ok = space_marketplace:update(PrevName, SpaceId, NewName);
+                    _ ->
+                        ok
+                end
+        end
+    end);
 
 update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {user_privileges, UserId}}}) ->
     PrivsToGrant = maps:get(<<"grant">>, Req#el_req.data, []),
