@@ -25,21 +25,21 @@
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
--define(AVAILABLE_MARKETPLACE_TAGS, lists:flatten(maps:values(oz_worker:get_env(
-    available_marketplace_tags
+-define(AVAILABLE_SPACE_TAGS, lists:flatten(maps:values(oz_worker:get_env(
+    available_space_tags
 )))).
 -define(OPTIONAL_MARKETPLACE_PARAMETERS_SPEC, #{
     <<"advertisedInMarketplace">> => {boolean, any},
     <<"description">> => {binary, any},
     <<"organizationName">> => {binary, any},
-    <<"tags">> => {list_of_binaries, ?AVAILABLE_MARKETPLACE_TAGS},
+    <<"tags">> => {list_of_binaries, ?AVAILABLE_SPACE_TAGS},
     <<"marketplaceContactEmail">> => {binary, any}
 }).
 -define(REQUIRED_MARKETPLACE_PARAMETERS_SPEC, #{
     <<"advertisedInMarketplace">> => {boolean, any},
     <<"description">> => {binary, non_empty},
     <<"organizationName">> => {binary, non_empty},
-    <<"tags">> => {list_of_binaries, {all, [non_empty, ?AVAILABLE_MARKETPLACE_TAGS]}},
+    <<"tags">> => {list_of_binaries, {all, [non_empty, ?AVAILABLE_SPACE_TAGS]}},
     <<"marketplaceContactEmail">> => {binary, email}
 }).
 
@@ -458,20 +458,17 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
         <<"sharesCount">> => length(Shares)
     }};
 
-get(#el_req{gri = #gri{aspect = marketplace_data, scope = protected}}, Space) ->
-    #od_space{
-        name = Name,
-        advertised_in_marketplace = AdvertisedInMarketplace,
-        description = Description,
-        organization_name = OrganizationName,
-        tags = Tags,
-        creation_time = CreationTime
-    } = Space,
-
+get(#el_req{gri = #gri{aspect = marketplace_data, scope = protected}}, Space = #od_space{
+    name = Name,
+    description = Description,
+    organization_name = OrganizationName,
+    tags = Tags,
+    creation_time = CreationTime
+}) ->
     {ProviderNames, TotalSupportSize} = lists:foldl(
         fun({ProviderId, SupportSize}, {ProviderNamesAcc, SupportSizeAcc}) ->
             {ok, #document{value = #od_provider{name = ProviderName}}} = od_provider:get(ProviderId),
-            [{[ProviderName | ProviderNamesAcc], SupportSize + SupportSizeAcc}]
+            {[ProviderName | ProviderNamesAcc], SupportSize + SupportSizeAcc}
         end,
         {[], 0},
         maps:to_list(entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space))
@@ -479,7 +476,6 @@ get(#el_req{gri = #gri{aspect = marketplace_data, scope = protected}}, Space) ->
 
     {ok, #{
         <<"name">> => Name,
-        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
         <<"description">> => Description,
         <<"organizationName">> => OrganizationName,
         <<"tags">> => Tags,
@@ -1261,7 +1257,7 @@ update_marketplace_data(Diff, Space = #od_space{
         false -> #{optional => ?OPTIONAL_MARKETPLACE_PARAMETERS_SPEC}
     end,
     Data = lists:foldl(fun
-        ({_Key, _UndefinedValue, _UndefinedValue}, Acc) -> Acc;
+        ({_Key, UndefinedValue, UndefinedValue}, Acc) -> Acc;
         ({Key, _Value, _UndefinedValue}, Acc) when is_map_key(Key, Acc) -> Acc;
         ({Key, Value, _UndefinedValue}, Acc) -> Acc#{Key => Value}
     end, Diff#{<<"advertisedInMarketplace">> => IsAdvertised}, [

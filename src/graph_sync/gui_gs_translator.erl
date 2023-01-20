@@ -54,7 +54,7 @@ handshake_attributes(_Client) ->
         <<"defaultHarvestingBackendType">> => utils:undefined_to_null(DefaultHarvestingBackendType),
         <<"defaultHarvestingBackendEndpoint">> => utils:undefined_to_null(DefaultHarvestingBackendEndpoint),
         <<"defaultAtmResourceSpec">> => oz_worker:get_env(default_atm_resource_spec),
-        <<"availableMarketplaceTags">> => oz_worker:get_env(available_marketplace_tags)
+        <<"availableSpaceTags">> => oz_worker:get_env(available_space_tags)
     }.
 
 
@@ -419,7 +419,7 @@ translate_group(#gri{aspect = eff_atm_inventories}, AtmInventories) ->
 translate_space(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
     Privileges;
 
-translate_space(#gri{id = undefined, aspect = marketplace_list, scope = private}, SpaceIds) ->
+translate_space(#gri{id = undefined, aspect = marketplace_list, scope = protected}, SpaceIds) ->
     #{
         <<"list">> => ids_to_serialized_gris(
             #gri{type = od_space, aspect = marketplace_data, scope = protected},
