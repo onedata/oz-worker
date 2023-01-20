@@ -2487,8 +2487,136 @@ get_record(od_space, 13) -> UpgradedRecord = {od_space,
         <<"provider_a">> => {123456, [{od_storage, <<"storage_a">>}]},
         <<"provider_b">> => {987654, [{od_storage, <<"storage_b">>}]}
     })};
-get_record(od_space, 14) -> #od_space{
+get_record(od_space, 14) -> {od_space,
+    <<"name">>,
+    [<<"user3">>, <<"user1">>],
+
+    #{
+        <<"user1">> => privileges:from_list([
+            ?SPACE_VIEW,
+            ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+            ?SPACE_VIEW_TRANSFERS,
+            ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+            ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+            ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_MANAGE_SHARES,
+            ?SPACE_VIEW_VIEWS,
+            ?SPACE_QUERY_VIEWS,
+            ?SPACE_VIEW_STATISTICS,
+            ?SPACE_VIEW_CHANGES_STREAM,
+            ?SPACE_SCHEDULE_REPLICATION,
+            ?SPACE_VIEW_QOS,
+            ?SPACE_REGISTER_FILES,
+            ?SPACE_MANAGE_DATASETS,
+            ?SPACE_VIEW_ARCHIVES,
+            ?SPACE_CREATE_ARCHIVES,
+            ?SPACE_VIEW_ATM_WORKFLOW_EXECUTIONS,
+            ?SPACE_SCHEDULE_ATM_WORKFLOW_EXECUTIONS
+        ]),
+        <<"user2">> => privileges:from_list([
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+            ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
+            ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
+        ]),
+        <<"user3">> => [?SPACE_READ_DATA, ?SPACE_WRITE_DATA]
+    },
+    #{
+        <<"group1">> => privileges:from_list([
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT
+        ]),
+        <<"group2">> => privileges:from_list([
+            ?SPACE_VIEW,
+            ?SPACE_READ_DATA, ?SPACE_WRITE_DATA,
+            ?SPACE_VIEW_TRANSFERS,
+            ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_ADD_USER, ?SPACE_REMOVE_USER,
+            ?SPACE_ADD_GROUP, ?SPACE_REMOVE_GROUP,
+            ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+            ?SPACE_REGISTER_FILES,
+            ?SPACE_MANAGE_SHARES,
+            ?SPACE_VIEW_VIEWS,
+            ?SPACE_QUERY_VIEWS,
+            ?SPACE_VIEW_STATISTICS,
+            ?SPACE_VIEW_CHANGES_STREAM,
+            ?SPACE_SCHEDULE_REPLICATION,
+            ?SPACE_VIEW_QOS,
+            ?SPACE_UPDATE, ?SPACE_DELETE,
+            ?SPACE_SET_PRIVILEGES,
+            ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
+            ?SPACE_MANAGE_VIEWS,
+            ?SPACE_CANCEL_REPLICATION,
+            ?SPACE_SCHEDULE_EVICTION, ?SPACE_CANCEL_EVICTION,
+            ?SPACE_MANAGE_QOS,
+            ?SPACE_MANAGE_DATASETS,
+            ?SPACE_VIEW_ARCHIVES,
+            ?SPACE_CREATE_ARCHIVES,
+            ?SPACE_REMOVE_ARCHIVES,
+            ?SPACE_RECALL_ARCHIVES,
+            ?SPACE_VIEW_ATM_WORKFLOW_EXECUTIONS,
+            ?SPACE_SCHEDULE_ATM_WORKFLOW_EXECUTIONS,
+            % following privs should be added by the upgrade procedure
+            ?SPACE_MANAGE_ATM_WORKFLOW_EXECUTIONS
+        ])
+    },
+    #{},
+    [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+    [],
+
+    #{
+        <<"user3">> => {
+            privileges:from_list([
+                ?SPACE_VIEW, ?SPACE_READ_DATA, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS,
+                ?SPACE_VIEW_PRIVILEGES, ?SPACE_ADD_USER, ?SPACE_REMOVE_USER, ?SPACE_ADD_GROUP,
+                ?SPACE_REMOVE_GROUP, ?SPACE_ADD_HARVESTER, ?SPACE_REMOVE_HARVESTER,
+                ?SPACE_MANAGE_SHARES, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS,
+                ?SPACE_VIEW_STATISTICS, ?SPACE_VIEW_CHANGES_STREAM,
+                ?SPACE_SCHEDULE_REPLICATION, ?SPACE_VIEW_QOS, ?SPACE_REGISTER_FILES,
+                ?SPACE_MANAGE_DATASETS,
+                ?SPACE_VIEW_ARCHIVES, ?SPACE_CREATE_ARCHIVES,
+                ?SPACE_VIEW_ATM_WORKFLOW_EXECUTIONS,
+                ?SPACE_SCHEDULE_ATM_WORKFLOW_EXECUTIONS
+            ]),
+            [{od_space, <<"self">>}]
+        }
+    },
+    #{},
+    #{
+        <<"provider_a">> => {123456, [{od_storage, <<"storage_a">>}]},
+        <<"provider_b">> => {987654, [{od_storage, <<"storage_b">>}]}
+    },
+    #{},
+
+    #support_parameters_registry{
+        registry = #{
+            <<"provider_a">> => #support_parameters{
+                accounting_enabled = false,
+                dir_stats_service_enabled = false,
+                dir_stats_service_status = disabled
+            },
+            <<"provider_b">> => #support_parameters{
+                accounting_enabled = false,
+                dir_stats_service_enabled = false,
+                dir_stats_service_status = disabled
+            }
+        }
+    },
+
+    ozt_mocks:get_frozen_time_seconds(),
+    ?SUB(nobody),
+
+    true,
+    true
+};
+get_record(od_space, 15) -> #od_space{
     name = <<"name">>,
+
+    advertised_in_marketplace = false,
+    description = <<"">>,
+    organization_name = <<"">>,
+    tags = [],
+    marketplace_contact_email = <<"">>,
+
     owners = [<<"user3">>, <<"user1">>],
 
     users = #{
