@@ -94,7 +94,7 @@ operation_supported(create, {group, _}, private) -> true;
 operation_supported(create, group, private) -> true;
 operation_supported(create, harvest_metadata, private) -> true;
 
-operation_supported(get, list_marketplace, protected) -> true;
+operation_supported(get, marketplace_list, protected) -> true;
 operation_supported(get, list, private) -> true;
 operation_supported(get, privileges, _) -> true;
 operation_supported(get, api_samples, private) -> true;
@@ -178,14 +178,14 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     #{<<"name">> := Name} = Req#el_req.data,
-    ProposedSpaceId = case maps:find(<<"idGeneratorSeed">>, Req#el_req.data) of
+    SpaceId = case maps:find(<<"idGeneratorSeed">>, Req#el_req.data) of
         {ok, IdGeneratorSeed} ->
             datastore_key:new_from_digest([<<"customSpaceIdGeneratorSeed">>, IdGeneratorSeed]);
         error ->
-            undefined
+            datastore_key:new()
     end,
     SpaceDoc = #document{
-        key = ProposedSpaceId,
+        key = SpaceId,
         value = update_marketplace_data(Req#el_req.data, #od_space{
             name = Name,
 
@@ -194,7 +194,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         })
     },
 
-    CriticalSectionFun = fun() ->
+    critical_section:run(?SPACE_CRITICAL_SECTION_KEY(SpaceId), fun() ->
         case od_space:create(SpaceDoc) of
             {ok, #document{key = Key, value = #od_space{advertised_in_marketplace = true}}} ->
                 space_marketplace:add(Name, Key),
@@ -204,11 +204,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             {error, already_exists} ->
                 throw(?ERROR_ALREADY_EXISTS)
         end
-    end,
-    SpaceId = case ProposedSpaceId of
-        undefined -> CriticalSectionFun();
-        _ -> critical_section:run(?SPACE_CRITICAL_SECTION_KEY(ProposedSpaceId), CriticalSectionFun)
-    end,
+    end),
 
     case Req#el_req.auth_hint of
         ?AS_USER(UserId) ->
@@ -413,7 +409,7 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
 %%--------------------------------------------------------------------
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
-get(#el_req{gri = #gri{aspect = list_marketplace}}, _) ->
+get(#el_req{gri = #gri{aspect = marketplace_list}}, _) ->
     space_marketplace:list_all();
 
 get(#el_req{gri = #gri{aspect = list}}, _) ->
@@ -828,7 +824,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = space_support_to
 authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
 
-authorize(#el_req{operation = get, gri = #gri{aspect = list_marketplace}, auth = ?USER}, _) ->
+authorize(#el_req{operation = get, gri = #gri{aspect = marketplace_list}, auth = ?USER}, _) ->
     true;
 
 authorize(#el_req{operation = get, gri = #gri{aspect = api_samples}, auth = ?USER(UserId)}, Space) ->
@@ -1019,7 +1015,7 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {group
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = group}}) ->
     [?OZ_GROUPS_CREATE, ?OZ_SPACES_ADD_RELATIONSHIPS];
 
-required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list_marketplace}}) ->
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = marketplace_list}}) ->
     [?OZ_SPACES_LIST];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->

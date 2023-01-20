@@ -88,7 +88,7 @@ create_response(#gri{id = SpaceId, aspect = harvester}, _, resource, {#gri{id = 
 %% @end
 %%--------------------------------------------------------------------
 -spec get_response(entity_logic:gri(), Resource :: term()) -> rest_handler:rest_resp().
-get_response(#gri{id = undefined, aspect = list_marketplace}, Spaces) ->
+get_response(#gri{id = undefined, aspect = marketplace_list}, Spaces) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
 
 get_response(#gri{id = undefined, aspect = list}, Spaces) ->
@@ -100,6 +100,11 @@ get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
 get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
     #{
         <<"name">> := Name,
+        <<"advertisedInMarketplace">> := AdvertisedInMarketplace,
+        <<"description">> := Description,
+        <<"organizationName">> := OrganizationName,
+        <<"tags">> := Tags,
+        <<"marketplaceContactEmail">> := MarketplaceContactEmail,
         <<"providers">> := Providers,
         <<"supportParametersRegistry">> := SupportParametersRegistry,
         <<"creator">> := Creator,
@@ -108,6 +113,11 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
     rest_translator:ok_body_reply(#{
         <<"spaceId">> => SpaceId,
         <<"name">> => Name,
+        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
+        <<"description">> => Description,
+        <<"organizationName">> => OrganizationName,
+        <<"tags">> => Tags,
+        <<"marketplaceContactEmail">> => MarketplaceContactEmail,
         <<"providers">> => Providers,
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry),
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),

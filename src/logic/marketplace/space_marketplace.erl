@@ -10,7 +10,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 -module(space_marketplace).
--author("Lukasz Opiola").
+-author("Bartosz Walkowicz").
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/errors.hrl").
