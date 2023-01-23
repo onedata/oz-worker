@@ -276,7 +276,16 @@ validate_task_lambda_config(#atm_task_schema{
             {_, _} ->
                 ok
         end
-    end, ConfigSpec).
+    end, ConfigSpec),
+
+    maps:foreach(fun(ParameterName, Value) ->
+        {ok, #atm_parameter_spec{
+            data_spec = DataSpec
+        }} = lists_utils:find(fun(#atm_parameter_spec{name = N}) -> N == ParameterName end, ConfigSpec),
+        atm_schema_validator:sanitize_predefined_value(
+            Value, DataSpec, str_utils:format_bin("tasks[~s].lambdaConfig[~s]", [TaskId, ParameterName])
+        )
+    end, LambdaConfig).
 
 
 %% @private
@@ -288,8 +297,7 @@ validate_task_argument_mappers(#atm_task_schema{
     argument_specs = ArgumentSpecs
 }) ->
     MapperArgumentNames = [S#atm_task_schema_argument_mapper.argument_name || S <- ArgumentMappings],
-    % there may be not more that one mapper per argument name (hence the mapper names must be unique),
-    % but any number of result mappers per result name (so there is no need to check for uniqueness)
+    % there may be no more that one mapper per argument name (hence the mapper names must be unique)
     atm_schema_validator:assert_unique_identifiers(
         name, MapperArgumentNames, str_utils:format_bin("tasks[~s].argumentMappings", [TaskId])
     ),
@@ -318,6 +326,7 @@ validate_task_result_mappers(#atm_task_schema{
 }, #atm_lambda_revision{
     result_specs = ResultSpecs
 }) ->
+    % any number of result mappers per result name is allowed (no need to check for uniqueness)
     MapperResultNames = [S#atm_task_schema_result_mapper.result_name || S <- ResultMappings],
     SpecResultNames = [S#atm_lambda_result_spec.name || S <- ResultSpecs],
     atm_schema_validator:assert_known_names(

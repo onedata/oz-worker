@@ -51,12 +51,13 @@
     atm_workflow_schema_bad_store_reference_in_result_mapper/1,
     atm_workflow_schema_bad_current_task_time_series_store_reference_in_result_mapper/1,
     atm_workflow_schema_bad_lambda_reference_in_task/1,
-    atm_workflow_schema_lambda_argument_mapped_more_than_once/1,
     atm_workflow_schema_bad_config_parameter_reference_in_lambda_config/1,
-    atm_workflow_schema_bad_argument_reference_in_mapper/1,
-    atm_workflow_schema_bad_result_reference_in_mapper/1,
     atm_workflow_schema_missing_required_lambda_config_value/1,
-    atm_workflow_schema_missing_required_argument_mapper/1
+    atm_workflow_schema_disallowed_lambda_config_value/1,
+    atm_workflow_schema_lambda_argument_mapped_more_than_once/1,
+    atm_workflow_schema_bad_argument_reference_in_mapper/1,
+    atm_workflow_schema_missing_required_argument_mapper/1,
+    atm_workflow_schema_bad_result_reference_in_mapper/1
 ]).
 
 all() ->
@@ -78,12 +79,13 @@ all() ->
         atm_workflow_schema_bad_store_reference_in_result_mapper,
         atm_workflow_schema_bad_current_task_time_series_store_reference_in_result_mapper,
         atm_workflow_schema_bad_lambda_reference_in_task,
-        atm_workflow_schema_lambda_argument_mapped_more_than_once,
         atm_workflow_schema_bad_config_parameter_reference_in_lambda_config,
-        atm_workflow_schema_bad_argument_reference_in_mapper,
-        atm_workflow_schema_bad_result_reference_in_mapper,
         atm_workflow_schema_missing_required_lambda_config_value,
-        atm_workflow_schema_missing_required_argument_mapper
+        atm_workflow_schema_disallowed_lambda_config_value,
+        atm_workflow_schema_lambda_argument_mapped_more_than_once,
+        atm_workflow_schema_bad_argument_reference_in_mapper,
+        atm_workflow_schema_missing_required_argument_mapper,
+        atm_workflow_schema_bad_result_reference_in_mapper
     ]).
 
 
@@ -547,6 +549,133 @@ atm_workflow_schema_bad_lambda_reference_in_task(_Config) ->
     }).
 
 
+atm_workflow_schema_bad_config_parameter_reference_in_lambda_config(_Config) ->
+    BadParameterName1 = <<"bad parameter name">>,
+    BadParameterName2 = <<"invalid parameter name">>,
+    run_validation_tests(#test_spec{
+        schema_type = atm_workflow_schema,
+        tested_data_field = <<"lanes">>,
+        spoil_data_field_fun = fun(LanesJson, #{<<"stores">> := CorrectStoreSchemasJson}, AtmInventoryId) ->
+            AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
+            CorrectStoreSchemaIds = store_schemas_json_to_ids(CorrectStoreSchemasJson),
+            AtmLambdaId = ?RAND_ELEMENT(AtmLambdas),
+            AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
+
+            CorrectLambdaConfigEntries = gen_lambda_config(AtmLambdaRevision),
+            OffendingLambdaConfigEntries = gen_lambda_config([BadParameterName1, BadParameterName2]),
+
+            OffendingTask = #atm_task_schema{
+                id = TaskId = atm_test_utils:example_id(),
+                name = atm_test_utils:example_name(),
+                lambda_id = AtmLambdaId,
+                lambda_revision_number = ozt_atm_lambdas:get_largest_revision_number(AtmLambdaId),
+                lambda_config = maps:merge(OffendingLambdaConfigEntries, CorrectLambdaConfigEntries),
+                argument_mappings = atm_test_utils:example_argument_mappers(AtmLambdaRevision, CorrectStoreSchemaIds),
+                result_mappings = atm_test_utils:example_result_mappers(AtmLambdaRevision, CorrectStoreSchemaIds)
+            },
+            OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemasJson),
+            OffendingNamesStr = <<BadParameterName1/binary, ", ", BadParameterName2/binary>>,
+            {
+                lists_utils:shuffle([OffendingLane | LanesJson]),
+                ?ERROR_BAD_DATA(
+                    <<"tasks[", TaskId/binary, "].lambdaConfig">>,
+                    <<"The following names were not recognized (they reference inexistent definitions): ", OffendingNamesStr/binary>>
+                )
+            }
+        end
+    }).
+
+
+atm_workflow_schema_missing_required_lambda_config_value(_Config) ->
+    run_validation_tests(#test_spec{
+        schema_type = atm_workflow_schema,
+        tested_data_field = <<"lanes">>,
+        spoil_data_field_fun = fun(LanesJson, #{<<"stores">> := CorrectStoreSchemasJson}, AtmInventoryId) ->
+            AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
+            CorrectStoreSchemaIds = store_schemas_json_to_ids(CorrectStoreSchemasJson),
+
+            AtmLambdaRevisionJson = ozt_atm_lambdas:example_revision_json(),
+            MissingConfigParameterSpecJson = #{<<"name">> := MissingParameterName} = maps:merge(
+                ozt_atm_lambdas:example_parameter_spec_json(),
+                #{
+                    <<"isOptional">> => false,
+                    <<"defaultValue">> => null
+                }
+            ),
+            OtherConfigParameterSpecsJson = maps:get(<<"configSpec">>, AtmLambdaRevisionJson),
+            AtmLambdaId = create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson#{
+                <<"configSpec">> => lists_utils:shuffle([MissingConfigParameterSpecJson | OtherConfigParameterSpecsJson])
+            }),
+            AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
+
+            LambdaConfigWithPresentNames = gen_lambda_config(jsonable_record:list_from_json(
+                OtherConfigParameterSpecsJson, atm_parameter_spec
+            )),
+
+            OffendingTask = #atm_task_schema{
+                id = atm_test_utils:example_id(),
+                name = atm_test_utils:example_name(),
+                lambda_id = AtmLambdaId,
+                lambda_revision_number = ozt_atm_lambdas:get_largest_revision_number(AtmLambdaId),
+                lambda_config = LambdaConfigWithPresentNames,
+                argument_mappings = atm_test_utils:example_argument_mappers(AtmLambdaRevision, CorrectStoreSchemaIds),
+                result_mappings = atm_test_utils:example_result_mappers(AtmLambdaRevision, CorrectStoreSchemaIds)
+            },
+            OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemasJson),
+            {
+                lists_utils:shuffle([OffendingLane | LanesJson]),
+                ?ERROR_BAD_DATA(
+                    <<"lambdaConfig">>,
+                    <<"Missing value for required lambda config parameter '", MissingParameterName/binary, "'">>
+                )
+            }
+        end
+    }).
+
+
+atm_workflow_schema_disallowed_lambda_config_value(_Config) ->
+    lists:foreach(fun({DataSpec, InvalidValue}) ->
+        OffendingConfigParameterSpec = ozt_atm_lambdas:example_parameter_spec_json(DataSpec, undefined),
+        #{<<"name">> := ConfigParameterName} = OffendingConfigParameterSpec,
+        run_validation_tests(#test_spec{
+            schema_type = atm_workflow_schema,
+            tested_data_field = <<"lanes">>,
+            spoil_data_field_fun = fun(LanesJson, #{<<"stores">> := CorrectStoreSchemasJson}, AtmInventoryId) ->
+                AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
+                CorrectStoreSchemaIds = store_schemas_json_to_ids(CorrectStoreSchemasJson),
+
+                AtmLambdaRevisionJson = ozt_atm_lambdas:example_revision_json(),
+                OtherConfigParameterSpecsJson = maps:get(<<"configSpec">>, AtmLambdaRevisionJson),
+                AtmLambdaId = create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson#{
+                    <<"configSpec">> => lists_utils:shuffle([OffendingConfigParameterSpec | OtherConfigParameterSpecsJson])
+                }),
+                AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
+
+                CorrectLambdaConfig = gen_lambda_config(jsonable_record:list_from_json(
+                    OtherConfigParameterSpecsJson, atm_parameter_spec
+                )),
+                OffendingLambdaConfig = CorrectLambdaConfig#{ConfigParameterName => InvalidValue},
+
+                OffendingTask = #atm_task_schema{
+                    id = TaskId = atm_test_utils:example_id(),
+                    name = atm_test_utils:example_name(),
+                    lambda_id = AtmLambdaId,
+                    lambda_revision_number = ozt_atm_lambdas:get_largest_revision_number(AtmLambdaId),
+                    lambda_config = OffendingLambdaConfig,
+                    argument_mappings = atm_test_utils:example_argument_mappers(AtmLambdaRevision, CorrectStoreSchemaIds),
+                    result_mappings = atm_test_utils:example_result_mappers(AtmLambdaRevision, CorrectStoreSchemaIds)
+                },
+                OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemasJson),
+                DataKeyName = <<"tasks[", TaskId/binary, "].lambdaConfig[", ConfigParameterName/binary, "]">>,
+                {
+                    lists_utils:shuffle([OffendingLane | LanesJson]),
+                    exp_disallowed_predefined_value_error(DataKeyName, DataSpec, InvalidValue)
+                }
+            end
+        })
+    end, example_invalid_data_specs_and_predefined_values()).
+
+
 atm_workflow_schema_lambda_argument_mapped_more_than_once(_Config) ->
     run_validation_tests(#test_spec{
         schema_type = atm_workflow_schema,
@@ -636,37 +765,47 @@ atm_workflow_schema_bad_argument_reference_in_mapper(_Config) ->
     }).
 
 
-atm_workflow_schema_bad_config_parameter_reference_in_lambda_config(_Config) ->
-    BadParameterName1 = <<"bad parameter name">>,
-    BadParameterName2 = <<"invalid parameter name">>,
+atm_workflow_schema_missing_required_argument_mapper(_Config) ->
     run_validation_tests(#test_spec{
         schema_type = atm_workflow_schema,
         tested_data_field = <<"lanes">>,
         spoil_data_field_fun = fun(LanesJson, #{<<"stores">> := CorrectStoreSchemasJson}, AtmInventoryId) ->
             AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
             CorrectStoreSchemaIds = store_schemas_json_to_ids(CorrectStoreSchemasJson),
-            AtmLambdaId = ?RAND_ELEMENT(AtmLambdas),
+
+            AtmLambdaRevisionJson = ozt_atm_lambdas:example_revision_json(),
+            MissingArgumentSpec = #{<<"name">> := MissingArgumentName} = maps:merge(
+                ozt_atm_lambdas:example_parameter_spec_json(),
+                #{
+                    <<"isOptional">> => false,
+                    <<"defaultValue">> => null
+                }
+            ),
+            OtherArgumentSpecs = maps:get(<<"argumentSpecs">>, AtmLambdaRevisionJson),
+            AtmLambdaId = create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson#{
+                <<"argumentSpecs">> => lists_utils:shuffle([MissingArgumentSpec | OtherArgumentSpecs])
+            }),
             AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
 
-            CorrectLambdaConfigEntries = gen_lambda_config(AtmLambdaRevision),
-            OffendingLambdaConfigEntries = gen_lambda_config([BadParameterName1, BadParameterName2]),
+            PresentArgumentMappings = atm_test_utils:example_argument_mappers_for_specs(
+                jsonable_record:list_from_json(OtherArgumentSpecs, atm_parameter_spec), CorrectStoreSchemaIds
+            ),
 
             OffendingTask = #atm_task_schema{
-                id = TaskId = atm_test_utils:example_id(),
+                id = atm_test_utils:example_id(),
                 name = atm_test_utils:example_name(),
                 lambda_id = AtmLambdaId,
                 lambda_revision_number = ozt_atm_lambdas:get_largest_revision_number(AtmLambdaId),
-                lambda_config = maps:merge(OffendingLambdaConfigEntries, CorrectLambdaConfigEntries),
-                argument_mappings = atm_test_utils:example_argument_mappers(AtmLambdaRevision, CorrectStoreSchemaIds),
+                lambda_config = gen_lambda_config(AtmLambdaRevision),
+                argument_mappings = lists_utils:shuffle(PresentArgumentMappings),
                 result_mappings = atm_test_utils:example_result_mappers(AtmLambdaRevision, CorrectStoreSchemaIds)
             },
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemasJson),
-            OffendingNamesStr = <<BadParameterName1/binary, ", ", BadParameterName2/binary>>,
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
                 ?ERROR_BAD_DATA(
-                    <<"tasks[", TaskId/binary, "].lambdaConfig">>,
-                    <<"The following names were not recognized (they reference inexistent definitions): ", OffendingNamesStr/binary>>
+                    <<"argumentMappings">>,
+                    <<"Missing argument mapper for required argument '", MissingArgumentName/binary, "'">>
                 )
             }
         end
@@ -713,100 +852,6 @@ atm_workflow_schema_bad_result_reference_in_mapper(_Config) ->
                 ?ERROR_BAD_DATA(
                     <<"tasks[", TaskId/binary, "].resultMappings">>,
                     <<"The following names were not recognized (they reference inexistent definitions): ", OffendingNamesStr/binary>>
-                )
-            }
-        end
-    }).
-
-
-atm_workflow_schema_missing_required_lambda_config_value(_Config) ->
-    run_validation_tests(#test_spec{
-        schema_type = atm_workflow_schema,
-        tested_data_field = <<"lanes">>,
-        spoil_data_field_fun = fun(LanesJson, #{<<"stores">> := CorrectStoreSchemasJson}, AtmInventoryId) ->
-            AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
-            CorrectStoreSchemaIds = store_schemas_json_to_ids(CorrectStoreSchemasJson),
-
-            AtmLambdaRevisionJson = ozt_atm_lambdas:example_revision_json(),
-            MissingConfigParameterSpecJson = #{<<"name">> := MissingParameterName} = maps:merge(
-                ozt_atm_lambdas:example_parameter_spec_json(),
-                #{
-                    <<"isOptional">> => false,
-                    <<"defaultValue">> => null
-                }
-            ),
-            OtherConfigParameterSpecsJson = maps:get(<<"configSpec">>, AtmLambdaRevisionJson),
-            AtmLambdaId = create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson#{
-                <<"configSpec">> => lists_utils:shuffle([MissingConfigParameterSpecJson | OtherConfigParameterSpecsJson])
-            }),
-            AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
-
-            LambdaConfigWithPresentNames = gen_lambda_config(jsonable_record:list_from_json(
-                OtherConfigParameterSpecsJson, atm_parameter_spec
-            )),
-
-            OffendingTask = #atm_task_schema{
-                id = atm_test_utils:example_id(),
-                name = atm_test_utils:example_name(),
-                lambda_id = AtmLambdaId,
-                lambda_revision_number = ozt_atm_lambdas:get_largest_revision_number(AtmLambdaId),
-                lambda_config = LambdaConfigWithPresentNames,
-                argument_mappings = atm_test_utils:example_argument_mappers(AtmLambdaRevision, CorrectStoreSchemaIds),
-                result_mappings = atm_test_utils:example_result_mappers(AtmLambdaRevision, CorrectStoreSchemaIds)
-            },
-            OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemasJson),
-            {
-                lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
-                    <<"lambdaConfig">>,
-                    <<"Missing value for required lambda config parameter '", MissingParameterName/binary, "'">>
-                )
-            }
-        end
-    }).
-
-
-atm_workflow_schema_missing_required_argument_mapper(_Config) ->
-    run_validation_tests(#test_spec{
-        schema_type = atm_workflow_schema,
-        tested_data_field = <<"lanes">>,
-        spoil_data_field_fun = fun(LanesJson, #{<<"stores">> := CorrectStoreSchemasJson}, AtmInventoryId) ->
-            AtmLambdas = ozt_atm_inventories:get_atm_lambdas(AtmInventoryId),
-            CorrectStoreSchemaIds = store_schemas_json_to_ids(CorrectStoreSchemasJson),
-
-            AtmLambdaRevisionJson = ozt_atm_lambdas:example_revision_json(),
-            MissingArgumentSpec = #{<<"name">> := MissingArgumentName} = maps:merge(
-                ozt_atm_lambdas:example_parameter_spec_json(),
-                #{
-                    <<"isOptional">> => false,
-                    <<"defaultValue">> => null
-                }
-            ),
-            OtherArgumentSpecs = maps:get(<<"argumentSpecs">>, AtmLambdaRevisionJson),
-            AtmLambdaId = create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson#{
-                <<"argumentSpecs">> => lists_utils:shuffle([MissingArgumentSpec | OtherArgumentSpecs])
-            }),
-            AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
-
-            PresentArgumentMappings = atm_test_utils:example_argument_mappers_for_specs(
-                jsonable_record:list_from_json(OtherArgumentSpecs, atm_parameter_spec), CorrectStoreSchemaIds
-            ),
-
-            OffendingTask = #atm_task_schema{
-                id = atm_test_utils:example_id(),
-                name = atm_test_utils:example_name(),
-                lambda_id = AtmLambdaId,
-                lambda_revision_number = ozt_atm_lambdas:get_largest_revision_number(AtmLambdaId),
-                lambda_config = gen_lambda_config(AtmLambdaRevision),
-                argument_mappings = lists_utils:shuffle(PresentArgumentMappings),
-                result_mappings = atm_test_utils:example_result_mappers(AtmLambdaRevision, CorrectStoreSchemaIds)
-            },
-            OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemasJson),
-            {
-                lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
-                    <<"argumentMappings">>,
-                    <<"Missing argument mapper for required argument '", MissingArgumentName/binary, "'">>
                 )
             }
         end
