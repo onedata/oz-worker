@@ -34,7 +34,7 @@
     init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
-    atm_lambda_non_unique_config_spec_names/1,
+    atm_lambda_non_unique_config_parameter_spec_names/1,
     atm_lambda_non_unique_argument_spec_names/1,
     atm_lambda_non_unique_result_spec_names/1,
     atm_lambda_disallowed_config_parameter_default_value/1,
@@ -62,7 +62,7 @@
 
 all() ->
     ?ALL([
-        atm_lambda_non_unique_config_spec_names,
+        atm_lambda_non_unique_config_parameter_spec_names,
         atm_lambda_non_unique_argument_spec_names,
         atm_lambda_non_unique_result_spec_names,
         atm_lambda_disallowed_config_parameter_default_value,
@@ -118,17 +118,17 @@ all() ->
 %%% Test functions
 %%%===================================================================
 
-atm_lambda_non_unique_config_spec_names(_Config) ->
+atm_lambda_non_unique_config_parameter_spec_names(_Config) ->
     run_validation_tests(#test_spec{
         schema_type = atm_lambda,
-        tested_data_field = <<"configSpec">>,
-        spoil_data_field_fun = fun(ConfigSpecJson, _AtmInventoryId) ->
+        tested_data_field = <<"configParameterSpecs">>,
+        spoil_data_field_fun = fun(ConfigParameterSpecsJson, _AtmInventoryId) ->
             SpecAlpha = maps:merge(ozt_atm_lambdas:example_parameter_spec_json(), #{<<"name">> => <<"same name">>}),
             SpecBeta = maps:merge(ozt_atm_lambdas:example_parameter_spec_json(), #{<<"name">> => <<"same name">>}),
             {
-                lists_utils:shuffle([SpecAlpha, SpecBeta | ConfigSpecJson]),
+                lists_utils:shuffle([SpecAlpha, SpecBeta | ConfigParameterSpecsJson]),
                 ?ERROR_BAD_DATA(
-                    <<"configSpec">>,
+                    <<"configParameterSpecs">>,
                     <<"The provided list contains duplicate names">>
                 )
             }
@@ -176,13 +176,13 @@ atm_lambda_disallowed_config_parameter_default_value(_Config) ->
     lists:foreach(fun({DataSpec, InvalidDefaultValue}) ->
         OffendingConfigParameterSpec = ozt_atm_lambdas:example_parameter_spec_json(DataSpec, InvalidDefaultValue),
         #{<<"name">> := ConfigParameterName} = OffendingConfigParameterSpec,
-        DataKeyName = <<"configSpec[", ConfigParameterName/binary, "].defaultValue">>,
+        DataKeyName = <<"configParameterSpecs[", ConfigParameterName/binary, "].defaultValue">>,
         run_validation_tests(#test_spec{
             schema_type = atm_lambda,
-            tested_data_field = <<"configSpec">>,
-            spoil_data_field_fun = fun(ConfigSpecsJson, _AtmInventoryId) ->
+            tested_data_field = <<"configParameterSpecs">>,
+            spoil_data_field_fun = fun(ConfigParameterSpecsJson, _AtmInventoryId) ->
                 {
-                    lists_utils:shuffle([OffendingConfigParameterSpec | ConfigSpecsJson]),
+                    lists_utils:shuffle([OffendingConfigParameterSpec | ConfigParameterSpecsJson]),
                     exp_disallowed_predefined_value_error(DataKeyName, DataSpec, InvalidDefaultValue)
                 }
             end
@@ -602,9 +602,9 @@ atm_workflow_schema_missing_required_lambda_config_value(_Config) ->
                     <<"defaultValue">> => null
                 }
             ),
-            OtherConfigParameterSpecsJson = maps:get(<<"configSpec">>, AtmLambdaRevisionJson),
+            OtherConfigParameterSpecsJson = maps:get(<<"configParameterSpecs">>, AtmLambdaRevisionJson),
             AtmLambdaId = create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson#{
-                <<"configSpec">> => lists_utils:shuffle([MissingConfigParameterSpecJson | OtherConfigParameterSpecsJson])
+                <<"configParameterSpecs">> => lists_utils:shuffle([MissingConfigParameterSpecJson | OtherConfigParameterSpecsJson])
             }),
             AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
 
@@ -645,9 +645,9 @@ atm_workflow_schema_disallowed_lambda_config_value(_Config) ->
                 CorrectStoreSchemaIds = store_schemas_json_to_ids(CorrectStoreSchemasJson),
 
                 AtmLambdaRevisionJson = ozt_atm_lambdas:example_revision_json(),
-                OtherConfigParameterSpecsJson = maps:get(<<"configSpec">>, AtmLambdaRevisionJson),
+                OtherConfigParameterSpecsJson = maps:get(<<"configParameterSpecs">>, AtmLambdaRevisionJson),
                 AtmLambdaId = create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson#{
-                    <<"configSpec">> => lists_utils:shuffle([OffendingConfigParameterSpec | OtherConfigParameterSpecsJson])
+                    <<"configParameterSpecs">> => lists_utils:shuffle([OffendingConfigParameterSpec | OtherConfigParameterSpecsJson])
                 }),
                 AtmLambdaRevision = ozt_atm_lambdas:get_revision_with_largest_number(AtmLambdaId),
 
@@ -1182,15 +1182,15 @@ gen_lane_including_tasks(Tasks, AtmLambdas, StoreSchemasJson) ->
 
 
 %% @private
-gen_lambda_config(#atm_lambda_revision{config_spec = ConfigSpec}) ->
-    gen_lambda_config(ConfigSpec);
-gen_lambda_config(ConfigSpecOrParameterNames) ->
+gen_lambda_config(#atm_lambda_revision{config_parameter_specs = ConfigParameterSpecs}) ->
+    gen_lambda_config(ConfigParameterSpecs);
+gen_lambda_config(ConfigParameterSpecsOrNames) ->
     maps_utils:generate_from_list(fun
         F(#atm_parameter_spec{name = Name, data_spec = DataSpec}) ->
             {Name, atm_test_utils:example_predefined_value(DataSpec)};
         F(Name) ->
             F(#atm_parameter_spec{name = Name, data_spec = atm_test_utils:example_data_spec()})
-    end, ConfigSpecOrParameterNames).
+    end, ConfigParameterSpecsOrNames).
 
 
 %% @private

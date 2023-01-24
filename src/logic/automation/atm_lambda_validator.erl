@@ -38,9 +38,9 @@ validate(AtmLambdaRevision) ->
 %% @private
 -spec validate_config_parameter_names(atm_lambda_revision:record()) ->
     ok | errors:error().
-validate_config_parameter_names(#atm_lambda_revision{config_spec = ConfigSpec}) ->
-    ParameterNames = [S#atm_parameter_spec.name || S <- ConfigSpec],
-    atm_schema_validator:assert_unique_identifiers(name, ParameterNames, <<"configSpec">>).
+validate_config_parameter_names(#atm_lambda_revision{config_parameter_specs = ConfigParameterSpecs}) ->
+    ParameterNames = [S#atm_parameter_spec.name || S <- ConfigParameterSpecs],
+    atm_schema_validator:assert_unique_identifiers(name, ParameterNames, <<"configParameterSpecs">>).
 
 
 %% @private
@@ -62,8 +62,8 @@ validate_result_names(#atm_lambda_revision{result_specs = ResultSpecs}) ->
 %% @private
 -spec sanitize_config_parameter_default_values(atm_lambda_revision:record()) ->
     ok | errors:error().
-sanitize_config_parameter_default_values(#atm_lambda_revision{config_spec = ConfigSpec}) ->
-    sanitize_parameter_default_values(ConfigSpec, <<"configSpec">>).
+sanitize_config_parameter_default_values(#atm_lambda_revision{config_parameter_specs = ConfigParameterSpecs}) ->
+    sanitize_parameter_default_values(ConfigParameterSpecs, <<"configParameterSpecs">>).
 
 
 %% @private

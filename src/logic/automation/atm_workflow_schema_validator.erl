@@ -260,10 +260,10 @@ validate_task_lambda_config(#atm_task_schema{
     id = TaskId,
     lambda_config = LambdaConfig
 }, #atm_lambda_revision{
-    config_spec = ConfigSpec
+    config_parameter_specs = ConfigParameterSpecs
 }) ->
     ReferencedConfigParameterNames = maps:keys(LambdaConfig),
-    ConfigParameterNames = [S#atm_parameter_spec.name || S <- ConfigSpec],
+    ConfigParameterNames = [S#atm_parameter_spec.name || S <- ConfigParameterSpecs],
     atm_schema_validator:assert_known_names(
         ReferencedConfigParameterNames, ConfigParameterNames, str_utils:format_bin("tasks[~s].lambdaConfig", [TaskId])
     ),
@@ -276,12 +276,12 @@ validate_task_lambda_config(#atm_task_schema{
             {_, _} ->
                 ok
         end
-    end, ConfigSpec),
+    end, ConfigParameterSpecs),
 
     maps:foreach(fun(ParameterName, Value) ->
         {ok, #atm_parameter_spec{
             data_spec = DataSpec
-        }} = lists_utils:find(fun(#atm_parameter_spec{name = N}) -> N == ParameterName end, ConfigSpec),
+        }} = lists_utils:find(fun(#atm_parameter_spec{name = N}) -> N == ParameterName end, ConfigParameterSpecs),
         atm_schema_validator:sanitize_predefined_value(
             Value, DataSpec, str_utils:format_bin("tasks[~s].lambdaConfig[~s]", [TaskId, ParameterName])
         )

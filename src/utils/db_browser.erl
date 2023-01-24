@@ -876,7 +876,7 @@ latest_lambda_revision(#document{value = #od_atm_lambda{revision_registry = Revi
                     docker_image = <<"unknown">>,
                     docker_execution_options = #atm_docker_execution_options{}
                 },
-                config_spec = [],
+                config_parameter_specs = [],
                 argument_specs = [],
                 result_specs = [],
                 preferred_batch_size = 100,
