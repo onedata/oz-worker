@@ -33,6 +33,7 @@
 -export([create_as_support_for_space/1]).
 -export([simulate_version/2]).
 -export([get/1]).
+-export([get_name/1]).
 -export([set_up_support_for_user/2]).
 -export([get_root_token/1]).
 -export([create_storage/1, create_storage/3, ensure_storage/2]).
@@ -96,6 +97,12 @@ simulate_version(ProviderId, ReleaseVersion) ->
 get(ProviderId) ->
     {ok, Provider} = ?assertMatch({ok, _}, ozt:rpc(provider_logic, get, [?ROOT, ProviderId])),
     Provider.
+
+
+-spec get_name(od_provider:id()) -> od_provider:name().
+get_name(ProviderId) ->
+    {ok, ProviderName} = ?assertMatch({ok, _}, ozt:rpc(provider_logic, get_name, [?ROOT, ProviderId])),
+    ProviderName.
 
 
 -spec set_up_support_for_user(od_provider:id(), od_user:id()) -> ok.

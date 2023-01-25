@@ -276,6 +276,9 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry)
     };
 
+translate_resource(_, #gri{type = od_space, aspect = marketplace_data, scope = protected}, MarketplaceData) ->
+    MarketplaceData;
+
 translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = private}, Share) ->
     #od_share{
         space = SpaceId,

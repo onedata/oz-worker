@@ -38,6 +38,7 @@
     list_privileges_test/1,
     list_marketplace/1,
     get_test/1,
+    get_marketplace_data_test/1,
     update_test/1,
     delete_test/1,
 
@@ -63,6 +64,7 @@ all() ->
         list_privileges_test,
         list_marketplace,
         get_test,
+        get_marketplace_data_test,
         update_test,
         delete_test,
 
@@ -545,6 +547,125 @@ get_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
+
+
+get_marketplace_data_test(Config) ->
+    {ok, Owner} = oz_test_utils:create_user(Config),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    BasicS1Data = #{
+        <<"name">> => ?SPACE_NAME1,
+        <<"description">> => ?RAND_STR(),
+        <<"organizationName">> => ?RAND_STR(),
+        <<"tags">> => [<<"demo">>]
+    },
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(Owner), BasicS1Data#{
+        <<"advertisedInMarketplace">> => true,
+        <<"marketplaceContactEmail">> => <<"a@a.a">>
+    }),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(Owner), ?SPACE_NAME2),
+
+    AllPrivs = privileges:space_privileges(),
+    lists:foreach(fun(SpaceId) ->
+        oz_test_utils:space_add_user(Config, SpaceId, U1),
+        oz_test_utils:space_set_user_privileges(Config, SpaceId, U1,
+            AllPrivs -- [?SPACE_VIEW], [?SPACE_VIEW]
+        ),
+        oz_test_utils:space_add_user(Config, SpaceId, U2),
+        oz_test_utils:space_set_user_privileges(Config, SpaceId, U2,
+            [?SPACE_VIEW], AllPrivs -- [?SPACE_VIEW]
+        )
+    end, [S1, S2]),
+
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config),
+    SupportSize = oz_test_utils:minimum_support_size(Config),
+    {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+    {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1, SupportSize),
+
+    ozt_providers:simulate_version(P1, ?LINE_21_02),
+    ozt_spaces:set_support_parameters(S1, P1, ozt_spaces:random_support_parameters()),
+
+    S1Data = BasicS1Data#{
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
+        <<"totalSupportSize">> => SupportSize,
+        <<"providerNames">> => [ozt_providers:get_name(P1)]
+    },
+
+    % Get and check protected data
+    GetProtectedDataApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_SPACES_VIEW]},
+                {user, Owner},
+                {user, U1},
+                {user, U2},
+                {provider, P1, P1Token},
+                {user, NonAdmin}
+            ],
+            unauthorized = [nobody],
+            forbidden = []
+        },
+        %% TODO after implementing final listing operation
+%%        rest_spec = #rest_spec{
+%%            method = get,
+%%            path = [<<"/spaces/">>, S1],
+%%            expected_code = ?HTTP_200_OK,
+%%            expected_body = ?OK_MAP(S1Data)
+%%        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = get_marketplace_data,
+            args = [auth, S1],
+            expected_result = ?OK_MAP(S1Data)
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_space, id = S1, aspect = marketplace_data, scope = protected},
+            expected_result = ?OK_MAP(S1Data#{
+                <<"gri">> => gri:serialize(?GRI(od_space, S1, marketplace_data, protected))
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
+
+    % Assert it is not possible to get marketplace data from space not in marketplace
+    ?assert(api_test_utils:run_tests(Config, #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_SPACES_VIEW]},
+                {user, Owner},
+                {user, U1},
+                {user, U2},
+                {provider, P1, P1Token},
+                {user, NonAdmin},
+                nobody
+            ],
+            unauthorized = [],
+            forbidden = []
+        },
+        %% TODO after implementing final listing operation
+%%        rest_spec = #rest_spec{
+%%            method = get,
+%%            path = [<<"/spaces/">>, S1],
+%%            expected_code = ?HTTP_200_OK,
+%%            expected_body = ?OK_MAP(S1Data)
+%%        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = get_marketplace_data,
+            args = [auth, S2],
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_space, id = S2, aspect = marketplace_data, scope = protected},
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        }
+    })).
 
 
 update_test(Config) ->
