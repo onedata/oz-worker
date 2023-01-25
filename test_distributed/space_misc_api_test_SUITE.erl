@@ -330,7 +330,7 @@ list_marketplace(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    ExpSpaces = lists:foldl(fun(Num, Acc) ->
+    ExpSpaces = lists:reverse(lists:foldl(fun(Num, Acc) ->
         SpaceName = str_utils:format_bin("space_~B", [Num]),
 
         case ?RAND_BOOL() of
@@ -342,14 +342,13 @@ list_marketplace(Config) ->
                     <<"organizationName">> => ?RAND_STR(),
                     <<"tags">> => [<<"demo">>],
                     <<"marketplaceContactEmail">> => <<"a@a.a">>
-
                 }),
                 [SpaceId | Acc];
             false ->
                 {ok, _} = oz_test_utils:create_space(Config, ?USER(U1), SpaceName),
                 Acc
         end
-    end, [], lists:seq(1, 10)),
+    end, [], lists:seq(1, 10))),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -745,7 +744,21 @@ delete_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, S1} = oz_test_utils:create_space(Config, ?USER(Owner), ?SPACE_NAME1),
+        AdvertisedInMarketplace = ?RAND_BOOL(),
+        SpaceData = case AdvertisedInMarketplace of
+            true ->
+                #{
+                    <<"name">> => ?SPACE_NAME1,
+                    <<"advertisedInMarketplace">> => true,
+                    <<"description">> => ?RAND_STR(),
+                    <<"organizationName">> => ?RAND_STR(),
+                    <<"tags">> => [<<"demo">>],
+                    <<"marketplaceContactEmail">> => <<"a@a.a">>
+                };
+            false ->
+                ?SPACE_NAME1
+        end,
+        {ok, S1} = oz_test_utils:create_space(Config, ?USER(Owner), SpaceData),
         oz_test_utils:space_add_user(Config, S1, U1),
         oz_test_utils:space_set_user_privileges(
             Config, S1, U1, [], [?SPACE_DELETE]
@@ -754,14 +767,20 @@ delete_test(Config) ->
         oz_test_utils:space_set_user_privileges(
             Config, S1, U2, [?SPACE_DELETE], []
         ),
-        #{spaceId => S1}
+        #{spaceId => S1, in_marketplace => AdvertisedInMarketplace}
     end,
     DeleteEntityFun = fun(#{spaceId := SpaceId} = _Env) ->
         oz_test_utils:delete_space(Config, SpaceId)
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{
+        spaceId := SpaceId,
+        in_marketplace := InMarketplace
+    } = _Env, _) ->
         {ok, Spaces} = oz_test_utils:list_spaces(Config),
-        ?assertEqual(lists:member(SpaceId, Spaces), not ShouldSucceed)
+        ?assertEqual(lists:member(SpaceId, Spaces), not ShouldSucceed),
+
+        Marketplace = list_marketplace(),
+        ?assertEqual(lists:member(SpaceId, Marketplace), InMarketplace andalso not ShouldSucceed)
     end,
 
     ApiTestSpec = #api_test_spec{

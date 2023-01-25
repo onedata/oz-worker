@@ -596,10 +596,14 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
         end, Harvesters),
         % remove all owners from the space to be deleted in order to avoid
         % potential errors when cleaning up user relations
-        {ok, _} = od_space:update(SpaceId, fun(Space) ->
-            {ok, Space#od_space{owners = []}}
-        end),
-        entity_graph:delete_with_relations(od_space, SpaceId)
+        critical_section:run(?SPACE_CRITICAL_SECTION_KEY(SpaceId), fun() ->
+            {ok, #document{value = #od_space{name = SpaceName}}} = od_space:update(
+                SpaceId,
+                fun(Space) -> {ok, Space#od_space{owners = []}} end
+            ),
+            space_marketplace:delete(SpaceName, SpaceId),
+            entity_graph:delete_with_relations(od_space, SpaceId)
+        end)
     end;
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
