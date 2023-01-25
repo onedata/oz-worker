@@ -480,7 +480,7 @@ get(#el_req{gri = #gri{aspect = marketplace_data, scope = protected}}, Space = #
         <<"organizationName">> => OrganizationName,
         <<"tags">> => Tags,
         <<"creationTime">> => CreationTime,
-        <<"totalSuppportSize">> => TotalSupportSize,
+        <<"totalSupportSize">> => TotalSupportSize,
         <<"providerNames">> => ProviderNames
     }};
 

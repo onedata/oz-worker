@@ -36,6 +36,7 @@
     create_with_custom_id_generator_seed_test/1,
     list_test/1,
     list_privileges_test/1,
+    list_marketplace/1,
     get_test/1,
     update_test/1,
     delete_test/1,
@@ -60,6 +61,7 @@ all() ->
         create_with_custom_id_generator_seed_test,
         list_test,
         list_privileges_test,
+        list_marketplace,
         get_test,
         update_test,
         delete_test,
@@ -317,6 +319,75 @@ list_privileges_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+list_marketplace(Config) ->
+    % Make sure that spaces created in other tests are deleted.
+    oz_test_utils:delete_all_entities(Config),
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    ExpSpaces = lists:foldl(fun(Num, Acc) ->
+        SpaceName = str_utils:format_bin("space_~B", [Num]),
+
+        case ?RAND_BOOL() of
+            true ->
+                {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(U1), #{
+                    <<"name">> => SpaceName,
+                    <<"advertisedInMarketplace">> => true,
+                    <<"description">> => ?RAND_STR(),
+                    <<"organizationName">> => ?RAND_STR(),
+                    <<"tags">> => [<<"demo">>],
+                    <<"marketplaceContactEmail">> => <<"a@a.a">>
+
+                }),
+                [SpaceId | Acc];
+            false ->
+                {ok, _} = oz_test_utils:create_space(Config, ?USER(U1), SpaceName),
+                Acc
+        end
+    end, [], lists:seq(1, 10)),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_SPACES_LIST]},
+                {user, NonAdmin},
+                {user, U1}
+            ],
+            unauthorized = [nobody],
+            forbidden = []
+        },
+        %% TODO after implementing final listing operation
+%%        rest_spec = #rest_spec{
+%%            method = get,
+%%            path = <<"/spaces">>,
+%%            expected_code = ?HTTP_200_OK,
+%%            expected_body = #{<<"spaces">> => ExpSpaces}
+%%        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = list_marketplace,
+            args = [auth],
+            expected_result = ?OK_LIST(ExpSpaces)
+        }
+        % TODO VFS-4520 Tests for GraphSync API
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % check also space_logic:exist function
+    lists:foreach(
+        fun(SpaceId) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, space_logic, exists, [SpaceId])
+            )
+        end, ExpSpaces
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, space_logic, exists, [<<"asdiucyaie827346w">>])
+    ).
 
 
 get_test(Config) ->
