@@ -40,7 +40,7 @@
     get_test/1,
     get_marketplace_data_test/1,
     update_space_not_in_marketplace_test/1,
-    update_test/1,
+    update_space_in_marketplace_test/1,
     delete_test/1,
 
     get_shares_test/1,
@@ -67,7 +67,7 @@ all() ->
         get_test,
         get_marketplace_data_test,
         update_space_not_in_marketplace_test,
-        update_test,
+        update_space_in_marketplace_test,
         delete_test,
 
         get_shares_test,
@@ -758,14 +758,13 @@ update_space_not_in_marketplace_test(Config) ->
             <<"advertisedInMarketplace">> => [true],
             <<"description">> => [?RAND_STR()],
             <<"organizationName">> => [?RAND_STR()],
-            <<"tags">> => [?RAND_SUBLIST(?AVAILABLE_SPACE_TAGS)],
+            <<"tags">> => [?RAND_SUBLIST(?AVAILABLE_SPACE_TAGS, 1, length(?AVAILABLE_SPACE_TAGS))],
             <<"marketplaceContactEmail">> => [<<"b@b.b">>]
         },
         bad_values = [
             {<<"description">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"description">>)},
             {<<"organizationName">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"organizationName">>)},
             {<<"tags">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"tags">>)},
-            {<<"marketplaceContactEmail">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"marketplaceContactEmail">>)},
             {<<"marketplaceContactEmail">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"marketplaceContactEmail">>)}
         ]
     },
@@ -812,14 +811,33 @@ update_space_not_in_marketplace_test(Config) ->
     )).
 
 
-update_test(Config) ->
+update_space_in_marketplace_test(Config) ->
     {ok, Owner} = oz_test_utils:create_user(Config),
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    GetSpaceDataJsonFun = fun(SpaceId) ->
+        Space = ozt_spaces:get(SpaceId),
+
+        #{
+            <<"name">> => Space#od_space.name,
+            <<"advertisedInMarketplace">> => Space#od_space.advertised_in_marketplace,
+            <<"description">> => Space#od_space.description,
+            <<"organizationName">> => Space#od_space.organization_name,
+            <<"tags">> => Space#od_space.tags,
+            <<"marketplaceContactEmail">> => Space#od_space.marketplace_contact_email
+        }
+    end,
     EnvSetUpFun = fun() ->
-        {ok, S1} = oz_test_utils:create_space(Config, ?USER(Owner), ?CORRECT_NAME),
+        {ok, S1} = oz_test_utils:create_space(Config, ?USER(Owner), #{
+            <<"name">> => ?CORRECT_NAME,
+            <<"advertisedInMarketplace">> => true,
+            <<"description">> => ?RAND_STR(),
+            <<"organizationName">> => ?RAND_STR(),
+            <<"tags">> => ?RAND_SUBLIST(?AVAILABLE_SPACE_TAGS, 1, length(?AVAILABLE_SPACE_TAGS)),
+            <<"marketplaceContactEmail">> => <<"a@a.a">>
+        }),
         oz_test_utils:space_add_user(Config, S1, U1),
         oz_test_utils:space_set_user_privileges(Config, S1, U1, [], [
             ?SPACE_UPDATE
@@ -828,57 +846,102 @@ update_test(Config) ->
         oz_test_utils:space_set_user_privileges(Config, S1, U2, [
             ?SPACE_UPDATE
         ], []),
-        #{spaceId => S1}
+        #{spaceId => S1, initialData => GetSpaceDataJsonFun(S1)}
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, Data) ->
-        {ok, Space} = oz_test_utils:get_space(Config, SpaceId),
-        ExpName = case ShouldSucceed of
-            false -> ?CORRECT_NAME;
-            true -> maps:get(<<"name">>, Data, ?CORRECT_NAME)
+    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId, initialData := PrevData} = _Env, Data) ->
+        ExpData = case ShouldSucceed of
+            false -> PrevData;
+            true -> maps:merge(PrevData, Data)
         end,
-        ?assertEqual(ExpName, Space#od_space.name)
+        ?assertEqual(ExpData, GetSpaceDataJsonFun(SpaceId)),
+
+        case {ShouldSucceed, maps:get(<<"advertisedInMarketplace">>, Data, true)} of
+            {true, false} -> ?assertNot(lists:member(SpaceId, list_marketplace()));
+            _ -> ?assert(lists:member(SpaceId, list_marketplace()))
+        end
     end,
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_SPACES_UPDATE]},
-                {user, Owner},
-                {user, U2}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin}
-            ]
+    WithoutRemovingFromMarketplaceSpec = #data_spec{
+        at_least_one = [
+            <<"name">>,
+            <<"description">>,
+            <<"organizationName">>,
+            <<"tags">>,
+            <<"marketplaceContactEmail">>
+        ],
+        correct_values = #{
+            <<"name">> => [?RAND_STR()],
+            <<"description">> => [?RAND_STR()],
+            <<"organizationName">> => [?RAND_STR()],
+            <<"tags">> => [?RAND_SUBLIST(?AVAILABLE_SPACE_TAGS, 1, length(?AVAILABLE_SPACE_TAGS))],
+            <<"marketplaceContactEmail">> => [<<"b@b.b">>]
         },
-        rest_spec = #rest_spec{
-            method = patch,
-            path = [<<"/spaces/">>, spaceId],
-            expected_code = ?HTTP_204_NO_CONTENT
-        },
-        logic_spec = #logic_spec{
-            module = space_logic,
-            function = update,
-            args = [auth, spaceId, data],
-            expected_result = ?OK_RES
-        },
-        gs_spec = #gs_spec{
-            operation = update,
-            gri = #gri{type = od_space, id = spaceId, aspect = instance},
-            expected_result = ?OK_RES
-        },
-        data_spec = #data_spec{
-            at_least_one = [<<"name">>],
-            correct_values = #{
-                <<"name">> => [?CORRECT_NAME]
-            },
-            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+        bad_values = [
+            {<<"description">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"description">>)},
+            {<<"organizationName">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"organizationName">>)},
+            {<<"tags">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"tags">>)},
+            {<<"marketplaceContactEmail">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"marketplaceContactEmail">>)}
+            | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+        ]
+    },
+    WithRemovingFromMarketplaceSpec = #data_spec{
+        required = [<<"advertisedInMarketplace">>],
+        optional = [
+            <<"name">>,
+            <<"description">>,
+            <<"organizationName">>,
+            <<"tags">>,
+            <<"marketplaceContactEmail">>
+        ],
+        correct_values = #{
+            <<"name">> => [?RAND_STR()],
+            <<"advertisedInMarketplace">> => [false],
+            <<"description">> => [<<>>, ?RAND_STR()],
+            <<"organizationName">> => [<<>>, ?RAND_STR()],
+            <<"tags">> => [?RAND_SUBLIST(?AVAILABLE_SPACE_TAGS)],
+            <<"marketplaceContactEmail">> => [<<>>, ?RAND_STR()]
         }
     },
+
+    BuildApiTestSpecFun = fun(DataSpec) ->
+        #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_SPACES_UPDATE]},
+                    {user, Owner},
+                    {user, U2}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, U1},
+                    {user, NonAdmin}
+                ]
+            },
+            rest_spec = #rest_spec{
+                method = patch,
+                path = [<<"/spaces/">>, spaceId],
+                expected_code = ?HTTP_204_NO_CONTENT
+            },
+            logic_spec = #logic_spec{
+                module = space_logic,
+                function = update,
+                args = [auth, spaceId, data],
+                expected_result = ?OK_RES
+            },
+            gs_spec = #gs_spec{
+                operation = update,
+                gri = #gri{type = od_space, id = spaceId, aspect = instance},
+                expected_result = ?OK_RES
+            },
+            data_spec = DataSpec
+        }
+    end,
     ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+        Config, BuildApiTestSpecFun(WithoutRemovingFromMarketplaceSpec), EnvSetUpFun, undefined, VerifyEndFun
+    )),
+    ?assert(api_test_utils:run_tests(
+        Config, BuildApiTestSpecFun(WithRemovingFromMarketplaceSpec), EnvSetUpFun, undefined, VerifyEndFun
     )).
 
 
