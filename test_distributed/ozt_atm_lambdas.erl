@@ -38,7 +38,7 @@
 %% Example data generation
 -export([example_data_json/0]).
 -export([example_revision_json/0]).
--export([example_argument_spec_json/0, example_argument_spec_json/2]).
+-export([example_parameter_spec_json/0, example_parameter_spec_json/2]).
 -export([example_result_spec_json/0]).
 
 -compile({no_auto_import, [get/1]}).
@@ -293,13 +293,13 @@ example_revision_json() ->
     jsonable_record:to_json(atm_test_utils:example_lambda_revision(), atm_lambda_revision).
 
 
--spec example_argument_spec_json() -> json_utils:json_term().
-example_argument_spec_json() ->
-    jsonable_record:to_json(atm_test_utils:example_argument_spec(), atm_lambda_argument_spec).
+-spec example_parameter_spec_json() -> json_utils:json_term().
+example_parameter_spec_json() ->
+    jsonable_record:to_json(atm_test_utils:example_parameter_spec(), atm_parameter_spec).
 
--spec example_argument_spec_json(atm_data_spec:record(), term()) -> json_utils:json_term().
-example_argument_spec_json(DataSpec, DefaultValue) ->
-    jsonable_record:to_json(atm_test_utils:example_argument_spec(DataSpec, DefaultValue), atm_lambda_argument_spec).
+-spec example_parameter_spec_json(atm_data_spec:record(), term()) -> json_utils:json_term().
+example_parameter_spec_json(DataSpec, DefaultValue) ->
+    jsonable_record:to_json(atm_test_utils:example_parameter_spec(DataSpec, DefaultValue), atm_parameter_spec).
 
 
 -spec example_result_spec_json() -> json_utils:json_term().
