@@ -277,6 +277,8 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected
     };
 
 translate_resource(_, #gri{type = od_space, aspect = marketplace_data, scope = protected}, MarketplaceData) ->
+    % @TODO VFS-4520 this translator is only added to enable GS API testing in the api framework
+    % (currently it supports only the provider GS API)
     MarketplaceData;
 
 translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = private}, Share) ->

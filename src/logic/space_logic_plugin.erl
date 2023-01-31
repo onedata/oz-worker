@@ -28,18 +28,18 @@
 -define(AVAILABLE_SPACE_TAGS, lists:flatten(maps:values(oz_worker:get_env(
     available_space_tags
 )))).
--define(OPTIONAL_MARKETPLACE_PARAMETERS_SPEC, #{
-    <<"advertisedInMarketplace">> => {boolean, any},
+-define(PARAMETER_SPECS_FOR_NON_ADVERTISED_SPACE, #{
     <<"description">> => {binary, any},
     <<"organizationName">> => {binary, any},
     <<"tags">> => {list_of_binaries, ?AVAILABLE_SPACE_TAGS},
+    <<"advertisedInMarketplace">> => {boolean, any},
     <<"marketplaceContactEmail">> => {binary, any}
 }).
--define(REQUIRED_MARKETPLACE_PARAMETERS_SPEC, #{
-    <<"advertisedInMarketplace">> => {boolean, any},
+-define(PARAMETER_SPECS_FOR_ADVERTISED_SPACE, #{
     <<"description">> => {binary, non_empty},
     <<"organizationName">> => {binary, non_empty},
     <<"tags">> => {list_of_binaries, {all, [non_empty, ?AVAILABLE_SPACE_TAGS]}},
+    <<"advertisedInMarketplace">> => {boolean, any},
     <<"marketplaceContactEmail">> => {binary, email}
 }).
 
@@ -434,16 +434,17 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Space) ->
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{
         name = Name,
-        advertised_in_marketplace = AdvertisedInMarketplace,
         description = Description,
         organization_name = OrganizationName,
         tags = Tags,
+        advertised_in_marketplace = AdvertisedInMarketplace,
         marketplace_contact_email = MarketplaceContactEmail,
         shares = Shares,
         support_parameters_registry = SupportParametersRegistry,
         creation_time = CreationTime,
         creator = Creator
     } = Space,
+
     {ok, #{
         <<"name">> => Name,
         <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
@@ -465,13 +466,13 @@ get(#el_req{gri = #gri{aspect = marketplace_data, scope = protected}}, Space = #
     tags = Tags,
     creation_time = CreationTime
 }) ->
-    {ProviderNames, TotalSupportSize} = lists:foldl(
-        fun({ProviderId, SupportSize}, {ProviderNamesAcc, SupportSizeAcc}) ->
+    {ProviderNames, TotalSupportSize} = maps:fold(
+        fun(ProviderId, SupportSize, {ProviderNamesAcc, SupportSizeAcc}) ->
             {ok, #document{value = #od_provider{name = ProviderName}}} = od_provider:get(ProviderId),
             {[ProviderName | ProviderNamesAcc], SupportSize + SupportSizeAcc}
         end,
         {[], 0},
-        maps:to_list(entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space))
+        entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space)
     ),
 
     {ok, #{
@@ -547,7 +548,8 @@ update(#el_req{gri = GRI = #gri{id = SpaceId, aspect = instance}, data = Data}) 
                     {true, false, _} ->
                         ok = space_marketplace:delete(PrevName, SpaceId);
                     {true, true, false} ->
-                        ok = space_marketplace:update(PrevName, SpaceId, NewName);
+                        ok = space_marketplace:add(NewName, SpaceId),
+                        ok = space_marketplace:delete(PrevName, SpaceId);
                     _ ->
                         ok
                 end
@@ -1118,7 +1120,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
         required => #{
             <<"name">> => {binary, name}
         },
-        optional => ?OPTIONAL_MARKETPLACE_PARAMETERS_SPEC#{
+        optional => ?PARAMETER_SPECS_FOR_NON_ADVERTISED_SPACE#{
             <<"idGeneratorSeed">> => {binary, any}
         }
     };
@@ -1191,7 +1193,7 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = harvester}}) ->
     }});
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
-    at_least_one => ?OPTIONAL_MARKETPLACE_PARAMETERS_SPEC#{<<"name">> => {binary, name}}
+    at_least_one => ?PARAMETER_SPECS_FOR_NON_ADVERTISED_SPACE#{<<"name">> => {binary, name}}
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}) ->
@@ -1257,8 +1259,8 @@ update_marketplace_data(Diff, Space = #od_space{
     IsAdvertised = maps:get(<<"advertisedInMarketplace">>, Diff, Advertised),
 
     DataSpec = case IsAdvertised of
-        true -> #{required => ?REQUIRED_MARKETPLACE_PARAMETERS_SPEC};
-        false -> #{optional => ?OPTIONAL_MARKETPLACE_PARAMETERS_SPEC}
+        true -> #{required => ?PARAMETER_SPECS_FOR_ADVERTISED_SPACE};
+        false -> #{optional => ?PARAMETER_SPECS_FOR_NON_ADVERTISED_SPACE}
     end,
     Data = lists:foldl(fun
         ({_Key, UndefinedValue, UndefinedValue}, Acc) -> Acc;
@@ -1273,9 +1275,9 @@ update_marketplace_data(Diff, Space = #od_space{
     SanitizedData = entity_logic_sanitizer:ensure_valid(DataSpec, undefined, Data),
 
     Space#od_space{
-        advertised_in_marketplace = IsAdvertised,
         description = maps:get(<<"description">>, SanitizedData, Description),
         organization_name = maps:get(<<"organizationName">>, SanitizedData, OrganizationName),
         tags = maps:get(<<"tags">>, SanitizedData, Tags),
+        advertised_in_marketplace = IsAdvertised,
         marketplace_contact_email = maps:get(<<"marketplaceContactEmail">>, SanitizedData, ContactEmail)
     }.

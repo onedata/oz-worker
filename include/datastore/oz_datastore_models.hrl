@@ -239,11 +239,11 @@ end).
 %% This record defines a space that can be used by users to store their files
 -record(od_space, {
     name = <<"">> :: od_space:name(),
-
-    advertised_in_marketplace = false :: boolean(),
     description = <<"">> :: od_space:description(),
     organization_name = <<"">> :: od_space:organization_name(),
     tags = [] :: [od_space:tag()],
+
+    advertised_in_marketplace = false :: boolean(),
     marketplace_contact_email = <<"">> :: od_space:marketplace_contact_email(),
 
     % The list of space owners - users that have absolute power regarding the

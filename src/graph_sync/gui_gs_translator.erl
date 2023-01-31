@@ -441,13 +441,14 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
         shares = Shares,
         support_parameters_registry = SupportParametersRegistry
     } = Space,
+
     fun(?USER(UserId)) -> #{
-        <<"name">> => Name,
         <<"scope">> => <<"private">>,
-        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
+        <<"name">> => Name,
         <<"description">> => Description,
         <<"organizationName">> => OrganizationName,
         <<"tags">> => Tags,
+        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
         <<"marketplaceContactEmail">> => MarketplaceContactEmail,
         <<"directMembership">> => space_logic:has_direct_user(Space, UserId),
         <<"currentUserIsOwner">> => space_logic:is_owner(Space, UserId),
@@ -471,10 +472,10 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
 translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
     #{
         <<"name">> := Name,
-        <<"advertisedInMarketplace">> := AdvertisedInMarketplace,
         <<"description">> := Description,
         <<"organizationName">> := OrganizationName,
         <<"tags">> := Tags,
+        <<"advertisedInMarketplace">> := AdvertisedInMarketplace,
         <<"marketplaceContactEmail">> := MarketplaceContactEmail,
         <<"providers">> := SupportSizes,
         <<"creationTime">> := CreationTime,
@@ -483,13 +484,14 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"supportParametersRegistry">> := SupportParametersRegistry
     } = SpaceData,
     {ok, #document{value = Space}} = od_space:get(SpaceId),
+
     fun(?USER(UserId)) -> #{
-        <<"name">> => Name,
         <<"scope">> => <<"protected">>,
-        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
+        <<"name">> => Name,
         <<"description">> => Description,
         <<"organizationName">> => OrganizationName,
         <<"tags">> => Tags,
+        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
         <<"marketplaceContactEmail">> => MarketplaceContactEmail,
         <<"directMembership">> => space_logic:has_direct_user(Space, UserId),
         <<"currentUserIsOwner">> => space_logic:is_owner(Space, UserId),
@@ -501,7 +503,6 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
             <<"creationTime">> => CreationTime,
             <<"sharesCount">> => SharesCount
         })
-
     } end;
 
 translate_space(#gri{aspect = marketplace_data, scope = protected}, MarketplaceData) ->

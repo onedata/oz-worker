@@ -15,7 +15,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/errors.hrl").
 
--export([add/2, update/3, delete/2]).
+-export([add/2, delete/2]).
 -export([list_all/0]).
 
 % index() consists of 2 parts:
@@ -42,17 +42,6 @@ add(SpaceName, SpaceId) ->
     case datastore_model:add_links(?CTX, ?FOREST, ?TREE_ID, {Index, SpaceId}) of
         {ok, _} -> ok;
         {error, already_exists} -> ?ERROR_ALREADY_EXISTS
-    end.
-
-
--spec update(od_space:name(), od_space:id(), od_space:name()) ->
-    ok | {error, term()}.
-update(PrevName, SpaceId, NewName) ->
-    case add(NewName, SpaceId) of
-        ok ->
-            delete(PrevName, SpaceId);
-        ?ERROR_ALREADY_EXISTS ->
-            ?ERROR_ALREADY_EXISTS
     end.
 
 

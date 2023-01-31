@@ -2610,11 +2610,11 @@ get_record(od_space, 14) -> {od_space,
 };
 get_record(od_space, 15) -> #od_space{
     name = <<"name">>,
-
-    advertised_in_marketplace = false,
     description = <<"">>,
     organization_name = <<"">>,
     tags = [],
+
+    advertised_in_marketplace = false,
     marketplace_contact_email = <<"">>,
 
     owners = [<<"user3">>, <<"user1">>],

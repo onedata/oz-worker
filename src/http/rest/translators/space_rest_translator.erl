@@ -100,10 +100,10 @@ get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
 get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
     #{
         <<"name">> := Name,
-        <<"advertisedInMarketplace">> := AdvertisedInMarketplace,
         <<"description">> := Description,
         <<"organizationName">> := OrganizationName,
         <<"tags">> := Tags,
+        <<"advertisedInMarketplace">> := AdvertisedInMarketplace,
         <<"marketplaceContactEmail">> := MarketplaceContactEmail,
         <<"providers">> := Providers,
         <<"supportParametersRegistry">> := SupportParametersRegistry,
@@ -113,10 +113,10 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
     rest_translator:ok_body_reply(#{
         <<"spaceId">> => SpaceId,
         <<"name">> => Name,
-        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
         <<"description">> => Description,
         <<"organizationName">> => OrganizationName,
         <<"tags">> => Tags,
+        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
         <<"marketplaceContactEmail">> => MarketplaceContactEmail,
         <<"providers">> => Providers,
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry),

@@ -388,18 +388,18 @@ get_record_struct(14) ->
     ]};
 get_record_struct(15) ->
     % new fields:
-    % - advertised_in_marketplace
     % - description
     % - organization_name
     % - tags
+    % - advertised_in_marketplace
     % - marketplace_contact_email
     {record, [
         {name, string},
-
-        {advertised_in_marketplace, boolean},
         {description, string},
         {organization_name, string},
         {tags, [string]},
+
+        {advertised_in_marketplace, boolean},
         {marketplace_contact_email, string},
 
         {owners, [string]},
@@ -1248,11 +1248,11 @@ upgrade_record(14, Space) ->
 
     {15, {od_space,
         Name,
-
-        false,
         <<"">>,
         <<"">>,
         [],
+
+        false,
         <<"">>,
 
         Owners,
