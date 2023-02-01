@@ -38,7 +38,7 @@
 -define(PARAMETER_SPECS_FOR_ADVERTISED_SPACE, #{
     <<"description">> => {binary, non_empty},
     <<"organizationName">> => {binary, non_empty},
-    <<"tags">> => {list_of_binaries, {all, [non_empty, ?AVAILABLE_SPACE_TAGS]}},
+    <<"tags">> => {list_of_binaries, ?AVAILABLE_SPACE_TAGS},
     <<"advertisedInMarketplace">> => {boolean, any},
     <<"marketplaceContactEmail">> => {binary, email}
 }).

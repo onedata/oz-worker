@@ -112,7 +112,7 @@ all() ->
         <<"name">> => [?RAND_STR()],
         <<"description">> => [?RAND_STR()],
         <<"organizationName">> => [?RAND_STR()],
-        <<"tags">> => [?RAND_SUBLIST(?AVAILABLE_SPACE_TAGS, 1, length(?AVAILABLE_SPACE_TAGS))],
+        <<"tags">> => [[], ?RAND_SUBLIST(?AVAILABLE_SPACE_TAGS)],
         <<"marketplaceContactEmail">> => [<<"a@a.a">>]
     },
     __OTHER_VALUES
@@ -131,7 +131,6 @@ all() ->
 -define(BAD_PARAMETER_VALUES_FOR_ADVERTISED_SPACE, [
     {<<"description">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"description">>)},
     {<<"organizationName">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"organizationName">>)},
-    {<<"tags">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"tags">>)},
     {<<"marketplaceContactEmail">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"marketplaceContactEmail">>)}
 ]).
 
@@ -140,7 +139,7 @@ all() ->
         <<"name">> => ?RAND_STR(),
         <<"description">> => ?RAND_STR(),
         <<"organizationName">> => ?RAND_STR(),
-        <<"tags">> => ?RAND_SUBLIST(?AVAILABLE_SPACE_TAGS, 1, length(?AVAILABLE_SPACE_TAGS)),
+        <<"tags">> => ?RAND_SUBLIST(?AVAILABLE_SPACE_TAGS),
         <<"advertisedInMarketplace">> => true,
         <<"marketplaceContactEmail">> => <<"a@a.a">>
     },
@@ -281,7 +280,7 @@ create_with_custom_id_generator_seed_test(Config) ->
 
 list_test(Config) ->
     % Make sure that spaces created in other tests are deleted.
-    oz_test_utils:delete_all_entities(Config),
+    ozt:delete_all_entities(),
 
     U1 = ozt_users:create(),
     NonAdmin = ozt_users:create(),
@@ -323,15 +322,10 @@ list_test(Config) ->
 
     % check also space_logic:exist function
     lists:foreach(
-        fun(SpaceId) ->
-            ?assert(oz_test_utils:call_oz(
-                Config, space_logic, exists, [SpaceId])
-            )
-        end, ExpSpaces
+        fun(SpaceId) -> ?assert(ozt:rpc(space_logic, exists, [SpaceId])) end,
+        ExpSpaces
     ),
-    ?assert(not oz_test_utils:call_oz(
-        Config, space_logic, exists, [<<"asdiucyaie827346w">>])
-    ).
+    ?assert(not ozt:rpc(space_logic, exists, [<<"asdiucyaie827346w">>])).
 
 
 list_privileges_test(Config) ->
@@ -356,7 +350,7 @@ list_privileges_test(Config) ->
 
 list_marketplace_test(Config) ->
     % Make sure that spaces created in other tests are deleted.
-    oz_test_utils:delete_all_entities(Config),
+    ozt:delete_all_entities(),
 
     U1 = ozt_users:create(),
     NonAdmin = ozt_users:create(),
@@ -419,7 +413,7 @@ get_test(Config) ->
     ozt_spaces:add_user(S1, U2, [?SPACE_VIEW]),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config),
-    SupportSize = oz_test_utils:minimum_support_size(Config),
+    SupportSize = ozt_spaces:minimum_support_size(),
     {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1, SupportSize),
 
@@ -583,7 +577,7 @@ get_marketplace_data_test(Config) ->
     end, [S1, S2]),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config),
-    SupportSize = oz_test_utils:minimum_support_size(Config),
+    SupportSize = ozt_spaces:minimum_support_size(),
     {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1, SupportSize),
 
@@ -844,21 +838,6 @@ update_space_in_marketplace_test(Config) ->
     )).
 
 
-%% @private
--spec get_space_marketplace_related_data_json(od_space:id()) -> json_utils:json_map().
-get_space_marketplace_related_data_json(SpaceId) ->
-    Space = ozt_spaces:get(SpaceId),
-
-    #{
-        <<"name">> => Space#od_space.name,
-        <<"description">> => Space#od_space.description,
-        <<"organizationName">> => Space#od_space.organization_name,
-        <<"tags">> => Space#od_space.tags,
-        <<"advertisedInMarketplace">> => Space#od_space.advertised_in_marketplace,
-        <<"marketplaceContactEmail">> => Space#od_space.marketplace_contact_email
-    }.
-
-
 delete_test(Config) ->
     Owner = ozt_users:create(),
     U1 = ozt_users:create(),
@@ -877,7 +856,7 @@ delete_test(Config) ->
         #{spaceId => S1, in_marketplace => AdvertisedInMarketplace}
     end,
     DeleteEntityFun = fun(#{spaceId := SpaceId} = _Env) ->
-        oz_test_utils:delete_space(Config, SpaceId)
+        ozt_spaces:delete(SpaceId)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{
         spaceId := SpaceId,
@@ -982,7 +961,7 @@ get_share_test(Config) ->
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config),
     oz_test_utils:support_space_by_provider(Config, P1, S1),
 
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    ozt:reconcile_entity_graph(),
 
     ShareId = ?UNIQUE_STRING,
     ShareData = #{
@@ -1056,7 +1035,7 @@ list_storages_test(Config) ->
         end, lists:seq(1, 5)
     ),
 
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    ozt:reconcile_entity_graph(),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -1083,16 +1062,10 @@ list_storages_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % check also space_logic:has_storage function
-    lists:foreach(
-        fun(StorageId) ->
-            ?assert(oz_test_utils:call_oz(
-                Config, space_logic, is_supported_by_storage, [S1, StorageId])
-            )
-        end, ExpStorages
-    ),
-    ?assert(not oz_test_utils:call_oz(
-        Config, space_logic, is_supported_by_storage, [S1, <<"asdiucyaie827346w">>])
-    ).
+    lists:foreach(fun(StorageId) ->
+        ?assert(ozt:rpc(space_logic, is_supported_by_storage, [S1, StorageId]))
+    end, ExpStorages),
+    ?assert(not ozt:rpc(space_logic, is_supported_by_storage, [S1, <<"asdiucyaie827346w">>])).
 
 
 create_space_support_token(Config) ->
@@ -1205,19 +1178,19 @@ remove_provider_test(Config) ->
     {ok, {P2, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, St3} = oz_test_utils:create_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
     {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P2), St3, S1),
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    ozt:reconcile_entity_graph(),
 
     EnvSetUpFun = fun() ->
         {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
         {ok, St2} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
         {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1),
         {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St2, S1),
-        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+        ozt:reconcile_entity_graph(),
         #{storageId1 => St1, storageId2 => St2}
     end,
     DeleteEntityFun = fun(_Env) ->
         oz_test_utils:space_remove_provider(Config, S1, P1),
-        oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
+        ozt:reconcile_entity_graph()
     end,
     VerifyEndFun = fun(ShouldSucceed, #{storageId1 := St1, storageId2 := St2} = _Env, _) ->
         {ok, Storages} = oz_test_utils:space_get_storages(Config, S1),
@@ -1278,7 +1251,7 @@ list_effective_providers_test(Config) ->
         end, lists:seq(1, 5)
     ),
 
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    ozt:reconcile_entity_graph(),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -1311,16 +1284,10 @@ list_effective_providers_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % check also space_logic:has_provider function
-    lists:foreach(
-        fun(ProviderId) ->
-            ?assert(oz_test_utils:call_oz(
-                Config, space_logic, is_supported_by_provider, [S1, ProviderId])
-            )
-        end, ExpProviders
-    ),
-    ?assert(not oz_test_utils:call_oz(
-        Config, space_logic, is_supported_by_provider, [S1, <<"asdiucyaie827346w">>])
-    ).
+    lists:foreach(fun(ProviderId) ->
+        ?assert(ozt:rpc(space_logic, is_supported_by_provider, [S1, ProviderId]))
+    end, ExpProviders),
+    ?assert(not ozt:rpc(space_logic, is_supported_by_provider, [S1, <<"asdiucyaie827346w">>])).
 
 
 get_eff_provider_test(Config) ->
@@ -1345,7 +1312,7 @@ get_eff_provider_test(Config) ->
     {ok, S1} = oz_test_utils:support_space_by_provider(Config, P1, S1),
     {ok, S1} = oz_test_utils:support_space_by_provider(Config, P2, S1),
 
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    ozt:reconcile_entity_graph(),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -1593,11 +1560,28 @@ update_support_parameters_test(Config) ->
 %%% Internal functions
 %%%===================================================================
 
+
 %% @private
 -spec list_marketplace() -> [od_space:id()].
 list_marketplace() ->
     {ok, SpaceIds} = ozt:rpc(space_marketplace, list_all, []),
     SpaceIds.
+
+
+%% @private
+-spec get_space_marketplace_related_data_json(od_space:id()) -> json_utils:json_map().
+get_space_marketplace_related_data_json(SpaceId) ->
+    Space = ozt_spaces:get(SpaceId),
+
+    #{
+        <<"name">> => Space#od_space.name,
+        <<"description">> => Space#od_space.description,
+        <<"organizationName">> => Space#od_space.organization_name,
+        <<"tags">> => Space#od_space.tags,
+        <<"advertisedInMarketplace">> => Space#od_space.advertised_in_marketplace,
+        <<"marketplaceContactEmail">> => Space#od_space.marketplace_contact_email
+    }.
+
 
 %%%===================================================================
 %%% Setup/teardown functions
