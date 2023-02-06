@@ -436,6 +436,8 @@ support_space_insecure(ProviderId, SpaceId, StorageId, SupportSize) ->
         SupportSize
     ),
 
+    wait_for_eff_support_recalculation(ProviderId, StorageId, SpaceId),
+
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {true, {Space, Rev}} = space_logic_plugin:fetch_entity(NewGRI),
 
@@ -550,3 +552,29 @@ add_implicit_qos_parameters(StorageId, ProviderId, QosParameters) ->
         <<"storageId">> => StorageId,
         <<"providerId">> => ProviderId
     }.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Provider supports are recalculated asynchronously - wait for it so that
+%% the information about current supports is up to date when this function returns.
+%% @end
+%%--------------------------------------------------------------------
+-spec wait_for_eff_support_recalculation(od_provider:id(), od_storage:id(), od_space:id()) -> ok.
+wait_for_eff_support_recalculation(ProviderId, StorageId, SpaceId) ->
+    try
+        utils:wait_until(fun() ->
+            space_logic:is_supported_by_provider(SpaceId, ProviderId) andalso
+                provider_logic:supports_space(ProviderId, SpaceId) andalso
+                space_logic:is_supported_by_storage(SpaceId, StorageId) andalso
+                storage_logic:supports_space(StorageId, SpaceId)
+        end)
+    catch _:_ ->
+        % Do not fail upon timeout; if there are too many pending changes in the graph,
+        % this may take even longer. Worst case scenario is that the client will get
+        % a confirmation of support change operation, but the effective supports will
+        % not yet be recalculated. They will converge eventually though.
+        ok
+    end.
+

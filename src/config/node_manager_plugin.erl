@@ -26,7 +26,7 @@
 -export([before_cluster_upgrade/0]).
 -export([upgrade_cluster/1]).
 -export([custom_workers/0]).
--export([on_db_and_workers_ready/0]).
+-export([before_listeners_start/0]).
 -export([listeners/0]).
 -export([handle_call/3, handle_cast/2]).
 
@@ -152,12 +152,15 @@ custom_workers() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Overrides {@link node_manager_plugin_default:on_db_and_workers_ready/0}.
+%% Overrides {@link node_manager_plugin_default:before_listeners_start/0}.
+%% NOTE: this callback blocks the application supervisor and must not be used to
+%% interact with the main supervision tree.
+%%
 %% This callback is executed on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec on_db_and_workers_ready() -> ok | {error, Reason :: term()}.
-on_db_and_workers_ready() ->
+-spec before_listeners_start() -> ok | {error, Reason :: term()}.
+before_listeners_start() ->
     try
         % Logic that should be run on every node of the cluster
         onezone_plugins:init(),
@@ -175,7 +178,7 @@ on_db_and_workers_ready() ->
         end
     catch
         _:Error ->
-            ?error_stacktrace("Error in node_manager_plugin:on_db_and_workers_ready: ~p", [Error]),
+            ?error_stacktrace("Error in node_manager_plugin:before_listeners_start: ~p", [Error]),
             {error, cannot_start_node_manager_plugin}
     end.
 
