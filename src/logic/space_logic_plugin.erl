@@ -45,6 +45,10 @@
 
 -define(SPACE_CRITICAL_SECTION_KEY(__SPACE_ID), {?MODULE, space, __SPACE_ID}).
 
+-define(MAX_LIST_LIMIT, 1000).
+-define(DEFAULT_LIST_LIMIT, 1000).
+
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -196,8 +200,11 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
 
     critical_section:run(?SPACE_CRITICAL_SECTION_KEY(SpaceId), fun() ->
         case od_space:create(SpaceDoc) of
-            {ok, #document{key = Key, value = #od_space{advertised_in_marketplace = true}}} ->
-                space_marketplace:add(Name, Key),
+            {ok, #document{key = Key, value = #od_space{
+                advertised_in_marketplace = true,
+                tags = SpaceTags
+            }}} ->
+                space_marketplace:add(Name, Key, SpaceTags),
                 Key;
             {ok, #document{key = Key}} ->
                 Key;
@@ -409,8 +416,28 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
 %%--------------------------------------------------------------------
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
-get(#el_req{gri = #gri{aspect = marketplace_list}}, _) ->
-    space_marketplace:list_all();
+get(#el_req{data = Data, gri = #gri{aspect = marketplace_list}}, _) ->
+    Tags = maps:get(<<"tags">>, Data, all),
+
+    Offset = maps:get(<<"offset">>, Data, 0),
+    Limit = maps:get(<<"limit">>, Data, ?DEFAULT_LIST_LIMIT),
+
+    ListingOpts = case maps:get(<<"token">>, Data, undefined) of
+        undefined ->
+            Index = maps:get(<<"index">>, Data, undefined),
+            maps_utils:put_if_defined(#{offset => Offset, limit => Limit}, start_index, Index);
+        Token when is_binary(Token) ->
+            % if token is passed, offset has to be increased by 1
+            % to ensure that listing using token is exclusive
+            #{
+                start_index => http_utils:base64url_decode(Token),
+                offset => Offset + 1,
+                limit => Limit
+            }
+    end,
+    Entries = space_marketplace:list(Tags, ListingOpts),
+
+    {ok, {Entries, length(Entries) < Limit}};
 
 get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, SpaceDocs} = od_space:list(),
@@ -537,19 +564,23 @@ update(#el_req{gri = GRI = #gri{id = SpaceId, aspect = instance}, data = Data}) 
             true ->
                 ok;
             false ->
-                {ok, _} = od_space:update(SpaceId, fun(_) -> {ok, NewSpace} end),
+                {ok, #document{value = #od_space{tags = NewTags}}} = od_space:update(
+                    SpaceId,
+                    fun(_) -> {ok, NewSpace} end
+                ),
 
+                PrevTags = Space#od_space.tags,
                 PrevAdvertisedInMarketplace = Space#od_space.advertised_in_marketplace,
                 NewAdvertisedInMarketplace = NewSpace#od_space.advertised_in_marketplace,
 
                 case {PrevAdvertisedInMarketplace, NewAdvertisedInMarketplace, PrevName == NewName} of
                     {false, true, _} ->
-                        ok = space_marketplace:add(NewName, SpaceId);
+                        ok = space_marketplace:add(NewName, SpaceId, NewTags);
                     {true, false, _} ->
-                        ok = space_marketplace:delete(PrevName, SpaceId);
+                        ok = space_marketplace:delete(PrevName, SpaceId, PrevTags);
                     {true, true, false} ->
-                        ok = space_marketplace:add(NewName, SpaceId),
-                        ok = space_marketplace:delete(PrevName, SpaceId);
+                        ok = space_marketplace:add(NewName, SpaceId, NewTags),
+                        ok = space_marketplace:delete(PrevName, SpaceId, PrevTags);
                     _ ->
                         ok
                 end
@@ -599,11 +630,11 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
         % remove all owners from the space to be deleted in order to avoid
         % potential errors when cleaning up user relations
         critical_section:run(?SPACE_CRITICAL_SECTION_KEY(SpaceId), fun() ->
-            {ok, #document{value = #od_space{name = SpaceName}}} = od_space:update(
+            {ok, #document{value = #od_space{name = SpaceName, tags = Tags}}} = od_space:update(
                 SpaceId,
                 fun(Space) -> {ok, Space#od_space{owners = []}} end
             ),
-            space_marketplace:delete(SpaceName, SpaceId),
+            space_marketplace:delete(SpaceName, SpaceId, Tags),
             entity_graph:delete_with_relations(od_space, SpaceId)
         end)
     end;
@@ -1192,6 +1223,16 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = harvester}}) ->
         type = od_harvester, id = undefined, aspect = instance
     }});
 
+validate(#el_req{operation = update, gri = #gri{aspect = marketplace_list}}) -> #{
+    optional => #{
+        <<"index">> => {binary, any},
+        <<"token">> => {binary, non_empty},
+        <<"offset">> => {integer, any},
+        <<"limit">> => {integer, {between, 1, ?MAX_LIST_LIMIT}},
+        <<"tags">> => {list_of_binaries, ?AVAILABLE_SPACE_TAGS}
+    }
+};
+
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => ?PARAMETER_SPECS_FOR_NON_ADVERTISED_SPACE#{<<"name">> => {binary, name}}
 };
@@ -1269,7 +1310,7 @@ update_marketplace_data(Diff, Space = #od_space{
     end, Diff#{<<"advertisedInMarketplace">> => IsAdvertised}, [
         {<<"description">>, Description, <<"">>},
         {<<"organizationName">>, OrganizationName, <<"">>},
-        {<<"tags">>, Tags, []},
+        {<<"tags">>, Tags, undefined},
         {<<"marketplaceContactEmail">>, ContactEmail, <<"">>}
     ]),
     SanitizedData = entity_logic_sanitizer:ensure_valid(DataSpec, undefined, Data),

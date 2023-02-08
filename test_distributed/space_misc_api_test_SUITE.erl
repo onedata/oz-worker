@@ -168,8 +168,8 @@ create_test(Config) ->
         ?assertEqual(F(<<"marketplaceContactEmail">>, <<>>), Space#od_space.marketplace_contact_email),
 
         case F(<<"advertisedInMarketplace">>, false) of
-            true -> ?assert(lists:member(SpaceId, list_marketplace()));
-            false -> ?assertNot(lists:member(SpaceId, list_marketplace()))
+            true -> ?assert(in_marketplace(SpaceId));
+            false -> ?assertNot(in_marketplace(SpaceId))
         end,
 
         true
@@ -355,6 +355,7 @@ list_marketplace_test(Config) ->
     U1 = ozt_users:create(),
     NonAdmin = ozt_users:create(),
 
+    %% TODO
     ExpSpaces = lists:reverse(lists:foldl(fun(Num, Acc) ->
         SpaceName = str_utils:format_bin("space_~B", [Num]),
 
@@ -686,8 +687,8 @@ update_space_not_in_marketplace_test(Config) ->
         ?assertEqual(ExpData, get_space_marketplace_related_data_json(SpaceId)),
 
         case ShouldSucceed andalso maps:get(<<"advertisedInMarketplace">>, Data, false) of
-            true -> ?assert(lists:member(SpaceId, list_marketplace()));
-            false -> ?assertNot(lists:member(SpaceId, list_marketplace()))
+            true -> ?assert(in_marketplace(SpaceId));
+            false -> ?assertNot(in_marketplace(SpaceId))
         end
     end,
 
@@ -772,8 +773,8 @@ update_space_in_marketplace_test(Config) ->
         ?assertEqual(ExpData, get_space_marketplace_related_data_json(SpaceId)),
 
         case {ShouldSucceed, maps:get(<<"advertisedInMarketplace">>, Data, true)} of
-            {true, false} -> ?assertNot(lists:member(SpaceId, list_marketplace()));
-            _ -> ?assert(lists:member(SpaceId, list_marketplace()))
+            {true, false} -> ?assertNot(in_marketplace(SpaceId));
+            _ -> ?assert(in_marketplace(SpaceId))
         end
     end,
 
@@ -865,8 +866,7 @@ delete_test(Config) ->
         {ok, Spaces} = oz_test_utils:list_spaces(Config),
         ?assertEqual(lists:member(SpaceId, Spaces), not ShouldSucceed),
 
-        Marketplace = list_marketplace(),
-        ?assertEqual(lists:member(SpaceId, Marketplace), InMarketplace andalso not ShouldSucceed)
+        ?assertEqual(in_marketplace(SpaceId), InMarketplace andalso not ShouldSucceed)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -1562,10 +1562,12 @@ update_support_parameters_test(Config) ->
 
 
 %% @private
--spec list_marketplace() -> [od_space:id()].
-list_marketplace() ->
-    {ok, SpaceIds} = ozt:rpc(space_marketplace, list_all, []),
-    SpaceIds.
+-spec in_marketplace(od_space:id()) -> boolean().
+in_marketplace(SpaceId) ->
+    Entries = ozt:rpc(space_marketplace, list, [
+        all, #{limit => 10000000000000000, offset => 0}
+    ]),
+    lists:keymember(SpaceId, 2, Entries).
 
 
 %% @private

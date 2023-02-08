@@ -26,7 +26,7 @@
     get_name/2,
     list/1,
     list_privileges/0,
-    list_marketplace/1
+    list_marketplace/2
 ]).
 -export([
     update/3
@@ -205,8 +205,8 @@ list_privileges() ->
 %% Get all spaces in marketplace.
 %% @end
 %%--------------------------------------------------------------------
--spec list_marketplace(aai:auth()) -> {ok, [od_space:id()]} | errors:error().
-list_marketplace(Auth) ->
+-spec list_marketplace(aai:auth(), map()) -> {ok, [od_space:id()]} | errors:error().
+list_marketplace(Auth, Data) ->
     entity_logic:handle(#el_req{
         operation = get,
         auth = Auth,
@@ -215,7 +215,8 @@ list_marketplace(Auth) ->
             id = undefined,
             aspect = marketplace_list,
             scope = protected
-        }
+        },
+        data = Data
     }).
 
 
