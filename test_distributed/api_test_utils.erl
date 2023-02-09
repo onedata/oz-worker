@@ -390,6 +390,8 @@ verify_logic_result({error, Error}, ?ERROR_REASON({error, Error})) ->
     true;
 verify_logic_result({ok, Result}, ?OK_TERM(VerifyFun)) ->
     VerifyFun(Result);
+verify_logic_result({ok, value, Value}, ?OK_VALUE(Value)) ->
+    true;
 verify_logic_result(_, _) ->
     false.
 

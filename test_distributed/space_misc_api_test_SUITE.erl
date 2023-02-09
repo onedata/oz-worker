@@ -355,23 +355,67 @@ list_marketplace_test(Config) ->
     U1 = ozt_users:create(),
     NonAdmin = ozt_users:create(),
 
-    %% TODO
-    ExpSpaces = lists:reverse(lists:foldl(fun(Num, Acc) ->
-        SpaceName = str_utils:format_bin("space_~B", [Num]),
+    MarketplaceSpaces = lists:reverse(lists:foldl(fun(Num, Acc) ->
+        SpaceName = str_utils:format_bin("space_~B", [1000 + Num]),
 
         case ?RAND_BOOL() of
             true ->
+                Tags = ?RAND_SUBLIST(?AVAILABLE_SPACE_TAGS),
+
                 {ok, SpaceId} = oz_test_utils:create_space(
                     Config,
                     ?USER(U1),
-                    ?CORRECT_DATA_FOR_ADVERTISED_SPACE(#{<<"name">> => SpaceName})
+                    ?CORRECT_DATA_FOR_ADVERTISED_SPACE(#{
+                        <<"name">> => SpaceName,
+                        <<"tags">> => Tags
+                    })
                 ),
-                [SpaceId | Acc];
+                [{SpaceName, SpaceId, Tags} | Acc];
             false ->
                 {ok, _} = oz_test_utils:create_space(Config, ?USER(U1), SpaceName),
                 Acc
         end
-    end, [], lists:seq(1, 10))),
+    end, [], lists:seq(1, 400))),
+
+    FilterMarketplaceSpacesFun = fun(Data) ->
+        ExpEntries0 = case maps:get(<<"tags">>, Data, all) of
+            all ->
+                MarketplaceSpaces;
+            [] ->
+                [];
+            Tags ->
+                lists:filter(fun({_, _, SpaceTags}) ->
+                    lists_utils:intersect(Tags, SpaceTags) /= []
+                end, MarketplaceSpaces)
+        end,
+
+        Offset0 = maps:get(<<"offset">>, Data, 0),
+        {Index, Offset1} = case maps:get(<<"token">>, Data, undefined) of
+            undefined ->
+                {maps:get(<<"index">>, Data, <<>>), Offset0};
+            Token when is_binary(Token) ->
+                {http_utils:base64url_decode(Token), Offset0 + 1}
+        end,
+        ExpEntries1 = case Offset1 >= 0 of
+            true ->
+                lists:nthtail(Offset1, lists:dropwhile(fun({SpaceName, _, _}) ->
+                    SpaceName < Index
+                end, ExpEntries0));
+            false ->
+                {LtIndexEntries0, GteIndexEntries} = lists:partition(fun({SpaceName, _, _}) ->
+                    SpaceName < Index
+                end, ExpEntries0),
+                LtIndexEntries1 = lists:reverse(lists:sublist(
+                    lists:reverse(LtIndexEntries0), abs(Offset1)
+                )),
+                LtIndexEntries1 ++ GteIndexEntries
+        end,
+
+        Limit = maps:get(<<"limit">>, Data, 1000),
+        ExpEntries2 = lists:sublist(ExpEntries1, Limit),
+
+        {ExpEntries2, length(ExpEntries2) < Limit}
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -394,8 +438,57 @@ list_marketplace_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = list_marketplace,
-            args = [auth],
-            expected_result = ?OK_LIST(ExpSpaces)
+            args = [auth, data],
+            expected_result = ?OK_ENV(fun(_, Data) ->
+                {ExpEntries0, IsLast} = FilterMarketplaceSpacesFun(Data),
+                ExpEntries1 = lists:map(fun({SpaceName, SpaceId, _}) ->
+                    {<<SpaceName/binary, "@", SpaceId/binary>>, SpaceId}
+                end, ExpEntries0),
+
+                ?OK_VALUE({ExpEntries1, IsLast})
+            end)
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_space, aspect = list_marketplace, scope = protected},
+            expected_result = ?OK_ENV(fun(_Env, Data) ->
+                {ExpEntries0, IsLast} = FilterMarketplaceSpacesFun(Data),
+
+                ?OK_MAP(#{
+                    <<"list">> => lists:map(fun({SpaceName, SpaceId, _}) ->
+                        #{
+                            <<"index">> => <<SpaceName/binary, "@", SpaceId/binary>>,
+                            <<"spaceId">> => SpaceId
+                        }
+                    end, ExpEntries0),
+                    <<"isLast">> => IsLast
+                })
+            end)
+        },
+        data_spec = #data_spec{
+            optional = [
+                <<"index">>,
+                <<"token">>,
+                <<"offset">>,
+                <<"limit">>,
+                <<"tags">>
+            ],
+            correct_values = #{
+                <<"index">> => [<<"space_1100">>, <<>>, null],
+                <<"token">> => [http_utils:base64url_encode(<<"space_1200">>)],
+                <<"offset">> => [-100, -10, 0, 10],
+                <<"limit">> => [150, 50, 10, 2],
+                <<"tags">> => [?RAND_SUBLIST(?AVAILABLE_SPACE_TAGS), []]
+            },
+            bad_values = [
+                {<<"index">>, 10, ?ERROR_BAD_VALUE_BINARY(<<"index">>)},
+                {<<"token">>, 10, ?ERROR_BAD_VALUE_BINARY(<<"token">>)},
+                {<<"token">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"offset">>, <<"a">>, ?ERROR_BAD_VALUE_INTEGER(<<"offset">>)},
+                {<<"limit">>, <<"a">>, ?ERROR_BAD_VALUE_INTEGER(<<"limit">>)},
+                {<<"limit">>, 0, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"limit">>, 1, 1000)},
+                {<<"tags">>, [<<"troll">>], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"tags">>, ?AVAILABLE_SPACE_TAGS)}
+            ]
         }
         % TODO VFS-4520 Tests for GraphSync API
     },
