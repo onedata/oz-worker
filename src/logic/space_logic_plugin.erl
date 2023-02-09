@@ -487,7 +487,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
         <<"sharesCount">> => length(Shares)
     }};
 
-get(#el_req{gri = #gri{aspect = marketplace_data, scope = protected}}, Space = #od_space{
+get(#el_req{gri = #gri{id = SpaceId, aspect = marketplace_data}}, Space = #od_space{
     name = Name,
     description = Description,
     organization_name = OrganizationName,
@@ -505,6 +505,7 @@ get(#el_req{gri = #gri{aspect = marketplace_data, scope = protected}}, Space = #
 
     {ok, #{
         <<"name">> => Name,
+        <<"index">> => space_marketplace:index(Name, SpaceId),
         <<"description">> => Description,
         <<"organizationName">> => OrganizationName,
         <<"tags">> => Tags,

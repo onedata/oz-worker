@@ -679,6 +679,7 @@ get_marketplace_data_test(Config) ->
     ozt_spaces:set_support_parameters(S1, P1, ozt_spaces:random_support_parameters()),
 
     S1Data = BasicS1Data#{
+        <<"index">> => space_marketplace:index(?SPACE_NAME1, S1),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"totalSupportSize">> => SupportSize,
         <<"providerNames">> => [ozt_providers:get_name(P1)]

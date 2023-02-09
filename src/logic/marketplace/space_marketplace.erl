@@ -15,6 +15,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/errors.hrl").
 
+-export([index/2]).
 -export([add/3, delete/3]).
 -export([list/2]).
 
@@ -47,6 +48,11 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
+
+
+-spec index(od_space:name(), od_space:id()) -> index().
+index(SpaceName, SpaceId) ->
+    <<SpaceName/binary, "@", SpaceId/binary>>.
 
 
 -spec add(od_space:name(), od_space:id(), [od_space:tag()]) -> ok.
@@ -161,12 +167,6 @@ list(Tags, ListingOpts) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-
-%% @private
--spec index(od_space:name(), od_space:id()) -> index().
-index(SpaceName, SpaceId) ->
-    <<SpaceName/binary, "@", SpaceId/binary>>.
 
 
 %% @private
