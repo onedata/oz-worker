@@ -208,12 +208,12 @@ list_privileges() ->
 -spec list_marketplace(aai:auth(), map()) -> {ok, [od_space:id()]} | errors:error().
 list_marketplace(Auth, Data) ->
     entity_logic:handle(#el_req{
-        operation = get,
+        operation = create,
         auth = Auth,
         gri = #gri{
             type = od_space,
             id = undefined,
-            aspect = marketplace_list,
+            aspect = list_marketplace,
             scope = protected
         },
         data = Data

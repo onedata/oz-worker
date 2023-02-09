@@ -98,7 +98,8 @@ operation_supported(create, {group, _}, private) -> true;
 operation_supported(create, group, private) -> true;
 operation_supported(create, harvest_metadata, private) -> true;
 
-operation_supported(get, marketplace_list, protected) -> true;
+operation_supported(create, list_marketplace, protected) -> true;
+
 operation_supported(get, list, private) -> true;
 operation_supported(get, privileges, _) -> true;
 operation_supported(get, api_samples, private) -> true;
@@ -405,18 +406,9 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
             ({HarvesterId, FailedIndices}, Acc) when map_size(FailedIndices) =/= 0 ->
                 Acc#{HarvesterId => FailedIndices};
             (_, Acc) -> Acc
-        end, #{}, Res)}.
+        end, #{}, Res)};
 
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves a resource (aspect of entity) based on entity logic request and
-%% prefetched entity.
-%% @end
-%%--------------------------------------------------------------------
--spec get(entity_logic:req(), entity_logic:entity()) ->
-    entity_logic:get_result().
-get(#el_req{data = Data, gri = #gri{aspect = marketplace_list}}, _) ->
+create(#el_req{data = Data, gri = #gri{aspect = list_marketplace}}) ->
     Tags = maps:get(<<"tags">>, Data, all),
 
     Offset = maps:get(<<"offset">>, Data, 0),
@@ -437,8 +429,17 @@ get(#el_req{data = Data, gri = #gri{aspect = marketplace_list}}, _) ->
     end,
     Entries = space_marketplace:list(Tags, ListingOpts),
 
-    {ok, {Entries, length(Entries) < Limit}};
+    {ok, value, {Entries, length(Entries) < Limit}}.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a resource (aspect of entity) based on entity logic request and
+%% prefetched entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(entity_logic:req(), entity_logic:entity()) ->
+    entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, SpaceDocs} = od_space:list(),
     {ok, [SpaceId || #document{key = SpaceId} <- SpaceDocs]};
@@ -555,22 +556,30 @@ get(#el_req{gri = #gri{aspect = storages}}, Space) ->
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = GRI = #gri{id = SpaceId, aspect = instance}, data = Data}) ->
     critical_section:run(?SPACE_CRITICAL_SECTION_KEY(SpaceId), fun() ->
-        {true, {Space, _}} = fetch_entity(GRI),
-        PrevName = Space#od_space.name,
+        {true, {PrevSpace, _}} = fetch_entity(GRI),
+        PrevName = PrevSpace#od_space.name,
         NewName = maps:get(<<"name">>, Data, PrevName),
-        NewSpace = update_marketplace_data(Data, Space#od_space{name = NewName}),
+        NewSpace = update_marketplace_data(Data, PrevSpace#od_space{name = NewName}),
 
-        case Space == NewSpace of
+        case PrevSpace == NewSpace of
             true ->
                 ok;
             false ->
                 {ok, #document{value = #od_space{tags = NewTags}}} = od_space:update(
-                    SpaceId,
-                    fun(_) -> {ok, NewSpace} end
+                    SpaceId, fun(Space) ->
+                        {ok, Space#od_space{
+                            name = NewName,
+                            description = NewSpace#od_space.description,
+                            organization_name = NewSpace#od_space.organization_name,
+                            tags = NewSpace#od_space.tags,
+                            advertised_in_marketplace = NewSpace#od_space.advertised_in_marketplace,
+                            marketplace_contact_email = NewSpace#od_space.marketplace_contact_email
+                        }}
+                    end
                 ),
 
-                PrevTags = Space#od_space.tags,
-                PrevAdvertisedInMarketplace = Space#od_space.advertised_in_marketplace,
+                PrevTags = PrevSpace#od_space.tags,
+                PrevAdvertisedInMarketplace = PrevSpace#od_space.advertised_in_marketplace,
                 NewAdvertisedInMarketplace = NewSpace#od_space.advertised_in_marketplace,
 
                 case {PrevAdvertisedInMarketplace, NewAdvertisedInMarketplace, PrevName == NewName} of
@@ -851,13 +860,13 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_toke
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_GROUP);
 
+authorize(#el_req{operation = create, gri = #gri{aspect = list_marketplace}, auth = ?USER}, _) ->
+    true;
+
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = space_support_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_SUPPORT);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
-    true;
-
-authorize(#el_req{operation = get, gri = #gri{aspect = marketplace_list}, auth = ?USER}, _) ->
     true;
 
 authorize(#el_req{operation = get, gri = #gri{aspect = api_samples}, auth = ?USER(UserId)}, Space) ->
@@ -1048,7 +1057,7 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {group
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = group}}) ->
     [?OZ_GROUPS_CREATE, ?OZ_SPACES_ADD_RELATIONSHIPS];
 
-required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = marketplace_list}}) ->
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = list_marketplace}}) ->
     [?OZ_SPACES_LIST];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
@@ -1223,7 +1232,7 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = harvester}}) ->
         type = od_harvester, id = undefined, aspect = instance
     }});
 
-validate(#el_req{operation = update, gri = #gri{aspect = marketplace_list}}) -> #{
+validate(#el_req{operation = create, gri = #gri{aspect = list_marketplace}}) -> #{
     optional => #{
         <<"index">> => {binary, any},
         <<"token">> => {binary, non_empty},
@@ -1291,10 +1300,10 @@ auth_by_support(_, _) ->
 -spec update_marketplace_data(json_utils:json_map(), od_space:record()) ->
     od_space:record().
 update_marketplace_data(Diff, Space = #od_space{
-    advertised_in_marketplace = Advertised,
     description = Description,
     organization_name = OrganizationName,
     tags = Tags,
+    advertised_in_marketplace = Advertised,
     marketplace_contact_email = ContactEmail
 }) ->
     IsAdvertised = maps:get(<<"advertisedInMarketplace">>, Diff, Advertised),

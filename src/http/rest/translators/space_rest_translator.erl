@@ -79,7 +79,18 @@ create_response(#gri{id = SpaceId, aspect = group}, _, resource, {#gri{id = Grou
 create_response(#gri{id = SpaceId, aspect = harvester}, _, resource, {#gri{id = HarvesterId}, _}) ->
     rest_translator:created_reply_with_location(
         [<<"spaces">>, SpaceId, <<"harvesters">>, HarvesterId]
-    ).
+    );
+
+create_response(#gri{aspect = list_marketplace}, _, value, {Entries, IsLast}) ->
+    {SpacesIndices, SpaceIds} = lists:unzip(Entries),
+
+    rest_translator:ok_body_reply(#{
+        <<"spaces">> => SpaceIds,
+        <<"nextPageToken">> => case IsLast of
+            true -> null;
+            false -> http_utils:base64url_encode(lists:last(SpacesIndices))
+        end
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -88,9 +99,6 @@ create_response(#gri{id = SpaceId, aspect = harvester}, _, resource, {#gri{id = 
 %% @end
 %%--------------------------------------------------------------------
 -spec get_response(entity_logic:gri(), Resource :: term()) -> rest_handler:rest_resp().
-get_response(#gri{id = undefined, aspect = marketplace_list}, Spaces) ->
-    rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
-
 get_response(#gri{id = undefined, aspect = list}, Spaces) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
 

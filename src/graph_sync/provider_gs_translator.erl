@@ -54,6 +54,14 @@ translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {Access
         <<"token">> => AccessToken,
         <<"ttl">> => Expires
     };
+translate_value(_, #gri{type = od_space, aspect = list_marketplace, scope = protected}, {Entries, IsLast}) ->
+    % @TODO VFS-4520 this translator is only added to enable GS API testing in the api framework
+    #{
+        <<"list">> => lists:map(fun({Index, SpaceId}) ->
+            #{<<"spaceId">> => SpaceId, <<"index">> => Index}
+        end, Entries),
+        <<"isLast">> => IsLast
+    };
 translate_value(_, #gri{type = od_space, aspect = harvest_metadata}, Result) ->
     case Result of
         {error, _} = Error ->

@@ -419,12 +419,12 @@ translate_group(#gri{aspect = eff_atm_inventories}, AtmInventories) ->
 translate_space(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
     Privileges;
 
-translate_space(#gri{id = undefined, aspect = marketplace_list, scope = protected}, SpaceIds) ->
+translate_space(#gri{id = undefined, aspect = list_marketplace, scope = protected}, {Entries, IsLast}) ->
     #{
-        <<"list">> => ids_to_serialized_gris(
-            #gri{type = od_space, aspect = marketplace_data, scope = protected},
-            SpaceIds
-        )
+        <<"list">> => lists:map(fun({Index, SpaceId}) ->
+            #{<<"spaceId">> => SpaceId, <<"index">> => Index}
+        end, Entries),
+        <<"isLast">> => IsLast
     };
 
 translate_space(#gri{aspect = api_samples, scope = private}, ApiSamples) ->

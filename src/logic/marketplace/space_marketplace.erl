@@ -115,15 +115,23 @@ list(Tags, ListingOpts) ->
         (#link{name = Index}, {skip, N, _LastSkippedIndex}) ->
             {ok, {skip, N - 1, Index}};
 
-        (#link{name = Index}, {take_until_start_index, EntriesAcc0}) when Index >= StartIndex ->
-            EntriesAcc1 = lists:sublist(EntriesAcc0, 1, abs(Offset)),
+        (#link{name = Index, target = SpaceId}, {take_until_start_index, EntriesAcc0}) when
+            Index >= StartIndex
+        ->
+            EntriesAcc1 = lists:sublist(EntriesAcc0, abs(Offset)),
             RemainingLimit = Limit - length(EntriesAcc1),
 
-            case RemainingLimit =< 0 of
-                true -> {stop, {take, 0, lists:nthtail(abs(RemainingLimit), EntriesAcc1)}};
-                false -> {ok, {take, RemainingLimit, EntriesAcc1}}
+            if
+                RemainingLimit =< 0 ->
+                    {stop, {take, 0, lists:nthtail(abs(RemainingLimit), EntriesAcc1)}};
+                RemainingLimit == 1 ->
+                    {stop, {take, 0, [{Index, SpaceId} | EntriesAcc1]}};
+                true ->
+                    {ok, {take, RemainingLimit - 1, [{Index, SpaceId} | EntriesAcc1]}}
             end;
-        (#link{name = Index}, Acc = {take_until_start_index, [{PrevIndex, _} | _]}) when Index == PrevIndex ->
+        (#link{name = Index}, Acc = {take_until_start_index, [{PrevIndex, _} | _]}) when
+            Index == PrevIndex
+        ->
             {ok, Acc};
         (#link{name = Index, target = SpaceId}, {take_until_start_index, EntriesAcc}) ->
             {ok, {take_until_start_index, [{Index, SpaceId} | EntriesAcc]}}
