@@ -76,6 +76,13 @@ translate_value(_, #gri{aspect = TokenType}, Token) when
     serialize_token(Token);
 translate_value(_, #gri{aspect = {user_temporary_token, _}}, Token) ->
     serialize_token(Token);
+translate_value(_, #gri{type = od_space, aspect = list_marketplace}, {Entries, IsLast}) ->
+    #{
+        <<"list">> => lists:map(fun({Index, SpaceId}) ->
+            #{<<"spaceId">> => SpaceId, <<"index">> => Index}
+        end, Entries),
+        <<"isLast">> => IsLast
+    };
 translate_value(_, #gri{type = od_harvester, aspect = {query, _}}, Response) ->
     Response;
 translate_value(_, #gri{type = od_harvester, aspect = {gen_curl_query, _}}, Response) ->
@@ -418,14 +425,6 @@ translate_group(#gri{aspect = eff_atm_inventories}, AtmInventories) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_space(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
     Privileges;
-
-translate_space(#gri{id = undefined, aspect = list_marketplace, scope = protected}, {Entries, IsLast}) ->
-    #{
-        <<"list">> => lists:map(fun({Index, SpaceId}) ->
-            #{<<"spaceId">> => SpaceId, <<"index">> => Index}
-        end, Entries),
-        <<"isLast">> => IsLast
-    };
 
 translate_space(#gri{aspect = api_samples, scope = private}, ApiSamples) ->
     ApiSamples;
