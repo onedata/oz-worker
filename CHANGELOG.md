@@ -4,6 +4,33 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.0-rc2
+
+-   **VFS-9999** Web GUI: Added space details popovers with space
+    information in various views.
+-   **VFS-9162** Web GUI: Added api samples modal for space.
+-   **VFS-9129** Web GUI: Upgraded EmberJS to v3.8.
+-   **VFS-10432** Web GUI: Fixed cookie notification appearing after
+    consenting and starting new web browser session.
+-   **VFS-10414** Web GUI: Fixed displaying wrong names of spaces in
+    shares sidebar.
+-   **VFS-10357** Web GUI: Added support for "manage archives" privilege
+    and "creator" information in archives.
+-   **VFS-10312** Web GUI: Changed name conflict and disambiguation
+    separator from `#` to `@`.
+-   **VFS-10235** Changed default value of `accountingEnabled` parameter
+    to `true` when requesting space support.
+-   **VFS-10129** Web GUI: Added global and per-lane chart dashboards in
+    automation workflows.
+-   **VFS-10128** Web GUI: Added possibility to map a lambda result to
+    many stores in an automation task definition.
+-   **VFS-10117** Added lambda config specification and the possibility
+    to provide its values on the task level. Changed data types in
+    automation; added boolean, reworked integer into number with
+    constraints.
+-   **VFS-10046** Web GUI: Added user details popovers with user
+    information in various views.
+
 ### 21.02.0-alpha28
 
 -   **VFS-9614** Web GUI: Added archivisation audit log view.
