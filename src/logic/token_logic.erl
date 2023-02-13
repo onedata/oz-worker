@@ -438,7 +438,7 @@ migrate_provider_root_tokens() ->
         try
             migrate_provider_root_token(ProviderId, RootTokenId)
         catch Class:Reason:Stacktrace ->
-            ?warning_exception(autoformat, [ProviderId, RootTokenId], Class, Reason, Stacktrace)
+            ?warning_exception(?autoformat([ProviderId, RootTokenId]), Class, Reason, Stacktrace)
         end
     end, ProviderDocs).
 
