@@ -8,7 +8,7 @@ CHANGELOG
 
 -   **VFS-9999** Web GUI: Added space details popovers with space
     information in various views.
--   **VFS-9162** Web GUI: Added api samples modal for space.
+-   **VFS-9162** Web GUI: Added API samples modal for space.
 -   **VFS-9129** Web GUI: Upgraded EmberJS to v3.8.
 -   **VFS-10432** Web GUI: Fixed cookie notification appearing after
     consenting and starting new web browser session.
@@ -24,6 +24,8 @@ CHANGELOG
     automation workflows.
 -   **VFS-10128** Web GUI: Added possibility to map a lambda result to
     many stores in an automation task definition.
+-   **VFS-10125** Added mailing capabilities to Onezone by means of an
+    integrated SMTP client.
 -   **VFS-10117** Added lambda config specification and the possibility
     to provide its values on the task level. Changed data types in
     automation; added boolean, reworked integer into number with
