@@ -30,9 +30,13 @@
     idp_auth_test_mode:gather_log(debug, Format, Args),
     ?debug(Format, Args)
 end).
--define(auth_debug_stacktrace(Format, Args, Stacktrace), begin
-    idp_auth_test_mode:gather_log(debug, Format, Args, Stacktrace),
-    ?debug_stacktrace(Format, Args, Stacktrace)
+-define(auth_debug_exception(Format, Args, Class, Reason, Stacktrace), begin
+    idp_auth_test_mode:gather_log(
+        debug,
+        Format ++ "~n> Caught: ~s:~p~n> Stacktrace:~s",
+        Args ++ [Class, Reason, lager:pr_stacktrace(Stacktrace)]
+    ),
+    ?debug_exception(Format, Class, Reason, Args, Stacktrace)
 end).
 
 -define(auth_warning(Format, Args), begin
