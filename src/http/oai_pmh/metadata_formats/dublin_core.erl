@@ -126,11 +126,10 @@ encode(Metadata, AdditionalIdentifiers) ->
                 (Other) ->
                     Other
             end, Content)
-    catch Type:Reason:Stacktrace ->
-        ?debug_stacktrace(
-            "Cannot parse dublin core metadata due to ~p:~p, identifiers: ~p",
-            [Type, Reason, AdditionalIdentifiers],
-            Stacktrace
+    catch Class:Reason:Stacktrace ->
+        ?debug_exception(
+            "Cannot parse dublin core metadata, identifiers: ~p", [AdditionalIdentifiers],
+            Class, Reason, Stacktrace
         ),
         []
     end,

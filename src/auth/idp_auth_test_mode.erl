@@ -21,7 +21,7 @@
     process_is_test_mode_enabled/0,
     store_user_data/1, get_user_data/0,
     store_state_token/1, get_state_token/0,
-    gather_log/3, gather_log/4,
+    gather_log/3,
     get_logs/0
 ]).
 
@@ -97,32 +97,19 @@ get_state_token() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @equiv gather_log(Loglevel, Format, Args, undefined)
+%% Computes a log message based on given format and args and appends
+%% it to the logs stored in process memory.
 %% @end
 %%--------------------------------------------------------------------
--spec gather_log(Loglevel :: atom(), Format :: string(), Args :: [term()]) ->
-    ok.
+-spec gather_log(Loglevel :: atom(), Format :: string(), Args :: [term()]) -> ok.
 gather_log(Loglevel, Format, Args) ->
-    gather_log(Loglevel, Format, Args, undefined).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Computes a log message based on given format and args, includes stacktrace
-%% (if specified) and appends it to the logs stored in process memory.
-%% @end
-%%--------------------------------------------------------------------
--spec gather_log(Loglevel :: atom(), Format :: string(), Args :: [term()],
-    Stacktrace :: undefined | list()) -> ok.
-gather_log(Loglevel, Format, Args, Stacktrace) ->
     case process_is_test_mode_enabled() of
         false ->
             ok;
         true ->
-            append_to_log(str_utils:format("~s ~ts~s", [
+            append_to_log(str_utils:format("~s ~ts", [
                 format_loglevel(Loglevel),
-                str_utils:format(Format, Args),
-                format_stacktrace(Stacktrace)
+                str_utils:format(Format, Args)
             ]))
     end.
 
@@ -159,13 +146,3 @@ append_to_log(Str) ->
 format_loglevel(debug) -> "[DEBUG]";
 format_loglevel(warning) -> "[WARNG]";
 format_loglevel(error) -> "[ERROR]".
-
-
-%% @private
--spec format_stacktrace(undefined | list()) -> string().
-format_stacktrace(undefined) ->
-    "";
-format_stacktrace(Stacktrace) ->
-    str_utils:format("~nStacktrace: ~s", [
-        iolist_to_binary(lager:pr_stacktrace(Stacktrace))
-    ]).
