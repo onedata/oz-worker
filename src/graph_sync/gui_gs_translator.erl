@@ -76,11 +76,12 @@ translate_value(_, #gri{aspect = TokenType}, Token) when
     serialize_token(Token);
 translate_value(_, #gri{aspect = {user_temporary_token, _}}, Token) ->
     serialize_token(Token);
-translate_value(_, #gri{type = od_space, aspect = list_marketplace}, {Entries, IsLast}) ->
+translate_value(_, #gri{type = od_space, aspect = Aspect}, {Entries, IsLast, _NextPageToken}) when
+    Aspect =:= list_marketplace;
+    Aspect =:= list_marketplace_with_data
+->
     #{
-        <<"list">> => lists:map(fun({Index, SpaceId}) ->
-            #{<<"spaceId">> => SpaceId, <<"index">> => Index}
-        end, Entries),
+        <<"list">> => Entries,
         <<"isLast">> => IsLast
     };
 translate_value(_, #gri{type = od_harvester, aspect = {query, _}}, Response) ->

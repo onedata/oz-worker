@@ -26,7 +26,8 @@
     get_name/2,
     list/1,
     list_privileges/0,
-    list_marketplace/2
+    list_marketplace/2,
+    list_marketplace_with_data/2
 ]).
 -export([
     update/3
@@ -214,6 +215,26 @@ list_marketplace(Auth, Data) ->
             type = od_space,
             id = undefined,
             aspect = list_marketplace,
+            scope = protected
+        },
+        data = Data
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get all spaces in marketplace with their data.
+%% @end
+%%--------------------------------------------------------------------
+-spec list_marketplace_with_data(aai:auth(), map()) -> {ok, [od_space:id()]} | errors:error().
+list_marketplace_with_data(Auth, Data) ->
+    entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{
+            type = od_space,
+            id = undefined,
+            aspect = list_marketplace_with_data,
             scope = protected
         },
         data = Data

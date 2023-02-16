@@ -81,15 +81,14 @@ create_response(#gri{id = SpaceId, aspect = harvester}, _, resource, {#gri{id = 
         [<<"spaces">>, SpaceId, <<"harvesters">>, HarvesterId]
     );
 
-create_response(#gri{aspect = list_marketplace}, _, value, {Entries, IsLast}) ->
-    {SpacesIndices, SpaceIds} = lists:unzip(Entries),
-
+create_response(#gri{aspect = Aspect}, _, value, {Entries, IsLast, NextPageToken}) when
+    Aspect =:= list_marketplace;
+    Aspect =:= list_marketplace_with_data
+->
     rest_translator:ok_body_reply(#{
-        <<"spaces">> => SpaceIds,
-        <<"nextPageToken">> => case IsLast of
-            true -> null;
-            false -> http_utils:base64url_encode(lists:last(SpacesIndices))
-        end
+        <<"spaces">> => Entries,
+        <<"isLast">> => IsLast,
+        <<"nextPageToken">> => utils:undefined_to_null(NextPageToken)
     }).
 
 

@@ -85,7 +85,7 @@ list(all, ListingOpts) ->
         {offset, offset},
         {limit, size},
         {start_index, prev_link_name}
-    ], sanitize_listing_opts(ListingOpts)),
+    ], ListingOpts),
 
     FoldFun = fun(#link{name = Index, target = SpaceId}, Acc) ->
         {ok, [{Index, SpaceId} | Acc]}
@@ -95,11 +95,9 @@ list(all, ListingOpts) ->
     ),
     lists:reverse(Entries);
 
-list(Tags, ListingOpts) ->
-    SanitizedListingOpts = #{limit := Limit} = sanitize_listing_opts(ListingOpts),
-    Limit = maps:get(limit, SanitizedListingOpts),
-    Offset = maps:get(offset, SanitizedListingOpts, 0),
-    StartIndex = maps:get(start_index, SanitizedListingOpts, <<>>),
+list(Tags, #{limit := Limit} = ListingOpts) ->
+    Offset = maps:get(offset, ListingOpts, 0),
+    StartIndex = maps:get(start_index, ListingOpts, <<>>),
 
     TreeIds = [?TAG_TREE_ID(Tag) || Tag <- Tags],
 
@@ -162,22 +160,3 @@ list(Tags, ListingOpts) ->
         {ok, {take_until_start_index, Entries}} ->
             lists:sublist(lists:reverse(lists:sublist(Entries, 1, abs(Offset))), 1, Limit)
     end.
-
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-
-%% @private
--spec sanitize_listing_opts(listing_opts()) -> listing_opts() | no_return().
-sanitize_listing_opts(ListingOpts) ->
-    middleware_sanitizer:sanitize_data(ListingOpts, #{
-        required => #{
-            limit => {integer, {not_lower_than, 1}}
-        },
-        at_least_one => #{
-            offset => {integer, any},
-            start_index => {binary, any}
-        }
-    }).

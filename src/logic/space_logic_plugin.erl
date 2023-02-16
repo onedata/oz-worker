@@ -99,6 +99,7 @@ operation_supported(create, group, private) -> true;
 operation_supported(create, harvest_metadata, private) -> true;
 
 operation_supported(create, list_marketplace, protected) -> true;
+operation_supported(create, list_marketplace_with_data, protected) -> true;
 
 operation_supported(get, list, private) -> true;
 operation_supported(get, privileges, _) -> true;
@@ -408,7 +409,10 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
             (_, Acc) -> Acc
         end, #{}, Res)};
 
-create(#el_req{data = Data, gri = #gri{aspect = list_marketplace}}) ->
+create(Req = #el_req{data = Data, gri = GRI = #gri{aspect = Aspect}}) when
+    Aspect =:= list_marketplace;
+    Aspect =:= list_marketplace_with_data
+->
     Tags = maps:get(<<"tags">>, Data, all),
 
     Offset = maps:get(<<"offset">>, Data, 0),
@@ -427,9 +431,33 @@ create(#el_req{data = Data, gri = #gri{aspect = list_marketplace}}) ->
                 limit => Limit
             }
     end,
-    Entries = space_marketplace:list(Tags, ListingOpts),
+    BasicEntries = space_marketplace:list(Tags, ListingOpts),
+    IsLast = length(BasicEntries) < Limit,
+    NextPageToken = case IsLast of
+        true ->
+            undefined;
+        false ->
+            {LastEntryIndex, _} = lists:last(BasicEntries),
+            http_utils:base64url_encode(LastEntryIndex)
+    end,
 
-    {ok, value, {Entries, length(Entries) < Limit}}.
+    MappedEntries = case Aspect of
+        list_marketplace ->
+            lists:map(fun({Index, SpaceId}) ->
+                #{<<"spaceId">> => SpaceId, <<"index">> => Index}
+            end, BasicEntries);
+
+        list_marketplace_with_data ->
+            lists_utils:pmap(fun({_, SpaceId}) ->
+                {true, {Space, _}} = fetch_entity(#gri{aspect = instance, id = SpaceId}),
+                {ok, SpaceData} = get(
+                    Req#el_req{gri = GRI#gri{id = SpaceId, aspect = marketplace_data}}, Space
+                ),
+                SpaceData
+            end, BasicEntries)
+    end,
+
+    {ok, value, {MappedEntries, IsLast, NextPageToken}}.
 
 
 %%--------------------------------------------------------------------
@@ -874,7 +902,10 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_toke
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_GROUP);
 
-authorize(#el_req{operation = create, gri = #gri{aspect = list_marketplace}, auth = ?USER}, _) ->
+authorize(#el_req{operation = create, gri = #gri{aspect = Aspect}, auth = ?USER}, _) when
+    Aspect =:= list_marketplace;
+    Aspect =:= list_marketplace_with_data
+->
     true;
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = space_support_token}}, Space) ->
@@ -1071,7 +1102,10 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {group
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = group}}) ->
     [?OZ_GROUPS_CREATE, ?OZ_SPACES_ADD_RELATIONSHIPS];
 
-required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = list_marketplace}}) ->
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = Aspect}}) when
+    Aspect =:= list_marketplace;
+    Aspect =:= list_marketplace_with_data
+->
     [?OZ_SPACES_LIST];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
@@ -1246,15 +1280,19 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = harvester}}) ->
         type = od_harvester, id = undefined, aspect = instance
     }});
 
-validate(#el_req{operation = create, gri = #gri{aspect = list_marketplace}}) -> #{
-    optional => #{
-        <<"index">> => {binary, any},
-        <<"token">> => {binary, non_empty},
-        <<"offset">> => {integer, any},
-        <<"limit">> => {integer, {between, 1, ?MAX_LIST_LIMIT}},
-        <<"tags">> => {list_of_binaries, ?AVAILABLE_SPACE_TAGS}
-    }
-};
+validate(#el_req{operation = create, gri = #gri{aspect = Aspect}}) when
+    Aspect =:= list_marketplace;
+    Aspect =:= list_marketplace_with_data
+->
+    #{
+        optional => #{
+            <<"index">> => {binary, any},
+            <<"token">> => {binary, non_empty},
+            <<"offset">> => {integer, any},
+            <<"limit">> => {integer, {between, 1, ?MAX_LIST_LIMIT}},
+            <<"tags">> => {list_of_binaries, ?AVAILABLE_SPACE_TAGS}
+        }
+    };
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => ?PARAMETER_SPECS_FOR_NON_ADVERTISED_SPACE#{<<"name">> => {binary, name}}
