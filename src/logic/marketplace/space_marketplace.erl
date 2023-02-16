@@ -19,11 +19,13 @@
 -export([add/3, delete/3]).
 -export([list/2]).
 
-% index() consists of 2 parts:
+% index()/internal_index() consists of 2 parts:
 %  1) space name - so that links would be sorted by name.
 %  2) space id - this part allows to distinguish links associated with spaces
 %                using the same name.
 -type index() :: binary().
+-type internal_index() :: binary().
+
 -type offset() :: integer().
 -type limit() :: pos_integer().
 
@@ -33,6 +35,7 @@
     offset => offset()
 }.
 -type entries() :: [{index(), od_space:id()}].
+-type internal_entries() :: [{internal_index(), od_space:id()}].
 
 -export_type([index/0, offset/0, limit/0, listing_opts/0, entries/0]).
 
@@ -44,6 +47,11 @@
 -define(ALL_TREE_ID, <<"space-marketplace-all-tree">>).
 -define(TAG_TREE_ID(__TAG), <<"space-marketplace-tree-for-", __TAG/binary>>).
 
+% Uses @ for separator for nice/clean gui/rest display/behaviour
+-define(INDEX_SEP, "@").
+% Uses null for separator to ensure alphabetical sorting
+-define(INTERNAL_INDEX_SEP, 0).
+
 
 %%%===================================================================
 %%% API
@@ -52,12 +60,12 @@
 
 -spec index(od_space:name(), od_space:id()) -> index().
 index(SpaceName, SpaceId) ->
-    <<SpaceName/binary, "@", SpaceId/binary>>.
+    <<SpaceName/binary, ?INDEX_SEP, SpaceId/binary>>.
 
 
 -spec add(od_space:name(), od_space:id(), [od_space:tag()]) -> ok.
 add(SpaceName, SpaceId, Tags) ->
-    Link = {index(SpaceName, SpaceId), SpaceId},
+    Link = {internal_index(SpaceName, SpaceId), SpaceId},
 
     lists:foreach(fun(TreeId) ->
         case datastore_model:add_links(?CTX, ?FOREST, TreeId, Link) of
@@ -69,7 +77,7 @@ add(SpaceName, SpaceId, Tags) ->
 
 -spec delete(od_space:name(), od_space:id(), [od_space:tag()]) -> ok.
 delete(SpaceName, SpaceId, Tags) ->
-    Index = index(SpaceName, SpaceId),
+    Index = internal_index(SpaceName, SpaceId),
 
     lists:foreach(fun(TreeId) ->
         case datastore_model:delete_links(?CTX, ?FOREST, TreeId, Index) of
@@ -81,23 +89,23 @@ delete(SpaceName, SpaceId, Tags) ->
 
 -spec list(all | [od_space:tag()], listing_opts()) -> entries().
 list(all, ListingOpts) ->
-    FoldOpts = kv_utils:copy_found([
-        {offset, offset},
-        {limit, size},
-        {start_index, prev_link_name}
-    ], ListingOpts),
+    FoldOpts = #{
+        size => maps:get(limit, ListingOpts),
+        offset => maps:get(offset, ListingOpts, 0),
+        prev_link_name => index_to_internal_index(maps:get(start_index, ListingOpts, <<>>))
+    },
 
     FoldFun = fun(#link{name = Index, target = SpaceId}, Acc) ->
         {ok, [{Index, SpaceId} | Acc]}
     end,
-    {ok, Entries} = datastore_model:fold_links(
+    {ok, InternalEntries} = datastore_model:fold_links(
         ?CTX, ?FOREST, ?ALL_TREE_ID, FoldFun, [], FoldOpts
     ),
-    lists:reverse(Entries);
+    internal_entries_to_entries(lists:reverse(InternalEntries));
 
 list(Tags, #{limit := Limit} = ListingOpts) ->
     Offset = maps:get(offset, ListingOpts, 0),
-    StartIndex = maps:get(start_index, ListingOpts, <<>>),
+    StartIndex = index_to_internal_index(maps:get(start_index, ListingOpts, <<>>)),
 
     TreeIds = [?TAG_TREE_ID(Tag) || Tag <- Tags],
 
@@ -152,11 +160,48 @@ list(Tags, #{limit := Limit} = ListingOpts) ->
             {{skip, Offset, <<>>}, BasicFoldOpts}
     end,
 
-    case datastore_model:fold_links(?CTX, ?FOREST, TreeIds, FoldFun, InitialAcc, FoldOpts) of
+    InternalEntries = case datastore_model:fold_links(
+        ?CTX, ?FOREST, TreeIds, FoldFun, InitialAcc, FoldOpts
+    ) of
         {ok, {take, _, Entries}} ->
             lists:reverse(Entries);
         {ok, {skip, _, _}} ->
             [];
         {ok, {take_until_start_index, Entries}} ->
             lists:sublist(lists:reverse(lists:sublist(Entries, 1, abs(Offset))), 1, Limit)
-    end.
+    end,
+    internal_entries_to_entries(InternalEntries).
+
+
+%%%===================================================================
+%%% Internal function
+%%%===================================================================
+
+
+%% @private
+-spec internal_index(od_space:name(), od_space:id()) -> internal_index().
+internal_index(SpaceName, SpaceId) ->
+    <<SpaceName/binary, ?INTERNAL_INDEX_SEP, SpaceId/binary>>.
+
+
+%% @private
+-spec index_to_internal_index(index()) -> internal_index().
+index_to_internal_index(<<>>) ->
+    <<>>;
+index_to_internal_index(Index) ->
+    binary:replace(Index, <<?INDEX_SEP>>, <<?INTERNAL_INDEX_SEP>>).
+
+
+%% @private
+-spec internal_index_to_index(internal_index()) -> index().
+internal_index_to_index(InternalIndex) ->
+    binary:replace(InternalIndex, <<?INTERNAL_INDEX_SEP>>, <<?INDEX_SEP>>).
+
+
+%% @private
+-spec internal_entries_to_entries(internal_entries()) -> entries().
+internal_entries_to_entries(InternalEntries) ->
+    lists:map(
+        fun({InternalIndex, SpaceId}) -> {internal_index_to_index(InternalIndex), SpaceId} end,
+        InternalEntries
+    ).
