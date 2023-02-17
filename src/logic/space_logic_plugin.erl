@@ -621,17 +621,16 @@ update(#el_req{gri = GRI = #gri{id = SpaceId, aspect = instance}, data = Data}) 
                         ok = space_marketplace:delete(PrevName, SpaceId, PrevTags);
                     {true, true, false} ->
                         % Changed space name when in marketplace
-                        ok = space_marketplace:add(NewName, SpaceId, NewTags),
-                        ok = space_marketplace:delete(PrevName, SpaceId, PrevTags);
+                        ok = space_marketplace:delete(PrevName, SpaceId, PrevTags),
+                        ok = space_marketplace:add(NewName, SpaceId, NewTags);
                     {true, true, true} ->
                         case {PrevTags -- NewTags, NewTags -- PrevTags} of
                             {[], []} ->
                                 ok;
-                            %% TODO test
                             {RemovedTags, AddedTags} ->
                                 % Changed space tags when in marketplace
-                                ok = space_marketplace:add(NewName, SpaceId, AddedTags),
-                                ok = space_marketplace:delete(PrevName, SpaceId, RemovedTags)
+                                ok = space_marketplace:delete(PrevName, SpaceId, RemovedTags),
+                                ok = space_marketplace:add(NewName, SpaceId, AddedTags)
                         end;
                     _ ->
                         ok

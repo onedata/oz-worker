@@ -49,6 +49,19 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = undefined, aspect = privileges}
     }},
+    %% List space marketplace
+    %% This operation does not require any specific privileges.
+    {<<"/spaces/marketplace/list">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_space, id = undefined, aspect = list_marketplace, scope = protected}
+    }},
+    %% Get space details in marketplace
+    %% This operation does not require any specific privileges.
+    {<<"/spaces/marketplace/:id">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = marketplace_data, scope = protected}
+    }},
     %% Get space details
     %% This operation requires one of the following privileges:
     %% - oz_spaces_view

@@ -168,7 +168,7 @@ create_test(Config) ->
         ?assertEqual(F(<<"marketplaceContactEmail">>, <<>>), Space#od_space.marketplace_contact_email),
 
         case F(<<"advertisedInMarketplace">>, false) of
-            true -> ?assert(in_marketplace(SpaceId));
+            true -> assert_in_marketplace_with_tags(SpaceId, maps:get(<<"tags">>, Data));
             false -> ?assertNot(in_marketplace(SpaceId))
         end,
 
@@ -458,13 +458,19 @@ list_marketplace_test(Config) ->
             unauthorized = [nobody],
             forbidden = []
         },
-        %% TODO after implementing final listing operation
-%%        rest_spec = #rest_spec{
-%%            method = get,
-%%            path = <<"/spaces">>,
-%%            expected_code = ?HTTP_200_OK,
-%%            expected_body = #{<<"spaces">> => ExpSpaces}
-%%        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = <<"/spaces/marketplace/list">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = ?OK_ENV(fun(_Env, Data) ->
+                {ExpEntries, IsLast, NextPageToken} = FilterMarketplaceSpacesFun(Data, basic),
+                #{
+                    <<"spaces">> => ExpEntries,
+                    <<"isLast">> => IsLast,
+                    <<"nextPageToken">> => utils:undefined_to_null(NextPageToken)
+                }
+            end)
+        },
         logic_spec = #logic_spec{
             module = space_logic,
             function = list_marketplace,
@@ -753,13 +759,12 @@ get_marketplace_data_test(Config) ->
             unauthorized = [nobody],
             forbidden = []
         },
-        %% TODO after implementing final listing operation
-%%        rest_spec = #rest_spec{
-%%            method = get,
-%%            path = [<<"/spaces/">>, S1],
-%%            expected_code = ?HTTP_200_OK,
-%%            expected_body = ?OK_MAP(S1Data)
-%%        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/spaces/marketplace/">>, S1],
+            expected_code = ?HTTP_200_OK,
+            expected_body = S1Data
+        },
         logic_spec = LogicSpec,
         gs_spec = GSSpec
     },
@@ -772,13 +777,12 @@ get_marketplace_data_test(Config) ->
             unauthorized = [],
             forbidden = []
         },
-        %% TODO after implementing final listing operation
-%%        rest_spec = #rest_spec{
-%%            method = get,
-%%            path = [<<"/spaces/">>, S1],
-%%            expected_code = ?HTTP_200_OK,
-%%            expected_body = ?OK_MAP(S1Data)
-%%        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/spaces/marketplace/">>, S2],
+            expected_code = ?HTTP_404_NOT_FOUND,
+            expected_body = #{<<"error">> => errors:to_json(?ERROR_NOT_FOUND)}
+        },
         logic_spec = LogicSpec#logic_spec{
             args = [auth, S2],
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
@@ -819,7 +823,7 @@ update_space_not_in_marketplace_test(Config) ->
         ?assertEqual(ExpData, get_space_marketplace_related_data_json(SpaceId)),
 
         case ShouldSucceed andalso maps:get(<<"advertisedInMarketplace">>, Data, false) of
-            true -> ?assert(in_marketplace(SpaceId));
+            true -> assert_in_marketplace_with_tags(SpaceId, maps:get(<<"tags">>, ExpData));
             false -> ?assertNot(in_marketplace(SpaceId))
         end
     end,
@@ -906,7 +910,7 @@ update_space_in_marketplace_test(Config) ->
 
         case {ShouldSucceed, maps:get(<<"advertisedInMarketplace">>, Data, true)} of
             {true, false} -> ?assertNot(in_marketplace(SpaceId));
-            _ -> ?assert(in_marketplace(SpaceId))
+            _ -> assert_in_marketplace_with_tags(SpaceId, maps:get(<<"tags">>, ExpData))
         end
     end,
 
@@ -1694,10 +1698,29 @@ update_support_parameters_test(Config) ->
 
 
 %% @private
+-spec assert_in_marketplace_with_tags(od_space:id(), all | [od_space:tag()]) ->
+    ok | no_return().
+assert_in_marketplace_with_tags(SpaceId, []) ->
+    % Even with no tags space will be at least in all spaces tree
+    ?assert(in_marketplace(all, SpaceId)),
+    ?assertNot(in_marketplace(?AVAILABLE_SPACE_TAGS, SpaceId));
+assert_in_marketplace_with_tags(SpaceId, NewTags) ->
+    ?assert(in_marketplace(all, SpaceId)),
+    ?assert(in_marketplace(NewTags, SpaceId)),
+    ?assertNot(in_marketplace(?AVAILABLE_SPACE_TAGS -- NewTags, SpaceId)).
+
+
+%% @private
 -spec in_marketplace(od_space:id()) -> boolean().
 in_marketplace(SpaceId) ->
+    in_marketplace(all, SpaceId).
+
+
+%% @private
+-spec in_marketplace(all | [od_space:tag()], od_space:id()) -> boolean().
+in_marketplace(SpaceTags, SpaceId) ->
     Entries = ozt:rpc(space_marketplace, list, [
-        all, #{limit => 10000000000000000, offset => 0}
+        SpaceTags, #{limit => 10000000000000000, offset => 0}
     ]),
     lists:keymember(SpaceId, 2, Entries).
 
