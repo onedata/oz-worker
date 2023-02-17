@@ -532,6 +532,7 @@ get(#el_req{gri = #gri{id = SpaceId, aspect = marketplace_data}}, Space = #od_sp
     ),
 
     {ok, #{
+        <<"spaceId">> => SpaceId,
         <<"name">> => Name,
         <<"index">> => space_marketplace:index(Name, SpaceId),
         <<"description">> => Description,
