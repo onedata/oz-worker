@@ -41,7 +41,6 @@
 -export([delete_all_user_named_tokens/2, delete_all_provider_named_tokens/2]).
 -export([revoke_all_user_temporary_tokens/2, revoke_all_provider_temporary_tokens/2]).
 -export([create_legacy_invite_token/2, create_legacy_client_token/1]).
--export([migrate_deprecated_tokens/0]).
 
 
 -define(GUI_TOKEN_TTL, oz_worker:get_env(gui_token_ttl, 600)).
@@ -391,102 +390,9 @@ create_legacy_client_token(Auth = ?USER(UserId)) ->
     },
     create_user_named_token(Auth, UserId, Data).
 
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Migrates deprecated user and provider client tokens to the new model.
-%% Dedicated for upgrading Onezone from 19.02.* to 20.02.*.
-%% @end
-%%--------------------------------------------------------------------
--spec migrate_deprecated_tokens() -> ok.
-migrate_deprecated_tokens() ->
-    ?info("Migrating legacy user tokens..."),
-    migrate_user_tokens(),
-    ?notice("Successfully migrated legacy user tokens"),
-    ?info("Migrating legacy provider tokens..."),
-    migrate_provider_root_tokens(),
-    ?notice("Successfully migrated legacy provider tokens").
-
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-%% @private
--spec migrate_user_tokens() -> ok.
-migrate_user_tokens() ->
-    {ok, UserDocs} = od_user:list(),
-    lists:foreach(fun(#document{key = UserId, value = #od_user{client_tokens = ClientTokens}}) ->
-        lists:foldl(fun(Serialized, Counter) ->
-            try
-                migrate_user_token(UserId, Serialized, Counter)
-            catch Class:Reason:Stacktrace ->
-                ?warning_exception(
-                    "Failed to migrate user token, UserId: ~s, Token: ~s...",
-                    [UserId, binary:part(Serialized, 0, 30)],
-                    Class, Reason, Stacktrace
-                )
-            end
-        end, 1, ClientTokens)
-    end, UserDocs).
-
-
-%% @private
--spec migrate_provider_root_tokens() -> ok.
-migrate_provider_root_tokens() ->
-    {ok, ProviderDocs} = od_provider:list(),
-    lists:foreach(fun(#document{key = ProviderId, value = #od_provider{root_token = RootTokenId}}) ->
-        try
-            migrate_provider_root_token(ProviderId, RootTokenId)
-        catch Class:Reason:Stacktrace ->
-            ?warning_exception(?autoformat([ProviderId, RootTokenId]), Class, Reason, Stacktrace)
-        end
-    end, ProviderDocs).
-
-
--spec migrate_user_token(od_user:id(), tokens:serialized(), Counter :: integer()) -> NewCounter :: integer().
-migrate_user_token(UserId, Serialized, Counter) ->
-    {ok, #token{id = TokenId, macaroon = Macaroon}} = tokens:deserialize(Serialized),
-    Caveats = macaroon:first_party_caveats(Macaroon),
-    {ok, #document{value = #onedata_auth{secret = Secret}}} = onedata_auth:get(TokenId),
-    TokenName = ?LEGACY_CLIENT_TOKEN_NAME(Counter),
-    % Do not check results - it is possible that some of the records
-    % already exist if the upgrade procedure was interrupted and repeated
-    od_token:create(#document{key = TokenId, value = #od_token{
-        name = TokenName,
-        version = 1,
-        subject = ?SUB(user, UserId),
-        type = ?ACCESS_TOKEN,
-        caveats = [caveats:deserialize(C) || C <- Caveats],
-        metadata = token_metadata:build(?ACCESS_TOKEN, #{}, #{}),
-        secret = Secret
-    }}),
-    token_names:register(?SUB(user, UserId), TokenName, TokenId),
-    od_user:update(UserId, fun(User = #od_user{client_tokens = ClientTokens}) ->
-        {ok, User#od_user{client_tokens = lists:delete(Serialized, ClientTokens)}}
-    end),
-    onedata_auth:delete(TokenId),
-    Counter + 1.
-
-
-%% @private
--spec migrate_provider_root_token(od_provider:id(), tokens:id()) -> ok.
-migrate_provider_root_token(ProviderId, RootTokenId) ->
-    {ok, Secret, _} = macaroon_auth:get(RootTokenId),
-    TokenName = ?PROVIDER_ROOT_TOKEN_NAME,
-    % Do not check results - it is possible that some of the records
-    % already exist if the upgrade procedure was interrupted and repeated
-    od_token:create(#document{key = RootTokenId, value = #od_token{
-        name = TokenName,
-        version = 1,
-        subject = ?SUB(?ONEPROVIDER, ProviderId),
-        type = ?ACCESS_TOKEN,
-        caveats = [],
-        metadata = token_metadata:build(?ACCESS_TOKEN, #{}, #{}),
-        secret = Secret
-    }}),
-    token_names:register(?SUB(?ONEPROVIDER, ProviderId), TokenName, RootTokenId),
-    macaroon_auth:delete(RootTokenId).
-
 
 %% @private
 -spec gen_invite_token_name(token_type:invite_type(), gri:entity_id()) -> binary().
