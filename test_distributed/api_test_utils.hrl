@@ -98,7 +98,6 @@
 -define(OK_LIST_CONTAINS(__ExpectedList), {ok_list_contains, __ExpectedList}).
 -define(OK_LIST_DOESNT_CONTAIN(__ExpectedList),
     {ok_list_doesnt_contain, __ExpectedList}).
--define(OK_VALUE(__Value), {ok_value, __Value}).
 -define(OK_TERM(__VerifyFun), {ok_term, __VerifyFun}).
 -define(OK_ENV(__PrepareFun), {ok_env, __PrepareFun}).
 -define(ERROR_REASON(__ExpectedError), {error_reason, __ExpectedError}).

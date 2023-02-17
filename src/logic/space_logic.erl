@@ -206,9 +206,11 @@ list_privileges() ->
 %% Get all spaces in marketplace.
 %% @end
 %%--------------------------------------------------------------------
--spec list_marketplace(aai:auth(), map()) -> {ok, [od_space:id()]} | errors:error().
+-spec list_marketplace(aai:auth(), map()) ->
+    {ok, {Entries :: map(), IsLast :: boolean(), NextPageToken :: undefined | binary()}} |
+    errors:error().
 list_marketplace(Auth, Data) ->
-    entity_logic:handle(#el_req{
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
         auth = Auth,
         gri = #gri{
@@ -218,7 +220,7 @@ list_marketplace(Auth, Data) ->
             scope = protected
         },
         data = Data
-    }).
+    })).
 
 
 %%--------------------------------------------------------------------
@@ -226,9 +228,11 @@ list_marketplace(Auth, Data) ->
 %% Get all spaces in marketplace with their data.
 %% @end
 %%--------------------------------------------------------------------
--spec list_marketplace_with_data(aai:auth(), map()) -> {ok, [od_space:id()]} | errors:error().
+-spec list_marketplace_with_data(aai:auth(), map()) ->
+    {ok, {DataEntries :: map(), IsLast :: boolean(), NextPageToken :: undefined | binary()}} |
+    errors:error().
 list_marketplace_with_data(Auth, Data) ->
-    entity_logic:handle(#el_req{
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
         auth = Auth,
         gri = #gri{
@@ -238,7 +242,7 @@ list_marketplace_with_data(Auth, Data) ->
             scope = protected
         },
         data = Data
-    }).
+    })).
 
 
 %%--------------------------------------------------------------------

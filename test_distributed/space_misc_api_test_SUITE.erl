@@ -476,7 +476,8 @@ list_marketplace_test(Config) ->
             function = list_marketplace,
             args = [auth, data],
             expected_result = ?OK_ENV(fun(_, Data) ->
-                ?OK_VALUE(FilterMarketplaceSpacesFun(Data, basic))
+                ExpResult = FilterMarketplaceSpacesFun(Data, basic),
+                ?OK_TERM(fun(Result) -> ?assertEqual(ExpResult, Result) end)
             end)
         },
         gs_spec = #gs_spec{
@@ -523,7 +524,8 @@ list_marketplace_test(Config) ->
             function = list_marketplace_with_data,
             args = [auth, data],
             expected_result = ?OK_ENV(fun(_, Data) ->
-                ?OK_VALUE(FilterMarketplaceSpacesFun(Data, extended))
+                ExpResult = FilterMarketplaceSpacesFun(Data, extended),
+                ?OK_TERM(fun(Result) -> ?assertEqual(ExpResult, Result) end)
             end)
         },
         gs_spec = #gs_spec{
