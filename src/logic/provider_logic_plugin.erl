@@ -174,12 +174,8 @@ create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
         {ok, {OnedataGroupId, _}} -> {ok, value, OnedataGroupId};
         {error, malformed} -> ?ERROR_BAD_DATA(<<"groupId">>)
     catch
-        Type:Reason:Stacktrace ->
-            ?debug_stacktrace(
-                "Cannot map group '~s' from IdP '~p' due to ~p:~p",
-                [GroupId, IdP, Type, Reason],
-                Stacktrace
-            ),
+        Class:Reason:Stacktrace ->
+            ?debug_exception("Cannot map group '~s' from IdP '~p'", [GroupId, IdP], Class, Reason, Stacktrace),
             ?ERROR_MALFORMED_DATA
     end;
 

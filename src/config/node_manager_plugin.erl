@@ -112,7 +112,7 @@ before_init() ->
         ok
     catch
         Class:Reason:Stacktrace ->
-            ?log_exception(Class, Reason, Stacktrace),
+            ?error_exception(Class, Reason, Stacktrace),
             {error, cannot_start_node_manager_plugin}
     end.
 
@@ -178,7 +178,7 @@ before_listeners_start() ->
         end
     catch
         Class:Reason:Stacktrace ->
-            ?log_exception(Class, Reason, Stacktrace),
+            ?error_exception(Class, Reason, Stacktrace),
             {error, cannot_start_node_manager_plugin}
     end.
 
@@ -296,7 +296,7 @@ broadcast_dns_config() ->
         ok
     catch
         Class:Reason:Stacktrace ->
-            ?log_exception(
+            ?error_exception(
                 "Error sending dns zone update, scheduling retry after ~p seconds",
                 [?DNS_UPDATE_RETRY_INTERVAL div 1000],
                 Class, Reason, Stacktrace

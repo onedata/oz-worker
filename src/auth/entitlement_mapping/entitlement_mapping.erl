@@ -473,11 +473,10 @@ map_entitlement(IdP, RawEntitlement) ->
             end)
         ]),
         {ok, {GroupId, IdPEntitlement}}
-    catch Type:Reason:Stacktrace ->
-        ?auth_debug_stacktrace(
-            "Cannot parse entitlement \"~s\" for IdP '~p' due to ~p:~p",
-            [RawEntitlement, IdP, Type, Reason],
-            Stacktrace
+    catch Class:Reason:Stacktrace ->
+        ?auth_debug_exception(
+            "Cannot parse entitlement \"~s\" for IdP '~p'", [RawEntitlement, IdP],
+            Class, Reason, Stacktrace
         ),
         {error, malformed}
     end.
