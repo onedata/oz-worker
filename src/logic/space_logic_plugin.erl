@@ -921,6 +921,8 @@ authorize(#el_req{operation = get, gri = #gri{aspect = marketplace_data}, auth =
     advertised_in_marketplace = AdvertisedInMarketplace
 }) ->
     AdvertisedInMarketplace;
+authorize(#el_req{operation = get, gri = #gri{aspect = marketplace_data}}, _) ->
+    false;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse auth_by_support(Req, Space);

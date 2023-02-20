@@ -737,7 +737,6 @@ get_marketplace_data_test(Config) ->
         {user, Owner},
         {user, U1},
         {user, U2},
-        {provider, P1, P1Token},
         {user, NonAdmin}
     ],
     LogicSpec = #logic_spec{
@@ -759,7 +758,7 @@ get_marketplace_data_test(Config) ->
         client_spec = #client_spec{
             correct = UsersWithAccounts,
             unauthorized = [nobody],
-            forbidden = []
+            forbidden = [{provider, P1, P1Token}]
         },
         rest_spec = #rest_spec{
             method = get,
@@ -775,7 +774,7 @@ get_marketplace_data_test(Config) ->
     % Assert it is not possible to get marketplace data from space not in marketplace
     ?assert(api_test_utils:run_tests(Config, #api_test_spec{
         client_spec = #client_spec{
-            correct = [nobody | UsersWithAccounts],
+            correct = [nobody, {provider, P1, P1Token} | UsersWithAccounts],
             unauthorized = [],
             forbidden = []
         },
