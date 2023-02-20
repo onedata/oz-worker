@@ -100,7 +100,7 @@ all() ->
         get_own_space_test,
         legacy_support_space_test,
         legacy_update_support_size_test,
-        legacy_revoke_support_test,
+%%        legacy_revoke_support_test,   % @TODO VFS-5856 soon to be removed
 
         check_my_ip_test,
         map_user_test,
@@ -1499,6 +1499,7 @@ get_own_space_test(Config) ->
     end, Spaces).
 
 
+%% @TODO VFS-5856 drop support for this operation
 legacy_support_space_test(Config) ->
     MinSupportSize = oz_test_utils:minimum_support_size(Config),
     {ok, Cluster1Member} = oz_test_utils:create_user(Config),
@@ -1627,6 +1628,7 @@ legacy_support_space_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
+%% @TODO VFS-5856 drop support for this operation
 legacy_update_support_size_test(Config) ->
     MinSupportSize = oz_test_utils:minimum_support_size(Config),
     {ok, Cluster1Member} = oz_test_utils:create_user(Config),
@@ -1711,6 +1713,7 @@ legacy_update_support_size_test(Config) ->
     )).
 
 
+%% @TODO VFS-5856 drop support for this operation
 legacy_revoke_support_test(Config) ->
     oz_test_utils:delete_all_entities(Config),
     {ok, Cluster1Member} = oz_test_utils:create_user(Config),
