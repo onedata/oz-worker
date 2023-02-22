@@ -270,7 +270,7 @@ delete(#el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
                 end)
         end, UpdatedDoc#document.value#od_space.harvesters),
 
-        wait_for_eff_support_recalculation(ProviderId, SpaceId)
+        wait_for_recalculated_eff_support_state(false, ProviderId, StorageId, SpaceId)
     end.
 
 
@@ -473,7 +473,7 @@ support_space_insecure(ProviderId, SpaceId, StorageId, Data) ->
         throw(Error)
     end,
 
-    wait_for_eff_support_recalculation(ProviderId, SpaceId),
+    wait_for_recalculated_eff_support_state(true, ProviderId, StorageId, SpaceId),
 
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {true, {Space, Rev}} = space_logic_plugin:fetch_entity(NewGRI),
@@ -598,12 +598,21 @@ add_implicit_qos_parameters(StorageId, ProviderId, QosParameters) ->
 %% the information about current supports is up to date when this function returns.
 %% @end
 %%--------------------------------------------------------------------
--spec wait_for_eff_support_recalculation(od_provider:id(), od_space:id()) -> ok.
-wait_for_eff_support_recalculation(ProviderId, SpaceId) ->
+-spec wait_for_recalculated_eff_support_state(boolean(), od_provider:id(), od_storage:id(), od_space:id()) ->
+    ok.
+wait_for_recalculated_eff_support_state(ExpectedSupportExistence, ProviderId, StorageId, SpaceId) ->
     try
         utils:wait_until(fun() ->
-            space_logic:is_supported_by_provider(SpaceId, ProviderId) andalso
-                provider_logic:supports_space(ProviderId, SpaceId)
+            AllStatuses = [
+                space_logic:is_supported_by_provider(SpaceId, ProviderId),
+                provider_logic:supports_space(ProviderId, SpaceId),
+                space_logic:is_supported_by_storage(SpaceId, StorageId),
+                storage_logic:supports_space(StorageId, SpaceId)
+            ],
+            case ExpectedSupportExistence of
+                true -> lists:all(fun(B) -> B end, AllStatuses);
+                false -> not lists:any(fun(B) -> B end, AllStatuses)
+            end
         end)
     catch _:_ ->
         % Do not fail upon timeout; if there are too many pending changes in the graph,
@@ -612,3 +621,4 @@ wait_for_eff_support_recalculation(ProviderId, SpaceId) ->
         % not yet be recalculated. They will converge eventually though.
         ok
     end.
+

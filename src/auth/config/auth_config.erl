@@ -622,12 +622,11 @@ fetch_auth_config() ->
                 UpgradedCfg = upgrade_auth_config(FoundVersion, ?CURRENT_CONFIG_VERSION),
                 node_cache:put(cached_auth_config, UpgradedCfg, ?CONFIG_CACHE_TTL),
                 UpgradedCfg
-            catch Type:Reason:Stacktrace ->
-                ?alert_stacktrace(
+            catch Class:Reason:Stacktrace ->
+                ?alert_exception(
                     "Failed to upgrade auth.config / saml.config, the login page "
-                    "will not work. Please upgrade the config manually. Reason - ~p:~p",
-                    [Type, Reason],
-                    Stacktrace
+                    "will not work. Please upgrade the config manually.",
+                    Class, Reason, Stacktrace
                 ),
                 #{}
             end;

@@ -26,7 +26,7 @@
 -export([before_cluster_upgrade/0]).
 -export([upgrade_cluster/1]).
 -export([custom_workers/0]).
--export([on_db_and_workers_ready/0]).
+-export([before_listeners_start/0]).
 -export([listeners/0]).
 -export([handle_call/3, handle_cast/2]).
 
@@ -43,9 +43,10 @@
 % Human readable version is included to for logging purposes.
 -define(CLUSTER_GENERATIONS, [
     {1, ?LINE_19_02},
-    {2, oz_worker:get_release_version()}
+    {2, ?LINE_20_02},
+    {3, oz_worker:get_release_version()}
 ]).
--define(OLDEST_UPGRADABLE_CLUSTER_GENERATION, 1).
+-define(OLDEST_UPGRADABLE_CLUSTER_GENERATION, 2).
 
 %%%===================================================================
 %%% node_manager_plugin_default callbacks
@@ -111,8 +112,8 @@ before_init() ->
         oz_worker_sup:start_link(),
         ok
     catch
-        _:Error:Stacktrace ->
-            ?error_stacktrace("Error in node_manager_plugin:before_init: ~p", [Error], Stacktrace),
+        Class:Reason:Stacktrace ->
+            ?error_exception(Class, Reason, Stacktrace),
             {error, cannot_start_node_manager_plugin}
     end.
 
@@ -133,10 +134,10 @@ before_cluster_upgrade() -> ok.
 %%--------------------------------------------------------------------
 -spec upgrade_cluster(node_manager:cluster_generation()) ->
     {ok, node_manager:cluster_generation()}.
-upgrade_cluster(1) ->
-    token_logic:migrate_deprecated_tokens(),
-    storage_logic:migrate_legacy_supports(),
-    {ok, 2}.
+upgrade_cluster(2) ->
+    % no model upgrades are required, but a new version must be
+    % forced along with new major release version
+    {ok, 3}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -151,12 +152,16 @@ custom_workers() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Overrides {@link node_manager_plugin_default:on_db_and_workers_ready/0}.
+%% Overrides {@link node_manager_plugin_default:before_listeners_start/0}.
+%%
+%% NOTE: this callback blocks the application supervisor and must not be used to
+%% interact with the main supervision tree.
+%%
 %% This callback is executed on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec on_db_and_workers_ready() -> ok | {error, Reason :: term()}.
-on_db_and_workers_ready() ->
+-spec before_listeners_start() -> ok | {error, Reason :: term()}.
+before_listeners_start() ->
     try
         % Logic that should be run on every node of the cluster
         onezone_plugins:init(),
@@ -173,8 +178,8 @@ on_db_and_workers_ready() ->
                 group_logic:ensure_predefined_groups()
         end
     catch
-        _:Error:Stacktrace ->
-            ?error_stacktrace("Error in node_manager_plugin:on_db_and_workers_ready: ~p", [Error], Stacktrace),
+        Class:Reason:Stacktrace ->
+            ?error_exception(Class, Reason, Stacktrace),
             {error, cannot_start_node_manager_plugin}
     end.
 
@@ -291,11 +296,11 @@ broadcast_dns_config() ->
         end, consistent_hashing:get_all_nodes()),
         ok
     catch
-        Type:Message:Stacktrace ->
-            ?error_stacktrace(
-                "Error sending dns zone update, scheduling retry after ~p seconds: ~p:~p",
-                [?DNS_UPDATE_RETRY_INTERVAL div 1000, Type, Message],
-                Stacktrace
+        Class:Reason:Stacktrace ->
+            ?error_exception(
+                "Error sending dns zone update, scheduling retry after ~p seconds",
+                [?DNS_UPDATE_RETRY_INTERVAL div 1000],
+                Class, Reason, Stacktrace
             ),
             erlang:send_after(?DNS_UPDATE_RETRY_INTERVAL, self(), {timer, broadcast_dns_config}),
             error
