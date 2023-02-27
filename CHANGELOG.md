@@ -4,6 +4,11 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 20.02.20
+
+-   **VFS-10432** Web GUI: Fixed cookie notification appearing after
+    consenting and starting new web browser session.
+
 ### 20.02.19
 
 -   **VFS-9926** Web GUI: Opening Oneprovider view in Onezone GUI when
