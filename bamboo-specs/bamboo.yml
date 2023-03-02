@@ -76,7 +76,6 @@ stages:
         - basic_auth
         - cluster_groups_api
         - cluster_misc_api
-        - cluster_upgrade
         - cluster_users_api
         - connection
         - db_browser
@@ -453,14 +452,6 @@ cluster_misc_api:
     - *ct_logs
     - <<: *cover_ct
       name: cover_ct_cluster_misc_api.tar.gz
-
-cluster_upgrade:
-  <<: *ct-job
-  key: CLUP
-  artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_cluster_upgrade.tar.gz
 
 cluster_users_api:
   <<: *ct-job
@@ -976,7 +967,6 @@ Coverage report:
     - artifact: cover_ct_basic_auth.tar.gz
     - artifact: cover_ct_cluster_groups_api.tar.gz
     - artifact: cover_ct_cluster_misc_api.tar.gz
-    - artifact: cover_ct_cluster_upgrade.tar.gz
     - artifact: cover_ct_cluster_users_api.tar.gz
     - artifact: cover_ct_connection.tar.gz
     - artifact: cover_ct_db_browser.tar.gz

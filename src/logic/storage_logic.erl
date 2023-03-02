@@ -43,9 +43,6 @@
     belongs_to_provider/2,
     supports_space/2
 ]).
--export([
-    migrate_legacy_supports/0
-]).
 
 %%%===================================================================
 %%% API
@@ -275,41 +272,3 @@ supports_space(StorageId, SpaceId) when is_binary(StorageId) ->
     entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, od_storage, StorageId);
 supports_space(Storage, SpaceId) ->
     entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, Storage).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Migrates legacy space supports to new model with storages.
-%% This is done by creating virtual storage record for each provider
-%% and supporting space with this storage.
-%% This storage record does not represent actual storage, it is provider
-%% that keeps knowledge of storages as long as it is in previous version.
-%% Provider removes this virtual storage record during its upgrade procedure.
-%%
-%% Dedicated for upgrading Onezone from 19.02.* to 20.02.*.
-%% @end
-%%--------------------------------------------------------------------
--spec migrate_legacy_supports() -> ok.
-migrate_legacy_supports() ->
-    entity_graph:init_state(),
-    ?info("Creating virtual storages for providers..."),
-    {ok, Providers} = od_provider:list(),
-    lists:foreach(fun(#document{key = ProviderId} = Provider) ->
-        case provider_logic:has_storage(ProviderId, ProviderId) of
-            true -> ok;
-            false ->
-                create(?PROVIDER(ProviderId), ProviderId, ?STORAGE_DEFAULT_NAME)
-        end,
-        {ok, Spaces} = provider_logic:get_legacy_spaces(Provider),
-        ?info("  * Migrating space supports for provider: ~s", [ProviderId]),
-        maps:map(fun(SpaceId, SupportSize) ->
-            try
-                entity_graph:add_relation(od_space, SpaceId, od_storage, ProviderId, SupportSize)
-            catch
-                _:(?ERROR_RELATION_ALREADY_EXISTS(_,_,_,_)) -> ok
-            end,
-            {ok, _} = provider_logic:remove_legacy_space(ProviderId, SpaceId)
-        end, Spaces),
-        ?notice("    Successfully migrated space supports for provider: ~s", [ProviderId])
-    end, Providers),
-    ?notice("Successfully migrated legacy supports").
