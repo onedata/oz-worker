@@ -209,6 +209,11 @@ CHANGELOG
     Fixed inability to open share hosted by Oneprovider 19.02.x using
     Onezone 20.02.x.
 
+### 20.02.20
+
+-   **VFS-10432** Web GUI: Fixed cookie notification appearing after
+    consenting and starting new web browser session.
+
 ### 20.02.19
 
 -   **VFS-9926** Web GUI: Opening Oneprovider view in Onezone GUI when
