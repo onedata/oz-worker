@@ -400,7 +400,7 @@ harvest_metadata_test(Config) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_space, id = S1, aspect = harvest_metadata},
-            expected_result = ?OK_MAP(ExpectedResult(errors:to_json(?ERROR_NOT_FOUND)))
+            expected_result_op = ?OK_MAP(ExpectedResult(errors:to_json(?ERROR_NOT_FOUND)))
         },
         data_spec = #data_spec{
             required = [<<"destination">>, <<"maxSeq">>, <<"maxStreamSeq">>, <<"batch">>],

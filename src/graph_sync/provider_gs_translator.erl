@@ -54,15 +54,6 @@ translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {Access
         <<"token">> => AccessToken,
         <<"ttl">> => Expires
     };
-translate_value(_, #gri{type = od_space, aspect = Aspect, scope = protected}, {Entries, IsLast, _NextPageToken}) when
-    Aspect =:= list_marketplace;
-    Aspect =:= list_marketplace_with_data
-->
-    % @TODO VFS-4520 this translator is only added to enable GS API testing in the api framework
-    #{
-        <<"list">> => Entries,
-        <<"isLast">> => IsLast
-    };
 translate_value(_, #gri{type = od_space, aspect = harvest_metadata}, Result) ->
     case Result of
         {error, _} = Error ->
@@ -130,11 +121,6 @@ translate_value(ProtocolVersion, GRI, Data) ->
     Result :: gs_protocol:data() | errors:error().
 translate_resource(_, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->
     #{<<"timeMillis">> => TimeMillis};
-
-translate_resource(_, #gri{type = od_space, aspect = api_samples, scope = private}, ApiSamples) ->
-    % @TODO VFS-4520 this translator is only added to enable GS API testing in the api framework
-    % (currently it supports only the provider GS API)
-    ApiSamples;
 
 translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, User) ->
     #od_user{
@@ -284,11 +270,6 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected
         <<"providers">> => Providers,
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry)
     };
-
-translate_resource(_, #gri{type = od_space, aspect = marketplace_data, scope = protected}, MarketplaceData) ->
-    % @TODO VFS-4520 this translator is only added to enable GS API testing in the api framework
-    % (currently it supports only the provider GS API)
-    MarketplaceData;
 
 translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = private}, Share) ->
     #od_share{
@@ -519,7 +500,7 @@ translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, sco
     };
 
 translate_resource(ProtocolVersion, GRI, Data) ->
-    ?error("Cannot translate graph sync get result for:~n
+    ?error("Cannot translate Oneprovider graph sync get result for:~n
     ProtocolVersion: ~p~n
     GRI: ~p~n
     Data: ~p~n", [

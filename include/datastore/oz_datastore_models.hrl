@@ -159,6 +159,7 @@ end).
     client_tokens = [] :: [binary()],
     % List of user's aliases for spaces
     space_aliases = #{} :: #{od_space:id() => binary()},
+    space_membership_requests = space_membership_requests:empty() :: space_membership_requests:record(),
 
     % Privileges of this user in admin's OZ API
     oz_privileges = [] :: [privileges:oz_privilege()],

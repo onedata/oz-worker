@@ -150,7 +150,7 @@ create_test(Config) ->
         {<<"shareId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"shareId">>)},
         {<<"shareId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"shareId">>)},
         {<<"description">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"description">>)},
-        {<<"description">>, str_utils:rand_hex(50001), ?ERROR_BAD_VALUE_BINARY_TOO_LARGE(<<"description">>, 100000)},
+        {<<"description">>, ?RAND_UNICODE_STR(100001), ?ERROR_BAD_VALUE_STRING_TOO_LARGE(<<"description">>, 100000)},
         {<<"rootFileId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"rootFileId">>)},
         {<<"rootFileId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"rootFileId">>)},
         {<<"fileType">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"fileType">>)},
@@ -182,7 +182,7 @@ create_test(Config) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_share, aspect = instance},
-            expected_result = ?OK_ENV(fun(_, Data) ->
+            expected_result_op = ?OK_ENV(fun(_, Data) ->
                 ?OK_MAP_CONTAINS(#{
                     <<"handleId">> => null,
                     <<"name">> => ?CORRECT_NAME,
@@ -205,7 +205,7 @@ create_test(Config) ->
             correct_values = #{
                 <<"shareId">> => [fun() -> ?UNIQUE_STRING end],
                 <<"name">> => [?CORRECT_NAME],
-                <<"description">> => [<<"">>, str_utils:rand_hex(769)],
+                <<"description">> => [<<"">>, ?RAND_UNICODE_STR(769)],
                 <<"rootFileId">> => [?ROOT_FILE_ID],
                 <<"fileType">> => [file, dir],
                 <<"spaceId">> => [S1]
@@ -294,7 +294,7 @@ get_test(Config, ShareId, FileType) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_share, id = ShareId, aspect = instance},
-            expected_result = api_test_expect:private_share(gs, ShareId, ShareData, ?SUB(user, Owner))
+            expected_result_op = api_test_expect:private_share(gs, ShareId, ShareData, ?SUB(user, Owner))
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
@@ -327,7 +327,7 @@ get_test(Config, ShareId, FileType) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_share, id = ShareId, aspect = instance, scope = public},
-            expected_result = api_test_expect:public_share(gs, ShareId, ShareData)
+            expected_result_op = api_test_expect:public_share(gs, ShareId, ShareData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec)),
@@ -410,7 +410,7 @@ update_test(Config) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_share, id = shareId, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [
@@ -419,10 +419,10 @@ update_test(Config) ->
             ],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
-                <<"description">> => [<<"">>, str_utils:rand_hex(1397)]
+                <<"description">> => [<<"">>, ?RAND_UNICODE_STR(1397)]
             },
             bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME) ++ [
-                {<<"description">>, str_utils:rand_hex(50001), ?ERROR_BAD_VALUE_BINARY_TOO_LARGE(<<"description">>, 100000)}
+                {<<"description">>, ?RAND_UNICODE_STR(100001), ?ERROR_BAD_VALUE_STRING_TOO_LARGE(<<"description">>, 100000)}
             ]
         }
     },
@@ -480,7 +480,7 @@ delete_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_share, id = shareId, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -698,7 +698,7 @@ update_provider_version(Config, ProviderId, Version) ->
 
 %% @private
 start_provider_graphsync_channel(Config, ProviderId, ProviderToken) ->
-    Url = oz_test_utils:graph_sync_url(Config, provider),
+    Url = oz_test_utils:graph_sync_url(Config, oneprovider),
     SSlOpts = [{secure, only_verify_peercert}, {cacerts, oz_test_utils:gui_ca_certs(Config)}],
     {ok, GsClient, _} = gs_client:start_link(
         Url, {token, ProviderToken}, ?SUPPORTED_PROTO_VERSIONS, fun(_) -> ok end, SSlOpts

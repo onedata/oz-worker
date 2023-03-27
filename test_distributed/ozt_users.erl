@@ -22,7 +22,8 @@
 -export([get/1]).
 -export([toggle_access_block/2]).
 -export([create_group_for/1]).
--export([create_space_for/1]).
+-export([create_space_for/1, create_space_for/2]).
+-export([create_advertised_space_for/1, create_advertised_space_for/2]).
 -export([join_space/2, leave_space/2]).
 -export([create_handle_service_for/1]).
 -export([create_harvester_for/1]).
@@ -78,10 +79,28 @@ create_group_for(UserId) ->
 
 -spec create_space_for(od_user:id()) -> od_space:id().
 create_space_for(UserId) ->
-    {ok, SpaceId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create_space, [
-        ?USER(UserId), UserId, #{<<"name">> => <<"of-user-", UserId/binary>>}
-    ])),
+    create_space_for(UserId, #{<<"name">> => <<"of-user-", UserId/binary>>}).
+
+-spec create_space_for(od_user:id(), od_space:name() | entity_logic:data()) -> od_space:id().
+create_space_for(UserId, NameOrData) ->
+    {ok, SpaceId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create_space, [?USER(UserId), UserId, NameOrData])),
     SpaceId.
+
+
+-spec create_advertised_space_for(od_user:id()) -> od_space:id().
+create_advertised_space_for(UserId) ->
+    create_advertised_space_for(UserId, #{<<"name">> => <<"of-user-", UserId/binary>>}).
+
+-spec create_advertised_space_for(od_user:id(), entity_logic:data()) -> od_space:id().
+create_advertised_space_for(UserId, Data) ->
+    create_space_for(UserId, maps:merge(#{
+        <<"name">> => ?UNIQUE_STRING,
+        <<"description">> => ?RAND_STR(),
+        <<"organizationName">> => ?RAND_STR(),
+        <<"tags">> => ?RAND_SUBLIST(ozt_spaces:available_space_tags()),
+        <<"advertisedInMarketplace">> => true,
+        <<"marketplaceContactEmail">> => <<"space-operator@example.com">>
+    }, Data)).
 
 
 -spec join_space(od_user:id(), tokens:token()) -> od_space:id().

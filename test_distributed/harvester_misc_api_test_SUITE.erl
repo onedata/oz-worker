@@ -317,7 +317,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_harvester, id = H1, aspect = instance, scope = private},
-            expected_result = ?OK_MAP_CONTAINS(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"indices">> => [],
                 <<"spaces">> => [S],
                 <<"gri">> => fun(EncodedGri) ->
@@ -533,7 +533,7 @@ update_test(Config) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [<<"name">>, <<"harvestingBackendEndpoint">>, <<"harvestingBackendType">>, <<"public">>],
@@ -620,7 +620,7 @@ update_gui_plugin_config_test(Config) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = gui_plugin_config},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             required = [<<"guiPluginConfig">>],
@@ -690,7 +690,7 @@ delete_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -760,7 +760,7 @@ delete_harvested_metadata_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = metadata},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
@@ -1087,7 +1087,7 @@ update_index_test(Config) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = {index, indexId}},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [<<"name">>, <<"guiPluginName">>],
@@ -1157,7 +1157,7 @@ delete_index_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = {index, indexId}},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
@@ -1219,7 +1219,7 @@ delete_index_metadata_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = {index_metadata, indexId}},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).

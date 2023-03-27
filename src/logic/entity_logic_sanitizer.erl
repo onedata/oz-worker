@@ -34,7 +34,7 @@
 | {not_lower_than, integer()} | {not_greater_than, integer()}
 | {between, integer(), integer()}
 | [term()] % A list of accepted values
-| {size_limit, integer()}
+| {text_length_limit, integer()}
 | {exists, fun((entity_logic:entity_id()) -> boolean())}
 | {not_exists, fun((entity_logic:entity_id()) -> boolean())}
 | {relation_exists, atom(), binary(), atom(), binary(), fun((entity_logic:entity_id()) -> boolean())}
@@ -596,12 +596,13 @@ sanitize_value(_, VerifyFun, Key, Val) when is_function(VerifyFun, 1) ->
         false ->
             throw(?ERROR_BAD_DATA(Key))
     end;
-sanitize_value(binary, {size_limit, SizeLimit}, Key, Val) ->
-    try byte_size(Val) =< SizeLimit of
+sanitize_value(binary, {text_length_limit, SizeLimit}, Key, Val) ->
+    % string:length/1 counts characters rather than bytes (one unicode character can be a couple of bytes long)
+    try string:length(Val) =< SizeLimit of
         true ->
             Val;
         false ->
-            throw(?ERROR_BAD_VALUE_BINARY_TOO_LARGE(Key, SizeLimit))
+            throw(?ERROR_BAD_VALUE_STRING_TOO_LARGE(Key, SizeLimit))
     catch _:_ ->
         throw(?ERROR_BAD_VALUE_BINARY(Key))
     end;

@@ -42,6 +42,7 @@
     get_oz_privileges/2, get_eff_oz_privileges/2,
     list_client_tokens/2,
     get_space_alias/3,
+    get_space_membership_requests/2,
     acquire_idp_access_token/3
 ]).
 -export([
@@ -298,6 +299,16 @@ get_space_alias(Auth, UserId, SpaceId) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = {space_alias, SpaceId}}
+    }).
+
+
+-spec get_space_membership_requests(aai:auth(), od_user:id()) ->
+    {ok, space_membership_requests:record()} | errors:error().
+get_space_membership_requests(Auth, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_user, id = UserId, aspect = space_membership_requests}
     }).
 
 

@@ -170,7 +170,6 @@ protected_space(logic, _Id, SpaceData, Creator) ->
         <<"description">> => maps:get(<<"description">>, SpaceData, <<"">>),
         <<"organizationName">> => maps:get(<<"organizationName">>, SpaceData, <<"">>),
         <<"tags">> => maps:get(<<"tags">>, SpaceData, []),
-        <<"marketplaceContactEmail">> => maps:get(<<"marketplaceContactEmail">>, SpaceData, <<"">>),
         <<"providers">> => maps:get(<<"providers">>, SpaceData, #{}),
         <<"supportParametersRegistry">> => maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
@@ -185,7 +184,6 @@ protected_space(rest, Id, SpaceData, Creator) ->
         <<"description">> => maps:get(<<"description">>, SpaceData, <<"">>),
         <<"organizationName">> => maps:get(<<"organizationName">>, SpaceData, <<"">>),
         <<"tags">> => maps:get(<<"tags">>, SpaceData, []),
-        <<"marketplaceContactEmail">> => maps:get(<<"marketplaceContactEmail">>, SpaceData, <<"">>),
         <<"providers">> => maps:get(<<"providers">>, SpaceData, #{}),
         <<"supportParametersRegistry">> => jsonable_record:to_json(
             maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),

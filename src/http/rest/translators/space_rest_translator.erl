@@ -111,7 +111,6 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
         <<"organizationName">> := OrganizationName,
         <<"tags">> := Tags,
         <<"advertisedInMarketplace">> := AdvertisedInMarketplace,
-        <<"marketplaceContactEmail">> := MarketplaceContactEmail,
         <<"providers">> := Providers,
         <<"supportParametersRegistry">> := SupportParametersRegistry,
         <<"creator">> := Creator,
@@ -124,12 +123,14 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
         <<"organizationName">> => OrganizationName,
         <<"tags">> => Tags,
         <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
-        <<"marketplaceContactEmail">> => MarketplaceContactEmail,
         <<"providers">> => Providers,
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry),
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
         <<"creationTime">> => CreationTime
     });
+
+get_response(#gri{aspect = {membership_requester_info, _}}, RequesterInfo) ->
+    rest_translator:ok_body_reply(RequesterInfo);
 
 get_response(#gri{id = SpaceId, aspect = marketplace_data, scope = protected}, MarketplaceData) ->
     rest_translator:ok_body_reply(MarketplaceData#{<<"spaceId">> => SpaceId});

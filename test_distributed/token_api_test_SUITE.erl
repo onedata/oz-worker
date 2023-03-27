@@ -2445,7 +2445,7 @@ create_offline_user_access_token_base(RequestingProvider, SubjectUser, Token, Ac
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_token, id = undefined, aspect = {offline_user_access_token, SubjectUser}},
-            expected_result = case ExpectedResult of
+            expected_result_op = case ExpectedResult of
                 ok -> ?OK_TERM(VerifyFun);
                 {error, _} = Error -> ?ERROR_REASON(Error)
             end

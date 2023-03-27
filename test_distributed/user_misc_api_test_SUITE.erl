@@ -27,58 +27,70 @@
 
 
 -export([
-    all/0,
+    groups/0, all/0,
     init_per_suite/1, end_per_suite/1,
-    init_per_testcase/2, end_per_testcase/2
+    init_per_group/2, end_per_group/2
 ]).
 -export([
-    create_test/1,
     create_with_predefined_id_test/1,
-    list_test/1,
     get_test/1,
     get_self_test/1,
     update_test/1,
     change_password_test/1,
     update_basic_auth_config_test/1,
-    toggle_access_block_test/1,
     delete_test/1,
     delete_self_test/1,
 
     create_client_token_test/1,
-    list_client_tokens_test/1,
     delete_client_token_test/1,
 
     acquire_idp_access_token_test/1,
 
-    list_eff_providers_test/1,
+    get_spaces_in_eff_provider_test/1,
+
+    % sequential
+    create_test/1,
+    list_test/1,
+    toggle_access_block_test/1,
+    get_space_membership_requests_test/1,
+    list_client_tokens_test/1,
     get_eff_provider_test/1,
-    get_spaces_in_eff_provider_test/1
+    list_eff_providers_test/1
 ]).
 
-all() ->
-    ?ALL([
-        create_test,
+groups() -> [
+    {parallel_tests, [parallel], [
         create_with_predefined_id_test,
-        list_test,
         get_test,
         get_self_test,
         update_test,
         change_password_test,
         update_basic_auth_config_test,
-        toggle_access_block_test,
         delete_test,
         delete_self_test,
 
         create_client_token_test,
-        list_client_tokens_test,
         delete_client_token_test,
 
         acquire_idp_access_token_test,
 
-        list_eff_providers_test,
-        get_eff_provider_test,
         get_spaces_in_eff_provider_test
-    ]).
+    ]},
+    {sequential_tests, [sequential], [
+        create_test,
+        list_test,
+        toggle_access_block_test,
+        get_space_membership_requests_test,
+        list_client_tokens_test,
+        get_eff_provider_test,
+        list_eff_providers_test
+    ]}
+].
+
+all() -> [
+    {group, sequential_tests},
+    {group, parallel_tests}
+].
 
 
 %%%===================================================================
@@ -168,7 +180,7 @@ create_test(Config) ->
             gs_spec = #gs_spec{
                 operation = create,
                 gri = #gri{type = od_user, aspect = instance},
-                expected_result = ?OK_MAP_CONTAINS(#{
+                expected_result_op = ?OK_MAP_CONTAINS(#{
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = gri:deserialize(EncodedGri),
                         VerifyFun(Id)
@@ -354,7 +366,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_user, id = User, aspect = instance},
-            expected_result = ?OK_MAP_CONTAINS(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"effectiveGroups">> => [],
                 <<"effectiveAtmInventories">> => [],
                 <<"effectiveHandleServices">> => [],
@@ -411,7 +423,7 @@ get_test(Config) ->
             gri = #gri{
                 type = od_user, id = User, aspect = instance, scope = protected
             },
-            expected_result = api_test_expect:protected_user(gs, User, ProtectedUserData)
+            expected_result_op = api_test_expect:protected_user(gs, User, ProtectedUserData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
@@ -427,7 +439,7 @@ get_test(Config) ->
             gri = #gri{
                 type = od_user, id = User, aspect = instance, scope = shared
             },
-            expected_result = api_test_expect:shared_user(gs, User, UserData)
+            expected_result_op = api_test_expect:shared_user(gs, User, UserData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)),
@@ -450,7 +462,7 @@ get_test(Config) ->
             expected_result = api_test_expect:protected_user(logic, User, BlockedUserData)
         },
         gs_spec = GsSpec#gs_spec{
-            expected_result = api_test_expect:protected_user(gs, User, BlockedUserData)
+            expected_result_op = api_test_expect:protected_user(gs, User, BlockedUserData)
         }
     })).
 
@@ -484,7 +496,7 @@ get_self_test(Config) ->
                 type = od_user, id = ?SELF,
                 aspect = instance, scope = protected
             },
-            expected_result = api_test_expect:protected_user(gs, User, ProtectedUserData)
+            expected_result_op = api_test_expect:protected_user(gs, User, ProtectedUserData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -534,7 +546,7 @@ update_test(Config) ->
         gs_spec = GsSpec = #gs_spec{
             operation = update,
             gri = #gri{type = od_user, id = ?SELF, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = DataSpec = #data_spec{
             at_least_one = [<<"fullName">>, <<"username">>],
@@ -628,7 +640,7 @@ change_password_test(Config) ->
             gs_spec = GsSpec = #gs_spec{
                 operation = update,
                 gri = #gri{type = od_user, id = ?SELF, aspect = password},
-                expected_result = ExpResult
+                expected_result_op = ExpResult
             },
             data_spec = #data_spec{
                 required = [<<"oldPassword">>, <<"newPassword">>],
@@ -945,7 +957,7 @@ delete_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_user, id = userId, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -981,7 +993,7 @@ delete_self_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_user, id = ?SELF, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_utils:run_tests(
@@ -1131,6 +1143,91 @@ delete_client_token_test(Config) ->
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
     )).
+
+
+get_space_membership_requests_test(Config) ->
+    ProviderId = ozt_providers:create(),
+    SubjectUserId = ozt_users:create(),
+    OtherUserId = ozt_users:create(),
+    PendingSpaces = lists_utils:generate(fun ozt_spaces:create_advertised/0, 5),
+    AcceptedSpaces = lists_utils:generate(fun ozt_spaces:create_advertised/0, 5),
+    RejectedSpaces = lists_utils:generate(fun ozt_spaces:create_advertised/0, 5),
+
+    ExpPendingSpaces = maps_utils:generate_from_list(fun(SpaceId) ->
+        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
+        ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
+        RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
+        #{
+            <<"requestId">> => RequestId,
+            <<"contactEmail">> => ContactEmail,
+            <<"lastActivity">> => ozt_mocks:get_frozen_time_seconds()
+        }
+    end, PendingSpaces),
+
+    lists:foreach(fun(SpaceId) ->
+        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
+        ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
+        RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
+        ozt_spaces:resolve_membership_request(SpaceId, RequestId, true)
+    end, AcceptedSpaces),
+
+    ExpRejectedSpaces = maps_utils:generate_from_list(fun(SpaceId) ->
+        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
+        ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
+        RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
+        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
+        ozt_spaces:resolve_membership_request(SpaceId, RequestId, false),
+        #{
+            <<"requestId">> => RequestId,
+            <<"contactEmail">> => ContactEmail,
+            <<"lastActivity">> => ozt_mocks:get_frozen_time_seconds()
+        }
+    end, RejectedSpaces),
+
+    ExpResultForSubjectUser = #{
+        <<"pending">> => ExpPendingSpaces,
+        <<"rejected">> => ExpRejectedSpaces,
+        <<"lastPendingRequestPruningTime">> => ozt_mocks:get_frozen_time_seconds()
+    },
+    ExpResultForOtherUser = #{
+        <<"pending">> => #{},
+        <<"rejected">> => #{},
+        <<"lastPendingRequestPruningTime">> => 0
+    },
+    GenApiTestSpec = fun(UserId, ExpectedResult) -> #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{user, UserId}]
+        },
+        logic_spec = #logic_spec{
+            module = user_logic,
+            function = get_space_membership_requests,
+            args = [auth, UserId],
+            expected_result = ?OK_TERM(jsonable_record:from_json(ExpectedResult, space_membership_requests))
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/user/space_membership_requests">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = ExpectedResult
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_user, id = UserId, aspect = space_membership_requests},
+            expected_result_gui = ?OK_MAP_CONTAINS(ExpectedResult)
+        }
+    } end,
+
+    ApiTestSpecForSubjectUser = GenApiTestSpec(SubjectUserId, ExpResultForSubjectUser),
+    api_test_utils:run_tests(Config, ApiTestSpecForSubjectUser),
+    api_test_utils:run_tests(Config, GenApiTestSpec(OtherUserId, ExpResultForOtherUser)),
+    % access by unauthorized/forbidden clients can be requested only via logic/gs
+    api_test_utils:run_tests(Config, ApiTestSpecForSubjectUser#api_test_spec{
+        client_spec = #client_spec{
+            unauthorized = [nobody],
+            forbidden = [{provider, ProviderId}]
+        },
+        rest_spec = undefined
+    }).
 
 
 acquire_idp_access_token_test(Config) ->
@@ -1462,9 +1559,12 @@ end_per_suite(_Config) ->
     application:stop(hackney),
     ssl:stop().
 
-init_per_testcase(_, Config) ->
+init_per_group(_Group, Config) ->
+    ozt_mailer:mock(),
     ozt_mocks:freeze_time(),
     Config.
 
-end_per_testcase(_, _Config) ->
-    ozt_mocks:unfreeze_time().
+end_per_group(_Group, Config) ->
+    ozt_mailer:unmock(),
+    ozt_mocks:unfreeze_time(),
+    Config.

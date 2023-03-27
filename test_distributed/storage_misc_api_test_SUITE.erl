@@ -136,7 +136,7 @@ create_test_base(Config, ReadonlyValue) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_storage, aspect = instance},
-            expected_result = ?OK_ENV(fun(_, DataSet) ->
+            expected_result_op = ?OK_ENV(fun(_, DataSet) ->
                 QosParams =
                     case maps:get(<<"qosParameters">>, DataSet, undefined) of
                         undefined -> maps:get(<<"qos_parameters">>, DataSet, #{});
@@ -257,7 +257,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_storage, id = St1, aspect = instance},
-            expected_result = ?OK_MAP_CONTAINS(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?STORAGE_NAME1,
                 <<"provider">> => P1,
                 <<"qosParameters">> => ExpectedQosParameters,
@@ -302,7 +302,7 @@ get_test(Config) ->
             operation = get,
             gri = #gri{type = od_storage, id = St1, aspect = instance, scope = shared},
             auth_hint = ?THROUGH_SPACE(S),
-            expected_result = ?OK_MAP_CONTAINS(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"provider">> => P1,
                 <<"name">> => ?STORAGE_NAME1,
                 <<"qosParameters">> => ExpectedQosParameters,
@@ -390,7 +390,7 @@ update_test(Config, ReadonlyValue) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_storage, id = storageId, aspect = instance},
-            expected_result = ?OK_ENV(fun(Env, DataSet) ->
+            expected_result_op = ?OK_ENV(fun(Env, DataSet) ->
                 ExpectedImported = maps:get(<<"imported">>, DataSet, unknown),
                 ExpectedReadonly = maps:get(<<"readonly">>, DataSet, false),
                 case ExpectedReadonly andalso ExpectedImported =:= false of
@@ -470,7 +470,7 @@ delete_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_storage, id = storageId, aspect = instance},
-            expected_result = ?OK
+            expected_result_op = ?OK
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -598,7 +598,7 @@ support_space_test(Config) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_storage, id = SupportingStorageId, aspect = support},
-            expected_result = ?OK_ENV(fun(#{space_id := SpaceId}, _Data) ->
+            expected_result_op = ?OK_ENV(fun(#{space_id := SpaceId}, _Data) ->
                 ?OK_MAP_CONTAINS(#{
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = SupportedSpaceId} = gri:deserialize(EncodedGri),
@@ -683,7 +683,7 @@ update_support_size_test(Config) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_storage, id = St1, aspect = {space, spaceId}},
-            expected_result = ?OK
+            expected_result_op = ?OK
         },
         data_spec = #data_spec{
             required = [<<"size">>],
@@ -768,7 +768,7 @@ revoke_support_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_storage, id = SupportingStorageId, aspect = {space, spaceId}},
-            expected_result = ?OK
+            expected_result_op = ?OK
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -837,7 +837,7 @@ upgrade_legacy_support_test(Config) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_storage, id = St2, aspect = {upgrade_legacy_support, S}},
-            expected_result = ?OK
+            expected_result_op = ?OK
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -852,7 +852,7 @@ upgrade_legacy_support_test(Config) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_storage, id = St2, aspect = {upgrade_legacy_support, S}},
-            expected_result = ?OK
+            expected_result_op = ?OK
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
@@ -874,7 +874,7 @@ upgrade_legacy_support_test(Config) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_storage, id = St1, aspect = {upgrade_legacy_support, S}},
-            expected_result = ?OK_TERM(VerifyFun)
+            expected_result_op = ?OK_TERM(VerifyFun)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
@@ -933,7 +933,7 @@ support_with_imported_storage_test(Config) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_storage, id = ImportedStorageP2, aspect = support},
-            expected_result = ?ERROR_REASON(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(S1, ImportedStorageP1))
+            expected_result_op = ?ERROR_REASON(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(S1, ImportedStorageP1))
         },
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
@@ -962,7 +962,7 @@ support_with_imported_storage_test(Config) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_storage, id = storageId, aspect = support},
-            expected_result = ?OK_MAP_CONTAINS(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = SpaceId} = gri:deserialize(EncodedGri),
                     ?assertEqual(S1, SpaceId)
@@ -987,7 +987,7 @@ support_with_imported_storage_test(Config) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_storage, id = ImportedStorageP1, aspect = support},
-            expected_result = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
+            expected_result_op = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
         },
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
@@ -1089,7 +1089,7 @@ modify_imported_storage_test(Config) ->
             gs_spec = #gs_spec{
                 operation = update,
                 gri = #gri{type = od_storage, id = St, aspect = instance},
-                expected_result = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
+                expected_result_op = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
             },
             data_spec = #data_spec{
                 at_least_one = [<<"imported">>],
@@ -1121,7 +1121,7 @@ modify_imported_storage_test(Config) ->
             gs_spec = #gs_spec{
                 operation = update,
                 gri = #gri{type = od_storage, id = St, aspect = instance},
-                expected_result = ?OK
+                expected_result_op = ?OK
             },
             data_spec = #data_spec{
                 at_least_one = [<<"qos_parameters">>, <<"qosParameters">>, <<"imported">>, <<"name">>],
@@ -1167,7 +1167,7 @@ modify_imported_storage_test(Config) ->
             gs_spec = #gs_spec{
                 operation = update,
                 gri = #gri{type = od_storage, id = Storage, aspect = instance},
-                expected_result = ?OK
+                expected_result_op = ?OK
             },
             data_spec = #data_spec{
                 at_least_one = [<<"imported">>],

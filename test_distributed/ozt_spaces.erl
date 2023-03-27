@@ -17,8 +17,13 @@
 -include("ozt.hrl").
 
 %% API
--export([create/0, create/1]).
+-export([create/0, create/1, create/2, create_advertised/0, create_advertised/1]).
 -export([get/1, exists/1]).
+-export([update/2]).
+-export([list_marketplace/0, list_marketplace/1]).
+-export([submit_membership_request/2, submit_membership_request/3]).
+-export([try_submit_membership_request/2, try_submit_membership_request/3]).
+-export([resolve_membership_request/3, try_resolve_membership_request/3]).
 -export([add_owner/2, remove_owner/2]).
 -export([add_user/2, add_user/3]).
 -export([remove_user/2]).
@@ -29,6 +34,7 @@
 -export([create_support_token/2]).
 -export([create_share/2]).
 -export([get_users/1, get_groups/1, get_eff_users/1, get_eff_groups/1]).
+-export([has_eff_user/2]).
 -export([get_user_privileges/2, get_group_privileges/2, get_eff_user_privileges/2, get_eff_group_privileges/2]).
 -export([get_shares/1]).
 -export([set_user_privileges/3]).
@@ -36,9 +42,9 @@
 -export([set_support_parameters/3, get_support_parameters/2]).
 -export([delete/1]).
 -export([minimum_support_size/0]).
+-export([available_space_tags/0]).
 
 -compile({no_auto_import, [get/1]}).
-
 
 %%%===================================================================
 %%% API
@@ -49,10 +55,31 @@ create() ->
     create(?UNIQUE_STRING).
 
 
--spec create(od_space:name()) -> od_space:id().
-create(Name) ->
-    {ok, SpaceId} = ?assertMatch({ok, _}, ozt:rpc(space_logic, create, [?ROOT, #{<<"name">> => Name}])),
+-spec create(od_space:name() | entity_logic:data()) -> od_space:id().
+create(NameOrData) ->
+    create(?ROOT, NameOrData).
+
+-spec create(aai:auth(), od_space:name() | entity_logic:data()) -> od_space:id().
+create(Auth, NameOrData) ->
+    {ok, SpaceId} = ?assertMatch({ok, _}, ozt:rpc(space_logic, create, [Auth, NameOrData])),
     SpaceId.
+
+
+-spec create_advertised() -> od_space:id().
+create_advertised() ->
+    create_advertised(#{}).
+
+%% @doc Data overrides the default (randomized) values
+-spec create_advertised(entity_logic:data()) -> od_space:id().
+create_advertised(Data) ->
+    create(maps:merge(#{
+        <<"name">> => entity_logic_sanitizer:normalize_name(?RAND_UNICODE_STR(), undefined),
+        <<"description">> => ?RAND_UNICODE_STR(),
+        <<"organizationName">> => ?RAND_UNICODE_STR(),
+        <<"tags">> => ?RAND_SUBLIST(available_space_tags()),
+        <<"advertisedInMarketplace">> => true,
+        <<"marketplaceContactEmail">> => ?RAND_EMAIL_ADDRESS()
+    }, Data)).
 
 
 -spec get(od_space:id()) -> od_space:record().
@@ -64,6 +91,65 @@ get(SpaceId) ->
 -spec exists(od_space:id()) -> od_space:record().
 exists(SpaceId) ->
     ozt:rpc(space_logic, exists, [SpaceId]).
+
+
+-spec update(od_space:id(), entity_logic:data()) -> ok.
+update(SpaceId, Data) ->
+    ?assertEqual(ok, ozt:rpc(space_logic, update, [?ROOT, SpaceId, Data])).
+
+
+-spec list_marketplace() -> [od_space:id()].
+list_marketplace() ->
+    list_marketplace(all).
+
+-spec list_marketplace(all | [od_space:tag()]) -> [od_space:id()].
+list_marketplace(Tags) ->
+    Entries = ozt:rpc(space_marketplace, list, [Tags, #{limit => 10000000000000000, offset => 0}]),
+    element(2, lists:unzip(Entries)).
+
+
+-spec submit_membership_request(od_space:id(), od_user:id()) -> space_membership_requests:request_id().
+submit_membership_request(SpaceId, RequesterUserId) ->
+    submit_membership_request(SpaceId, RequesterUserId, ?RAND_EMAIL_ADDRESS()).
+
+-spec submit_membership_request(od_space:id(), od_user:id(), od_user:email()) -> space_membership_requests:request_id().
+submit_membership_request(SpaceId, RequesterUserId, ContactEmail) ->
+    {ok, RequestId} = ?assertMatch({ok, _}, try_submit_membership_request(SpaceId, RequesterUserId, ContactEmail)),
+    RequestId.
+
+
+-spec try_submit_membership_request(od_space:id(), od_user:id()) ->
+    {ok, space_membership_requests:request_id()} | errors:error().
+try_submit_membership_request(SpaceId, RequesterUserId) ->
+    try_submit_membership_request(SpaceId, RequesterUserId, ?RAND_EMAIL_ADDRESS()).
+
+-spec try_submit_membership_request(od_space:id(), od_user:id(), od_user:email()) ->
+    {ok, space_membership_requests:request_id()} | errors:error().
+try_submit_membership_request(SpaceId, RequesterUserId, ContactEmail) ->
+    case ozt:rpc(space_logic, submit_membership_request, [?USER(RequesterUserId), SpaceId, #{
+        <<"contactEmail">> => ContactEmail
+    }]) of
+        ok ->
+            #od_user{
+                space_membership_requests = {space_membership_requests, Pending, _Rejected, _LastPruningTime}
+            } = ozt_users:get(RequesterUserId),
+            {request, RequestId, _, _} = maps:get(SpaceId, Pending),
+            {ok, RequestId};
+        {error, _} = Error ->
+            Error
+    end.
+
+
+-spec resolve_membership_request(od_space:id(), space_membership_requests:request_id(), boolean()) -> ok.
+resolve_membership_request(SpaceId, RequestId, Grant) ->
+    ?assertEqual(ok, try_resolve_membership_request(SpaceId, RequestId, Grant)).
+
+-spec try_resolve_membership_request(od_space:id(), space_membership_requests:request_id(), boolean()) -> ok | errors:error().
+try_resolve_membership_request(SpaceId, RequestId, Grant) ->
+    ozt:rpc(space_logic, resolve_membership_request, [?ROOT, SpaceId, #{
+        <<"requestId">> => RequestId,
+        <<"grant">> => Grant
+    }]).
 
 
 -spec add_owner(od_space:id(), od_user:id()) -> ok.
@@ -153,6 +239,11 @@ get_eff_groups(SpaceId) ->
     Groups.
 
 
+-spec has_eff_user(od_space:id(), od_user:id()) -> boolean().
+has_eff_user(SpaceId, UserId) ->
+    ozt:rpc(space_logic, has_eff_user, [SpaceId, UserId]).
+
+
 -spec get_user_privileges(od_space:id(), od_user:id()) -> [privileges:space_privilege()].
 get_user_privileges(SpaceId, UserId) ->
     {ok, Privs} = ?assertMatch({ok, _}, ozt:rpc(space_logic, get_user_privileges, [?ROOT, SpaceId, UserId])),
@@ -235,3 +326,8 @@ delete(SpaceId) ->
 -spec minimum_support_size() -> od_space:support_size().
 minimum_support_size() ->
     ozt:get_env(minimum_space_support_size).
+
+
+-spec available_space_tags() -> [od_space:tag()].
+available_space_tags() ->
+    lists:flatten(maps:values(ozt:get_env(available_space_tags))).

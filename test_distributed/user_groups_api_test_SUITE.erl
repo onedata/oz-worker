@@ -208,7 +208,7 @@ create_group_test(Config) ->
             operation = create,
             gri = #gri{type = od_group, aspect = instance},
             auth_hint = ?AS_USER(U1),
-            expected_result = ?OK_ENV(fun(_, Data) ->
+            expected_result_op = ?OK_ENV(fun(_, Data) ->
                 ExpName = maps:get(<<"name">>, Data),
                 ExpType = maps:get(<<"type">>, Data, ?DEFAULT_GROUP_TYPE),
                 ?OK_MAP_CONTAINS(#{
@@ -404,7 +404,7 @@ get_group_test(Config) ->
                 type = od_group, id = G1, aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_USER(U1),
-            expected_result = api_test_expect:protected_group(gs, G1, GroupData, ?SUB(user, U1))
+            expected_result_op = api_test_expect:protected_group(gs, G1, GroupData, ?SUB(user, U1))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
@@ -570,7 +570,7 @@ get_eff_group_test(Config) ->
                     aspect = instance, scope = protected
                 },
                 auth_hint = ?THROUGH_USER(U1),
-                expected_result = api_test_expect:protected_group(gs, GroupId, GroupData, ?SUB(nobody))
+                expected_result_op = api_test_expect:protected_group(gs, GroupId, GroupData, ?SUB(nobody))
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))

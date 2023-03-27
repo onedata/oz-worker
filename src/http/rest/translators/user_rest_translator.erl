@@ -100,6 +100,11 @@ get_response(#gri{id = UserId, aspect = instance, scope = shared}, UserData) ->
         <<"alias">> => utils:undefined_to_null(Username)
     });
 
+get_response(#gri{aspect = space_membership_requests}, SpaceMembershipRequests) ->
+    rest_translator:ok_body_reply(
+        maps:remove(<<"lastPendingRequestPruningTime">>, jsonable_record:to_json(SpaceMembershipRequests))
+    );
+
 get_response(#gri{aspect = oz_privileges}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 

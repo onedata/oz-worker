@@ -3678,8 +3678,8 @@ oz_rest_url(Config, PathOrTokens) ->
 %% Get graph sync WebSocket URL for zone.
 %% @end
 %%--------------------------------------------------------------------
--spec graph_sync_url(Config :: term(), Type :: provider | gui) -> binary().
-graph_sync_url(Config, provider) ->
+-spec graph_sync_url(Config :: term(), ozt_gs:endpoint()) -> binary().
+graph_sync_url(Config, oneprovider) ->
     oz_url(Config, <<"wss">>, <<?PROVIDER_GRAPH_SYNC_WS_PATH>>);
 graph_sync_url(Config, gui) ->
     oz_url(Config, <<"wss">>, <<?GUI_GRAPH_SYNC_WS_PATH>>).

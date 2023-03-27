@@ -463,7 +463,7 @@ get_space_test(Config) ->
                 type = od_space, id = S1, aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_HARVESTER(H1),
-            expected_result = api_test_expect:protected_space(gs, S1, SpaceData, ?SUB(nobody))
+            expected_result_op = api_test_expect:protected_space(gs, S1, SpaceData, ?SUB(nobody))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).

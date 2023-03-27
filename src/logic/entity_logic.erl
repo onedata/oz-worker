@@ -119,22 +119,10 @@ handle(ElReq) ->
 %%--------------------------------------------------------------------
 -spec handle(req(), VersionedEntity :: versioned_entity()) -> result().
 handle(#el_req{gri = #gri{type = EntityType}} = ElReq, VersionedEntity) ->
-    try
-        ElPlugin = EntityType:entity_logic_plugin(),
-        handle_unsafe(#state{
-            req = ElReq, plugin = ElPlugin, versioned_entity = VersionedEntity
-        })
-    catch
-        throw:Error ->
-            Error;
-        Type:Message:Stacktrace ->
-            ?error_stacktrace(
-                "Unexpected error in entity_logic - ~p:~p",
-                [Type, Message],
-                Stacktrace
-            ),
-            ?ERROR_INTERNAL_SERVER_ERROR
-    end.
+    ElPlugin = EntityType:entity_logic_plugin(),
+    ?catch_exceptions(handle_unsafe(#state{
+        req = ElReq, plugin = ElPlugin, versioned_entity = VersionedEntity
+    })).
 
 
 %%--------------------------------------------------------------------

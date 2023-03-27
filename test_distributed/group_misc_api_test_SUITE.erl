@@ -118,7 +118,7 @@ create_test(Config) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_group, aspect = instance},
-            expected_result = ?OK_ENV(fun(_, DataSet) ->
+            expected_result_op = ?OK_ENV(fun(_, DataSet) ->
                 ExpType = maps:get(<<"type">>, DataSet, ?DEFAULT_GROUP_TYPE),
                 ?OK_MAP_CONTAINS(#{
                     <<"name">> => ?CORRECT_NAME,
@@ -291,7 +291,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_group, id = G1, aspect = instance},
-            expected_result = ?OK_MAP_CONTAINS(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"children">> => #{},
                 <<"effectiveChildren">> => #{},
                 <<"name">> => ?GROUP_NAME1,
@@ -338,7 +338,7 @@ get_test(Config) ->
             gri = #gri{
                 type = od_group, id = G1, aspect = instance, scope = shared
             },
-            expected_result = api_test_expect:shared_group(gs, G1, GroupData)
+            expected_result_op = api_test_expect:shared_group(gs, G1, GroupData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)),
@@ -359,7 +359,7 @@ get_test(Config) ->
             gri = #gri{
                 type = od_group, id = G1, aspect = instance, scope = protected
             },
-            expected_result = api_test_expect:protected_group(gs, G1, GroupData, ?SUB(user, U1))
+            expected_result_op = api_test_expect:protected_group(gs, G1, GroupData, ?SUB(user, U1))
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
@@ -419,7 +419,7 @@ update_test(Config) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_group, id = groupId, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [<<"name">>, <<"type">>],
@@ -489,7 +489,7 @@ delete_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_group, id = groupId, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -527,7 +527,7 @@ protected_group_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_group, id = GroupId, aspect = instance},
-            expected_result = ?ERROR_REASON(?ERROR_PROTECTED_GROUP)
+            expected_result_op = ?ERROR_REASON(?ERROR_PROTECTED_GROUP)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),

@@ -18,6 +18,7 @@
 
 %% API
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([is_advertised_in_marketplace/1]).
 -export([update_support_parameters_registry/2, update_support_parameters/3, clear_support_parameters/2]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
@@ -54,6 +55,8 @@
     sync_enabled => true,
     memory_copies => all
 }).
+
+-compile({no_auto_import, [get/1]}).
 
 %%%===================================================================
 %%% API
@@ -116,6 +119,14 @@ force_delete(SpaceId) ->
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
+
+-spec is_advertised_in_marketplace(od_space:id()) -> boolean().
+is_advertised_in_marketplace(SpaceId) ->
+    case get(SpaceId) of
+        {ok, #document{value = #od_space{advertised_in_marketplace = Advertised}}} -> Advertised;
+        {error, not_found} -> false
+    end.
 
 
 -spec update_support_parameters_registry(

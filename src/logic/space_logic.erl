@@ -45,6 +45,10 @@
     create_group_invite_token/2,
     create_space_support_token/2,
 
+    submit_membership_request/3,
+    get_membership_requester_info/3,
+    resolve_membership_request/3,
+
     add_user/3, add_user/4,
     add_group/3, add_group/4,
     create_group/3, create_group/4,
@@ -357,6 +361,38 @@ create_space_support_token(Auth, SpaceId) ->
         gri = #gri{type = od_space, id = SpaceId, aspect = space_support_token},
         data = #{}
     })).
+
+
+-spec submit_membership_request(aai:auth(), od_space:id(), entity_logic:data()) ->
+    ok | errors:error().
+submit_membership_request(Auth, SpaceId, Data) ->
+    entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = membership_request},
+        data = Data
+    }).
+
+
+-spec get_membership_requester_info(aai:auth(), od_space:id(), space_membership_requests:request_id()) ->
+    {ok, entity_logic:data()} | errors:error().
+get_membership_requester_info(Auth, SpaceId, RequestId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = {membership_requester_info, RequestId}}
+    }).
+
+
+-spec resolve_membership_request(aai:auth(), od_space:id(), entity_logic:data()) ->
+    ok | errors:error().
+resolve_membership_request(Auth, SpaceId, Data) ->
+    entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = resolve_membership_request},
+        data = Data
+    }).
 
 
 %%--------------------------------------------------------------------

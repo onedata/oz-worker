@@ -278,7 +278,7 @@ get_child_details_test(Config) ->
                 type = od_group, id = G2, aspect = instance, scope = shared
             },
             auth_hint = ?THROUGH_GROUP(G1),
-            expected_result = api_test_expect:shared_group(gs, G2, GroupData)
+            expected_result_op = api_test_expect:shared_group(gs, G2, GroupData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -745,7 +745,7 @@ get_eff_child_details_test(Config) ->
                     aspect = instance, scope = shared
                 },
                 auth_hint = ?THROUGH_GROUP(G1),
-                expected_result = api_test_expect:shared_group(gs, GroupId, GroupData)
+                expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec))

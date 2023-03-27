@@ -50,11 +50,18 @@ handshake_attributes(_Client) ->
         <<"serviceVersion">> => oz_worker:get_release_version(),
         <<"serviceBuildVersion">> => oz_worker:get_build_version(),
         <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle),
-        <<"maxTemporaryTokenTtl">> => oz_worker:get_env(max_temporary_token_ttl, 604800), % 1 week
+        <<"maxTemporaryTokenTtl">> => oz_worker:get_env(max_temporary_token_ttl, 604800),  % a week
         <<"defaultHarvestingBackendType">> => utils:undefined_to_null(DefaultHarvestingBackendType),
         <<"defaultHarvestingBackendEndpoint">> => utils:undefined_to_null(DefaultHarvestingBackendEndpoint),
         <<"defaultAtmResourceSpec">> => oz_worker:get_env(default_atm_resource_spec),
-        <<"availableSpaceTags">> => oz_worker:get_env(available_space_tags)
+        <<"availableSpaceTags">> => oz_worker:get_env(available_space_tags),
+        <<"spaceMarketplaceEnabled">> => oz_worker:get_env(space_marketplace_enabled, true),
+        <<"spaceMarketplaceMinBackoffBetweenReminders">> => oz_worker:get_env(
+            space_marketplace_min_backoff_between_reminders_seconds, 604800  % a week
+        ),
+        <<"spaceMarketplaceMinBackoffAfterRejection">> => oz_worker:get_env(
+            space_marketplace_min_backoff_after_rejection_seconds, 2592000  % a month
+        )
     }.
 
 
@@ -199,7 +206,7 @@ translate_resource(_, GRI = #gri{type = oz_worker}, Data) ->
     translate_zone(GRI, Data);
 
 translate_resource(ProtocolVersion, GRI, Data) ->
-    ?error("Cannot translate graph sync get result for:~n
+    ?error("Cannot translate GUI graph sync get result for:~n
     ProtocolVersion: ~p~n
     GRI: ~p~n
     Data: ~p~n", [
@@ -220,7 +227,8 @@ translate_user(GRI = #gri{type = od_user, id = UserId, aspect = instance, scope 
         basic_auth_enabled = BasicAuthEnabled,
         password_hash = PasswordHash,
         full_name = FullName,
-        username = Username
+        username = Username,
+        emails = Emails
     } = User,
     CanInviteProviders = open =:= oz_worker:get_env(provider_registration_policy, open) orelse
         user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_INVITE),
@@ -230,6 +238,7 @@ translate_user(GRI = #gri{type = od_user, id = UserId, aspect = instance, scope 
         <<"hasPassword">> => PasswordHash /= undefined,
         <<"fullName">> => FullName,
         <<"username">> => utils:undefined_to_null(Username),
+        <<"emails">> => Emails,
         <<"canInviteProviders">> => CanInviteProviders,
         <<"tokenList">> => gri:serialize(#gri{type = od_token, id = undefined, aspect = {user_named_tokens, UserId}}),
         <<"linkedAccountList">> => gri:serialize(GRI#gri{aspect = linked_accounts, scope = private}),
@@ -279,6 +288,9 @@ translate_user(#gri{aspect = {linked_account, _}}, #linked_account{idp = IdP, em
         <<"idp">> => IdP,
         <<"emails">> => Emails
     };
+
+translate_user(#gri{aspect = space_membership_requests}, SpaceMembershipRequests) ->
+    maps:remove(<<"lastPendingRequestPruningTime">>, jsonable_record:to_json(SpaceMembershipRequests));
 
 translate_user(#gri{aspect = eff_groups}, Groups) ->
     #{
@@ -476,7 +488,6 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"organizationName">> := OrganizationName,
         <<"tags">> := Tags,
         <<"advertisedInMarketplace">> := AdvertisedInMarketplace,
-        <<"marketplaceContactEmail">> := MarketplaceContactEmail,
         <<"providers">> := SupportSizes,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator,
@@ -492,7 +503,6 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"organizationName">> => OrganizationName,
         <<"tags">> => Tags,
         <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
-        <<"marketplaceContactEmail">> => MarketplaceContactEmail,
         <<"directMembership">> => space_logic:has_direct_user(Space, UserId),
         <<"currentUserIsOwner">> => space_logic:is_owner(Space, UserId),
         <<"currentUserEffPrivileges">> => entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Space),
@@ -507,6 +517,9 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
 
 translate_space(#gri{aspect = marketplace_data, scope = protected}, MarketplaceData) ->
     MarketplaceData;
+
+translate_space(#gri{aspect = {membership_requester_info, _}, scope = private}, MembershipRequesterInfo) ->
+    MembershipRequesterInfo;
 
 translate_space(#gri{aspect = As}, Users) when As =:= users; As =:= owners; As =:= eff_users ->
     #{

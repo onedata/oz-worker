@@ -324,7 +324,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"name">> => {binary, name}
     },
     optional => #{
-        <<"summary">> => {binary, {size_limit, ?SUMMARY_SIZE_LIMIT}},
+        <<"summary">> => {binary, {text_length_limit, ?SUMMARY_SIZE_LIMIT}},
         % validation of revision data is performed during the workflow schema creation procedure
         <<"revision">> => {json, any},
         % this can be an arbitrary string and is not verified, as for example a dump
@@ -357,7 +357,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {dump_revision, _}}}) -
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"summary">> => {binary, {size_limit, ?SUMMARY_SIZE_LIMIT}},
+        <<"summary">> => {binary, {text_length_limit, ?SUMMARY_SIZE_LIMIT}},
         % validation of revision data is performed during the workflow schema update procedure
         <<"revision">> => {json, any}
     }

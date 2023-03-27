@@ -42,12 +42,12 @@
     <<"advertisedInMarketplace">> => {boolean, any},
     <<"marketplaceContactEmail">> => {binary, email}
 }).
-
 -define(SPACE_CRITICAL_SECTION_KEY(__SPACE_ID), {?MODULE, space, __SPACE_ID}).
 
 -define(MAX_LIST_LIMIT, 1000).
 -define(DEFAULT_LIST_LIMIT, 1000).
 
+-define(MEMBERSHIP_REQUEST_MESSAGE_SIZE_LIMIT, 2000).
 
 %%%===================================================================
 %%% API
@@ -91,6 +91,8 @@ operation_supported(create, space_support_token, private) -> true;
 
 operation_supported(create, instance, private) -> true;
 operation_supported(create, join, private) -> true;
+operation_supported(create, membership_request, private) -> true;
+operation_supported(create, resolve_membership_request, private) -> true;
 operation_supported(create, {owner, _}, private) -> true;
 
 operation_supported(create, {user, _}, private) -> true;
@@ -110,6 +112,7 @@ operation_supported(get, instance, protected) -> true;
 operation_supported(get, owners, private) -> true;
 
 operation_supported(get, marketplace_data, protected) -> true;
+operation_supported(get, {membership_requester_info, _}, private) -> true;
 
 operation_supported(get, users, private) -> true;
 operation_supported(get, eff_users, private) -> true;
@@ -158,6 +161,7 @@ operation_supported(_, _, _) -> false.
 is_subscribable(instance, _) -> true;
 is_subscribable(owners, private) -> true;
 is_subscribable(marketplace_data, protected) -> true;
+is_subscribable({membership_requester_info, _}, private) -> true;
 is_subscribable(users, private) -> true;
 is_subscribable(eff_users, private) -> true;
 is_subscribable(groups, private) -> true;
@@ -290,6 +294,21 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
         {ok, resource, {NewGRI, {SpaceData, Rev}}}
     end);
 
+create(Req = #el_req{auth = ?USER(UserId), gri = #gri{id = SpaceId, aspect = membership_request}}) ->
+    ContactEmail = maps:get(<<"contactEmail">>, Req#el_req.data),
+    Message = maps:get(<<"message">>, Req#el_req.data, <<"">>),
+    od_user:lock_and_update_space_membership_requests(UserId, fun(SpaceMembershipRequests) ->
+        space_membership_requests:submit(SpaceId, UserId, ContactEmail, Message, SpaceMembershipRequests)
+    end);
+
+create(Req = #el_req{gri = #gri{id = SpaceId, aspect = resolve_membership_request}}) ->
+    RequestId = maps:get(<<"requestId">>, Req#el_req.data),
+    Grant = maps:get(<<"grant">>, Req#el_req.data),
+    RequesterUserId = space_membership_requests:infer_requester_id(RequestId),
+    od_user:lock_and_update_space_membership_requests(RequesterUserId, fun(SpaceMembershipRequests) ->
+        space_membership_requests:resolve(SpaceId, RequestId, Grant, SpaceMembershipRequests)
+    end);
+
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 20.02.*
     token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?USER_JOIN_SPACE, SpaceId));
@@ -412,7 +431,7 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
 create(Req = #el_req{data = Data, gri = GRI = #gri{aspect = Aspect}}) when
     Aspect =:= list_marketplace;
     Aspect =:= list_marketplace_with_data
-->
+    ->
     Tags = maps:get(<<"tags">>, Data, all),
 
     Offset = maps:get(<<"offset">>, Data, 0),
@@ -485,8 +504,16 @@ get(#el_req{gri = #gri{id = SpaceId, aspect = api_samples}}, _) ->
 get(#el_req{gri = #gri{aspect = owners}}, #od_space{owners = Owners}) ->
     {ok, Owners};
 
-get(#el_req{gri = #gri{aspect = instance, scope = private}}, Space) ->
-    {ok, Space};
+get(Req = #el_req{auth = Auth, gri = #gri{aspect = instance, scope = private}}, Space) ->
+    CanViewMarketplaceContactEmail = case Auth of
+        ?ROOT -> true;
+        ?USER -> auth_by_privilege(Req, Space, ?SPACE_MANAGE_MARKETPLACE);
+        _ -> false
+    end,
+    {ok, case CanViewMarketplaceContactEmail of
+        true -> Space;
+        false -> Space#od_space{marketplace_contact_email = <<"">>}
+    end};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{
         name = Name,
@@ -494,7 +521,6 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
         organization_name = OrganizationName,
         tags = Tags,
         advertised_in_marketplace = AdvertisedInMarketplace,
-        marketplace_contact_email = MarketplaceContactEmail,
         shares = Shares,
         support_parameters_registry = SupportParametersRegistry,
         creation_time = CreationTime,
@@ -507,7 +533,6 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
         <<"description">> => Description,
         <<"organizationName">> => OrganizationName,
         <<"tags">> => Tags,
-        <<"marketplaceContactEmail">> => MarketplaceContactEmail,
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"supportParametersRegistry">> => SupportParametersRegistry,
         <<"creationTime">> => CreationTime,
@@ -541,6 +566,21 @@ get(#el_req{gri = #gri{id = SpaceId, aspect = marketplace_data}}, Space = #od_sp
         <<"creationTime">> => CreationTime,
         <<"totalSupportSize">> => TotalSupportSize,
         <<"providerNames">> => ProviderNames
+    }};
+
+get(#el_req{gri = #gri{id = SpaceId, aspect = {membership_requester_info, RequestId}}}, _) ->
+    RequesterUserId = space_membership_requests:infer_requester_id(RequestId),
+    #document{value = #od_user{
+        full_name = FullName,
+        username = Username,
+        space_membership_requests = SpaceMembershipRequests
+    }} = ?check(od_user:get(RequesterUserId)),
+    ContactEmail = space_membership_requests:lookup_email_for_pending(SpaceId, RequestId, SpaceMembershipRequests),
+    {ok, #{
+        <<"userId">> => RequesterUserId,
+        <<"fullName">> => FullName,
+        <<"username">> => Username,
+        <<"contactEmail">> => ContactEmail
     }};
 
 get(#el_req{gri = #gri{aspect = users}}, Space) ->
@@ -781,6 +821,10 @@ exists(#el_req{gri = #gri{aspect = marketplace_data, scope = protected}}, #od_sp
 }) ->
     AdvertisedInMarketPlace;
 
+exists(#el_req{gri = #gri{aspect = {membership_requester_info, _}, scope = private}}, _) ->
+    % more specific errors are generated when handling the request
+    true;
+
 exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     case Req#el_req.auth_hint of
         ?THROUGH_USER(UserId) ->
@@ -896,6 +940,15 @@ authorize(Req = #el_req{operation = create, gri = #gri{id = SpaceId, aspect = ha
             file_id:guid_to_space_id(Guid) == SpaceId
         end, maps:get(<<"batch">>, Data));
 
+authorize(#el_req{auth = ?USER, operation = create, gri = #gri{aspect = membership_request}}, Space) ->
+    Space#od_space.advertised_in_marketplace;
+
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = resolve_membership_request}, data = Data}, Space) ->
+    % ?SPACE_ADD_USER is additionally required if the resolving user grants access in response to the request
+    GrantsAccess = true == maps:get(<<"grant">>, Data, false),
+    auth_by_privilege(Req, Space, ?SPACE_MANAGE_MARKETPLACE) andalso
+        (not GrantsAccess orelse auth_by_privilege(Req, Space, ?SPACE_ADD_USER));
+
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_USER);
 
@@ -905,7 +958,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_tok
 authorize(#el_req{operation = create, gri = #gri{aspect = Aspect}, auth = ?USER}, _) when
     Aspect =:= list_marketplace;
     Aspect =:= list_marketplace_with_data
-->
+    ->
     true;
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = space_support_token}}, Space) ->
@@ -923,6 +976,10 @@ authorize(#el_req{operation = get, gri = #gri{aspect = marketplace_data}, auth =
     AdvertisedInMarketplace;
 authorize(#el_req{operation = get, gri = #gri{aspect = marketplace_data}}, _) ->
     false;
+
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = {membership_requester_info, _}}}, Space) ->
+    % only users authorized to resolve requests can view the info
+    auth_by_privilege(Req, Space, ?SPACE_MANAGE_MARKETPLACE);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse auth_by_support(Req, Space);
@@ -998,8 +1055,11 @@ authorize(Req = #el_req{operation = get}, Space) ->
     % All other resources can be accessed with view privileges or by the supporting provider
     auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse auth_by_support(Req, Space);
 
-authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_UPDATE);
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}, data = Data}, Space) ->
+    ModifiesMarketplaceData = maps:is_key(<<"advertisedInMarketplace">>, Data) orelse
+        maps:is_key(<<"marketplaceContactEmail">>, Data),
+    auth_by_privilege(Req, Space, ?SPACE_UPDATE) andalso
+        (not ModifiesMarketplaceData orelse auth_by_privilege(Req, Space, ?SPACE_MANAGE_MARKETPLACE));
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_SET_PRIVILEGES);
@@ -1107,7 +1167,7 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = group}
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = Aspect}}) when
     Aspect =:= list_marketplace;
     Aspect =:= list_marketplace_with_data
-->
+    ->
     [?OZ_SPACES_LIST];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
@@ -1117,6 +1177,8 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = api_sampl
     [?OZ_SPACES_VIEW];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = marketplace_data, scope = protected}}) ->
+    [?OZ_SPACES_VIEW];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {membership_requester_info, _}, scope = private}}) ->
     [?OZ_SPACES_VIEW];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}) ->
@@ -1226,6 +1288,24 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
         }
     };
 
+validate(#el_req{operation = create, gri = #gri{aspect = membership_request}}) ->
+    #{
+        required => #{
+            <<"contactEmail">> => {binary, email}
+        },
+        optional => #{
+            <<"message">> => {binary, {text_length_limit, ?MEMBERSHIP_REQUEST_MESSAGE_SIZE_LIMIT}}
+        }
+    };
+
+validate(#el_req{operation = create, gri = #gri{aspect = resolve_membership_request}}) ->
+    #{
+        required => #{
+            <<"requestId">> => {binary, non_empty},
+            <<"grant">> => {boolean, any}
+        }
+    };
+
 validate(#el_req{operation = create, gri = #gri{aspect = invite_user_token}}) ->
     #{
     };
@@ -1285,7 +1365,7 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = harvester}}) ->
 validate(#el_req{operation = create, gri = #gri{aspect = Aspect}}) when
     Aspect =:= list_marketplace;
     Aspect =:= list_marketplace_with_data
-->
+    ->
     #{
         optional => #{
             <<"index">> => {binary, any},

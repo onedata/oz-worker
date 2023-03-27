@@ -158,7 +158,7 @@ create_test(Config) ->
             operation = create,
             gri = #gri{type = od_handle_service, aspect = instance},
             auth_hint = ?AS_USER(U3),
-            expected_result = ?OK_ENV(fun(_Env, Data) ->
+            expected_result_op = ?OK_ENV(fun(_Env, Data) ->
                 ExpProperties = maps:get(<<"serviceProperties">>, Data),
                 ?OK_MAP_CONTAINS(#{
                     <<"name">> => ?HANDLE_SERVICE_NAME1,
@@ -309,7 +309,7 @@ get_test(Config) ->
             gri = #gri{
                 type = od_handle_service, id = HService, aspect = instance
             },
-            expected_result = ?OK_MAP_CONTAINS(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?HANDLE_SERVICE_NAME1,
                 <<"effectiveUsers">> => #{
                     U1 => AllPrivsBin -- [<<"handle_service_view">>],
@@ -417,7 +417,7 @@ update_test(Config) ->
             gri = #gri{
                 type = od_handle_service, id = hserviceId, aspect = instance
             },
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [
@@ -504,7 +504,7 @@ delete_test(Config) ->
             gri = #gri{
                 type = od_handle_service, id = hserviceId, aspect = instance
             },
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,

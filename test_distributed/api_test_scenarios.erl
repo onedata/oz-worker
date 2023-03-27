@@ -153,7 +153,7 @@ prepare_entity_not_found_gs_spec(undefined) ->
     undefined;
 prepare_entity_not_found_gs_spec(GsSpec) ->
     GsSpec#gs_spec{
-        expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        expected_result_op = ?ERROR_REASON(?ERROR_NOT_FOUND)
     }.
 
 
@@ -269,7 +269,7 @@ prepare_get_privs_gs_spec(undefined, _Privs) ->
     undefined;
 prepare_get_privs_gs_spec(GsSpec, Privs) ->
     GsSpec#gs_spec{
-        expected_result = ?OK_LIST(Privs)
+        expected_result_op = ?OK_LIST(Privs)
     }.
 
 
@@ -450,7 +450,7 @@ create_forbidden_gs_spec(undefined) ->
     undefined;
 create_forbidden_gs_spec(GsSpec) ->
     GsSpec#gs_spec{
-        expected_result = ?ERROR_REASON(?ERROR_FORBIDDEN)
+        expected_result_op = ?ERROR_REASON(?ERROR_FORBIDDEN)
     }.
 
 

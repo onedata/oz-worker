@@ -247,7 +247,7 @@ create_handle_test(Config) ->
             operation = create,
             gri = #gri{type = od_handle, aspect = instance},
             auth_hint = ?AS_USER(U1),
-            expected_result = ?OK_ENV(fun(#{shareId := ShareId} = Env, _Data) ->
+            expected_result_op = ?OK_ENV(fun(#{shareId := ShareId} = Env, _Data) ->
                 ?OK_MAP_CONTAINS(#{
                     <<"metadata">> => ?DC_METADATA,
                     <<"handleServiceId">> => HService,

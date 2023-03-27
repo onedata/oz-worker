@@ -88,7 +88,7 @@ space_api_samples_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_space, id = SpaceId, aspect = api_samples, scope = private},
-            expected_result = ?OK_TERM(fun(ResultBody) ->
+            expected_result_gui = ?OK_TERM(fun(ResultBody) ->
                 ExpectedApiRoot = str_utils:format_bin("https://~s/api/v3/onezone", [ozt:get_domain()]),
                 rest_api_samples_test_utils:verify_structure(
                     ResultBody, ExpectedApiRoot, exp_operation_list()

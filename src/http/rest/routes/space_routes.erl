@@ -62,6 +62,21 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = marketplace_data, scope = protected}
     }},
+    %% TODO VFS-10687 swaggers for space marketplace
+    {<<"/spaces/marketplace/:id/request">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = membership_request}
+    }},
+    %% TODO VFS-10687 swaggers for space marketplace
+    {<<"/spaces/marketplace/:id/request/resolve">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = resolve_membership_request}
+    }},
+    %% TODO VFS-10687 swaggers for space marketplace
+    {<<"/spaces/marketplace/:id/request/:rid/requester_info">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {membership_requester_info, ?BINDING(rid)}}
+    }},
     %% Get space details
     %% This operation requires one of the following privileges:
     %% - oz_spaces_view
@@ -315,7 +330,7 @@ routes() -> [
     %% - oz_shares_view
     {<<"/spaces/:id/shares/:sid">>, #rest_req{
         method = 'GET',
-        b_gri = #b_gri{type = od_share, id = ?BINDING(sid), aspect = instance, scope = private},
+        b_gri = #b_gri{type = od_share, id = ?BINDING(sid), aspect = instance},
         b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
     }},
     %% List space providers

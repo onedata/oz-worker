@@ -180,7 +180,7 @@ create_parent_test(Config) ->
             operation = create,
             gri = #gri{type = od_group, aspect = instance},
             auth_hint = ?AS_GROUP(Child),
-            expected_result = ?OK_ENV(fun(_, Data) ->
+            expected_result_op = ?OK_ENV(fun(_, Data) ->
                 ExpName = maps:get(<<"name">>, Data),
                 ExpType = maps:get(<<"type">>, Data, ?DEFAULT_GROUP_TYPE),
                 ?OK_MAP_CONTAINS(#{
@@ -471,7 +471,7 @@ get_parent_details_test(Config) ->
                 aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_GROUP(Group),
-            expected_result = api_test_expect:protected_group(gs, ParentGroup, GroupData, ?SUB(nobody))
+            expected_result_op = api_test_expect:protected_group(gs, ParentGroup, GroupData, ?SUB(nobody))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -563,7 +563,7 @@ get_eff_parent_details_test(Config) ->
                     aspect = instance, scope = protected
                 },
                 auth_hint = ?THROUGH_GROUP(G1),
-                expected_result = api_test_expect:protected_group(gs, GroupId, GroupData, ?SUB(nobody))
+                expected_result_op = api_test_expect:protected_group(gs, GroupId, GroupData, ?SUB(nobody))
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
