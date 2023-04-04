@@ -257,7 +257,7 @@ create_test(Config) ->
                 {<<"metadata">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
                 {<<"metadata">>, ?RAND_UNICODE_STR(100001),
-                    ?ERROR_BAD_VALUE_STRING_TOO_LARGE(<<"metadata">>, 100000)}
+                    ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"metadata">>, 100000)}
             ]
         }
     },
@@ -503,7 +503,7 @@ update_test(Config) ->
             bad_values = [
                 {<<"metadata">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
                 {<<"metadata">>, ?RAND_UNICODE_STR(100001),
-                    ?ERROR_BAD_VALUE_STRING_TOO_LARGE(<<"metadata">>, 100000)}
+                    ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"metadata">>, 100000)}
             ]
         }
     },

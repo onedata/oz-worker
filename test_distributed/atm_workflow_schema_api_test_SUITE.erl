@@ -1705,7 +1705,7 @@ generate_supplementary_atm_lambdas(AtmInventoryId) ->
 name_summary_bad_data_values() ->
     lists:flatten([
         {<<"summary">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"summary">>)},
-        {<<"summary">>, ?RAND_UNICODE_STR(315), ?ERROR_BAD_VALUE_STRING_TOO_LARGE(<<"summary">>, 200)},
+        {<<"summary">>, ?RAND_UNICODE_STR(315), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"summary">>, 200)},
         ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
     ]).
 

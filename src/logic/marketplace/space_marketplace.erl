@@ -18,7 +18,7 @@
 -export([index/2]).
 -export([add/3, delete/3]).
 -export([list/2]).
--export([intersect_spaces/1]).
+-export([intersect_with_advertised_spaces/1]).
 
 % index()/internal_index() consists of 2 parts:
 %  1) space name - so that links would be sorted by name.
@@ -169,8 +169,8 @@ list(Tags, #{limit := Limit} = ListingOpts) ->
     end.
 
 
--spec intersect_spaces([od_space:id()]) -> [od_space:id()].
-intersect_spaces(QuerySpaceIds) ->
+-spec intersect_with_advertised_spaces([od_space:id()]) -> [od_space:id()].
+intersect_with_advertised_spaces(QuerySpaceIds) ->
     QuerySpaceIdsGbSet = gb_sets:from_list(QuerySpaceIds),
     {ok, Intersection} = datastore_model:fold_links(?CTX, ?FOREST, ?ALL_TREE_ID, fun(#link{target = SpaceId}, Acc) ->
         case gb_sets:is_element(SpaceId, QuerySpaceIdsGbSet) of

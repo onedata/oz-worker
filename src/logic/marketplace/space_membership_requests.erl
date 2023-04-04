@@ -57,7 +57,7 @@
 -define(REJECTED_REQUEST_HISTORY_LENGTH, 1000).
 
 -define(PENDING_REQUEST_PRUNING_INTERVAL, oz_worker:get_env(
-    space_marketplace_pending_request_pruning_interval_seconds, 604800  % a week
+    space_marketplace_pending_request_pruning_interval_seconds, 86400  % a day
 )).
 -define(MIN_BACKOFF_BETWEEN_REMINDERS_SECONDS, oz_worker:get_env(
     space_marketplace_min_backoff_between_reminders_seconds, 604800  % a week
@@ -91,23 +91,20 @@ submit(SpaceId, UserId, ContactEmail, Message, InitialRecord) ->
 
 
 -spec lookup_email_for_pending(od_space:id(), request_id(), record()) -> od_user:email() | no_return().
-lookup_email_for_pending(SpaceId, RequestId, #space_membership_requests{pending = Pending}) ->
-    case maps:find(SpaceId, Pending) of
-        {ok, #request{id = RequestId, contact_email = ContactEmail}} -> ContactEmail;
-        _ -> throw(?ERROR_NOT_FOUND)
-    end.
+lookup_email_for_pending(SpaceId, RequestId, Record) ->
+    % fixme handle special cases:
+    % * space deleted -> not found
+    % * space not in marketplace -> not found
+    % * user already a member -> error relation already exists
+    (lookup_pending(SpaceId, RequestId, Record))#request.contact_email.  % throws in case of nonexistent pending request
 
 
 -spec resolve(od_space:id(), request_id(), boolean(), record()) ->
     {partial | done, record()} | no_return().
 resolve(SpaceId, RequestId, Grant, InitialRecord) ->
+    lookup_pending(SpaceId, RequestId, InitialRecord),  % throws in case of nonexistent pending request
+
     RequesterUserId = infer_requester_id(RequestId),
-
-    case maps:find(SpaceId, InitialRecord#space_membership_requests.pending) of
-        {ok, #request{id = RequestId}} -> ok;
-        _ -> throw(?ERROR_NOT_FOUND)
-    end,
-
     % in case the request for this specific space is no longer valid, trigger immediate
     % pruning, regardless of the interval - this will prune the request
     ShouldTriggerPruning = user_logic:has_eff_space(RequesterUserId, SpaceId) orelse
@@ -147,21 +144,13 @@ gen_request_id(UserId) ->
 %%%===================================================================
 
 -spec to_json(record()) -> json_utils:json_term().
-to_json(#space_membership_requests{pending = Pending, rejected = Rejected, last_pending_request_pruning_time = LPT}) ->
-    #{
-        <<"pending">> => maps:map(fun(_SpaceId, R) -> request_to_json(R) end, Pending),
-        <<"rejected">> => maps:map(fun(_SpaceId, R) -> request_to_json(R) end, Rejected),
-        <<"lastPendingRequestPruningTime">> => LPT
-    }.
+to_json(Record) ->
+    encode(json, Record).
 
 
 -spec from_json(json_utils:json_term()) -> record().
-from_json(#{<<"pending">> := PendingJson, <<"rejected">> := RejectedJson, <<"lastPendingRequestPruningTime">> := LPT}) ->
-    #space_membership_requests{
-        pending = maps:map(fun(_SpaceId, R) -> request_from_json(R) end, PendingJson),
-        rejected = maps:map(fun(_SpaceId, R) -> request_from_json(R) end, RejectedJson),
-        last_pending_request_pruning_time = LPT
-    }.
+from_json(RecordJson) ->
+    decode(json, RecordJson).
 
 %%%===================================================================
 %%% persistent_record callbacks
@@ -174,22 +163,31 @@ version() ->
 
 -spec db_encode(record(), persistent_record:nested_record_encoder()) -> json_utils:json_term().
 db_encode(Record, _NestedRecordEncoder) ->
-    to_json(Record).
+    encode(db, Record).
 
 
 -spec db_decode(json_utils:json_term(), persistent_record:nested_record_decoder()) -> record().
 db_decode(RecordJson, _NestedRecordDecoder) ->
-    from_json(RecordJson).
+    decode(db, RecordJson).
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
 %% @private
+-spec lookup_pending(od_space:id(), request_id(), record()) -> record() | no_return().
+lookup_pending(SpaceId, RequestId, #space_membership_requests{pending = Pending}) ->
+    case maps:find(SpaceId, Pending) of
+        {ok, #request{id = RequestId} = Request} -> Request;
+        _ -> throw(?ERROR_NOT_FOUND)
+    end.
+
+
+%% @private
 -spec submit_internal(od_space:id(), od_user:id(), od_user:email(), binary(), record()) ->
     record() | no_return().
 submit_internal(SpaceId, UserId, ContactEmail, Message, InitialRecord) ->
-    {Approach, UpdatedRecord} = check_eligibility(SpaceId, UserId, InitialRecord),
+    {Approach, UpdatedRecord} = qualify(SpaceId, UserId, InitialRecord),
     {RequestClassification, Request} = case Approach of
         {reuse, RequestToReuse} ->
             {reminder, RequestToReuse#request{
@@ -203,7 +201,7 @@ submit_internal(SpaceId, UserId, ContactEmail, Message, InitialRecord) ->
                 last_activity = ?NOW_SECONDS()
             }}
     end,
-    ?check(space_marketplace_mailer:send_checked_membership_request(
+    ?check(space_marketplace_mailer:check_send_membership_request(
         SpaceId, UserId, Request#request.id, RequestClassification, ContactEmail, Message
     )),
     UpdatedRecord#space_membership_requests{
@@ -221,11 +219,12 @@ resolve_sanitized(SpaceId, RequesterUserId, Grant, Record = #space_membership_re
     {Request = #request{contact_email = ContactEmail}, NewPending} = maps:take(SpaceId, Pending),
     RecordWithUpdatedPending = Record#space_membership_requests{pending = NewPending},
     Grant andalso ?check(space_logic:add_user(?ROOT, SpaceId, RequesterUserId)),
-    space_marketplace_mailer:send_best_effort_request_resolved_notification(SpaceId, ContactEmail, Grant),
     case Grant of
         true ->
+            space_marketplace_mailer:best_effort_notify_request_resolved(SpaceId, ContactEmail, granted),
             RecordWithUpdatedPending;
         false ->
+            space_marketplace_mailer:best_effort_notify_request_resolved(SpaceId, ContactEmail, rejected),
             prune_overflowing_rejected_history(RecordWithUpdatedPending#space_membership_requests{
                 rejected = Rejected#{SpaceId => Request#request{last_activity = ?NOW_SECONDS()}}
             })
@@ -233,11 +232,11 @@ resolve_sanitized(SpaceId, RequesterUserId, Grant, Record = #space_membership_re
 
 
 %% @private
--spec check_eligibility(od_space:id(), od_user:id(), record()) ->
+-spec qualify(od_space:id(), od_user:id(), record()) ->
     {create_new | {reuse, request()}, record()} | no_return().
-check_eligibility(_SpaceId, _UserId, Record) when map_size(Record#space_membership_requests.pending) >= ?PENDING_REQUEST_LIMIT ->
+qualify(_SpaceId, _UserId, Record) when map_size(Record#space_membership_requests.pending) >= ?PENDING_REQUEST_LIMIT ->
     throw(?ERROR_LIMIT_REACHED(?PENDING_REQUEST_LIMIT, <<"pending space membership requests">>));
-check_eligibility(SpaceId, UserId, Record) ->
+qualify(SpaceId, UserId, Record) ->
     assert_not_a_member(UserId, SpaceId),
     NewRecord = check_if_not_recently_rejected(SpaceId, Record),
     case maps:find(SpaceId, NewRecord#space_membership_requests.pending) of
@@ -323,7 +322,7 @@ prune_pending_requests(UserId, Record = #space_membership_requests{pending = Pen
     SpaceIdsWithoutAlreadyGranted = lists_utils:subtract(PendingSpaceIds, AlreadyGrantedSpaceIds),
 
     % since the last update of the record, some spaces may have been removed from the marketplace
-    StillRelevantSpaceIds = space_marketplace:intersect_spaces(SpaceIdsWithoutAlreadyGranted),
+    StillRelevantSpaceIds = space_marketplace:intersect_with_advertised_spaces(SpaceIdsWithoutAlreadyGranted),
     CancelledSpaceIds = lists_utils:subtract(SpaceIdsWithoutAlreadyGranted, StillRelevantSpaceIds),
     async_send_notifications_for_spaces(cancelled, CancelledSpaceIds, Record),
 
@@ -352,9 +351,9 @@ async_send_notifications_for_spaces(Type, SpaceIds, #space_membership_requests{p
             #request{contact_email = Email} = maps:get(SpaceId, Pending),
             case Type of
                 already_granted ->
-                    space_marketplace_mailer:send_best_effort_already_granted_notification(SpaceId, Email);
+                    space_marketplace_mailer:best_effort_notify_membership_already_granted(SpaceId, Email);
                 cancelled ->
-                    space_marketplace_mailer:send_best_effort_request_cancelled_notification(SpaceId, Email)
+                    space_marketplace_mailer:best_effort_notify_request_cancelled(SpaceId, Email)
             end
         end, SpaceIds))
     end).
@@ -398,6 +397,29 @@ prune_outdated_rejected_history(Record = #space_membership_requests{rejected = R
 %% @private
 is_rejected_request_history_overflown(#space_membership_requests{rejected = Rejected}) ->
     maps:size(Rejected) > ?REJECTED_REQUEST_HISTORY_LENGTH.
+
+
+%% @private
+-spec encode(json | db, record()) -> json_utils:json_term().
+encode(json, #space_membership_requests{pending = Pending, rejected = Rejected}) ->
+    #{
+        <<"pending">> => maps:map(fun(_SpaceId, R) -> request_to_json(R) end, Pending),
+        <<"rejected">> => maps:map(fun(_SpaceId, R) -> request_to_json(R) end, Rejected)
+    };
+encode(db, #space_membership_requests{last_pending_request_pruning_time = LPT} = Record) ->
+    maps:merge(encode(json, Record), #{<<"lastPendingRequestPruningTime">> => LPT}).
+
+
+%% @private
+-spec decode(json | db, json_utils:json_term()) -> record().
+decode(json, #{<<"pending">> := PendingJson, <<"rejected">> := RejectedJson}) ->
+    #space_membership_requests{
+        pending = maps:map(fun(_SpaceId, R) -> request_from_json(R) end, PendingJson),
+        rejected = maps:map(fun(_SpaceId, R) -> request_from_json(R) end, RejectedJson)
+    };
+decode(db, #{<<"lastPendingRequestPruningTime">> := LPT} = JsonRecord) ->
+    Record = decode(json, JsonRecord),
+    Record#space_membership_requests{last_pending_request_pruning_time = LPT}.
 
 
 %% @private

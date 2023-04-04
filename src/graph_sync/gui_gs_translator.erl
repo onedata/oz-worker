@@ -290,7 +290,7 @@ translate_user(#gri{aspect = {linked_account, _}}, #linked_account{idp = IdP, em
     };
 
 translate_user(#gri{aspect = space_membership_requests}, SpaceMembershipRequests) ->
-    maps:remove(<<"lastPendingRequestPruningTime">>, jsonable_record:to_json(SpaceMembershipRequests));
+    jsonable_record:to_json(SpaceMembershipRequests);
 
 translate_user(#gri{aspect = eff_groups}, Groups) ->
     #{

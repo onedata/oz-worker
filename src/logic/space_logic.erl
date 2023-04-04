@@ -90,6 +90,7 @@
     exists/1,
     is_owner/2,
     has_eff_privilege/3,
+    has_eff_privileges/3,
     has_direct_user/2,
     has_eff_user/2,
     has_eff_group/2,
@@ -1067,26 +1068,25 @@ is_owner(#od_space{owners = Owners}, UserId) ->
     lists:member(UserId, Owners).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Predicate saying whether specified effective user has specified
-%% effective privilege in given space.
-%% @end
-%%--------------------------------------------------------------------
--spec has_eff_privilege(SpaceOrId :: od_space:id() | #od_space{},
-    UserId :: od_user:id(), Privilege :: privileges:space_privilege()) ->
+-spec has_eff_privilege(od_space:id() | od_space:record(), od_user:id(), privileges:space_privilege()) ->
     boolean().
-has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
+has_eff_privilege(SpaceId, UserId, Privilege) ->
+    has_eff_privileges(SpaceId, UserId, [Privilege]).
+
+
+-spec has_eff_privileges(od_space:id() | od_space:record(), od_user:id(), [privileges:space_privilege()]) ->
+    boolean().
+has_eff_privileges(SpaceId, UserId, Privileges) when is_binary(SpaceId) ->
     case od_space:get(SpaceId) of
         {ok, #document{value = Space}} ->
-            has_eff_privilege(Space, UserId, Privilege);
-        _ ->
+            has_eff_privileges(Space, UserId, Privileges);
+        {error, not_found} ->
             false
     end;
-has_eff_privilege(Space, UserId, Privilege) ->
-    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, Space) orelse
-        % space owners have all the privileges, regardless those assigned
-        is_owner(Space, UserId).
+has_eff_privileges(Space, UserId, Privileges) ->
+    EffUserPrivileges = entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Space),
+    % space owners have all the privileges, regardless those assigned
+    lists_utils:is_subset(Privileges, EffUserPrivileges) orelse is_owner(Space, UserId).
 
 
 %%--------------------------------------------------------------------

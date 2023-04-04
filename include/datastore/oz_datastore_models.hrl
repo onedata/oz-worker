@@ -159,6 +159,7 @@ end).
     client_tokens = [] :: [binary()],
     % List of user's aliases for spaces
     space_aliases = #{} :: #{od_space:id() => binary()},
+    % NOTE: you MUST use od_user:lock_and_update_space_membership_requests/2 to apply any changes to this field
     space_membership_requests = space_membership_requests:empty() :: space_membership_requests:record(),
 
     % Privileges of this user in admin's OZ API

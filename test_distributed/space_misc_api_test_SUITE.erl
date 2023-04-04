@@ -59,7 +59,7 @@
 
     update_support_parameters_test/1,
 
-    % sequential
+    % sequential tests
     list_test/1,
     list_marketplace_test/1
 ]).
@@ -297,56 +297,6 @@ create_with_custom_id_generator_seed_test(Config) ->
     ?assertEqual(lists:duplicate(SpaceCount - 1, ?ERROR_ALREADY_EXISTS), ErrorResults).
 
 
-list_test(Config) ->
-    % Make sure that spaces created in other tests are deleted.
-    ozt:delete_all_entities(),
-
-    U1 = ozt_users:create(),
-    NonAdmin = ozt_users:create(),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, S3} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, S4} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, S5} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    ExpSpaces = [S1, S2, S3, S4, S5],
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_SPACES_LIST]}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin},
-                {user, U1}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = <<"/spaces">>,
-            expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"spaces">> => ExpSpaces}
-        },
-        logic_spec = #logic_spec{
-            module = space_logic,
-            function = list,
-            args = [auth],
-            expected_result = ?OK_LIST(ExpSpaces)
-        }
-        % TODO VFS-4520 Tests for GraphSync API
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % check also space_logic:exist function
-    lists:foreach(
-        fun(SpaceId) -> ?assert(ozt:rpc(space_logic, exists, [SpaceId])) end,
-        ExpSpaces
-    ),
-    ?assert(not ozt:rpc(space_logic, exists, [<<"asdiucyaie827346w">>])).
-
-
 list_privileges_test(Config) ->
 
     ApiTestSpec = #api_test_spec{
@@ -365,197 +315,6 @@ list_privileges_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-
-list_marketplace_test(Config) ->
-    % Make sure that spaces created in other tests are deleted.
-    ozt:delete_all_entities(),
-
-    Creator = ozt_users:create(),
-    NonAdmin = ozt_users:create(),
-
-    Description = ?RAND_STR(),
-    OrganizationName = ?RAND_STR(),
-
-    MarketplaceSpaces = lists:reverse(lists:foldl(fun(Num, Acc) ->
-        SpaceName = str_utils:format_bin("space_~B", [1000 + Num]),
-
-        case ?RAND_BOOL() of
-            true ->
-                Tags = ?RAND_SUBLIST(ozt_spaces:available_space_tags()),
-                SpaceId = ozt_users:create_advertised_space_for(Creator, #{
-                    <<"name">> => SpaceName,
-                    <<"description">> => Description,
-                    <<"organizationName">> => OrganizationName,
-                    <<"tags">> => Tags
-                }),
-                [{SpaceName, SpaceId, Tags} | Acc];
-            false ->
-                ozt_users:create_space_for(Creator, SpaceName),
-                Acc
-        end
-    end, [], lists:seq(1, 400))),
-
-    FilterMarketplaceSpacesFun = fun(Data, Type) ->
-        ExpEntries0 = case maps:get(<<"tags">>, Data, all) of
-            all ->
-                MarketplaceSpaces;
-            [] ->
-                [];
-            Tags ->
-                lists:filter(fun({_, _, SpaceTags}) ->
-                    lists_utils:intersect(Tags, SpaceTags) /= []
-                end, MarketplaceSpaces)
-        end,
-
-        Offset0 = maps:get(<<"offset">>, Data, 0),
-        {Index, Offset1} = case maps:get(<<"token">>, Data, undefined) of
-            undefined ->
-                {maps:get(<<"index">>, Data, <<>>), Offset0};
-            Token when is_binary(Token) ->
-                {http_utils:base64url_decode(Token), Offset0 + 1}
-        end,
-        ExpEntries1 = case Offset1 >= 0 of
-            true ->
-                lists:nthtail(Offset1, lists:dropwhile(fun({SpaceName, _, _}) ->
-                    SpaceName < Index
-                end, ExpEntries0));
-            false ->
-                {LtIndexEntries0, GteIndexEntries} = lists:partition(fun({SpaceName, _, _}) ->
-                    SpaceName < Index
-                end, ExpEntries0),
-                LtIndexEntries1 = lists:reverse(lists:sublist(
-                    lists:reverse(LtIndexEntries0), abs(Offset1)
-                )),
-                LtIndexEntries1 ++ GteIndexEntries
-        end,
-
-        Limit = maps:get(<<"limit">>, Data, 1000),
-        ExpEntries2 = lists:sublist(ExpEntries1, Limit),
-
-        ExpEntries3 = case Type of
-            basic ->
-                lists:map(fun({SpaceName, SpaceId, _}) ->
-                    #{
-                        <<"index">> => space_marketplace:index(SpaceName, SpaceId),
-                        <<"spaceId">> => SpaceId
-                    }
-                end, ExpEntries2);
-            extended ->
-                lists:map(fun({SpaceName, SpaceId, SpaceTags}) ->
-                    #{
-                        <<"spaceId">> => SpaceId,
-                        <<"name">> => SpaceName,
-                        <<"description">> => Description,
-                        <<"organizationName">> => OrganizationName,
-                        <<"tags">> => SpaceTags,
-                        <<"index">> => space_marketplace:index(SpaceName, SpaceId),
-                        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
-                        <<"totalSupportSize">> => 0,
-                        <<"providerNames">> => []
-                    }
-                end, ExpEntries2)
-        end,
-        IsLast = length(ExpEntries3) < Limit,
-        NextPageToken = case IsLast of
-            true -> undefined;
-            false -> http_utils:base64url_encode(maps:get(<<"index">>, lists:last(ExpEntries3)))
-        end,
-
-        {ExpEntries3, IsLast, NextPageToken}
-    end,
-
-    ApiTestSpecForBasicListing = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_SPACES_LIST]},
-                {user, NonAdmin},
-                {user, Creator}
-            ],
-            unauthorized = [nobody],
-            forbidden = []
-        },
-        rest_spec = #rest_spec{
-            method = post,
-            path = <<"/spaces/marketplace/list">>,
-            expected_code = ?HTTP_200_OK,
-            expected_body = ?OK_ENV(fun(_Env, Data) ->
-                {ExpEntries, IsLast, NextPageToken} = FilterMarketplaceSpacesFun(Data, basic),
-                #{
-                    <<"spaces">> => ExpEntries,
-                    <<"isLast">> => IsLast,
-                    <<"nextPageToken">> => utils:undefined_to_null(NextPageToken)
-                }
-            end)
-        },
-        logic_spec = #logic_spec{
-            module = space_logic,
-            function = list_marketplace,
-            args = [auth, data],
-            expected_result = ?OK_ENV(fun(_, Data) ->
-                ExpResult = FilterMarketplaceSpacesFun(Data, basic),
-                ?OK_TERM(fun(Result) -> ?assertEqual(ExpResult, Result) end)
-            end)
-        },
-        gs_spec = #gs_spec{
-            operation = create,
-            gri = #gri{type = od_space, aspect = list_marketplace, scope = protected},
-            expected_result_gui = ?OK_ENV(fun(_Env, Data) ->
-                {ExpEntries, IsLast, _NextPageToken} = FilterMarketplaceSpacesFun(Data, basic),
-                ?OK_MAP(#{<<"list">> => ExpEntries, <<"isLast">> => IsLast})
-            end)
-        },
-        data_spec = #data_spec{
-            optional = [
-                <<"index">>,
-                <<"token">>,
-                <<"offset">>,
-                <<"limit">>,
-                <<"tags">>
-            ],
-            correct_values = #{
-                <<"index">> => [<<"space_1100">>, <<>>, null],
-                <<"token">> => [http_utils:base64url_encode(<<"space_1200">>)],
-                <<"offset">> => [-100, -10, 0, 10],
-                <<"limit">> => [150, 50, 10, 2],
-                <<"tags">> => [?RAND_SUBLIST(ozt_spaces:available_space_tags()), []]
-            },
-            bad_values = [
-                {<<"index">>, 10, ?ERROR_BAD_VALUE_BINARY(<<"index">>)},
-                {<<"token">>, 10, ?ERROR_BAD_VALUE_BINARY(<<"token">>)},
-                {<<"token">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"offset">>, <<"a">>, ?ERROR_BAD_VALUE_INTEGER(<<"offset">>)},
-                {<<"limit">>, <<"a">>, ?ERROR_BAD_VALUE_INTEGER(<<"limit">>)},
-                {<<"limit">>, 0, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"limit">>, 1, 1000)},
-                {<<"tags">>, [<<"troll">>], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"tags">>, ozt_spaces:available_space_tags())}
-            ]
-        }
-        % TODO VFS-4520 Tests for GraphSync API
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForBasicListing)),
-
-    ApiTestSpecForExtendedListing = ApiTestSpecForBasicListing#api_test_spec{
-        rest_spec = undefined,
-        logic_spec = #logic_spec{
-            module = space_logic,
-            function = list_marketplace_with_data,
-            args = [auth, data],
-            expected_result = ?OK_ENV(fun(_, Data) ->
-                ExpResult = FilterMarketplaceSpacesFun(Data, extended),
-                ?OK_TERM(fun(Result) -> ?assertEqual(ExpResult, Result) end)
-            end)
-        },
-        gs_spec = #gs_spec{
-            operation = create,
-            gri = #gri{type = od_space, aspect = list_marketplace_with_data, scope = protected},
-            expected_result_gui = ?OK_ENV(fun(_Env, Data) ->
-                {ExpEntries, IsLast, _NextPageToken} = FilterMarketplaceSpacesFun(Data, extended),
-                ?OK_MAP(#{<<"list">> => ExpEntries, <<"isLast">> => IsLast})
-            end)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForExtendedListing)).
 
 
 get_test(Config) ->
@@ -1510,7 +1269,7 @@ submit_membership_request_test(Config) ->
         rest_spec = #rest_spec{
             method = post,
             path = [<<"/spaces/marketplace/">>, space_id, <<"/request">>],
-            expected_code = ?HTTP_204_NO_CONTENT
+            expected_code = ?HTTP_204_NO_CONTENT %@fixme this should return the request id
         },
         gs_spec = #gs_spec{
             operation = create,
@@ -1528,7 +1287,7 @@ submit_membership_request_test(Config) ->
                 {<<"contactEmail">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_BINARY(<<"contactEmail">>)},
                 {<<"contactEmail">>, <<"emailwithoutdomain">>, ?ERROR_BAD_VALUE_EMAIL},
                 {<<"message">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"message">>)},
-                {<<"message">>, ?RAND_UNICODE_STR(2001), ?ERROR_BAD_VALUE_STRING_TOO_LARGE(<<"message">>, 2000)}
+                {<<"message">>, ?RAND_UNICODE_STR(2001), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"message">>, 2000)}
             ]
         }
     }, EnvSetUpFun, undefined, undefined)).
@@ -1986,10 +1745,252 @@ update_support_parameters_test(Config) ->
         end, CorrectClients)
     end, [?LINE_19_02, ?LINE_20_02, ?LINE_21_02]).
 
+% ----------------
+% sequential tests
+
+list_test(Config) ->
+    % Make sure that spaces created in other tests are deleted.
+    ozt:delete_all_entities(),
+
+    U1 = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S3} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S4} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S5} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    ExpSpaces = [S1, S2, S3, S4, S5],
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_SPACES_LIST]}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {user, U1}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/spaces">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"spaces">> => ExpSpaces}
+        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = list,
+            args = [auth],
+            expected_result = ?OK_LIST(ExpSpaces)
+        }
+        % TODO VFS-4520 Tests for GraphSync API
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % check also space_logic:exist function
+    lists:foreach(
+        fun(SpaceId) -> ?assert(ozt:rpc(space_logic, exists, [SpaceId])) end,
+        ExpSpaces
+    ),
+    ?assert(not ozt:rpc(space_logic, exists, [<<"asdiucyaie827346w">>])).
+
+
+list_marketplace_test(Config) ->
+    % Make sure that spaces created in other tests are deleted.
+    ozt:delete_all_entities(),
+
+    Creator = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+
+    Description = ?RAND_STR(),
+    OrganizationName = ?RAND_STR(),
+
+    MarketplaceSpaces = lists:reverse(lists:foldl(fun(Num, Acc) ->
+        SpaceName = str_utils:format_bin("space_~B", [1000 + Num]),
+
+        case ?RAND_BOOL() of
+            true ->
+                Tags = ?RAND_SUBLIST(ozt_spaces:available_space_tags()),
+                SpaceId = ozt_users:create_advertised_space_for(Creator, #{
+                    <<"name">> => SpaceName,
+                    <<"description">> => Description,
+                    <<"organizationName">> => OrganizationName,
+                    <<"tags">> => Tags
+                }),
+                [{SpaceName, SpaceId, Tags} | Acc];
+            false ->
+                ozt_users:create_space_for(Creator, SpaceName),
+                Acc
+        end
+    end, [], lists:seq(1, 400))),
+
+    FilterMarketplaceSpacesFun = fun(Data, Type) ->
+        ExpEntries0 = case maps:get(<<"tags">>, Data, all) of
+            all ->
+                MarketplaceSpaces;
+            [] ->
+                [];
+            Tags ->
+                lists:filter(fun({_, _, SpaceTags}) ->
+                    lists_utils:intersect(Tags, SpaceTags) /= []
+                end, MarketplaceSpaces)
+        end,
+
+        Offset0 = maps:get(<<"offset">>, Data, 0),
+        {Index, Offset1} = case maps:get(<<"token">>, Data, undefined) of
+            undefined ->
+                {maps:get(<<"index">>, Data, <<>>), Offset0};
+            Token when is_binary(Token) ->
+                {http_utils:base64url_decode(Token), Offset0 + 1}
+        end,
+        ExpEntries1 = case Offset1 >= 0 of
+            true ->
+                lists:nthtail(Offset1, lists:dropwhile(fun({SpaceName, _, _}) ->
+                    SpaceName < Index
+                end, ExpEntries0));
+            false ->
+                {LtIndexEntries0, GteIndexEntries} = lists:partition(fun({SpaceName, _, _}) ->
+                    SpaceName < Index
+                end, ExpEntries0),
+                LtIndexEntries1 = lists:reverse(lists:sublist(
+                    lists:reverse(LtIndexEntries0), abs(Offset1)
+                )),
+                LtIndexEntries1 ++ GteIndexEntries
+        end,
+
+        Limit = maps:get(<<"limit">>, Data, 1000),
+        ExpEntries2 = lists:sublist(ExpEntries1, Limit),
+
+        ExpEntries3 = case Type of
+            basic ->
+                lists:map(fun({SpaceName, SpaceId, _}) ->
+                    #{
+                        <<"index">> => space_marketplace:index(SpaceName, SpaceId),
+                        <<"spaceId">> => SpaceId
+                    }
+                end, ExpEntries2);
+            extended ->
+                lists:map(fun({SpaceName, SpaceId, SpaceTags}) ->
+                    #{
+                        <<"spaceId">> => SpaceId,
+                        <<"name">> => SpaceName,
+                        <<"description">> => Description,
+                        <<"organizationName">> => OrganizationName,
+                        <<"tags">> => SpaceTags,
+                        <<"index">> => space_marketplace:index(SpaceName, SpaceId),
+                        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
+                        <<"totalSupportSize">> => 0,
+                        <<"providerNames">> => []
+                    }
+                end, ExpEntries2)
+        end,
+        IsLast = length(ExpEntries3) < Limit,
+        NextPageToken = case IsLast of
+            true -> undefined;
+            false -> http_utils:base64url_encode(maps:get(<<"index">>, lists:last(ExpEntries3)))
+        end,
+
+        {ExpEntries3, IsLast, NextPageToken}
+    end,
+
+    ApiTestSpecForBasicListing = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_SPACES_LIST]},
+                {user, NonAdmin},
+                {user, Creator}
+            ],
+            unauthorized = [nobody],
+            forbidden = []
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = <<"/spaces/marketplace/list">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = ?OK_ENV(fun(_Env, Data) ->
+                {ExpEntries, IsLast, NextPageToken} = FilterMarketplaceSpacesFun(Data, basic),
+                #{
+                    <<"spaces">> => ExpEntries,
+                    <<"isLast">> => IsLast,
+                    <<"nextPageToken">> => utils:undefined_to_null(NextPageToken)
+                }
+            end)
+        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = list_marketplace,
+            args = [auth, data],
+            expected_result = ?OK_ENV(fun(_, Data) ->
+                ExpResult = FilterMarketplaceSpacesFun(Data, basic),
+                ?OK_TERM(fun(Result) -> ?assertEqual(ExpResult, Result) end)
+            end)
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_space, aspect = list_marketplace, scope = protected},
+            expected_result_gui = ?OK_ENV(fun(_Env, Data) ->
+                {ExpEntries, IsLast, _NextPageToken} = FilterMarketplaceSpacesFun(Data, basic),
+                ?OK_MAP(#{<<"list">> => ExpEntries, <<"isLast">> => IsLast})
+            end)
+        },
+        data_spec = #data_spec{
+            optional = [
+                <<"index">>,
+                <<"token">>,
+                <<"offset">>,
+                <<"limit">>,
+                <<"tags">>
+            ],
+            correct_values = #{
+                <<"index">> => [<<"space_1100">>, <<>>, null],
+                <<"token">> => [http_utils:base64url_encode(<<"space_1200">>)],
+                <<"offset">> => [-100, -10, 0, 10],
+                <<"limit">> => [150, 50, 10, 2],
+                <<"tags">> => [?RAND_SUBLIST(ozt_spaces:available_space_tags()), []]
+            },
+            bad_values = [
+                {<<"index">>, 10, ?ERROR_BAD_VALUE_BINARY(<<"index">>)},
+                {<<"token">>, 10, ?ERROR_BAD_VALUE_BINARY(<<"token">>)},
+                {<<"token">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"offset">>, <<"a">>, ?ERROR_BAD_VALUE_INTEGER(<<"offset">>)},
+                {<<"limit">>, <<"a">>, ?ERROR_BAD_VALUE_INTEGER(<<"limit">>)},
+                {<<"limit">>, 0, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"limit">>, 1, 1000)},
+                {<<"tags">>, [<<"troll">>], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"tags">>, ozt_spaces:available_space_tags())}
+            ]
+        }
+        % TODO VFS-4520 Tests for GraphSync API
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForBasicListing)),
+
+    ApiTestSpecForExtendedListing = ApiTestSpecForBasicListing#api_test_spec{
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = list_marketplace_with_data,
+            args = [auth, data],
+            expected_result = ?OK_ENV(fun(_, Data) ->
+                ExpResult = FilterMarketplaceSpacesFun(Data, extended),
+                ?OK_TERM(fun(Result) -> ?assertEqual(ExpResult, Result) end)
+            end)
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_space, aspect = list_marketplace_with_data, scope = protected},
+            expected_result_gui = ?OK_ENV(fun(_Env, Data) ->
+                {ExpEntries, IsLast, _NextPageToken} = FilterMarketplaceSpacesFun(Data, extended),
+                ?OK_MAP(#{<<"list">> => ExpEntries, <<"isLast">> => IsLast})
+            end)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForExtendedListing)).
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
 
 %% @private
 -spec assert_in_marketplace_with_tags(od_space:id(), all | [od_space:tag()]) ->

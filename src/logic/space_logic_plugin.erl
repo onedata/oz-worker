@@ -428,10 +428,12 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
             (_, Acc) -> Acc
         end, #{}, Res)};
 
+%% @formatter:off
 create(Req = #el_req{data = Data, gri = GRI = #gri{aspect = Aspect}}) when
     Aspect =:= list_marketplace;
     Aspect =:= list_marketplace_with_data
     ->
+%% @formatter:on
     Tags = maps:get(<<"tags">>, Data, all),
 
     Offset = maps:get(<<"offset">>, Data, 0),
@@ -945,22 +947,23 @@ authorize(#el_req{auth = ?USER, operation = create, gri = #gri{aspect = membersh
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = resolve_membership_request}, data = Data}, Space) ->
     % ?SPACE_ADD_USER is additionally required if the resolving user grants access in response to the request
-    GrantsAccess = true == maps:get(<<"grant">>, Data, false),
-    auth_by_privilege(Req, Space, ?SPACE_MANAGE_MARKETPLACE) andalso
-        (not GrantsAccess orelse auth_by_privilege(Req, Space, ?SPACE_ADD_USER));
+    auth_by_privileges(Req, Space, case maps:get(<<"grant">>, Data, false) of
+        true -> [?SPACE_ADD_USER, ?SPACE_MANAGE_MARKETPLACE];
+        false -> [?SPACE_MANAGE_MARKETPLACE]
+    end);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_USER);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_GROUP);
-
+%% @formatter:off
 authorize(#el_req{operation = create, gri = #gri{aspect = Aspect}, auth = ?USER}, _) when
     Aspect =:= list_marketplace;
     Aspect =:= list_marketplace_with_data
-    ->
+->
     true;
-
+%% @formatter:on
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = space_support_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_SUPPORT);
 
@@ -1053,13 +1056,16 @@ authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = eff
 
 authorize(Req = #el_req{operation = get}, Space) ->
     % All other resources can be accessed with view privileges or by the supporting provider
+    ?dump(auth_by_privilege(Req, Space, ?SPACE_VIEW)),
     auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse auth_by_support(Req, Space);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}, data = Data}, Space) ->
     ModifiesMarketplaceData = maps:is_key(<<"advertisedInMarketplace">>, Data) orelse
         maps:is_key(<<"marketplaceContactEmail">>, Data),
-    auth_by_privilege(Req, Space, ?SPACE_UPDATE) andalso
-        (not ModifiesMarketplaceData orelse auth_by_privilege(Req, Space, ?SPACE_MANAGE_MARKETPLACE));
+    auth_by_privileges(Req, Space, case ModifiesMarketplaceData of
+        true -> [?SPACE_UPDATE, ?SPACE_MANAGE_MARKETPLACE];
+        false -> [?SPACE_UPDATE]
+    end);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_SET_PRIVILEGES);
@@ -1163,13 +1169,13 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {group
 
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = group}}) ->
     [?OZ_GROUPS_CREATE, ?OZ_SPACES_ADD_RELATIONSHIPS];
-
+%% @formatter:off
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = Aspect}}) when
     Aspect =:= list_marketplace;
     Aspect =:= list_marketplace_with_data
-    ->
+->
     [?OZ_SPACES_LIST];
-
+%% @formatter:on
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
     [?OZ_SPACES_LIST];
 
@@ -1361,11 +1367,11 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = harvester}}) ->
     harvester_logic_plugin:validate(Req#el_req{gri = #gri{
         type = od_harvester, id = undefined, aspect = instance
     }});
-
+%% @formatter:off
 validate(#el_req{operation = create, gri = #gri{aspect = Aspect}}) when
     Aspect =:= list_marketplace;
     Aspect =:= list_marketplace_with_data
-    ->
+->
     #{
         optional => #{
             <<"index">> => {binary, any},
@@ -1375,7 +1381,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = Aspect}}) when
             <<"tags">> => {list_of_binaries, ?AVAILABLE_SPACE_TAGS}
         }
     };
-
+%% @formatter:on
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => ?PARAMETER_SPECS_FOR_NON_ADVERTISED_SPACE#{<<"name">> => {binary, name}}
 };
@@ -1415,10 +1421,17 @@ auth_by_ownership(_, _) ->
 
 %% @private
 -spec auth_by_privilege(entity_logic:req(), od_space:id() | od_space:record(),
-    privileges:space_privilege()) -> boolean().
-auth_by_privilege(#el_req{auth = ?USER(UserId)}, SpaceOrId, Privilege) ->
-    space_logic:has_eff_privilege(SpaceOrId, UserId, Privilege);
-auth_by_privilege(_, _, _) ->
+    [privileges:space_privilege()]) -> boolean().
+auth_by_privilege(ElReq, SpaceOrId, Privilege) ->
+    auth_by_privileges(ElReq, SpaceOrId, [Privilege]).
+
+
+%% @private
+-spec auth_by_privileges(entity_logic:req(), od_space:id() | od_space:record(),
+    [privileges:space_privilege()]) -> boolean().
+auth_by_privileges(#el_req{auth = ?USER(UserId)}, SpaceOrId, Privileges) ->
+    space_logic:has_eff_privileges(SpaceOrId, UserId, Privileges);
+auth_by_privileges(_, _, _) ->
     false.
 
 

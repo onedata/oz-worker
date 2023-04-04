@@ -17,10 +17,10 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([send_checked_membership_request/6]).
--export([send_best_effort_request_resolved_notification/3]).
--export([send_best_effort_already_granted_notification/2]).
--export([send_best_effort_request_cancelled_notification/2]).
+-export([check_send_membership_request/6]).
+-export([best_effort_notify_request_resolved/3]).
+-export([best_effort_notify_membership_already_granted/2]).
+-export([best_effort_notify_request_cancelled/2]).
 
 
 -define(GREETING, <<"Dear Onedata user,">>).
@@ -35,7 +35,7 @@
 %%% API
 %%%===================================================================
 
--spec send_checked_membership_request(
+-spec check_send_membership_request(
     od_space:id(),
     od_user:id(),
     space_membership_requests:request_id(),
@@ -44,10 +44,10 @@
     binary()
 ) ->
     ok | ?ERROR_INTERNAL_SERVER_ERROR(_).
-send_checked_membership_request(SpaceId, RequesterUserId, RequestId, RequestClassification, RequesterEmail, Message) ->
+check_send_membership_request(SpaceId, RequesterUserId, RequestId, RequestClassification, RequesterEmail, Message) ->
     {SpaceName, MarketplaceContactEmail} = get_space_info(SpaceId),
     {RequesterFullName, RequesterUsername} = get_user_info(RequesterUserId),
-    DecisionLink = build_decision_link(SpaceId, RequestId),
+    DecisionUri = build_gui_decision_uri(SpaceId, RequestId),
     OpeningSentence = str_utils:format_bin(case RequestClassification of
         first ->
             "A new membership request for space '~ts' (id: ~s) has been posted by:";
@@ -90,34 +90,34 @@ send_checked_membership_request(SpaceId, RequesterUserId, RequestId, RequestClas
             RequesterEmail,
             RequesterUserId,
             case Message of <<"">> -> ""; _ -> str_utils:format("Message: ~ts~n", [Message]) end,
-            DecisionLink,
+            DecisionUri,
             ?FOOTER
         ]
     ),
     send_checked(MarketplaceContactEmail, Subject, Body).
 
 
--spec send_best_effort_request_resolved_notification(
+-spec best_effort_notify_request_resolved(
     od_space:id(),
     od_user:email(),
-    boolean()
+    granted | rejected
 ) ->
     ok | ?ERROR_INTERNAL_SERVER_ERROR(_).
-send_best_effort_request_resolved_notification(SpaceId, UserContactEmail, Grant) ->
+best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision) ->
     {SpaceName, _} = get_space_info(SpaceId),
-    DecisionStr = case Grant of
-        true -> "ACCEPTED";
-        false -> "DECLINED"
+    DecisionStr = case Decision of
+        granted -> "GRANTED";
+        rejected -> "REJECTED"
     end,
-    ExtraInfo = case Grant of
-        false ->
+    ExtraInfo = case Decision of
+        rejected ->
             "";
-        true ->
+        granted ->
             str_utils:format(
                 "You may start using the space. View it in Web GUI by clicking the link below:~n"
                 "~s~n"
                 "~n",
-                [build_space_view_link(SpaceId)]
+                [build_gui_space_view_uri(SpaceId)]
             )
     end,
     Subject = str_utils:format_bin("Membership request ~s - space '~ts'", [DecisionStr, SpaceName]),
@@ -138,12 +138,12 @@ send_best_effort_request_resolved_notification(SpaceId, UserContactEmail, Grant)
     send_best_effort(UserContactEmail, Subject, Body).
 
 
--spec send_best_effort_already_granted_notification(
+-spec best_effort_notify_membership_already_granted(
     od_space:id(),
     od_user:email()
 ) ->
     ok | ?ERROR_INTERNAL_SERVER_ERROR(_).
-send_best_effort_already_granted_notification(SpaceId, UserContactEmail) ->
+best_effort_notify_membership_already_granted(SpaceId, UserContactEmail) ->
     {SpaceName, _} = get_space_info(SpaceId),
     Subject = str_utils:format_bin("Membership already GRANTED - space '~ts'", [SpaceName]),
     Body = str_utils:format_bin(
@@ -162,12 +162,12 @@ send_best_effort_already_granted_notification(SpaceId, UserContactEmail) ->
     send_best_effort(UserContactEmail, Subject, Body).
 
 
--spec send_best_effort_request_cancelled_notification(
+-spec best_effort_notify_request_cancelled(
     od_space:id(),
     od_user:email()
 ) ->
     ok | ?ERROR_INTERNAL_SERVER_ERROR(_).
-send_best_effort_request_cancelled_notification(SpaceId, UserContactEmail) ->
+best_effort_notify_request_cancelled(SpaceId, UserContactEmail) ->
     SpaceName = try
         {Name, _} = get_space_info(SpaceId),
         Name
@@ -194,18 +194,24 @@ send_best_effort_request_cancelled_notification(SpaceId, UserContactEmail) ->
 %%% Internal functions
 %%%===================================================================
 
+%%--------------------------------------------------------------------
 %% @private
--spec build_decision_link(od_space:id(), space_membership_requests:request_id()) -> http_client:url().
-build_decision_link(SpaceId, RequestId) ->
+%% @doc
+%% URI of the page in GUI where the space maintainer makes a decision
+%% whether to accept/reject given membership request.
+%% @end
+%%--------------------------------------------------------------------
+-spec build_gui_decision_uri(od_space:id(), space_membership_requests:request_id()) -> http_client:url().
+build_gui_decision_uri(SpaceId, RequestId) ->
     oz_worker:get_uri(str_utils:format_bin(
         "/#/onedata?action_name=confirmJoinSpaceRequest&action_spaceId=~s&action_requestId=~s",
         [SpaceId, RequestId]
     )).
 
 %% @private
--spec build_space_view_link(od_space:id()) -> http_client:url().
-build_space_view_link(SpaceId) ->
-    oz_worker:get_uri(str_utils:format_bin("/#/onedata/spaces/~s/index", [SpaceId])).
+-spec build_gui_space_view_uri(od_space:id()) -> http_client:url().
+build_gui_space_view_uri(SpaceId) ->
+    oz_worker:get_uri(str_utils:format_bin("/#/onedata/spaces/~s", [SpaceId])).
 
 
 %% @private

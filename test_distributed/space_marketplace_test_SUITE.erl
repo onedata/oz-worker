@@ -10,7 +10,6 @@
 %%% NOTE: API tests are located in @see space_misc_api_test_SUITE.erl
 %%% @end
 %%%-------------------------------------------------------------------
-%%%-------------------------------------------------------------------
 -module(space_marketplace_test_SUITE).
 -author("Lukasz Opiola").
 
@@ -36,7 +35,7 @@
 
     intersect_spaces_test/1,
 
-    % time_manipulating_tests
+    % sequential_time_manipulating_tests
     submit_reminder_test/1,
     submit_reminder_error_too_soon_test/1,
     submit_another_request_test/1,
@@ -214,9 +213,11 @@ intersect_spaces_test(_Config) ->
     RandomIds = lists_utils:generate(fun() -> ?RAND_STR() end, 500),
     ?assertEqual(
         lists:sort(MarketplaceSpacesSample),
-        lists:sort(ozt:rpc(space_marketplace, intersect_spaces, [?SHUFFLED(RandomIds ++ MarketplaceSpacesSample)]))
+        lists:sort(ozt:rpc(space_marketplace, intersect_with_advertised_spaces, [?SHUFFLED(RandomIds ++ MarketplaceSpacesSample)]))
     ).
 
+% ----------------
+% sequential_time_manipulating_tests
 
 submit_reminder_test(_Config) ->
     {RequesterId, FirstRequesterEmail, SpaceId} = {ozt_users:create(), ?RAND_EMAIL_ADDRESS(), ?RAND_ADVERTISED_SPACE()},
@@ -621,14 +622,14 @@ has_received_notification_email(
         false -> <<"Unknown">>
     end,
     SubjectTypeKeyword = case Type of
-        {resolved, true} -> "ACCEPTED";
-        {resolved, false} -> "DECLINED";
+        {resolved, true} -> "GRANTED";
+        {resolved, false} -> "REJECTED";
         already_granted -> "already GRANTED";
         cancelled -> "CANCELLED"
     end,
     BodyTypeKeywords = case Type of
-        {resolved, true} -> ["ACCEPTED", "by the space operator", "in Web GUI", "/#/onedata/spaces/"];
-        {resolved, false} -> ["DECLINED", "by the space operator"];
+        {resolved, true} -> ["GRANTED", "by the space operator", "in Web GUI", "/#/onedata/spaces/"];
+        {resolved, false} -> ["REJECTED", "by the space operator"];
         already_granted -> ["has been withdrawn", "has been GRANTED", "independently of space marketplace"];
         cancelled -> ["has been CANCELLED", "has been deleted", "no longer advertised"]
     end,
