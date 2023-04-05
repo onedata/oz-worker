@@ -47,7 +47,7 @@
 
     submit_membership_request/3,
     get_membership_requester_info/3,
-    resolve_membership_request/3,
+    resolve_membership_request/4,
 
     add_user/3, add_user/4,
     add_group/3, add_group/4,
@@ -385,13 +385,18 @@ get_membership_requester_info(Auth, SpaceId, RequestId) ->
     }).
 
 
--spec resolve_membership_request(aai:auth(), od_space:id(), entity_logic:data()) ->
+-spec resolve_membership_request(
+    aai:auth(),
+    od_space:id(),
+    space_membership_requests:request_id(),
+    entity_logic:data()
+) ->
     ok | errors:error().
-resolve_membership_request(Auth, SpaceId, Data) ->
+resolve_membership_request(Auth, SpaceId, RequestId, Data) ->
     entity_logic:handle(#el_req{
         operation = create,
         auth = Auth,
-        gri = #gri{type = od_space, id = SpaceId, aspect = resolve_membership_request},
+        gri = #gri{type = od_space, id = SpaceId, aspect = {resolve_membership_request, RequestId}},
         data = Data
     }).
 

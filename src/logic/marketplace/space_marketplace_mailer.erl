@@ -75,7 +75,7 @@ check_send_membership_request(SpaceId, RequesterUserId, RequestId, RequestClassi
         "User ID: ~s~n"
         "~ts"
         "~n"
-        "Please decide upon acceptance or denial of the request without undue delay. Visit the link below:~n"
+        "Please decide upon acceptance or rejection of the request without undue delay. Visit the link below:~n"
         "~s~n"
         "~n"
         "Membership requests can be made by any user since this space is advertised in the space marketplace. "
@@ -100,19 +100,19 @@ check_send_membership_request(SpaceId, RequesterUserId, RequestId, RequestClassi
 -spec best_effort_notify_request_resolved(
     od_space:id(),
     od_user:email(),
-    granted | rejected
+    space_membership_requests:decision()
 ) ->
     ok | ?ERROR_INTERNAL_SERVER_ERROR(_).
 best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision) ->
     {SpaceName, _} = get_space_info(SpaceId),
     DecisionStr = case Decision of
-        granted -> "GRANTED";
-        rejected -> "REJECTED"
+        grant -> "GRANTED";
+        reject -> "REJECTED"
     end,
     ExtraInfo = case Decision of
-        rejected ->
+        reject ->
             "";
-        granted ->
+        grant ->
             str_utils:format(
                 "You may start using the space. View it in Web GUI by clicking the link below:~n"
                 "~s~n"
@@ -198,7 +198,7 @@ best_effort_notify_request_cancelled(SpaceId, UserContactEmail) ->
 %% @private
 %% @doc
 %% URI of the page in GUI where the space maintainer makes a decision
-%% whether to accept/reject given membership request.
+%% whether to grant/reject given membership request.
 %% @end
 %%--------------------------------------------------------------------
 -spec build_gui_decision_uri(od_space:id(), space_membership_requests:request_id()) -> http_client:url().

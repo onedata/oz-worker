@@ -33,6 +33,8 @@
 -export([version/0, db_encode/2, db_decode/2]).
 
 
+% expresses the decision of space maintainer; whether to grant or reject a membership request
+-type decision() :: grant | reject.
 -type request_id() :: binary().
 -record(request, {
     id :: request_id(),
@@ -49,7 +51,7 @@
     last_pending_request_pruning_time = 0 :: time:seconds()
 }).
 -type record() :: #space_membership_requests{}.
--export_type([request_id/0, record/0]).
+-export_type([decision/0, request_id/0, record/0]).
 
 
 -define(NOW_SECONDS(), global_clock:timestamp_seconds()).
@@ -99,9 +101,9 @@ lookup_email_for_pending(SpaceId, RequestId, Record) ->
     (lookup_pending(SpaceId, RequestId, Record))#request.contact_email.  % throws in case of nonexistent pending request
 
 
--spec resolve(od_space:id(), request_id(), boolean(), record()) ->
+-spec resolve(od_space:id(), request_id(), decision(), record()) ->
     {partial | done, record()} | no_return().
-resolve(SpaceId, RequestId, Grant, InitialRecord) ->
+resolve(SpaceId, RequestId, Decision, InitialRecord) ->
     lookup_pending(SpaceId, RequestId, InitialRecord),  % throws in case of nonexistent pending request
 
     RequesterUserId = infer_requester_id(RequestId),
@@ -119,7 +121,7 @@ resolve(SpaceId, RequestId, Grant, InitialRecord) ->
         {true, PrunedRecord} ->
             {partial, PrunedRecord};
         false ->
-            {done, resolve_sanitized(SpaceId, RequesterUserId, Grant, InitialRecord)}
+            {done, resolve_sanitized(SpaceId, RequesterUserId, Decision, InitialRecord)}
     end.
 
 
@@ -129,7 +131,7 @@ infer_requester_id(RequestId) ->
         [UserId, _] = binary:split(RequestId, <<?REQUEST_ID_SEPARATOR>>, [global]),
         UserId
     catch _:_ ->
-        throw(?ERROR_BAD_DATA(<<"requestId">>))
+        throw(?ERROR_BAD_VALUE_IDENTIFIER(<<"requestId">>))
     end.
 
 
@@ -175,7 +177,7 @@ db_decode(RecordJson, _NestedRecordDecoder) ->
 %%%===================================================================
 
 %% @private
--spec lookup_pending(od_space:id(), request_id(), record()) -> record() | no_return().
+-spec lookup_pending(od_space:id(), request_id(), record()) -> request() | no_return().
 lookup_pending(SpaceId, RequestId, #space_membership_requests{pending = Pending}) ->
     case maps:find(SpaceId, Pending) of
         {ok, #request{id = RequestId} = Request} -> Request;
@@ -210,21 +212,21 @@ submit_internal(SpaceId, UserId, ContactEmail, Message, InitialRecord) ->
 
 
 %% @private
--spec resolve_sanitized(od_space:id(), od_user:id(), boolean(), record()) ->
+-spec resolve_sanitized(od_space:id(), od_user:id(), decision(), record()) ->
     record() | no_return().
-resolve_sanitized(SpaceId, RequesterUserId, Grant, Record = #space_membership_requests{
+resolve_sanitized(SpaceId, RequesterUserId, Decision, Record = #space_membership_requests{
     pending = Pending,
     rejected = Rejected
 }) ->
     {Request = #request{contact_email = ContactEmail}, NewPending} = maps:take(SpaceId, Pending),
     RecordWithUpdatedPending = Record#space_membership_requests{pending = NewPending},
-    Grant andalso ?check(space_logic:add_user(?ROOT, SpaceId, RequesterUserId)),
-    case Grant of
-        true ->
-            space_marketplace_mailer:best_effort_notify_request_resolved(SpaceId, ContactEmail, granted),
+    case Decision of
+        grant ->
+            ?check(space_logic:add_user(?ROOT, SpaceId, RequesterUserId)),
+            space_marketplace_mailer:best_effort_notify_request_resolved(SpaceId, ContactEmail, Decision),
             RecordWithUpdatedPending;
-        false ->
-            space_marketplace_mailer:best_effort_notify_request_resolved(SpaceId, ContactEmail, rejected),
+        reject ->
+            space_marketplace_mailer:best_effort_notify_request_resolved(SpaceId, ContactEmail, Decision),
             prune_overflowing_rejected_history(RecordWithUpdatedPending#space_membership_requests{
                 rejected = Rejected#{SpaceId => Request#request{last_activity = ?NOW_SECONDS()}}
             })
@@ -258,7 +260,7 @@ qualify(SpaceId, UserId, Record) ->
 
 
 %% @private
--spec assert_not_a_member(od_space:id(), od_user:id()) -> ok | no_return().
+-spec assert_not_a_member(od_user:id(), od_space:id()) -> ok | no_return().
 assert_not_a_member(UserId, SpaceId) ->
     case user_logic:has_eff_space(UserId, SpaceId) of
         false -> ok;
@@ -322,7 +324,7 @@ prune_pending_requests(UserId, Record = #space_membership_requests{pending = Pen
     SpaceIdsWithoutAlreadyGranted = lists_utils:subtract(PendingSpaceIds, AlreadyGrantedSpaceIds),
 
     % since the last update of the record, some spaces may have been removed from the marketplace
-    StillRelevantSpaceIds = space_marketplace:intersect_with_advertised_spaces(SpaceIdsWithoutAlreadyGranted),
+    StillRelevantSpaceIds = space_marketplace:filter_advertised(SpaceIdsWithoutAlreadyGranted),
     CancelledSpaceIds = lists_utils:subtract(SpaceIdsWithoutAlreadyGranted, StillRelevantSpaceIds),
     async_send_notifications_for_spaces(cancelled, CancelledSpaceIds, Record),
 

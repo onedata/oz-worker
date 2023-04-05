@@ -1347,7 +1347,7 @@ get_membership_requester_info_test(Config) ->
         }
     })),
 
-    ?assertEqual(?ERROR_BAD_DATA(<<"requestId">>), ozt:rpc(
+    ?assertEqual(?ERROR_BAD_VALUE_IDENTIFIER(<<"requestId">>), ozt:rpc(
         space_logic, get_membership_requester_info, [?USER(SpaceOperatorId), SpaceId, <<"abc">>]
     )),
     ?assertEqual(?ERROR_NOT_FOUND, ozt:rpc(
@@ -1387,37 +1387,47 @@ resolve_membership_request_test(Config) ->
             },
             rest_spec = #rest_spec{
                 method = post,
-                path = [<<"/spaces/marketplace/">>, space_id, <<"/request/resolve">>],
+                path = [<<"/spaces/marketplace/">>, space_id, <<"/request/">>, request_id, <<"/resolve">>],
                 expected_code = ?HTTP_204_NO_CONTENT
             },
             logic_spec = #logic_spec{
                 module = space_logic,
                 function = resolve_membership_request,
-                args = [auth, space_id, data],
+                args = [auth, space_id, request_id, data],
                 expected_result = ?OK
             },
             gs_spec = #gs_spec{
                 operation = create,
-                gri = #gri{type = od_space, id = space_id, aspect = resolve_membership_request},
+                gri = #gri{type = od_space, id = space_id, aspect = {resolve_membership_request, request_id}},
                 expected_result_gui = ?OK
             },
             data_spec = #data_spec{
                 required = [
-                    <<"requestId">>,
-                    <<"grant">>
+                    <<"decision">>
                 ],
                 correct_values = #{
-                    <<"requestId">> => [fun(#{request_id := RequestId}) -> RequestId end],
-                    <<"grant">> => [Grant]
+                    <<"decision">> => [Grant]
                 },
                 bad_values = [
                     {<<"requestId">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_BINARY(<<"requestId">>)},
-                    {<<"requestId">>, <<"2132345">>, ?ERROR_BAD_DATA(<<"requestId">>)},
-                    {<<"grant">>, 1234, ?ERROR_BAD_VALUE_BOOLEAN(<<"grant">>)}
+                    {<<"requestId">>, <<"2132345">>, ?ERROR_BAD_VALUE_IDENTIFIER(<<"requestId">>)},
+                    {<<"decision">>, not_sure, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"decision">>, [grant, reject])},
+                    {<<"decision">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"decision">>)}
                 ]
             }
         }, EnvSetUpFun, undefined, undefined))
-    end, [true, false]).
+    end, [true, false]),
+
+    SpaceId = ozt_users:create_advertised_space_for(SpaceOperatorId),
+    RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),
+    ?assertEqual(
+        ?ERROR_BAD_VALUE_EMPTY(<<"requestId">>),
+        ozt_spaces:try_resolve_membership_request(SpaceId, RequestId, <<"">>)
+    ),
+    ?assertEqual(
+        ?ERROR_BAD_VALUE_BINARY(<<"requestId">>),
+        ozt_spaces:try_resolve_membership_request(SpaceId, RequestId, [1,2,3])
+    ).
 
 
 list_effective_providers_test(Config) ->

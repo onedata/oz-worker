@@ -92,7 +92,7 @@ operation_supported(create, space_support_token, private) -> true;
 operation_supported(create, instance, private) -> true;
 operation_supported(create, join, private) -> true;
 operation_supported(create, membership_request, private) -> true;
-operation_supported(create, resolve_membership_request, private) -> true;
+operation_supported(create, {resolve_membership_request, _}, private) -> true;
 operation_supported(create, {owner, _}, private) -> true;
 
 operation_supported(create, {user, _}, private) -> true;
@@ -301,12 +301,11 @@ create(Req = #el_req{auth = ?USER(UserId), gri = #gri{id = SpaceId, aspect = mem
         space_membership_requests:submit(SpaceId, UserId, ContactEmail, Message, SpaceMembershipRequests)
     end);
 
-create(Req = #el_req{gri = #gri{id = SpaceId, aspect = resolve_membership_request}}) ->
-    RequestId = maps:get(<<"requestId">>, Req#el_req.data),
-    Grant = maps:get(<<"grant">>, Req#el_req.data),
+create(Req = #el_req{gri = #gri{id = SpaceId, aspect = {resolve_membership_request, RequestId}}}) ->
+    Decision = maps:get(<<"decision">>, Req#el_req.data),
     RequesterUserId = space_membership_requests:infer_requester_id(RequestId),
     od_user:lock_and_update_space_membership_requests(RequesterUserId, fun(SpaceMembershipRequests) ->
-        space_membership_requests:resolve(SpaceId, RequestId, Grant, SpaceMembershipRequests)
+        space_membership_requests:resolve(SpaceId, RequestId, Decision, SpaceMembershipRequests)
     end);
 
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
@@ -432,7 +431,7 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
 create(Req = #el_req{data = Data, gri = GRI = #gri{aspect = Aspect}}) when
     Aspect =:= list_marketplace;
     Aspect =:= list_marketplace_with_data
-    ->
+->
 %% @formatter:on
     Tags = maps:get(<<"tags">>, Data, all),
 
@@ -945,11 +944,11 @@ authorize(Req = #el_req{operation = create, gri = #gri{id = SpaceId, aspect = ha
 authorize(#el_req{auth = ?USER, operation = create, gri = #gri{aspect = membership_request}}, Space) ->
     Space#od_space.advertised_in_marketplace;
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = resolve_membership_request}, data = Data}, Space) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {resolve_membership_request, _}}, data = Data}, Space) ->
     % ?SPACE_ADD_USER is additionally required if the resolving user grants access in response to the request
-    auth_by_privileges(Req, Space, case maps:get(<<"grant">>, Data, false) of
-        true -> [?SPACE_ADD_USER, ?SPACE_MANAGE_MARKETPLACE];
-        false -> [?SPACE_MANAGE_MARKETPLACE]
+    auth_by_privileges(Req, Space, case maps:get(<<"decision">>, Data) of
+        grant -> [?SPACE_ADD_USER, ?SPACE_MANAGE_MARKETPLACE];
+        reject -> [?SPACE_MANAGE_MARKETPLACE]
     end);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space) ->
@@ -1056,7 +1055,6 @@ authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = eff
 
 authorize(Req = #el_req{operation = get}, Space) ->
     % All other resources can be accessed with view privileges or by the supporting provider
-    ?dump(auth_by_privilege(Req, Space, ?SPACE_VIEW)),
     auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse auth_by_support(Req, Space);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}, data = Data}, Space) ->
@@ -1304,11 +1302,11 @@ validate(#el_req{operation = create, gri = #gri{aspect = membership_request}}) -
         }
     };
 
-validate(#el_req{operation = create, gri = #gri{aspect = resolve_membership_request}}) ->
+validate(#el_req{operation = create, gri = #gri{aspect = {resolve_membership_request, _}}}) ->
     #{
         required => #{
-            <<"requestId">> => {binary, non_empty},
-            <<"grant">> => {boolean, any}
+            {aspect, <<"requestId">>} => {binary, non_empty},
+            <<"decision">> => {atom, [grant, reject]}
         }
     };
 
@@ -1420,15 +1418,15 @@ auth_by_ownership(_, _) ->
 
 
 %% @private
--spec auth_by_privilege(entity_logic:req(), od_space:id() | od_space:record(),
-    [privileges:space_privilege()]) -> boolean().
+-spec auth_by_privilege(entity_logic:req(), od_space:id() | od_space:record(), privileges:space_privilege()) ->
+    boolean().
 auth_by_privilege(ElReq, SpaceOrId, Privilege) ->
     auth_by_privileges(ElReq, SpaceOrId, [Privilege]).
 
 
 %% @private
--spec auth_by_privileges(entity_logic:req(), od_space:id() | od_space:record(),
-    [privileges:space_privilege()]) -> boolean().
+-spec auth_by_privileges(entity_logic:req(), od_space:id() | od_space:record(), [privileges:space_privilege()]) ->
+    boolean().
 auth_by_privileges(#el_req{auth = ?USER(UserId)}, SpaceOrId, Privileges) ->
     space_logic:has_eff_privileges(SpaceOrId, UserId, Privileges);
 auth_by_privileges(_, _, _) ->

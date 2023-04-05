@@ -68,14 +68,14 @@ routes() -> [
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = membership_request}
     }},
     %% TODO VFS-10687 swaggers for space marketplace
-    {<<"/spaces/marketplace/:id/request/resolve">>, #rest_req{
-        method = 'POST',
-        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = resolve_membership_request}
-    }},
-    %% TODO VFS-10687 swaggers for space marketplace
     {<<"/spaces/marketplace/:id/request/:rid/requester_info">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {membership_requester_info, ?BINDING(rid)}}
+    }},
+    %% TODO VFS-10687 swaggers for space marketplace
+    {<<"/spaces/marketplace/:id/request/:rid/resolve">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {resolve_membership_request, ?BINDING(rid)}}
     }},
     %% Get space details
     %% This operation requires one of the following privileges:
