@@ -94,7 +94,7 @@ check_send_membership_request(SpaceId, RequesterUserId, RequestId, RequestClassi
             ?FOOTER
         ]
     ),
-    send_checked(MarketplaceContactEmail, Subject, Body).
+    check_send(MarketplaceContactEmail, Subject, Body).
 
 
 -spec best_effort_notify_request_resolved(
@@ -135,7 +135,7 @@ best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision) ->
             ?FOOTER
         ]
     ),
-    send_best_effort(UserContactEmail, Subject, Body).
+    best_effort_send(UserContactEmail, Subject, Body).
 
 
 -spec best_effort_notify_membership_already_granted(
@@ -159,7 +159,7 @@ best_effort_notify_membership_already_granted(SpaceId, UserContactEmail) ->
             ?FOOTER
         ]
     ),
-    send_best_effort(UserContactEmail, Subject, Body).
+    best_effort_send(UserContactEmail, Subject, Body).
 
 
 -spec best_effort_notify_request_cancelled(
@@ -188,7 +188,7 @@ best_effort_notify_request_cancelled(SpaceId, UserContactEmail) ->
             ?FOOTER
         ]
     ),
-    send_best_effort(UserContactEmail, Subject, Body).
+    best_effort_send(UserContactEmail, Subject, Body).
 
 %%%===================================================================
 %%% Internal functions
@@ -240,8 +240,8 @@ get_user_info(UserId) ->
 %% Used for emails that are critical; a failure to deliver should raise an exception.
 %% @end
 %%--------------------------------------------------------------------
--spec send_checked(od_user:email(), binary(), binary()) -> ok | no_return().
-send_checked(Recipient, Subject, Body) ->
+-spec check_send(od_user:email(), binary(), binary()) -> ok | no_return().
+check_send(Recipient, Subject, Body) ->
     ?check(onezone_mailer:send([Recipient], Subject, Body)).
 
 
@@ -253,7 +253,7 @@ send_checked(Recipient, Subject, Body) ->
 %% Errors will be logged internally by onezone_mailer.
 %% @end
 %%--------------------------------------------------------------------
--spec send_best_effort(od_user:email(), binary(), binary()) -> ok.
-send_best_effort(Recipient, Subject, Body) ->
+-spec best_effort_send(od_user:email(), binary(), binary()) -> ok.
+best_effort_send(Recipient, Subject, Body) ->
     onezone_mailer:send([Recipient], Subject, Body),
     ok.
