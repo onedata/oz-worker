@@ -228,14 +228,14 @@ get_all_sessions(UserId) ->
 %% @doc
 %% Must be used to apply any changes to space_membership_requests field.
 %% May be used for a long-lasting transactions as it does not block the tp process.
-%% If {partial, UpdatedRecord} is returned, the changes will be saved and the procedure
-%% will be called again, with the same callback. The second time, {done, UpdatedRecord}
-%% must be returned.
+%% If 'pruning_needed' is returned, pruning of pending membership requests will be
+%% called, the result will be saved and the procedure will be called again, with
+%% the same callback. The second time, {done, UpdatedRecord} must be returned.
 %% @end
 %%--------------------------------------------------------------------
 -spec lock_and_update_space_membership_requests(
     id(),
-    fun((space_membership_requests:record()) -> {partial | done, space_membership_requests:record()})
+    fun((space_membership_requests:record()) -> pruning_needed | {done, space_membership_requests:record()})
 ) ->
     {ok, space_membership_requests:record()} | {error, term()}.
 lock_and_update_space_membership_requests(UserId, Diff) ->
