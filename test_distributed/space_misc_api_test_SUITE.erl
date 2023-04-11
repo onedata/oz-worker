@@ -327,14 +327,12 @@ get_test(Config) ->
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(Owner), ?SPACE_NAME1),
     ozt_spaces:add_user(SpaceId, UserWithoutSpaceView, AllPrivs -- [?SPACE_VIEW]),
     ozt_spaces:add_user(SpaceId, UserWithSpaceViewOnly, [?SPACE_VIEW]),
-    ozt_spaces:add_user(SpaceId, UserWithSpaceViewAndManageMarketplace, [?SPACE_VIEW, ?SPACE_MANAGE_MARKETPLACE]),
+    ozt_spaces:add_user(SpaceId, UserWithSpaceViewAndManageMarketplace, [?SPACE_VIEW, ?SPACE_MANAGE_IN_MARKETPLACE]),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config),
     SupportSize = ozt_spaces:minimum_support_size(),
     {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, SpaceId} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, SpaceId, SupportSize),
-
-    AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     ozt_providers:simulate_version(P1, ?LINE_21_02),
     ozt_spaces:set_support_parameters(SpaceId, P1, ozt_spaces:random_support_parameters()),
@@ -347,8 +345,24 @@ get_test(Config) ->
     ExpAdvertisedInMarketplace = false,
     ozt:reconcile_entity_graph(),
 
+    ExpUsersField = #{
+        Owner => AllPrivs,
+        UserWithoutSpaceView => AllPrivs -- [?SPACE_VIEW],
+        UserWithSpaceViewOnly => [?SPACE_VIEW],
+        UserWithSpaceViewAndManageMarketplace => [?SPACE_VIEW, ?SPACE_MANAGE_IN_MARKETPLACE]
+    },
+    ExpEffUsersField = #{
+        Owner => {AllPrivs, [{od_space, <<"self">>}]},
+        UserWithoutSpaceView => {AllPrivs -- [?SPACE_VIEW], [{od_space, <<"self">>}]},
+        UserWithSpaceViewOnly => {[?SPACE_VIEW], [{od_space, <<"self">>}]},
+        UserWithSpaceViewAndManageMarketplace => {[?SPACE_VIEW, ?SPACE_MANAGE_IN_MARKETPLACE], [{od_space, <<"self">>}]}
+    },
+    ExpUsersWithBinaryPrivs = maps:map(fun(_UserId, Privileges) ->
+        [atom_to_binary(P) || P <- Privileges]
+    end, ExpUsersField),
+
     % The private data which differs depending on the auth
-    % (in case of users, requires ?SPACE_MANAGE_MARKETPLACE privilege)
+    % (in case of users, requires ?SPACE_MANAGE_IN_MARKETPLACE privilege)
     lists:foreach(fun({CorrectClient, CanViewMarketplaceContactEmail}) ->
         ExpectedMarketplaceContactEmail = ?RAND_ELEMENT([?RAND_EMAIL_ADDRESS(), <<"">>]),
         ozt_spaces:update(SpaceId, #{<<"marketplaceContactEmail">> => ExpectedMarketplaceContactEmail}),
@@ -385,19 +399,8 @@ get_test(Config) ->
                             true -> ExpectedMarketplaceContactEmail;
                             false -> <<"">>
                         end),
-                        ?assertEqual(Users, #{
-                            Owner => AllPrivs,
-                            UserWithoutSpaceView => AllPrivs -- [?SPACE_VIEW],
-                            UserWithSpaceViewOnly => [?SPACE_VIEW],
-                            UserWithSpaceViewAndManageMarketplace => [?SPACE_VIEW, ?SPACE_MANAGE_MARKETPLACE]
-                        }
-                        ),
-                        ?assertEqual(EffUsers, #{
-                            Owner => {AllPrivs, [{od_space, <<"self">>}]},
-                            UserWithoutSpaceView => {AllPrivs -- [?SPACE_VIEW], [{od_space, <<"self">>}]},
-                            UserWithSpaceViewOnly => {[?SPACE_VIEW], [{od_space, <<"self">>}]},
-                            UserWithSpaceViewAndManageMarketplace => {[?SPACE_VIEW, ?SPACE_MANAGE_MARKETPLACE], [{od_space, <<"self">>}]}
-                        }),
+                        ?assertEqual(Users, ExpUsersField),
+                        ?assertEqual(EffUsers, ExpEffUsersField),
                         ?assertEqual(Storages, #{St1 => SupportSize}),
                         ?assertEqual(SupportParametersRegistry, ExpSupportParametersRegistry),
                         ?assertEqual(EffProviders, #{P1 => {SupportSize, [{od_storage, St1}]}})
@@ -410,22 +413,12 @@ get_test(Config) ->
                 expected_result_op = ?OK_MAP_CONTAINS(#{
                     <<"name">> => ?SPACE_NAME1,
                     <<"owners">> => [Owner],
-                    <<"users">> => #{
-                        Owner => AllPrivsBin,
-                        UserWithoutSpaceView => AllPrivsBin -- [<<"space_view">>],
-                        UserWithSpaceViewOnly => [<<"space_view">>],
-                        UserWithSpaceViewAndManageMarketplace => [<<"space_view">>, <<"space_manage_marketplace">>]
-                    },
+                    <<"users">> => ExpUsersWithBinaryPrivs,
                     <<"groups">> => #{},
                     <<"shares">> => [],
                     <<"providers">> => #{P1 => SupportSize},
                     <<"harvesters">> => [],
-                    <<"effectiveUsers">> => #{
-                        Owner => AllPrivsBin,
-                        UserWithoutSpaceView => AllPrivsBin -- [<<"space_view">>],
-                        UserWithSpaceViewOnly => [<<"space_view">>],
-                        UserWithSpaceViewAndManageMarketplace => [<<"space_view">>, <<"space_manage_marketplace">>]
-                    },
+                    <<"effectiveUsers">> => ExpUsersWithBinaryPrivs,
                     <<"effectiveGroups">> => #{},
                     <<"supportParametersRegistry">> => jsonable_record:to_json(
                         ExpSupportParametersRegistry, support_parameters_registry
@@ -599,7 +592,7 @@ get_marketplace_data_test(Config) ->
 update_space_not_in_marketplace_test(Config) ->
     Owner = ozt_users:create(),
     % if marketplace advertisement or contact email is modified,
-    % SPACE_MANAGE_MARKETPLACE is required beside SPACE_UPDATE
+    % SPACE_MANAGE_IN_MARKETPLACE is required beside SPACE_UPDATE
     UserWithUpdatePrivileges = ozt_users:create(),
     UserWithManageMarketplacePrivileges = ozt_users:create(),
     UserWithoutPrivileges = ozt_users:create(),
@@ -618,7 +611,7 @@ update_space_not_in_marketplace_test(Config) ->
         )),
         ozt_spaces:add_user(S1, UserWithoutPrivileges, []),
         ozt_spaces:add_user(S1, UserWithUpdatePrivileges, [?SPACE_UPDATE]),
-        ozt_spaces:add_user(S1, UserWithManageMarketplacePrivileges, [?SPACE_MANAGE_MARKETPLACE]),
+        ozt_spaces:add_user(S1, UserWithManageMarketplacePrivileges, [?SPACE_MANAGE_IN_MARKETPLACE]),
         #{spaceId => S1, initialData => get_space_marketplace_related_data_json(S1)}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId, initialData := PrevData} = _Env, Data) ->
@@ -732,7 +725,7 @@ update_space_not_in_marketplace_test(Config) ->
 update_space_in_marketplace_test(Config) ->
     Owner = ozt_users:create(),
     % if marketplace advertisement or contact email is modified,
-    % SPACE_MANAGE_MARKETPLACE is required beside SPACE_UPDATE
+    % SPACE_MANAGE_IN_MARKETPLACE is required beside SPACE_UPDATE
     UserWithUpdatePrivileges = ozt_users:create(),
     UserWithoutPrivileges = ozt_users:create(),
     UserWithManageMarketplacePrivileges = ozt_users:create(),
@@ -744,7 +737,7 @@ update_space_in_marketplace_test(Config) ->
         })),
         ozt_spaces:add_user(S1, UserWithoutPrivileges, []),
         ozt_spaces:add_user(S1, UserWithUpdatePrivileges, [?SPACE_UPDATE]),
-        ozt_spaces:add_user(S1, UserWithManageMarketplacePrivileges, [?SPACE_MANAGE_MARKETPLACE]),
+        ozt_spaces:add_user(S1, UserWithManageMarketplacePrivileges, [?SPACE_MANAGE_IN_MARKETPLACE]),
         #{spaceId => S1, initialData => get_space_marketplace_related_data_json(S1)}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId, initialData := PrevData} = _Env, Data) ->
@@ -1247,6 +1240,12 @@ submit_membership_request_test(Config) ->
         #{space_id => ozt_spaces:create_advertised()}
     end,
 
+    VerifyFun = fun(SpaceId, Data, RequestId) ->
+        ContactEmail = maps:get(<<"contactEmail">>, Data),
+        #od_user{space_membership_requests = Record} = ozt_users:get(RequesterId),
+        ?assertEqual(ContactEmail, ozt:rpc(space_membership_requests, lookup_email_for_pending, [SpaceId, RequestId, Record]))
+    end,
+
     ?assert(api_test_utils:run_tests(Config, #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -1261,23 +1260,33 @@ submit_membership_request_test(Config) ->
             module = space_logic,
             function = submit_membership_request,
             args = [auth, space_id, data],
-            expected_result = ?OK
+            expected_result = ?OK_ENV(fun(#{space_id := SpaceId}, Data) ->
+                ?OK_TERM(fun(RequestId) -> VerifyFun(SpaceId, Data, RequestId) end)
+            end)
         },
         rest_spec = #rest_spec{
             method = post,
             path = [<<"/spaces/marketplace/">>, space_id, <<"/request">>],
-            expected_code = ?HTTP_204_NO_CONTENT %@fixme this should return the request id
+            expected_code = ?HTTP_200_OK,
+            expected_body = ?OK_ENV(fun(#{space_id := SpaceId}, Data) ->
+                fun(#{<<"requestId">> := RequestId}) ->
+                    VerifyFun(SpaceId, Data, RequestId),
+                    true
+                end
+            end)
         },
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_space, id = space_id, aspect = membership_request},
-            expected_result_gui = ?OK
+            expected_result_gui = ?OK_ENV(fun(#{space_id := SpaceId}, Data) ->
+                ?OK_TERM(fun(#{<<"requestId">> := RequestId}) -> VerifyFun(SpaceId, Data, RequestId) end)
+            end)
         },
         data_spec = #data_spec{
             required = [<<"contactEmail">>],
             optional = [<<"message">>],
             correct_values = #{
-                <<"contactEmail">> => [<<"email@example.com">>],
+                <<"contactEmail">> => [?RAND_EMAIL_ADDRESS()],
                 <<"message">> => [<<"">>, ?RAND_STR(), ?RAND_STR(2000)]
             },
             bad_values = [
@@ -1299,7 +1308,7 @@ get_membership_requester_info_test(Config) ->
     SpaceOperatorId = ozt_users:create(),
     SpaceMemberWithoutPrivsId = ozt_users:create(),
     SpaceId = ozt_users:create_advertised_space_for(SpaceOperatorId),
-    ozt_spaces:add_user(SpaceId, SpaceMemberWithoutPrivsId, privileges:space_admin() -- [?SPACE_MANAGE_MARKETPLACE]),
+    ozt_spaces:add_user(SpaceId, SpaceMemberWithoutPrivsId, privileges:space_admin() -- [?SPACE_MANAGE_IN_MARKETPLACE]),
 
     ContactEmail = ?RAND_EMAIL_ADDRESS(),
     RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId, ContactEmail),
@@ -1362,8 +1371,8 @@ resolve_membership_request_test(Config) ->
         EnvSetUpFun = fun() ->
             SpaceId = ozt_users:create_advertised_space_for(SpaceOperatorId),
             RequiredPrivs = case Decision of
-                grant -> [?SPACE_MANAGE_MARKETPLACE, ?SPACE_ADD_USER];
-                reject -> [?SPACE_MANAGE_MARKETPLACE]
+                grant -> [?SPACE_MANAGE_IN_MARKETPLACE, ?SPACE_ADD_USER];
+                reject -> [?SPACE_MANAGE_IN_MARKETPLACE]
             end,
             ozt_spaces:add_user(SpaceId, SpaceMemberWithoutPrivsId, privileges:space_admin() -- RequiredPrivs),
             RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),
@@ -1414,14 +1423,13 @@ resolve_membership_request_test(Config) ->
     end, [grant, reject]),
 
     SpaceId = ozt_users:create_advertised_space_for(SpaceOperatorId),
-    RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),
     ?assertEqual(
         ?ERROR_BAD_VALUE_EMPTY(<<"requestId">>),
         ozt_spaces:try_resolve_membership_request(SpaceId, <<"">>, ?RAND_ELEMENT([grant, reject]))
     ),
     ?assertEqual(
         ?ERROR_BAD_VALUE_BINARY(<<"requestId">>),
-        ozt_spaces:try_resolve_membership_request(SpaceId, [1,2,3], ?RAND_ELEMENT([grant, reject]))
+        ozt_spaces:try_resolve_membership_request(SpaceId, [1, 2, 3], ?RAND_ELEMENT([grant, reject]))
     ).
 
 

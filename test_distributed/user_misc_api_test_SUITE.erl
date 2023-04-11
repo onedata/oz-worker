@@ -1308,7 +1308,7 @@ get_space_membership_requests_test(Config) ->
     AcceptedSpaces = lists_utils:generate(fun ozt_spaces:create_advertised/0, 5),
     RejectedSpaces = lists_utils:generate(fun ozt_spaces:create_advertised/0, 5),
 
-    ExpPendingSpaces = maps_utils:generate_from_list(fun(SpaceId) ->
+    ExpPendingSpaceMembershipRequests = maps_utils:generate_from_list(fun(SpaceId) ->
         ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
         ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
         RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
@@ -1326,7 +1326,7 @@ get_space_membership_requests_test(Config) ->
         ozt_spaces:resolve_membership_request(SpaceId, RequestId, grant)
     end, AcceptedSpaces),
 
-    ExpRejectedSpaces = maps_utils:generate_from_list(fun(SpaceId) ->
+    ExpRejectedSpaceMembershipRequests = maps_utils:generate_from_list(fun(SpaceId) ->
         ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
         ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
         RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
@@ -1340,8 +1340,8 @@ get_space_membership_requests_test(Config) ->
     end, RejectedSpaces),
 
     ExpResultForSubjectUser = #{
-        <<"pending">> => ExpPendingSpaces,
-        <<"rejected">> => ExpRejectedSpaces,
+        <<"pending">> => ExpPendingSpaceMembershipRequests,
+        <<"rejected">> => ExpRejectedSpaceMembershipRequests,
         <<"lastPendingRequestPruningTime">> => ozt_mocks:get_frozen_time_seconds()
     },
     ExpResultForOtherUser = #{

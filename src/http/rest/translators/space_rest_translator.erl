@@ -46,6 +46,9 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#g
 create_response(#gri{aspect = join} = Gri, AuthHint, resource, Result) ->
     create_response(Gri#gri{aspect = instance}, AuthHint, resource, Result);
 
+create_response(#gri{aspect = membership_request}, _, value, RequestId) ->
+    rest_translator:ok_body_reply(#{<<"requestId">> => RequestId});
+
 create_response(#gri{aspect = invite_user_token}, _, value, Token) ->
     {ok, Serialized} = tokens:serialize(Token),
     rest_translator:ok_body_reply(#{<<"token">> => Serialized});

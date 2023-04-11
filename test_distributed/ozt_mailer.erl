@@ -48,6 +48,11 @@ unmock() ->
     ozt_mocks:mock_unload([onezone_mailer]).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% If enabled, all attempts to sent and email to this address will fail with an error.
+%% @end
+%%--------------------------------------------------------------------
 -spec toggle_error_simulation(od_user:email(), boolean()) -> ok.
 toggle_error_simulation(EmailAddress, Flag) ->
     testmaster_save_on_oz_nodes(?SIMULATE_ERRORS_KEY(EmailAddress), Flag).
@@ -92,11 +97,9 @@ oz_node_mailer_send_mock(RecipientAddresses, Subject, Body) ->
 %% @private
 -spec oz_node_collect_email(smtp_client:email_address(), binary(), binary()) -> ok.
 oz_node_collect_email(RecipientAddress, Subject, Body) ->
-    PreviousMailHistory = oz_node_get_saved(?MAIL_HISTORY_KEY(RecipientAddress), []),
-    oz_node_save_on_oz_nodes(
-        ?MAIL_HISTORY_KEY(RecipientAddress),
-        PreviousMailHistory ++ [#received_mail{subject = Subject, body = Body}]
-    ).
+    oz_node_update_on_nodes(?MAIL_HISTORY_KEY(RecipientAddress), fun(PreviousMailHistory) ->
+        {ok, PreviousMailHistory ++ [#received_mail{subject = Subject, body = Body}], infinity}
+    end, []).
 
 
 %% @private
@@ -118,9 +121,9 @@ testmaster_get_email_history(RecipientAddress) ->
 
 
 %% @private
--spec oz_node_save_on_oz_nodes(atom(), term()) -> ok.
-oz_node_save_on_oz_nodes(Key, Value) ->
-    utils:rpc_multicall(consistent_hashing:get_all_nodes(), node_cache, put, [Key, Value]),
+-spec oz_node_update_on_nodes(atom(), node_cache:update_callback(), term()) -> ok.
+oz_node_update_on_nodes(Key, UpdateCallback, Default) ->
+    utils:rpc_multicall(consistent_hashing:get_all_nodes(), node_cache, update, [Key, UpdateCallback, Default]),
     ok.
 
 

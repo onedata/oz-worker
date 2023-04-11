@@ -365,14 +365,14 @@ create_space_support_token(Auth, SpaceId) ->
 
 
 -spec submit_membership_request(aai:auth(), od_space:id(), entity_logic:data()) ->
-    ok | errors:error().
+    {ok, space_membership_requests:request_id()} | errors:error().
 submit_membership_request(Auth, SpaceId, Data) ->
-    entity_logic:handle(#el_req{
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
         auth = Auth,
         gri = #gri{type = od_space, id = SpaceId, aspect = membership_request},
         data = Data
-    }).
+    })).
 
 
 -spec get_membership_requester_info(aai:auth(), od_space:id(), space_membership_requests:request_id()) ->

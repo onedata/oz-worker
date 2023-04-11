@@ -22,7 +22,7 @@
 %% API
 -export([empty/0]).
 -export([submit/5]).
--export([lookup_email_for_pending/3]).
+-export([lookup_pending_request_id/2, lookup_email_for_pending/3]).
 -export([resolve/4]).
 -export([infer_requester_id/1]).
 
@@ -92,13 +92,21 @@ submit(SpaceId, UserId, ContactEmail, Message, InitialRecord) ->
     end.
 
 
+-spec lookup_pending_request_id(od_space:id(), record()) ->
+    request_id() | no_return().
+lookup_pending_request_id(SpaceId, #space_membership_requests{pending = Pending}) ->
+    case maps:find(SpaceId, Pending) of
+        {ok, #request{id = RequestId}} -> RequestId;
+        _ -> throw(?ERROR_NOT_FOUND)
+    end.
+
+
 -spec lookup_email_for_pending(od_space:id(), request_id(), record()) -> od_user:email() | no_return().
 lookup_email_for_pending(SpaceId, RequestId, Record) ->
-    % fixme handle special cases:
-    % * space deleted -> not found
-    % * space not in marketplace -> not found
-    % * user already a member -> error relation already exists
-    (lookup_pending(SpaceId, RequestId, Record))#request.contact_email.  % throws in case of nonexistent pending request
+    od_space:is_advertised_in_marketplace(SpaceId) orelse throw(?ERROR_NOT_FOUND),
+    Request = lookup_pending(SpaceId, RequestId, Record),  % throws in case of nonexistent pending request
+    assert_not_a_member(infer_requester_id(RequestId), SpaceId),
+    Request#request.contact_email.
 
 
 -spec resolve(od_space:id(), request_id(), decision(), record()) ->
@@ -192,6 +200,8 @@ submit_internal(SpaceId, UserId, ContactEmail, Message, InitialRecord) ->
     {Approach, UpdatedRecord} = qualify(SpaceId, UserId, InitialRecord),
     {RequestClassification, Request} = case Approach of
         {reuse, RequestToReuse} ->
+            % reminder reuses the same request id, which makes the previous decision
+            % URL still valid (the space maintainer can use any of the emails to decide)
             {reminder, RequestToReuse#request{
                 contact_email = ContactEmail,
                 last_activity = ?NOW_SECONDS()

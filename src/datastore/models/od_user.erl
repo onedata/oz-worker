@@ -237,12 +237,13 @@ get_all_sessions(UserId) ->
     id(),
     fun((space_membership_requests:record()) -> {partial | done, space_membership_requests:record()})
 ) ->
-    ok | {error, term()}.
+    {ok, space_membership_requests:record()} | {error, term()}.
 lock_and_update_space_membership_requests(UserId, Diff) ->
     UpdateSpaceMembershipRequests = fun(NewValue) ->
-        ?extract_ok(od_user:update(UserId, fun(User) ->
-            {ok, User#od_user{space_membership_requests = NewValue}}
-        end))
+        case od_user:update(UserId, fun(User) -> {ok, User#od_user{space_membership_requests = NewValue}} end) of
+            {ok, _} -> {ok, NewValue};
+            {error, _} = Error -> Error
+        end
     end,
 
     ?catch_exceptions(critical_section:run({?FUNCTION_NAME, UserId}, fun() ->
@@ -254,7 +255,7 @@ lock_and_update_space_membership_requests(UserId, Diff) ->
                     {done, FinalSpaceMembershipRequests} ->
                         UpdateSpaceMembershipRequests(FinalSpaceMembershipRequests);
                     {partial, PartiallyUpdatedSpaceMembershipRequests} ->
-                        ok = UpdateSpaceMembershipRequests(PartiallyUpdatedSpaceMembershipRequests),
+                        {ok, _} = UpdateSpaceMembershipRequests(PartiallyUpdatedSpaceMembershipRequests),
                         {done, FinalSpaceMembershipRequests} = Diff(PartiallyUpdatedSpaceMembershipRequests),
                         UpdateSpaceMembershipRequests(FinalSpaceMembershipRequests)
                 end

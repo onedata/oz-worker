@@ -31,16 +31,19 @@
     submit_error_already_a_member_test/1,
     resolve_error_not_found_test/1,
     resolve_error_mailer_malfunction_test/1,
-    get_membership_requester_info_error_not_found_test/1,
+    get_membership_requester_info_forged_ids_test/1,
 
-    intersect_spaces_test/1,
+    filter_advertised_test/1,
 
-    % sequential_time_manipulating_tests
+    % sequential_tests - manipulate time or modify the advertised spaces commonly used by all the spaces
     submit_reminder_test/1,
     submit_reminder_error_too_soon_test/1,
     submit_another_request_test/1,
     submit_another_error_recently_rejected_test/1,
     submit_error_mailer_malfunction_test/1,
+    get_membership_requester_info_space_deleted_test/1,
+    get_membership_requester_info_space_no_longer_advertised_test/1,
+    get_membership_requester_info_user_already_a_member_test/1,
     resolve_no_longer_valid_test/1,
     prune_pending_requests_test/1,
     prune_rejected_history_test/1
@@ -56,16 +59,19 @@ groups() -> [
         submit_error_already_a_member_test,
         resolve_error_not_found_test,
         resolve_error_mailer_malfunction_test,
-        get_membership_requester_info_error_not_found_test,
+        get_membership_requester_info_forged_ids_test,
 
-        intersect_spaces_test
+        filter_advertised_test
     ]},
-    {sequential_time_manipulating_tests, [sequential], [
+    {sequential_tests, [sequential], [
         submit_reminder_test,
         submit_reminder_error_too_soon_test,
         submit_another_request_test,
         submit_another_error_recently_rejected_test,
         submit_error_mailer_malfunction_test,
+        get_membership_requester_info_space_deleted_test,
+        get_membership_requester_info_space_no_longer_advertised_test,
+        get_membership_requester_info_user_already_a_member_test,
         resolve_no_longer_valid_test,
         prune_pending_requests_test,
         prune_rejected_history_test
@@ -74,7 +80,7 @@ groups() -> [
 
 all() -> [
     {group, parallel_tests},
-    {group, sequential_time_manipulating_tests}
+    {group, sequential_tests}
 ].
 
 % a couple over the pending + rejected history limits to properly test them
@@ -195,29 +201,29 @@ resolve_error_mailer_malfunction_test(_Config) ->
     end, [grant, reject]).
 
 
-get_membership_requester_info_error_not_found_test(_Config) ->
+get_membership_requester_info_forged_ids_test(_Config) ->
     {RequesterId, ExistingSpaceId} = {ozt_users:create(), ?RAND_ADVERTISED_SPACE()},
     ExistingRequestId = ozt_spaces:submit_membership_request(ExistingSpaceId, RequesterId),
     ForgedSpaceId = datastore_key:new(),
     ForgedRequestId = <<RequesterId/binary, "-iuysdtgfuye">>,
-    ?assertMatch(?ERROR_NOT_FOUND, ozt:rpc(space_logic, get_membership_requester_info, [ExistingSpaceId, ForgedRequestId, true])),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt:rpc(space_logic, get_membership_requester_info, [ExistingSpaceId, ForgedRequestId, false])),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt:rpc(space_logic, get_membership_requester_info, [ForgedSpaceId, ExistingRequestId, true])),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt:rpc(space_logic, get_membership_requester_info, [ForgedSpaceId, ExistingRequestId, false])),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt:rpc(space_logic, get_membership_requester_info, [ForgedSpaceId, ForgedRequestId, true])),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt:rpc(space_logic, get_membership_requester_info, [ForgedSpaceId, ForgedRequestId, false])).
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(ExistingSpaceId, ForgedRequestId)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(ExistingSpaceId, ForgedRequestId)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(ForgedSpaceId, ExistingRequestId)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(ForgedSpaceId, ExistingRequestId)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(ForgedSpaceId, ForgedRequestId)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(ForgedSpaceId, ForgedRequestId)).
 
 
-intersect_spaces_test(_Config) ->
-    MarketplaceSpacesSample = ?RAND_SUBLIST(ozt_spaces:list_marketplace()),
-    RandomIds = lists_utils:generate(fun() -> ?RAND_STR() end, 500),
+filter_advertised_test(_Config) ->
+    AdvertisedSpaceIds = ?RAND_SUBLIST(ozt_spaces:list_marketplace()),
+    NonAdvertisedSpaceIds = lists_utils:generate(fun() -> ?RAND_STR() end, 500),
     ?assertEqual(
-        lists:sort(MarketplaceSpacesSample),
-        lists:sort(ozt:rpc(space_marketplace, filter_advertised, [?SHUFFLED(RandomIds ++ MarketplaceSpacesSample)]))
+        lists:sort(AdvertisedSpaceIds),
+        lists:sort(ozt:rpc(space_marketplace, filter_advertised, [?SHUFFLED(NonAdvertisedSpaceIds ++ AdvertisedSpaceIds)]))
     ).
 
 % ----------------
-% sequential_time_manipulating_tests
+% sequential_tests
 
 submit_reminder_test(_Config) ->
     {RequesterId, FirstRequesterEmail, SpaceId} = {ozt_users:create(), ?RAND_EMAIL_ADDRESS(), ?RAND_ADVERTISED_SPACE()},
@@ -365,6 +371,30 @@ resolve_no_longer_valid_test(_Config) ->
     ?assert(has_received_notification_email(RequesterEmail, ?FROZEN_TIME_SECONDS(), ThirdSpaceId, cancelled), ?ATTEMPTS).
 
 
+get_membership_requester_info_space_deleted_test(_Config) ->
+    {RequesterId, SpaceId} = {ozt_users:create(), ozt_spaces:create_advertised()},
+    RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),
+    ozt_spaces:delete(SpaceId),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(SpaceId, RequestId)).
+
+
+get_membership_requester_info_space_no_longer_advertised_test(_Config) ->
+    {RequesterId, SpaceId} = {ozt_users:create(), ozt_spaces:create_advertised()},
+    RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),
+    ozt_spaces:update(SpaceId, #{<<"advertisedInMarketplace">> => false}),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(SpaceId, RequestId)).
+
+
+get_membership_requester_info_user_already_a_member_test(_Config) ->
+    {RequesterId, SpaceId} = {ozt_users:create(), ozt_spaces:create_advertised()},
+    RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),
+    ozt_spaces:add_user(SpaceId, RequesterId),
+    ?assertMatch(
+        ?ERROR_RELATION_ALREADY_EXISTS(od_user, RequesterId, od_space, SpaceId),
+        ozt_spaces:try_get_membership_info(SpaceId, RequestId)
+    ).
+
+
 prune_pending_requests_test(_Config) ->
     RequesterId = ozt_users:create(),
     AdvertisedSpaces = ?RAND_SUBLIST(ozt_spaces:list_marketplace(), 1052),
@@ -464,6 +494,11 @@ prune_rejected_history_test(_Config) ->
     AdvertisedSpaces = ?RAND_SUBLIST(ozt_spaces:list_marketplace(), 1100),
     {SpacesWithinLimit, Rest} = lists:split(1000, AdvertisedSpaces),
     {OutdatedRejectedSpaces, ExpectedPrematurelyPrunedSpaces} = lists:split(50, Rest),
+
+    % OutdatedRejectedSpaces are expected to be pruned because
+    %     MIN_BACKOFF_AFTER_REJECTION_SECONDS has passed
+    % ExpectedPrematurelyPrunedSpaces are expected to be pruned because of history overflow,
+    %   despite the fact that the backoff has not passed yet
 
     ozt:pforeach(fun(SpaceId) ->
         RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),

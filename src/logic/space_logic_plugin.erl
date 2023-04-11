@@ -297,16 +297,19 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
 create(Req = #el_req{auth = ?USER(UserId), gri = #gri{id = SpaceId, aspect = membership_request}}) ->
     ContactEmail = maps:get(<<"contactEmail">>, Req#el_req.data),
     Message = maps:get(<<"message">>, Req#el_req.data, <<"">>),
-    od_user:lock_and_update_space_membership_requests(UserId, fun(SpaceMembershipRequests) ->
-        space_membership_requests:submit(SpaceId, UserId, ContactEmail, Message, SpaceMembershipRequests)
-    end);
+    UpdatedSpaceMembershipRequests = ?check(od_user:lock_and_update_space_membership_requests(
+        UserId, fun(SpaceMembershipRequests) ->
+            space_membership_requests:submit(SpaceId, UserId, ContactEmail, Message, SpaceMembershipRequests)
+        end)
+    ),
+    {ok, value, space_membership_requests:lookup_pending_request_id(SpaceId, UpdatedSpaceMembershipRequests)};
 
 create(Req = #el_req{gri = #gri{id = SpaceId, aspect = {resolve_membership_request, RequestId}}}) ->
     Decision = maps:get(<<"decision">>, Req#el_req.data),
     RequesterUserId = space_membership_requests:infer_requester_id(RequestId),
-    od_user:lock_and_update_space_membership_requests(RequesterUserId, fun(SpaceMembershipRequests) ->
+    ?extract_ok(od_user:lock_and_update_space_membership_requests(RequesterUserId, fun(SpaceMembershipRequests) ->
         space_membership_requests:resolve(SpaceId, RequestId, Decision, SpaceMembershipRequests)
-    end);
+    end));
 
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 20.02.*
@@ -508,7 +511,7 @@ get(#el_req{gri = #gri{aspect = owners}}, #od_space{owners = Owners}) ->
 get(Req = #el_req{auth = Auth, gri = #gri{aspect = instance, scope = private}}, Space) ->
     CanViewMarketplaceContactEmail = case Auth of
         ?ROOT -> true;
-        ?USER -> auth_by_privilege(Req, Space, ?SPACE_MANAGE_MARKETPLACE);
+        ?USER -> auth_by_privilege(Req, Space, ?SPACE_MANAGE_IN_MARKETPLACE);
         _ -> false
     end,
     {ok, case CanViewMarketplaceContactEmail of
@@ -949,8 +952,8 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = {resolve_members
     Decision = maps:get(<<"decision">>, entity_logic_sanitizer:ensure_valid(validate(Req), Aspect, Req#el_req.data)),
     % ?SPACE_ADD_USER is additionally required if the resolving user grants access in response to the request
     auth_by_privileges(Req, Space, case Decision of
-        grant -> [?SPACE_ADD_USER, ?SPACE_MANAGE_MARKETPLACE];
-        reject -> [?SPACE_MANAGE_MARKETPLACE]
+        grant -> [?SPACE_ADD_USER, ?SPACE_MANAGE_IN_MARKETPLACE];
+        reject -> [?SPACE_MANAGE_IN_MARKETPLACE]
     end);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space) ->
@@ -983,7 +986,7 @@ authorize(#el_req{operation = get, gri = #gri{aspect = marketplace_data}}, _) ->
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {membership_requester_info, _}}}, Space) ->
     % only users authorized to resolve requests can view the info
-    auth_by_privilege(Req, Space, ?SPACE_MANAGE_MARKETPLACE);
+    auth_by_privilege(Req, Space, ?SPACE_MANAGE_IN_MARKETPLACE);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse auth_by_support(Req, Space);
@@ -1063,7 +1066,7 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}, data 
     ModifiesMarketplaceData = maps:is_key(<<"advertisedInMarketplace">>, Data) orelse
         maps:is_key(<<"marketplaceContactEmail">>, Data),
     auth_by_privileges(Req, Space, case ModifiesMarketplaceData of
-        true -> [?SPACE_UPDATE, ?SPACE_MANAGE_MARKETPLACE];
+        true -> [?SPACE_UPDATE, ?SPACE_MANAGE_IN_MARKETPLACE];
         false -> [?SPACE_UPDATE]
     end);
 

@@ -22,6 +22,7 @@
 -export([update/2]).
 -export([list_marketplace/0, list_marketplace/1]).
 -export([submit_membership_request/2, submit_membership_request/3]).
+-export([try_get_membership_info/2]).
 -export([try_submit_membership_request/2, try_submit_membership_request/3]).
 -export([resolve_membership_request/3, try_resolve_membership_request/3]).
 -export([add_owner/2, remove_owner/2]).
@@ -118,6 +119,12 @@ submit_membership_request(SpaceId, RequesterUserId, ContactEmail) ->
     RequestId.
 
 
+-spec try_get_membership_info(od_space:id(), space_membership_requests:request_id()) ->
+    {ok, entity_logic:data()} | errors:error().
+try_get_membership_info(SpaceId, RequestId) ->
+    ozt:rpc(space_logic, get_membership_requester_info, [?ROOT, SpaceId, RequestId]).
+
+
 -spec try_submit_membership_request(od_space:id(), od_user:id()) ->
     {ok, space_membership_requests:request_id()} | errors:error().
 try_submit_membership_request(SpaceId, RequesterUserId) ->
@@ -126,18 +133,9 @@ try_submit_membership_request(SpaceId, RequesterUserId) ->
 -spec try_submit_membership_request(od_space:id(), od_user:id(), od_user:email()) ->
     {ok, space_membership_requests:request_id()} | errors:error().
 try_submit_membership_request(SpaceId, RequesterUserId, ContactEmail) ->
-    case ozt:rpc(space_logic, submit_membership_request, [?USER(RequesterUserId), SpaceId, #{
+    ozt:rpc(space_logic, submit_membership_request, [?USER(RequesterUserId), SpaceId, #{
         <<"contactEmail">> => ContactEmail
-    }]) of
-        ok ->
-            #od_user{
-                space_membership_requests = {space_membership_requests, Pending, _Rejected, _LastPruningTime}
-            } = ozt_users:get(RequesterUserId),
-            {request, RequestId, _, _} = maps:get(SpaceId, Pending),
-            {ok, RequestId};
-        {error, _} = Error ->
-            Error
-    end.
+    }]).
 
 
 -spec resolve_membership_request(
