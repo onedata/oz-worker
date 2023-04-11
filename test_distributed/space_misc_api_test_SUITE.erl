@@ -298,7 +298,6 @@ create_with_custom_id_generator_seed_test(Config) ->
 
 
 list_privileges_test(Config) ->
-
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, nobody]
@@ -318,8 +317,6 @@ list_privileges_test(Config) ->
 
 
 get_test(Config) ->
-    ?ct_catch_exceptions(get_test_internal(Config)).
-get_test_internal(Config) ->
     Owner = ozt_users:create(),
     UserWithoutSpaceView = ozt_users:create(),
     UserWithSpaceViewOnly = ozt_users:create(),
@@ -353,7 +350,7 @@ get_test_internal(Config) ->
     % The private data which differs depending on the auth
     % (in case of users, requires ?SPACE_MANAGE_MARKETPLACE privilege)
     lists:foreach(fun({CorrectClient, CanViewMarketplaceContactEmail}) ->
-        ExpectedMarketplaceContactEmail = ?RAND_ELEMENT([?RAND_EMAIL_ADDRESS(), undefined]),
+        ExpectedMarketplaceContactEmail = ?RAND_ELEMENT([?RAND_EMAIL_ADDRESS(), <<"">>]),
         ozt_spaces:update(SpaceId, #{<<"marketplaceContactEmail">> => ExpectedMarketplaceContactEmail}),
         ?assert(api_test_utils:run_tests(Config, #api_test_spec{
             client_spec = #client_spec{
@@ -386,7 +383,7 @@ get_test_internal(Config) ->
                         ?assertEqual(ExpAdvertisedInMarketplace, AdvertisedInMarketplace),
                         ?assertEqual(MarketplaceContactEmail, case CanViewMarketplaceContactEmail of
                             true -> ExpectedMarketplaceContactEmail;
-                            false -> undefined
+                            false -> <<"">>
                         end),
                         ?assertEqual(Users, #{
                             Owner => AllPrivs,
@@ -1361,12 +1358,12 @@ resolve_membership_request_test(Config) ->
     SpaceOperatorId = ozt_users:create(),
     SpaceMemberWithoutPrivsId = ozt_users:create(),
 
-    lists:foreach(fun(Grant) ->
+    lists:foreach(fun(Decision) ->
         EnvSetUpFun = fun() ->
             SpaceId = ozt_users:create_advertised_space_for(SpaceOperatorId),
-            RequiredPrivs = case Grant of
-                true -> [?SPACE_MANAGE_MARKETPLACE, ?SPACE_ADD_USER];
-                false -> [?SPACE_MANAGE_MARKETPLACE]
+            RequiredPrivs = case Decision of
+                grant -> [?SPACE_MANAGE_MARKETPLACE, ?SPACE_ADD_USER];
+                reject -> [?SPACE_MANAGE_MARKETPLACE]
             end,
             ozt_spaces:add_user(SpaceId, SpaceMemberWithoutPrivsId, privileges:space_admin() -- RequiredPrivs),
             RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),
@@ -1406,27 +1403,25 @@ resolve_membership_request_test(Config) ->
                     <<"decision">>
                 ],
                 correct_values = #{
-                    <<"decision">> => [Grant]
+                    <<"decision">> => [Decision]
                 },
                 bad_values = [
-                    {<<"requestId">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_BINARY(<<"requestId">>)},
-                    {<<"requestId">>, <<"2132345">>, ?ERROR_BAD_VALUE_IDENTIFIER(<<"requestId">>)},
                     {<<"decision">>, not_sure, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"decision">>, [grant, reject])},
                     {<<"decision">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"decision">>)}
                 ]
             }
         }, EnvSetUpFun, undefined, undefined))
-    end, [true, false]),
+    end, [grant, reject]),
 
     SpaceId = ozt_users:create_advertised_space_for(SpaceOperatorId),
     RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),
     ?assertEqual(
         ?ERROR_BAD_VALUE_EMPTY(<<"requestId">>),
-        ozt_spaces:try_resolve_membership_request(SpaceId, RequestId, <<"">>)
+        ozt_spaces:try_resolve_membership_request(SpaceId, <<"">>, ?RAND_ELEMENT([grant, reject]))
     ),
     ?assertEqual(
         ?ERROR_BAD_VALUE_BINARY(<<"requestId">>),
-        ozt_spaces:try_resolve_membership_request(SpaceId, RequestId, [1,2,3])
+        ozt_spaces:try_resolve_membership_request(SpaceId, [1,2,3], ?RAND_ELEMENT([grant, reject]))
     ).
 
 

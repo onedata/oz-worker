@@ -1323,7 +1323,7 @@ get_space_membership_requests_test(Config) ->
         ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
         ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
         RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
-        ozt_spaces:resolve_membership_request(SpaceId, RequestId, true)
+        ozt_spaces:resolve_membership_request(SpaceId, RequestId, grant)
     end, AcceptedSpaces),
 
     ExpRejectedSpaces = maps_utils:generate_from_list(fun(SpaceId) ->
@@ -1331,7 +1331,7 @@ get_space_membership_requests_test(Config) ->
         ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
         RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
         ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
-        ozt_spaces:resolve_membership_request(SpaceId, RequestId, false),
+        ozt_spaces:resolve_membership_request(SpaceId, RequestId, reject),
         #{
             <<"requestId">> => RequestId,
             <<"contactEmail">> => ContactEmail,

@@ -944,9 +944,11 @@ authorize(Req = #el_req{operation = create, gri = #gri{id = SpaceId, aspect = ha
 authorize(#el_req{auth = ?USER, operation = create, gri = #gri{aspect = membership_request}}, Space) ->
     Space#od_space.advertised_in_marketplace;
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {resolve_membership_request, _}}, data = Data}, Space) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {resolve_membership_request, _} = Aspect}}, Space) ->
+    % authorization is checked before validity, so some garbage value may happen here
+    Decision = maps:get(<<"decision">>, entity_logic_sanitizer:ensure_valid(validate(Req), Aspect, Req#el_req.data)),
     % ?SPACE_ADD_USER is additionally required if the resolving user grants access in response to the request
-    auth_by_privileges(Req, Space, case maps:get(<<"decision">>, Data) of
+    auth_by_privileges(Req, Space, case Decision of
         grant -> [?SPACE_ADD_USER, ?SPACE_MANAGE_MARKETPLACE];
         reject -> [?SPACE_MANAGE_MARKETPLACE]
     end);
