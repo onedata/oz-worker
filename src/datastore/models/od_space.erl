@@ -18,7 +18,11 @@
 
 %% API
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
--export([update_support_parameters_registry/2, update_support_parameters/3, clear_support_parameters/2]).
+-export([
+    create_support_parameters/3,
+    update_support_parameters_registry/2, update_support_parameters/3,
+    clear_support_parameters/2
+]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -103,6 +107,14 @@ force_delete(SpaceId) ->
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
+
+-spec create_support_parameters(id(), od_provider:id(), support_parameters:record()) ->
+    {ok, doc()} | {error, term()}.
+create_support_parameters(SpaceId, ProviderId, SupportParametersOverlay) ->
+    update_support_parameters_registry(SpaceId, fun(PreviousRegistry) ->
+        support_parameters_registry:create_entry(ProviderId, SupportParametersOverlay, PreviousRegistry)
+    end).
 
 
 -spec update_support_parameters_registry(

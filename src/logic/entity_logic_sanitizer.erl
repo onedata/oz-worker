@@ -596,7 +596,7 @@ sanitize_value(binary, {size_limit, SizeLimit}, Key, Val) ->
         true ->
             Val;
         false ->
-            throw(?ERROR_BAD_VALUE_BINARY_TOO_LARGE(Key, SizeLimit))
+            throw(?ERROR_BAD_VALUE_TEXT_TOO_LARGE(Key, SizeLimit))
     catch _:_ ->
         throw(?ERROR_BAD_VALUE_BINARY(Key))
     end;
