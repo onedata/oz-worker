@@ -25,6 +25,7 @@
 -export([lookup_pending_request_id/2, lookup_email_for_pending/3]).
 -export([resolve/4]).
 -export([infer_requester_id/1]).
+-export([prune_pending_requests/2]).
 
 %% jsonable_record callbacks
 -export([to_json/1, from_json/1]).
@@ -82,11 +83,11 @@ empty() ->
 
 
 -spec submit(od_space:id(), od_user:id(), od_user:email(), binary(), record()) ->
-    {partial | done, record()} | no_return().
+    {done, record()} | pruning_needed | no_return().
 submit(SpaceId, UserId, ContactEmail, Message, InitialRecord) ->
-    case attempt_regular_pruning_of_pending_requests(UserId, InitialRecord) of
-        {true, PrunedRecord} ->
-            {partial, PrunedRecord};
+    case pruning_interval_passed(InitialRecord) of
+        true ->
+            pruning_needed;
         false ->
             {done, submit_internal(SpaceId, UserId, ContactEmail, Message, InitialRecord)}
     end.
@@ -110,7 +111,7 @@ lookup_email_for_pending(SpaceId, RequestId, Record) ->
 
 
 -spec resolve(od_space:id(), request_id(), decision(), record()) ->
-    {partial | done, record()} | no_return().
+    {done, record()} | pruning_needed | no_return().
 resolve(SpaceId, RequestId, Decision, InitialRecord) ->
     lookup_pending(SpaceId, RequestId, InitialRecord),  % throws in case of nonexistent pending request
 
@@ -125,11 +126,11 @@ resolve(SpaceId, RequestId, Decision, InitialRecord) ->
         false -> InitialRecord
     end,
 
-    case attempt_regular_pruning_of_pending_requests(RequesterUserId, UpdatedRecord) of
-        {true, PrunedRecord} ->
-            {partial, PrunedRecord};
+    case pruning_interval_passed(UpdatedRecord) of
+        true ->
+            pruning_needed;
         false ->
-            {done, resolve_sanitized(SpaceId, RequesterUserId, Decision, InitialRecord)}
+            {done, resolve_sanitized(SpaceId, RequesterUserId, Decision, UpdatedRecord)}
     end.
 
 
@@ -148,6 +149,27 @@ infer_requester_id(RequestId) ->
 gen_request_id(UserId) ->
     RandomPart = str_utils:rand_hex(?REQUEST_ID_RANDOM_PART_BYTES),
     <<UserId/binary, ?REQUEST_ID_SEPARATOR, RandomPart/binary>>.
+
+
+%% @doc Prunes no longer valid requests and sends corresponding notifications.
+-spec prune_pending_requests(od_user:id(), record()) -> record().
+prune_pending_requests(UserId, Record = #space_membership_requests{pending = Pending}) ->
+    PendingSpaceIds = maps:keys(Pending),
+    % since the last update of the record, the user may have gained access to some of the spaces
+    {ok, UserSpaceIds} = user_logic:get_eff_spaces(?ROOT, UserId),
+    AlreadyGrantedSpaceIds = lists_utils:intersect(PendingSpaceIds, UserSpaceIds),
+    async_send_notifications_for_spaces(already_granted, AlreadyGrantedSpaceIds, Record),
+    SpaceIdsWithoutAlreadyGranted = lists_utils:subtract(PendingSpaceIds, AlreadyGrantedSpaceIds),
+
+    % since the last update of the record, some spaces may have been removed from the marketplace
+    StillRelevantSpaceIds = space_marketplace:filter_advertised(SpaceIdsWithoutAlreadyGranted),
+    CancelledSpaceIds = lists_utils:subtract(SpaceIdsWithoutAlreadyGranted, StillRelevantSpaceIds),
+    async_send_notifications_for_spaces(cancelled, CancelledSpaceIds, Record),
+
+    Record#space_membership_requests{
+        pending = maps:with(StillRelevantSpaceIds, Pending),
+        last_pending_request_pruning_time = ?NOW_SECONDS()
+    }.
 
 %%%===================================================================
 %%% jsonable_record callbacks
@@ -237,7 +259,7 @@ resolve_sanitized(SpaceId, RequesterUserId, Decision, Record = #space_membership
             RecordWithUpdatedPending;
         reject ->
             space_marketplace_mailer:best_effort_notify_request_resolved(SpaceId, ContactEmail, Decision),
-            prune_overflowing_rejected_history(RecordWithUpdatedPending#space_membership_requests{
+            trim_overflowing_rejected_history(RecordWithUpdatedPending#space_membership_requests{
                 rejected = Rejected#{SpaceId => Request#request{last_activity = ?NOW_SECONDS()}}
             })
     end.
@@ -283,7 +305,7 @@ assert_not_a_member(UserId, SpaceId) ->
 check_if_not_recently_rejected(SpaceId, Record) ->
     case maps:is_key(SpaceId, Record#space_membership_requests.rejected) of
         true ->
-            NewRecord = prune_outdated_rejected_history(Record),
+            NewRecord = forget_outdated_rejected_history(Record),
             case maps:find(SpaceId, NewRecord#space_membership_requests.rejected) of
                 {ok, #request{last_activity = LastActivity}} ->
                     throw(?ERROR_FORBIDDEN(str_utils:format_bin(
@@ -299,48 +321,9 @@ check_if_not_recently_rejected(SpaceId, Record) ->
     end.
 
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Some emails may be sent during pruning, hence if the function returns
-%% {true, NewRecord}, this partial modification to the record should be
-%% persisted in database before proceeding with the main procedure.
-%% Otherwise, pruning of the same requests can happen multiple times,
-%% causing multiple copies of the emails to be sent.
-%% @end
-%%--------------------------------------------------------------------
--spec attempt_regular_pruning_of_pending_requests(od_user:id(), record()) -> false | {true, record()}.
-attempt_regular_pruning_of_pending_requests(UserId, Record) ->
-    LastPendingRequestPruningTime = Record#space_membership_requests.last_pending_request_pruning_time,
-    case ?NOW_SECONDS() - LastPendingRequestPruningTime >= ?PENDING_REQUEST_PRUNING_INTERVAL of
-        false ->
-            false;
-        true ->
-            PrunedRecord = prune_pending_requests(UserId, Record),
-            {true, PrunedRecord#space_membership_requests{
-                last_pending_request_pruning_time = ?NOW_SECONDS()
-            }}
-    end.
-
-
-%% @private
--spec prune_pending_requests(od_user:id(), record()) -> record().
-prune_pending_requests(UserId, Record = #space_membership_requests{pending = Pending}) ->
-    PendingSpaceIds = maps:keys(Pending),
-    % since the last update of the record, the user may have gained access to some of the spaces
-    {ok, UserSpaceIds} = user_logic:get_eff_spaces(?ROOT, UserId),
-    AlreadyGrantedSpaceIds = lists_utils:intersect(PendingSpaceIds, UserSpaceIds),
-    async_send_notifications_for_spaces(already_granted, AlreadyGrantedSpaceIds, Record),
-    SpaceIdsWithoutAlreadyGranted = lists_utils:subtract(PendingSpaceIds, AlreadyGrantedSpaceIds),
-
-    % since the last update of the record, some spaces may have been removed from the marketplace
-    StillRelevantSpaceIds = space_marketplace:filter_advertised(SpaceIdsWithoutAlreadyGranted),
-    CancelledSpaceIds = lists_utils:subtract(SpaceIdsWithoutAlreadyGranted, StillRelevantSpaceIds),
-    async_send_notifications_for_spaces(cancelled, CancelledSpaceIds, Record),
-
-    Record#space_membership_requests{
-        pending = maps:with(StillRelevantSpaceIds, Pending)
-    }.
+-spec pruning_interval_passed(record()) -> boolean().
+pruning_interval_passed(#space_membership_requests{last_pending_request_pruning_time = LastPendingRequestPruningTime}) ->
+    ?NOW_SECONDS() - LastPendingRequestPruningTime >= ?PENDING_REQUEST_PRUNING_INTERVAL.
 
 
 %%--------------------------------------------------------------------
@@ -372,25 +355,25 @@ async_send_notifications_for_spaces(Type, SpaceIds, #space_membership_requests{p
 
 
 %% @private
--spec prune_overflowing_rejected_history(record()) -> record().
-prune_overflowing_rejected_history(Record) ->
+-spec trim_overflowing_rejected_history(record()) -> record().
+trim_overflowing_rejected_history(Record) ->
     case is_rejected_request_history_overflown(Record) of
         false ->
             Record;
         true ->
             #space_membership_requests{
                 rejected = Rejected
-            } = RecordWithOutdatedPruned = prune_outdated_rejected_history(Record),
-            case is_rejected_request_history_overflown(RecordWithOutdatedPruned) of
+            } = RecordWithOutdatedForgotten = forget_outdated_rejected_history(Record),
+            case is_rejected_request_history_overflown(RecordWithOutdatedForgotten) of
                 false ->
-                    RecordWithOutdatedPruned;
+                    RecordWithOutdatedForgotten;
                 true ->
-                    % in case it's not possible to stay within history limit by pruning
-                    % only outdated requests, the oldest one is pruned
+                    % in case it's not possible to stay within history limit by forgetting
+                    % only outdated requests, the oldest one is removed
                     RejectedSpacesSortedByLastActivity = lists:sort(fun(A, B) ->
                         (maps:get(A, Rejected))#request.last_activity < (maps:get(B, Rejected))#request.last_activity
                     end, maps:keys(Rejected)),
-                    RecordWithOutdatedPruned#space_membership_requests{
+                    RecordWithOutdatedForgotten#space_membership_requests{
                         rejected = maps:remove(hd(RejectedSpacesSortedByLastActivity), Rejected)
                     }
             end
@@ -398,8 +381,8 @@ prune_overflowing_rejected_history(Record) ->
 
 
 %% @private
--spec prune_outdated_rejected_history(record()) -> record().
-prune_outdated_rejected_history(Record = #space_membership_requests{rejected = Rejected}) ->
+-spec forget_outdated_rejected_history(record()) -> record().
+forget_outdated_rejected_history(Record = #space_membership_requests{rejected = Rejected}) ->
     Now = ?NOW_SECONDS(),
     Record#space_membership_requests{rejected = maps:filter(fun(_, #request{last_activity = LastActivity}) ->
         Now < LastActivity + ?MIN_BACKOFF_AFTER_REJECTION_SECONDS

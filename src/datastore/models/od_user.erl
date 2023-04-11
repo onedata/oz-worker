@@ -239,7 +239,7 @@ get_all_sessions(UserId) ->
 ) ->
     {ok, space_membership_requests:record()} | {error, term()}.
 lock_and_update_space_membership_requests(UserId, Diff) ->
-    UpdateSpaceMembershipRequests = fun(NewValue) ->
+    SaveSpaceMembershipRequests = fun(NewValue) ->
         case od_user:update(UserId, fun(User) -> {ok, User#od_user{space_membership_requests = NewValue}} end) of
             {ok, _} -> {ok, NewValue};
             {error, _} = Error -> Error
@@ -250,14 +250,15 @@ lock_and_update_space_membership_requests(UserId, Diff) ->
         case get(UserId) of
             {error, _} = GetError ->
                 GetError;
-            {ok, #document{value = #od_user{space_membership_requests = SpaceMembershipRequests}}} ->
-                case Diff(SpaceMembershipRequests) of
-                    {done, FinalSpaceMembershipRequests} ->
-                        UpdateSpaceMembershipRequests(FinalSpaceMembershipRequests);
-                    {partial, PartiallyUpdatedSpaceMembershipRequests} ->
-                        {ok, _} = UpdateSpaceMembershipRequests(PartiallyUpdatedSpaceMembershipRequests),
-                        {done, FinalSpaceMembershipRequests} = Diff(PartiallyUpdatedSpaceMembershipRequests),
-                        UpdateSpaceMembershipRequests(FinalSpaceMembershipRequests)
+            {ok, #document{value = #od_user{space_membership_requests = SMR}}} ->
+                case Diff(SMR) of
+                    {done, FinalSMR} ->
+                        SaveSpaceMembershipRequests(FinalSMR);
+                    pruning_needed ->
+                        PrunedSMR = space_membership_requests:prune_pending_requests(UserId, SMR),
+                        {ok, _} = SaveSpaceMembershipRequests(PrunedSMR),
+                        {done, FinalSMR} = Diff(PrunedSMR),
+                        SaveSpaceMembershipRequests(FinalSMR)
                 end
         end
     end)).
