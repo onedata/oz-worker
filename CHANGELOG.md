@@ -4,6 +4,52 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.1
+
+-   **VFS-10531** Web GUI: Added support for enum-like data types in
+    automation (list of allowed values for string and number types).
+-   **VFS-10414** Web GUI: Fixed displaying wrong names of spaces in
+    shares sidebar.
+-   **VFS-10389** Web GUI: Added showing data per provider in directory
+    statistics.
+-   **VFS-10357** Web GUI: Added support for "manage archives" privilege
+    and "creator" information in archives.
+-   **VFS-10312** Web GUI: Changed name conflict and disambiguation
+    separator from `#` to `@`.
+-   **VFS-10235** Changed default value of `accountingEnabled` parameter
+    to `true` when requesting space support.
+-   **VFS-10129** Web GUI: Added global and per-lane chart dashboards in
+    automation workflows.
+-   **VFS-10128** Web GUI: Added possibility to map a lambda result to
+    many stores in an automation task definition.
+-   **VFS-10126** Web GUI: Added Space Marketplace - space
+    configuration, spaces browser and membership requests resolver
+    views.
+-   **VFS-10125** Added mailing capabilities to Onezone by means of an
+    integrated SMTP client.
+-   **VFS-10122** Introduced the Space Marketplace. Any space can be
+    publicly advertised in the Marketplace, allowing Onedata users to
+    request access to it. The access requesting process is based on an
+    email exchange with the appointed space maintainer.
+-   **VFS-10118** Web GUI: Introduced GUI for automation lambda
+    parameters.
+-   **VFS-10117** Added lambda config specification and the possibility
+    to provide its values on the task level. Changed data types in
+    automation; added boolean, reworked integer into number with
+    constraints.
+-   **VFS-10046** Web GUI: Added user details popovers with user
+    information in various views.
+-   **VFS-9999** Web GUI: Added space details popovers with space
+    information in various views.
+-   **VFS-9622** Upgraded the base image for release dockers from Ubuntu
+    18.04 to Ubuntu 20.04.
+-   **VFS-9162** Web GUI: Added API samples modal for space.
+-   **VFS-9129** Web GUI: Upgraded EmberJS to v3.8.
+-   **VFS-7873** Web GUI: Added possibility to dump, upload and
+    duplicate automation lambdas.
+-   **VFS-7715** Web GUI: Added store references check to automation
+    workflow editor.
+
 ### 21.02.0-alpha28
 
 -   **VFS-9614** Web GUI: Added archivisation audit log view.
