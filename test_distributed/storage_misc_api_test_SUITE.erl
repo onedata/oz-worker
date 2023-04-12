@@ -490,13 +490,14 @@ support_space_test(Config) ->
 
     IllegalSupportParamsJson = jsonable_record:to_json(#support_parameters{
         accounting_enabled = true,
-        dir_stats_service_enabled = false
+        dir_stats_service_enabled = false,
+        dir_stats_service_status = disabled
     }),
 
     ozt_providers:simulate_version(SupportingProviderId, ?LINE_21_02),
 
     % Reused in all specs
-    BadValues = [
+    BadValues = lists:flatten([
         {<<"token">>, <<"bad-token">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
         {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
         {<<"token">>, BadInviteTokenSerialized, ?ERROR_BAD_VALUE_TOKEN(<<"token">>,
@@ -509,8 +510,22 @@ support_space_test(Config) ->
         {<<"spaceSupportParameters">>, <<"bad-data">>, ?ERROR_BAD_DATA(<<"spaceSupportParameters">>)},
         {<<"spaceSupportParameters">>, IllegalSupportParamsJson, ?ERROR_BAD_DATA(
             <<"dirStatsServiceEnabled">>, <<"Dir stats service must be enabled if accounting is enabled">>
-        )}
-    ],
+        )},
+        lists:map(fun({MissingField, {AccountingEnabled, DirStatsEnabled, DirStatsStatus}}) ->
+            MissingSupportParamsJson = jsonable_record:to_json(#support_parameters{
+                accounting_enabled = AccountingEnabled,
+                dir_stats_service_enabled = DirStatsEnabled,
+                dir_stats_service_status = DirStatsStatus
+            }),
+            {<<"spaceSupportParameters">>, MissingSupportParamsJson, ?ERROR_MISSING_REQUIRED_VALUE(
+                <<"supportParameters.", MissingField/binary>>
+            )}
+        end, [
+            {<<"accountingEnabled">>, {undefined, false, disabled}},
+            {<<"dirStatsEnabled">>, {false, undefined, disabled}},
+            {<<"dirStatsStatus">>, {false, false, undefined}}
+        ])
+    ]),
 
     EnvSetUpFun = fun() -> #{
         space_id => ozt_users:create_space_for(SpaceOwner)
@@ -527,7 +542,7 @@ support_space_test(Config) ->
                 false ->
                     #{};
                 true ->
-                    DirStatsEnabled = kv_utils:get([<<"spaceSupportParameters">>, <<"dirStatsServiceEnabled">>], Data, true),
+                    DirStatsEnabled = kv_utils:get([<<"spaceSupportParameters">>, <<"dirStatsServiceEnabled">>], Data, false),
                     #{
                         SupportingProviderId => ozt_spaces:expected_tweaked_support_parameters(#support_parameters{
                             accounting_enabled = kv_utils:get([<<"spaceSupportParameters">>, <<"accountingEnabled">>], Data, false),
@@ -566,7 +581,8 @@ support_space_test(Config) ->
                 RandAccountingEnabled = ?RAND_BOOL(),
                 #{
                     <<"accountingEnabled">> => RandAccountingEnabled,
-                    <<"dirStatsServiceEnabled">> => RandAccountingEnabled orelse ?RAND_BOOL()
+                    <<"dirStatsServiceEnabled">> => RandAccountingEnabled orelse ?RAND_BOOL(),
+                    <<"dirStatsServiceStatus">> => <<"disabled">>
                 }
             end]
         },
@@ -738,8 +754,8 @@ revoke_support_test(Config) ->
             false ->
                 #support_parameters{
                     accounting_enabled = false,
-                    dir_stats_service_enabled = true,
-                    dir_stats_service_status = initializing
+                    dir_stats_service_enabled = false,
+                    dir_stats_service_status = disabled
                 }
         end,
         ?assertEqual(ExpectedSupportParametersEntry, maps:get(
@@ -1023,7 +1039,8 @@ parallel_supports_test_retry() ->
         % add some bad (conflicting) support params that should cause support failures
         lists_utils:generate(fun() -> #support_parameters{
             accounting_enabled = true,
-            dir_stats_service_enabled = false
+            dir_stats_service_enabled = false,
+            dir_stats_service_status = disabled
         } end, Parallelism - (Parallelism div 2))
     ])),
 
@@ -1050,15 +1067,7 @@ parallel_supports_test_retry() ->
     % one of the supports should succeed and the parameters should be set as in the request
     {OkResults, ErrorResults} = lists:partition(IsSuccessResult, ResultsWithRequestedParams),
     ?assertEqual(1, length(OkResults)),
-    ?assertEqual(Parallelism - 1, length(ErrorResults)),
-
-    {ok, {{ok, SubjectSpace}, ExpectedSupportParams}} = lists_utils:find(IsSuccessResult, ResultsWithRequestedParams),
-    ?assertEqual(
-        ozt_spaces:expected_tweaked_support_parameters(ExpectedSupportParams#support_parameters{
-            dir_stats_service_status = disabled  % this field cannot be set during space support
-        }),
-        ozt_spaces:get_support_parameters(SubjectSpace, SupportingProvider)
-    ).
+    ?assertEqual(Parallelism - 1, length(ErrorResults)).
 
 
 modify_imported_storage_test(Config) ->
