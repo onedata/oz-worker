@@ -437,7 +437,8 @@ expected_configuration(Config) ->
             undefined -> null;
             Url -> list_to_binary(Url)
         end,
-        <<"bagitUploaderWorkflowSchemaId">> => ExpectedBagitUploaderWorkflowSchemaId
+        <<"bagitUploaderWorkflowSchemaId">> => ExpectedBagitUploaderWorkflowSchemaId,
+        <<"availableSpaceTags">> => ozt:get_env(available_space_tags)
     }.
 
 

@@ -388,8 +388,10 @@ verify_logic_result({ok, GotList}, ?OK_LIST_DOESNT_CONTAIN(ExpList)) ->
         GotList -- ExpList =:= GotList;
 verify_logic_result({error, Error}, ?ERROR_REASON({error, Error})) ->
     true;
-verify_logic_result({ok, Result}, ?OK_TERM(VerifyFun)) ->
+verify_logic_result({ok, Result}, ?OK_TERM(VerifyFun)) when is_function(VerifyFun) ->
     VerifyFun(Result);
+verify_logic_result({ok, Result}, ?OK_TERM(Term)) ->
+    Result =:= Term;
 verify_logic_result(_, _) ->
     false.
 
@@ -452,16 +454,21 @@ run_gs_test(_Config, _GsSpec, nobody, _Data, _DescFmt, _Env, undefined) ->
     ok;
 run_gs_test(Config, GsSpec, Client, Data, Description, Env, undefined) ->
     ResolvedClient = resolve_auth(Client, Env),
-    GsClient = prepare_gs_client(Config, ResolvedClient),
+    {GsClient, Endpoint} = prepare_gs_client(Config, GsSpec, ResolvedClient),
     NewGsSpec = prepare_gs_spec(Config, GsSpec, ResolvedClient, Data, Env),
-    Result = check_gs_call(NewGsSpec, GsClient, Data),
+    Result = check_gs_call(NewGsSpec, Endpoint, GsClient, Data),
     log_gs_test_result(NewGsSpec, ResolvedClient, Data, Description, Result);
 
 run_gs_test(Config, GsSpec, Client, Data, DescFmt, Env, ExpError) ->
     NewGsSpec = GsSpec#gs_spec{
-        expected_result = ?ERROR_REASON(error_to_gs_expectations(
-            Config, ExpError
-        ))
+        expected_result_op = case GsSpec#gs_spec.expected_result_op of
+            undefined -> undefined;
+            _ -> ?ERROR_REASON(error_to_gs_expectations(Config, ExpError))
+        end,
+        expected_result_gui = case GsSpec#gs_spec.expected_result_gui of
+            undefined -> undefined;
+            _ -> ?ERROR_REASON(error_to_gs_expectations(Config, ExpError))
+        end
     },
     run_gs_test(
         Config, NewGsSpec, Client, Data, DescFmt, Env, undefined
@@ -480,47 +487,72 @@ error_to_gs_expectations(Config, ErrorType) ->
     ).
 
 
-prepare_gs_client(Config, {user, UserId, _Token}) ->
-    prepare_gs_client(Config, {user, UserId});
-prepare_gs_client(Config, {user, UserId}) ->
+% TODO VFS-4520 Consider checking auth in the operation supported endpoint
+% and check in tests that some operations are only supported for users and some for providers
+prepare_gs_client(Config, GsSpec, {user, UserId, _Token}) ->
+    prepare_gs_client(Config, GsSpec, {user, UserId});
+prepare_gs_client(Config, #gs_spec{operation = Operation, gri = Gri} = GsSpec, {user, UserId}) ->
     {ok, {_SessionId, SessionCookie}} = oz_test_utils:log_in(Config, UserId),
     {ok, GuiToken} = oz_test_utils:request_gui_token(Config, SessionCookie),
-    prepare_gs_client(
+    Endpoint = case GsSpec#gs_spec.expected_result_gui of
+        undefined when GsSpec#gs_spec.expected_result_op /= undefined ->
+            utils:throttle(GsSpec#gs_spec.gri, timer:minutes(1), fun() ->
+                ct:pal("WARN: using Oneprovider gs expectation for user client~s", [
+                    ?autoformat([Operation, Gri])
+                ])
+            end),
+            oneprovider;
+        _ ->
+            gui
+    end,
+    prepare_gs_client_for_endpoint(
         Config,
+        Endpoint,
         ?SUB(user, UserId),
         {with_http_cookies, {token, GuiToken}, [{?SESSION_COOKIE_KEY, SessionCookie}]},
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
     );
-prepare_gs_client(_Config, nobody) ->
+prepare_gs_client(_Config, _, nobody) ->
     ok;
-prepare_gs_client(Config, {provider, ProviderId}) ->
+prepare_gs_client(Config, GsSpec, {provider, ProviderId}) ->
     Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
-    prepare_gs_client(Config, {provider, ProviderId, Token});
-prepare_gs_client(Config, {provider, ProviderId, Token}) ->
-    prepare_gs_client(
+    prepare_gs_client(Config, GsSpec, {provider, ProviderId, Token});
+prepare_gs_client(Config, #gs_spec{operation = Operation, gri = Gri} = GsSpec, {provider, ProviderId, Token}) ->
+    Endpoint = case GsSpec#gs_spec.expected_result_op of
+        undefined when GsSpec#gs_spec.expected_result_gui /= undefined ->
+            utils:throttle(GsSpec#gs_spec.gri, timer:minutes(1), fun() ->
+                ct:pal("WARN: using gui gs expectation for Oneprovider client~s", [
+                    ?autoformat([Operation, Gri])
+                ])
+            end),
+            gui;
+        _ ->
+            oneprovider
+    end,
+    prepare_gs_client_for_endpoint(
         Config,
+        Endpoint,
         ?SUB(?ONEPROVIDER, ProviderId),
         {token, Token},
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
     );
-prepare_gs_client(_Config, {op_panel, _ProviderId}) ->
+prepare_gs_client(_Config, _GsSpec, {op_panel, _ProviderId}) ->
     error(op_panel_graph_sync_not_supported);
-prepare_gs_client(_Config, {op_panel, _ProviderId, _Token}) ->
+prepare_gs_client(_Config, _GsSpec, {op_panel, _ProviderId, _Token}) ->
     error(op_panel_graph_sync_not_supported).
 
 
-prepare_gs_client(Config, ExpIdentity, Authorization, Opts) ->
+prepare_gs_client_for_endpoint(Config, Endpoint, ExpIdentity, Authorization, Opts) ->
     {ok, GsClient, #gs_resp_handshake{
         identity = ExpIdentity
     }} = gs_client:start_link(
-        % @todo VFS-4520 Currently only provider endpoint is tested
-        oz_test_utils:graph_sync_url(Config, provider),
+        oz_test_utils:graph_sync_url(Config, Endpoint),
         Authorization,
         oz_test_utils:get_gs_supported_proto_versions(Config),
         fun(_) -> ok end,
         Opts
     ),
-    GsClient.
+    {GsClient, Endpoint}.
 
 
 % Convert placeholders in various spec fields into real data
@@ -528,8 +560,11 @@ prepare_gs_spec(_Config, GsSpec, Client, Data, Env) ->
     GsSpec#gs_spec{
         gri = prepare_gri(GsSpec#gs_spec.gri, Env),
         auth_hint = prepare_auth_hint(GsSpec#gs_spec.auth_hint, Client, Env),
-        expected_result = prepare_exp_result(
-            GsSpec#gs_spec.expected_result, Env, Data
+        expected_result_op = prepare_exp_result(
+            GsSpec#gs_spec.expected_result_op, Env, Data
+        ),
+        expected_result_gui = prepare_exp_result(
+            GsSpec#gs_spec.expected_result_gui, Env, Data
         )
     }.
 
@@ -570,14 +605,18 @@ prepare_auth_hint(Auth_Hint, _Client, _Env) ->
     Auth_Hint.
 
 
-check_gs_call(GsSpec, GsClient, Data) ->
+check_gs_call(GsSpec, Endpoint, GsClient, Data) ->
     #gs_spec{
         operation = Operation,
         gri = Gri,
         subscribe = Subscribe,
-        auth_hint = AuthHint,
-        expected_result = ExpResult
+        auth_hint = AuthHint
     } = GsSpec,
+
+    ExpResult = case Endpoint of
+        gui -> GsSpec#gs_spec.expected_result_gui;
+        oneprovider -> GsSpec#gs_spec.expected_result_op
+    end,
 
     Result = gs_client:graph_request(
         GsClient, Gri, Operation, Data, Subscribe, AuthHint
@@ -635,8 +674,10 @@ verify_gs_result({ok, ?GS_RESP(Map)}, ?OK_MAP_CONTAINS(ExpMap)) when is_map(Map)
         _ ->
             rest_test_utils:contains_map(Map, ExpMap)
     end;
-verify_gs_result({ok, ?GS_RESP(Result)}, ?OK_TERM(VerifyFun)) ->
+verify_gs_result({ok, ?GS_RESP(Result)}, ?OK_TERM(VerifyFun)) when is_function(VerifyFun) ->
     VerifyFun(Result);
+verify_gs_result({ok, ?GS_RESP(Result)}, ?OK_TERM(Term)) ->
+    Result =:= Term;
 verify_gs_result(_, _) ->
     false.
 
@@ -669,7 +710,7 @@ log_gs_test_result(GsSpec, Client, Data, Description, {result, Result}) ->
         Data,
         GsSpec#gs_spec.subscribe,
         GsSpec#gs_spec.auth_hint,
-        GsSpec#gs_spec.expected_result,
+        GsSpec#gs_spec.expected_result_op,
         Result
     ]),
     throw(fail).

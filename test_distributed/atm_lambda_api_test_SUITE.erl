@@ -148,7 +148,7 @@ create_test(Config) ->
         gs_spec = GsSpec = #gs_spec{
             operation = create,
             gri = #gri{type = od_atm_lambda, aspect = instance},
-            expected_result = ?OK_ENV(fun(_, Data) ->
+            expected_result_op = ?OK_ENV(fun(_, Data) ->
                 ?OK_MAP_CONTAINS(#{
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = gri:deserialize(EncodedGri),
@@ -208,7 +208,7 @@ create_test(Config) ->
             end)
         },
         gs_spec = GsSpec#gs_spec{
-            expected_result = ?OK_ENV(fun(_, Data) ->
+            expected_result_op = ?OK_ENV(fun(_, Data) ->
                 ?OK_MAP_CONTAINS(#{
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = gri:deserialize(EncodedGri),
@@ -323,7 +323,7 @@ get_test(Config) ->
                 aspect = instance, scope = private
             },
             auth_hint = ?THROUGH_ATM_INVENTORY(AtmInventoryId),
-            expected_result = api_test_expect:private_atm_lambda(gs, AtmLambdaId, AtmLambdaDataWithInventory, ?SUB(user, Creator))
+            expected_result_op = api_test_expect:private_atm_lambda(gs, AtmLambdaId, AtmLambdaDataWithInventory, ?SUB(user, Creator))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -467,7 +467,7 @@ dump_test(Config) ->
                 type = od_atm_lambda, id = AtmLambdaId,
                 aspect = dump, scope = private
             },
-            expected_result = api_test_expect:json_dump_of_atm_lambda(gs, AtmLambdaId, AtmLambdaData, RevisionNumber)
+            expected_result_op = api_test_expect:json_dump_of_atm_lambda(gs, AtmLambdaId, AtmLambdaData, RevisionNumber)
         },
         data_spec = #data_spec{
             required = [
@@ -581,7 +581,7 @@ update_test_base(Config, ScenarioType) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_atm_lambda, id = atm_lambda_id, aspect = instance},
-            expected_result = case ScenarioType of
+            expected_result_op = case ScenarioType of
                 new_revision_same_as_initial -> ?ERROR_REASON(?ERROR_ALREADY_EXISTS);
                 _ -> ?OK_RES
             end
@@ -634,7 +634,7 @@ add_revision_test(Config) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_atm_lambda, id = AtmLambdaId, aspect = {revision, <<"undefined">>}},
-            expected_result = ?ERROR_REASON(?ERROR_BAD_DATA(<<"targetRevisionNumber">>))
+            expected_result_op = ?ERROR_REASON(?ERROR_BAD_DATA(<<"targetRevisionNumber">>))
         },
         data_spec = #data_spec{
             required = [
@@ -768,7 +768,7 @@ add_revision_test_base(Config, RevisionNumberProvisionMode, ScenarioType) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_atm_lambda, id = atm_lambda_id, aspect = {revision, target_revision_number_binary}},
-            expected_result = case ScenarioType of
+            expected_result_op = case ScenarioType of
                 new_revision_same_as_initial -> ?ERROR_REASON(?ERROR_ALREADY_EXISTS);
                 _ -> ?OK_RES
             end
@@ -919,7 +919,7 @@ update_revision_lifecycle_state_test(Config, ScenarioType) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_atm_lambda, id = atm_lambda_id, aspect = {revision, revision_to_update_binary}},
-            expected_result = case ScenarioType of
+            expected_result_op = case ScenarioType of
                 nonexistent_revision -> ?ERROR_REASON(?ERROR_NOT_FOUND);
                 _ -> ?OK_RES
             end
@@ -995,7 +995,7 @@ dump_revision_test(Config) ->
                 type = od_atm_lambda, id = AtmLambdaId,
                 aspect = {dump_revision, RevisionNumberBin}, scope = private
             },
-            expected_result = api_test_expect:json_dump_of_atm_lambda_revision(gs, AtmLambdaRevisionData, RevisionNumber)
+            expected_result_op = api_test_expect:json_dump_of_atm_lambda_revision(gs, AtmLambdaRevisionData, RevisionNumber)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -1016,7 +1016,7 @@ dump_revision_test(Config) ->
                 type = od_atm_lambda, id = AtmLambdaId,
                 aspect = {dump_revision, <<"asdf">>}, scope = private
             },
-            expected_result = ?ERROR_REASON(?ERROR_BAD_DATA(<<"revisionNumber">>))
+            expected_result_op = ?ERROR_REASON(?ERROR_BAD_DATA(<<"revisionNumber">>))
         }
     })).
 

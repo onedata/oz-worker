@@ -18,11 +18,8 @@
 
 %% API
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
--export([
-    insert_support_parameters/3,
-    update_support_parameters_registry/2, update_support_parameters/3,
-    clear_support_parameters/2
-]).
+-export([is_advertised_in_marketplace/1]).
+-export([insert_support_parameters/3, update_support_parameters/3, clear_support_parameters/2]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -36,8 +33,21 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
+% description in markdown (.md) format;
+% will be publicly visible if the space is advertised in the marketplace
+-type description() :: binary().
+% name of organization responsible for space management
+-type organization_name() :: binary().
+% a short keyword or phrase that helps to understand the purpose of a space and can be used for filtering;
+% will be publicly visible if the space is advertised in the marketplace
+-type tag() :: binary().
+% email address that will be used for notifying the person responsible for space management
+% in marketplace about new membership requests
+-type marketplace_contact_email() :: binary().
 -type support_size() :: pos_integer().
--export_type([name/0, support_size/0]).
+-export_type([
+    name/0, description/0, organization_name/0, tag/0, marketplace_contact_email/0, support_size/0
+]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -45,6 +55,8 @@
     sync_enabled => true,
     memory_copies => all
 }).
+
+-compile({no_auto_import, [get/1]}).
 
 %%%===================================================================
 %%% API
@@ -109,27 +121,19 @@ list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
 
 
+-spec is_advertised_in_marketplace(od_space:id()) -> boolean().
+is_advertised_in_marketplace(SpaceId) ->
+    case get(SpaceId) of
+        {ok, #document{value = #od_space{advertised_in_marketplace = Advertised}}} -> Advertised;
+        {error, not_found} -> false
+    end.
+
+
 -spec insert_support_parameters(id(), od_provider:id(), support_parameters:record()) ->
     {ok, doc()} | {error, term()}.
 insert_support_parameters(SpaceId, ProviderId, SupportParametersOverlay) ->
     update_support_parameters_registry(SpaceId, fun(PreviousRegistry) ->
         support_parameters_registry:insert_entry(ProviderId, SupportParametersOverlay, PreviousRegistry)
-    end).
-
-
--spec update_support_parameters_registry(
-    id(),
-    fun((support_parameters_registry:record()) -> {ok, support_parameters_registry:record()} | errors:error())
-) ->
-    {ok, doc()} | {error, term()}.
-update_support_parameters_registry(SpaceId, Diff) ->
-    update(SpaceId, fun(Space = #od_space{support_parameters_registry = PreviousRegistry}) ->
-        case Diff(PreviousRegistry) of
-            {error, _} = Error ->
-                Error;
-            {ok, NewRegistry} ->
-                {ok, Space#od_space{support_parameters_registry = NewRegistry}}
-        end
     end).
 
 
@@ -168,6 +172,25 @@ entity_logic_plugin() ->
     space_logic_plugin.
 
 %%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+-spec update_support_parameters_registry(
+    id(),
+    fun((support_parameters_registry:record()) -> {ok, support_parameters_registry:record()} | errors:error())
+) ->
+    {ok, doc()} | {error, term()}.
+update_support_parameters_registry(SpaceId, Diff) ->
+    update(SpaceId, fun(Space = #od_space{support_parameters_registry = PreviousRegistry}) ->
+        case Diff(PreviousRegistry) of
+            {error, _} = Error ->
+                Error;
+            {ok, NewRegistry} ->
+                {ok, Space#od_space{support_parameters_registry = NewRegistry}}
+        end
+    end).
+
+%%%===================================================================
 %%% datastore_model callbacks
 %%%===================================================================
 
@@ -178,7 +201,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    14.
+    15.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -363,6 +386,43 @@ get_record_struct(14) ->
     % new field - support_parameters_registry
     {record, [
         {name, string},
+
+        {owners, [string]},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {storages, #{string => integer}},
+        {shares, [string]},
+        {harvesters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => {integer, [{atom, string}]}}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {support_parameters_registry, {custom, string, {persistent_record, encode, decode, support_parameters_registry}}},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(15) ->
+    % new fields:
+    % - description
+    % - organization_name
+    % - tags
+    % - advertised_in_marketplace
+    % - marketplace_contact_email
+    {record, [
+        {name, string},
+        {description, string},
+        {organization_name, string},
+        {tags, [string]},
+
+        {advertised_in_marketplace, boolean},
+        {marketplace_contact_email, string},
 
         {owners, [string]},
 
@@ -1177,6 +1237,62 @@ upgrade_record(13, Space) ->
                 ?DEFAULT_SUPPORT_PARAMETERS_FOR_LEGACY_PROVIDERS
             end, EffProviders)
         },
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(14, Space) ->
+    {od_space,
+        Name,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        SupportParametersRegistry,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Space,
+
+    {15, {od_space,
+        Name,
+        <<"">>,
+        <<"">>,
+        [],
+
+        false,
+        <<"">>,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        SupportParametersRegistry,
 
         CreationTime,
         Creator,

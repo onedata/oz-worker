@@ -225,7 +225,7 @@ create_test_base(Config, Creator, SupplementaryAtmLambdas) ->
         gs_spec = GsSpec = #gs_spec{
             operation = create,
             gri = #gri{type = od_atm_workflow_schema, aspect = instance},
-            expected_result = ?OK_ENV(fun(Env, Data) ->
+            expected_result_op = ?OK_ENV(fun(Env, Data) ->
                 ?OK_MAP_CONTAINS(#{
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = gri:deserialize(EncodedGri),
@@ -300,7 +300,7 @@ create_test_base(Config, Creator, SupplementaryAtmLambdas) ->
             end)
         },
         gs_spec = GsSpec#gs_spec{
-            expected_result = ?OK_ENV(fun(Env, Data) ->
+            expected_result_op = ?OK_ENV(fun(Env, Data) ->
                 ?OK_MAP_CONTAINS(#{
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = gri:deserialize(EncodedGri),
@@ -417,7 +417,7 @@ get_test(Config) ->
                 aspect = instance, scope = private
             },
             auth_hint = ?THROUGH_ATM_INVENTORY(AtmInventoryId),
-            expected_result = api_test_expect:private_atm_workflow_schema(gs, AtmWorkflowSchemaId, AtmWorkflowSchemaDataWithInventory, ?SUB(user, Creator))
+            expected_result_op = api_test_expect:private_atm_workflow_schema(gs, AtmWorkflowSchemaId, AtmWorkflowSchemaDataWithInventory, ?SUB(user, Creator))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -523,7 +523,7 @@ dump_test(Config) ->
                 type = od_atm_workflow_schema, id = AtmWorkflowSchemaId,
                 aspect = dump, scope = private
             },
-            expected_result = api_test_expect:json_dump_of_atm_workflow_schema(gs, AtmWorkflowSchemaId, AtmWorkflowSchemaData, RevisionNumber)
+            expected_result_op = api_test_expect:json_dump_of_atm_workflow_schema(gs, AtmWorkflowSchemaId, AtmWorkflowSchemaData, RevisionNumber)
         },
         data_spec = #data_spec{
             required = [
@@ -714,7 +714,7 @@ update_test_base(Config, Creator, SupplementaryAtmLambdas, ClientType) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_atm_workflow_schema, id = atm_workflow_schema_id, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [
@@ -785,7 +785,7 @@ insert_revision_test(Config) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_atm_workflow_schema, id = AtmWorkflowSchemaId, aspect = {revision, <<"undefined">>}},
-            expected_result = ?ERROR_REASON(?ERROR_BAD_DATA(<<"targetRevisionNumber">>))
+            expected_result_op = ?ERROR_REASON(?ERROR_BAD_DATA(<<"targetRevisionNumber">>))
         },
         data_spec = #data_spec{
             required = [
@@ -934,7 +934,7 @@ insert_revision_test_base(Config, Creator, SupplementaryAtmLambdas, ClientType, 
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_atm_workflow_schema, id = atm_workflow_schema_id, aspect = {revision, target_revision_number_binary}},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             required = lists:flatten([
@@ -1091,7 +1091,7 @@ delete_revision_test_base(Config, RevisionExistence) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_atm_workflow_schema, id = atm_workflow_schema_id, aspect = {revision, revision_number_to_delete_binary}},
-            expected_result = case RevisionExistence of
+            expected_result_op = case RevisionExistence of
                 existent -> ?OK_RES;
                 nonexistent -> ?ERROR_REASON(?ERROR_NOT_FOUND)
             end
@@ -1154,7 +1154,7 @@ dump_revision_test(Config) ->
                 type = od_atm_workflow_schema, id = AtmWorkflowSchemaId,
                 aspect = {dump_revision, RevisionNumberBin}, scope = private
             },
-            expected_result = api_test_expect:json_dump_of_atm_workflow_schema_revision(gs, AtmWorkflowSchemaRevisionData, RevisionNumber)
+            expected_result_op = api_test_expect:json_dump_of_atm_workflow_schema_revision(gs, AtmWorkflowSchemaRevisionData, RevisionNumber)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -1175,7 +1175,7 @@ dump_revision_test(Config) ->
                 type = od_atm_workflow_schema, id = AtmWorkflowSchemaId,
                 aspect = {dump_revision, <<"asdf">>}, scope = private
             },
-            expected_result = ?ERROR_REASON(?ERROR_BAD_DATA(<<"revisionNumber">>))
+            expected_result_op = ?ERROR_REASON(?ERROR_BAD_DATA(<<"revisionNumber">>))
         }
     })).
 
@@ -1232,7 +1232,7 @@ delete_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_atm_workflow_schema, id = atm_workflow_schema_id, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -1705,7 +1705,7 @@ generate_supplementary_atm_lambdas(AtmInventoryId) ->
 name_summary_bad_data_values() ->
     lists:flatten([
         {<<"summary">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"summary">>)},
-        {<<"summary">>, str_utils:rand_hex(315), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"summary">>, 200)},
+        {<<"summary">>, ?RAND_UNICODE_STR(315), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"summary">>, 200)},
         ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
     ]).
 

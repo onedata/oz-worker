@@ -85,6 +85,7 @@ operation_supported(get, {client_token, _}, private) -> true;
 operation_supported(get, linked_accounts, private) -> true;
 operation_supported(get, {linked_account, _}, private) -> true;
 operation_supported(get, {space_alias, _}, private) -> true;
+operation_supported(get, space_membership_requests, private) -> true;
 
 operation_supported(get, groups, private) -> true;
 operation_supported(get, eff_groups, private) -> true;
@@ -147,6 +148,7 @@ is_subscribable(client_tokens, private) -> true;
 is_subscribable({client_token, _}, private) -> true;
 is_subscribable(linked_accounts, private) -> true;
 is_subscribable({linked_account, _}, private) -> true;
+is_subscribable(space_membership_requests, private) -> true;
 is_subscribable(eff_groups, private) -> true;
 is_subscribable(eff_spaces, private) -> true;
 is_subscribable(eff_providers, private) -> true;
@@ -217,8 +219,6 @@ create(#el_req{gri = #gri{id = UserId, aspect = client_tokens} = GRI}) ->
         {error, _} = Error ->
             Error
     end;
-
-
 
 
 create(Req = #el_req{gri = #gri{id = UserId, aspect = {space_alias, SpaceId}}}) ->
@@ -312,6 +312,9 @@ get(#el_req{gri = #gri{aspect = {linked_account, UserId}}}, User) ->
 
 get(#el_req{gri = #gri{aspect = {space_alias, SpaceId}}}, User) ->
     {ok, maps:get(SpaceId, User#od_user.space_aliases)};
+
+get(#el_req{gri = #gri{aspect = space_membership_requests}}, User) ->
+    {ok, User#od_user.space_membership_requests};
 
 get(#el_req{gri = #gri{aspect = groups}}, User) ->
     {ok, entity_graph:get_relations(direct, top_down, od_group, User)};

@@ -223,7 +223,7 @@ create_handle_service_test(Config) ->
             operation = create,
             gri = #gri{type = od_handle_service, aspect = instance},
             auth_hint = ?AS_USER(U1),
-            expected_result = ?OK_MAP_CONTAINS(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ExpName,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),

@@ -19,6 +19,10 @@
 %% API
 -export([freeze_time/0, unfreeze_time/0, get_frozen_time_seconds/0, simulate_seconds_passing/1]).
 
+-export([mock_new/1, mock_new/2]).
+-export([mock_expect/3]).
+-export([mock_unload/1]).
+
 -export([mock_gui_static/0, unmock_gui_static/0]).
 
 -export([mock_peer_ip_of_all_connections/1, unmock_peer_ip_of_all_connections/0]).
@@ -59,6 +63,25 @@ simulate_seconds_passing(Seconds) ->
     oz_test_utils:simulate_seconds_passing(Seconds).
 
 
+-spec mock_new(module() | [module()]) -> ok.
+mock_new(ModuleOrList) ->
+    mock_new(ModuleOrList, [passthrough, no_history]).
+
+-spec mock_new(module() | [module()], [mock_opt()]) -> ok.
+mock_new(ModuleOrList, Options) ->
+    ok = test_utils:mock_new(ozt:get_nodes(), ModuleOrList, Options).
+
+
+-spec mock_expect(module(), atom(), function()) -> ok.
+mock_expect(Module, FunctionName, Expectation) ->
+    ok = test_utils:mock_expect(ozt:get_nodes(), Module, FunctionName, Expectation).
+
+
+-spec mock_unload(module() | [module()]) -> ok.
+mock_unload(ModuleOrList) ->
+    ok = test_utils:mock_unload(ozt:get_nodes(), ModuleOrList).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Mocks the gui_static module - useful in tests that create / delete a lot of
@@ -67,49 +90,43 @@ simulate_seconds_passing(Seconds) ->
 %%--------------------------------------------------------------------
 -spec mock_gui_static() -> ok.
 mock_gui_static() ->
-    ok = test_utils:mock_new(ozt:get_nodes(), gui_static, [passthrough]),
-    ok = test_utils:mock_expect(ozt:get_nodes(), gui_static, gui_exists, fun(_, _) ->
-        true
-    end),
-    ok = test_utils:mock_expect(ozt:get_nodes(), gui_static, link_gui, fun(_, _, _) ->
-        ok
-    end),
-    ok = test_utils:mock_expect(ozt:get_nodes(), gui_static, unlink_gui, fun(_, _) ->
-        ok
-    end).
+    mock_new(gui_static, [passthrough]),
+    mock_expect(gui_static, gui_exists, fun(_, _) -> true end),
+    mock_expect(gui_static, link_gui, fun(_, _, _) -> ok end),
+    mock_expect(gui_static, unlink_gui, fun(_, _) -> ok end).
 
 
 -spec unmock_gui_static() -> ok.
 unmock_gui_static() ->
-    ok = test_utils:mock_unload(ozt:get_nodes(), gui_static).
+    mock_unload(gui_static).
 
 
 -spec mock_peer_ip_of_all_connections(ip_utils:ip()) -> ok.
 mock_peer_ip_of_all_connections(Ip) ->
-    ok = test_utils:mock_new(ozt:get_nodes(), cowboy_req, [passthrough]),
-    ok = test_utils:mock_expect(ozt:get_nodes(), cowboy_req, peer, fun(_) ->
+    mock_new(cowboy_req, [passthrough]),
+    mock_expect(cowboy_req, peer, fun(_) ->
         {Ip, _Port = 10000}  % port is not relevant
     end).
 
 
 -spec unmock_peer_ip_of_all_connections() -> ok.
 unmock_peer_ip_of_all_connections() ->
-    ok = test_utils:mock_unload(ozt:get_nodes(), cowboy_req).
+    mock_unload(cowboy_req).
 
 
 -spec mock_geo_db_entry_for_all_ips(ip_utils:ans(), ip_utils:country_code(), [ip_utils:region()]) ->
     ok.
 mock_geo_db_entry_for_all_ips(Asn, Country, Regions) ->
-    ok = test_utils:mock_new(ozt:get_nodes(), ip_utils, [passthrough]),
-    ok = test_utils:mock_expect(ozt:get_nodes(), ip_utils, lookup_asn, fun
+    mock_new(ip_utils, [passthrough]),
+    mock_expect(ip_utils, lookup_asn, fun
         (undefined) -> {error, invalid_address};
         (_) -> {ok, Asn}
     end),
-    ok = test_utils:mock_expect(ozt:get_nodes(), ip_utils, lookup_country, fun
+    mock_expect(ip_utils, lookup_country, fun
         (undefined) -> {error, invalid_address};
         (_) -> {ok, Country}
     end),
-    ok = test_utils:mock_expect(ozt:get_nodes(), ip_utils, lookup_region, fun
+    mock_expect(ip_utils, lookup_region, fun
         (undefined) -> {error, invalid_address};
         (_) -> {ok, Regions}
     end).
@@ -117,7 +134,7 @@ mock_geo_db_entry_for_all_ips(Asn, Country, Regions) ->
 
 -spec unmock_geo_db_entry_for_all_ips() -> ok.
 unmock_geo_db_entry_for_all_ips() ->
-    ok = test_utils:mock_unload(ozt:get_nodes(), ip_utils).
+    mock_unload(ip_utils).
 
 
 -spec mock_handle_proxy() -> ok.

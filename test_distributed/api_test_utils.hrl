@@ -31,6 +31,7 @@
     {ok_list, [term()]} | {ok_list_contains, [term()]} |
     {ok_list_doesnt_contain, [term()]} |
     {ok_term, fun((Result :: term()) -> boolean())} |
+    {ok_value, term()} |
     {ok_env, fun((Env :: #{}, Data :: #{}) -> term())} | {error_reason, term()}.
 
 -type gs_expectation() :: ok | {ok_map, #{}} | {ok_map_contains, #{}} |
@@ -76,7 +77,11 @@
     gri :: gri:gri(),
     subscribe = false :: boolean(),
     auth_hint = undefined :: gs_protocol:auth_hint(),
-    expected_result = undefined :: undefined | gs_expectation()
+    % the operation may have different results depending on the
+    % endpoint used (oneprovider or gui)
+    expected_result_op = undefined :: undefined | gs_expectation(),
+    % TODO VFS-4520 Most GraphSync API tests run only on oneprovider endpoint
+    expected_result_gui = undefined :: undefined | gs_expectation()
 }).
 
 -record(api_test_spec, {

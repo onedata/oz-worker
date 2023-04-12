@@ -568,7 +568,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"resourceId">> => {any, {exists, fun(Value) ->
             share_logic:exists(Value) end
         }},
-        <<"metadata">> => {binary, {size_limit, ?METADATA_SIZE_LIMIT}}
+        <<"metadata">> => {binary, {text_length_limit, ?METADATA_SIZE_LIMIT}}
     }
 };
 
@@ -596,7 +596,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) -> #{
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     required => #{
-        <<"metadata">> => {binary, {size_limit, ?METADATA_SIZE_LIMIT}}
+        <<"metadata">> => {binary, {text_length_limit, ?METADATA_SIZE_LIMIT}}
     }
 };
 

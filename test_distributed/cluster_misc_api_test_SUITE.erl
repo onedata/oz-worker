@@ -391,7 +391,7 @@ update_onepanel_proxy_test(Config) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_cluster, id = clusterId, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             required = [<<"onepanelProxy">>],
@@ -529,7 +529,7 @@ update_version_info_test_base(Config, ClusterType, ServiceType) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_cluster, id = clusterId, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             required = [DataKey],

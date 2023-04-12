@@ -42,7 +42,7 @@
 
 -type protocol_handler() :: saml_protocol | openid_protocol.
 
--define(NOW(), global_clock:timestamp_seconds()).
+-define(NOW_SECONDS(), global_clock:timestamp_seconds()).
 -define(REFRESH_THRESHOLD, oz_worker:get_env(idp_access_token_refresh_threshold, 300)).
 
 %% API
@@ -158,13 +158,13 @@ acquire_idp_access_token(#linked_account{access_token = {undefined, 0}, refresh_
     ?ERROR_NOT_FOUND;
 acquire_idp_access_token(#linked_account{access_token = {AccessToken, Expires}, refresh_token = undefined}) ->
     % No refresh token - no point in trying to refresh the access token
-    Now = ?NOW(),
+    Now = ?NOW_SECONDS(),
     case Expires > Now of
         true -> {ok, {AccessToken, Expires - Now}};
         false -> ?ERROR_NOT_FOUND
     end;
 acquire_idp_access_token(#linked_account{idp = IdP, access_token = {AccessToken, Expires}, refresh_token = RefreshToken}) ->
-    Now = ?NOW(),
+    Now = ?NOW_SECONDS(),
     case Expires - ?REFRESH_THRESHOLD > Now of
         true -> {ok, {AccessToken, Expires - Now}};
         false -> refresh_idp_access_token(IdP, RefreshToken)
@@ -188,7 +188,7 @@ refresh_idp_access_token(IdP, RefreshToken) ->
                 ?ERROR_USER_BLOCKED;
             {ok, _} ->
                 #linked_account{access_token = {AccessToken, Expires}} = LinkedAccount,
-                {ok, {AccessToken, Expires - ?NOW()}}
+                {ok, {AccessToken, Expires - ?NOW_SECONDS()}}
         end
     catch
         throw:Error:Stacktrace ->

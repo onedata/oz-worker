@@ -267,7 +267,7 @@ privileges_in_a_big_space_performance_base(Config) ->
         )
     end,
 
-    {ok, SupervisorPid, _} = spawn_clients(Config, provider, ProvidersAndAuths, true, GatherUpdate, OnSuccessFun),
+    {ok, SupervisorPid, _} = spawn_clients(Config, oneprovider, ProvidersAndAuths, true, GatherUpdate, OnSuccessFun),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
 
@@ -377,17 +377,17 @@ concurrent_active_clients_spawning_performance_base(Config) ->
 %%% Internal functions
 %%%===================================================================
 
-spawn_clients(Config, Type, Clients, RetryFlag, CallbackFunction, OnSuccessFun) ->
-    URL = oz_test_utils:graph_sync_url(Config, Type),
+spawn_clients(Config, Endpoint, Clients, RetryFlag, CallbackFunction, OnSuccessFun) ->
+    URL = oz_test_utils:graph_sync_url(Config, Endpoint),
     AuthsAndIdentities = lists:map(fun(Client) ->
-        case Type of
+        case Endpoint of
             gui ->
                 {ok, {_SessionId, SessionCookie}} = oz_test_utils:log_in(Config, Client),
                 {ok, GuiToken} = oz_test_utils:request_gui_token(Config, SessionCookie),
                 Auth = {with_http_cookies, {token, GuiToken}, [{?SESSION_COOKIE_KEY, SessionCookie}]},
                 Identity = ?SUB(user, Client),
                 {Auth, Identity};
-            provider ->
+            oneprovider ->
                 {ProviderId, ProviderToken} = Client,
                 Auth = {token, ProviderToken},
                 Identity = ?SUB(?ONEPROVIDER, ProviderId),

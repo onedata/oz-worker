@@ -27,171 +27,75 @@
 
 
 -export([
-    all/0,
+    groups/0, all/0,
     init_per_suite/1, end_per_suite/1,
-    init_per_testcase/2, end_per_testcase/2
+    init_per_group/2, end_per_group/2
 ]).
 -export([
-    create_test/1,
     create_with_predefined_id_test/1,
-    list_test/1,
     get_test/1,
     get_self_test/1,
     update_test/1,
     change_password_test/1,
     update_basic_auth_config_test/1,
-    toggle_access_block_test/1,
     delete_test/1,
     delete_self_test/1,
 
     create_client_token_test/1,
-    list_client_tokens_test/1,
     delete_client_token_test/1,
 
     acquire_idp_access_token_test/1,
 
-    list_eff_providers_test/1,
+    get_spaces_in_eff_provider_test/1,
+
+    % sequential
+    create_test/1,
+    list_test/1,
+    toggle_access_block_test/1,
+    get_space_membership_requests_test/1,
+    list_client_tokens_test/1,
     get_eff_provider_test/1,
-    get_spaces_in_eff_provider_test/1
+    list_eff_providers_test/1
 ]).
 
-all() ->
-    ?ALL([
-        create_test,
+groups() -> [
+    {parallel_tests, [parallel], [
         create_with_predefined_id_test,
-        list_test,
         get_test,
         get_self_test,
         update_test,
         change_password_test,
         update_basic_auth_config_test,
-        toggle_access_block_test,
         delete_test,
         delete_self_test,
 
         create_client_token_test,
-        list_client_tokens_test,
         delete_client_token_test,
 
         acquire_idp_access_token_test,
 
-        list_eff_providers_test,
-        get_eff_provider_test,
         get_spaces_in_eff_provider_test
-    ]).
+    ]},
+    {sequential_tests, [sequential], [
+        create_test,
+        list_test,
+        toggle_access_block_test,
+        get_space_membership_requests_test,
+        list_client_tokens_test,
+        get_eff_provider_test,
+        list_eff_providers_test
+    ]}
+].
+
+all() -> [
+    {group, sequential_tests},
+    {group, parallel_tests}
+].
 
 
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
-
-create_test(Config) ->
-    TestCases = [
-        %   fullName        username       password
-        {default_value, default_value, default_value},
-
-        {default_value, ?UNIQUE_STRING, default_value},
-        {?UNIQUE_STRING, default_value, default_value},
-        {?UNIQUE_STRING, ?UNIQUE_STRING, default_value},
-
-        {default_value, ?UNIQUE_STRING, ?UNIQUE_STRING},
-        {?UNIQUE_STRING, ?UNIQUE_STRING, ?UNIQUE_STRING}
-    ],
-
-    lists:foreach(fun({FullName, Username, Password}) ->
-
-        ExpFullName = case FullName of
-            default_value -> ?DEFAULT_FULL_NAME;
-            _ -> FullName
-        end,
-
-        ExpUsername = case Username of
-            default_value -> undefined;
-            _ -> Username
-        end,
-
-        ExpBasicAuthEnabled = case Password of
-            default_value -> false;
-            _ -> true
-        end,
-
-        EnvSetUp = fun() ->
-            {ok, NonAdmin} = oz_test_utils:create_user(Config),
-            #{non_admin => NonAdmin}
-        end,
-
-        EnvTearDown = fun(_) ->
-            oz_test_utils:delete_all_entities(Config)
-        end,
-
-        VerifyFun = fun(UserId) ->
-            {ok, User} = oz_test_utils:get_user(Config, UserId),
-            ?assertEqual(ExpFullName, User#od_user.full_name),
-            ?assertEqual(ExpUsername, User#od_user.username),
-            ?assertEqual(ExpBasicAuthEnabled, User#od_user.basic_auth_enabled),
-            case Password of
-                default_value ->
-                    ok;
-                _ ->
-                    ?assert(onedata_passwords:verify(Password, User#od_user.password_hash))
-            end,
-            true
-        end,
-
-        ApiTestSpec = #api_test_spec{
-            client_spec = #client_spec{
-                correct = [
-                    root,
-                    {admin, [?OZ_USERS_CREATE]}
-                ],
-                unauthorized = [nobody],
-                forbidden = [
-                    {user, non_admin}
-                ]
-            },
-            rest_spec = #rest_spec{
-                method = post,
-                path = <<"/users">>,
-                expected_code = ?HTTP_201_CREATED,
-                expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
-                    BaseURL = ?URL(Config, [<<"/users/">>]),
-                    [UserId] = binary:split(Location, [BaseURL], [global, trim_all]),
-                    VerifyFun(UserId)
-                end
-            },
-            logic_spec = #logic_spec{
-                module = user_logic,
-                function = create,
-                args = [auth, data],
-                expected_result = ?OK_TERM(VerifyFun)
-            },
-            gs_spec = #gs_spec{
-                operation = create,
-                gri = #gri{type = od_user, aspect = instance},
-                expected_result = ?OK_MAP_CONTAINS(#{
-                    <<"gri">> => fun(EncodedGri) ->
-                        #gri{id = Id} = gri:deserialize(EncodedGri),
-                        VerifyFun(Id)
-                    end
-                })
-            },
-            data_spec = #data_spec{
-                required = lists:flatten([
-                    case FullName of default_value -> []; _ -> <<"fullName">> end,
-                    case Username of default_value -> []; _ -> <<"username">> end,
-                    case Password of default_value -> []; _ -> <<"password">> end
-                ]),
-                correct_values = lists:foldl(fun maps:merge/2, #{}, [
-                    case FullName of default_value -> #{}; Val -> #{<<"fullName">> => [Val]} end,
-                    case Username of default_value -> #{}; Val -> #{<<"username">> => [Val]} end,
-                    case Password of default_value -> #{}; Val -> #{<<"password">> => [Val]} end
-                ]),
-                bad_values = ?BAD_VALUES_FULL_NAME(?ERROR_BAD_VALUE_FULL_NAME)
-            }
-        },
-        ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUp, EnvTearDown, undefined))
-    end, TestCases).
-
 
 create_with_predefined_id_test(Config) ->
     % Creating users with predefined ids is reserved for internal Onezone logic
@@ -219,63 +123,6 @@ create_with_predefined_id_test(Config) ->
         oz_test_utils:call_oz(
             Config, user_logic, create, [?ROOT, #{<<"username">> => ExpUsername}]
         )
-    ).
-
-
-list_test(Config) ->
-    % Make sure that users created in other tests are deleted.
-    oz_test_utils:delete_all_entities(Config),
-
-    {ok, U1} = oz_test_utils:create_user(Config),
-    {ok, U2} = oz_test_utils:create_user(Config),
-    {ok, ProviderAdmin} = oz_test_utils:create_user(Config),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config),
-    {ok, Admin} = oz_test_utils:create_user(Config),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, [
-        ?OZ_USERS_LIST
-    ], []),
-    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
-        Config, ProviderAdmin, ?PROVIDER_NAME1
-    ),
-
-    ExpUsers = [Admin, NonAdmin, U1, U2, ProviderAdmin],
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, Admin}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin},
-                {provider, P1, P1Token}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = <<"/users">>,
-            expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"users">> => ExpUsers}
-        },
-        logic_spec = #logic_spec{
-            operation = get,
-            module = user_logic,
-            function = list,
-            args = [auth],
-            expected_result = ?OK_LIST(ExpUsers)
-        }
-        % TODO VFS-4520 Tests for GraphSync API
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % check also user_logic:exists function
-    lists:foreach(
-        fun(User) ->
-            ?assert(oz_test_utils:call_oz(Config, user_logic, exists, [User]))
-        end, ExpUsers
-    ),
-    ?assert(not oz_test_utils:call_oz(
-        Config, user_logic, exists, [<<"asdiucyaie827346w">>])
     ).
 
 
@@ -354,7 +201,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_user, id = User, aspect = instance},
-            expected_result = ?OK_MAP_CONTAINS(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"effectiveGroups">> => [],
                 <<"effectiveAtmInventories">> => [],
                 <<"effectiveHandleServices">> => [],
@@ -411,7 +258,7 @@ get_test(Config) ->
             gri = #gri{
                 type = od_user, id = User, aspect = instance, scope = protected
             },
-            expected_result = api_test_expect:protected_user(gs, User, ProtectedUserData)
+            expected_result_op = api_test_expect:protected_user(gs, User, ProtectedUserData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
@@ -427,7 +274,7 @@ get_test(Config) ->
             gri = #gri{
                 type = od_user, id = User, aspect = instance, scope = shared
             },
-            expected_result = api_test_expect:shared_user(gs, User, UserData)
+            expected_result_op = api_test_expect:shared_user(gs, User, UserData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)),
@@ -450,7 +297,7 @@ get_test(Config) ->
             expected_result = api_test_expect:protected_user(logic, User, BlockedUserData)
         },
         gs_spec = GsSpec#gs_spec{
-            expected_result = api_test_expect:protected_user(gs, User, BlockedUserData)
+            expected_result_op = api_test_expect:protected_user(gs, User, BlockedUserData)
         }
     })).
 
@@ -484,7 +331,7 @@ get_self_test(Config) ->
                 type = od_user, id = ?SELF,
                 aspect = instance, scope = protected
             },
-            expected_result = api_test_expect:protected_user(gs, User, ProtectedUserData)
+            expected_result_op = api_test_expect:protected_user(gs, User, ProtectedUserData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -534,7 +381,7 @@ update_test(Config) ->
         gs_spec = GsSpec = #gs_spec{
             operation = update,
             gri = #gri{type = od_user, id = ?SELF, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = DataSpec = #data_spec{
             at_least_one = [<<"fullName">>, <<"username">>],
@@ -628,7 +475,7 @@ change_password_test(Config) ->
             gs_spec = GsSpec = #gs_spec{
                 operation = update,
                 gri = #gri{type = od_user, id = ?SELF, aspect = password},
-                expected_result = ExpResult
+                expected_result_op = ExpResult
             },
             data_spec = #data_spec{
                 required = [<<"oldPassword">>, <<"newPassword">>],
@@ -849,62 +696,6 @@ update_basic_auth_config_test(Config) ->
     end, TestCases).
 
 
-toggle_access_block_test(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config),
-
-    EnvSetUpFun = fun() ->
-        {ok, #od_user{blocked = PreviousAccessBlock}} = oz_test_utils:get_user(Config, UserId),
-        #{previousAccessBlock => PreviousAccessBlock}
-    end,
-
-    VerifyEndFun = fun(ShouldSucceed, #{previousAccessBlock := PreviousAccessBlock}, RequestData) ->
-        ExpectedAccessBlock = case ShouldSucceed of
-            true -> maps:get(<<"blocked">>, RequestData);
-            false -> PreviousAccessBlock
-        end,
-        {ok, #od_user{blocked = CurrentAccessBlock}} = oz_test_utils:get_user(Config, UserId),
-        ?assertEqual(CurrentAccessBlock, ExpectedAccessBlock)
-    end,
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_USERS_UPDATE]}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, UserId},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = patch,
-            path = [<<"/users/">>, UserId, <<"/access_block">>],
-            expected_code = ?HTTP_204_NO_CONTENT
-        },
-        logic_spec = #logic_spec{
-            module = user_logic,
-            function = toggle_access_block,
-            args = [auth, UserId, data],
-            expected_result = ?OK_RES
-        },
-        data_spec = #data_spec{
-            required = [<<"blocked">>],
-            correct_values = #{<<"blocked">> => [true, false]},
-            bad_values = [
-                {<<"blocked">>, 1234, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
-                {<<"blocked">>, 34.5, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
-                {<<"blocked">>, null, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
-                {<<"blocked">>, <<"">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
-                {<<"blocked">>, <<"short">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)}
-            ]
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
-
-
 delete_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
@@ -945,7 +736,7 @@ delete_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_user, id = userId, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -981,7 +772,7 @@ delete_self_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_user, id = ?SELF, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_utils:run_tests(
@@ -1029,54 +820,6 @@ create_client_token_test(Config) ->
             expected_result = ?OK_TERM(VerifyFun)
         },
         rest_spec = undefined
-        % TODO VFS-4520 Tests for GraphSync API
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
-
-
-list_client_tokens_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config),
-    {ok, Token} = oz_test_utils:create_client_token(Config, User),
-
-    ExpTokens = [Token | lists:map(
-        fun(_) ->
-            {ok, Serialized} = oz_test_utils:create_client_token(Config, User),
-            Serialized
-        end, lists:seq(1, 5)
-    )],
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = ClientSpec = #client_spec{
-            correct = [
-                root,
-                {user, User, Token}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = <<"/user/client_tokens">>,
-            expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"tokens">> => ExpTokens}
-        }
-        % TODO VFS-4520 Tests for GraphSync API
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % Check that regular client can't make request on behalf of other client
-    {ok, SomeUser} = oz_test_utils:create_user(Config),
-    ApiTestSpec2 = ApiTestSpec#api_test_spec{
-        client_spec = ClientSpec#client_spec{
-            unauthorized = [nobody],
-            forbidden = [{user, SomeUser}]
-        },
-        rest_spec = undefined,
-        logic_spec = #logic_spec{
-            operation = get,
-            module = user_logic,
-            function = list_client_tokens,
-            args = [auth, User],
-            expected_result = ?OK_LIST(ExpTokens)
-        }
         % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
@@ -1266,121 +1009,6 @@ acquire_idp_access_token_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec5)).
 
 
-
-
-list_eff_providers_test(Config) ->
-    {
-        [{P1, _}, {P2, _}, {P3, _}, {P4, _}],
-        _Spaces, _Groups, {U1, U2, NonAdmin}
-    } = api_test_scenarios:create_eff_providers_env(Config),
-
-    ExpProviders = [P1, P2, P3, P4],
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                {user, U1},
-                {user, U2}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/user/effective_providers">>],
-            expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"providers">> => ExpProviders}
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % Check that regular client can't make request on behalf of other client
-    ApiTestSpec2 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U2},
-                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = undefined,
-        logic_spec = #logic_spec{
-            module = user_logic,
-            function = get_eff_providers,
-            args = [auth, U2],
-            expected_result = ?OK_LIST(ExpProviders)
-        }
-        % TODO VFS-4520 Tests for GraphSync API
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-
-    % check also user_logic:has_eff_provider function
-    lists:foreach(
-        fun(ProviderId) ->
-            ?assert(oz_test_utils:call_oz(
-                Config, user_logic, has_eff_provider, [U2, ProviderId])
-            )
-        end, ExpProviders
-    ),
-    ?assert(not oz_test_utils:call_oz(
-        Config, user_logic, has_eff_provider, [U2, <<"asdiucyaie827346w">>])
-    ).
-
-
-get_eff_provider_test(Config) ->
-    {
-        EffProviders, _Spaces, _Groups, {U1, U2, NonAdmin}
-    } = api_test_scenarios:create_eff_providers_env(Config),
-
-    lists:foreach(fun({ProvId, ProvDetails}) ->
-        ApiTestSpec = #api_test_spec{
-            client_spec = #client_spec{
-                correct = [
-                    {user, U1},
-                    {user, U2}
-                ]
-            },
-            rest_spec = #rest_spec{
-                method = get,
-                path = [<<"/user/effective_providers/">>, ProvId],
-                expected_code = ?HTTP_200_OK,
-                expected_body = api_test_expect:protected_provider(rest, ProvId, ProvDetails)
-            }
-        },
-        ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-        % Check that regular client can't make request
-        % on behalf of other client
-        ApiTestSpec2 = #api_test_spec{
-            client_spec = #client_spec{
-                correct = [
-                    root,
-                    {admin, [?OZ_PROVIDERS_VIEW]},
-                    {user, U2}
-                ],
-                unauthorized = [nobody],
-                forbidden = [
-                    {user, U1},
-                    {user, NonAdmin}
-                ]
-            },
-            rest_spec = undefined,
-            logic_spec = #logic_spec{
-                module = user_logic,
-                function = get_eff_provider,
-                args = [auth, U2, ProvId],
-                expected_result = api_test_expect:protected_provider(logic, ProvId, ProvDetails)
-            }
-            % @TODO VFS-4520 Tests for GraphSync API
-
-        },
-        ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
-
-    end, EffProviders).
-
-
 get_spaces_in_eff_provider_test(Config) ->
     {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_DETAILS(?UNIQUE_STRING)),
     {ok, U1} = oz_test_utils:create_user(Config),
@@ -1448,6 +1076,474 @@ get_spaces_in_eff_provider_test(Config) ->
         end, [{U1, [S1_1, S1_2]}, {U2, [S2]}]
     ).
 
+% ----------------
+% sequential_tests
+
+create_test(Config) ->
+    TestCases = [
+        %   fullName        username       password
+        {default_value, default_value, default_value},
+
+        {default_value, ?UNIQUE_STRING, default_value},
+        {?UNIQUE_STRING, default_value, default_value},
+        {?UNIQUE_STRING, ?UNIQUE_STRING, default_value},
+
+        {default_value, ?UNIQUE_STRING, ?UNIQUE_STRING},
+        {?UNIQUE_STRING, ?UNIQUE_STRING, ?UNIQUE_STRING}
+    ],
+
+    lists:foreach(fun({FullName, Username, Password}) ->
+
+        ExpFullName = case FullName of
+            default_value -> ?DEFAULT_FULL_NAME;
+            _ -> FullName
+        end,
+
+        ExpUsername = case Username of
+            default_value -> undefined;
+            _ -> Username
+        end,
+
+        ExpBasicAuthEnabled = case Password of
+            default_value -> false;
+            _ -> true
+        end,
+
+        EnvSetUp = fun() ->
+            {ok, NonAdmin} = oz_test_utils:create_user(Config),
+            #{non_admin => NonAdmin}
+        end,
+
+        EnvTearDown = fun(_) ->
+            oz_test_utils:delete_all_entities(Config)
+        end,
+
+        VerifyFun = fun(UserId) ->
+            {ok, User} = oz_test_utils:get_user(Config, UserId),
+            ?assertEqual(ExpFullName, User#od_user.full_name),
+            ?assertEqual(ExpUsername, User#od_user.username),
+            ?assertEqual(ExpBasicAuthEnabled, User#od_user.basic_auth_enabled),
+            case Password of
+                default_value ->
+                    ok;
+                _ ->
+                    ?assert(onedata_passwords:verify(Password, User#od_user.password_hash))
+            end,
+            true
+        end,
+
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_USERS_CREATE]}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, non_admin}
+                ]
+            },
+            rest_spec = #rest_spec{
+                method = post,
+                path = <<"/users">>,
+                expected_code = ?HTTP_201_CREATED,
+                expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
+                    BaseURL = ?URL(Config, [<<"/users/">>]),
+                    [UserId] = binary:split(Location, [BaseURL], [global, trim_all]),
+                    VerifyFun(UserId)
+                end
+            },
+            logic_spec = #logic_spec{
+                module = user_logic,
+                function = create,
+                args = [auth, data],
+                expected_result = ?OK_TERM(VerifyFun)
+            },
+            gs_spec = #gs_spec{
+                operation = create,
+                gri = #gri{type = od_user, aspect = instance},
+                expected_result_op = ?OK_MAP_CONTAINS(#{
+                    <<"gri">> => fun(EncodedGri) ->
+                        #gri{id = Id} = gri:deserialize(EncodedGri),
+                        VerifyFun(Id)
+                    end
+                })
+            },
+            data_spec = #data_spec{
+                required = lists:flatten([
+                    case FullName of default_value -> []; _ -> <<"fullName">> end,
+                    case Username of default_value -> []; _ -> <<"username">> end,
+                    case Password of default_value -> []; _ -> <<"password">> end
+                ]),
+                correct_values = lists:foldl(fun maps:merge/2, #{}, [
+                    case FullName of default_value -> #{}; Val -> #{<<"fullName">> => [Val]} end,
+                    case Username of default_value -> #{}; Val -> #{<<"username">> => [Val]} end,
+                    case Password of default_value -> #{}; Val -> #{<<"password">> => [Val]} end
+                ]),
+                bad_values = ?BAD_VALUES_FULL_NAME(?ERROR_BAD_VALUE_FULL_NAME)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUp, EnvTearDown, undefined))
+    end, TestCases).
+
+
+list_test(Config) ->
+    % Make sure that users created in other tests are deleted.
+    oz_test_utils:delete_all_entities(Config),
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, ProviderAdmin} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, Admin} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, [
+        ?OZ_USERS_LIST
+    ], []),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
+        Config, ProviderAdmin, ?PROVIDER_NAME1
+    ),
+
+    ExpUsers = [Admin, NonAdmin, U1, U2, ProviderAdmin],
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, Admin}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {provider, P1, P1Token}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/users">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"users">> => ExpUsers}
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = user_logic,
+            function = list,
+            args = [auth],
+            expected_result = ?OK_LIST(ExpUsers)
+        }
+        % TODO VFS-4520 Tests for GraphSync API
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % check also user_logic:exists function
+    lists:foreach(
+        fun(User) ->
+            ?assert(oz_test_utils:call_oz(Config, user_logic, exists, [User]))
+        end, ExpUsers
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, user_logic, exists, [<<"asdiucyaie827346w">>])
+    ).
+
+
+toggle_access_block_test(Config) ->
+    {ok, UserId} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    EnvSetUpFun = fun() ->
+        {ok, #od_user{blocked = PreviousAccessBlock}} = oz_test_utils:get_user(Config, UserId),
+        #{previousAccessBlock => PreviousAccessBlock}
+    end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{previousAccessBlock := PreviousAccessBlock}, RequestData) ->
+        ExpectedAccessBlock = case ShouldSucceed of
+            true -> maps:get(<<"blocked">>, RequestData);
+            false -> PreviousAccessBlock
+        end,
+        {ok, #od_user{blocked = CurrentAccessBlock}} = oz_test_utils:get_user(Config, UserId),
+        ?assertEqual(CurrentAccessBlock, ExpectedAccessBlock)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_USERS_UPDATE]}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, UserId},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = patch,
+            path = [<<"/users/">>, UserId, <<"/access_block">>],
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
+        logic_spec = #logic_spec{
+            module = user_logic,
+            function = toggle_access_block,
+            args = [auth, UserId, data],
+            expected_result = ?OK_RES
+        },
+        data_spec = #data_spec{
+            required = [<<"blocked">>],
+            correct_values = #{<<"blocked">> => [true, false]},
+            bad_values = [
+                {<<"blocked">>, 1234, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
+                {<<"blocked">>, 34.5, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
+                {<<"blocked">>, null, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
+                {<<"blocked">>, <<"">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
+                {<<"blocked">>, <<"short">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
+
+
+get_space_membership_requests_test(Config) ->
+    ProviderId = ozt_providers:create(),
+    SubjectUserId = ozt_users:create(),
+    OtherUserId = ozt_users:create(),
+    PendingSpaces = lists_utils:generate(fun ozt_spaces:create_advertised/0, 5),
+    AcceptedSpaces = lists_utils:generate(fun ozt_spaces:create_advertised/0, 5),
+    RejectedSpaces = lists_utils:generate(fun ozt_spaces:create_advertised/0, 5),
+
+    ExpPendingSpaceMembershipRequests = maps_utils:generate_from_list(fun(SpaceId) ->
+        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
+        ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
+        RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
+        #{
+            <<"requestId">> => RequestId,
+            <<"contactEmail">> => ContactEmail,
+            <<"lastActivity">> => ozt_mocks:get_frozen_time_seconds()
+        }
+    end, PendingSpaces),
+
+    lists:foreach(fun(SpaceId) ->
+        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
+        ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
+        RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
+        ozt_spaces:resolve_membership_request(SpaceId, RequestId, grant)
+    end, AcceptedSpaces),
+
+    ExpRejectedSpaceMembershipRequests = maps_utils:generate_from_list(fun(SpaceId) ->
+        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
+        ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
+        RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
+        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
+        ozt_spaces:resolve_membership_request(SpaceId, RequestId, reject),
+        #{
+            <<"requestId">> => RequestId,
+            <<"contactEmail">> => ContactEmail,
+            <<"lastActivity">> => ozt_mocks:get_frozen_time_seconds()
+        }
+    end, RejectedSpaces),
+
+    ExpResultForSubjectUser = #{
+        <<"pending">> => ExpPendingSpaceMembershipRequests,
+        <<"rejected">> => ExpRejectedSpaceMembershipRequests,
+        <<"lastPendingRequestPruningTime">> => ozt_mocks:get_frozen_time_seconds()
+    },
+    ExpResultForOtherUser = #{
+        <<"pending">> => #{},
+        <<"rejected">> => #{},
+        <<"lastPendingRequestPruningTime">> => 0
+    },
+    GenApiTestSpec = fun(UserId, ExpectedResult) -> #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{user, UserId}]
+        },
+        logic_spec = #logic_spec{
+            module = user_logic,
+            function = get_space_membership_requests,
+            args = [auth, UserId],
+            expected_result = ?OK_TERM(jsonable_record:from_json(ExpectedResult, space_membership_requests))
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/user/space_membership_requests">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = ExpectedResult
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_user, id = UserId, aspect = space_membership_requests},
+            expected_result_gui = ?OK_MAP_CONTAINS(ExpectedResult)
+        }
+    } end,
+
+    ApiTestSpecForSubjectUser = GenApiTestSpec(SubjectUserId, ExpResultForSubjectUser),
+    api_test_utils:run_tests(Config, ApiTestSpecForSubjectUser),
+    api_test_utils:run_tests(Config, GenApiTestSpec(OtherUserId, ExpResultForOtherUser)),
+    % access by unauthorized/forbidden clients can be requested only via logic/gs
+    api_test_utils:run_tests(Config, ApiTestSpecForSubjectUser#api_test_spec{
+        client_spec = #client_spec{
+            unauthorized = [nobody],
+            forbidden = [{provider, ProviderId}]
+        },
+        rest_spec = undefined
+    }).
+
+
+list_client_tokens_test(Config) ->
+    {ok, User} = oz_test_utils:create_user(Config),
+    {ok, Token} = oz_test_utils:create_client_token(Config, User),
+
+    ExpTokens = [Token | lists:map(
+        fun(_) ->
+            {ok, Serialized} = oz_test_utils:create_client_token(Config, User),
+            Serialized
+        end, lists:seq(1, 5)
+    )],
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = ClientSpec = #client_spec{
+            correct = [
+                root,
+                {user, User, Token}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/user/client_tokens">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"tokens">> => ExpTokens}
+        }
+        % TODO VFS-4520 Tests for GraphSync API
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % Check that regular client can't make request on behalf of other client
+    {ok, SomeUser} = oz_test_utils:create_user(Config),
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = ClientSpec#client_spec{
+            unauthorized = [nobody],
+            forbidden = [{user, SomeUser}]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            operation = get,
+            module = user_logic,
+            function = list_client_tokens,
+            args = [auth, User],
+            expected_result = ?OK_LIST(ExpTokens)
+        }
+        % TODO VFS-4520 Tests for GraphSync API
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+
+
+get_eff_provider_test(Config) ->
+    {
+        EffProviders, _Spaces, _Groups, {U1, U2, NonAdmin}
+    } = api_test_scenarios:create_eff_providers_env(Config),
+
+    lists:foreach(fun({ProvId, ProvDetails}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    {user, U1},
+                    {user, U2}
+                ]
+            },
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/user/effective_providers/">>, ProvId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_provider(rest, ProvId, ProvDetails)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+        % Check that regular client can't make request
+        % on behalf of other client
+        ApiTestSpec2 = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_PROVIDERS_VIEW]},
+                    {user, U2}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, U1},
+                    {user, NonAdmin}
+                ]
+            },
+            rest_spec = undefined,
+            logic_spec = #logic_spec{
+                module = user_logic,
+                function = get_eff_provider,
+                args = [auth, U2, ProvId],
+                expected_result = api_test_expect:protected_provider(logic, ProvId, ProvDetails)
+            }
+            % @TODO VFS-4520 Tests for GraphSync API
+
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
+
+    end, EffProviders).
+
+
+list_eff_providers_test(Config) ->
+    {
+        [{P1, _}, {P2, _}, {P3, _}, {P4, _}],
+        _Spaces, _Groups, {U1, U2, NonAdmin}
+    } = api_test_scenarios:create_eff_providers_env(Config),
+
+    ExpProviders = [P1, P2, P3, P4],
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {user, U1},
+                {user, U2}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/user/effective_providers">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"providers">> => ExpProviders}
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % Check that regular client can't make request on behalf of other client
+    ApiTestSpec2 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U2},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            module = user_logic,
+            function = get_eff_providers,
+            args = [auth, U2],
+            expected_result = ?OK_LIST(ExpProviders)
+        }
+        % TODO VFS-4520 Tests for GraphSync API
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    % check also user_logic:has_eff_provider function
+    lists:foreach(
+        fun(ProviderId) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, user_logic, has_eff_provider, [U2, ProviderId])
+            )
+        end, ExpProviders
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, user_logic, has_eff_provider, [U2, <<"asdiucyaie827346w">>])
+    ).
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -1462,9 +1558,12 @@ end_per_suite(_Config) ->
     application:stop(hackney),
     ssl:stop().
 
-init_per_testcase(_, Config) ->
+init_per_group(_Group, Config) ->
+    ozt_mailer:mock(),
     ozt_mocks:freeze_time(),
     Config.
 
-end_per_testcase(_, _Config) ->
-    ozt_mocks:unfreeze_time().
+end_per_group(_Group, Config) ->
+    ozt_mailer:unmock(),
+    ozt_mocks:unfreeze_time(),
+    Config.

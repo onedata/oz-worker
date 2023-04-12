@@ -497,7 +497,7 @@ get_group_test(Config) ->
                 type = od_group, id = G1, aspect = instance, scope = shared
             },
             auth_hint = ?THROUGH_HARVESTER(H1),
-            expected_result = api_test_expect:shared_group(gs, G1, GroupData)
+            expected_result_op = api_test_expect:shared_group(gs, G1, GroupData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -713,7 +713,7 @@ get_eff_group_test(Config) ->
                     aspect = instance, scope = shared
                 },
                 auth_hint = ?THROUGH_HARVESTER(H1),
-                expected_result = api_test_expect:shared_group(gs, GroupId, GroupData)
+                expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec))

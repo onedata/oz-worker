@@ -383,7 +383,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_provider, id = P1, aspect = instance},
-            expected_result = ?OK_MAP_CONTAINS(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ExpName, <<"domain">> => ExpDomain,
                 <<"effectiveGroups">> => [], <<"effectiveUsers">> => [U1],
                 <<"latitude">> => ExpLatitude, <<"longitude">> => ExpLongitude,
@@ -437,7 +437,7 @@ get_test(Config) ->
                 type = od_provider, id = P1,
                 aspect = instance, scope = protected
             },
-            expected_result = api_test_expect:protected_provider(gs, P1, ProviderData#{<<"online">> => true})
+            expected_result_op = api_test_expect:protected_provider(gs, P1, ProviderData#{<<"online">> => true})
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
@@ -462,7 +462,7 @@ get_self_test(Config) ->
                 type = od_provider, id = ?SELF,
                 aspect = instance, scope = protected
             },
-            expected_result = api_test_expect:protected_provider(gs, P1, ProviderData#{<<"online">> => true})
+            expected_result_op = api_test_expect:protected_provider(gs, P1, ProviderData#{<<"online">> => true})
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -644,7 +644,7 @@ update_test(Config) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_provider, id = providerId, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = DataSpec
     },
@@ -709,7 +709,7 @@ delete_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_provider, id = providerId, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -749,7 +749,7 @@ delete_self_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_provider, id = ?SELF, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_utils:run_tests(
@@ -871,7 +871,7 @@ get_eff_user_test(Config) ->
                         aspect = instance, scope = protected
                     },
                     auth_hint = ?THROUGH_PROVIDER(P1),
-                    expected_result = api_test_expect:protected_user(gs, UserId, UserDetails)
+                    expected_result_op = api_test_expect:protected_user(gs, UserId, UserDetails)
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
@@ -1112,7 +1112,7 @@ get_eff_group_test(Config) ->
                     aspect = instance, scope = protected
                 },
                 auth_hint = ?THROUGH_PROVIDER(P1),
-                expected_result = api_test_expect:protected_group(gs, GroupId, GroupData, ?SUB(nobody))
+                expected_result_op = api_test_expect:protected_group(gs, GroupId, GroupData, ?SUB(nobody))
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
@@ -1468,7 +1468,7 @@ get_eff_space_test(Config) ->
                     aspect = instance, scope = protected
                 },
                 auth_hint = ?THROUGH_PROVIDER(P1),
-                expected_result = api_test_expect:protected_space(gs, SpaceId, SpaceData, ?SUB(nobody))
+                expected_result_op = api_test_expect:protected_space(gs, SpaceId, SpaceData, ?SUB(nobody))
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
@@ -1566,7 +1566,7 @@ legacy_support_space_test(Config) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_provider, id = P1, aspect = support},
-            expected_result = ?OK_MAP_CONTAINS(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = SpaceId} = gri:deserialize(EncodedGri),
                     VerifyFun(SpaceId)
@@ -2013,7 +2013,7 @@ update_subdomain_test(Config) ->
             gri = #gri{
                 type = od_provider, id = providerId, aspect = domain_config
             },
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = DataSpec = #data_spec{
             required = [
@@ -2133,7 +2133,7 @@ update_domain_test(Config) ->
             gri = #gri{
                 type = od_provider, id = providerId, aspect = domain_config
             },
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             required = [<<"subdomainDelegation">>, <<"domain">>],
@@ -2207,7 +2207,7 @@ update_domain_is_idempotent_test(Config) ->
             gri = #gri{
                 type = od_provider, id = providerId, aspect = domain_config
             },
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             required = [<<"subdomainDelegation">>, <<"domain">>],
@@ -2276,7 +2276,7 @@ get_domain_config_test(Config) ->
         gs_spec = GsSpec = #gs_spec{
             operation = get,
             gri = #gri{type = od_provider, id = P1, aspect = domain_config},
-            expected_result = ?OK_MAP_CONTAINS(ExpBody#{
+            expected_result_op = ?OK_MAP_CONTAINS(ExpBody#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, P1)
@@ -2306,7 +2306,7 @@ get_domain_config_test(Config) ->
         logic_spec = LogicSpec#logic_spec{expected_result = ?OK_MAP(ExpBody2)},
         rest_spec = RestSpec#rest_spec{expected_body = {contains, ExpBody2Bin}},
         gs_spec = GsSpec#gs_spec{
-            expected_result = ?OK_MAP_CONTAINS(ExpBody2Bin#{
+            expected_result_op = ?OK_MAP_CONTAINS(ExpBody2Bin#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, P1)
@@ -2341,7 +2341,7 @@ get_own_domain_config_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_provider, id = ?SELF, aspect = domain_config},
-            expected_result = ?OK_MAP_CONTAINS(ExpBody#{
+            expected_result_op = ?OK_MAP_CONTAINS(ExpBody#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, P1)
@@ -2606,7 +2606,7 @@ start_gs_connection(Config, ProviderToken) ->
     % Prevent exiting GS connections from killing the test master
     process_flag(trap_exit, true),
     {ok, ClientPid, _} = ?assertMatch({ok, _, #gs_resp_handshake{identity = ?SUB(?ONEPROVIDER, _)}}, gs_client:start_link(
-        oz_test_utils:graph_sync_url(Config, provider),
+        oz_test_utils:graph_sync_url(Config, oneprovider),
         {token, ProviderToken},
         oz_test_utils:get_gs_supported_proto_versions(Config),
         fun(_) -> ok end,

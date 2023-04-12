@@ -22,9 +22,12 @@
 -export([
     get/2,
     get_protected_data/2,
+    get_marketplace_data/2,
     get_name/2,
     list/1,
-    list_privileges/0
+    list_privileges/0,
+    list_marketplace/2,
+    list_marketplace_with_data/2
 ]).
 -export([
     update/3
@@ -41,6 +44,10 @@
     create_user_invite_token/2,
     create_group_invite_token/2,
     create_space_support_token/2,
+
+    submit_membership_request/3,
+    get_membership_requester_info/3,
+    resolve_membership_request/4,
 
     add_user/3, add_user/4,
     add_group/3, add_group/4,
@@ -83,6 +90,7 @@
     exists/1,
     is_owner/2,
     has_eff_privilege/3,
+    has_eff_privileges/3,
     has_direct_user/2,
     has_eff_user/2,
     has_eff_group/2,
@@ -146,6 +154,21 @@ get_protected_data(Auth, SpaceId) ->
     }).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves protected space data from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_marketplace_data(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
+    {ok, map()} | errors:error().
+get_marketplace_data(Auth, SpaceId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = marketplace_data, scope = protected}
+    }).
+
+
 -spec get_name(aai:auth(), od_space:id()) ->
     {ok, od_space:name()} | {error, term()}.
 get_name(Auth, SpaceId) ->
@@ -181,6 +204,50 @@ list_privileges() ->
         operation = get,
         gri = #gri{type = od_space, id = undefined, aspect = privileges}
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get all spaces in marketplace.
+%% @end
+%%--------------------------------------------------------------------
+-spec list_marketplace(aai:auth(), map()) ->
+    {ok, {Entries :: map(), IsLast :: boolean(), NextPageToken :: undefined | binary()}} |
+    errors:error().
+list_marketplace(Auth, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{
+            type = od_space,
+            id = undefined,
+            aspect = list_marketplace,
+            scope = protected
+        },
+        data = Data
+    })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get all spaces in marketplace with their data.
+%% @end
+%%--------------------------------------------------------------------
+-spec list_marketplace_with_data(aai:auth(), map()) ->
+    {ok, {DataEntries :: map(), IsLast :: boolean(), NextPageToken :: undefined | binary()}} |
+    errors:error().
+list_marketplace_with_data(Auth, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{
+            type = od_space,
+            id = undefined,
+            aspect = list_marketplace_with_data,
+            scope = protected
+        },
+        data = Data
+    })).
 
 
 %%--------------------------------------------------------------------
@@ -295,6 +362,43 @@ create_space_support_token(Auth, SpaceId) ->
         gri = #gri{type = od_space, id = SpaceId, aspect = space_support_token},
         data = #{}
     })).
+
+
+-spec submit_membership_request(aai:auth(), od_space:id(), entity_logic:data()) ->
+    {ok, space_membership_requests:request_id()} | errors:error().
+submit_membership_request(Auth, SpaceId, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = membership_request},
+        data = Data
+    })).
+
+
+-spec get_membership_requester_info(aai:auth(), od_space:id(), space_membership_requests:request_id()) ->
+    {ok, entity_logic:data()} | errors:error().
+get_membership_requester_info(Auth, SpaceId, RequestId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = {membership_requester_info, RequestId}}
+    }).
+
+
+-spec resolve_membership_request(
+    aai:auth(),
+    od_space:id(),
+    space_membership_requests:request_id(),
+    entity_logic:data()
+) ->
+    ok | errors:error().
+resolve_membership_request(Auth, SpaceId, RequestId, Data) ->
+    entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = {resolve_membership_request, RequestId}},
+        data = Data
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -969,26 +1073,25 @@ is_owner(#od_space{owners = Owners}, UserId) ->
     lists:member(UserId, Owners).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Predicate saying whether specified effective user has specified
-%% effective privilege in given space.
-%% @end
-%%--------------------------------------------------------------------
--spec has_eff_privilege(SpaceOrId :: od_space:id() | #od_space{},
-    UserId :: od_user:id(), Privilege :: privileges:space_privilege()) ->
+-spec has_eff_privilege(od_space:id() | od_space:record(), od_user:id(), privileges:space_privilege()) ->
     boolean().
-has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
+has_eff_privilege(SpaceId, UserId, Privilege) ->
+    has_eff_privileges(SpaceId, UserId, [Privilege]).
+
+
+-spec has_eff_privileges(od_space:id() | od_space:record(), od_user:id(), [privileges:space_privilege()]) ->
+    boolean().
+has_eff_privileges(SpaceId, UserId, Privileges) when is_binary(SpaceId) ->
     case od_space:get(SpaceId) of
         {ok, #document{value = Space}} ->
-            has_eff_privilege(Space, UserId, Privilege);
-        _ ->
+            has_eff_privileges(Space, UserId, Privileges);
+        {error, not_found} ->
             false
     end;
-has_eff_privilege(Space, UserId, Privilege) ->
-    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, Space) orelse
-        % space owners have all the privileges, regardless those assigned
-        is_owner(Space, UserId).
+has_eff_privileges(Space, UserId, Privileges) ->
+    EffUserPrivileges = entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Space),
+    % space owners have all the privileges, regardless those assigned
+    lists_utils:is_subset(Privileges, EffUserPrivileges) orelse is_owner(Space, UserId).
 
 
 %%--------------------------------------------------------------------

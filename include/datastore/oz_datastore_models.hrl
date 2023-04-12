@@ -159,6 +159,8 @@ end).
     client_tokens = [] :: [binary()],
     % List of user's aliases for spaces
     space_aliases = #{} :: #{od_space:id() => binary()},
+    % NOTE: you MUST use od_user:lock_and_update_space_membership_requests/2 to apply any changes to this field
+    space_membership_requests = space_membership_requests:empty() :: space_membership_requests:record(),
 
     % Privileges of this user in admin's OZ API
     oz_privileges = [] :: [privileges:oz_privilege()],
@@ -239,6 +241,12 @@ end).
 %% This record defines a space that can be used by users to store their files
 -record(od_space, {
     name = <<"">> :: od_space:name(),
+    description = <<"">> :: od_space:description(),
+    organization_name = <<"">> :: od_space:organization_name(),
+    tags = [] :: [od_space:tag()],
+
+    advertised_in_marketplace = false :: boolean(),
+    marketplace_contact_email = <<"">> :: od_space:marketplace_contact_email(),
 
     % The list of space owners - users that have absolute power regarding the
     % space API and files (analogical to "root", but in the scope of one space).

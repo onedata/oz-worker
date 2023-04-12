@@ -256,7 +256,7 @@ create_test(Config) ->
                     ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"metadata">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
-                {<<"metadata">>, str_utils:rand_hex(50001),
+                {<<"metadata">>, ?RAND_UNICODE_STR(100001),
                     ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"metadata">>, 100000)}
             ]
         }
@@ -347,7 +347,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_handle, id = HandleId, aspect = instance},
-            expected_result = ?OK_MAP_CONTAINS(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"effectiveUsers">> => #{
                     U1 => AllPrivsBin -- [<<"handle_view">>],
                     U2 => [<<"handle_view">>]
@@ -423,7 +423,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_handle, id = HandleId, aspect = instance, scope = public},
-            expected_result = api_test_expect:public_handle(gs, HandleId, HandleData)
+            expected_result_op = api_test_expect:public_handle(gs, HandleId, HandleData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec)).
@@ -495,14 +495,14 @@ update_test(Config) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_handle, id = handleId, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             required = [<<"metadata">>],
             correct_values = #{<<"metadata">> => [?DC_METADATA2]},
             bad_values = [
                 {<<"metadata">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
-                {<<"metadata">>, str_utils:rand_hex(50001),
+                {<<"metadata">>, ?RAND_UNICODE_STR(100001),
                     ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"metadata">>, 100000)}
             ]
         }
@@ -576,7 +576,7 @@ delete_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_handle, id = handleId, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,

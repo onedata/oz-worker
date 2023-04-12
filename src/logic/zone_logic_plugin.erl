@@ -125,7 +125,8 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
         <<"compatibilityRegistryRevision">> => CompatibilityRegistryRevision,
         <<"compatibleOneproviderVersions">> => CompatibleOpVersions,
         <<"openDataXrootdServerDomain">> => OpenDataXrootdServerDomain,
-        <<"bagitUploaderWorkflowSchemaId">> => BagitUploaderWorkflowSchemaId
+        <<"bagitUploaderWorkflowSchemaId">> => BagitUploaderWorkflowSchemaId,
+        <<"availableSpaceTags">> => oz_worker:get_env(available_space_tags)
     }};
 
 get(#el_req{gri = #gri{aspect = test_image}}, _) ->

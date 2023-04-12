@@ -239,10 +239,13 @@ update(#el_req{gri = #gri{id = StorageId, aspect = instance}, data = Data}) ->
     end);
 
 update(Req = #el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
-    NewSupportSize = maps:get(<<"size">>, Req#el_req.data),
-    entity_graph:update_relation(
-        od_space, SpaceId, od_storage, StorageId, NewSupportSize
-    ).
+    fun(#od_storage{provider = ProviderId}) ->
+        NewSupportSize = maps:get(<<"size">>, Req#el_req.data),
+        entity_graph:update_relation(
+            od_space, SpaceId, od_storage, StorageId, NewSupportSize
+        ),
+        wait_for_recalculated_eff_support_state(true, ProviderId, StorageId, SpaceId)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -600,15 +603,28 @@ add_implicit_qos_parameters(StorageId, ProviderId, QosParameters) ->
 wait_for_recalculated_eff_support_state(ExpectedSupportExistence, ProviderId, StorageId, SpaceId) ->
     try
         utils:wait_until(fun() ->
+            #document{value = Space} = ?check(od_space:get(SpaceId)),
+            #document{value = Provider = #od_provider{storages = ProviderStorages}} = ?check(od_provider:get(ProviderId)),
             AllStatuses = [
-                space_logic:is_supported_by_provider(SpaceId, ProviderId),
-                provider_logic:supports_space(ProviderId, SpaceId),
-                space_logic:is_supported_by_storage(SpaceId, StorageId),
+                space_logic:is_supported_by_provider(Space, ProviderId),
+                provider_logic:supports_space(Provider, SpaceId),
+                space_logic:is_supported_by_storage(Space, StorageId),
                 storage_logic:supports_space(StorageId, SpaceId)
             ],
             case ExpectedSupportExistence of
-                true -> lists:all(fun(B) -> B end, AllStatuses);
-                false -> not lists:any(fun(B) -> B end, AllStatuses)
+                false ->
+                    not lists:any(fun(B) -> B end, AllStatuses);
+                true ->
+                    StorageSupports = entity_graph:get_relations_with_attrs(direct, top_down, od_storage, Space),
+                    EffProviderSupports = entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
+                    ExpectedSupportSize = maps:fold(fun(CurrentStorageId, CurrentSupportSize, Acc) ->
+                        Acc + case lists:member(CurrentStorageId, ProviderStorages) of
+                            true -> CurrentSupportSize;
+                            false -> 0
+                        end
+                    end, 0, StorageSupports),
+                    lists:all(fun(B) -> B end, AllStatuses) andalso
+                        maps:get(ProviderId, EffProviderSupports, 0) == ExpectedSupportSize
             end
         end)
     catch _:_ ->

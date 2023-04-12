@@ -146,7 +146,7 @@ get_space_details_test(Config) ->
                 type = od_space, id = S1, aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_GROUP(G1),
-            expected_result = api_test_expect:protected_space(gs, S1, SpaceData, ?SUB(nobody))
+            expected_result_op = api_test_expect:protected_space(gs, S1, SpaceData, ?SUB(nobody))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -232,7 +232,7 @@ create_space_test(Config) ->
             operation = create,
             gri = #gri{type = od_space, aspect = instance},
             auth_hint = ?AS_GROUP(G1),
-            expected_result = ?OK_MAP_CONTAINS(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"groups">> => #{G1 => AllPrivsBin},
                 <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{},
@@ -524,7 +524,7 @@ get_eff_space_details_test(Config) ->
                     aspect = instance, scope = protected
                 },
                 auth_hint = ?THROUGH_GROUP(G1),
-                expected_result = api_test_expect:protected_space(gs, SpaceId, SpaceData, ?SUB(nobody))
+                expected_result_op = api_test_expect:protected_space(gs, SpaceId, SpaceData, ?SUB(nobody))
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec))

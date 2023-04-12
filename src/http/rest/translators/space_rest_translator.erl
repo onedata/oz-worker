@@ -46,6 +46,9 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#g
 create_response(#gri{aspect = join} = Gri, AuthHint, resource, Result) ->
     create_response(Gri#gri{aspect = instance}, AuthHint, resource, Result);
 
+create_response(#gri{aspect = membership_request}, _, value, RequestId) ->
+    rest_translator:ok_body_reply(#{<<"requestId">> => RequestId});
+
 create_response(#gri{aspect = invite_user_token}, _, value, Token) ->
     {ok, Serialized} = tokens:serialize(Token),
     rest_translator:ok_body_reply(#{<<"token">> => Serialized});
@@ -79,7 +82,17 @@ create_response(#gri{id = SpaceId, aspect = group}, _, resource, {#gri{id = Grou
 create_response(#gri{id = SpaceId, aspect = harvester}, _, resource, {#gri{id = HarvesterId}, _}) ->
     rest_translator:created_reply_with_location(
         [<<"spaces">>, SpaceId, <<"harvesters">>, HarvesterId]
-    ).
+    );
+
+create_response(#gri{aspect = Aspect}, _, value, {Entries, IsLast, NextPageToken}) when
+    Aspect =:= list_marketplace;
+    Aspect =:= list_marketplace_with_data
+->
+    rest_translator:ok_body_reply(#{
+        <<"spaces">> => Entries,
+        <<"isLast">> => IsLast,
+        <<"nextPageToken">> => utils:undefined_to_null(NextPageToken)
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -97,6 +110,10 @@ get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
 get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
     #{
         <<"name">> := Name,
+        <<"description">> := Description,
+        <<"organizationName">> := OrganizationName,
+        <<"tags">> := Tags,
+        <<"advertisedInMarketplace">> := AdvertisedInMarketplace,
         <<"providers">> := Providers,
         <<"supportParametersRegistry">> := SupportParametersRegistry,
         <<"creator">> := Creator,
@@ -105,11 +122,21 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
     rest_translator:ok_body_reply(#{
         <<"spaceId">> => SpaceId,
         <<"name">> => Name,
+        <<"description">> => Description,
+        <<"organizationName">> => OrganizationName,
+        <<"tags">> => Tags,
+        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
         <<"providers">> => Providers,
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry),
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
         <<"creationTime">> => CreationTime
     });
+
+get_response(#gri{aspect = {membership_requester_info, _}}, RequesterInfo) ->
+    rest_translator:ok_body_reply(RequesterInfo);
+
+get_response(#gri{id = SpaceId, aspect = marketplace_data, scope = protected}, MarketplaceData) ->
+    rest_translator:ok_body_reply(MarketplaceData#{<<"spaceId">> => SpaceId});
 
 get_response(#gri{aspect = owners}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});

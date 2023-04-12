@@ -26,6 +26,7 @@
 
 -define(SHARE_DESCRIPTION_SIZE_LIMIT, 100000).
 
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -285,14 +286,14 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     },
     optional => #{
         <<"fileType">> => {atom, [file, dir]},
-        <<"description">> => {binary, {size_limit, ?SHARE_DESCRIPTION_SIZE_LIMIT}}
+        <<"description">> => {binary, {text_length_limit, ?SHARE_DESCRIPTION_SIZE_LIMIT}}
     }
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"description">> => {binary, {size_limit, ?SHARE_DESCRIPTION_SIZE_LIMIT}}
+        <<"description">> => {binary, {text_length_limit, ?SHARE_DESCRIPTION_SIZE_LIMIT}}
     }
 }.
 

@@ -34,7 +34,7 @@
 | {not_lower_than, integer()} | {not_greater_than, integer()}
 | {between, integer(), integer()}
 | [term()] % A list of accepted values
-| {size_limit, integer()}
+| {text_length_limit, integer()}
 | {exists, fun((entity_logic:entity_id()) -> boolean())}
 | {not_exists, fun((entity_logic:entity_id()) -> boolean())}
 | {relation_exists, atom(), binary(), atom(), binary(), fun((entity_logic:entity_id()) -> boolean())}
@@ -43,7 +43,7 @@
 | email | name
 | full_name | username | password.
 
--type parameter_specs() :: #{key() | {aspect, binary()} => {type_spec(), value_spec()}}.
+-type parameter_specs() :: #{key() | {aspect, binary()} => {type_spec(), value_spec() | {all, [value_spec()]}}}.
 
 %% @formatter:off
 % The 'aspect' key word allows to validate the data provided in aspect
@@ -453,7 +453,12 @@ sanitize_type(Rule, Key, _) ->
 %% Performs simple value conversion (if possible) and checks the Value for Key.
 %% @end
 %%--------------------------------------------------------------------
--spec sanitize_value(type_spec(), value_spec(), key(), value()) -> SanitizedValue :: value().
+-spec sanitize_value(type_spec(), value_spec() | {all, [value_spec()]}, key(), value()) ->
+    SanitizedValue :: value().
+sanitize_value(Type, {all, Rules}, Key, Value) ->
+    lists:foldl(fun(Rule, Acc) ->
+        sanitize_value(Type, Rule, Key, Acc)
+    end, Value, Rules);
 sanitize_value(_, any, _Key, Value) ->
     Value;
 sanitize_value(atom, non_empty, Key, '') ->
@@ -591,8 +596,9 @@ sanitize_value(_, VerifyFun, Key, Val) when is_function(VerifyFun, 1) ->
         false ->
             throw(?ERROR_BAD_DATA(Key))
     end;
-sanitize_value(binary, {size_limit, SizeLimit}, Key, Val) ->
-    try byte_size(Val) =< SizeLimit of
+sanitize_value(binary, {text_length_limit, SizeLimit}, Key, Val) ->
+    % string:length/1 counts characters rather than bytes (one unicode character can be a couple of bytes long)
+    try string:length(Val) =< SizeLimit of
         true ->
             Val;
         false ->

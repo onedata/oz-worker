@@ -116,6 +116,7 @@ stages:
         - space_groups_api
         - space_harvesters_api
         - space_lifecycle
+        - space_marketplace
         - space_misc_api
         - space_owners
         - space_users_api
@@ -773,6 +774,14 @@ space_lifecycle:
     - <<: *cover_ct
       name: cover_ct_space_lifecycle.tar.gz
 
+space_marketplace:
+  <<: *ct-job
+  key: SPMP
+  artifacts:
+    - *ct_logs
+    - <<: *cover_ct
+      name: cover_ct_space_marketplace.tar.gz
+
 space_misc_api:
   <<: *ct-job
   key: SPAC
@@ -1007,6 +1016,7 @@ Coverage report:
     - artifact: cover_ct_space_groups_api.tar.gz
     - artifact: cover_ct_space_harvesters_api.tar.gz
     - artifact: cover_ct_space_lifecycle.tar.gz
+    - artifact: cover_ct_space_marketplace.tar.gz
     - artifact: cover_ct_space_misc_api.tar.gz
     - artifact: cover_ct_space_owners.tar.gz
     - artifact: cover_ct_space_users_api.tar.gz

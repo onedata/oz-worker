@@ -25,6 +25,30 @@
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
+-define(AVAILABLE_SPACE_TAGS, lists:flatten(maps:values(oz_worker:get_env(
+    available_space_tags
+)))).
+-define(PARAMETER_SPECS_FOR_NON_ADVERTISED_SPACE, #{
+    <<"description">> => {binary, any},
+    <<"organizationName">> => {binary, any},
+    <<"tags">> => {list_of_binaries, ?AVAILABLE_SPACE_TAGS},
+    <<"advertisedInMarketplace">> => {boolean, any},
+    <<"marketplaceContactEmail">> => {binary, any}
+}).
+-define(PARAMETER_SPECS_FOR_ADVERTISED_SPACE, #{
+    <<"description">> => {binary, non_empty},
+    <<"organizationName">> => {binary, non_empty},
+    <<"tags">> => {list_of_binaries, ?AVAILABLE_SPACE_TAGS},
+    <<"advertisedInMarketplace">> => {boolean, any},
+    <<"marketplaceContactEmail">> => {binary, email}
+}).
+-define(SPACE_CRITICAL_SECTION_KEY(__SPACE_ID), {?MODULE, space, __SPACE_ID}).
+
+-define(MAX_LIST_LIMIT, 1000).
+-define(DEFAULT_LIST_LIMIT, 1000).
+
+-define(MEMBERSHIP_REQUEST_MESSAGE_SIZE_LIMIT, 2000).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -67,12 +91,17 @@ operation_supported(create, space_support_token, private) -> true;
 
 operation_supported(create, instance, private) -> true;
 operation_supported(create, join, private) -> true;
+operation_supported(create, membership_request, private) -> true;
+operation_supported(create, {resolve_membership_request, _}, private) -> true;
 operation_supported(create, {owner, _}, private) -> true;
 
 operation_supported(create, {user, _}, private) -> true;
 operation_supported(create, {group, _}, private) -> true;
 operation_supported(create, group, private) -> true;
 operation_supported(create, harvest_metadata, private) -> true;
+
+operation_supported(create, list_marketplace, protected) -> true;
+operation_supported(create, list_marketplace_with_data, protected) -> true;
 
 operation_supported(get, list, private) -> true;
 operation_supported(get, privileges, _) -> true;
@@ -81,6 +110,9 @@ operation_supported(get, api_samples, private) -> true;
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
 operation_supported(get, owners, private) -> true;
+
+operation_supported(get, marketplace_data, protected) -> true;
+operation_supported(get, {membership_requester_info, _}, private) -> true;
 
 operation_supported(get, users, private) -> true;
 operation_supported(get, eff_users, private) -> true;
@@ -128,6 +160,8 @@ operation_supported(_, _, _) -> false.
     boolean().
 is_subscribable(instance, _) -> true;
 is_subscribable(owners, private) -> true;
+is_subscribable(marketplace_data, protected) -> true;
+is_subscribable({membership_requester_info, _}, private) -> true;
 is_subscribable(users, private) -> true;
 is_subscribable(eff_users, private) -> true;
 is_subscribable(groups, private) -> true;
@@ -154,26 +188,37 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     #{<<"name">> := Name} = Req#el_req.data,
-    ProposedSpaceId = case maps:find(<<"idGeneratorSeed">>, Req#el_req.data) of
+    SpaceId = case maps:find(<<"idGeneratorSeed">>, Req#el_req.data) of
         {ok, IdGeneratorSeed} ->
             datastore_key:new_from_digest([<<"customSpaceIdGeneratorSeed">>, IdGeneratorSeed]);
         error ->
-            undefined
+            datastore_key:new()
     end,
     SpaceDoc = #document{
-        key = ProposedSpaceId,
-        value = #od_space{
+        key = SpaceId,
+        value = update_marketplace_data(Req#el_req.data, #od_space{
             name = Name,
+
             creator = aai:normalize_subject(Auth#auth.subject),
             creation_time = global_clock:timestamp_seconds()
-        }
+        })
     },
-    SpaceId = case od_space:create(SpaceDoc) of
-        {ok, #document{key = Key}} ->
-            Key;
-        {error, already_exists} ->
-            throw(?ERROR_ALREADY_EXISTS)
-    end,
+
+    critical_section:run(?SPACE_CRITICAL_SECTION_KEY(SpaceId), fun() ->
+        case od_space:create(SpaceDoc) of
+            {ok, #document{key = Key, value = #od_space{
+                advertised_in_marketplace = true,
+                tags = SpaceTags
+            }}} ->
+                space_marketplace:add(Name, Key, SpaceTags),
+                Key;
+            {ok, #document{key = Key}} ->
+                Key;
+            {error, already_exists} ->
+                throw(?ERROR_ALREADY_EXISTS)
+        end
+    end),
+
     case Req#el_req.auth_hint of
         ?AS_USER(UserId) ->
             entity_graph:add_relation(
@@ -248,6 +293,23 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
         {ok, SpaceData} = get(#el_req{gri = NewGRI}, Space),
         {ok, resource, {NewGRI, {SpaceData, Rev}}}
     end);
+
+create(Req = #el_req{auth = ?USER(UserId), gri = #gri{id = SpaceId, aspect = membership_request}}) ->
+    ContactEmail = maps:get(<<"contactEmail">>, Req#el_req.data),
+    Message = maps:get(<<"message">>, Req#el_req.data, <<"">>),
+    UpdatedSpaceMembershipRequests = ?check(od_user:lock_and_update_space_membership_requests(
+        UserId, fun(SpaceMembershipRequests) ->
+            space_membership_requests:submit(SpaceId, UserId, ContactEmail, Message, SpaceMembershipRequests)
+        end)
+    ),
+    {ok, value, space_membership_requests:lookup_pending_request_id(SpaceId, UpdatedSpaceMembershipRequests)};
+
+create(Req = #el_req{gri = #gri{id = SpaceId, aspect = {resolve_membership_request, RequestId}}}) ->
+    Decision = maps:get(<<"decision">>, Req#el_req.data),
+    RequesterUserId = space_membership_requests:infer_requester_id(RequestId),
+    ?extract_ok(od_user:lock_and_update_space_membership_requests(RequesterUserId, fun(SpaceMembershipRequests) ->
+        space_membership_requests:resolve(SpaceId, RequestId, Decision, SpaceMembershipRequests)
+    end));
 
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 20.02.*
@@ -366,7 +428,59 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
             ({HarvesterId, FailedIndices}, Acc) when map_size(FailedIndices) =/= 0 ->
                 Acc#{HarvesterId => FailedIndices};
             (_, Acc) -> Acc
-        end, #{}, Res)}.
+        end, #{}, Res)};
+
+%% @formatter:off
+create(Req = #el_req{data = Data, gri = GRI = #gri{aspect = Aspect}}) when
+    Aspect =:= list_marketplace;
+    Aspect =:= list_marketplace_with_data
+->
+%% @formatter:on
+    Tags = maps:get(<<"tags">>, Data, all),
+
+    Offset = maps:get(<<"offset">>, Data, 0),
+    Limit = maps:get(<<"limit">>, Data, ?DEFAULT_LIST_LIMIT),
+
+    ListingOpts = case maps:get(<<"token">>, Data, undefined) of
+        undefined ->
+            Index = maps:get(<<"index">>, Data, undefined),
+            maps_utils:put_if_defined(#{offset => Offset, limit => Limit}, start_index, Index);
+        Token when is_binary(Token) ->
+            % if token is passed, offset has to be increased by 1
+            % to ensure that listing using token is exclusive
+            #{
+                start_index => http_utils:base64url_decode(Token),
+                offset => Offset + 1,
+                limit => Limit
+            }
+    end,
+    BasicEntries = space_marketplace:list(Tags, ListingOpts),
+    IsLast = length(BasicEntries) < Limit,
+    NextPageToken = case IsLast of
+        true ->
+            undefined;
+        false ->
+            {LastEntryIndex, _} = lists:last(BasicEntries),
+            http_utils:base64url_encode(LastEntryIndex)
+    end,
+
+    MappedEntries = case Aspect of
+        list_marketplace ->
+            lists:map(fun({Index, SpaceId}) ->
+                #{<<"spaceId">> => SpaceId, <<"index">> => Index}
+            end, BasicEntries);
+
+        list_marketplace_with_data ->
+            lists_utils:pmap(fun({_, SpaceId}) ->
+                {true, {Space, _}} = fetch_entity(#gri{aspect = instance, id = SpaceId}),
+                {ok, SpaceData} = get(
+                    Req#el_req{gri = GRI#gri{id = SpaceId, aspect = marketplace_data}}, Space
+                ),
+                SpaceData
+            end, BasicEntries)
+    end,
+
+    {ok, value, {MappedEntries, IsLast, NextPageToken}}.
 
 
 %%--------------------------------------------------------------------
@@ -394,23 +508,83 @@ get(#el_req{gri = #gri{id = SpaceId, aspect = api_samples}}, _) ->
 get(#el_req{gri = #gri{aspect = owners}}, #od_space{owners = Owners}) ->
     {ok, Owners};
 
-get(#el_req{gri = #gri{aspect = instance, scope = private}}, Space) ->
-    {ok, Space};
+get(Req = #el_req{auth = Auth, gri = #gri{aspect = instance, scope = private}}, Space) ->
+    CanViewMarketplaceContactEmail = case Auth of
+        ?ROOT -> true;
+        ?USER -> auth_by_privilege(Req, Space, ?SPACE_MANAGE_IN_MARKETPLACE);
+        _ -> false
+    end,
+    {ok, case CanViewMarketplaceContactEmail of
+        true -> Space;
+        false -> Space#od_space{marketplace_contact_email = <<"">>}
+    end};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{
         name = Name,
+        description = Description,
+        organization_name = OrganizationName,
+        tags = Tags,
+        advertised_in_marketplace = AdvertisedInMarketplace,
         shares = Shares,
         support_parameters_registry = SupportParametersRegistry,
         creation_time = CreationTime,
         creator = Creator
     } = Space,
+
     {ok, #{
         <<"name">> => Name,
+        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
+        <<"description">> => Description,
+        <<"organizationName">> => OrganizationName,
+        <<"tags">> => Tags,
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"supportParametersRegistry">> => SupportParametersRegistry,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator,
         <<"sharesCount">> => length(Shares)
+    }};
+
+get(#el_req{gri = #gri{id = SpaceId, aspect = marketplace_data}}, Space = #od_space{
+    name = Name,
+    description = Description,
+    organization_name = OrganizationName,
+    tags = Tags,
+    creation_time = CreationTime
+}) ->
+    {ProviderNames, TotalSupportSize} = maps:fold(
+        fun(ProviderId, SupportSize, {ProviderNamesAcc, SupportSizeAcc}) ->
+            {ok, #document{value = #od_provider{name = ProviderName}}} = od_provider:get(ProviderId),
+            {[ProviderName | ProviderNamesAcc], SupportSize + SupportSizeAcc}
+        end,
+        {[], 0},
+        entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space)
+    ),
+
+    {ok, #{
+        <<"spaceId">> => SpaceId,
+        <<"name">> => Name,
+        <<"index">> => space_marketplace:index(Name, SpaceId),
+        <<"description">> => Description,
+        <<"organizationName">> => OrganizationName,
+        <<"tags">> => Tags,
+        <<"creationTime">> => CreationTime,
+        <<"totalSupportSize">> => TotalSupportSize,
+        <<"providerNames">> => ProviderNames
+    }};
+
+get(#el_req{gri = #gri{id = SpaceId, aspect = {membership_requester_info, RequestId}}}, _) ->
+    RequesterUserId = space_membership_requests:infer_requester_id(RequestId),
+    #document{value = #od_user{
+        full_name = FullName,
+        username = Username,
+        space_membership_requests = SpaceMembershipRequests
+    }} = ?check(od_user:get(RequesterUserId)),
+    ContactEmail = space_membership_requests:lookup_email_for_pending(SpaceId, RequestId, SpaceMembershipRequests),
+    {ok, #{
+        <<"userId">> => RequesterUserId,
+        <<"fullName">> => FullName,
+        <<"username">> => Username,
+        <<"contactEmail">> => ContactEmail
     }};
 
 get(#el_req{gri = #gri{aspect = users}}, Space) ->
@@ -454,12 +628,59 @@ get(#el_req{gri = #gri{aspect = storages}}, Space) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
-update(#el_req{gri = #gri{id = SpaceId, aspect = instance}, data = Data}) ->
-    NewName = maps:get(<<"name">>, Data),
-    {ok, _} = od_space:update(SpaceId, fun(Space = #od_space{}) ->
-        {ok, Space#od_space{name = NewName}}
-    end),
-    ok;
+update(#el_req{gri = GRI = #gri{id = SpaceId, aspect = instance}, data = Data}) ->
+    critical_section:run(?SPACE_CRITICAL_SECTION_KEY(SpaceId), fun() ->
+        {true, {PrevSpace, _}} = fetch_entity(GRI),
+        PrevName = PrevSpace#od_space.name,
+        NewName = maps:get(<<"name">>, Data, PrevName),
+        NewSpace = update_marketplace_data(Data, PrevSpace#od_space{name = NewName}),
+
+        case PrevSpace == NewSpace of
+            true ->
+                ok;
+            false ->
+                {ok, #document{value = #od_space{tags = NewTags}}} = od_space:update(
+                    SpaceId, fun(Space) ->
+                        {ok, Space#od_space{
+                            name = NewName,
+                            description = NewSpace#od_space.description,
+                            organization_name = NewSpace#od_space.organization_name,
+                            tags = NewSpace#od_space.tags,
+                            advertised_in_marketplace = NewSpace#od_space.advertised_in_marketplace,
+                            marketplace_contact_email = NewSpace#od_space.marketplace_contact_email
+                        }}
+                    end
+                ),
+
+                PrevTags = PrevSpace#od_space.tags,
+                PrevAdvertisedInMarketplace = PrevSpace#od_space.advertised_in_marketplace,
+                NewAdvertisedInMarketplace = NewSpace#od_space.advertised_in_marketplace,
+
+                case {PrevAdvertisedInMarketplace, NewAdvertisedInMarketplace, PrevName == NewName} of
+                    {false, true, _} ->
+                        % Added space to marketplace
+                        ok = space_marketplace:add(NewName, SpaceId, NewTags);
+                    {true, false, _} ->
+                        % Removed space from marketplace
+                        ok = space_marketplace:delete(PrevName, SpaceId, PrevTags);
+                    {true, true, false} ->
+                        % Changed space name when in marketplace
+                        ok = space_marketplace:delete(PrevName, SpaceId, PrevTags),
+                        ok = space_marketplace:add(NewName, SpaceId, NewTags);
+                    {true, true, true} ->
+                        case {PrevTags -- NewTags, NewTags -- PrevTags} of
+                            {[], []} ->
+                                ok;
+                            {RemovedTags, AddedTags} ->
+                                % Changed space tags when in marketplace
+                                ok = space_marketplace:delete(PrevName, SpaceId, RemovedTags),
+                                ok = space_marketplace:add(NewName, SpaceId, AddedTags)
+                        end;
+                    _ ->
+                        ok
+                end
+        end
+    end);
 
 update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {user_privileges, UserId}}}) ->
     PrivsToGrant = maps:get(<<"grant">>, Req#el_req.data, []),
@@ -503,10 +724,14 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
         end, Harvesters),
         % remove all owners from the space to be deleted in order to avoid
         % potential errors when cleaning up user relations
-        {ok, _} = od_space:update(SpaceId, fun(Space) ->
-            {ok, Space#od_space{owners = []}}
-        end),
-        entity_graph:delete_with_relations(od_space, SpaceId)
+        critical_section:run(?SPACE_CRITICAL_SECTION_KEY(SpaceId), fun() ->
+            {ok, #document{value = #od_space{name = SpaceName, tags = Tags}}} = od_space:update(
+                SpaceId,
+                fun(Space) -> {ok, Space#od_space{owners = []}} end
+            ),
+            space_marketplace:delete(SpaceName, SpaceId, Tags),
+            entity_graph:delete_with_relations(od_space, SpaceId)
+        end)
     end;
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
@@ -595,6 +820,15 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {harvester, HarvesterId}}}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
+exists(#el_req{gri = #gri{aspect = marketplace_data, scope = protected}}, #od_space{
+    advertised_in_marketplace = AdvertisedInMarketPlace
+}) ->
+    AdvertisedInMarketPlace;
+
+exists(#el_req{gri = #gri{aspect = {membership_requester_info, _}, scope = private}}, _) ->
+    % more specific errors are generated when handling the request
+    true;
+
 exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     case Req#el_req.auth_hint of
         ?THROUGH_USER(UserId) ->
@@ -710,12 +944,30 @@ authorize(Req = #el_req{operation = create, gri = #gri{id = SpaceId, aspect = ha
             file_id:guid_to_space_id(Guid) == SpaceId
         end, maps:get(<<"batch">>, Data));
 
+authorize(#el_req{auth = ?USER, operation = create, gri = #gri{aspect = membership_request}}, Space) ->
+    Space#od_space.advertised_in_marketplace;
+
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {resolve_membership_request, _} = Aspect}}, Space) ->
+    % authorization is checked before validity, so some garbage value may happen here
+    Decision = maps:get(<<"decision">>, entity_logic_sanitizer:ensure_valid(validate(Req), Aspect, Req#el_req.data)),
+    % ?SPACE_ADD_USER is additionally required if the resolving user grants access in response to the request
+    auth_by_privileges(Req, Space, case Decision of
+        grant -> [?SPACE_ADD_USER, ?SPACE_MANAGE_IN_MARKETPLACE];
+        reject -> [?SPACE_MANAGE_IN_MARKETPLACE]
+    end);
+
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_USER);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_GROUP);
-
+%% @formatter:off
+authorize(#el_req{operation = create, gri = #gri{aspect = Aspect}, auth = ?USER}, _) when
+    Aspect =:= list_marketplace;
+    Aspect =:= list_marketplace_with_data
+->
+    true;
+%% @formatter:on
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = space_support_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_SUPPORT);
 
@@ -724,6 +976,17 @@ authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
 
 authorize(#el_req{operation = get, gri = #gri{aspect = api_samples}, auth = ?USER(UserId)}, Space) ->
     entity_graph:has_relation(direct, bottom_up, od_user, UserId, Space);
+
+authorize(#el_req{operation = get, gri = #gri{aspect = marketplace_data}, auth = ?USER}, #od_space{
+    advertised_in_marketplace = AdvertisedInMarketplace
+}) ->
+    AdvertisedInMarketplace;
+authorize(#el_req{operation = get, gri = #gri{aspect = marketplace_data}}, _) ->
+    false;
+
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = {membership_requester_info, _}}}, Space) ->
+    % only users authorized to resolve requests can view the info
+    auth_by_privilege(Req, Space, ?SPACE_MANAGE_IN_MARKETPLACE);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse auth_by_support(Req, Space);
@@ -799,8 +1062,13 @@ authorize(Req = #el_req{operation = get}, Space) ->
     % All other resources can be accessed with view privileges or by the supporting provider
     auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse auth_by_support(Req, Space);
 
-authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_UPDATE);
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}, data = Data}, Space) ->
+    ModifiesMarketplaceData = maps:is_key(<<"advertisedInMarketplace">>, Data) orelse
+        maps:is_key(<<"marketplaceContactEmail">>, Data),
+    auth_by_privileges(Req, Space, case ModifiesMarketplaceData of
+        true -> [?SPACE_UPDATE, ?SPACE_MANAGE_IN_MARKETPLACE];
+        false -> [?SPACE_UPDATE]
+    end);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_SET_PRIVILEGES);
@@ -904,11 +1172,22 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {group
 
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = group}}) ->
     [?OZ_GROUPS_CREATE, ?OZ_SPACES_ADD_RELATIONSHIPS];
-
+%% @formatter:off
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = Aspect}}) when
+    Aspect =:= list_marketplace;
+    Aspect =:= list_marketplace_with_data
+->
+    [?OZ_SPACES_LIST];
+%% @formatter:on
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
     [?OZ_SPACES_LIST];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = api_samples, scope = private}}) ->
+    [?OZ_SPACES_VIEW];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = marketplace_data, scope = protected}}) ->
+    [?OZ_SPACES_VIEW];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {membership_requester_info, _}, scope = private}}) ->
     [?OZ_SPACES_VIEW];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}) ->
@@ -997,14 +1276,15 @@ required_admin_privileges(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
-validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
-    required => #{
-        <<"name">> => {binary, name}
-    },
-    optional => #{
-        <<"idGeneratorSeed">> => {binary, any}
-    }
-};
+validate(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
+    #{
+        required => #{
+            <<"name">> => {binary, name}
+        },
+        optional => ?PARAMETER_SPECS_FOR_NON_ADVERTISED_SPACE#{
+            <<"idGeneratorSeed">> => {binary, any}
+        }
+    };
 
 validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
     #{
@@ -1014,6 +1294,24 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
                 ?AS_GROUP(_) -> ?GROUP_JOIN_SPACE;
                 ?AS_HARVESTER(_) -> ?HARVESTER_JOIN_SPACE
             end}
+        }
+    };
+
+validate(#el_req{operation = create, gri = #gri{aspect = membership_request}}) ->
+    #{
+        required => #{
+            <<"contactEmail">> => {binary, email}
+        },
+        optional => #{
+            <<"message">> => {binary, {text_length_limit, ?MEMBERSHIP_REQUEST_MESSAGE_SIZE_LIMIT}}
+        }
+    };
+
+validate(#el_req{operation = create, gri = #gri{aspect = {resolve_membership_request, _}}}) ->
+    #{
+        required => #{
+            {aspect, <<"requestId">>} => {binary, non_empty},
+            <<"decision">> => {atom, [grant, reject]}
         }
     };
 
@@ -1072,11 +1370,23 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = harvester}}) ->
     harvester_logic_plugin:validate(Req#el_req{gri = #gri{
         type = od_harvester, id = undefined, aspect = instance
     }});
-
+%% @formatter:off
+validate(#el_req{operation = create, gri = #gri{aspect = Aspect}}) when
+    Aspect =:= list_marketplace;
+    Aspect =:= list_marketplace_with_data
+->
+    #{
+        optional => #{
+            <<"index">> => {binary, any},
+            <<"token">> => {binary, non_empty},
+            <<"offset">> => {integer, any},
+            <<"limit">> => {integer, {between, 1, ?MAX_LIST_LIMIT}},
+            <<"tags">> => {list_of_binaries, ?AVAILABLE_SPACE_TAGS}
+        }
+    };
+%% @formatter:on
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
-    required => #{
-        <<"name">> => {binary, name}
-    }
+    at_least_one => ?PARAMETER_SPECS_FOR_NON_ADVERTISED_SPACE#{<<"name">> => {binary, name}}
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}) ->
@@ -1113,11 +1423,18 @@ auth_by_ownership(_, _) ->
 
 
 %% @private
--spec auth_by_privilege(entity_logic:req(), od_space:id() | od_space:record(),
-    privileges:space_privilege()) -> boolean().
-auth_by_privilege(#el_req{auth = ?USER(UserId)}, SpaceOrId, Privilege) ->
-    space_logic:has_eff_privilege(SpaceOrId, UserId, Privilege);
-auth_by_privilege(_, _, _) ->
+-spec auth_by_privilege(entity_logic:req(), od_space:id() | od_space:record(), privileges:space_privilege()) ->
+    boolean().
+auth_by_privilege(ElReq, SpaceOrId, Privilege) ->
+    auth_by_privileges(ElReq, SpaceOrId, [Privilege]).
+
+
+%% @private
+-spec auth_by_privileges(entity_logic:req(), od_space:id() | od_space:record(), [privileges:space_privilege()]) ->
+    boolean().
+auth_by_privileges(#el_req{auth = ?USER(UserId)}, SpaceOrId, Privileges) ->
+    space_logic:has_eff_privileges(SpaceOrId, UserId, Privileges);
+auth_by_privileges(_, _, _) ->
     false.
 
 
@@ -1127,3 +1444,40 @@ auth_by_support(#el_req{auth = ?PROVIDER(ProviderId)}, Space) ->
     space_logic:is_supported_by_provider(Space, ProviderId);
 auth_by_support(_, _) ->
     false.
+
+
+%% @private
+-spec update_marketplace_data(json_utils:json_map(), od_space:record()) ->
+    od_space:record().
+update_marketplace_data(Diff, Space = #od_space{
+    description = Description,
+    organization_name = OrganizationName,
+    tags = Tags,
+    advertised_in_marketplace = Advertised,
+    marketplace_contact_email = ContactEmail
+}) ->
+    IsAdvertised = maps:get(<<"advertisedInMarketplace">>, Diff, Advertised),
+
+    DataSpec = case IsAdvertised of
+        true -> #{required => ?PARAMETER_SPECS_FOR_ADVERTISED_SPACE};
+        false -> #{optional => ?PARAMETER_SPECS_FOR_NON_ADVERTISED_SPACE}
+    end,
+    Data = lists:foldl(fun
+        ({_Key, UndefinedValue, UndefinedValue}, Acc) -> Acc;
+        ({Key, _Value, _UndefinedValue}, Acc) when is_map_key(Key, Acc) -> Acc;
+        ({Key, Value, _UndefinedValue}, Acc) -> Acc#{Key => Value}
+    end, Diff#{<<"advertisedInMarketplace">> => IsAdvertised}, [
+        {<<"description">>, Description, <<"">>},
+        {<<"organizationName">>, OrganizationName, <<"">>},
+        {<<"tags">>, Tags, undefined},
+        {<<"marketplaceContactEmail">>, ContactEmail, <<"">>}
+    ]),
+    SanitizedData = entity_logic_sanitizer:ensure_valid(DataSpec, undefined, Data),
+
+    Space#od_space{
+        description = maps:get(<<"description">>, SanitizedData, Description),
+        organization_name = maps:get(<<"organizationName">>, SanitizedData, OrganizationName),
+        tags = maps:get(<<"tags">>, SanitizedData, Tags),
+        advertised_in_marketplace = IsAdvertised,
+        marketplace_contact_email = maps:get(<<"marketplaceContactEmail">>, SanitizedData, ContactEmail)
+    }.

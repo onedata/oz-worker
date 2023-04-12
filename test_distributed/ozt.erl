@@ -18,7 +18,7 @@
 
 -define(OZT_MODULES, [
     oz_test_utils, % Load the old utils until the migration is complete
-    ozt, ozt_http, ozt_gs, ozt_tokens, ozt_mocks,
+    ozt, ozt_http, ozt_gs, ozt_tokens, ozt_mocks, ozt_mailer,
     ozt_users, ozt_groups, ozt_spaces, ozt_providers,
     ozt_handle_services, ozt_clusters, ozt_harvesters,
     ozt_atm_inventories, ozt_atm_lambdas, ozt_atm_workflow_schemas
@@ -29,6 +29,7 @@
 %% API
 -export([init_per_suite/1, init_per_suite/2, get_test_config/0]).
 -export([rpc/3, rpc/4]).
+-export([rpc_multicall/3]).
 -export([timestamp_seconds/0]).
 -export([reconcile_entity_graph/0]).
 -export([delete_all_entities/0]).
@@ -119,6 +120,13 @@ rpc(Node, Module, Function, Args) ->
         Result ->
             Result
     end.
+
+
+-spec rpc_multicall(module(), atom(), [term()]) -> ok.
+rpc_multicall(Module, Function, Args) ->
+    lists:foreach(fun(Node) ->
+        rpc(Node, Module, Function, Args)
+    end, get_nodes()).
 
 
 -spec timestamp_seconds() -> time:seconds().

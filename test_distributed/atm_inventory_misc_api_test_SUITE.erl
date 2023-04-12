@@ -233,7 +233,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_atm_inventory, id = AtmInventory, aspect = instance, scope = private},
-            expected_result = ?OK_MAP_CONTAINS(AtmInventoryData#{
+            expected_result_op = ?OK_MAP_CONTAINS(AtmInventoryData#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(AtmInventory, Id)
@@ -409,7 +409,7 @@ update_test(Config) ->
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_atm_inventory, id = atm_inventory_id, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [<<"name">>],
@@ -496,7 +496,7 @@ delete_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_atm_inventory, id = atm_inventory_id, aspect = instance},
-            expected_result = ?OK_RES
+            expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,

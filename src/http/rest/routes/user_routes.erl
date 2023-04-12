@@ -295,6 +295,12 @@ routes() -> [
         method = 'PUT',
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {space_alias, ?BINDING(sid)}}
     }},
+    %% TODO VFS-10687 swaggers for space marketplace
+    {<<"/user/space_membership_requests">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = space_membership_requests}
+    }},
     %% List effective user spaces
     %% This operation does not require any specific privileges.
     {<<"/user/effective_spaces">>, #rest_req{
