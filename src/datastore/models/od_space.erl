@@ -19,7 +19,7 @@
 %% API
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([is_advertised_in_marketplace/1]).
--export([update_support_parameters_registry/2, update_support_parameters/3, clear_support_parameters/2]).
+-export([insert_support_parameters/3, update_support_parameters/3, clear_support_parameters/2]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -129,19 +129,11 @@ is_advertised_in_marketplace(SpaceId) ->
     end.
 
 
--spec update_support_parameters_registry(
-    id(),
-    fun((support_parameters_registry:record()) -> {ok, support_parameters_registry:record()} | errors:error())
-) ->
+-spec insert_support_parameters(id(), od_provider:id(), support_parameters:record()) ->
     {ok, doc()} | {error, term()}.
-update_support_parameters_registry(SpaceId, Diff) ->
-    update(SpaceId, fun(Space = #od_space{support_parameters_registry = PreviousRegistry}) ->
-        case Diff(PreviousRegistry) of
-            {error, _} = Error ->
-                Error;
-            {ok, NewRegistry} ->
-                {ok, Space#od_space{support_parameters_registry = NewRegistry}}
-        end
+insert_support_parameters(SpaceId, ProviderId, SupportParametersOverlay) ->
+    update_support_parameters_registry(SpaceId, fun(PreviousRegistry) ->
+        support_parameters_registry:insert_entry(ProviderId, SupportParametersOverlay, PreviousRegistry)
     end).
 
 
@@ -178,6 +170,25 @@ to_string(SpaceId) ->
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     space_logic_plugin.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+-spec update_support_parameters_registry(
+    id(),
+    fun((support_parameters_registry:record()) -> {ok, support_parameters_registry:record()} | errors:error())
+) ->
+    {ok, doc()} | {error, term()}.
+update_support_parameters_registry(SpaceId, Diff) ->
+    update(SpaceId, fun(Space = #od_space{support_parameters_registry = PreviousRegistry}) ->
+        case Diff(PreviousRegistry) of
+            {error, _} = Error ->
+                Error;
+            {ok, NewRegistry} ->
+                {ok, Space#od_space{support_parameters_registry = NewRegistry}}
+        end
+    end).
 
 %%%===================================================================
 %%% datastore_model callbacks
@@ -1222,7 +1233,9 @@ upgrade_record(13, Space) ->
         EffHarvesters,
 
         #support_parameters_registry{
-            registry = maps:map(fun(_ProviderId, _) -> ?POST_SPACE_UPGRADE_SUPPORT_PARAMETERS end, EffProviders)
+            registry = maps:map(fun(_ProviderId, _) ->
+                ?DEFAULT_SUPPORT_PARAMETERS_FOR_LEGACY_PROVIDERS
+            end, EffProviders)
         },
 
         CreationTime,
