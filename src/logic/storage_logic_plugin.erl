@@ -450,13 +450,10 @@ support_space_insecure(ProviderId, SpaceId, StorageId, Data) ->
 
     % start with setting the support parameters, which can fail if the provided data is not valid
     % upon a failure, there is nothing changed yet that would need undoing to make the process transactional
-    RequestedSpaceSupportParameters = maps:get(<<"spaceSupportParameters">>, Data, #support_parameters{}),
-    PrunedSpaceSupportParameters = #support_parameters{
-        % only the two parameters can be set during space support
-        accounting_enabled = RequestedSpaceSupportParameters#support_parameters.accounting_enabled,
-        dir_stats_service_enabled = RequestedSpaceSupportParameters#support_parameters.dir_stats_service_enabled
-    },
-    case od_space:update_support_parameters(SpaceId, ProviderId, PrunedSpaceSupportParameters) of
+    RequestedSpaceSupportParameters = ?check(support_parameters:sanitize(maps:get(
+        <<"spaceSupportParameters">>, Data, ?DEFAULT_SUPPORT_PARAMETERS_FOR_LEGACY_PROVIDERS
+    ))),
+    case od_space:insert_support_parameters(SpaceId, ProviderId, RequestedSpaceSupportParameters) of
         {ok, _} -> ok;
         {error, _} = Error2 -> throw(Error2)
     end,

@@ -150,7 +150,7 @@ create_test(Config) ->
         {<<"shareId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"shareId">>)},
         {<<"shareId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"shareId">>)},
         {<<"description">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"description">>)},
-        {<<"description">>, str_utils:rand_hex(50001), ?ERROR_BAD_VALUE_BINARY_TOO_LARGE(<<"description">>, 100000)},
+        {<<"description">>, str_utils:rand_hex(50001), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"description">>, 100000)},
         {<<"rootFileId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"rootFileId">>)},
         {<<"rootFileId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"rootFileId">>)},
         {<<"fileType">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"fileType">>)},
@@ -422,7 +422,7 @@ update_test(Config) ->
                 <<"description">> => [<<"">>, str_utils:rand_hex(1397)]
             },
             bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME) ++ [
-                {<<"description">>, str_utils:rand_hex(50001), ?ERROR_BAD_VALUE_BINARY_TOO_LARGE(<<"description">>, 100000)}
+                {<<"description">>, str_utils:rand_hex(50001), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"description">>, 100000)}
             ]
         }
     },
