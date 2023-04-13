@@ -508,17 +508,12 @@ get(#el_req{gri = #gri{id = SpaceId, aspect = api_samples}}, _) ->
 get(#el_req{gri = #gri{aspect = owners}}, #od_space{owners = Owners}) ->
     {ok, Owners};
 
-get(Req = #el_req{auth = Auth, gri = #gri{aspect = instance, scope = private}}, Space) ->
-    CanViewMarketplaceContactEmail = case Auth of
-        ?ROOT -> true;
-        ?USER -> auth_by_privilege(Req, Space, ?SPACE_MANAGE_IN_MARKETPLACE);
-        _ -> false
-    end,
-    {ok, case CanViewMarketplaceContactEmail of
+get(Req = #el_req{gri = #gri{aspect = instance, scope = private}}, Space) ->
+    {ok, case can_view_marketplace_contact_email(Req, Space) of
         true -> Space;
         false -> Space#od_space{marketplace_contact_email = <<"">>}
     end};
-get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
+get(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{
         name = Name,
         description = Description,
@@ -530,13 +525,17 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
         creation_time = CreationTime,
         creator = Creator
     } = Space,
-
+    MarketplaceContactEmail = case can_view_marketplace_contact_email(Req, Space) of
+        true -> Space#od_space.marketplace_contact_email;
+        false -> <<"">>
+    end,
     {ok, #{
         <<"name">> => Name,
-        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
         <<"description">> => Description,
         <<"organizationName">> => OrganizationName,
         <<"tags">> => Tags,
+        <<"advertisedInMarketplace">> => AdvertisedInMarketplace,
+        <<"marketplaceContactEmail">> => MarketplaceContactEmail,
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"supportParametersRegistry">> => SupportParametersRegistry,
         <<"creationTime">> => CreationTime,
@@ -1443,6 +1442,17 @@ auth_by_privileges(_, _, _) ->
 auth_by_support(#el_req{auth = ?PROVIDER(ProviderId)}, Space) ->
     space_logic:is_supported_by_provider(Space, ProviderId);
 auth_by_support(_, _) ->
+    false.
+
+
+%% @private
+-spec can_view_marketplace_contact_email(entity_logic:req(), od_space:record()) -> boolean().
+can_view_marketplace_contact_email(#el_req{auth = ?ROOT}, _) ->
+    true;
+can_view_marketplace_contact_email(Req = #el_req{auth = ?USER(UserId)}, Space) ->
+    auth_by_privileges(Req, Space, [?SPACE_VIEW, ?SPACE_MANAGE_IN_MARKETPLACE]) orelse
+        user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_VIEW);
+can_view_marketplace_contact_email(_, _) ->
     false.
 
 

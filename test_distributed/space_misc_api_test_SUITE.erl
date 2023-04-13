@@ -323,8 +323,13 @@ get_test(Config) ->
     UserWithSpaceViewAndManageMarketplace = ozt_users:create(),
     NonAdmin = ozt_users:create(),
 
+    ExpectedMarketplaceContactEmail = ?RAND_ELEMENT([?RAND_EMAIL_ADDRESS(), <<"">>]),
+    SpaceId = ozt_users:create_space_for(Owner, #{
+        <<"name">> => ?SPACE_NAME1,
+        <<"marketplaceContactEmail">> => ExpectedMarketplaceContactEmail
+    }),
+
     AllPrivs = privileges:space_privileges(),
-    {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(Owner), ?SPACE_NAME1),
     ozt_spaces:add_user(SpaceId, UserWithoutSpaceView, AllPrivs -- [?SPACE_VIEW]),
     ozt_spaces:add_user(SpaceId, UserWithSpaceViewOnly, [?SPACE_VIEW]),
     ozt_spaces:add_user(SpaceId, UserWithSpaceViewAndManageMarketplace, [?SPACE_VIEW, ?SPACE_MANAGE_IN_MARKETPLACE]),
@@ -364,8 +369,6 @@ get_test(Config) ->
     % The private data which differs depending on the auth
     % (in case of users, requires ?SPACE_MANAGE_IN_MARKETPLACE privilege)
     lists:foreach(fun({CorrectClient, CanViewMarketplaceContactEmail}) ->
-        ExpectedMarketplaceContactEmail = ?RAND_ELEMENT([?RAND_EMAIL_ADDRESS(), <<"">>]),
-        ozt_spaces:update(SpaceId, #{<<"marketplaceContactEmail">> => ExpectedMarketplaceContactEmail}),
         ?assert(api_test_utils:run_tests(Config, #api_test_spec{
             client_spec = #client_spec{
                 correct = [CorrectClient],
@@ -438,49 +441,54 @@ get_test(Config) ->
         {{provider, P1, P1Token}, false}
     ]),
 
-    % Get and check protected data
-    SpaceData = #{
-        <<"name">> => ?SPACE_NAME1,
-        <<"providers">> => #{P1 => SupportSize},
-        <<"supportParametersRegistry">> => ExpSupportParametersRegistry,
-        <<"advertisedInMarketplace">> => ExpAdvertisedInMarketplace
-    },
-    GetProtectedDataApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_SPACES_VIEW]},
-                {user, Owner},
-                {user, UserWithoutSpaceView},
-                {user, UserWithSpaceViewOnly},
-                {provider, P1, P1Token}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin}
-            ]
+    % The protected data which differs depending on the auth
+    % (in case of users, requires ?SPACE_MANAGE_IN_MARKETPLACE privilege)
+    lists:foreach(fun({CorrectClient, CanViewMarketplaceContactEmail}) ->
+        ProtectedSpaceData = #{
+            <<"name">> => ?SPACE_NAME1,
+            <<"providers">> => #{P1 => SupportSize},
+            <<"supportParametersRegistry">> => ExpSupportParametersRegistry,
+            <<"advertisedInMarketplace">> => ExpAdvertisedInMarketplace,
+            <<"marketplaceContactEmail">> => case CanViewMarketplaceContactEmail of
+                true -> ExpectedMarketplaceContactEmail;
+                false -> <<"">>
+            end
         },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/spaces/">>, SpaceId],
-            expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:protected_space(rest, SpaceId, SpaceData, ?SUB(user, Owner))
-        },
-        logic_spec = #logic_spec{
-            module = space_logic,
-            function = get_protected_data,
-            args = [auth, SpaceId],
-            expected_result = api_test_expect:protected_space(logic, SpaceId, SpaceData, ?SUB(user, Owner))
-        },
-        gs_spec = #gs_spec{
-            operation = get,
-            gri = #gri{
-                type = od_space, id = SpaceId, aspect = instance, scope = protected
+        ?assert(api_test_utils:run_tests(Config, #api_test_spec{
+            client_spec = #client_spec{
+                correct = [CorrectClient],
+                unauthorized = [nobody],
+                forbidden = [{user, NonAdmin}]
             },
-            expected_result_op = api_test_expect:protected_space(gs, SpaceId, SpaceData, ?SUB(user, Owner))
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/spaces/">>, SpaceId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_space(rest, SpaceId, ProtectedSpaceData, ?SUB(user, Owner))
+            },
+            logic_spec = #logic_spec{
+                module = space_logic,
+                function = get_protected_data,
+                args = [auth, SpaceId],
+                expected_result = api_test_expect:protected_space(logic, SpaceId, ProtectedSpaceData, ?SUB(user, Owner))
+            },
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{
+                    type = od_space, id = SpaceId, aspect = instance, scope = protected
+                },
+                expected_result_op = api_test_expect:protected_space(gs, SpaceId, ProtectedSpaceData, ?SUB(user, Owner))
+            }
+        }))
+    end, [
+        {root, true},
+        {{admin, [?OZ_SPACES_VIEW]}, true},
+        {{user, Owner}, true},
+        {{user, UserWithSpaceViewAndManageMarketplace}, true},
+        {{user, UserWithSpaceViewOnly}, false},
+        {{user, UserWithoutSpaceView}, false},
+        {{provider, P1, P1Token}, false}
+    ]).
 
 
 get_marketplace_data_test(Config) ->
