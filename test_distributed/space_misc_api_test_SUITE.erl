@@ -327,7 +327,7 @@ get_test(Config) ->
     SpaceId = ozt_users:create_space_for(Owner, #{
         <<"name">> => ?SPACE_NAME1,
         <<"marketplaceContactEmail">> => ExpectedMarketplaceContactEmail
-        }),
+    }),
 
     AllPrivs = privileges:space_privileges(),
     ozt_spaces:add_user(SpaceId, UserWithoutSpaceView, AllPrivs -- [?SPACE_VIEW]),

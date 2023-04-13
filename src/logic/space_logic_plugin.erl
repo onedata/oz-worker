@@ -1446,7 +1446,7 @@ auth_by_support(_, _) ->
 
 
 %% @private
--spec can_view_marketplace_contact_email(aai:auth(), od_space:record()) -> boolean().
+-spec can_view_marketplace_contact_email(entity_logic:req(), od_space:record()) -> boolean().
 can_view_marketplace_contact_email(#el_req{auth = ?ROOT}, _) ->
     true;
 can_view_marketplace_contact_email(Req = #el_req{auth = ?USER(UserId)}, Space) ->
