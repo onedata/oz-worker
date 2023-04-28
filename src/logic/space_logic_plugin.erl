@@ -91,8 +91,8 @@ operation_supported(create, space_support_token, private) -> true;
 
 operation_supported(create, instance, private) -> true;
 operation_supported(create, join, private) -> true;
-operation_supported(create, membership_request, private) -> true;
-operation_supported(create, {resolve_membership_request, _}, private) -> true;
+operation_supported(create, membership_request, private) -> assert_marketplace_enabled();
+operation_supported(create, {resolve_membership_request, _}, private) -> assert_marketplace_enabled();
 operation_supported(create, {owner, _}, private) -> true;
 
 operation_supported(create, {user, _}, private) -> true;
@@ -112,7 +112,7 @@ operation_supported(get, instance, protected) -> true;
 operation_supported(get, owners, private) -> true;
 
 operation_supported(get, marketplace_data, protected) -> assert_marketplace_enabled();
-operation_supported(get, {membership_requester_info, _}, private) -> true;
+operation_supported(get, {membership_requester_info, _}, private) -> assert_marketplace_enabled();
 
 operation_supported(get, users, private) -> true;
 operation_supported(get, eff_users, private) -> true;

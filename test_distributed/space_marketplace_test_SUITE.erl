@@ -36,9 +36,15 @@
     filter_advertised_test/1,
 
     % sequential_tests - manipulate time or modify the advertised spaces commonly used by all the spaces
+    submit_request_error_marketplace_disabled_test/1,
+    resolve_request_error_marketplace_disabled_test/1,
+    get_membership_info_error_marketplace_disabled_test/1,
+
     submit_reminder_test/1,
+    submit_reminder_error_marketplace_disabled_test/1,
     submit_reminder_error_too_soon_test/1,
     submit_another_request_test/1,
+    submit_another_error_marketplace_disabled_test/1,
     submit_another_error_recently_rejected_test/1,
     submit_error_mailer_malfunction_test/1,
     get_membership_requester_info_space_deleted_test/1,
@@ -64,9 +70,15 @@ groups() -> [
         filter_advertised_test
     ]},
     {sequential_tests, [sequential], [
+        submit_request_error_marketplace_disabled_test,
+        resolve_request_error_marketplace_disabled_test,
+        get_membership_info_error_marketplace_disabled_test,
+
         submit_reminder_test,
+        submit_reminder_error_marketplace_disabled_test,
         submit_reminder_error_too_soon_test,
         submit_another_request_test,
+        submit_another_error_marketplace_disabled_test,
         submit_another_error_recently_rejected_test,
         submit_error_mailer_malfunction_test,
         get_membership_requester_info_space_deleted_test,
@@ -225,6 +237,43 @@ filter_advertised_test(_Config) ->
 % ----------------
 % sequential_tests
 
+submit_request_error_marketplace_disabled_test(_Config) ->
+    {RequesterId, RequesterEmail, SpaceId} = {ozt_users:create(), ?RAND_EMAIL_ADDRESS(), ?RAND_ADVERTISED_SPACE()},
+    OperatorEmail = get_marketplace_contact_email(SpaceId),
+    ozt:set_env(space_marketplace_enabled, false),
+    ?assertEqual(
+        ?ERROR_SPACE_MARKETPLACE_DISABLED,
+        ozt_spaces:try_submit_membership_request(SpaceId, RequesterId, RequesterEmail)
+    ),
+    ?assertNot(has_registered_space_membership_request(
+        pending, RequesterId, SpaceId, <<>>, RequesterEmail, ?FROZEN_TIME_SECONDS())
+    ),
+    ?assertNot(has_received_membership_request_email(
+        OperatorEmail, ?FROZEN_TIME_SECONDS(), SpaceId, first, <<>>, RequesterId, RequesterEmail
+    )).
+
+
+resolve_request_error_marketplace_disabled_test(_Config) ->
+    {RequesterId, RequesterEmail, SpaceId} = {ozt_users:create(), ?RAND_EMAIL_ADDRESS(), ?RAND_ADVERTISED_SPACE()},
+    RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId, RequesterEmail),
+    ozt:set_env(space_marketplace_enabled, false),
+    ?assertEqual(
+        ?ERROR_SPACE_MARKETPLACE_DISABLED,
+        ozt_spaces:try_resolve_membership_request(SpaceId, RequestId, grant)
+    ),
+    ?assertNot(has_received_notification_email(RequesterEmail, ?FROZEN_TIME_SECONDS(), SpaceId, {resolved, grant})).
+
+
+get_membership_info_error_marketplace_disabled_test(_Config) ->
+    {RequesterId, ExistingSpaceId} = {ozt_users:create(), ?RAND_ADVERTISED_SPACE()},
+    ExistingRequestId = ozt_spaces:submit_membership_request(ExistingSpaceId, RequesterId),
+    ozt:set_env(space_marketplace_enabled, false),
+    ?assertEqual(
+        ?ERROR_SPACE_MARKETPLACE_DISABLED,
+        ozt_spaces:try_get_membership_info(ExistingSpaceId, ExistingRequestId)
+    ).
+
+
 submit_reminder_test(_Config) ->
     {RequesterId, FirstRequesterEmail, SpaceId} = {ozt_users:create(), ?RAND_EMAIL_ADDRESS(), ?RAND_ADVERTISED_SPACE()},
     OperatorEmail = get_marketplace_contact_email(SpaceId),
@@ -252,6 +301,27 @@ submit_reminder_test(_Config) ->
     ),
     ?assert(ozt_spaces:has_eff_user(SpaceId, RequesterId)),
     ?assert(has_received_notification_email(lists:last(ReminderEmails), ?FROZEN_TIME_SECONDS(), SpaceId, {resolved, grant})).
+
+
+submit_reminder_error_marketplace_disabled_test(_Config) ->
+    {RequesterId, FirstRequesterEmail, SpaceId} = {ozt_users:create(), ?RAND_EMAIL_ADDRESS(), ?RAND_ADVERTISED_SPACE()},
+    OperatorEmail = get_marketplace_contact_email(SpaceId),
+
+    ozt_spaces:submit_membership_request(SpaceId, RequesterId, FirstRequesterEmail),
+    ReminderRequesterEmail = ?RAND_EMAIL_ADDRESS(),
+    ozt_mocks:simulate_seconds_passing(?MIN_BACKOFF_BETWEEN_REMINDERS_SECONDS),
+    ozt:set_env(space_marketplace_enabled, false),
+    ?assertEqual(
+        ?ERROR_SPACE_MARKETPLACE_DISABLED,
+        ozt_spaces:try_submit_membership_request(SpaceId, RequesterId, ReminderRequesterEmail)
+    ),
+    ?assertNot(has_registered_space_membership_request(
+        pending, RequesterId, SpaceId, <<>>, ReminderRequesterEmail, ?FROZEN_TIME_SECONDS())
+    ),
+    ?assertNot(has_received_membership_request_email(
+        OperatorEmail, ?FROZEN_TIME_SECONDS(), SpaceId,
+        reminder, <<>>, RequesterId, ReminderRequesterEmail
+    )).
 
 
 submit_reminder_error_too_soon_test(_Config) ->
@@ -293,6 +363,26 @@ submit_another_request_test(_Config) ->
     ),
     ?assert(ozt_spaces:has_eff_user(SpaceId, RequesterId)),
     ?assert(has_received_notification_email(RequesterEmailBeta, ?FROZEN_TIME_SECONDS(), SpaceId, {resolved, grant})).
+
+
+submit_another_error_marketplace_disabled_test(_Config) ->
+    {RequesterId, SpaceId} = {ozt_users:create(), ?RAND_ADVERTISED_SPACE()},
+    {RequesterEmailAlpha, RequesterEmailBeta} = {?RAND_EMAIL_ADDRESS(), ?RAND_EMAIL_ADDRESS()},
+    OperatorEmail = get_marketplace_contact_email(SpaceId),
+
+    FirstRequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId, RequesterEmailAlpha),
+    ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 989234)),
+    ozt_spaces:resolve_membership_request(SpaceId, FirstRequestId, reject),
+    ?assert(has_received_notification_email(RequesterEmailAlpha, ?FROZEN_TIME_SECONDS(), SpaceId, {resolved, reject})),
+    ozt_mocks:simulate_seconds_passing(?MIN_BACKOFF_AFTER_REJECTION_SECONDS),
+    ozt:set_env(space_marketplace_enabled, false),
+    ?assertEqual(
+        ?ERROR_SPACE_MARKETPLACE_DISABLED,
+        ozt_spaces:try_submit_membership_request(SpaceId, RequesterId, RequesterEmailBeta)
+    ),
+    ?assertNot(has_received_membership_request_email(
+        OperatorEmail, ?FROZEN_TIME_SECONDS(), SpaceId, first, <<>>, RequesterId, RequesterEmailBeta
+    )).
 
 
 submit_another_error_recently_rejected_test(_Config) ->
@@ -709,7 +799,8 @@ init_per_testcase(_, Config) ->
     % spaces are reused between testcases and some tests may simulate errors
     % for marketplace contact email, so they must be reset for no interference
     ozt:pforeach(fun(SpaceId) ->
-        ozt_mailer:toggle_error_simulation(get_marketplace_contact_email(SpaceId), false)
+        ozt_mailer:toggle_error_simulation(get_marketplace_contact_email(SpaceId), false),
+        ozt:set_env(space_marketplace_enabled, true)
     end, ozt_spaces:list_marketplace()),
     Config.
 
