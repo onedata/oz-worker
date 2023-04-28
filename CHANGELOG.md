@@ -4,23 +4,63 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
-### 21.02.0-alpha28
+### 21.02.1
 
+-   **VFS-10531** Web GUI: Added support for enum-like data types in
+    automation (list of allowed values for string and number types).
+-   **VFS-10432** Web GUI: Fixed cookie notification appearing after
+    consenting and starting new web browser session.
+-   **VFS-10414** Web GUI: Fixed displaying wrong names of spaces in
+    shares sidebar.
+-   **VFS-10389** Web GUI: Added showing data per provider in directory
+    statistics.
+-   **VFS-10357** Web GUI: Added support for "manage archives" privilege
+    and "creator" information in archives.
+-   **VFS-10312** Web GUI: Changed name conflict and disambiguation
+    separator from `#` to `@`.
+-   **VFS-10235** Changed default value of `accountingEnabled` parameter
+    to `true` when requesting space support.
+-   **VFS-10129** Web GUI: Added global and per-lane chart dashboards in
+    automation workflows.
+-   **VFS-10128** Web GUI: Added possibility to map a lambda result to
+    many stores in an automation task definition.
+-   **VFS-10126** Web GUI: Added Space Marketplace - space
+    configuration, spaces browser and membership requests resolver
+    views.
+-   **VFS-10125** Added mailing capabilities to Onezone by means of an
+    integrated SMTP client.
+-   **VFS-10122** Introduced the Space Marketplace. Any space can be
+    publicly advertised in the Marketplace, allowing Onedata users to
+    request access to it. The access requesting process is based on an
+    email exchange with the appointed space maintainer.
+-   **VFS-10118** Web GUI: Introduced GUI for automation lambda
+    parameters.
+-   **VFS-10117** Added lambda config specification and the possibility
+    to provide its values on the task level. Changed data types in
+    automation; added boolean, reworked integer into number with
+    constraints.
+-   **VFS-10065** Web GUI: Fixed API samples tab in file details modal
+    for archived file.
+-   **VFS-10046** Web GUI: Added user details popovers with user
+    information in various views.
+-   **VFS-10037** Web GUI: Added "rate" and "timeDerivative" time series
+    chart functions.
+-   **VFS-9999** Web GUI: Added space details popovers with space
+    information in various views.
+-   **VFS-9637** Web GUI: Improved and unified look of audit log
+    browsers.
+-   **VFS-9622** Upgraded the base image for release dockers from Ubuntu
+    18.04 to Ubuntu 20.04.
 -   **VFS-9614** Web GUI: Added archivisation audit log view.
 -   **VFS-9531** Web GUI: Improved UX of the automation stores browser.
 -   **VFS-9339** Web GUI: Added a new file info tab with REST API
     samples.
--   **VFS-10065** Web GUI: Fixed API samples tab in file details modal
-    for archived file.
--   **VFS-10037** Web GUI: Added \"rate\" and \"timeDerivative\" time
-    series chart functions.
-
-### 21.02.0-alpha27
-
--   **VFS-9771** Web GUI: Added handling of the restricted registration
-    policy in the \"Add cluster\" page.
--   **VFS-9637** Web GUI: Improved and unified look of audit log
-    browsers.
+-   **VFS-9207** Web GUI: Enforced loading fonts from server to avoid
+    incorrect local fonts in browser.
+-   **VFS-9162** Web GUI: Added API samples modal for space.
+-   **VFS-9129** Web GUI: Upgraded EmberJS to v3.8.
+-   **VFS-9036** Web GUI: Added showing time series charts in executed
+    automation workflows.
 -   **VFS-8948** Introduced the concept of time series dashboard specs -
     structured recipes for transforming and displaying measurements in
     charts, which can be organized into sections. Each time series
@@ -29,138 +69,78 @@ CHANGELOG
 -   **VFS-8903** Web GUI: Upgraded EmberJS to v3.4.
 -   **VFS-8716** Web GUI: Added complex data types editor to the
     automation views.
-
-### 21.02.0-alpha26
-
--   **VFS-9207** Web GUI: Enforced loading fonts from server to avoid
-    incorrect local fonts in browser.
--   **VFS-9036** Web GUI: Added showing time series charts in executed
-    automation workflows.
--   **VFS-8043** Added support for the time series data type in
-    automation models.
-
-### 21.02.0-alpha25
-
-### 21.02.0-alpha24
-
--   **VFS-7724** Web GUI: redesigned datasets and archives browser to
-    browse datasets tree and archives in single splitted view.
-
-### 21.02.0-alpha23
-
 -   **VFS-8681** Added a new data type to automation machinery - the
     array type, with recursive specification of the data type of its
     elements.
 -   **VFS-8638** All lambdas now work in batch mode - the lambda creator
     must handle the input with batch arguments and produce an output
     with batch results. The batch size used during workflow execution is
-    controlled by the parameters \`maxBatchSize\` in lane schema
-    definitions and \`preferredBatchSize\` in lambda definitions.
+    controlled by the parameters `maxBatchSize` in lane schema
+    definitions and `preferredBatchSize` in lambda definitions.
 -   **VFS-8348** Web GUI: added links to transferred files on transfers
     view and information about their membership in archive and dataset.
 -   **VFS-8288** It is now possible to specify requested resources and
     resource limits on the lambda and task level for OpenFaaS functions.
 -   **VFS-8263** Added blocking modal when user tries to exit editor
     with unsaved workflow.
--   **VFS-8247** Added new option to harverster\'s indices that allow
-    for harvesting details about archives (archiveId, archiveDescription
-    and archiveCreationTime).
--   **VFS-8172** Add \`/health\` endpoints to REST APIs of all services.
+-   **VFS-8247** Added new option to harverster's indices that allow for
+    harvesting details about archives (archiveId, archiveDescription and
+    archiveCreationTime).
+-   **VFS-8172** Add `/health` endpoints to REST APIs of all services.
 -   **VFS-8073** Upgrade folly, wangle and proxygen libraries to version
     2021.01.04.00.
+-   **VFS-8043** Added support for the time series data type in
+    automation models.
+-   **VFS-7975** Added possibility to cancel running automation
+    workflow.
+-   **VFS-7947** Added possibility to run workflows directly from file
+    browser.
 -   **VFS-7900** Added the possibility to unlink unused lambdas from an
     automation inventory. Upon unlinking from its last inventory, the
     lambda is automatically removed.
 -   **VFS-7898** Web GUI: added self-shortening links to files with
     support for files inside archives.
--   **VFS-7728** Introduced versioning of lambdas and workflow schemas.
-    Users may create subsequent revisions of the above models and modify
-    their statuses (draft, stable, deprecated) to simplify management
-    and retain backward compatibility of definitions that are already in
-    use.
--   **VFS-7633** UX improvements in web GUI concerning navigation
-    between files, datasets and archives using hyperlinks.
--   **VFS-7629** Web GUI: added new datasets panel with archives browser
-    in file browser.
-
-### 21.02.0-alpha22
-
-### 21.02.0-alpha21
-
-### 21.02.0-alpha20
-
-### 21.02.0-alpha19
-
-### 21.02.0-alpha18
-
--   **VFS-7947** Added possibility to run workflows directly from file
-    browser.
-
-### 21.02.0-alpha17
-
-### 21.02.0-alpha16
-
--   **VFS-7975** Added possibility to cancel running automation
-    workflow.
--   **VFS-7846** Added action \"Upload BagIt\" to file browser, which is
-    available when OpenFaaS and special \"BagIt uploader\" workflow are
-    available.
--   **VFS-7741** Web GUI: showing proper error information page when
-    there is no on-line supporting provider for share.
-
-### 21.02.0-alpha15
-
--   **VFS-7747** Upgrade the codebase to Erlang OTP 24.
-
-### 21.02.0-alpha14
-
 -   **VFS-7880** Introduce the concept of automation; tools for defining
     and executing automated workflows, made up of lambdas that are
     submitted to a local OpenFaaS platform. These functionalities
     currently have experimental status.
+-   **VFS-7873** Web GUI: Added possibility to dump, upload and
+    duplicate automation lambdas.
+-   **VFS-7846** Added action "Upload BagIt" to file browser, which is
+    available when OpenFaaS and special "BagIt uploader" workflow are
+    available.
 -   **VFS-7829** Add the possibility to export workflow schemas to JSON
     and import them based on the JSON, linking or creating missing
     lambdas in one shot.
 -   **VFS-7817** GUI improvements in automation GUI: added navigation
     via URL to specific execution, creating stores during task and lane
     creation, showing inventory name for each execution entry.
+-   **VFS-7747** Upgrade the codebase to Erlang OTP 24.
 -   **VFS-7738** Fixed issues with navigation between datasets, archives
     and archive files browsers.
--   **VFS-7329** Added automation GUI - inventories, lambdas and
-    workflows views in Onezone and workflows execution overview in
-    Oneprovider.
-
-### 21.02.0-alpha13
-
-### 21.02.0-alpha12
-
+-   **VFS-7728** Introduced versioning of lambdas and workflow schemas.
+    Users may create subsequent revisions of the above models and modify
+    their statuses (draft, stable, deprecated) to simplify management
+    and retain backward compatibility of definitions that are already in
+    use.
+-   **VFS-7724** Web GUI: redesigned datasets and archives browser to
+    browse datasets tree and archives in single splitted view.
+-   **VFS-7715** Web GUI: Added store references check to automation
+    workflow editor.
 -   **VFS-7705** Added more file actions to archive file browser GUI:
     share, metadata, permissions read, data distribution and quality of
     service.
-
-### 21.02.0-alpha11
-
 -   **VFS-7663** Changed background image of sign-in page in Onezone and
     Onepanel.
 -   **VFS-7648** Added Web GUI views for browsing and creating datasets
     and archives.
--   **VFS-7304** Add preliminary REST API for dataset archivization - to
-    be extended in near future.
-
-### 21.02.0-alpha10
-
-### 21.02.0-alpha9
-
-### 21.02.0-alpha8
-
+-   **VFS-7633** UX improvements in web GUI concerning navigation
+    between files, datasets and archives using hyperlinks.
+-   **VFS-7629** Web GUI: added new datasets panel with archives browser
+    in file browser.
 -   **VFS-7575** Add the possibility to incorporate an XRootD server
     within the Onedata environment for exposing Open Data collections
     for public access using the XRootD protocol.
--   **VFS-7228** Improve the design and UX of the token consumer page in
-    Onezone GUI .
-
-### 21.02.0-alpha7
-
 -   **VFS-7515** Added new harvesting options - fileType and
     datasetInfo.
 -   **VFS-7429** Implemented the concept of datasets. Datasets allow the
@@ -172,47 +152,15 @@ CHANGELOG
     subdirectories and files. Datasets can be nested, allowing users to
     compose arbitrary hierarchical structures. Added corresponding views
     for managing datasets and write protection flags in file browser Web
-    GUI and a REST API, accessible under \`/datasets\`,
-    \`/datasets/{DatasetId}\` and \`/data/{FileId}/dataset/summary\`
-    paths.
-
-### 21.02.0-alpha6
-
-### 21.02.0-alpha5
-
--   **VFS-7294** Added publicly available REST endpoints for fetching
-    information and data of shared files/directories. The data-related
-    endpoints are offered by Onezone, which redirects to a suitable
-    Oneprovider so that a guest user does not need any knowledge of the
-    environment to access the data. Improved the Web GUI\'s shares view
-    to present the public endpoints in an easy-to-use manner.
-
-### 21.02.0-alpha4
-
--   **VFS-7413** Fixed displaying users with the same full name on
-    members views.
-
-### 21.02.0-alpha3
-
--   **VFS-6638** Fixed handling duplicate clusters states on clusters
-    list in GUI.
-
-### 21.02.0-alpha2
-
--   **VFS-7321** Added REST API endpoint for blocking and unblocking
-    user accounts. Blocked user is denied access to all Onedata services
-    unless their account is unblocked again.
--   **VFS-7165** Add a workaround for Erlang\'s SSL implementation that
-    would not reload server certificate chain when it is changed (e.g.
-    after Let\'s Encrypt certificate regeneration).
--   **VFS-6566** Improved UX and fixed minor issues in share views.
-    Fixed inability to open share hosted by Oneprovider 19.02.x using
-    Onezone 20.02.x.
-
-### 20.02.20
-
--   **VFS-10432** Web GUI: Fixed cookie notification appearing after
-    consenting and starting new web browser session.
+    GUI and a REST API, accessible under `/datasets`,
+    `/datasets/{DatasetId}` and `/data/{FileId}/dataset/summary` paths.
+-   **VFS-7329** Added automation GUI - inventories, lambdas and
+    workflows views in Onezone and workflows execution overview in
+    Oneprovider.
+-   **VFS-7304** Add preliminary REST API for dataset archivization - to
+    be extended in near future.
+-   **VFS-7228** Improve the design and UX of the token consumer page in
+    Onezone GUI .
 
 ### 20.02.19
 

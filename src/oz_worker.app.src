@@ -11,7 +11,7 @@
 
 {application, oz_worker, [
     {description, "Onezone worker node."},
-    {vsn, "21.02.0-alpha28"},
+    {vsn, "21.02.1"},
     {registered, [oz_worker_sup]},
     {applications, [
         kernel,
