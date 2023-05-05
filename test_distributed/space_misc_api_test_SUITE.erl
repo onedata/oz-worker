@@ -30,7 +30,8 @@
 -export([
     groups/0, all/0,
     init_per_suite/1, end_per_suite/1,
-    init_per_group/2, end_per_group/2
+    init_per_group/2, end_per_group/2,
+    end_per_testcase/2
 ]).
 -export([
     create_test/1,
@@ -60,8 +61,10 @@
     update_support_parameters_test/1,
 
     % sequential tests
+    get_marketplace_data_error_marketplace_disabled_test/1,
     list_test/1,
-    list_marketplace_test/1
+    list_marketplace_test/1,
+    list_marketplace_error_marketplace_disabled_test/1
 ]).
 
 
@@ -94,8 +97,10 @@ groups() -> [
         update_support_parameters_test
     ]},
     {sequential_tests, [sequential], [
+        get_marketplace_data_error_marketplace_disabled_test,
         list_test,
-        list_marketplace_test
+        list_marketplace_test,
+        list_marketplace_error_marketplace_disabled_test
     ]}
 ].
 
@@ -1769,6 +1774,61 @@ update_support_parameters_test(Config) ->
 % ----------------
 % sequential tests
 
+get_marketplace_data_error_marketplace_disabled_test(Config) ->
+    Owner = ozt_users:create(),
+    U1 = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+
+    BasicS1Data = #{
+        <<"name">> => ?SPACE_NAME1,
+        <<"description">> => ?RAND_STR(),
+        <<"organizationName">> => ?RAND_STR(),
+        <<"tags">> => [<<"demo">>]
+    },
+    S1 = ozt_users:create_advertised_space_for(U1, BasicS1Data),
+    P1 = ozt_providers:create(),
+
+    ozt_providers:support_space(P1, S1),
+    ozt_providers:simulate_version(P1, ?LINE_21_02),
+    ozt_spaces:set_support_parameters(S1, P1, ozt_spaces:random_support_parameters()),
+
+    ozt:set_env(space_marketplace_enabled, false),
+
+    UsersWithAccounts = [
+        root,
+        {admin, [?OZ_SPACES_VIEW]},
+        {user, Owner},
+        {user, U1},
+        {user, NonAdmin}
+    ],
+
+    ?assert(api_test_utils:run_tests(Config, #api_test_spec{
+        client_spec = #client_spec{
+            correct = [nobody, {provider, P1} | UsersWithAccounts],
+            unauthorized = [],
+            forbidden = []
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/spaces/marketplace/">>, S1],
+            expected_code = ?HTTP_400_BAD_REQUEST,
+            expected_body = #{<<"error">> => errors:to_json(?ERROR_SPACE_MARKETPLACE_DISABLED)}
+        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = get_marketplace_data,
+            args = [auth, S1],
+            expected_result = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_space, id = S1, aspect = marketplace_data, scope = protected},
+            expected_result_op = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED),
+            expected_result_gui = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+        }
+    })).
+
+
 list_test(Config) ->
     % Make sure that spaces created in other tests are deleted.
     ozt:delete_all_entities(),
@@ -1828,25 +1888,7 @@ list_marketplace_test(Config) ->
 
     Description = ?RAND_STR(),
     OrganizationName = ?RAND_STR(),
-
-    MarketplaceSpaces = lists:reverse(lists:foldl(fun(Num, Acc) ->
-        SpaceName = str_utils:format_bin("space_~B", [1000 + Num]),
-
-        case ?RAND_BOOL() of
-            true ->
-                Tags = ?RAND_SUBLIST(ozt_spaces:available_space_tags()),
-                SpaceId = ozt_users:create_advertised_space_for(Creator, #{
-                    <<"name">> => SpaceName,
-                    <<"description">> => Description,
-                    <<"organizationName">> => OrganizationName,
-                    <<"tags">> => Tags
-                }),
-                [{SpaceName, SpaceId, Tags} | Acc];
-            false ->
-                ozt_users:create_space_for(Creator, SpaceName),
-                Acc
-        end
-    end, [], lists:seq(1, 400))),
+    MarketplaceSpaces = create_number_of_marketplace_spaces(400, Creator, Description, OrganizationName),
 
     FilterMarketplaceSpacesFun = fun(Data, Type) ->
         ExpEntries0 = case maps:get(<<"tags">>, Data, all) of
@@ -2009,6 +2051,70 @@ list_marketplace_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpecForExtendedListing)).
 
+
+list_marketplace_error_marketplace_disabled_test(Config) ->
+    % Make sure that spaces created in other tests are deleted.
+    ozt:delete_all_entities(),
+
+    Creator = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+
+    Description = ?RAND_STR(),
+    OrganizationName = ?RAND_STR(),
+    create_number_of_marketplace_spaces(100, Creator, Description, OrganizationName),
+
+    ozt:set_env(space_marketplace_enabled, false),
+
+    ApiTestSpecForBasicListing = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                nobody,
+                {admin, [?OZ_SPACES_LIST]},
+                {user, NonAdmin},
+                {user, Creator}
+            ],
+            unauthorized = [],
+            forbidden = []
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = <<"/spaces/marketplace/list">>,
+            expected_code = ?HTTP_400_BAD_REQUEST,
+            expected_body = #{<<"error">> => errors:to_json(?ERROR_SPACE_MARKETPLACE_DISABLED)}
+        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = list_marketplace,
+            args = [auth, data],
+            expected_result = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_space, aspect = list_marketplace, scope = protected},
+            expected_result_op = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED),
+            expected_result_gui = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForBasicListing)),
+
+    ApiTestSpecForExtendedListing = ApiTestSpecForBasicListing#api_test_spec{
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = list_marketplace_with_data,
+            args = [auth, data],
+            expected_result = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_space, aspect = list_marketplace_with_data, scope = protected},
+            expected_result_op = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED),
+            expected_result_gui = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForExtendedListing)).
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -2053,6 +2159,30 @@ get_space_marketplace_related_data_json(SpaceId) ->
     }.
 
 
+%% @private
+-spec create_number_of_marketplace_spaces(number, creator, description, organization_name) -> list().
+create_number_of_marketplace_spaces(Number, Creator, Description, OrganizationName) ->
+
+    lists:reverse(lists:foldl(fun(Num, Acc) ->
+        SpaceName = str_utils:format_bin("space_~B", [1000 + Num]),
+
+        case ?RAND_BOOL() of
+            true ->
+                Tags = ?RAND_SUBLIST(ozt_spaces:available_space_tags()),
+                SpaceId = ozt_users:create_advertised_space_for(Creator, #{
+                    <<"name">> => SpaceName,
+                    <<"description">> => Description,
+                    <<"organizationName">> => OrganizationName,
+                    <<"tags">> => Tags
+                }),
+                [{SpaceName, SpaceId, Tags} | Acc];
+            false ->
+                ozt_users:create_space_for(Creator, SpaceName),
+                Acc
+        end
+    end, [], lists:seq(1, Number))).
+
+
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
@@ -2075,3 +2205,8 @@ end_per_group(_Group, Config) ->
     ozt_mailer:unmock(),
     ozt_mocks:unfreeze_time(),
     Config.
+
+end_per_testcase(_, Config) ->
+    ozt:set_env(space_marketplace_enabled, true),
+    Config.
+
