@@ -91,8 +91,8 @@ operation_supported(create, space_support_token, private) -> true;
 
 operation_supported(create, instance, private) -> true;
 operation_supported(create, join, private) -> true;
-operation_supported(create, membership_request, private) -> assert_marketplace_enabled();
-operation_supported(create, {resolve_membership_request, _}, private) -> assert_marketplace_enabled();
+operation_supported(create, membership_request, private) -> space_marketplace:assert_enabled();
+operation_supported(create, {resolve_membership_request, _}, private) -> space_marketplace:assert_enabled();
 operation_supported(create, {owner, _}, private) -> true;
 
 operation_supported(create, {user, _}, private) -> true;
@@ -100,8 +100,8 @@ operation_supported(create, {group, _}, private) -> true;
 operation_supported(create, group, private) -> true;
 operation_supported(create, harvest_metadata, private) -> true;
 
-operation_supported(create, list_marketplace, protected) -> assert_marketplace_enabled();
-operation_supported(create, list_marketplace_with_data, protected) -> assert_marketplace_enabled();
+operation_supported(create, list_marketplace, protected) -> space_marketplace:assert_enabled();
+operation_supported(create, list_marketplace_with_data, protected) -> space_marketplace:assert_enabled();
 
 operation_supported(get, list, private) -> true;
 operation_supported(get, privileges, _) -> true;
@@ -111,8 +111,8 @@ operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
 operation_supported(get, owners, private) -> true;
 
-operation_supported(get, marketplace_data, protected) -> assert_marketplace_enabled();
-operation_supported(get, {membership_requester_info, _}, private) -> assert_marketplace_enabled();
+operation_supported(get, marketplace_data, protected) -> space_marketplace:assert_enabled();
+operation_supported(get, {membership_requester_info, _}, private) -> space_marketplace:assert_enabled();
 
 operation_supported(get, users, private) -> true;
 operation_supported(get, eff_users, private) -> true;
@@ -1443,15 +1443,6 @@ auth_by_support(#el_req{auth = ?PROVIDER(ProviderId)}, Space) ->
     space_logic:is_supported_by_provider(Space, ProviderId);
 auth_by_support(_, _) ->
     false.
-
-
-%% @private
--spec assert_marketplace_enabled() -> true | no_return().
-assert_marketplace_enabled() ->
-    case oz_worker:get_env(space_marketplace_enabled) of
-        true -> true;
-        false -> throw(?ERROR_SPACE_MARKETPLACE_DISABLED)
-    end.
 
 
 %% @private

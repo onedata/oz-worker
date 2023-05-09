@@ -19,6 +19,7 @@
 -export([add/3, delete/3]).
 -export([list/2]).
 -export([filter_advertised/1]).
+-export([assert_enabled/0]).
 
 % index()/internal_index() consists of 2 parts:
 %  1) space name - so that links would be sorted by name.
@@ -179,3 +180,11 @@ filter_advertised(QuerySpaceIds) ->
         end
     end, [], #{}),
     Intersection.
+
+
+-spec assert_enabled() -> true | no_return().
+assert_enabled() ->
+    case oz_worker:get_env(space_marketplace_enabled) of
+        true -> true;
+        false -> throw(?ERROR_SPACE_MARKETPLACE_DISABLED)
+    end.
