@@ -1376,16 +1376,16 @@ get_space_membership_requests_test(Config) ->
     } end,
 
     ApiTestSpecForSubjectUser = GenApiTestSpec(SubjectUserId, ExpResultForSubjectUser),
-    api_test_utils:run_tests(Config, ApiTestSpecForSubjectUser),
-    api_test_utils:run_tests(Config, GenApiTestSpec(OtherUserId, ExpResultForOtherUser)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForSubjectUser)),
+    ?assert(api_test_utils:run_tests(Config, GenApiTestSpec(OtherUserId, ExpResultForOtherUser))),
     % access by unauthorized/forbidden clients can be requested only via logic/gs
-    api_test_utils:run_tests(Config, ApiTestSpecForSubjectUser#api_test_spec{
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForSubjectUser#api_test_spec{
         client_spec = #client_spec{
             unauthorized = [nobody],
             forbidden = [{provider, ProviderId}]
         },
         rest_spec = undefined
-    }).
+    })).
 
 
 
