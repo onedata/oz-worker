@@ -29,7 +29,8 @@
 -export([
     groups/0, all/0,
     init_per_suite/1, end_per_suite/1,
-    init_per_group/2, end_per_group/2
+    init_per_group/2, end_per_group/2,
+    end_per_testcase/2
 ]).
 -export([
     create_with_predefined_id_test/1,
@@ -53,6 +54,7 @@
     list_test/1,
     toggle_access_block_test/1,
     get_space_membership_requests_test/1,
+    get_space_membership_requests_error_marketplace_disabled_test/1,
     list_client_tokens_test/1,
     get_eff_provider_test/1,
     list_eff_providers_test/1
@@ -81,6 +83,7 @@ groups() -> [
         list_test,
         toggle_access_block_test,
         get_space_membership_requests_test,
+        get_space_membership_requests_error_marketplace_disabled_test,
         list_client_tokens_test,
         get_eff_provider_test,
         list_eff_providers_test
@@ -1385,6 +1388,49 @@ get_space_membership_requests_test(Config) ->
     }).
 
 
+
+get_space_membership_requests_error_marketplace_disabled_test(Config) ->
+    ProviderId = ozt_providers:create(),
+    SubjectUserId = ozt_users:create(),
+    SpaceId = ozt_spaces:create_advertised(),
+
+    ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
+    ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
+    RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
+    ozt_spaces:resolve_membership_request(SpaceId, RequestId, grant),
+
+    ozt:set_env(space_marketplace_enabled, false),
+
+    ?assert(api_test_utils:run_tests(Config, #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {user, SubjectUserId},
+                {provider, ProviderId},
+                nobody
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = user_logic,
+            function = get_space_membership_requests,
+            args = [auth, SubjectUserId],
+            expected_result = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/user/space_membership_requests">>],
+            expected_code = ?HTTP_400_BAD_REQUEST,
+            expected_body = #{<<"error">> => errors:to_json(?ERROR_SPACE_MARKETPLACE_DISABLED)}
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_user, id = SubjectUserId, aspect = space_membership_requests},
+            expected_result_op = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED),
+            expected_result_gui = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+        }
+    })).
+
+
+
 list_client_tokens_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, Token} = oz_test_utils:create_client_token(Config, User),
@@ -1566,4 +1612,8 @@ init_per_group(_Group, Config) ->
 end_per_group(_Group, Config) ->
     ozt_mailer:unmock(),
     ozt_mocks:unfreeze_time(),
+    Config.
+
+end_per_testcase(_, Config) ->
+    ozt:set_env(space_marketplace_enabled, true),
     Config.

@@ -1871,7 +1871,8 @@ list_marketplace_test(Config) ->
     Creator = ozt_users:create(),
     NonAdmin = ozt_users:create(),
 
-    MarketplaceSpaces = create_advertised_spaces(200, Creator) ++ create_non_advertised_spaces(200, Creator),
+    lists_utils:generate(fun() -> ozt_users:create_space_for(Creator) end, 200),
+    MarketplaceSpaces = create_advertised_spaces(200, Creator),
 
     FilterMarketplaceSpacesFun = fun(Data, Type) ->
         ExpEntries0 = case maps:get(<<"tags">>, Data, all) of
@@ -2135,7 +2136,7 @@ get_space_marketplace_related_data_json(SpaceId) ->
 %% @private
 -spec create_advertised_spaces(number, creator) -> list().
 create_advertised_spaces(Number, Creator) ->
-    lists:reverse(lists:foldl(fun(Num, Acc) ->
+    lists_utils:generate(fun(Num) ->
         SpaceName = str_utils:format_bin("space_~B", [1000 + Num]),
         SpaceTags = ?RAND_SUBLIST(ozt_spaces:available_space_tags()),
         Description = ?RAND_STR(),
@@ -2146,25 +2147,15 @@ create_advertised_spaces(Number, Creator) ->
             <<"organizationName">> => OrganizationName,
             <<"tags">> => SpaceTags
         }),
-        [#{
+        #{
             <<"spaceId">> => SpaceId,
             <<"name">> => SpaceName,
             <<"description">> => Description,
             <<"organizationName">> => OrganizationName,
             <<"tags">> => SpaceTags
-        } | Acc]
+        }
+     end, Number).
 
-  end, [], lists:seq(1, Number))).
-
-
-%% @private
--spec create_non_advertised_spaces(number, creator) -> list().
-create_non_advertised_spaces(Number, Creator) ->
-    lists:reverse(lists:foldl(fun(Num, Acc) ->
-        SpaceName = str_utils:format_bin("space_~B", [1000 + Num]),
-        ozt_users:create_space_for(Creator, SpaceName),
-        Acc
-    end, [],   lists:seq(1, Number))).
 
 %%%===================================================================
 %%% Setup/teardown functions
