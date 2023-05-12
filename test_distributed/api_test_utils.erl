@@ -457,7 +457,7 @@ run_gs_test(Config, GsSpec, Client, Data, Description, Env, undefined) ->
     {GsClient, Endpoint} = prepare_gs_client(Config, GsSpec, ResolvedClient),
     NewGsSpec = prepare_gs_spec(Config, GsSpec, ResolvedClient, Data, Env),
     Result = check_gs_call(NewGsSpec, Endpoint, GsClient, Data),
-    log_gs_test_result(NewGsSpec, ResolvedClient, Data, Description, Result);
+    log_gs_test_result(NewGsSpec, ResolvedClient, Endpoint, Data, Description, Result);
 
 run_gs_test(Config, GsSpec, Client, Data, DescFmt, Env, ExpError) ->
     NewGsSpec = GsSpec#gs_spec{
@@ -683,17 +683,17 @@ verify_gs_result(_, _) ->
 
 
 % Do not log anything on success as to not garbage report
-log_gs_test_result(_, _, _, _, true = _Result) ->
+log_gs_test_result(_, _, _, _, _, true = _Result) ->
     ok;
 
 % Do not log anything on unexpected error
 % as it is already logged by verify_logic_result
 % and throw fail to indicate failure
-log_gs_test_result(_, _, _, _, false = _Result) ->
+log_gs_test_result(_, _, _, _, _, false = _Result) ->
     throw(fail);
 
 % Displays an error when a gs test fails
-log_gs_test_result(GsSpec, Client, Data, Description, {result, Result}) ->
+log_gs_test_result(GsSpec, Client, Endpoint, Data, Description, {result, Result}) ->
     ct:pal("API GS test failed: ~s~n"
     "Client: ~p~n"
     "Operation: ~p~n"
@@ -710,7 +710,10 @@ log_gs_test_result(GsSpec, Client, Data, Description, {result, Result}) ->
         Data,
         GsSpec#gs_spec.subscribe,
         GsSpec#gs_spec.auth_hint,
-        GsSpec#gs_spec.expected_result_op,
+        case Endpoint of
+            gui -> GsSpec#gs_spec.expected_result_gui;
+            oneprovider -> GsSpec#gs_spec.expected_result_op
+        end,
         Result
     ]),
     throw(fail).

@@ -1397,7 +1397,6 @@ get_space_membership_requests_test(Config) ->
     })).
 
 
-
 get_space_membership_requests_error_marketplace_disabled_test(Config) ->
     ProviderId = ozt_providers:create(),
     SubjectUserId = ozt_users:create(),
