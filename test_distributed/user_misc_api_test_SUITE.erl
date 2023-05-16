@@ -1402,11 +1402,7 @@ get_space_membership_requests_error_marketplace_disabled_test(Config) ->
     SubjectUserId = ozt_users:create(),
     SpaceId = ozt_spaces:create_advertised(),
 
-    ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
-    ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
-    RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
-    ozt_spaces:resolve_membership_request(SpaceId, RequestId, grant),
-
+    ozt_spaces:submit_membership_request(SpaceId, SubjectUserId),
     ozt:set_env(space_marketplace_enabled, false),
 
     ?assert(api_test_utils:run_tests(Config, #api_test_spec{
