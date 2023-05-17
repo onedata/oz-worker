@@ -85,7 +85,7 @@ operation_supported(get, {client_token, _}, private) -> true;
 operation_supported(get, linked_accounts, private) -> true;
 operation_supported(get, {linked_account, _}, private) -> true;
 operation_supported(get, {space_alias, _}, private) -> true;
-operation_supported(get, space_membership_requests, private) -> true;
+operation_supported(get, space_membership_requests, private) -> space_marketplace:assert_enabled();
 
 operation_supported(get, groups, private) -> true;
 operation_supported(get, eff_groups, private) -> true;

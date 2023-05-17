@@ -29,7 +29,8 @@
 -export([
     groups/0, all/0,
     init_per_suite/1, end_per_suite/1,
-    init_per_group/2, end_per_group/2
+    init_per_group/2, end_per_group/2,
+    end_per_testcase/2
 ]).
 -export([
     create_with_predefined_id_test/1,
@@ -53,6 +54,7 @@
     list_test/1,
     toggle_access_block_test/1,
     get_space_membership_requests_test/1,
+    get_space_membership_requests_error_marketplace_disabled_test/1,
     list_client_tokens_test/1,
     get_eff_provider_test/1,
     list_eff_providers_test/1
@@ -81,6 +83,7 @@ groups() -> [
         list_test,
         toggle_access_block_test,
         get_space_membership_requests_test,
+        get_space_membership_requests_error_marketplace_disabled_test,
         list_client_tokens_test,
         get_eff_provider_test,
         list_eff_providers_test
@@ -1309,7 +1312,7 @@ get_space_membership_requests_test(Config) ->
     RejectedSpaces = lists_utils:generate(fun ozt_spaces:create_advertised/0, 5),
 
     ExpPendingSpaceMembershipRequests = maps_utils:generate_from_list(fun(SpaceId) ->
-        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
+        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100)),
         ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
         RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
         #{
@@ -1319,18 +1322,23 @@ get_space_membership_requests_test(Config) ->
         }
     end, PendingSpaces),
 
+    % pruning should be done with the first request submission
+    ExpLastPendingRequestPruningTime = lists:min(lists:map(fun(RequestForSpace) ->
+        maps:get(<<"lastActivity">>, RequestForSpace)
+    end, maps:values(ExpPendingSpaceMembershipRequests))),
+
     lists:foreach(fun(SpaceId) ->
-        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
         ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
         RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
+        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100)),
         ozt_spaces:resolve_membership_request(SpaceId, RequestId, grant)
     end, AcceptedSpaces),
 
     ExpRejectedSpaceMembershipRequests = maps_utils:generate_from_list(fun(SpaceId) ->
-        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
+        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100)),
         ContactEmail = str_utils:format_bin("~s@example.com", [?RAND_STR()]),
         RequestId = ozt_spaces:submit_membership_request(SpaceId, SubjectUserId, ContactEmail),
-        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100000)),
+        ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 100)),
         ozt_spaces:resolve_membership_request(SpaceId, RequestId, reject),
         #{
             <<"requestId">> => RequestId,
@@ -1341,15 +1349,18 @@ get_space_membership_requests_test(Config) ->
 
     ExpResultForSubjectUser = #{
         <<"pending">> => ExpPendingSpaceMembershipRequests,
-        <<"rejected">> => ExpRejectedSpaceMembershipRequests,
-        <<"lastPendingRequestPruningTime">> => ozt_mocks:get_frozen_time_seconds()
+        <<"rejected">> => ExpRejectedSpaceMembershipRequests
     },
     ExpResultForOtherUser = #{
         <<"pending">> => #{},
-        <<"rejected">> => #{},
-        <<"lastPendingRequestPruningTime">> => 0
+        <<"rejected">> => #{}
     },
-    GenApiTestSpec = fun(UserId, ExpectedResult) -> #api_test_spec{
+    GenApiTestSpec = fun(UserId, ExpectedResult, LastPendingRequestPruningTime) ->
+        DecodedExpectedResult = jsonable_record:from_json(ExpectedResult, space_membership_requests),
+        % the logic result also contains the last pending request pruning time, which is not included in
+        % the encoded JSON record
+        ExpectedLogicResult = setelement(4, DecodedExpectedResult, LastPendingRequestPruningTime),
+        #api_test_spec{
         client_spec = #client_spec{
             correct = [{user, UserId}]
         },
@@ -1357,7 +1368,7 @@ get_space_membership_requests_test(Config) ->
             module = user_logic,
             function = get_space_membership_requests,
             args = [auth, UserId],
-            expected_result = ?OK_TERM(jsonable_record:from_json(ExpectedResult, space_membership_requests))
+            expected_result = ?OK_TERM(ExpectedLogicResult)
         },
         rest_spec = #rest_spec{
             method = get,
@@ -1370,19 +1381,58 @@ get_space_membership_requests_test(Config) ->
             gri = #gri{type = od_user, id = UserId, aspect = space_membership_requests},
             expected_result_gui = ?OK_MAP_CONTAINS(ExpectedResult)
         }
-    } end,
+    }
+    end,
 
-    ApiTestSpecForSubjectUser = GenApiTestSpec(SubjectUserId, ExpResultForSubjectUser),
-    api_test_utils:run_tests(Config, ApiTestSpecForSubjectUser),
-    api_test_utils:run_tests(Config, GenApiTestSpec(OtherUserId, ExpResultForOtherUser)),
+    ApiTestSpecForSubjectUser = GenApiTestSpec(SubjectUserId, ExpResultForSubjectUser, ExpLastPendingRequestPruningTime),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForSubjectUser)),
+    ?assert(api_test_utils:run_tests(Config, GenApiTestSpec(OtherUserId, ExpResultForOtherUser, 0))),
     % access by unauthorized/forbidden clients can be requested only via logic/gs
-    api_test_utils:run_tests(Config, ApiTestSpecForSubjectUser#api_test_spec{
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpecForSubjectUser#api_test_spec{
         client_spec = #client_spec{
             unauthorized = [nobody],
             forbidden = [{provider, ProviderId}]
         },
         rest_spec = undefined
-    }).
+    })).
+
+
+get_space_membership_requests_error_marketplace_disabled_test(Config) ->
+    ProviderId = ozt_providers:create(),
+    SubjectUserId = ozt_users:create(),
+    SpaceId = ozt_spaces:create_advertised(),
+
+    ozt_spaces:submit_membership_request(SpaceId, SubjectUserId),
+    ozt:set_env(space_marketplace_enabled, false),
+
+    ?assert(api_test_utils:run_tests(Config, #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {user, SubjectUserId},
+                {provider, ProviderId},
+                nobody
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = user_logic,
+            function = get_space_membership_requests,
+            args = [auth, SubjectUserId],
+            expected_result = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/user/space_membership_requests">>],
+            expected_code = ?HTTP_400_BAD_REQUEST,
+            expected_body = #{<<"error">> => errors:to_json(?ERROR_SPACE_MARKETPLACE_DISABLED)}
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_user, id = SubjectUserId, aspect = space_membership_requests},
+            expected_result_op = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED),
+            expected_result_gui = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+        }
+    })).
+
 
 
 list_client_tokens_test(Config) ->
@@ -1566,4 +1616,8 @@ init_per_group(_Group, Config) ->
 end_per_group(_Group, Config) ->
     ozt_mailer:unmock(),
     ozt_mocks:unfreeze_time(),
+    Config.
+
+end_per_testcase(_, Config) ->
+    ozt:set_env(space_marketplace_enabled, true),
     Config.
