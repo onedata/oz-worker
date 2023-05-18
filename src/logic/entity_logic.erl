@@ -348,10 +348,13 @@ ensure_operation_supported(State) ->
 ensure_operation_supported_internal(State) ->
     try
         call_plugin(operation_supported, State)
-    catch _:_ ->
-        % No need for log here, 'operation_supported' may crash depending on
-        % what the request contains and this is expected.
-        false
+    catch
+        throw:{error, _} = Error ->
+            throw(Error);
+        _:_ ->
+            % No need for log here, 'operation_supported' may crash depending on
+            % what the request contains and this is expected.
+            false
     end.
 
 
