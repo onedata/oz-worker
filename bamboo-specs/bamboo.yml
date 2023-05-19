@@ -240,7 +240,7 @@ _Codetag Tracker:
         test-results: oz_worker/test/codetag_tracker_results/TEST-*.xml
         description: Parse test results
     - script: *clear-env
-  requirements: *requirements
+  requirements: []
   artifact-subscriptions: &oz-worker
     - artifact: oz_worker.tar.gz
 
