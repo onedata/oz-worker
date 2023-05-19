@@ -613,12 +613,14 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Prov
     } = Provider,
 
     ClusterId = Id,
+    {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, ClusterId),
     fun(?USER(UserId)) -> #{
         <<"scope">> => <<"private">>,
         <<"name">> => Name,
         <<"domain">> => Domain,
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
+        <<"version">> => Version,
         <<"cluster">> => gri:serialize(#gri{
             type = od_cluster, id = ClusterId, aspect = instance, scope = auto
         }),
@@ -638,12 +640,14 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = protected}, Pr
     } = Provider,
 
     ClusterId = Id,
+    {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, ClusterId),
     fun(?USER(UserId)) -> #{
         <<"scope">> => <<"protected">>,
         <<"name">> => Name,
         <<"domain">> => Domain,
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
+        <<"version">> => Version,
         <<"cluster">> => gri:serialize(#gri{
             type = od_cluster, id = ClusterId, aspect = instance, scope = auto
         }),
