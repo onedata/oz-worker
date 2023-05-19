@@ -609,7 +609,6 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Prov
     #od_provider{
         name = Name, domain = Domain,
         latitude = Latitude, longitude = Longitude,
-        latitude = Latitude, longitude = Longitude,
         creation_time = CreationTime
     } = Provider,
 
