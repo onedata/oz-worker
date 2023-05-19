@@ -18,7 +18,7 @@
 
 %% API
 -export([check_send_membership_request/6]).
--export([best_effort_notify_request_resolved/3]).
+-export([best_effort_notify_request_resolved/4]).
 -export([best_effort_notify_membership_already_granted/2]).
 -export([best_effort_notify_request_cancelled/2]).
 
@@ -100,10 +100,11 @@ check_send_membership_request(SpaceId, RequesterUserId, RequestId, RequestClassi
 -spec best_effort_notify_request_resolved(
     od_space:id(),
     od_user:email(),
-    space_membership_requests:decision()
+    space_membership_requests:decision(),
+    space_membership_requests:rejection_reason()
 ) ->
     ok | ?ERROR_INTERNAL_SERVER_ERROR(_).
-best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision) ->
+best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision, Reason) ->
     {SpaceName, _} = get_space_info(SpaceId),
     DecisionStr = case Decision of
         grant -> "GRANTED";
@@ -111,7 +112,16 @@ best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision) ->
     end,
     ExtraInfo = case Decision of
         reject ->
-            "";
+            case Reason of
+                <<"">> -> "The space maintainer did not provide a reason for rejection.";
+                _ -> str_utils:format(
+                    "The reason for the decision is as follows: ~n"
+                    "~s~n"
+                    "~n",
+                    [Reason]
+                )
+            end;
+
         grant ->
             str_utils:format(
                 "You may start using the space. View it in Web GUI by clicking the link below:~n"

@@ -20,11 +20,12 @@
 -export([create/0, create/1, create/2, create_advertised/0, create_advertised/1]).
 -export([get/1, exists/1]).
 -export([update/2]).
--export([list_marketplace/0, list_marketplace/1]).
+-export([draw_new_reason/0, list_marketplace/0, list_marketplace/1]).
 -export([submit_membership_request/2, submit_membership_request/3]).
 -export([try_get_membership_info/2]).
 -export([try_submit_membership_request/2, try_submit_membership_request/3]).
--export([resolve_membership_request/3, try_resolve_membership_request/3]).
+-export([resolve_membership_request/3, resolve_membership_request/4, try_resolve_membership_request/3,
+    try_resolve_membership_request/4]).
 -export([add_owner/2, remove_owner/2]).
 -export([add_user/2, add_user/3]).
 -export([remove_user/2]).
@@ -99,6 +100,14 @@ update(SpaceId, Data) ->
     ?assertEqual(ok, ozt:rpc(space_logic, update, [?ROOT, SpaceId, Data])).
 
 
+-spec draw_new_reason() -> space_membership_requests:rejection_reason().
+draw_new_reason() ->
+    case ?RAND_INT(1, 10) of
+        1 -> <<"">>;
+        _ -> ?RAND_REASON()
+    end.
+
+
 -spec list_marketplace() -> [od_space:id()].
 list_marketplace() ->
     list_marketplace(all).
@@ -147,6 +156,18 @@ try_submit_membership_request(SpaceId, RequesterUserId, ContactEmail) ->
 resolve_membership_request(SpaceId, RequestId, Decision) ->
     ?assertEqual(ok, try_resolve_membership_request(SpaceId, RequestId, Decision)).
 
+
+-spec resolve_membership_request(
+    od_space:id(),
+    space_membership_requests:request_id(),
+    space_membership_requests:decision(),
+    space_membership_requests:rejection_reason()
+) ->
+    ok.
+resolve_membership_request(SpaceId, RequestId, Decision, Reason) ->
+    ?assertEqual(ok, try_resolve_membership_request(SpaceId, RequestId, Decision, Reason)).
+
+
 -spec try_resolve_membership_request(
     od_space:id(),
     space_membership_requests:request_id(),
@@ -156,6 +177,19 @@ resolve_membership_request(SpaceId, RequestId, Decision) ->
 try_resolve_membership_request(SpaceId, RequestId, Decision) ->
     ozt:rpc(space_logic, resolve_membership_request, [?ROOT, SpaceId, RequestId, #{
         <<"decision">> => Decision
+    }]).
+
+
+-spec try_resolve_membership_request(
+    od_space:id(),
+    space_membership_requests:request_id(),
+    space_membership_requests:decision(),
+    space_membership_requests:rejection_reason()
+) ->
+    ok | errors:error().
+try_resolve_membership_request(SpaceId, RequestId, Decision, Reason) ->
+    ozt:rpc(space_logic, resolve_membership_request, [?ROOT, SpaceId, RequestId, #{
+       <<"decision">> => Decision, <<"reason">> => Reason
     }]).
 
 
