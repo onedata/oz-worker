@@ -4,6 +4,15 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.2
+
+-   **VFS-10825** Web GUI: Fixed unnecessary scrollbars in Safari.
+-   **VFS-10819** Web GUI: Fixed atm. inventory invite tokens creation
+    in tokens page.
+-   **VFS-10411** Web GUI: Added support for incomplete infinite scroll
+    listing chunks from backend. It increases stability of file browser
+    GUI.
+
 ### 21.02.1
 
 -   **VFS-10531** Web GUI: Added support for enum-like data types in
