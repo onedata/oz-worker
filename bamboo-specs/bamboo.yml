@@ -346,29 +346,14 @@ access_and_identity_tokens: &ct-job
     - script:
         interpreter: BINSH_OR_CMDEXE
         scripts:
-          - |-
-            mkdir -p cover_ct
-            cp test_distributed/logs/ct_run.*/*cover* cover_ct
-            cp test_distributed/logs/ct_run.*/*COVER* cover_ct
-            tar -czf cover_ct_${bamboo.shortJobName}.tar.gz cover_ct/
-        working-dir: oz_worker
-        description: Save cover results
-    - script:
-        interpreter: BINSH_OR_CMDEXE
-        scripts:
           - tar -mczf ct_logs_${bamboo.shortJobName}.tar.gz oz_worker/test_distributed/logs/
         description: Pack test logs
     - script: *clear-env
   artifacts:
     - &ct_logs
-      name: ct_logs_${bamboo.shortJobName}.tar.gz
-      pattern: ct_logs_${bamboo.shortJobName}.tar.gz
-      shared: false
-      required: false
-    - &cover_ct
-      name: cover_ct_access_and_identity_tokens.tar.gz
+      name: ct_logs_access_and_identity_tokens.tar.gz
       location: oz_worker
-      pattern: cover_ct_${bamboo.shortJobName}.tar.gz
+      pattern: ct_logs_${bamboo.shortJobName}.tar.gz
       shared: true
       required: false
   requirements: *requirements
@@ -378,529 +363,463 @@ api_samples:
   <<: *ct-job
   key: APIS
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_api_samples.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_api_samples.tar.gz
 
 atm_inventory_groups_api:
   <<: *ct-job
   key: AIGA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_atm_inventory_groups_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_atm_inventory_groups_api.tar.gz
 
 atm_inventory_misc_api:
   <<: *ct-job
   key: AIMA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_atm_inventory_misc_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_atm_inventory_misc_api.tar.gz
 
 atm_inventory_users_api:
   <<: *ct-job
   key: AIUI
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_atm_inventory_users_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_atm_inventory_users_api.tar.gz
 
 atm_lambda_api:
   <<: *ct-job
   key: ALA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_atm_lambda_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_atm_lambda_api.tar.gz
 
 atm_schema_validation:
   <<: *ct-job
   key: ASV
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_atm_schema_validation.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_atm_schema_validation.tar.gz
 
 atm_workflow_schema_api:
   <<: *ct-job
   key: AWSA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_atm_workflow_schema_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_atm_workflow_schema_api.tar.gz
 
 basic_auth:
   <<: *ct-job
   key: US
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_basic_auth.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_basic_auth.tar.gz
 
 cluster_groups_api:
   <<: *ct-job
   key: CGA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_cluster_groups_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_cluster_groups_api.tar.gz
 
 cluster_misc_api:
   <<: *ct-job
   key: CMA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_cluster_misc_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_cluster_misc_api.tar.gz
 
 cluster_users_api:
   <<: *ct-job
   key: CUA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_cluster_users_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_cluster_users_api.tar.gz
 
 connection:
   <<: *ct-job
   key: CON
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_connection.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_connection.tar.gz
 
 db_browser:
   <<: *ct-job
   key: DBBRWS
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_db_browser.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_db_browser.tar.gz
 
 dns:
   <<: *ct-job
   key: DNS
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_dns.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_dns.tar.gz
 
 entities_setup:
   <<: *ct-job
   key: GROUP
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_entities_setup.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_entities_setup.tar.gz
 
 entitlement_mapping:
   <<: *ct-job
   key: EM
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_entitlement_mapping.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_entitlement_mapping.tar.gz
 
 group_atm_inventories_api:
   <<: *ct-job
   key: GAIA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_group_atm_inventories_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_group_atm_inventories_api.tar.gz
 
 group_children_api:
   <<: *ct-job
   key: GRCHILDREN
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_group_children_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_group_children_api.tar.gz
 
 group_clusters_api:
   <<: *ct-job
   key: GCA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_group_clusters_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_group_clusters_api.tar.gz
 
 group_handles_api:
   <<: *ct-job
   key: GRHANDLES
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_group_handles_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_group_handles_api.tar.gz
 
 group_harvesters_api:
   <<: *ct-job
   key: GHA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_group_harvesters_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_group_harvesters_api.tar.gz
 
 group_hservice_api:
   <<: *ct-job
   key: GRHS
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_group_hservice_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_group_hservice_api.tar.gz
 
 group_misc_api:
   <<: *ct-job
   key: GRBASIC
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_group_misc_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_group_misc_api.tar.gz
 
 group_parents_api:
   <<: *ct-job
   key: GRPARENTS
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_group_parents_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_group_parents_api.tar.gz
 
 group_spaces_api:
   <<: *ct-job
   key: GRSPACES
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_group_spaces_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_group_spaces_api.tar.gz
 
 group_users_api:
   <<: *ct-job
   key: GRUSERS
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_group_users_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_group_users_api.tar.gz
 
 gui_static_distribution:
   <<: *ct-job
   key: GSD
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_gui_static_distribution.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_gui_static_distribution.tar.gz
 
 gui_tokens:
   <<: *ct-job
   key: TOK
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_gui_tokens.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_gui_tokens.tar.gz
 
 handle_groups_api:
   <<: *ct-job
   key: HANGROUPS
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_handle_groups_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_handle_groups_api.tar.gz
 
 handle_misc_api:
   <<: *ct-job
   key: HANBASIC
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_handle_misc_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_handle_misc_api.tar.gz
 
 handle_users_api:
   <<: *ct-job
   key: HANUSERS
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_handle_users_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_handle_users_api.tar.gz
 
 harvester_groups_api:
   <<: *ct-job
   key: HGA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_harvester_groups_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_harvester_groups_api.tar.gz
 
 harvester_misc_api:
   <<: *ct-job
   key: HAR
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_harvester_misc_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_harvester_misc_api.tar.gz
 
 harvester_spaces_api:
   <<: *ct-job
   key: HSA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_harvester_spaces_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_harvester_spaces_api.tar.gz
 
 harvester_users_api:
   <<: *ct-job
   key: HUA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_harvester_users_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_harvester_users_api.tar.gz
 
 hservice_groups_api:
   <<: *ct-job
   key: HSERGROUPS
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_hservice_groups_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_hservice_groups_api.tar.gz
 
 hservice_misc_api:
   <<: *ct-job
   key: HSERBASIC
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_hservice_misc_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_hservice_misc_api.tar.gz
 
 hservice_users_api:
   <<: *ct-job
   key: HSERUSERS
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_hservice_users_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_hservice_users_api.tar.gz
 
 invite_tokens:
   <<: *ct-job
   key: IT
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_invite_tokens.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_invite_tokens.tar.gz
 
 model_upgrade:
   <<: *ct-job
   key: RC12TOR
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_model_upgrade.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_model_upgrade.tar.gz
 
 oai:
   <<: *ct-job
   key: OAI
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_oai.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_oai.tar.gz
 
 onezone_mailer:
   <<: *ct-job
   key: OZMA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_onezone_mailer.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_onezone_mailer.tar.gz
 
 openid:
   <<: *ct-job
   key: OPID
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_openid.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_openid.tar.gz
 
 provider_api:
   <<: *ct-job
   key: PRED
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_provider_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_provider_api.tar.gz
 
 rest_auth:
   <<: *ct-job
   key: RESTA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_rest_auth.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_rest_auth.tar.gz
 
 session:
   <<: *ct-job
   key: SES
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_session.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_session.tar.gz
 
 share_api:
   <<: *ct-job
   key: SHAR
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_share_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_share_api.tar.gz
 
 space_groups_api:
   <<: *ct-job
   key: SPGROUPS
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_space_groups_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_space_groups_api.tar.gz
 
 space_harvesters_api:
   <<: *ct-job
   key: SHA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_space_harvesters_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_space_harvesters_api.tar.gz
 
 space_lifecycle:
   <<: *ct-job
   key: SPLI
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_space_lifecycle.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_space_lifecycle.tar.gz
 
 space_marketplace:
   <<: *ct-job
   key: SPMP
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_space_marketplace.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_space_marketplace.tar.gz
 
 space_misc_api:
   <<: *ct-job
   key: SPAC
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_space_misc_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_space_misc_api.tar.gz
 
 space_owners:
   <<: *ct-job
   key: SPOW
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_space_owners.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_space_owners.tar.gz
 
 space_users_api:
   <<: *ct-job
   key: SPUSERS
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_space_users_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_space_users_api.tar.gz
 
 storage_misc_api:
   <<: *ct-job
   key: STOR
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_storage_misc_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_storage_misc_api.tar.gz
 
 token_api:
   <<: *ct-job
   key: TAP
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_token_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_token_api.tar.gz
 
 user_atm_inventories_api:
   <<: *ct-job
   key: UAIA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_user_atm_inventories_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_user_atm_inventories_api.tar.gz
 
 user_clusters_api:
   <<: *ct-job
   key: UCA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_user_clusters_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_user_clusters_api.tar.gz
 
 user_groups_api:
   <<: *ct-job
   key: USGROUPS
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_user_groups_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_user_groups_api.tar.gz
 
 user_handles_api:
   <<: *ct-job
   key: USHANDLES
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_user_handles_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_user_handles_api.tar.gz
 
 user_harvesters_api:
   <<: *ct-job
   key: UHA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_user_harvesters_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_user_harvesters_api.tar.gz
 
 user_hservice_api:
   <<: *ct-job
   key: USHSERV
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_user_hservice_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_user_hservice_api.tar.gz
 
 user_misc_api:
   <<: *ct-job
   key: USA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_user_misc_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_user_misc_api.tar.gz
 
 user_privileges_api:
   <<: *ct-job
   key: UPA
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_user_privileges_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_user_privileges_api.tar.gz
 
 user_spaces_api:
   <<: *ct-job
   key: USSPACES
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_user_spaces_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_user_spaces_api.tar.gz
 
 zone_api:
   <<: *ct-job
   key: ZON
   artifacts:
-    - *ct_logs
-    - <<: *cover_ct
-      name: cover_ct_zone_api.tar.gz
+    - <<: *ct_logs
+      name: ct_logs_zone_api.tar.gz
 
 Coverage report:
   key: CR
@@ -965,71 +884,71 @@ Coverage report:
   artifact-subscriptions:
     - artifact: oz_worker.tar.gz
     - artifact: cover_eunit.tar.gz
-    - artifact: cover_ct_access_and_identity_tokens.tar.gz
-    - artifact: cover_ct_api_samples.tar.gz
-    - artifact: cover_ct_atm_inventory_groups_api.tar.gz
-    - artifact: cover_ct_atm_inventory_misc_api.tar.gz
-    - artifact: cover_ct_atm_inventory_users_api.tar.gz
-    - artifact: cover_ct_atm_lambda_api.tar.gz
-    - artifact: cover_ct_atm_schema_validation.tar.gz
-    - artifact: cover_ct_atm_workflow_schema_api.tar.gz
-    - artifact: cover_ct_basic_auth.tar.gz
-    - artifact: cover_ct_cluster_groups_api.tar.gz
-    - artifact: cover_ct_cluster_misc_api.tar.gz
-    - artifact: cover_ct_cluster_users_api.tar.gz
-    - artifact: cover_ct_connection.tar.gz
-    - artifact: cover_ct_db_browser.tar.gz
-    - artifact: cover_ct_dns.tar.gz
-    - artifact: cover_ct_entities_setup.tar.gz
-    - artifact: cover_ct_entitlement_mapping.tar.gz
-    - artifact: cover_ct_group_atm_inventories_api.tar.gz
-    - artifact: cover_ct_group_children_api.tar.gz
-    - artifact: cover_ct_group_clusters_api.tar.gz
-    - artifact: cover_ct_group_handles_api.tar.gz
-    - artifact: cover_ct_group_harvesters_api.tar.gz
-    - artifact: cover_ct_group_hservice_api.tar.gz
-    - artifact: cover_ct_group_misc_api.tar.gz
-    - artifact: cover_ct_group_parents_api.tar.gz
-    - artifact: cover_ct_group_spaces_api.tar.gz
-    - artifact: cover_ct_group_users_api.tar.gz
-    - artifact: cover_ct_gui_static_distribution.tar.gz
-    - artifact: cover_ct_gui_tokens.tar.gz
-    - artifact: cover_ct_handle_groups_api.tar.gz
-    - artifact: cover_ct_handle_misc_api.tar.gz
-    - artifact: cover_ct_handle_users_api.tar.gz
-    - artifact: cover_ct_harvester_groups_api.tar.gz
-    - artifact: cover_ct_harvester_misc_api.tar.gz
-    - artifact: cover_ct_harvester_spaces_api.tar.gz
-    - artifact: cover_ct_harvester_users_api.tar.gz
-    - artifact: cover_ct_hservice_groups_api.tar.gz
-    - artifact: cover_ct_hservice_misc_api.tar.gz
-    - artifact: cover_ct_hservice_users_api.tar.gz
-    - artifact: cover_ct_invite_tokens.tar.gz
-    - artifact: cover_ct_model_upgrade.tar.gz
-    - artifact: cover_ct_oai.tar.gz
-    - artifact: cover_ct_onezone_mailer.tar.gz
-    - artifact: cover_ct_openid.tar.gz
-    - artifact: cover_ct_provider_api.tar.gz
-    - artifact: cover_ct_rest_auth.tar.gz
-    - artifact: cover_ct_session.tar.gz
-    - artifact: cover_ct_share_api.tar.gz
-    - artifact: cover_ct_space_groups_api.tar.gz
-    - artifact: cover_ct_space_harvesters_api.tar.gz
-    - artifact: cover_ct_space_lifecycle.tar.gz
-    - artifact: cover_ct_space_marketplace.tar.gz
-    - artifact: cover_ct_space_misc_api.tar.gz
-    - artifact: cover_ct_space_owners.tar.gz
-    - artifact: cover_ct_space_users_api.tar.gz
-    - artifact: cover_ct_storage_misc_api.tar.gz
-    - artifact: cover_ct_token_api.tar.gz
-    - artifact: cover_ct_user_atm_inventories_api.tar.gz
-    - artifact: cover_ct_user_clusters_api.tar.gz
-    - artifact: cover_ct_user_groups_api.tar.gz
-    - artifact: cover_ct_user_handles_api.tar.gz
-    - artifact: cover_ct_user_harvesters_api.tar.gz
-    - artifact: cover_ct_user_hservice_api.tar.gz
-    - artifact: cover_ct_user_misc_api.tar.gz
-    - artifact: cover_ct_user_privileges_api.tar.gz
-    - artifact: cover_ct_user_spaces_api.tar.gz
-    - artifact: cover_ct_zone_api.tar.gz
+    - artifact: ct_logs_access_and_identity_tokens.tar.gz
+    - artifact: ct_logs_api_samples.tar.gz
+    - artifact: ct_logs_atm_inventory_groups_api.tar.gz
+    - artifact: ct_logs_atm_inventory_misc_api.tar.gz
+    - artifact: ct_logs_atm_inventory_users_api.tar.gz
+    - artifact: ct_logs_atm_lambda_api.tar.gz
+    - artifact: ct_logs_atm_schema_validation.tar.gz
+    - artifact: ct_logs_atm_workflow_schema_api.tar.gz
+    - artifact: ct_logs_basic_auth.tar.gz
+    - artifact: ct_logs_cluster_groups_api.tar.gz
+    - artifact: ct_logs_cluster_misc_api.tar.gz
+    - artifact: ct_logs_cluster_users_api.tar.gz
+    - artifact: ct_logs_connection.tar.gz
+    - artifact: ct_logs_db_browser.tar.gz
+    - artifact: ct_logs_dns.tar.gz
+    - artifact: ct_logs_entities_setup.tar.gz
+    - artifact: ct_logs_entitlement_mapping.tar.gz
+    - artifact: ct_logs_group_atm_inventories_api.tar.gz
+    - artifact: ct_logs_group_children_api.tar.gz
+    - artifact: ct_logs_group_clusters_api.tar.gz
+    - artifact: ct_logs_group_handles_api.tar.gz
+    - artifact: ct_logs_group_harvesters_api.tar.gz
+    - artifact: ct_logs_group_hservice_api.tar.gz
+    - artifact: ct_logs_group_misc_api.tar.gz
+    - artifact: ct_logs_group_parents_api.tar.gz
+    - artifact: ct_logs_group_spaces_api.tar.gz
+    - artifact: ct_logs_group_users_api.tar.gz
+    - artifact: ct_logs_gui_static_distribution.tar.gz
+    - artifact: ct_logs_gui_tokens.tar.gz
+    - artifact: ct_logs_handle_groups_api.tar.gz
+    - artifact: ct_logs_handle_misc_api.tar.gz
+    - artifact: ct_logs_handle_users_api.tar.gz
+    - artifact: ct_logs_harvester_groups_api.tar.gz
+    - artifact: ct_logs_harvester_misc_api.tar.gz
+    - artifact: ct_logs_harvester_spaces_api.tar.gz
+    - artifact: ct_logs_harvester_users_api.tar.gz
+    - artifact: ct_logs_hservice_groups_api.tar.gz
+    - artifact: ct_logs_hservice_misc_api.tar.gz
+    - artifact: ct_logs_hservice_users_api.tar.gz
+    - artifact: ct_logs_invite_tokens.tar.gz
+    - artifact: ct_logs_model_upgrade.tar.gz
+    - artifact: ct_logs_oai.tar.gz
+    - artifact: ct_logs_onezone_mailer.tar.gz
+    - artifact: ct_logs_openid.tar.gz
+    - artifact: ct_logs_provider_api.tar.gz
+    - artifact: ct_logs_rest_auth.tar.gz
+    - artifact: ct_logs_session.tar.gz
+    - artifact: ct_logs_share_api.tar.gz
+    - artifact: ct_logs_space_groups_api.tar.gz
+    - artifact: ct_logs_space_harvesters_api.tar.gz
+    - artifact: ct_logs_space_lifecycle.tar.gz
+    - artifact: ct_logs_space_marketplace.tar.gz
+    - artifact: ct_logs_space_misc_api.tar.gz
+    - artifact: ct_logs_space_owners.tar.gz
+    - artifact: ct_logs_space_users_api.tar.gz
+    - artifact: ct_logs_storage_misc_api.tar.gz
+    - artifact: ct_logs_token_api.tar.gz
+    - artifact: ct_logs_user_atm_inventories_api.tar.gz
+    - artifact: ct_logs_user_clusters_api.tar.gz
+    - artifact: ct_logs_user_groups_api.tar.gz
+    - artifact: ct_logs_user_handles_api.tar.gz
+    - artifact: ct_logs_user_harvesters_api.tar.gz
+    - artifact: ct_logs_user_hservice_api.tar.gz
+    - artifact: ct_logs_user_misc_api.tar.gz
+    - artifact: ct_logs_user_privileges_api.tar.gz
+    - artifact: ct_logs_user_spaces_api.tar.gz
+    - artifact: ct_logs_zone_api.tar.gz
 ...
