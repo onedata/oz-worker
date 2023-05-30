@@ -352,7 +352,6 @@ access_and_identity_tokens: &ct-job
   artifacts:
     - &ct_logs
       name: ct_logs_access_and_identity_tokens.tar.gz
-      location: oz_worker
       pattern: ct_logs_${bamboo.shortJobName}.tar.gz
       shared: true
       required: false
