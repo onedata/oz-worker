@@ -23,7 +23,7 @@
 -export([empty/0]).
 -export([submit/5]).
 -export([lookup_pending_request_id/2, lookup_email_for_pending/3]).
--export([resolve/5]).
+-export([resolve/4]).
 -export([infer_requester_id/1]).
 -export([prune_pending_requests/2]).
 
@@ -35,9 +35,8 @@
 
 
 % expresses the decision of space maintainer; whether to grant or reject a membership request
--type decision() :: grant | reject.
+-type decision() :: grant | {reject, binary()}.
 -type request_id() :: binary().
--type rejection_reason() :: binary().
 -record(request, {
     id :: request_id(),
     contact_email :: od_user:email(),
@@ -111,10 +110,9 @@ lookup_email_for_pending(SpaceId, RequestId, Record) ->
     Request#request.contact_email.
 
 
-%% @doc Reason is ignored when Decision==grant
--spec resolve(od_space:id(), request_id(), decision(), rejection_reason(), record()) ->
+-spec resolve(od_space:id(), request_id(), decision(), record()) ->
     {done, record()} | pruning_needed | no_return().
-resolve(SpaceId, RequestId, Decision, Reason, InitialRecord) ->
+resolve(SpaceId, RequestId, Decision, InitialRecord) ->
     lookup_pending(SpaceId, RequestId, InitialRecord),  % throws in case of nonexistent pending request
 
     RequesterUserId = infer_requester_id(RequestId),
@@ -132,7 +130,7 @@ resolve(SpaceId, RequestId, Decision, Reason, InitialRecord) ->
         true ->
             pruning_needed;
         false ->
-            {done, resolve_sanitized(SpaceId, RequesterUserId, Decision, Reason, UpdatedRecord)}
+            {done, resolve_sanitized(SpaceId, RequesterUserId, Decision, UpdatedRecord)}
     end.
 
 
@@ -246,9 +244,9 @@ submit_internal(SpaceId, UserId, ContactEmail, Message, InitialRecord) ->
 
 
 %% @private
--spec resolve_sanitized(od_space:id(), od_user:id(), decision(), rejection_reason(), record()) ->
+-spec resolve_sanitized(od_space:id(), od_user:id(), decision(), record()) ->
     record() | no_return().
-resolve_sanitized(SpaceId, RequesterUserId, Decision, Reason, Record = #space_membership_requests{
+resolve_sanitized(SpaceId, RequesterUserId, Decision, Record = #space_membership_requests{
     pending = Pending,
     rejected = Rejected
 }) ->
@@ -257,10 +255,10 @@ resolve_sanitized(SpaceId, RequesterUserId, Decision, Reason, Record = #space_me
     case Decision of
         grant ->
             ?check(space_logic:add_user(?ROOT, SpaceId, RequesterUserId)),
-            space_marketplace_mailer:best_effort_notify_request_resolved(SpaceId, ContactEmail, Decision, Reason),
+            space_marketplace_mailer:best_effort_notify_request_resolved(SpaceId, ContactEmail, Decision),
             RecordWithUpdatedPending;
-        reject ->
-            space_marketplace_mailer:best_effort_notify_request_resolved(SpaceId, ContactEmail, Decision, Reason),
+        {reject, _} ->
+            space_marketplace_mailer:best_effort_notify_request_resolved(SpaceId, ContactEmail, Decision),
             trim_overflowing_rejected_history(RecordWithUpdatedPending#space_membership_requests{
                 rejected = Rejected#{SpaceId => Request#request{last_activity = ?NOW_SECONDS()}}
             })

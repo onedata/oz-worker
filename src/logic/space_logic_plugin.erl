@@ -48,7 +48,7 @@
 -define(DEFAULT_LIST_LIMIT, 1000).
 
 -define(MEMBERSHIP_REQUEST_MESSAGE_SIZE_LIMIT, 2000).
--define(DECLINE_REQUEST_REASON_MESSAGE_SIZE_LIMIT, 2000).
+-define(MEMBERSHIP_REJECTION_REASON_SIZE_LIMIT, 2000).
 
 %%%===================================================================
 %%% API
@@ -306,11 +306,15 @@ create(Req = #el_req{auth = ?USER(UserId), gri = #gri{id = SpaceId, aspect = mem
     {ok, value, space_membership_requests:lookup_pending_request_id(SpaceId, UpdatedSpaceMembershipRequests)};
 
 create(Req = #el_req{gri = #gri{id = SpaceId, aspect = {resolve_membership_request, RequestId}}}) ->
-    Decision = maps:get(<<"decision">>, Req#el_req.data),
-    Reason = maps:get(<<"reason">>, Req#el_req.data, <<"">>),
+    Reason = maps:get(<<"rejectionReason">>, Req#el_req.data, <<"">>),
+    DecisionAtom = maps:get(<<"decision">>, Req#el_req.data),
+    Decision = case DecisionAtom of
+                   grant -> DecisionAtom;
+                   reject -> {DecisionAtom, Reason}
+               end,
     RequesterUserId = space_membership_requests:infer_requester_id(RequestId),
     ?extract_ok(od_user:lock_and_update_space_membership_requests(RequesterUserId, fun(SpaceMembershipRequests) ->
-        space_membership_requests:resolve(SpaceId, RequestId, Decision, Reason, SpaceMembershipRequests)
+        space_membership_requests:resolve(SpaceId, RequestId, Decision, SpaceMembershipRequests)
     end));
 
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
@@ -1315,7 +1319,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {resolve_membership_req
             <<"decision">> => {atom, [grant, reject]}
         },
         optional => #{
-            <<"reason">> => {binary, {text_length_limit, ?DECLINE_REQUEST_REASON_MESSAGE_SIZE_LIMIT}}
+            <<"rejectionReason">> => {binary, {text_length_limit, ?MEMBERSHIP_REJECTION_REASON_SIZE_LIMIT}}
         }
     };
 

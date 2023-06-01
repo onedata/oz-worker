@@ -106,6 +106,10 @@ all() -> [
 
 -define(FROZEN_TIME_SECONDS(), ozt_mocks:get_frozen_time_seconds()).
 -define(RAND_ADVERTISED_SPACE(), ?RAND_ELEMENT(ozt_spaces:list_marketplace())).
+-define(RAND_REASON(), case ?RAND_BOOL() of
+                           true -> ?RAND_UNICODE_STR(200);
+                           false -> <<"">>
+                       end).
 
 -define(PENDING_REQUEST_PRUNING_INTERVAL, ozt:get_env(space_marketplace_pending_request_pruning_interval_seconds)).
 -define(MIN_BACKOFF_BETWEEN_REMINDERS_SECONDS, ozt:get_env(space_marketplace_min_backoff_between_reminders_seconds)).
@@ -147,12 +151,13 @@ reject_test(_Config) ->
     {RequesterId, RequesterEmail, SpaceId} = {ozt_users:create(), ?RAND_EMAIL_ADDRESS(), ?RAND_ADVERTISED_SPACE()},
 
     RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId, RequesterEmail),
-    ozt_spaces:resolve_membership_request(SpaceId, RequestId, reject, Reason = ozt_spaces:draw_new_reason()),
+    ozt_spaces:resolve_membership_request(SpaceId, RequestId, {reject, Reason = ?RAND_REASON()}),
     ?assert(has_registered_space_membership_request(
         rejected, RequesterId, SpaceId, RequestId, RequesterEmail, ?FROZEN_TIME_SECONDS())
     ),
     ?assertNot(ozt_spaces:has_eff_user(SpaceId, RequesterId)),
-    ?assert(has_received_notification_email(RequesterEmail, ?FROZEN_TIME_SECONDS(), SpaceId, {resolved, reject, Reason})).
+    ?assert(has_received_notification_email(RequesterEmail, ?FROZEN_TIME_SECONDS(), SpaceId, {resolved,
+        {reject, Reason}})).
 
 
 submit_error_limit_reached_test(_Config) ->
@@ -201,14 +206,14 @@ resolve_error_not_found_test(_Config) ->
     ForgedSpaceId = datastore_key:new(),
     ForgedRequestId = <<RequesterId/binary, "-7832648714">>,
     ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ExistingSpaceId, ForgedRequestId, grant)),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ExistingSpaceId, ForgedRequestId, reject,
-        ozt_spaces:draw_new_reason())),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ExistingSpaceId, ForgedRequestId,
+        {reject, ?RAND_REASON()})),
     ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ExistingRequestId, grant)),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ExistingRequestId, reject,
-        ozt_spaces:draw_new_reason())),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ExistingRequestId,
+        {reject, ?RAND_REASON()})),
     ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ForgedRequestId, grant)),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ForgedRequestId, reject,
-        ozt_spaces:draw_new_reason())).
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ForgedRequestId,
+        {reject, ?RAND_REASON()})).
 
 
 resolve_error_mailer_malfunction_test(_Config) ->
@@ -222,9 +227,9 @@ resolve_error_mailer_malfunction_test(_Config) ->
                 ?assertMatch(ok, ozt_spaces:try_resolve_membership_request(SpaceId, RequestId, grant)),
                 NotificationType = {resolved, grant};
             reject ->
-                Reason = ozt_spaces:draw_new_reason(),
-                ?assertMatch(ok, ozt_spaces:try_resolve_membership_request(SpaceId, RequestId, reject, Reason)),
-                NotificationType = {resolved, reject, Reason}
+                Reason = ?RAND_REASON(),
+                ?assertMatch(ok, ozt_spaces:try_resolve_membership_request(SpaceId, RequestId, {reject, Reason})),
+                NotificationType = {resolved, {reject, Reason}}
         end,
 
         ?assertNot(has_received_notification_email(RequesterEmail, ?FROZEN_TIME_SECONDS(), SpaceId, NotificationType))
@@ -325,9 +330,9 @@ submit_another_request_test(_Config) ->
 
     FirstRequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId, RequesterEmailAlpha),
     ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 989234)),
-    ozt_spaces:resolve_membership_request(SpaceId, FirstRequestId, reject, Reason = ozt_spaces:draw_new_reason()),
-    ?assert(has_received_notification_email(RequesterEmailAlpha, ?FROZEN_TIME_SECONDS(), SpaceId, {resolved, reject,
-        Reason})),
+    ozt_spaces:resolve_membership_request(SpaceId, FirstRequestId, {reject, Reason = ?RAND_REASON()}),
+    ?assert(has_received_notification_email(RequesterEmailAlpha, ?FROZEN_TIME_SECONDS(), SpaceId, {resolved,
+        {reject, Reason}})),
     ozt_mocks:simulate_seconds_passing(?MIN_BACKOFF_AFTER_REJECTION_SECONDS),
     AnotherRequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId, RequesterEmailBeta),
     ?assertNotEqual(FirstRequestId, AnotherRequestId),
@@ -352,7 +357,7 @@ submit_another_error_recently_rejected_test(_Config) ->
 
     RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),
     ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 989234)),
-    ozt_spaces:resolve_membership_request(SpaceId, RequestId, reject, ozt_spaces:draw_new_reason()),
+    ozt_spaces:resolve_membership_request(SpaceId, RequestId, {reject, ?RAND_REASON()}),
 
     ozt_mocks:simulate_seconds_passing(?MIN_BACKOFF_AFTER_REJECTION_SECONDS - 1),
     ReminderAllowedDate = time:seconds_to_iso8601(?FROZEN_TIME_SECONDS() + 1),
@@ -370,9 +375,10 @@ submit_another_error_marketplace_disabled_test(_Config) ->
 
     FirstRequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId, RequesterEmailAlpha),
     ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 989234)),
-    ozt_spaces:resolve_membership_request(SpaceId, FirstRequestId, reject, Reason = ozt_spaces:draw_new_reason()),
-    ?assert(has_received_notification_email(RequesterEmailAlpha, ?FROZEN_TIME_SECONDS(), SpaceId, {resolved, reject,
-        Reason})),
+    Reason = ?RAND_REASON(),
+    ozt_spaces:resolve_membership_request(SpaceId, FirstRequestId, {reject, Reason}),
+    ?assert(has_received_notification_email(RequesterEmailAlpha, ?FROZEN_TIME_SECONDS(), SpaceId, {resolved,
+        {reject, Reason}})),
     ozt_mocks:simulate_seconds_passing(?MIN_BACKOFF_AFTER_REJECTION_SECONDS),
     ozt:set_env(space_marketplace_enabled, false),
     ?assertEqual(
@@ -457,8 +463,8 @@ resolve_no_longer_valid_test(_Config) ->
     FirstRequestId = ozt_spaces:submit_membership_request(FirstSpaceId, RequesterId, RequesterEmail),
     ozt_spaces:add_user(FirstSpaceId, RequesterId),
     ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(FirstSpaceId, FirstRequestId, grant)),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(FirstSpaceId, FirstRequestId, reject,
-        ozt_spaces:draw_new_reason())),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(FirstSpaceId, FirstRequestId,
+        {reject, ?RAND_REASON()})),
     ?assertNot(has_registered_space_membership_request(
         any, RequesterId, FirstSpaceId, FirstRequestId, RequesterEmail, ?FROZEN_TIME_SECONDS())
     ),
@@ -468,8 +474,8 @@ resolve_no_longer_valid_test(_Config) ->
     SecondRequestId = ozt_spaces:submit_membership_request(SecondSpaceId, RequesterId, RequesterEmail),
     ozt_spaces:update(SecondSpaceId, #{<<"advertisedInMarketplace">> => false}),
     ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(SecondSpaceId, SecondRequestId, grant)),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(SecondSpaceId, SecondRequestId, reject,
-        ozt_spaces:draw_new_reason())),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(SecondSpaceId, SecondRequestId,
+        {reject, ?RAND_REASON()})),
     ?assertNot(has_registered_space_membership_request(
         any, RequesterId, SecondSpaceId, SecondRequestId, RequesterEmail, ?FROZEN_TIME_SECONDS())
     ),
@@ -481,8 +487,8 @@ resolve_no_longer_valid_test(_Config) ->
     ThirdRequestId = ozt_spaces:submit_membership_request(ThirdSpaceId, RequesterId, RequesterEmail),
     ozt_spaces:delete(ThirdSpaceId),
     ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ThirdSpaceId, ThirdRequestId, grant)),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ThirdSpaceId, ThirdRequestId, reject,
-        ozt_spaces:draw_new_reason())),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ThirdSpaceId, ThirdRequestId,
+        {reject, ?RAND_REASON()})),
     ?assert(has_registered_space_membership_request(
         pending, RequesterId, ThirdSpaceId, ThirdRequestId, RequesterEmail, ?FROZEN_TIME_SECONDS())
     ),
@@ -615,7 +621,7 @@ prune_rejected_history_test(_Config) ->
 
     ozt:pforeach(fun(SpaceId) ->
         RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),
-        ozt_spaces:resolve_membership_request(SpaceId, RequestId, reject, ozt_spaces:draw_new_reason()),
+        ozt_spaces:resolve_membership_request(SpaceId, RequestId, {reject, ?RAND_REASON()}),
         ozt_mocks:simulate_seconds_passing(?RAND_INT(1, 1000))
     end, OutdatedRejectedSpaces),
     ozt_mocks:simulate_seconds_passing(?MIN_BACKOFF_AFTER_REJECTION_SECONDS),
@@ -623,14 +629,14 @@ prune_rejected_history_test(_Config) ->
     % pruned when needed
     lists:foreach(fun(SpaceId) ->
         RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),
-        ozt_spaces:resolve_membership_request(SpaceId, RequestId, reject, ozt_spaces:draw_new_reason()),
+        ozt_spaces:resolve_membership_request(SpaceId, RequestId, {reject, ?RAND_REASON()}),
         ozt_mocks:simulate_seconds_passing(1)
     end, ExpectedPrematurelyPrunedSpaces),
     % all 50 above spaces should be appended to the rejection history, the first one with the
     % oldest timestamp
     ozt:pforeach(fun(SpaceId) ->
         RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),
-        ozt_spaces:resolve_membership_request(SpaceId, RequestId, reject, ozt_spaces:draw_new_reason()),
+        ozt_spaces:resolve_membership_request(SpaceId, RequestId, {reject, ?RAND_REASON()}),
         ozt_mocks:simulate_seconds_passing(1)
     end, lists:sublist(SpacesWithinLimit, 950)),
     % adding 950 spaces to the history should cause the OutdatedRejectedSpaces to be
@@ -649,7 +655,7 @@ prune_rejected_history_test(_Config) ->
     lists:foreach(fun(Ordinal) ->
         ToRejectSpaceId = lists:nth(950 + Ordinal, SpacesWithinLimit),
         RequestId = ozt_spaces:submit_membership_request(ToRejectSpaceId, RequesterId),
-        ozt_spaces:resolve_membership_request(ToRejectSpaceId, RequestId, reject, ozt_spaces:draw_new_reason()),
+        ozt_spaces:resolve_membership_request(ToRejectSpaceId, RequestId, {reject, ?RAND_REASON()}),
         JustPrunedSpaceId = lists:nth(Ordinal, ExpectedPrematurelyPrunedSpaces),
         ?assertMatch({ok, _}, ozt_spaces:try_submit_membership_request(JustPrunedSpaceId, RequesterId)),
         case Ordinal of
@@ -732,6 +738,7 @@ has_received_membership_request_email(
 ) ->
     #od_space{name = SpaceName} = ozt_spaces:get(SpaceId),
     #od_user{full_name = RequesterFullName, username = RequesterUsername} = ozt_users:get(RequesterId),
+    ExpectedUsername = case RequesterUsername of undefined -> <<"none">>; _ -> RequesterUsername end,
     SubjectClassificationKeyword = case Classification of first -> "New"; reminder -> "REMINDER:" end,
     BodyClassificationKeyword = case Classification of first -> "new"; reminder -> "kind reminder" end,
 
@@ -741,7 +748,7 @@ has_received_membership_request_email(
     ], [
         "Dear Onedata user",
         BodyClassificationKeyword, SpaceId, SpaceName,
-        RequesterId, RequesterFullName, RequesterUsername, RequesterEmail,
+        RequesterId, RequesterFullName, ExpectedUsername, RequesterEmail,
         "confirmJoinSpaceRequest", RequestId,
         "This is an automated message", ozt:get_domain()
     ]),
@@ -756,8 +763,7 @@ has_received_membership_request_email(
     od_user:email(),
     time:seconds(),
     od_space:id(),
-    {resolved, grant} | {resolved, reject} | {resolved, reject, space_membership_requests:rejection_reason()}
-    | already_granted | cancelled
+    {resolved, space_membership_requests:decision()} | already_granted | cancelled
 ) ->
     boolean().
 has_received_notification_email(
@@ -772,22 +778,25 @@ has_received_notification_email(
     end,
     SubjectTypeKeyword = case Type of
         {resolved, grant} -> "GRANTED";
-        {resolved, reject, _} -> "REJECTED";
+        {resolved, {reject, _}} -> "REJECTED";
         already_granted -> "already GRANTED";
         cancelled -> "CANCELLED"
     end,
     BodyTypeKeywords = case Type of
-        {resolved, grant} -> ["GRANTED", "by the space operator", "in Web GUI", "/#/onedata/spaces/"];
-        {resolved, reject, Reason} -> case Reason of
-                                          Reason when Reason =:= <<"">> ->  ["REJECTED", "by the space operator",
-                                              "The space maintainer did not provide a reason for rejection."];
-                                          Reason ->  ["REJECTED", "by the space operator", str_utils:format(
-                                              "The reason for the decision is as follows: ~n"
-                                              "~s~n"
-                                              "~n",
-                                              [Reason]
-                                          )]
-                                      end;
+        {resolved, grant} -> ["GRANTED", "by the space maintainer", "in Web GUI", "/#/onedata/spaces/"];
+        {resolved, {reject, Reason}} ->
+            case Reason of
+                Reason when Reason =:= <<"">> ->
+                    ["REJECTED", "by the space maintainer",
+                    "No reason for rejection was provided."];
+                Reason ->
+                    ["REJECTED", "by the space maintainer", str_utils:format(
+                    "Reason: ~n"
+                    "~ts~n"
+                    "~n",
+                    [Reason]
+                )]
+            end;
         already_granted -> ["has been withdrawn", "has been GRANTED", "independently of space marketplace"];
         cancelled -> ["has been CANCELLED", "has been deleted", "no longer advertised"]
     end,

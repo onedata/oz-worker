@@ -18,7 +18,7 @@
 
 %% API
 -export([check_send_membership_request/6]).
--export([best_effort_notify_request_resolved/4]).
+-export([best_effort_notify_request_resolved/3]).
 -export([best_effort_notify_membership_already_granted/2]).
 -export([best_effort_notify_request_cancelled/2]).
 
@@ -100,23 +100,24 @@ check_send_membership_request(SpaceId, RequesterUserId, RequestId, RequestClassi
 -spec best_effort_notify_request_resolved(
     od_space:id(),
     od_user:email(),
-    space_membership_requests:decision(),
-    space_membership_requests:rejection_reason()
+    space_membership_requests:decision()
 ) ->
     ok | ?ERROR_INTERNAL_SERVER_ERROR(_).
-best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision, Reason) ->
+best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision) ->
     {SpaceName, _} = get_space_info(SpaceId),
     DecisionStr = case Decision of
         grant -> "GRANTED";
-        reject -> "REJECTED"
+        {reject, _} -> "REJECTED"
     end,
     ExtraInfo = case Decision of
-        reject ->
+        {reject, Reason} ->
             case Reason of
-                <<"">> -> "The space maintainer did not provide a reason for rejection.";
-                _ -> str_utils:format(
-                    "The reason for the decision is as follows: ~n"
-                    "~s~n"
+                <<"">> ->
+                    "No reason for rejection was provided.";
+                _ ->
+                    str_utils:format(
+                    "Reason: ~n"
+                    "~ts~n"
                     "~n",
                     [Reason]
                 )
@@ -134,7 +135,7 @@ best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision, Reason)
     Body = str_utils:format_bin(
         "~s~n"
         "~n"
-        "Your membership request for space '~ts' (id: ~s) has been ~s by the space operator.~n"
+        "Your membership request for space '~ts' (id: ~s) has been ~s by the space maintainer.~n"
         "~n"
         "~ts"
         "~s",
@@ -241,7 +242,7 @@ get_user_info(UserId) ->
         full_name = FullName,
         username = Username
     }}} = od_user:get(UserId),
-    {FullName, Username}.
+    {FullName, utils:ensure_defined(Username, <<"none">>)}.
 
 
 %%--------------------------------------------------------------------
