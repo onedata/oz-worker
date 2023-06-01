@@ -101,10 +101,9 @@ assert_known_names(NamesToCheck, KnownNames, DataKeyName) ->
     ok | no_return().
 sanitize_predefined_value(undefined, _DataSpec, _DataKeyName) ->
     ok;
-sanitize_predefined_value(Array, #atm_data_spec{type = atm_array_type} = AtmDataSpec, DataKeyName) ->
+sanitize_predefined_value(Array, #atm_array_data_spec{item_data_spec = ItemDataSpec}, DataKeyName) ->
     case atm_data_type:is_instance(atm_array_type, Array) of
         true ->
-            ItemDataSpec = maps:get(item_data_spec, AtmDataSpec#atm_data_spec.value_constraints),
             lists:foreach(fun({Index, Value}) ->
                 NestedDataKeyName = str_utils:format_bin("~s[~B]", [
                     DataKeyName, Index - 1  % count from 0 rather than 1 (as Erlang does)
@@ -118,7 +117,9 @@ sanitize_predefined_value(Array, #atm_data_spec{type = atm_array_type} = AtmData
                 [atm_data_type:type_to_json(atm_array_type)]
             )
     end;
-sanitize_predefined_value(Value, #atm_data_spec{type = DataType}, DataKeyName) ->
+sanitize_predefined_value(Value, AtmDataSpec, DataKeyName) ->
+    DataType = atm_data_spec:get_data_type(AtmDataSpec),
+
     case atm_data_type:is_instance(DataType, Value) of
         true ->
             ok;

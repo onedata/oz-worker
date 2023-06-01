@@ -955,36 +955,29 @@ spoil_data_field(#test_spec{
 %% @private
 example_invalid_data_specs_and_predefined_values() ->
     [
-        {#atm_data_spec{type = atm_boolean_type}, [true, 157]},
-        {#atm_data_spec{type = atm_number_type}, [#{<<"obj1">> => <<"val">>}, #{<<"obj2">> => <<"val">>}]},
-        {#atm_data_spec{type = atm_string_type}, 167.87},
-        {#atm_data_spec{type = atm_object_type}, <<"text">>},
-        {#atm_data_spec{
-            type = atm_time_series_measurement_type,
-            value_constraints = #{specs => lists_utils:random_sublist(atm_test_utils:example_time_series_measurement_specs())}
+        {#atm_boolean_data_spec{}, [true, 157]},
+        {#atm_number_data_spec{integers_only = false, allowed_values = undefined}, [#{<<"obj1">> => <<"val">>}, #{<<"obj2">> => <<"val">>}]},
+        {#atm_string_data_spec{allowed_values = undefined}, 167.87},
+        {#atm_object_data_spec{}, <<"text">>},
+        {#atm_time_series_measurement_data_spec{
+            specs = lists_utils:random_sublist(atm_test_utils:example_time_series_measurement_specs())
         }, #{<<"key">> => <<"val">>}},
-        {#atm_data_spec{type = atm_file_type}, -9},
-        {#atm_data_spec{
-            type = atm_array_type,
-            value_constraints = #{item_data_spec => #atm_data_spec{type = atm_string_type}}
+        {#atm_file_data_spec{file_type = 'ANY', attributes = [file_id]}, -9},
+        {#atm_array_data_spec{
+            item_data_spec = #atm_string_data_spec{allowed_values = undefined}
         }, <<"string">>},
-        {#atm_data_spec{
-            type = atm_array_type,
-            value_constraints = #{item_data_spec => #atm_data_spec{type = atm_string_type}}
+        {#atm_array_data_spec{
+            item_data_spec = #atm_string_data_spec{allowed_values = undefined}
         }, [123456]},
-        {#atm_data_spec{
-            type = atm_array_type,
-            value_constraints = #{item_data_spec => #atm_data_spec{
-                type = atm_array_type,
-                value_constraints = #{item_data_spec => #atm_data_spec{type = atm_string_type}}
-            }}
+        {#atm_array_data_spec{
+            item_data_spec = #atm_array_data_spec{
+                item_data_spec = #atm_string_data_spec{allowed_values = undefined}
+            }
         }, [[<<"string">>, <<"string">>], #{<<"not-a">> => <<"list">>}]},
-        {#atm_data_spec{
-            type = atm_array_type,
-            value_constraints = #{item_data_spec => #atm_data_spec{
-                type = atm_array_type,
-                value_constraints = #{item_data_spec => #atm_data_spec{type = atm_string_type}}
-            }}
+        {#atm_array_data_spec{
+            item_data_spec = #atm_array_data_spec{
+                item_data_spec = #atm_string_data_spec{allowed_values = undefined}
+            }
         }, [[<<"string">>, <<"string">>], [#{<<"not-a">> => <<"string">>}]]}
     ].
 
@@ -1032,8 +1025,8 @@ example_invalid_default_initial_contents_for_store(DataKeyName, list) ->
         ])
     end, example_invalid_data_specs_and_predefined_values());
 example_invalid_default_initial_contents_for_store(DataKeyName, tree_forest) ->
-    lists:flatmap(fun({DataSpec = #atm_data_spec{type = DataType}, InvalidPredefinedValue}) ->
-        case DataType == atm_file_type orelse DataType == atm_dataset_type of
+    lists:flatmap(fun({DataSpec, InvalidPredefinedValue}) ->
+        case lists:member(atm_data_spec:get_data_type(DataSpec), [atm_file_type, atm_dataset_type]) of
             true ->
                 lists:flatten([
                     case is_list(InvalidPredefinedValue) of
@@ -1090,9 +1083,7 @@ example_invalid_default_initial_contents_for_store(_DataKeyName, audit_log) ->
 
 
 %% @private
-exp_disallowed_predefined_value_error(DataKeyName, #atm_data_spec{type = atm_store_credentials_type}, _) ->
-    ?ERROR_BAD_DATA(DataKeyName, <<"Predefined value for store credentials is disallowed">>);
-exp_disallowed_predefined_value_error(DataKeyName, #atm_data_spec{type = atm_array_type} = AtmDataSpec, Values) ->
+exp_disallowed_predefined_value_error(DataKeyName, #atm_array_data_spec{item_data_spec = NestedItemDataSpec}, Values) ->
     case is_list(Values) of
         false ->
             ?ERROR_BAD_DATA(
@@ -1100,9 +1091,7 @@ exp_disallowed_predefined_value_error(DataKeyName, #atm_data_spec{type = atm_arr
                 <<"The provided predefined value for type 'array' must be an array of values">>
             );
         true ->
-            #atm_data_spec{
-                type = NestedItemDataType
-            } = NestedItemDataSpec = maps:get(item_data_spec, AtmDataSpec#atm_data_spec.value_constraints),
+            NestedItemDataType = atm_data_spec:get_data_type(NestedItemDataSpec),
             {ok, ExpError} = lists_utils:searchmap(fun({Index, Value}) ->
                 case atm_data_type:is_instance(NestedItemDataType, Value) of
                     true when NestedItemDataType =/= atm_array_type ->
@@ -1123,7 +1112,8 @@ exp_disallowed_predefined_value_error(DataKeyName, #atm_data_spec{type = atm_arr
             end, lists_utils:enumerate(Values)),
             ExpError
     end;
-exp_disallowed_predefined_value_error(DataKeyName, #atm_data_spec{type = DataType}, _) ->
+exp_disallowed_predefined_value_error(DataKeyName, AtmDataSpec, _) ->
+    DataType = atm_data_spec:get_data_type(AtmDataSpec),
     ?ERROR_BAD_DATA(
         DataKeyName,
         <<"The provided predefined value is invalid for type '", (atm_data_type:type_to_json(DataType))/binary, "'">>
