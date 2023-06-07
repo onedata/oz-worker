@@ -306,12 +306,12 @@ create(Req = #el_req{auth = ?USER(UserId), gri = #gri{id = SpaceId, aspect = mem
     {ok, value, space_membership_requests:lookup_pending_request_id(SpaceId, UpdatedSpaceMembershipRequests)};
 
 create(Req = #el_req{gri = #gri{id = SpaceId, aspect = {resolve_membership_request, RequestId}}}) ->
-    Reason = maps:get(<<"rejectionReason">>, Req#el_req.data, <<"">>),
-    DecisionAtom = maps:get(<<"decision">>, Req#el_req.data),
-    Decision = case DecisionAtom of
-                   grant -> DecisionAtom;
-                   reject -> {DecisionAtom, Reason}
-               end,
+    Decision = case maps:get(<<"decision">>, Req#el_req.data) of
+        grant -> grant;
+        reject ->
+            RejectionReason = maps:get(<<"rejectionReason">>, Req#el_req.data, <<"">>),
+            {reject, RejectionReason}
+    end,
     RequesterUserId = space_membership_requests:infer_requester_id(RequestId),
     ?extract_ok(od_user:lock_and_update_space_membership_requests(RequesterUserId, fun(SpaceMembershipRequests) ->
         space_membership_requests:resolve(SpaceId, RequestId, Decision, SpaceMembershipRequests)

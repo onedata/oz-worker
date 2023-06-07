@@ -114,13 +114,11 @@ best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision) ->
             case Reason of
                 <<"">> ->
                     "No reason for rejection was provided.";
-                _ ->
+                Reason ->
                     str_utils:format(
-                    "Reason: ~n"
-                    "~ts~n"
-                    "~n",
-                    [Reason]
-                )
+                        "Reason: \"~ts\"~n",
+                        [Reason]
+                    )
             end;
 
         grant ->
