@@ -307,7 +307,8 @@ create(Req = #el_req{auth = ?USER(UserId), gri = #gri{id = SpaceId, aspect = mem
 
 create(Req = #el_req{gri = #gri{id = SpaceId, aspect = {resolve_membership_request, RequestId}}}) ->
     Decision = case maps:get(<<"decision">>, Req#el_req.data) of
-        grant -> grant;
+        grant ->
+            grant;
         reject ->
             RejectionReason = maps:get(<<"rejectionReason">>, Req#el_req.data, <<"">>),
             {reject, RejectionReason}

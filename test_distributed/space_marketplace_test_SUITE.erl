@@ -205,14 +205,11 @@ resolve_error_not_found_test(_Config) ->
     ForgedSpaceId = datastore_key:new(),
     ForgedRequestId = <<RequesterId/binary, "-7832648714">>,
     ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ExistingSpaceId, ForgedRequestId, grant)),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ExistingSpaceId, ForgedRequestId,
-        {reject, ?RAND_REASON()})),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ExistingSpaceId, ForgedRequestId, {reject, ?RAND_REASON()})),
     ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ExistingRequestId, grant)),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ExistingRequestId,
-        {reject, ?RAND_REASON()})),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ExistingRequestId, {reject, ?RAND_REASON()})),
     ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ForgedRequestId, grant)),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ForgedRequestId,
-        {reject, ?RAND_REASON()})).
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ForgedRequestId, {reject, ?RAND_REASON()})).
 
 
 resolve_error_mailer_malfunction_test(_Config) ->
@@ -451,8 +448,7 @@ resolve_no_longer_valid_test(_Config) ->
     FirstRequestId = ozt_spaces:submit_membership_request(FirstSpaceId, RequesterId, RequesterEmail),
     ozt_spaces:add_user(FirstSpaceId, RequesterId),
     ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(FirstSpaceId, FirstRequestId, grant)),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(FirstSpaceId, FirstRequestId,
-        {reject, ?RAND_REASON()})),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(FirstSpaceId, FirstRequestId, {reject, ?RAND_REASON()})),
     ?assertNot(has_registered_space_membership_request(
         any, RequesterId, FirstSpaceId, FirstRequestId, RequesterEmail, ?FROZEN_TIME())
     ),
@@ -462,8 +458,7 @@ resolve_no_longer_valid_test(_Config) ->
     SecondRequestId = ozt_spaces:submit_membership_request(SecondSpaceId, RequesterId, RequesterEmail),
     ozt_spaces:update(SecondSpaceId, #{<<"advertisedInMarketplace">> => false}),
     ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(SecondSpaceId, SecondRequestId, grant)),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(SecondSpaceId, SecondRequestId,
-        {reject, ?RAND_REASON()})),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(SecondSpaceId, SecondRequestId, {reject, ?RAND_REASON()})),
     ?assertNot(has_registered_space_membership_request(
         any, RequesterId, SecondSpaceId, SecondRequestId, RequesterEmail, ?FROZEN_TIME())
     ),
@@ -475,8 +470,7 @@ resolve_no_longer_valid_test(_Config) ->
     ThirdRequestId = ozt_spaces:submit_membership_request(ThirdSpaceId, RequesterId, RequesterEmail),
     ozt_spaces:delete(ThirdSpaceId),
     ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ThirdSpaceId, ThirdRequestId, grant)),
-    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ThirdSpaceId, ThirdRequestId,
-        {reject, ?RAND_REASON()})),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ThirdSpaceId, ThirdRequestId, {reject, ?RAND_REASON()})),
     ?assert(has_registered_space_membership_request(
         pending, RequesterId, ThirdSpaceId, ThirdRequestId, RequesterEmail, ?FROZEN_TIME())
     ),

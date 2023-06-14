@@ -110,22 +110,13 @@ best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision) ->
         {reject, _} -> "REJECTED"
     end,
     ExtraInfo = case Decision of
+        {reject, <<"">>} ->
+            "No reason for rejection was provided.";
         {reject, Reason} ->
-            case Reason of
-                <<"">> ->
-                    "No reason for rejection was provided.";
-                Reason ->
-                    str_utils:format(
-                        "Reason: \"~ts\"~n",
-                        [Reason]
-                    )
-            end;
-
+            str_utils:format("Reason: \"~ts\"", [Reason]);
         grant ->
             str_utils:format(
-                "You may start using the space. View it in Web GUI by clicking the link below:~n"
-                "~s~n"
-                "~n",
+                "You may start using the space. View it in Web GUI by clicking the link below:~n~s",
                 [build_gui_space_view_uri(SpaceId)]
             )
     end,
@@ -135,7 +126,8 @@ best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision) ->
         "~n"
         "Your membership request for space '~ts' (id: ~s) has been ~s by the space maintainer.~n"
         "~n"
-        "~ts"
+        "~ts~n"
+        "~n"
         "~s",
         [
             ?GREETING,
