@@ -314,6 +314,7 @@ protected_provider(gs, Id, ProviderData) ->
         <<"gri">> => gri:serialize(?GRI(od_provider, Id, instance, protected)),
         <<"name">> => maps:get(<<"name">>, ProviderData),
         <<"domain">> => maps:get(<<"domain">>, ProviderData),
+        <<"version">> => maps:get(<<"version">>, ProviderData),
         <<"latitude">> => maps:get(<<"latitude">>, ProviderData),
         <<"longitude">> => maps:get(<<"longitude">>, ProviderData),
         <<"online">> => maps:get(<<"online">>, ProviderData, false)

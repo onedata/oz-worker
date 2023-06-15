@@ -338,13 +338,12 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         <<"subdomainDelegation">> => SubdomainDelegation,
         <<"domain">> => Domain,
         <<"subdomain">> => Subdomain,
+        <<"version">> => Version,
 
         <<"adminEmail">> => AdminEmail,
 
-        <<"domain">> => Domain,
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
-        <<"version">> => Version,
 
         <<"online">> => provider_connections:is_online(Id),
 
@@ -369,10 +368,9 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
     #{
         <<"name">> => Name,
         <<"domain">> => Domain,
-        <<"domain">> => Domain,
+        <<"version">> => Version,
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
-        <<"version">> => Version,
         <<"online">> => Online
     };
 
