@@ -107,16 +107,16 @@ best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision) ->
     {SpaceName, _} = get_space_info(SpaceId),
     DecisionStr = case Decision of
         grant -> "GRANTED";
-        reject -> "REJECTED"
+        {reject, _} -> "REJECTED"
     end,
     ExtraInfo = case Decision of
-        reject ->
-            "";
+        {reject, <<"">>} ->
+            "No reason for rejection was provided.";
+        {reject, Reason} ->
+            str_utils:format("Reason: \"~ts\"", [Reason]);
         grant ->
             str_utils:format(
-                "You may start using the space. View it in Web GUI by clicking the link below:~n"
-                "~s~n"
-                "~n",
+                "You may start using the space. View it in Web GUI by clicking the link below:~n~s",
                 [build_gui_space_view_uri(SpaceId)]
             )
     end,
@@ -124,9 +124,10 @@ best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision) ->
     Body = str_utils:format_bin(
         "~s~n"
         "~n"
-        "Your membership request for space '~ts' (id: ~s) has been ~s by the space operator.~n"
+        "Your membership request for space '~ts' (id: ~s) has been ~s by the space maintainer.~n"
         "~n"
-        "~ts"
+        "~ts~n"
+        "~n"
         "~s",
         [
             ?GREETING,
@@ -231,7 +232,7 @@ get_user_info(UserId) ->
         full_name = FullName,
         username = Username
     }}} = od_user:get(UserId),
-    {FullName, Username}.
+    {FullName, utils:ensure_defined(Username, <<"none">>)}.
 
 
 %%--------------------------------------------------------------------

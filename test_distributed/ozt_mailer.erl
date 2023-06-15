@@ -67,12 +67,12 @@ match_received_emails(Address, Timestamp, SubjectKeywords, BodyKeywords) ->
     end, FullHistory),
     MatchingBySubject = lists:filter(fun(#received_mail{subject = Subject}) ->
         lists:all(fun(Keyword) ->
-            nomatch /= string:find(Subject, str_utils:to_binary(Keyword))
+            nomatch /= string:find(Subject, str_utils:unicode_list_to_binary(Keyword))
         end, SubjectKeywords)
     end, MatchingByTimestamp),
     lists:filter(fun(#received_mail{body = Body}) ->
         lists:all(fun(Keyword) ->
-            nomatch /= string:find(Body, str_utils:to_binary(Keyword))
+            nomatch /= string:find(Body, str_utils:unicode_list_to_binary(Keyword))
         end, BodyKeywords)
     end, MatchingBySubject).
 

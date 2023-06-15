@@ -1435,11 +1435,11 @@ resolve_membership_request_test(Config) ->
     SpaceId = ozt_users:create_advertised_space_for(SpaceOperatorId),
     ?assertEqual(
         ?ERROR_BAD_VALUE_EMPTY(<<"requestId">>),
-        ozt_spaces:try_resolve_membership_request(SpaceId, <<"">>, ?RAND_ELEMENT([grant, reject]))
+        ozt_spaces:try_resolve_membership_request(SpaceId, <<"">>, ?RAND_ELEMENT([grant, {reject, <<"">>}]))
     ),
     ?assertEqual(
         ?ERROR_BAD_VALUE_BINARY(<<"requestId">>),
-        ozt_spaces:try_resolve_membership_request(SpaceId, [1, 2, 3], ?RAND_ELEMENT([grant, reject]))
+        ozt_spaces:try_resolve_membership_request(SpaceId, [1, 2, 3], ?RAND_ELEMENT([grant, {reject, <<"">>}]))
     ).
 
 
