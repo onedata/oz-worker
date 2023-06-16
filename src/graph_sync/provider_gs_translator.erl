@@ -329,11 +329,16 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         latitude = Latitude,
         longitude = Longitude
     } = Provider,
+
+    ClusterId = Id,
+    {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, ClusterId),
+
     #{
         <<"name">> => Name,
         <<"subdomainDelegation">> => SubdomainDelegation,
         <<"domain">> => Domain,
         <<"subdomain">> => Subdomain,
+        <<"version">> => Version,
 
         <<"adminEmail">> => AdminEmail,
 
@@ -350,15 +355,22 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         <<"effectiveGroups">> => entity_graph:get_relations(effective, bottom_up, od_group, Provider)
     };
 
-translate_resource(_, #gri{type = od_provider, aspect = instance, scope = protected}, ProviderData) ->
+translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope = protected}, ProviderData) ->
     #{
         <<"name">> := Name, <<"domain">> := Domain,
         <<"latitude">> := Latitude, <<"longitude">> := Longitude,
         <<"online">> := Online
     } = ProviderData,
+
+    ClusterId = Id,
+    {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, ClusterId),
+
     #{
-        <<"name">> => Name, <<"domain">> => Domain,
-        <<"latitude">> => Latitude, <<"longitude">> => Longitude,
+        <<"name">> => Name,
+        <<"domain">> => Domain,
+        <<"version">> => Version,
+        <<"latitude">> => Latitude,
+        <<"longitude">> => Longitude,
         <<"online">> => Online
     };
 

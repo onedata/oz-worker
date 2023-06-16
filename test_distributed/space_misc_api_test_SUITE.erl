@@ -1559,7 +1559,9 @@ get_eff_provider_test(Config) ->
                 aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_SPACE(S1),
-            expected_result_op = api_test_expect:protected_provider(gs, P1, ProviderDetails)
+            expected_result_op = api_test_expect:protected_provider(gs, P1, ProviderDetails#{
+                <<"version">> => <<"18.02.*">>
+            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -1570,7 +1572,10 @@ get_eff_provider_test(Config) ->
             correct = [{provider, P1, P1Token}]
         },
         gs_spec = GsSpec#gs_spec{
-            expected_result_op = api_test_expect:protected_provider(gs, P1, ProviderDetails#{<<"online">> => true})
+            expected_result_op = api_test_expect:protected_provider(gs, P1, ProviderDetails#{
+                <<"online">> => true,
+                <<"version">> => <<"18.02.*">>
+            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
