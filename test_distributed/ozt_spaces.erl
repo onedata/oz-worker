@@ -147,15 +147,20 @@ try_submit_membership_request(SpaceId, RequesterUserId, ContactEmail) ->
 resolve_membership_request(SpaceId, RequestId, Decision) ->
     ?assertEqual(ok, try_resolve_membership_request(SpaceId, RequestId, Decision)).
 
+
 -spec try_resolve_membership_request(
     od_space:id(),
     space_membership_requests:request_id(),
     space_membership_requests:decision()
-) ->
-    ok | errors:error().
-try_resolve_membership_request(SpaceId, RequestId, Decision) ->
+) -> ok | errors:error().
+try_resolve_membership_request(SpaceId, RequestId, {reject, Reason}) ->
     ozt:rpc(space_logic, resolve_membership_request, [?ROOT, SpaceId, RequestId, #{
-        <<"decision">> => Decision
+        <<"decision">> => reject,
+        <<"rejectionReason">> => Reason
+    }]);
+try_resolve_membership_request(SpaceId, RequestId, grant) ->
+    ozt:rpc(space_logic, resolve_membership_request, [?ROOT, SpaceId, RequestId, #{
+        <<"decision">> => grant
     }]).
 
 

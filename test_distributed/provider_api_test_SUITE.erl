@@ -385,6 +385,7 @@ get_test(Config) ->
             gri = #gri{type = od_provider, id = P1, aspect = instance},
             expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ExpName, <<"domain">> => ExpDomain,
+                <<"version">> => <<"18.02.*">>,
                 <<"effectiveGroups">> => [], <<"effectiveUsers">> => [U1],
                 <<"latitude">> => ExpLatitude, <<"longitude">> => ExpLongitude,
                 <<"spaces">> => #{S1 => SupportSize},
@@ -437,7 +438,10 @@ get_test(Config) ->
                 type = od_provider, id = P1,
                 aspect = instance, scope = protected
             },
-            expected_result_op = api_test_expect:protected_provider(gs, P1, ProviderData#{<<"online">> => true})
+            expected_result_op = api_test_expect:protected_provider(gs, P1, ProviderData#{
+                <<"online">> => true,
+                <<"version">> => <<"18.02.*">>
+            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
@@ -462,7 +466,10 @@ get_self_test(Config) ->
                 type = od_provider, id = ?SELF,
                 aspect = instance, scope = protected
             },
-            expected_result_op = api_test_expect:protected_provider(gs, P1, ProviderData#{<<"online">> => true})
+            expected_result_op = api_test_expect:protected_provider(gs, P1, ProviderData#{
+                <<"online">> => true,
+                <<"version">> => <<"18.02.*">>
+            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).

@@ -35,7 +35,7 @@
 
 
 % expresses the decision of space maintainer; whether to grant or reject a membership request
--type decision() :: grant | reject.
+-type decision() :: grant | {reject, binary()}.
 -type request_id() :: binary().
 -record(request, {
     id :: request_id(),
@@ -257,7 +257,7 @@ resolve_sanitized(SpaceId, RequesterUserId, Decision, Record = #space_membership
             ?check(space_logic:add_user(?ROOT, SpaceId, RequesterUserId)),
             space_marketplace_mailer:best_effort_notify_request_resolved(SpaceId, ContactEmail, Decision),
             RecordWithUpdatedPending;
-        reject ->
+        {reject, _} ->
             space_marketplace_mailer:best_effort_notify_request_resolved(SpaceId, ContactEmail, Decision),
             trim_overflowing_rejected_history(RecordWithUpdatedPending#space_membership_requests{
                 rejected = Rejected#{SpaceId => Request#request{last_activity = ?NOW_SECONDS()}}
