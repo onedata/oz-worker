@@ -14,6 +14,7 @@
 -module(od_atm_workflow_schema).
 -author("Lukasz Opiola").
 
+-include("automation.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
@@ -115,7 +116,7 @@ critical_section(AtmWorkflowSchemaId, Fun) ->
 -spec dump_to_json(id(), record(), atm_workflow_schema_revision:revision_number()) -> json_utils:json_map().
 dump_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevisionNumber) ->
     #{
-        <<"schemaFormatVersion">> => 2,
+        <<"schemaFormatVersion">> => ?CURRENT_SCHEMA_FORMAT_VERSION,
 
         <<"originalAtmWorkflowSchemaId">> => AtmWorkflowSchemaId,
 
@@ -130,9 +131,9 @@ dump_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevisionNumber) ->
 dump_revision_to_json(#od_atm_workflow_schema{revision_registry = RevisionRegistry}, RevisionNumber) ->
     IncludedRevision = atm_workflow_schema_revision_registry:get_revision(RevisionNumber, RevisionRegistry),
     #{
-        <<"schemaFormatVersion">> => 2,
+        <<"schemaFormatVersion">> => ?CURRENT_SCHEMA_FORMAT_VERSION,
         <<"originalRevisionNumber">> => RevisionNumber,
-        <<"atmWorkflowSchemaRevision">> => jsonable_record:to_json(IncludedRevision, atm_workflow_schema_revision),
+        <<"atmWorkflowSchemaRevision">> => persistent_record:encode(IncludedRevision, atm_workflow_schema_revision),
         <<"supplementaryAtmLambdas">> => maps:map(fun(AtmLambdaId, ReferencedRevisionNumbers) ->
             {ok, #document{value = AtmLambda}} = od_atm_lambda:get(AtmLambdaId),
             maps_utils:generate_from_list(fun(ReferencedRevisionNumber) ->
