@@ -27,7 +27,8 @@
 | list_of_binaries | integer | integer_or_infinity | float | json
 | token | invite_token | token_type | caveats
 | boolean | ipv4_address | list_of_ipv4_addresses
-| {jsonable_record, single | list, jsonable_record:record_type()}.
+| {jsonable_record, single | list, jsonable_record:record_type()}
+| {persistent_record, single, module()}.
 
 -type value_spec() :: any | non_empty
 | fun((term()) -> boolean())
@@ -436,6 +437,15 @@ sanitize_type({jsonable_record, list, RecordType}, Key, Values) ->
         lists:map(fun(Value) ->
             sanitize_type({jsonable_record, single, RecordType}, Key, Value)
         end, Values)
+    catch
+        throw:{error, _} = Error ->
+            throw(Error);
+        _:_ ->
+            throw(?ERROR_BAD_DATA(Key))
+    end;
+sanitize_type({persistent_record, single, RecordType}, Key, Value) ->
+    try
+        persistent_record:decode(Value, RecordType)
     catch
         throw:{error, _} = Error ->
             throw(Error);
