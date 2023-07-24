@@ -394,11 +394,15 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
         }
     };
 
-validate(#el_req{operation = create, gri = #gri{aspect = parse_revision}}) -> #{
-    required => #{
-        <<"atmLambdaRevision">> => {{jsonable_record, single, atm_lambda_revision}, any}
-    }
-};
+validate(#el_req{operation = create, data = Data, gri = #gri{aspect = parse_revision}}) ->
+    SchemaFormatVersion = maps:get(<<"schemaFormatVersion">>, Data, undefined),
+
+    #{
+        required => #{
+            <<"atmLambdaRevision">> => atm_lambda_revision_value_spec(SchemaFormatVersion)
+        },
+        optional => #{<<"schemaFormatVersion">> => ?SCHEMA_FORMAT_VERSION_SPEC}
+    };
 
 validate(#el_req{operation = create, gri = #gri{aspect = dump}}) -> #{
     required => #{
@@ -465,14 +469,7 @@ revision_sanitizer_spec(TargetRevisionNumber, SchemaFormatVersion) ->
                     false
                 end
         end},
-        <<"atmLambdaRevision">> => begin
-            Decoder = case SchemaFormatVersion of
-                undefined -> jsonable_record;
-                2 -> jsonable_record;
-                _ -> persistent_record
-            end,
-            {{Decoder, single, atm_lambda_revision}, any}
-        end
+        <<"atmLambdaRevision">> => atm_lambda_revision_value_spec(SchemaFormatVersion)
     },
 
     #{
@@ -484,6 +481,19 @@ revision_sanitizer_spec(TargetRevisionNumber, SchemaFormatVersion) ->
         end,
         optional => #{<<"schemaFormatVersion">> => ?SCHEMA_FORMAT_VERSION_SPEC}
     }.
+
+
+%% @private
+-spec atm_lambda_revision_value_spec(
+    undefined | ?MIN_SUPPORTED_SCHEMA_FORMAT_VERSION..?CURRENT_SCHEMA_FORMAT_VERSION
+) ->
+    entity_logic_sanitizer:value_spec().
+atm_lambda_revision_value_spec(undefined) ->
+    {{jsonable_record, single, atm_lambda_revision}, any};
+atm_lambda_revision_value_spec(2) ->
+    {{jsonable_record, single, atm_lambda_revision}, any};
+atm_lambda_revision_value_spec(_) ->
+    {{persistent_record, single, atm_lambda_revision}, any}.
 
 
 %% @private

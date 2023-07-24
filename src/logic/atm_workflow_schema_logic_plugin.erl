@@ -14,6 +14,7 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
+-include("automation.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/automation/automation.hrl").
@@ -327,6 +328,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"summary">> => {binary, {text_length_limit, ?SUMMARY_SIZE_LIMIT}},
         % validation of revision data is performed during the workflow schema creation procedure
         <<"revision">> => {json, any},
+        <<"schemaFormatVersion">> => ?SCHEMA_FORMAT_VERSION_SPEC,
         % this can be an arbitrary string and is not verified, as for example a dump
         % from another Onezone may be used to create a workflow schema
         <<"originalAtmWorkflowSchemaId">> => {binary, non_empty}
@@ -339,8 +341,9 @@ validate(#el_req{operation = create, gri = #gri{aspect = dump}}) -> #{
     }
 };
 
-validate(#el_req{operation = create, gri = #gri{aspect = {revision, TargetRevisionNumber}}}) ->
-    revision_sanitizer_spec(TargetRevisionNumber);
+validate(#el_req{operation = create, data = Data, gri = #gri{aspect = {revision, TargetRevisionNumber}}}) ->
+    SchemaFormatVersion = maps:get(<<"schemaFormatVersion">>, Data, undefined),
+    revision_sanitizer_spec(TargetRevisionNumber, SchemaFormatVersion);
 
 validate(#el_req{operation = create, gri = #gri{aspect = {dump_revision, _}}}) -> #{
     required => #{
@@ -360,7 +363,8 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
         <<"summary">> => {binary, {text_length_limit, ?SUMMARY_SIZE_LIMIT}},
         % validation of revision data is performed during the workflow schema update procedure
         <<"revision">> => {json, any}
-    }
+    },
+    optional => #{<<"schemaFormatVersion">> => ?SCHEMA_FORMAT_VERSION_SPEC}
 }.
 
 %%%===================================================================
@@ -368,8 +372,12 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 %%%===================================================================
 
 %% @private
--spec revision_sanitizer_spec(binary()) -> entity_logic_sanitizer:sanitizer_spec().
-revision_sanitizer_spec(TargetRevisionNumber) ->
+-spec revision_sanitizer_spec(
+    binary(),
+    undefined | ?MIN_SUPPORTED_SCHEMA_FORMAT_VERSION..?CURRENT_SCHEMA_FORMAT_VERSION
+) ->
+    entity_logic_sanitizer:sanitizer_spec().
+revision_sanitizer_spec(TargetRevisionNumber, SchemaFormatVersion) ->
     % NOTE: the target revision is generally given in the aspect, but a special "auto"
     % keyword is accepted to indicate that the original revision number should be taken
     % and then originalRevisionNumber key is mandatory. This is used especially when
@@ -385,7 +393,14 @@ revision_sanitizer_spec(TargetRevisionNumber) ->
                     false
                 end
         end},
-        <<"atmWorkflowSchemaRevision">> => {{jsonable_record, single, atm_workflow_schema_revision}, any}
+        <<"atmWorkflowSchemaRevision">> => begin
+            Decoder = case SchemaFormatVersion of
+                undefined -> jsonable_record;
+                2 -> jsonable_record;
+                _ -> persistent_record
+            end,
+            {{Decoder, single, atm_workflow_schema_revision}, any}
+        end
     },
 
     #{
@@ -396,6 +411,7 @@ revision_sanitizer_spec(TargetRevisionNumber) ->
                 CommonRequired
         end,
         optional => #{
+            <<"schemaFormatVersion">> => ?SCHEMA_FORMAT_VERSION_SPEC,
             <<"supplementaryAtmLambdas">> => {json, any}  % validation is performed by atm_workflow_schema_builder
         }
     }.
@@ -409,8 +425,10 @@ lookup_and_sanitize_revision_data(Data) ->
         error ->
             false;
         {ok, RevisionData} ->
+            SchemaFormatVersion = maps:get(<<"schemaFormatVersion">>, RevisionData, undefined),
+
             SanitizedRevisionData = entity_logic_sanitizer:ensure_valid(
-                revision_sanitizer_spec(<<"auto">>),
+                revision_sanitizer_spec(<<"auto">>, SchemaFormatVersion),
                 {revision, <<"auto">>},
                 RevisionData
             ),
