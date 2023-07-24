@@ -1276,8 +1276,11 @@ bad_supplementary_lambdas_data_test(_Config) ->
                 maps:map(fun(_AtmLambdaId, LambdaReferences) ->
                     maps:map(fun(_RevisionNumber, RevisionData) ->
                         % include ONLY the checksum field and drop the actual lambda data
-                        kv_utils:update_with([<<"revision">>, <<"atmLambdaRevision">>], fun(AtmLambdaRevisionData) ->
-                            maps:with([<<"checksum">>], AtmLambdaRevisionData)
+                        kv_utils:update_with([<<"revision">>, <<"atmLambdaRevision">>], fun
+                            (AtmLambdaRevisionData) when is_binary(AtmLambdaRevisionData) ->
+                                json_utils:encode(maps:with([<<"checksum">>], json_utils:decode(AtmLambdaRevisionData)));
+                            (AtmLambdaRevisionData) when is_map(AtmLambdaRevisionData) ->
+                               maps:with([<<"checksum">>], AtmLambdaRevisionData)
                         end, RevisionData)
                     end, LambdaReferences)
                 end, SupplementaryAtmLambdas)
@@ -1573,20 +1576,25 @@ recreate_atm_workflow_schema_from_dump_test_base(#recreate_test_spec{
             ExpectedDuplicateAtmWorkflowSchemaRevision,
             DuplicateAtmWorkflowSchemaRevision
         ),
-        ?assert(are_workflow_schema_dumps_equal(
-            ozt_atm_workflow_schemas:dump_to_json(DuplicateAtmWorkflowSchemaId, DuplicateAtmWorkflowSchema, RevisionNumber),
-            ozt_atm_workflow_schemas:dump_to_json(
-                OriginalAtmWorkflowSchemaId,
-                OriginalAtmWorkflowSchema#od_atm_workflow_schema{
-                    revision_registry = atm_workflow_schema_revision_registry:insert_revision(
-                        RevisionNumber,
-                        ExpectedDuplicateAtmWorkflowSchemaRevision,
-                        OriginalAtmWorkflowSchema#od_atm_workflow_schema.revision_registry
-                    )
-                },
-                RevisionNumber
-            )
-        )),
+        lists:foreach(fun(Version) ->
+            ?assert(are_workflow_schema_dumps_equal(
+                ozt_atm_workflow_schemas:dump_to_json(
+                    DuplicateAtmWorkflowSchemaId, DuplicateAtmWorkflowSchema, RevisionNumber, Version
+                ),
+                ozt_atm_workflow_schemas:dump_to_json(
+                    OriginalAtmWorkflowSchemaId,
+                    OriginalAtmWorkflowSchema#od_atm_workflow_schema{
+                        revision_registry = atm_workflow_schema_revision_registry:insert_revision(
+                            RevisionNumber,
+                            ExpectedDuplicateAtmWorkflowSchemaRevision,
+                            OriginalAtmWorkflowSchema#od_atm_workflow_schema.revision_registry
+                        )
+                    },
+                    RevisionNumber,
+                    Version
+                )
+            ))
+        end, [2, 3]),
 
         CurrentRevisionLambdaReferences = atm_workflow_schema_revision:extract_atm_lambda_references(
             DuplicateAtmWorkflowSchemaRevision
@@ -1683,20 +1691,24 @@ resolve_expected_adjusted_lambdas(#recreate_test_spec{
 generate_supplementary_atm_lambdas(AtmInventoryId) ->
     maps_utils:generate_from_list(fun(_) ->
         RevisionNumbers = lists_utils:random_sublist(lists:seq(1, 100), 1, 6),
+        AtmLambdaRevision = atm_test_utils:example_lambda_revision(),
         RevisionDataObjects = lists:map(fun(RevisionNumber) ->
             #{
                 <<"revision">> => #{
                     <<"originalRevisionNumber">> => RevisionNumber,
-                    <<"atmLambdaRevision">> => ozt_atm_lambdas:example_revision_json()
+                    <<"atmLambdaRevision">> => jsonable_record:to_json(AtmLambdaRevision, atm_lambda_revision)
                 }
             }
         end, RevisionNumbers),
+
         AtmLambdaId = ozt_atm_lambdas:create(AtmInventoryId, hd(RevisionDataObjects)),
         lists:foreach(fun(RevisionData) ->
             ozt_atm_lambdas:update(AtmLambdaId, RevisionData)
         end, tl(RevisionDataObjects)),
         {AtmLambdaId, maps_utils:generate_from_list(fun(RevisionNumber) ->
-            {integer_to_binary(RevisionNumber), ozt_atm_lambdas:dump_to_json(AtmLambdaId, RevisionNumber)}
+            {integer_to_binary(RevisionNumber), ozt_atm_lambdas:dump_to_legacy_json(
+                AtmLambdaId, AtmLambdaRevision, RevisionNumber
+            )}
         end, RevisionNumbers)}
     end, lists:seq(1, rand:uniform(7))).
 

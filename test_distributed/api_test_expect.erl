@@ -654,9 +654,11 @@ json_dump_of_atm_workflow_schema_revision(rest, AtmWorkflowSchemaRevisionData, R
     AtmWorkflowSchemaRevision = jsonable_record:from_json(AtmWorkflowSchemaRevisionData, atm_workflow_schema_revision),
     AtmLambdaReferences = atm_workflow_schema_revision:extract_atm_lambda_references(AtmWorkflowSchemaRevision),
     #{
-        <<"schemaFormatVersion">> => 2,
+        <<"schemaFormatVersion">> => 3,
         <<"originalRevisionNumber">> => RevisionNumber,
-        <<"atmWorkflowSchemaRevision">> => AtmWorkflowSchemaRevisionData,
+        <<"atmWorkflowSchemaRevision">> => persistent_record:encode(
+            AtmWorkflowSchemaRevision, atm_workflow_schema_revision
+        ),
         <<"supplementaryAtmLambdas">> => maps:map(fun(AtmLambdaId, LambdaRevisionNumbers) ->
             AtmLambda = ozt_atm_lambdas:get(AtmLambdaId),
             maps_utils:generate_from_list(fun(LambdaRevisionNumber) ->

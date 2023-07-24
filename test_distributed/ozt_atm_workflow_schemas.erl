@@ -28,7 +28,7 @@
 -export([try_update/3]).
 -export([insert_revision/3, try_insert_revision/4]).
 -export([delete/1]).
--export([dump_to_json/1, dump_to_json/2, dump_to_json/3]).
+-export([dump_to_json/1, dump_to_json/2, dump_to_json/3, dump_to_json/4, dump_to_legacy_json/3]).
 -export([get_largest_revision_number/1]).
 -export([extract_referenced_atm_lambda_ids/1]).
 -export([update_revision_with/3]).
@@ -164,9 +164,68 @@ dump_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema) ->
 ) ->
     json_utils:json_term().
 dump_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevisionNumber) ->
+    dump_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevisionNumber, ?RAND_ELEMENT([2, 3])).
+
+
+-spec dump_to_json(
+    od_atm_workflow_schema:id(),
+    od_atm_workflow_schema:record(),
+    atm_workflow_schema_revision:revision_number(),
+    SchemaFormatVersion :: 2..3
+) ->
+    json_utils:json_term().
+dump_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevisionNumber, 2) ->
+    dump_to_legacy_json(AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevisionNumber);
+dump_to_json(AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevisionNumber, 3) ->
     ozt:rpc(od_atm_workflow_schema, dump_to_json, [
         AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevisionNumber
     ]).
+
+
+-spec dump_to_legacy_json(
+    od_atm_workflow_schema:id(),
+    od_atm_workflow_schema:record(),
+    atm_workflow_schema_revision:revision_number()
+) ->
+    json_utils:json_term().
+dump_to_legacy_json(AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevisionNumber) ->
+    IncludedRevision = atm_workflow_schema_revision_registry:get_revision(
+        IncludedRevisionNumber,
+        AtmWorkflowSchema#od_atm_workflow_schema.revision_registry
+    ),
+
+    #{
+        <<"schemaFormatVersion">> => 2,
+
+        <<"originalAtmWorkflowSchemaId">> => AtmWorkflowSchemaId,
+
+        <<"name">> => AtmWorkflowSchema#od_atm_workflow_schema.name,
+        <<"summary">> => AtmWorkflowSchema#od_atm_workflow_schema.summary,
+
+        <<"revision">> => #{
+            <<"schemaFormatVersion">> => 2,
+            <<"originalRevisionNumber">> => IncludedRevisionNumber,
+            <<"atmWorkflowSchemaRevision">> => jsonable_record:to_json(
+                IncludedRevision, atm_workflow_schema_revision
+            ),
+            <<"supplementaryAtmLambdas">> => maps:map(fun(AtmLambdaId, ReferencedRevisionNumbers) ->
+                {ok, #document{
+                    value = #od_atm_lambda{
+                        revision_registry = AtmLambdaRevisionRegistry
+                    }
+                }} = ozt:rpc(od_atm_lambda, get, [AtmLambdaId]),
+                maps_utils:generate_from_list(fun(ReferencedRevisionNumber) ->
+                    Key = integer_to_binary(ReferencedRevisionNumber),
+                    AtmLambdaRevision = atm_lambda_revision_registry:get_revision(
+                        ReferencedRevisionNumber,
+                        AtmLambdaRevisionRegistry
+                    ),
+                    Value = ozt_atm_lambdas:dump_to_legacy_json(AtmLambdaId, AtmLambdaRevision, ReferencedRevisionNumber),
+                    {Key, Value}
+                end, ReferencedRevisionNumbers)
+            end, atm_workflow_schema_revision:extract_atm_lambda_references(IncludedRevision))
+        }
+    }.
 
 
 -spec get_largest_revision_number(od_atm_workflow_schema:id() | od_atm_workflow_schema:record()) ->
