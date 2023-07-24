@@ -44,7 +44,8 @@
 | email | name
 | full_name | username | password.
 
--type parameter_specs() :: #{key() | {aspect, binary()} => {type_spec(), value_spec() | {all, [value_spec()]}}}.
+-type parameter_spec() :: {type_spec(), value_spec() | {all, [value_spec()]}}.
+-type parameter_specs() :: #{key() | {aspect, binary()} => parameter_spec()}.
 
 %% @formatter:off
 % The 'aspect' key word allows to validate the data provided in aspect
@@ -56,7 +57,7 @@
 }.
 %% @formatter:on
 
--export_type([parameter_specs/0, sanitizer_spec/0]).
+-export_type([parameter_specs/0, sanitizer_spec/0, parameter_spec/0]).
 
 %%%===================================================================
 %%% API

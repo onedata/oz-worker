@@ -487,7 +487,7 @@ revision_sanitizer_spec(TargetRevisionNumber, SchemaFormatVersion) ->
 -spec atm_lambda_revision_value_spec(
     undefined | ?MIN_SUPPORTED_SCHEMA_FORMAT_VERSION..?CURRENT_SCHEMA_FORMAT_VERSION
 ) ->
-    entity_logic_sanitizer:value_spec().
+    entity_logic_sanitizer:parameter_spec().
 atm_lambda_revision_value_spec(undefined) ->
     {{jsonable_record, single, atm_lambda_revision}, any};
 atm_lambda_revision_value_spec(2) ->
