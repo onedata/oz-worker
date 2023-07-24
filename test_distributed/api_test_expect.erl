@@ -524,41 +524,35 @@ private_atm_lambda(gs, Id, AtmLambdaData, Creator) ->
 
 
 -spec json_dump_of_atm_lambda(
-    interface(), od_atm_lambda:id(), map(), atm_lambda_revision:revision_number()
+    interface(), od_atm_lambda:id(), atm_lambda_revision:record(), atm_lambda_revision:revision_number()
 ) -> expectation().
-json_dump_of_atm_lambda(logic, AtmLambdaId, AtmLambdaData, RevisionNumber) ->
-    ?OK_MAP(json_dump_of_atm_lambda(rest, AtmLambdaId, AtmLambdaData, RevisionNumber));
-json_dump_of_atm_lambda(rest, AtmLambdaId, AtmLambdaData, RevisionNumber) ->
+json_dump_of_atm_lambda(logic, AtmLambdaId, AtmLambdaRevision, RevisionNumber) ->
+    ?OK_MAP(json_dump_of_atm_lambda(rest, AtmLambdaId, AtmLambdaRevision, RevisionNumber));
+json_dump_of_atm_lambda(rest, AtmLambdaId, AtmLambdaRevision, RevisionNumber) ->
     #{
-        <<"schemaFormatVersion">> => 2,
+        <<"schemaFormatVersion">> => 3,
 
         <<"originalAtmLambdaId">> => AtmLambdaId,
 
-        <<"revision">> => json_dump_of_atm_lambda_revision(
-            rest,
-            kv_utils:get([<<"revision">>, <<"atmLambdaRevision">>], AtmLambdaData),
-            RevisionNumber
-        )
+        <<"revision">> => json_dump_of_atm_lambda_revision(rest, AtmLambdaRevision, RevisionNumber)
     };
-json_dump_of_atm_lambda(gs, AtmLambdaId, AtmLambdaData, RevisionNumber) ->
-    ?OK_MAP(json_dump_of_atm_lambda(rest, AtmLambdaId, AtmLambdaData, RevisionNumber)).
+json_dump_of_atm_lambda(gs, AtmLambdaId, AtmLambdaRevision, RevisionNumber) ->
+    ?OK_MAP(json_dump_of_atm_lambda(rest, AtmLambdaId, AtmLambdaRevision, RevisionNumber)).
 
 
 -spec json_dump_of_atm_lambda_revision(
-    interface(), map(), atm_lambda_revision:revision_number()
+    interface(), atm_lambda_revision:record(), atm_lambda_revision:revision_number()
 ) -> expectation().
-json_dump_of_atm_lambda_revision(logic, RevisionData, RevisionNumber) ->
-    ?OK_MAP(json_dump_of_atm_lambda_revision(rest, RevisionData, RevisionNumber));
-json_dump_of_atm_lambda_revision(rest, RevisionData, RevisionNumber) ->
+json_dump_of_atm_lambda_revision(logic, AtmLambdaRevision, RevisionNumber) ->
+    ?OK_MAP(json_dump_of_atm_lambda_revision(rest, AtmLambdaRevision, RevisionNumber));
+json_dump_of_atm_lambda_revision(rest, AtmLambdaRevision, RevisionNumber) ->
     #{
-        <<"schemaFormatVersion">> => 2,
+        <<"schemaFormatVersion">> => 3,
         <<"originalRevisionNumber">> => RevisionNumber,
-        <<"atmLambdaRevision">> => RevisionData#{
-            <<"checksum">> => (jsonable_record:from_json(RevisionData, atm_lambda_revision))#atm_lambda_revision.checksum
-        }
+        <<"atmLambdaRevision">> => persistent_record:encode(AtmLambdaRevision, atm_lambda_revision)
     };
-json_dump_of_atm_lambda_revision(gs, RevisionData, RevisionNumber) ->
-    ?OK_MAP(json_dump_of_atm_lambda_revision(rest, RevisionData, RevisionNumber)).
+json_dump_of_atm_lambda_revision(gs, AtmLambdaRevision, RevisionNumber) ->
+    ?OK_MAP(json_dump_of_atm_lambda_revision(rest, AtmLambdaRevision, RevisionNumber)).
 
 
 -spec private_atm_workflow_schema(interface(), od_atm_workflow_schema:id(), map(), aai:subject()) -> expectation().
@@ -634,7 +628,7 @@ json_dump_of_atm_workflow_schema(logic, AtmWorkflowSchemaId, AtmWorkflowSchemaDa
     ?OK_MAP(json_dump_of_atm_workflow_schema(rest, AtmWorkflowSchemaId, AtmWorkflowSchemaData, RevisionNumber));
 json_dump_of_atm_workflow_schema(rest, AtmWorkflowSchemaId, AtmWorkflowSchemaData, RevisionNumber) ->
     #{
-        <<"schemaFormatVersion">> => 2,
+        <<"schemaFormatVersion">> => 3,
 
         <<"originalAtmWorkflowSchemaId">> => AtmWorkflowSchemaId,
 
@@ -666,19 +660,11 @@ json_dump_of_atm_workflow_schema_revision(rest, AtmWorkflowSchemaRevisionData, R
         <<"supplementaryAtmLambdas">> => maps:map(fun(AtmLambdaId, LambdaRevisionNumbers) ->
             AtmLambda = ozt_atm_lambdas:get(AtmLambdaId),
             maps_utils:generate_from_list(fun(LambdaRevisionNumber) ->
-                AtmLambdaData = #{
-                    <<"revision">> => #{
-                        <<"originalRevisionNumber">> => LambdaRevisionNumbers,
-                        <<"atmLambdaRevision">> => jsonable_record:to_json(
-                            atm_lambda_revision_registry:get_revision(
-                                LambdaRevisionNumber, AtmLambda#od_atm_lambda.revision_registry
-                            ),
-                            atm_lambda_revision
-                        )
-                    }
-                },
+                AtmLambdaRevision = atm_lambda_revision_registry:get_revision(
+                    LambdaRevisionNumber, AtmLambda#od_atm_lambda.revision_registry
+                ),
                 AtmLambdaJsonDump = json_dump_of_atm_lambda(
-                    rest, AtmLambdaId, AtmLambdaData, LambdaRevisionNumber
+                    rest, AtmLambdaId, AtmLambdaRevision, LambdaRevisionNumber
                 ),
                 {integer_to_binary(LambdaRevisionNumber), AtmLambdaJsonDump}
             end, LambdaRevisionNumbers)

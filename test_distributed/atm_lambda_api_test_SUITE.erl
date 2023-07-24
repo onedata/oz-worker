@@ -428,10 +428,11 @@ dump_test(Config) ->
     ozt_atm_inventories:add_user(AtmInventoryId, AnotherMember, []),
 
     RevisionNumber = ?RAND_REV_NUMBER(),
+    AtmLambdaRevision = atm_test_utils:example_lambda_revision(),
     AtmLambdaData = #{
         <<"revision">> => #{
             <<"originalRevisionNumber">> => RevisionNumber,
-            <<"atmLambdaRevision">> => ozt_atm_lambdas:example_revision_json()
+            <<"atmLambdaRevision">> => jsonable_record:to_json(AtmLambdaRevision, atm_lambda_revision)
         }
     },
     AtmLambdaId = ozt_atm_lambdas:create(?USER(Creator), AtmInventoryId, AtmLambdaData),
@@ -453,13 +454,13 @@ dump_test(Config) ->
             method = post,
             path = [<<"/atm_lambdas/">>, AtmLambdaId, <<"/dump">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:json_dump_of_atm_lambda(rest, AtmLambdaId, AtmLambdaData, RevisionNumber)
+            expected_body = api_test_expect:json_dump_of_atm_lambda(rest, AtmLambdaId, AtmLambdaRevision, RevisionNumber)
         },
         logic_spec = #logic_spec{
             module = atm_lambda_logic,
             function = dump,
             args = [auth, AtmLambdaId, data],
-            expected_result = api_test_expect:json_dump_of_atm_lambda(logic, AtmLambdaId, AtmLambdaData, RevisionNumber)
+            expected_result = api_test_expect:json_dump_of_atm_lambda(logic, AtmLambdaId, AtmLambdaRevision, RevisionNumber)
         },
         gs_spec = #gs_spec{
             operation = create,
@@ -467,7 +468,7 @@ dump_test(Config) ->
                 type = od_atm_lambda, id = AtmLambdaId,
                 aspect = dump, scope = private
             },
-            expected_result_op = api_test_expect:json_dump_of_atm_lambda(gs, AtmLambdaId, AtmLambdaData, RevisionNumber)
+            expected_result_op = api_test_expect:json_dump_of_atm_lambda(gs, AtmLambdaId, AtmLambdaRevision, RevisionNumber)
         },
         data_spec = #data_spec{
             required = [
@@ -952,14 +953,14 @@ dump_revision_test(Config) ->
 
     RevisionNumber = ?RAND_REV_NUMBER(),
     RevisionNumberBin = integer_to_binary(RevisionNumber),
-    AtmLambdaRevisionData = ozt_atm_lambdas:example_revision_json(),
+    AtmLambdaRevision = atm_test_utils:example_lambda_revision(),
     AtmLambdaData = #{
         <<"name">> => atm_test_utils:example_name(),
         <<"summary">> => atm_test_utils:example_summary(),
 
         <<"revision">> => #{
             <<"originalRevisionNumber">> => RevisionNumber,
-            <<"atmLambdaRevision">> => AtmLambdaRevisionData
+            <<"atmLambdaRevision">> => jsonable_record:to_json(AtmLambdaRevision, atm_lambda_revision)
         }
     },
     AtmLambdaId = ozt_atm_lambdas:create(?USER(Creator), AtmInventoryId, AtmLambdaData),
@@ -981,13 +982,13 @@ dump_revision_test(Config) ->
             method = post,
             path = [<<"/atm_lambdas/">>, AtmLambdaId, <<"/revision/">>, RevisionNumberBin, <<"/dump">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:json_dump_of_atm_lambda_revision(rest, AtmLambdaRevisionData, RevisionNumber)
+            expected_body = api_test_expect:json_dump_of_atm_lambda_revision(rest, AtmLambdaRevision, RevisionNumber)
         },
         logic_spec = LogicSpec = #logic_spec{
             module = atm_lambda_logic,
             function = dump_revision,
             args = [auth, AtmLambdaId, RevisionNumber],
-            expected_result = api_test_expect:json_dump_of_atm_lambda_revision(logic, AtmLambdaRevisionData, RevisionNumber)
+            expected_result = api_test_expect:json_dump_of_atm_lambda_revision(logic, AtmLambdaRevision, RevisionNumber)
         },
         gs_spec = GsSpec = #gs_spec{
             operation = create,
@@ -995,7 +996,7 @@ dump_revision_test(Config) ->
                 type = od_atm_lambda, id = AtmLambdaId,
                 aspect = {dump_revision, RevisionNumberBin}, scope = private
             },
-            expected_result_op = api_test_expect:json_dump_of_atm_lambda_revision(gs, AtmLambdaRevisionData, RevisionNumber)
+            expected_result_op = api_test_expect:json_dump_of_atm_lambda_revision(gs, AtmLambdaRevision, RevisionNumber)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -1272,10 +1273,12 @@ recreate_atm_lambda_test(_Config) ->
             % check if the reference to the original lambda is set
             ?assertMatch(#od_atm_lambda{original_atm_lambda = OriginalAtmLambdaId}, DuplicateAtmLambda),
 
-            ?assert(are_lambda_dumps_equal(
-                ozt_atm_lambdas:dump_to_json(DuplicateAtmLambdaId, DuplicateAtmLambda, RevisionNumber),
-                ozt_atm_lambdas:dump_to_json(OriginalAtmLambdaId, OriginalAtmLambda, RevisionNumber)
-            )),
+            lists:foreach(fun(Version) ->
+                ?assert(are_lambda_dumps_equal(
+                    ozt_atm_lambdas:dump_to_json(DuplicateAtmLambdaId, DuplicateAtmLambda, RevisionNumber, Version),
+                    ozt_atm_lambdas:dump_to_json(OriginalAtmLambdaId, OriginalAtmLambda, RevisionNumber, Version)
+                ))
+            end, [2, 3]),
 
             ?assertEqual(
                 atm_lambda_revision_registry:get_revision(RevisionNumber, DuplicateAtmLambda#od_atm_lambda.revision_registry),
