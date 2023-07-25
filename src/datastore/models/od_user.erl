@@ -837,7 +837,7 @@ get_record_struct(16) ->
 
         {client_tokens, [string]},
         {space_aliases, #{string => string}},
-        {space_membership_requests, {custom, string, {persistent_record, encode, decode, space_membership_requests}}}, % new field
+        {space_membership_requests, {custom, string, {persistent_record, to_string, from_string, space_membership_requests}}}, % new field
 
         {oz_privileges, [atom]},
         {eff_oz_privileges, [atom]},

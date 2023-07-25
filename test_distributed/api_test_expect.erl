@@ -549,7 +549,7 @@ json_dump_of_atm_lambda_revision(rest, AtmLambdaRevision, RevisionNumber) ->
     #{
         <<"schemaFormatVersion">> => 3,
         <<"originalRevisionNumber">> => RevisionNumber,
-        <<"atmLambdaRevision">> => persistent_record:encode(AtmLambdaRevision, atm_lambda_revision)
+        <<"atmLambdaRevision">> => persistent_record:to_json(AtmLambdaRevision, atm_lambda_revision)
     };
 json_dump_of_atm_lambda_revision(gs, AtmLambdaRevision, RevisionNumber) ->
     ?OK_MAP(json_dump_of_atm_lambda_revision(rest, AtmLambdaRevision, RevisionNumber)).
@@ -656,7 +656,7 @@ json_dump_of_atm_workflow_schema_revision(rest, AtmWorkflowSchemaRevisionData, R
     #{
         <<"schemaFormatVersion">> => 3,
         <<"originalRevisionNumber">> => RevisionNumber,
-        <<"atmWorkflowSchemaRevision">> => persistent_record:encode(
+        <<"atmWorkflowSchemaRevision">> => persistent_record:to_json(
             AtmWorkflowSchemaRevision, atm_workflow_schema_revision
         ),
         <<"supplementaryAtmLambdas">> => maps:map(fun(AtmLambdaId, LambdaRevisionNumbers) ->

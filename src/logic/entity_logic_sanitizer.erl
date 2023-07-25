@@ -446,7 +446,7 @@ sanitize_type({jsonable_record, list, RecordType}, Key, Values) ->
     end;
 sanitize_type({persistent_record, single, RecordType}, Key, Value) ->
     try
-        persistent_record:decode(Value, RecordType)
+        persistent_record:from_json(Value, RecordType)
     catch
         throw:{error, _} = Error ->
             throw(Error);

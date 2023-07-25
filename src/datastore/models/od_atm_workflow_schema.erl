@@ -133,7 +133,7 @@ dump_revision_to_json(#od_atm_workflow_schema{revision_registry = RevisionRegist
     #{
         <<"schemaFormatVersion">> => ?CURRENT_SCHEMA_FORMAT_VERSION,
         <<"originalRevisionNumber">> => RevisionNumber,
-        <<"atmWorkflowSchemaRevision">> => persistent_record:encode(IncludedRevision, atm_workflow_schema_revision),
+        <<"atmWorkflowSchemaRevision">> => persistent_record:to_json(IncludedRevision, atm_workflow_schema_revision),
         <<"supplementaryAtmLambdas">> => maps:map(fun(AtmLambdaId, ReferencedRevisionNumbers) ->
             {ok, #document{value = AtmLambda}} = od_atm_lambda:get(AtmLambdaId),
             maps_utils:generate_from_list(fun(ReferencedRevisionNumber) ->
@@ -187,7 +187,7 @@ get_record_struct(1) ->
         {name, string},
         {summary, string},
 
-        {revision_registry, {custom, string, {persistent_record, encode, decode, atm_workflow_schema_revision_registry}}},
+        {revision_registry, {custom, string, {persistent_record, to_string, from_string, atm_workflow_schema_revision_registry}}},
 
         {original_atm_workflow_schema, string},
         {atm_inventory, string},

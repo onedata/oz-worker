@@ -1277,9 +1277,9 @@ bad_supplementary_lambdas_data_test(_Config) ->
                     maps:map(fun(_RevisionNumber, RevisionData) ->
                         % include ONLY the checksum field and drop the actual lambda data
                         kv_utils:update_with([<<"revision">>, <<"atmLambdaRevision">>], fun
-                            (AtmLambdaRevisionData) when is_binary(AtmLambdaRevisionData) ->
-                                json_utils:encode(maps:with([<<"checksum">>], json_utils:decode(AtmLambdaRevisionData)));
-                            (AtmLambdaRevisionData) when is_map(AtmLambdaRevisionData) ->
+                            (#{<<"_data">> := Data}) ->  % schemaFormatVersion == 3 dump
+                                #{<<"_data">> => maps:with([<<"checksum">>], Data)};
+                            (AtmLambdaRevisionData) ->
                                maps:with([<<"checksum">>], AtmLambdaRevisionData)
                         end, RevisionData)
                     end, LambdaReferences)
