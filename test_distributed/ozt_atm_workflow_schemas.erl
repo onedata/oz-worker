@@ -209,11 +209,9 @@ dump_to_legacy_json(AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevisionNumb
                 IncludedRevision, atm_workflow_schema_revision
             ),
             <<"supplementaryAtmLambdas">> => maps:map(fun(AtmLambdaId, ReferencedRevisionNumbers) ->
-                {ok, #document{
-                    value = #od_atm_lambda{
-                        revision_registry = AtmLambdaRevisionRegistry
-                    }
-                }} = ozt:rpc(od_atm_lambda, get, [AtmLambdaId]),
+                #od_atm_lambda{revision_registry = AtmLambdaRevisionRegistry} = ozt_atm_lambdas:get(
+                    AtmLambdaId
+                ),
                 maps_utils:generate_from_list(fun(ReferencedRevisionNumber) ->
                     Key = integer_to_binary(ReferencedRevisionNumber),
                     AtmLambdaRevision = atm_lambda_revision_registry:get_revision(
