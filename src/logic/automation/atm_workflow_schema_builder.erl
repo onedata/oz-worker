@@ -253,7 +253,14 @@ build_lambda_search_ctx(OriginalAtmLambdaId, RevisionNumber, AtmLambdaData) ->
             undefined ->
                 undefined;
             _ ->
-                kv_utils:get([<<"revision">>, <<"atmLambdaRevision">>, <<"checksum">>], AtmLambdaData, undefined)
+                case maps:get(<<"revision">>, AtmLambdaData, undefined) of
+                    #{<<"schemaFormatVersion">> := 3, <<"atmLambdaRevision">> := AtmLambdaRevision} ->
+                        kv_utils:get([<<"_data">>, <<"checksum">>], AtmLambdaRevision, undefined);
+                    AtmLambdaRevisionDump ->
+                        kv_utils:get(
+                            [<<"atmLambdaRevision">>, <<"checksum">>], AtmLambdaRevisionDump, undefined
+                        )
+                end
         end,
         json_dump = AtmLambdaData
     }.

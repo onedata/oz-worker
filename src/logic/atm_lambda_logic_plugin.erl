@@ -14,6 +14,7 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
+-include("automation.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/automation/automation.hrl").
@@ -388,15 +389,20 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
         optional => #{
             % this can be an arbitrary string and is not verified, as for example a dump
             % from another Onezone may be used to create a lambda
-            <<"originalAtmLambdaId">> => {binary, non_empty}
+            <<"originalAtmLambdaId">> => {binary, non_empty},
+            <<"schemaFormatVersion">> => ?SCHEMA_FORMAT_VERSION_SPEC
         }
     };
 
-validate(#el_req{operation = create, gri = #gri{aspect = parse_revision}}) -> #{
-    required => #{
-        <<"atmLambdaRevision">> => {{jsonable_record, single, atm_lambda_revision}, any}
-    }
-};
+validate(#el_req{operation = create, data = Data, gri = #gri{aspect = parse_revision}}) ->
+    SchemaFormatVersion = maps:get(<<"schemaFormatVersion">>, Data, undefined),
+
+    #{
+        required => #{
+            <<"atmLambdaRevision">> => atm_lambda_revision_value_spec(SchemaFormatVersion)
+        },
+        optional => #{<<"schemaFormatVersion">> => ?SCHEMA_FORMAT_VERSION_SPEC}
+    };
 
 validate(#el_req{operation = create, gri = #gri{aspect = dump}}) -> #{
     required => #{
@@ -404,8 +410,9 @@ validate(#el_req{operation = create, gri = #gri{aspect = dump}}) -> #{
     }
 };
 
-validate(#el_req{operation = create, gri = #gri{aspect = {revision, TargetRevisionNumber}}}) ->
-    revision_sanitizer_spec(TargetRevisionNumber);
+validate(#el_req{operation = create, data = Data, gri = #gri{aspect = {revision, TargetRevisionNumber}}}) ->
+    SchemaFormatVersion = maps:get(<<"schemaFormatVersion">>, Data, undefined),
+    revision_sanitizer_spec(TargetRevisionNumber, SchemaFormatVersion);
 
 validate(#el_req{operation = create, gri = #gri{aspect = {dump_revision, _}}}) -> #{
     required => #{
@@ -426,7 +433,8 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     required => #{
         % validation of revision data is performed during the lambda update procedure
         <<"revision">> => {json, any}
-    }
+    },
+    optional => #{<<"schemaFormatVersion">> => ?SCHEMA_FORMAT_VERSION_SPEC}
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = {revision, _}}}) -> #{
@@ -440,8 +448,12 @@ validate(#el_req{operation = update, gri = #gri{aspect = {revision, _}}}) -> #{
 %%%===================================================================
 
 %% @private
--spec revision_sanitizer_spec(binary()) -> entity_logic_sanitizer:sanitizer_spec().
-revision_sanitizer_spec(TargetRevisionNumber) ->
+-spec revision_sanitizer_spec(
+    binary(),
+    undefined | ?MIN_SUPPORTED_SCHEMA_FORMAT_VERSION..?CURRENT_SCHEMA_FORMAT_VERSION
+) ->
+    entity_logic_sanitizer:sanitizer_spec().
+revision_sanitizer_spec(TargetRevisionNumber, SchemaFormatVersion) ->
     % NOTE: the target revision is generally given in the aspect, but a special "auto"
     % keyword is accepted to indicate that the original revision number should be taken
     % and then originalRevisionNumber key is mandatory. This is used especially when
@@ -457,7 +469,7 @@ revision_sanitizer_spec(TargetRevisionNumber) ->
                     false
                 end
         end},
-        <<"atmLambdaRevision">> => {{jsonable_record, single, atm_lambda_revision}, any}
+        <<"atmLambdaRevision">> => atm_lambda_revision_value_spec(SchemaFormatVersion)
     },
 
     #{
@@ -466,8 +478,22 @@ revision_sanitizer_spec(TargetRevisionNumber) ->
                 CommonRequired#{<<"originalRevisionNumber">> => {integer, {not_lower_than, 1}}};
             _ ->
                 CommonRequired
-        end
+        end,
+        optional => #{<<"schemaFormatVersion">> => ?SCHEMA_FORMAT_VERSION_SPEC}
     }.
+
+
+%% @private
+-spec atm_lambda_revision_value_spec(
+    undefined | ?MIN_SUPPORTED_SCHEMA_FORMAT_VERSION..?CURRENT_SCHEMA_FORMAT_VERSION
+) ->
+    entity_logic_sanitizer:parameter_spec().
+atm_lambda_revision_value_spec(undefined) ->
+    {{jsonable_record, single, atm_lambda_revision}, any};
+atm_lambda_revision_value_spec(2) ->
+    {{jsonable_record, single, atm_lambda_revision}, any};
+atm_lambda_revision_value_spec(_) ->
+    {{persistent_record, single, atm_lambda_revision}, any}.
 
 
 %% @private
@@ -475,8 +501,10 @@ revision_sanitizer_spec(TargetRevisionNumber) ->
     entity_logic:sanitized_data() | no_return().
 lookup_and_sanitize_revision_data(Data) ->
     RevisionData = maps:get(<<"revision">>, Data),
+    SchemaFormatVersion = maps:get(<<"schemaFormatVersion">>, RevisionData, undefined),
+
     entity_logic_sanitizer:ensure_valid(
-        revision_sanitizer_spec(<<"auto">>),
+        revision_sanitizer_spec(<<"auto">>, SchemaFormatVersion),
         {revision, <<"auto">>},
         RevisionData
     ).

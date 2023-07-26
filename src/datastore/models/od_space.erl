@@ -400,7 +400,7 @@ get_record_struct(14) ->
         {eff_providers, #{string => {integer, [{atom, string}]}}},
         {eff_harvesters, #{string => [{atom, string}]}},
 
-        {support_parameters_registry, {custom, string, {persistent_record, encode, decode, support_parameters_registry}}},
+        {support_parameters_registry, {custom, string, {persistent_record, to_string, from_string, support_parameters_registry}}},
 
         {creation_time, integer},
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
@@ -437,7 +437,7 @@ get_record_struct(15) ->
         {eff_providers, #{string => {integer, [{atom, string}]}}},
         {eff_harvesters, #{string => [{atom, string}]}},
 
-        {support_parameters_registry, {custom, string, {persistent_record, encode, decode, support_parameters_registry}}},
+        {support_parameters_registry, {custom, string, {persistent_record, to_string, from_string, support_parameters_registry}}},
 
         {creation_time, integer},
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},

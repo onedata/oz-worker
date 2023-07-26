@@ -30,7 +30,7 @@ encode_decode_test() ->
     ),
 
     lists_utils:generate(fun() ->
-        ?assert(eunit_utils:is_equal_after_db_encode_and_decode(persistent_record:decode(
+        ?assert(eunit_utils:is_equal_after_db_encode_and_decode(persistent_record:from_string(
             random_record_db_encoded(), space_membership_requests
         ))),
         ?assert(eunit_utils:is_equal_after_json_encode_and_decode(jsonable_record:from_json(

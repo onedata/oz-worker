@@ -30,7 +30,7 @@
 -export([get_atm_workflow_schemas/1]).
 -export([link_to_inventory/2]).
 -export([unlink_from_inventory/2]).
--export([dump_to_json/1, dump_to_json/2, dump_to_json/3]).
+-export([dump_to_json/1, dump_to_json/2, dump_to_json/3, dump_to_json/4, dump_to_legacy_json/3]).
 -export([get_largest_revision_number/1, get_revision_with_largest_number/1]).
 -export([find_duplicate/3]).
 -export([substitute_lambdas_for_duplicates/2, substitute_lambdas_for_duplicates/3]).
@@ -172,9 +172,48 @@ dump_to_json(AtmLambdaId, AtmLambda) ->
 ) ->
     json_utils:json_term().
 dump_to_json(AtmLambdaId, AtmLambda, IncludedRevisionNumber) ->
+    dump_to_json(AtmLambdaId, AtmLambda, IncludedRevisionNumber, ?RAND_ELEMENT([2, 3])).
+
+
+-spec dump_to_json(
+    od_atm_lambda:id(),
+    od_atm_lambda:record(),
+    atm_lambda_revision:revision_number(),
+    SchemaFormatVersion :: 2..3
+) ->
+    json_utils:json_term().
+dump_to_json(AtmLambdaId, AtmLambda, IncludedRevisionNumber, 2) ->
+    IncludedRevision = atm_lambda_revision_registry:get_revision(
+        IncludedRevisionNumber,
+        AtmLambda#od_atm_lambda.revision_registry
+    ),
+    dump_to_legacy_json(AtmLambdaId, IncludedRevision, IncludedRevisionNumber);
+dump_to_json(AtmLambdaId, AtmLambda, IncludedRevisionNumber, 3) ->
     ozt:rpc(od_atm_lambda, dump_to_json, [
         AtmLambdaId, AtmLambda, IncludedRevisionNumber
     ]).
+
+
+-spec dump_to_legacy_json(
+    od_atm_lambda:id(),
+    atm_lambda_revision:record(),
+    atm_lambda_revision:revision_number()
+) ->
+    json_utils:json_term().
+dump_to_legacy_json(AtmLambdaId, AtmLambdaRevision, IncludedRevisionNumber) ->
+    #{
+        <<"schemaFormatVersion">> => 2,
+        <<"originalAtmLambdaId">> => AtmLambdaId,
+
+        <<"revision">> => #{
+            <<"schemaFormatVersion">> => 2,
+            <<"originalRevisionNumber">> => IncludedRevisionNumber,
+            <<"atmLambdaRevision">> => jsonable_record:to_json(
+                AtmLambdaRevision, atm_lambda_revision
+            )
+        }
+    }.
+
 
 
 -spec get_largest_revision_number(od_atm_lambda:id() | od_atm_lambda:record()) ->

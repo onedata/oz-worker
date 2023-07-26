@@ -14,6 +14,7 @@
 -module(od_atm_lambda).
 -author("Lukasz Opiola").
 
+-include("automation.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
@@ -113,7 +114,7 @@ critical_section(AtmLambdaId, Fun) ->
 -spec dump_to_json(id(), record(), atm_lambda_revision:revision_number()) -> json_utils:json_map().
 dump_to_json(AtmLambdaId, AtmLambda, IncludedRevisionNumber) ->
     #{
-        <<"schemaFormatVersion">> => 2,
+        <<"schemaFormatVersion">> => ?CURRENT_SCHEMA_FORMAT_VERSION,
 
         <<"originalAtmLambdaId">> => AtmLambdaId,
 
@@ -125,9 +126,9 @@ dump_to_json(AtmLambdaId, AtmLambda, IncludedRevisionNumber) ->
 dump_revision_to_json(#od_atm_lambda{revision_registry = RevisionRegistry}, RevisionNumber) ->
     IncludedRevision = atm_lambda_revision_registry:get_revision(RevisionNumber, RevisionRegistry),
     #{
-        <<"schemaFormatVersion">> => 2,
+        <<"schemaFormatVersion">> => ?CURRENT_SCHEMA_FORMAT_VERSION,
         <<"originalRevisionNumber">> => RevisionNumber,
-        <<"atmLambdaRevision">> => jsonable_record:to_json(IncludedRevision, atm_lambda_revision)
+        <<"atmLambdaRevision">> => persistent_record:to_json(IncludedRevision, atm_lambda_revision)
     }.
 
 
@@ -147,7 +148,7 @@ get_record_version() ->
     datastore_model:record_struct().
 get_record_struct(1) ->
     {record, [
-        {revision_registry, {custom, string, {persistent_record, encode, decode, atm_lambda_revision_registry}}},
+        {revision_registry, {custom, string, {persistent_record, to_string, from_string, atm_lambda_revision_registry}}},
 
         {original_atm_lambda, string},
         {atm_inventories, [string]},

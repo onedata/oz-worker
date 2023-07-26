@@ -27,7 +27,8 @@
 | list_of_binaries | integer | integer_or_infinity | float | json
 | token | invite_token | token_type | caveats
 | boolean | ipv4_address | list_of_ipv4_addresses
-| {jsonable_record, single | list, jsonable_record:record_type()}.
+| {jsonable_record, single | list, jsonable_record:record_type()}
+| {persistent_record, single, module()}.
 
 -type value_spec() :: any | non_empty
 | fun((term()) -> boolean())
@@ -43,7 +44,8 @@
 | email | name
 | full_name | username | password.
 
--type parameter_specs() :: #{key() | {aspect, binary()} => {type_spec(), value_spec() | {all, [value_spec()]}}}.
+-type parameter_spec() :: {type_spec(), value_spec() | {all, [value_spec()]}}.
+-type parameter_specs() :: #{key() | {aspect, binary()} => parameter_spec()}.
 
 %% @formatter:off
 % The 'aspect' key word allows to validate the data provided in aspect
@@ -55,7 +57,7 @@
 }.
 %% @formatter:on
 
--export_type([parameter_specs/0, sanitizer_spec/0]).
+-export_type([parameter_specs/0, sanitizer_spec/0, parameter_spec/0]).
 
 %%%===================================================================
 %%% API
@@ -436,6 +438,15 @@ sanitize_type({jsonable_record, list, RecordType}, Key, Values) ->
         lists:map(fun(Value) ->
             sanitize_type({jsonable_record, single, RecordType}, Key, Value)
         end, Values)
+    catch
+        throw:{error, _} = Error ->
+            throw(Error);
+        _:_ ->
+            throw(?ERROR_BAD_DATA(Key))
+    end;
+sanitize_type({persistent_record, single, RecordType}, Key, Value) ->
+    try
+        persistent_record:from_json(Value, RecordType)
     catch
         throw:{error, _} = Error ->
             throw(Error);
