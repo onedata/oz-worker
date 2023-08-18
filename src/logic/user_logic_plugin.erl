@@ -444,11 +444,18 @@ update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = Data}) ->
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = UserId, aspect = instance}}) ->
-    session:delete_all_user_sessions(UserId),
-    % Invalidate client tokens
-    temporary_token_secret:delete_for_subject(?SUB(user, UserId)),
-    token_logic:delete_all_user_named_tokens(?USER(UserId), UserId),
-    entity_graph:delete_with_relations(od_user, UserId);
+    fun(#od_user{full_name = FullName, username = Username}) ->
+        session:delete_all_user_sessions(UserId),
+        % Invalidate client tokens
+        temporary_token_secret:delete_for_subject(?SUB(user, UserId)),
+        token_logic:delete_all_user_named_tokens(?USER(UserId), UserId),
+        entity_graph:delete_with_relations(od_user, UserId),
+        ?info("User account '~ts' ('~s') has been deleted (~s)", [
+            FullName,
+            utils:ensure_defined(Username, <<"no username">>),
+            UserId
+        ])
+    end;
 
 delete(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}}) ->
     update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = #{
