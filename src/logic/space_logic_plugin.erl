@@ -721,7 +721,7 @@ update(#el_req{gri = #gri{id = SpaceId, aspect = {support_parameters, ProviderId
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
-    fun(#od_space{harvesters = Harvesters}) ->
+    fun(#od_space{name = Name, harvesters = Harvesters}) ->
         lists:foreach(fun(HarvesterId) ->
             harvester_indices:update_stats(HarvesterId, all,
                 fun(ExistingStats) ->
@@ -737,7 +737,8 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
             ),
             space_marketplace:delete(SpaceName, SpaceId, Tags),
             entity_graph:delete_with_relations(od_space, SpaceId)
-        end)
+        end),
+        ?info("Space '~ts' has been deleted (~s)", [Name, SpaceId])
     end;
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
