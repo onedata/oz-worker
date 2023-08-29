@@ -4,6 +4,24 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.3
+
+-   **VFS-11231** Refactored oneclient connection pool to improve
+    stability.
+-   **VFS-11100** Web GUI: Added support for global URLs to files for
+    authenticated users.
+-   **VFS-10962** Web GUI: Improved WebSocket auto-reconnect after
+    connection lost (e.g. on system suspend).
+-   **VFS-10895** Added detailed specification of needed file properties
+    in "file" automation type, including narrowing file properties set
+    passed to lambda functions during automation workflow exectution.
+-   **VFS-10782** Added the possibility to state the reason when
+    rejecting a membership request posted via the Space Marketplace.
+-   **VFS-10664** Web GUI: Space Marketplace Service Pack 1, including:
+    reject confirmation view, new information tiles on space overview,
+    space configuration unsaved changes guard, UX fixes.
+
+
 ### 21.02.2
 
 -   **VFS-10889** Web GUI: Added information about unsupported features
