@@ -47,3 +47,7 @@
 ## Set default heap size (1024 MB with 8byte word), do not kill processes
 +hmax 134217728
 +hmaxk false
+
+# the default printable characters detection is set to latin1, but the system operates on unicode
+# this impacts the printing to console and logs during runtime
++pc unicode
