@@ -18,6 +18,7 @@
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
+-export([get_ctx/0]).
 -export([actual_timestamp/0]).
 
 %% datastore_model callbacks
@@ -122,6 +123,10 @@ to_string(HandleId) ->
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     handle_logic_plugin.
+
+-spec get_ctx() -> datastore:ctx().
+get_ctx() ->
+    ?CTX.
 
 %%--------------------------------------------------------------------
 %% @equiv global_clock:timestamp_seconds().
