@@ -51,14 +51,21 @@
 %%%===================================================================
 
 
--spec index(calendar:datetime(), od_handle:id()) -> index().
-index(DataStampBin, HandleId) ->
-    <<DataStampBin/binary, ?INDEX_SEP, HandleId/binary>>.
+-spec index(time:seconds(), od_handle:id()) -> index().
+index(TimeSeconds, HandleId) ->
+%%    najstarszy na początku
+    <<(integer_to_binary(TimeSeconds))/binary, ?INDEX_SEP, HandleId/binary>>.
 
 %% powinno się dodawać posortowane po datach
 -spec add(calendar:datetime(), od_handle:id(), od_handle_service:id()) -> ok.
 add(DataStamp, HandleId, HandleServiceId) ->
-    Link = {index(term_to_binary(DataStamp), HandleId), HandleId},
+%%    Link = {index(term_to_binary(DataStamp), HandleId), HandleId},
+    Link = {index((DataStamp), HandleId), HandleId},
+%%    DataStamp -> TimeStamp
+%%    timestampy tu i w testach
+
+%%    get_current
+%%    link to string_utils
     lists:foreach(fun(TreeId) ->
         case datastore_model:add_links(?CTX, ?FOREST, TreeId, Link) of
             {ok, _} -> ok;
@@ -84,10 +91,19 @@ list(WhatToList, ListingOpts) ->
         all -> ?ALL_TREE_ID;
         _ -> ?SERVICE_TREE_ID(WhatToList)
     end,
+    From =maps:get(from, ListingOpts, <<>>),
     Token = maps:get(resumption_token, ListingOpts, <<>>),
+    Start = case Token of
+        <<>> ->
+            case From of
+                <<>> -> Token;
+                _ -> term_to_binary(From)
+            end ;
+        _ -> Token
+    end,
     FoldOpts = #{
         size => ?SIZE,
-        prev_link_name => Token,
+        prev_link_name => Start,
         inclusive => false
     },
     FoldFun = fun(#link{name = Index, target = _HandleId}, Acc) ->

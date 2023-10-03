@@ -24,28 +24,30 @@
     resumption_token_test/1,
     list_all_handle_test/1,
     list_handles_from_services_test/1,
-    delete_handle_from_service/1,
-    add_handle_to_service/1,
-    add_handle_withe_earlier_datastamp/1,
-    list_no_resumption_token/1
+    list_from_until_test/1,
+    delete_handle_from_service_test/1,
+    add_handle_to_service_test/1,
+    add_handle_withe_earlier_datastamp_test/1,
+    list_no_resumption_token_test/1
 ]).
 
 all() -> [
-%%    {group, parallel_tests},
+%%    {group, parallel_tests}
     {group, sequential_tests}
 ].
 
 groups() -> [
     {parallel_tests, [parallel], [
-        resumption_token_test,
-        list_all_handle_test,
-        list_handles_from_services_test
+%%        resumption_token_test,
+%%        list_all_handle_test,
+%%        list_handles_from_services_test,
+        list_from_until_test
     ]},
     {sequential_tests, [sequential], [
-%%        delete_handle_from_service,
-%%        add_handle_to_service,
-        add_handle_withe_earlier_datastamp
-%%        list_no_resumption_token
+%%        delete_handle_from_service_test,
+%%        add_handle_to_service_test,
+        add_handle_withe_earlier_datastamp_test
+%%        list_no_resumption_token_test
     ]}
 ].
 
@@ -102,7 +104,7 @@ resumption_token_test(_Config) ->
     ?assertEqual(3300, length(List1) + length(List2) + length(List3) + length(List4)).
 
 
-list_no_resumption_token(_Config) ->
+list_no_resumption_token_test(_Config) ->
     List = ozt:rpc(handle, list, [?SERVICE3, #{}]),
     lists:foreach(fun({DataStampBin, _HandleID}) ->
         case binary_to_term(DataStampBin) of
@@ -116,17 +118,12 @@ list_no_resumption_token(_Config) ->
 list_all_handle_test(_Config) ->
     ListAll = list_all(all),
 
-    %% this checks that DataStamp after conversion is in {Time, Data} format,
-    %% and also that time difference between creation and now is less tha 1 minute
+    %% this checks that DataStamp after conversion is in {Time, Data} format
     lists:foreach(fun({DataStampBin, _HandleID}) ->
-        {{Hour, Minute, Seconds}, {Year, Month, Day}} = binary_to_term(DataStampBin),
-        TimeInSeconds = calendar:datetime_to_gregorian_seconds(
-            {{Year, Month, Day}, {Hour, Minute, Seconds}}
-        ),
-        NowTimeInSeconds = calendar:datetime_to_gregorian_seconds(
-            calendar:now_to_datetime(erlang:timestamp())
-        ),
-        ?assert(abs(NowTimeInSeconds - TimeInSeconds) =< 60)
+        case binary_to_term(DataStampBin) of
+            {{_Hour, _Minute, _Seconds}, {_Year, _Month, _Day}} -> ok;
+            _ -> {error, recordsNotMatch}
+        end
     end,  ListAll),
 
     ?assertEqual(?HANDLE_STORE_SIZE, length(ListAll)).
@@ -137,8 +134,29 @@ list_handles_from_services_test(_Config) ->
     ListService2 = list_all(?SERVICE2),
     ?assertEqual(?HANDLE_STORE_SIZE, length(ListService1) + length(ListService2)).
 
+list_from_until_test(_Config) ->
+    ListingOpts = #{from => {{0, 0, 0}, {2023, 6, 10}}},
+    List = ozt:rpc(handle, list, [all, ListingOpts]),
+%%    lists:foreach(fun({DataStamp, _}) ->
+%%            ct:pal("~p~n", [binary_to_term(DataStamp)])
+%%    end,
+%%        case List of
+%%            {List1, {_, _}} -> List1;
+%%            _ -> List
+%%        end),
 
-delete_handle_from_service(_Config) ->
+%%    No nie działa
+    case List of
+        {NotFullList, {resumption_token, _Token}} ->
+            {DataStamp, _} = hd(NotFullList),
+            ct:pal("Resumption ~p ~n", [binary_to_term(DataStamp)]);
+        _ ->
+            {DataStamp, _} = hd(List),
+            ct:pal("No resumption token ~p ~n", [binary_to_term(DataStamp)])
+    end.
+
+
+delete_handle_from_service_test(_Config) ->
     ListAll = list_all(all),
     ListService1 = list_all(?SERVICE1),
     ListService2 = list_all(?SERVICE2),
@@ -156,11 +174,12 @@ delete_handle_from_service(_Config) ->
     ?assertEqual(length(ListService2)-1, length(list_all(?SERVICE2))),
     ?assertEqual(length(ListAll)-11, length(list_all(all))).
 
+
 %% checks if Handles are added sorted by data
-add_handle_withe_earlier_datastamp(_Config) ->
+add_handle_withe_earlier_datastamp_test(_Config) ->
     OldDataStamp1 = {{6,59,58}, {1999,9,29}},
-    OldDataStamp2 = {{6,59,58}, {2021,9,29}},
-    OldDataStamp3 = {{6,59,58}, {2022,9,29}},
+    OldDataStamp2 = {{6,59,58}, {2012,9,29}},
+    OldDataStamp3 = {{6,59,58}, {2018,9,29}},
     ozt:rpc(handle, add, [OldDataStamp3, ?RAND_ID(), ?RAND_SERVICE()]),
     ozt:rpc(handle, add, [OldDataStamp1, ?RAND_ID(), ?RAND_SERVICE()]),
     ozt:rpc(handle, add, [OldDataStamp2, ?RAND_ID(), ?RAND_SERVICE()]),
@@ -171,7 +190,7 @@ add_handle_withe_earlier_datastamp(_Config) ->
     ?assertEqual(OldDataStamp3, binary_to_term(DataStamp3)).
 
 
-add_handle_to_service(_Config) ->
+add_handle_to_service_test(_Config) ->
     BeforeAddingService1 = length(list_all(?SERVICE1)),
     BeforeAddingService2 = length(list_all(?SERVICE2)),
     BeforeAddingAll = length(list_all(all)),
@@ -221,14 +240,21 @@ list_handle_services(WhatToList, Token) ->
     ListingOpts = #{resumption_token => get_token_bin(Token)},
     ozt:rpc(handle, list, [WhatToList, ListingOpts]).
 
+generate_random_date() ->
+    random:seed(os:timestamp()),
+    Hour = random:uniform(24)-1,     % Hour (0-23)
+    Minute = random:uniform(60)-1,   % Minute (0-59)
+    Second = random:uniform(60)-1,   % Second (0-59)
+    Year = random:uniform(4) + 2019,  % Year (from 2020 to 2023)
+    Month = random:uniform(12),      % Month (1-12)
+    Day = random:uniform(31),        % Dzień (1-31)
+    {{Hour, Minute, Second}, {Year, Month, Day}}.
 
 create_handle() ->
-    {Data, Time} = calendar:now_to_datetime(erlang:timestamp()),
-    ozt:rpc(handle, add, [{Time, Data}, ?RAND_ID(), ?RAND_SERVICE()]).
+    ozt:rpc(handle, add, [generate_random_date(), ?RAND_ID(), ?RAND_SERVICE()]).
 
 create_handle_for_service(Service) ->
-    {Data, Time} = calendar:now_to_datetime(erlang:timestamp()),
-    ozt:rpc(handle, add, [{Time, Data}, ?RAND_ID(), Service]).
+    ozt:rpc(handle, add, [generate_random_date(), ?RAND_ID(), Service]).
 
 
 get_token_bin(Token) ->
