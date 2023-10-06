@@ -19,7 +19,7 @@
 -export([list/2]).
 
 % index()/internal_index() consists of 2 parts:
-%  1) datestamp - so that links would be sorted by datestamp.
+%  1) time seconds - so that links would be sorted by time.
 %  2) handle id - this part allows to distinguish links associated with handles
 %                that have the same data stamp.
 -type index() :: binary().
@@ -53,19 +53,12 @@
 
 -spec index(time:seconds(), od_handle:id()) -> index().
 index(TimeSeconds, HandleId) ->
-%%    najstarszy na początku
-    <<(integer_to_binary(TimeSeconds))/binary, ?INDEX_SEP, HandleId/binary>>.
+    <<(TimeSeconds)/binary, ?INDEX_SEP, HandleId/binary>>.
 
-%% powinno się dodawać posortowane po datach
--spec add(calendar:datetime(), od_handle:id(), od_handle_service:id()) -> ok.
-add(DataStamp, HandleId, HandleServiceId) ->
-%%    Link = {index(term_to_binary(DataStamp), HandleId), HandleId},
-    Link = {index((DataStamp), HandleId), HandleId},
-%%    DataStamp -> TimeStamp
-%%    timestampy tu i w testach
+-spec add(time:seconds(), od_handle:id(), od_handle_service:id()) -> ok.
+add(TimeSeconds, HandleId, HandleServiceId) ->
+    Link = {index(integer_to_binary(TimeSeconds), HandleId), HandleId},
 
-%%    get_current
-%%    link to string_utils
     lists:foreach(fun(TreeId) ->
         case datastore_model:add_links(?CTX, ?FOREST, TreeId, Link) of
             {ok, _} -> ok;
@@ -74,9 +67,9 @@ add(DataStamp, HandleId, HandleServiceId) ->
     end, [?ALL_TREE_ID, ?SERVICE_TREE_ID(HandleServiceId)]).
 
 
--spec delete(calendar:datetime(), od_handle:id(), od_handle_service:id()) -> ok.
-delete(DataStamp, HandleId, HandleServiceId) ->
-    Index = index(DataStamp, HandleId),
+-spec delete(time:seconds(), od_handle:id(), od_handle_service:id()) -> ok.
+delete(TimeSeconds, HandleId, HandleServiceId) ->
+    Index = index(TimeSeconds, HandleId),
     lists:foreach(fun(TreeId) ->
         case datastore_model:delete_links(?CTX, ?FOREST, TreeId, Index) of
             ok -> ok;
@@ -92,12 +85,13 @@ list(WhatToList, ListingOpts) ->
         _ -> ?SERVICE_TREE_ID(WhatToList)
     end,
     From =maps:get(from, ListingOpts, <<>>),
+    Until =maps:get(until, ListingOpts, <<>>),
     Token = maps:get(resumption_token, ListingOpts, <<>>),
     Start = case Token of
         <<>> ->
             case From of
                 <<>> -> Token;
-                _ -> term_to_binary(From)
+                _ -> integer_to_binary(From)
             end ;
         _ -> Token
     end,
@@ -107,18 +101,30 @@ list(WhatToList, ListingOpts) ->
         inclusive => false
     },
     FoldFun = fun(#link{name = Index, target = _HandleId}, Acc) ->
-        <<DataStamp:22/binary, 0, IndexHandleId/binary>> = Index,
-        {ok, [{DataStamp, IndexHandleId} | Acc]}
+        %% this will work for timestamp >= 1000000000 (i.e {2001, 9, 9}, {3, 46, 40}})
+        <<TimeSeconds:10/binary, 0, IndexHandleId/binary>> = Index,
+        {ok, [{TimeSeconds, IndexHandleId} | Acc]}
     end,
     {ok, InternalEntries} = datastore_model:fold_links(
         ?CTX, ?FOREST, TreeId, FoldFun, [], FoldOpts
     ),
-    handle_entries(InternalEntries, Token).
+    handle_entries(InternalEntries, Token, Until).
 
 
 %% @private
-handle_entries(InternalEntries, Token) ->
-    ReversedEntries =  lists:reverse(InternalEntries),
+handle_entries(InternalEntries, Token, Until) ->
+    %% checking head because this is before reverse
+    {TimeSecondsBin, _HandleId} = hd(InternalEntries),
+    TimeSeconds = binary_to_integer(TimeSecondsBin),
+    Entries = case TimeSeconds > Until of
+        false -> InternalEntries;
+        true ->
+            %% before reverse, so the newest are at the beginning
+            lists:dropwhile(fun({TimeSecondsBin, _HandleId}) ->
+                binary_to_integer(TimeSecondsBin) > Until
+            end, InternalEntries)
+    end,
+    ReversedEntries =  lists:reverse(Entries),
     Handles = case Token of
         <<>> -> ReversedEntries;
         _ -> tl(ReversedEntries)
@@ -129,5 +135,5 @@ handle_entries(InternalEntries, Token) ->
     end,
     case length(ReversedEntries) < ?SIZE andalso Token == <<>> of
         true -> Handles;
-        false -> {Handles, {resumption_token, NewToken}}
+        false -> {Handles, {{resumption_token, NewToken}, {until, Until}}}
     end.
