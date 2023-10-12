@@ -21,7 +21,7 @@
 -export([filter_advertised/1]).
 -export([assert_enabled/0]).
 
-% index()/internal_index() consists of 2 parts:
+% index() consists of 2 parts:
 %  1) space name - so that links would be sorted by name.
 %  2) space id - this part allows to distinguish links associated with spaces
 %                using the same name.

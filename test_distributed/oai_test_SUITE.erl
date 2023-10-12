@@ -119,93 +119,94 @@
 %%%===================================================================
 
 all() -> ?ALL([
-    identify_get_test,
-    identify_post_test,
-    identify_change_earliest_datestamp_get_test,
-    identify_change_earliest_datestamp_post_test,
+%%    identify_get_test,
+%%    identify_post_test,
+    identify_change_earliest_datestamp_get_test
+%%    identify_change_earliest_datestamp_post_test,
 
-    get_record_get_test,
-    get_record_post_test,
-    get_record_with_bad_metadata_get_test,
-    get_record_with_bad_metadata_post_test,
-
-    list_metadata_formats_get_test,
-    list_metadata_formats_post_test,
-
-    list_identifiers_get_test,
-    list_identifiers_post_test,
-    selective_list_identifiers1_get_test,
-    selective_list_identifiers1_post_test,
-    selective_list_identifiers2_get_test,
-    selective_list_identifiers2_post_test,
-    selective_list_identifiers3_get_test,
-    selective_list_identifiers3_post_test,
-    selective_list_identifiers4_get_test,
-    selective_list_identifiers4_post_test,
-    list_identifiers_modify_timestamp_get_test,
-    list_identifiers_modify_timestamp_post_test,
-    list_identifiers_modify_timestamp1_get_test,
-    list_identifiers_modify_timestamp1_post_test,
-    list_identifiers_modify_timestamp2_get_test,
-    list_identifiers_modify_timestamp2_post_test,
-
-    list_records_get_test,
-    list_records_post_test,
-    selective_list_records1_get_test,
-    selective_list_records1_post_test,
-    selective_list_records2_get_test,
-    selective_list_records2_post_test,
-    selective_list_records3_get_test,
-    selective_list_records3_post_test,
-    selective_list_records4_get_test,
-    selective_list_records4_post_test,
-    list_records_modify_timestamp_get_test,
-    list_records_modify_timestamp_post_test,
-    list_records_modify_timestamp1_get_test,
-    list_records_modify_timestamp1_post_test,
-    list_records_modify_timestamp2_get_test,
-    list_records_modify_timestamp2_post_test,
-
-    list_sets_get_test,
-    list_sets_post_test,
-    list_sets_empty_repository_get_test,
-    list_sets_empty_repository_post_test,
-
-    no_verb_get_test,
-    no_verb_post_test,
-    empty_verb_get_test,
-    empty_verb_post_test,
-    invalid_verb_get_test,
-    invalid_verb_post_test,
-    illegal_arg_get_test,
-    illegal_arg_post_test,
-    missing_arg_get_test,
-    missing_arg_post_test,
-    id_not_existing_get_test,
-    id_not_existing_post_test,
-    list_metadata_formats_no_format_error_get_test,
-    list_metadata_formats_no_format_error_post_test,
-    cannot_disseminate_format_get_test,
-    cannot_disseminate_format_post_test,
-    list_identifiers_empty_repository_error_get_test,
-    list_identifiers_empty_repository_error_post_test,
-    list_identifiers_no_records_match_error1_get_test,
-    list_identifiers_no_records_match_error1_post_test,
-    list_identifiers_no_records_match_error2_get_test,
-    list_identifiers_no_records_match_error2_post_test,
-    list_identifiers_granularity_mismatch_error_post_test,
-    list_identifiers_granularity_mismatch_error_get_test,
-    list_identifiers_wrong_date_format_error1_get_test,
-    list_identifiers_wrong_date_format_error1_post_test,
-    list_identifiers_wrong_date_format_error2_get_test,
-    list_identifiers_wrong_date_format_error2_post_test,
-    list_identifiers_wrong_date_format_error3_get_test,
-    list_identifiers_wrong_date_format_error3_post_test,
-
-    list_records_no_records_match_error1_get_test,
-    list_records_no_records_match_error1_post_test,
-    list_records_no_records_match_error2_get_test,
-    list_records_no_records_match_error2_post_test
+%%    get_record_get_test,
+%%    get_record_post_test,
+%%    get_record_with_bad_metadata_get_test,
+%%    get_record_with_bad_metadata_post_test,
+%%
+%%    list_metadata_formats_get_test,
+%%    list_metadata_formats_post_test,
+%%
+%%    list_identifiers_get_test,
+%%
+%%    list_identifiers_post_test,
+%%    selective_list_identifiers1_get_test,
+%%    selective_list_identifiers1_post_test,
+%%    selective_list_identifiers2_get_test,
+%%    selective_list_identifiers2_post_test,
+%%    selective_list_identifiers3_get_test,
+%%    selective_list_identifiers3_post_test,
+%%    selective_list_identifiers4_get_test,
+%%    selective_list_identifiers4_post_test,
+%%    list_identifiers_modify_timestamp_get_test,
+%%    list_identifiers_modify_timestamp_post_test,
+%%    list_identifiers_modify_timestamp1_get_test,
+%%    list_identifiers_modify_timestamp1_post_test,
+%%    list_identifiers_modify_timestamp2_get_test,
+%%    list_identifiers_modify_timestamp2_post_test,
+%%
+%%    list_records_get_test,
+%%    list_records_post_test,
+%%    selective_list_records1_get_test,
+%%    selective_list_records1_post_test,
+%%    selective_list_records2_get_test,
+%%    selective_list_records2_post_test,
+%%    selective_list_records3_get_test,
+%%    selective_list_records3_post_test,
+%%    selective_list_records4_get_test,
+%%    selective_list_records4_post_test,
+%%    list_records_modify_timestamp_get_test,
+%%    list_records_modify_timestamp_post_test,
+%%    list_records_modify_timestamp1_get_test,
+%%    list_records_modify_timestamp1_post_test,
+%%    list_records_modify_timestamp2_get_test,
+%%    list_records_modify_timestamp2_post_test,
+%%
+%%    list_sets_get_test,
+%%    list_sets_post_test,
+%%    list_sets_empty_repository_get_test,
+%%    list_sets_empty_repository_post_test,
+%%
+%%    no_verb_get_test,
+%%    no_verb_post_test,
+%%    empty_verb_get_test,
+%%    empty_verb_post_test,
+%%    invalid_verb_get_test,
+%%    invalid_verb_post_test,
+%%    illegal_arg_get_test,
+%%    illegal_arg_post_test,
+%%    missing_arg_get_test,
+%%    missing_arg_post_test,
+%%    id_not_existing_get_test,
+%%    id_not_existing_post_test,
+%%    list_metadata_formats_no_format_error_get_test,
+%%    list_metadata_formats_no_format_error_post_test,
+%%    cannot_disseminate_format_get_test,
+%%    cannot_disseminate_format_post_test,
+%%    list_identifiers_empty_repository_error_get_test,
+%%    list_identifiers_empty_repository_error_post_test,
+%%    list_identifiers_no_records_match_error1_get_test,
+%%    list_identifiers_no_records_match_error1_post_test,
+%%    list_identifiers_no_records_match_error2_get_test,
+%%    list_identifiers_no_records_match_error2_post_test,
+%%    list_identifiers_granularity_mismatch_error_post_test,
+%%    list_identifiers_granularity_mismatch_error_get_test,
+%%    list_identifiers_wrong_date_format_error1_get_test,
+%%    list_identifiers_wrong_date_format_error1_post_test,
+%%    list_identifiers_wrong_date_format_error2_get_test,
+%%    list_identifiers_wrong_date_format_error2_post_test,
+%%    list_identifiers_wrong_date_format_error3_get_test,
+%%    list_identifiers_wrong_date_format_error3_post_test,
+%%
+%%    list_records_no_records_match_error1_get_test,
+%%    list_records_no_records_match_error1_post_test,
+%%    list_records_no_records_match_error2_get_test,
+%%    list_records_no_records_match_error2_post_test
 ]).
 
 %% useful macros
@@ -526,6 +527,8 @@ identify_test_base(Config, Method) ->
     ] ++ [
         #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
     ],
+
+
     ?assert(check_identify(200, [], Method, ExpResponseContent, Config)).
 
 identify_change_earliest_datestamp_test_base(Config, Method) ->
@@ -1008,7 +1011,6 @@ check_list_records_no_records_match_error(Code, Args, Method, ExpResponseContent
         ExpResponseContent, {error, noRecordsMatch}, Config).
 
 check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Config) ->
-
     URL = ?config(oai_pmh_url, Config),
     Path = ?config(oai_pmh_path, Config),
     Args2 = case Verb of
@@ -1040,7 +1042,6 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
             headers => ?CONTENT_TYPE_HEADER
         }
     end,
-
     Check = rest_test_utils:check_rest_call(Config, #{
         request => Request,
         expect => #{

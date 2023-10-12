@@ -157,7 +157,7 @@ check_rest_call(Config, ArgsMap) ->
 %%        "   HeadersPlusAuth: ~p~n"
 %%        "   ReqBody: ~p~n"
 %%        "   Opts: ~p~n", [
-%%            ReqMethod, URL, HeadersPlusAuth, ReqBody, [{pool, false}, ReqOptsPlusAuth]
+%%            ReqMethod, URL, HeadersPlusAuth, ReqBody, [{pool, false}, ?CONNECT_OPTS ++ CompleteOpts]
 %%        ]),
 
         CaCerts = oz_test_utils:gui_ca_certs(Config),
@@ -166,7 +166,15 @@ check_rest_call(Config, ArgsMap) ->
             {ssl_options, [{cacerts, CaCerts} | SslOpts]} |
             proplists:delete(ssl_options, ReqOpts)
         ],
-
+%%        %% Useful for debug
+%%        ct:pal("[Req]: ~n"
+%%        "   ReqMethod: ~p~n"
+%%        "   URL: ~p~n"
+%%        "   HeadersPlusAuth: ~p~n"
+%%        "   ReqBody: ~p~n"
+%%        "   Opts: ~p~n", [
+%%            ReqMethod, URL, HeadersPlusAuth, ReqBody, [{pool, false}, ?CONNECT_OPTS ++ CompleteOpts]
+%%        ]),
         {ok, RespCode, RespHeaders, RespBody} = http_client:request(
             ReqMethod,
             URL,

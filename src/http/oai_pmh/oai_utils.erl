@@ -23,7 +23,8 @@
     oai_identifier_encode/1, oai_identifier_decode/1,
     build_oai_header/2, build_oai_record/3
 ]).
--export([list_handles/0, get_handle/1]).
+%%-export([list_handles/0, get_handle/1]).
+-export([get_handle/1]).
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -131,21 +132,24 @@ deserialize_datestamp(Datestamp) ->
 harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, SetSpec, HarvestingFun) ->
     From = deserialize_datestamp(FromDatestamp),
     Until = deserialize_datestamp(UntilDatestamp),
-    Identifiers = list_handles(),
-    HarvestedMetadata = lists:filtermap(fun(Identifier) ->
-        Handle = get_handle(Identifier),
-        case should_be_harvested(From, Until, MetadataPrefix, SetSpec, Handle) of
-            false ->
-                false;
-            true ->
-                {true, HarvestingFun(Identifier, Handle)}
-        end
-    end, Identifiers),
-    case HarvestedMetadata of
-        [] ->
-            throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
-        _ -> HarvestedMetadata
-    end.
+    Identifiers = handles:list(all, #{}),
+%%
+%%    Identifiers = list_handles(),
+    Identifiers.
+%%    HarvestedMetadata = lists:filtermap(fun(Identifier) ->
+%%        Handle = get_handle(Identifier),
+%%        case should_be_harvested(From, Until, MetadataPrefix, SetSpec, Handle) of
+%%            false ->
+%%                false;
+%%            true ->
+%%                {true, HarvestingFun(Identifier, Handle)}
+%%        end
+%%    end, Identifiers),
+%%    case HarvestedMetadata of
+%%        [] ->
+%%            throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
+%%        _ -> HarvestedMetadata
+%%    end.
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -309,15 +313,15 @@ ensure_list(Arg) when is_list(Arg) -> Arg;
 ensure_list(Arg) -> [Arg].
 
 
-%%%-------------------------------------------------------------------
-%%% @doc
-%%% Returns the list of all handles in the system.
-%%% @end
-%%%-------------------------------------------------------------------
--spec list_handles() -> [od_handle:id()].
-list_handles() ->
-    {ok, HandlesList} = handle_logic:list(?ROOT),
-    HandlesList.
+%%%%%-------------------------------------------------------------------
+%%%%% @doc
+%%%%% Returns the list of all handles in the system.
+%%%%% @end
+%%%%%-------------------------------------------------------------------
+%%-spec list_handles() -> [od_handle:id()].
+%%list_handles() ->
+%%    {ok, HandlesList} = handle_logic:list(?ROOT),
+%%    HandlesList.
 
 
 %%%-------------------------------------------------------------------

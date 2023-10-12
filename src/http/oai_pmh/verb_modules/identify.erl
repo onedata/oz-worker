@@ -87,7 +87,7 @@ get_response(<<"baseURL">>, _Args) ->
 get_response(<<"protocolVersion">>, _Args) ->
     ?PROTOCOL_VERSION;
 get_response(<<"earliestDatestamp">>, _Args) ->
-    case get_earliest_datestamp() of
+    case handles:get_earliest_timestamp() of
         none -> <<"Repository is empty">>;
         Datestamp -> oai_utils:serialize_datestamp(Datestamp)
     end;
@@ -113,20 +113,27 @@ get_response(<<"description">>, _Args) -> [].
 %%% Internal functions
 %%%===================================================================
 
-%%%-------------------------------------------------------------------
-%%% @private
-%%% @doc
-%%% Returns earliest metadata datestamp.
-%%% @end
-%%%-------------------------------------------------------------------
--spec get_earliest_datestamp() -> none | calendar:datetime().
-get_earliest_datestamp() ->
-    Ids = oai_utils:list_handles(),
-    Datestamps = lists:map(fun(Id) ->
-        #od_handle{timestamp = Timestamp} = oai_utils:get_handle(Id),
-        time:seconds_to_datetime(Timestamp)
-    end, Ids),
-    case Datestamps of
-        [] -> none;
-        _ -> hd(lists:sort(fun oai_utils:is_earlier_or_equal/2, Datestamps))
-    end.
+%%%%%-------------------------------------------------------------------
+%%%%% @private
+%%%%% @doc
+%%%%% Returns earliest metadata datestamp.
+%%%%% @end
+%%%%%-------------------------------------------------------------------
+%%-spec get_earliest_datestamp() -> none | calendar:datetime().
+%%get_earliest_datestamp() ->
+%%    ListingOpts = #{ size => 1},
+%%    List = handles:list(all, ListingOpts),
+%%    case List of
+%%        [{EarliestTime, _HandleId}] ->
+%%            time:seconds_to_datetime(binary_to_integer(EarliestTime));
+%%        [] -> none
+%%    end.
+%%    Ids = oai_utils:list_handles(),
+%%    Datestamps = lists:map(fun(Id) ->
+%%        #od_handle{timestamp = Timestamp} = oai_utils:get_handle(Id),
+%%        time:seconds_to_datetime(Timestamp)
+%%    end, Ids),
+%%    case Datestamps of
+%%        [] -> none;
+%%        _ -> hd(lists:sort(fun oai_utils:is_earlier_or_equal/2, Datestamps))
+%%    end.

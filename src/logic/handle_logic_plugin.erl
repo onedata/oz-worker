@@ -117,6 +117,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     ResourceType = <<"Share">> = maps:get(<<"resourceType">>, Req#el_req.data),
     ResourceId = ShareId = maps:get(<<"resourceId">>, Req#el_req.data),
     Metadata = maps:get(<<"metadata">>, Req#el_req.data),
+    CreationTime = global_clock:timestamp_seconds(),
 
     % ensure no race conditions when creating a handle for a share (only one may be created)
     critical_section:run({create_handle, ResourceId}, fun() ->
@@ -135,7 +136,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             public_handle = PublicHandle,
             metadata = Metadata,
             creator = aai:normalize_subject(Auth#auth.subject),
-            creation_time = global_clock:timestamp_seconds()
+            creation_time = CreationTime
         }},
         {ok, #document{key = HandleId}} = od_handle:create(Handle),
         entity_graph:add_relation(
@@ -162,6 +163,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             od_handle, HandleId,
             od_share, ShareId
         ),
+
+        handles:add(CreationTime, HandleId, HandleServiceId),
         {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
         {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}
     end);
@@ -268,15 +271,24 @@ get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Handle) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
+    {ok, #document{value = #od_handle{
+        handle_service = HandleService,
+        timestamp = TimeStamp
+    }}} = od_handle:get(HandleId),
     NewMetadata = maps:get(<<"metadata">>, Data),
+    NewTimeStamp = od_handle:actual_timestamp(),
     {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
         {ok, Handle#od_handle{
             metadata = NewMetadata,
-            timestamp = od_handle:actual_timestamp()
+            timestamp = NewTimeStamp
         }}
     end),
+    %%  after handle modification we need to update handle timestamp in tree
+    handles:delete(TimeStamp, HandleId, HandleService),
+    handles:add(NewTimeStamp, HandleId, HandleService),
     handle_proxy:modify_handle(HandleId, NewMetadata),
     ok;
+
 
 update(Req = #el_req{gri = #gri{id = HandleId, aspect = {user_privileges, UserId}}}) ->
     PrivsToGrant = maps:get(<<"grant">>, Req#el_req.data, []),
@@ -304,19 +316,21 @@ update(Req = #el_req{gri = #gri{id = HandleId, aspect = {group_privileges, Group
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
+    {ok, #document{value = #od_handle{
+        public_handle = PublicHandle,
+        handle_service = HandleService,
+        timestamp = TimeStamp
+    }}} = od_handle:get(HandleId),
     try
         handle_proxy:unregister_handle(HandleId)
     catch Class:Reason:Stacktrace ->
-        {ok, #document{value = #od_handle{
-            public_handle = PublicHandle,
-            handle_service = HandleService
-        }}} = od_handle:get(HandleId),
         ?warning_exception(
             "Handle ~s (~s) was removed but it failed to be unregistered from handle service ~s",
             [HandleId, PublicHandle, HandleService],
             Class, Reason, Stacktrace
         )
     end,
+    handles:delete(TimeStamp, HandleId, HandleService),
     entity_graph:delete_with_relations(od_handle, HandleId);
 
 delete(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}}) ->
