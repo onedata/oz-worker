@@ -914,9 +914,8 @@ init_per_suite(Config) ->
     ssl:start(),
     application:ensure_all_started(hackney),
     Posthook = fun(NewConfig) ->
-        [Node1 | _] = ?config(oz_worker_nodes, NewConfig),
         [
-            {oai_pmh_url, get_oai_pmh_URL(NewConfig, Node1)},
+            {oai_pmh_url, get_oai_pmh_URL(NewConfig)},
             {oai_pmh_path, get_oai_pmh_api_path(NewConfig)} | NewConfig
         ]
     end,
@@ -1058,14 +1057,12 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
 %%% Internal functions
 %%%===================================================================
 
-get_oai_pmh_URL(Config, Node) ->
-    case rand:uniform(2) of
-        1 ->
-            oz_test_utils:oz_url(Config, <<>>);
-        2 ->
-            OZ_IP_1 = test_utils:get_docker_ip(Node),
-            str_utils:format_bin("http://~s", [OZ_IP_1])
-    end.
+get_oai_pmh_URL(Config) ->
+    Schema = case rand:uniform(2) of
+        1 -> <<"http">>;
+        2 ->  <<"https">>
+    end,
+    oz_test_utils:oz_url(Config, Schema, <<>>).
 
 get_oai_pmh_api_path(Config) ->
     list_to_binary(oz_test_utils:get_env(Config, oai_pmh_api_prefix)).

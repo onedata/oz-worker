@@ -35,7 +35,6 @@ start_index => index()
 }.
 
 -type resumption_token() :: index().
--type until() :: pos_integer().
 
 -define(CTX, (od_handle:get_ctx())).
 
@@ -59,7 +58,7 @@ start_index => index()
 index(first, From) ->
     case From of
         <<>> -> From;
-        _ -> integer_to_binary(From)
+        _ -> str_utils:format_bin("~11..0B", [From])
     end;
 index(TimeSeconds, HandleId) ->
     FormattedTimeSeconds = str_utils:format_bin("~11..0B", [TimeSeconds]),
@@ -79,7 +78,7 @@ add(TimeSeconds, HandleId, HandleServiceId) ->
     lists:foreach(fun(TreeId) ->
         case datastore_model:add_links(?CTX, ?FOREST, TreeId, Link) of
             {ok, _} -> ok;
-            {error, already_exists} -> ok
+            {error, already_exists} -> throw(?ERROR_ALREADY_EXISTS)
         end
     end, [?ALL_TREE_ID, ?HSERVICE_TREE_ID(HandleServiceId)]).
 
@@ -96,7 +95,7 @@ delete(TimeSeconds, HandleId, HandleServiceId) ->
 
 
 -spec list(all | od_handle_service:id(), listing_opts()) -> [od_handle:id()] |
-{[od_handle:id()], {resumption_token(), until()}}.
+{[od_handle:id()], resumption_token()}.
 list() ->
     list(all, #{}).
 list(WhatToList, ListingOpts) ->
@@ -115,28 +114,23 @@ list(WhatToList, ListingOpts) ->
     FoldOpts = #{
         size => Size,
         prev_link_name => StartIndex,
+        prev_tree_id => TreeId,
         inclusive => false
     },
     FoldFun = fun(#link{name = Index, target = HandleId}, Acc) ->
         {TimeSeconds, _HId} = decode_index(Index),
-        % TODO
-        case TimeSeconds > Until of
-            true -> {stop, [Acc]};
+        Result = case TimeSeconds > Until of
+            true -> {stop, Acc};
             false -> {ok, [{TimeSeconds, HandleId} | Acc]}
-        end
+        end,
+        Result
     end,
-%%    FoldFun = fun(#link{name = Index, target = HandleId}, Acc) ->
-%%        {TimeSeconds, _HId} = decode_index(Index),
-%%        {ok, [{TimeSeconds, HandleId} | Acc]}
-%%    end,
-
     {ok, InternalEntries} = datastore_model:fold_links(
         ?CTX, ?FOREST, TreeId, FoldFun, [], FoldOpts
     ),
-%%    InternalEntries.
     case InternalEntries of
-        [] -> InternalEntries;
-        _ -> handle_entries(InternalEntries, Token, Until)
+        [] -> {InternalEntries, undefined};
+        _ -> build_result_from_reversed_listing(InternalEntries, Token)
     end.
 
 
@@ -155,22 +149,18 @@ get_earliest_timestamp() ->
 
 
 %% @private
-handle_entries(InternalEntries, Token, Until) ->
-    ReversedEntries = lists:reverse(InternalEntries),
-    NewToken = case length(ReversedEntries) < ?MAX_LIST_LIMIT of
+build_result_from_reversed_listing(InternalEntries, Token) ->
+    NewToken = case length(InternalEntries) < ?MAX_LIST_LIMIT of
         true -> <<>>;
         false ->
-            {TimeSeconds, HandleId} = lists:last(ReversedEntries),
+            {TimeSeconds, HandleId} = hd(InternalEntries),
             index(TimeSeconds, HandleId)
     end,
-    Handles = case Token of
-        <<>> -> ReversedEntries;
-        _ -> tl(ReversedEntries)
-    end,
-    EntriesNoTime = lists:map(fun({_, HandleId}) -> HandleId end, Handles),
+    ReversedEntries = lists:reverse(InternalEntries),
+    Handles = lists:map(fun({_, HandleId}) -> HandleId end, ReversedEntries),
     case length(ReversedEntries) < ?MAX_LIST_LIMIT andalso Token == <<>> of
-        true -> EntriesNoTime;
-        false -> {EntriesNoTime, {{resumption_token, NewToken}, {until, Until}}}
+        true -> {Handles, undefined};
+        false -> {Handles, NewToken}
     end.
 
 
