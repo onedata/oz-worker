@@ -117,7 +117,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     ResourceType = <<"Share">> = maps:get(<<"resourceType">>, Req#el_req.data),
     ResourceId = ShareId = maps:get(<<"resourceId">>, Req#el_req.data),
     Metadata = maps:get(<<"metadata">>, Req#el_req.data),
-    CreationTime = global_clock:timestamp_seconds(),
+    CreationTime = od_handle:actual_timestamp(),
 
     % ensure no race conditions when creating a handle for a share (only one may be created)
     critical_section:run({create_handle, ResourceId}, fun() ->
@@ -203,8 +203,8 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
-    {ok, HandleDocs} = od_handle:list(),
-    {ok, [HandleId || #document{key = HandleId} <- HandleDocs]};
+    {HandleList, undefined} = handles:list(all, #{}),
+    {ok, HandleList};
 
 get(#el_req{gri = #gri{aspect = privileges}}, _) ->
     {ok, #{
@@ -276,7 +276,7 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
         timestamp = TimeStamp
     }}} = od_handle:get(HandleId),
     NewMetadata = maps:get(<<"metadata">>, Data),
-    NewTimeStamp = od_handle:actual_timestamp(),
+    NewTimeStamp = maps:get(<<"timestamp">>, Data),
     {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
         {ok, Handle#od_handle{
             metadata = NewMetadata,
@@ -611,6 +611,9 @@ validate(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) -> #{
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"metadata">> => {binary, {text_length_limit, ?METADATA_SIZE_LIMIT}}
+    },
+    optional => #{
+        <<"timestamp">> => {integer, {not_lower_than, 0}}
     }
 };
 

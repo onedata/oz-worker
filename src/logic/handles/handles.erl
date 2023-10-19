@@ -104,8 +104,14 @@ list(WhatToList, ListingOpts) ->
         _ -> ?HSERVICE_TREE_ID(WhatToList)
     end,
     Size = maps:get(size, ListingOpts, ?DEFAULT_LIST_LIMIT),
-    From = maps:get(from, ListingOpts, <<>>),
-    Until = maps:get(until, ListingOpts, <<>>),
+    From = case maps:get(from, ListingOpts, <<>>) of
+        undefined -> <<>>;
+        NewFrom -> NewFrom
+    end,
+    Until = case maps:get(until, ListingOpts, <<>>) of
+        undefined -> <<>>;
+        NewUntil -> NewUntil
+    end,
     Token = maps:get(resumption_token, ListingOpts, <<>>),
     StartIndex = case Token of
         <<>> -> index(first, From);
@@ -137,14 +143,14 @@ list(WhatToList, ListingOpts) ->
 -spec get_earliest_timestamp() -> none | calendar:datetime().
 get_earliest_timestamp() ->
     ListingOpts = #{size => 1},
-    List = handles:list(all, ListingOpts),
+    {List, undefined} = handles:list(all, ListingOpts),
     case List of
+        [] -> none;
         [HandleId] ->
             {ok, #document{value = #od_handle{
                 timestamp = TimeSecondsBin
             }}} = od_handle:get(HandleId),
-            time:seconds_to_datetime(binary_to_integer(TimeSecondsBin));
-        [] -> none
+            time:seconds_to_datetime(TimeSecondsBin)
     end.
 
 
@@ -162,6 +168,3 @@ build_result_from_reversed_listing(InternalEntries, Token) ->
         true -> {Handles, undefined};
         false -> {Handles, NewToken}
     end.
-
-
-

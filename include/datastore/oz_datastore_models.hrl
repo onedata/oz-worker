@@ -369,6 +369,8 @@ end).
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_privilege()]),
 
+%%   TODO dlaczego creation time ma global_clock:timestamp_seconds()
+%%   a timestamp od_handle:actual_timestamp() ?
     creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),
 

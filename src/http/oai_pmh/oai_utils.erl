@@ -132,24 +132,32 @@ deserialize_datestamp(Datestamp) ->
 harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, SetSpec, HarvestingFun) ->
     From = deserialize_datestamp(FromDatestamp),
     Until = deserialize_datestamp(UntilDatestamp),
-    Identifiers = handles:list(all, #{}),
-%%
-%%    Identifiers = list_handles(),
-    Identifiers.
-%%    HarvestedMetadata = lists:filtermap(fun(Identifier) ->
-%%        Handle = get_handle(Identifier),
-%%        case should_be_harvested(From, Until, MetadataPrefix, SetSpec, Handle) of
-%%            false ->
-%%                false;
-%%            true ->
-%%                {true, HarvestingFun(Identifier, Handle)}
-%%        end
-%%    end, Identifiers),
-%%    case HarvestedMetadata of
-%%        [] ->
-%%            throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
-%%        _ -> HarvestedMetadata
-%%    end.
+    {Identifiers, undefined} = handles:list(all,
+        #{
+            from => case From of
+                undefined -> From;
+                _ -> time:datetime_to_seconds(From)
+            end,
+            until => case Until of
+                undefined -> Until;
+                _ -> time:datetime_to_seconds(Until)
+            end
+        }
+    ),
+    HarvestedMetadata = lists:filtermap(fun(Identifier) ->
+        Handle = get_handle(Identifier),
+        case should_be_harvested(From, Until, MetadataPrefix, SetSpec, Handle) of
+            false ->
+                false;
+            true ->
+                {true, HarvestingFun(Identifier, Handle)}
+        end
+    end, Identifiers),
+    case HarvestedMetadata of
+        [] ->
+            throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
+        _ -> HarvestedMetadata
+    end.
 
 %%%--------------------------------------------------------------------
 %%% @doc

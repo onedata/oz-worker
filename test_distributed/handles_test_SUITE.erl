@@ -124,6 +124,11 @@ list_handles_from_services_test(_Config) ->
 list_size_elements_test(_Config) ->
     ListingOpts = #{size => 5},
     {List, undefined} = ozt:rpc(handles, list, [all, ListingOpts]),
+    SubList = lists:sublist(node_cache:get(all_handles), 5),
+    ExpectedList = lists:map(
+        fun({_, HandleId, _}) -> HandleId end, SubList
+    ),
+    ?assertEqual(ExpectedList, List),
     ?assertEqual(5, length(List)).
 
 

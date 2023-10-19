@@ -1936,9 +1936,8 @@ create_handle(Config, Client, Data) ->
 %%--------------------------------------------------------------------
 -spec list_handles(Config :: term()) -> {ok, [od_handle:id()]}.
 list_handles(Config) ->
-    ?assertMatch({ok, _}, call_oz(Config, handle_logic, list, [
-        ?ROOT
-    ])).
+    {Handles, undefined} = call_oz(Config, handles, list, [all, #{}]),
+    {ok, Handles}.
 
 
 %%--------------------------------------------------------------------
