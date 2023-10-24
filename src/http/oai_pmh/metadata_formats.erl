@@ -28,7 +28,8 @@
 %%%--------------------------------------------------------------------
 -spec supported_formats() -> [binary()].
 supported_formats() ->[
-    <<"oai_dc">>
+    <<"oai_dc">>,
+    <<"oai_edm">>
 ].
 
 %%%--------------------------------------------------------------------
@@ -38,6 +39,7 @@ supported_formats() ->[
 %%%--------------------------------------------------------------------
 -spec module(MetadataPrefix :: binary()) -> atom().
 module(<<"oai_dc">>) -> dublin_core;
+module(<<"oai_edm">>) -> europeana_data_model;
 module(_MetadataPrefix) -> not_supported.
 
 %%%--------------------------------------------------------------------

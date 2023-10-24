@@ -180,7 +180,7 @@
     handle_service_set_group_privileges/5
 ]).
 -export([
-    create_handle/6, create_handle/3,
+    create_handle/7, create_handle/3,
     list_handles/1,
     get_handle/2,
     update_handle/3, update_handle/5,
@@ -1896,17 +1896,21 @@ handle_service_set_group_privileges(
 -spec create_handle(Config :: term(), Client :: aai:auth(),
     HandleServiceId :: od_handle_service:id(),
     ResourceType :: od_handle:resource_type(),
-    ResourceId :: od_handle:resource_id(), Metadata :: od_handle:metadata()) ->
+    ResourceId :: od_handle:resource_id(), Metadata :: od_handle:metadata(),
+    MetadataPrefix :: od_handle:metadata_prefix()) ->
     {ok, od_handle:id()}.
-create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, Metadata) ->
+create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId,
+    Metadata, MetadataPrefix) ->
     Result = case Client of
         ?USER(UserId) ->
             call_oz(Config, user_logic, create_handle, [
-                Client, UserId, HandleServiceId, ResourceType, ResourceId, Metadata
+                Client, UserId, HandleServiceId, ResourceType, ResourceId,
+                Metadata, MetadataPrefix
             ]);
         _ ->
             call_oz(Config, handle_logic, create, [
-                Client, HandleServiceId, ResourceType, ResourceId, Metadata
+                Client, HandleServiceId, ResourceType, ResourceId,
+                Metadata, MetadataPrefix
             ])
     end,
     ?assertMatch({ok, _}, Result).
@@ -1936,7 +1940,7 @@ create_handle(Config, Client, Data) ->
 %%--------------------------------------------------------------------
 -spec list_handles(Config :: term()) -> {ok, [od_handle:id()]}.
 list_handles(Config) ->
-    {Handles, undefined} = call_oz(Config, handles, list, [all, #{}]),
+    {Handles, undefined} = call_oz(Config, handles, list, [#{}]),
     {ok, Handles}.
 
 

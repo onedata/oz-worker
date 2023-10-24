@@ -16,8 +16,8 @@
 -include("datastore/oz_datastore_models.hrl").
 
 -export([index/2]).
--export([add/3, delete/3]).
--export([list/0, list/2, get_earliest_timestamp/0]).
+-export([add/4, delete/4]).
+-export([list/0, list/1, get_earliest_timestamp/0]).
 
 % index() consists of 2 parts:
 %  1) timestamp (in seconds) - so that links would be sorted by time.
@@ -41,7 +41,11 @@ start_index => index()
 -define(FOREST, <<"handle-forest">>).
 
 -define(ALL_TREE_ID, <<"handle-all-tree">>).
+-define(HANDLE_METADATA_FORMAT_TREE_ID(__MdFormat),
+    <<"handle-metadata", __MdFormat/binary, "-all-tree">>).
 -define(HSERVICE_TREE_ID(__HsId), <<"handle-tree-for-", __HsId/binary>>).
+-define(METADATA_FORMAT_HSERVICE_TREE_ID(__HsId, __MdFormat),
+    <<"handle-metadata", __MdFormat/binary," -tree-for-", __HsId/binary>>).
 
 % Uses null for separator to ensure alphabetical sorting
 -define(INDEX_SEP, 0).
@@ -71,8 +75,8 @@ decode_index(Index) ->
     {binary_to_integer(TimeSeconds), HandleId}.
 
 
--spec add(time:seconds(), od_handle:id(), od_handle_service:id()) -> ok.
-add(TimeSeconds, HandleId, HandleServiceId) ->
+-spec add(time:seconds(), od_handle:id(), od_handle_service:id(), od_handle:metadata_prefix()) -> ok.
+add(TimeSeconds, HandleId, HandleServiceId, MetadataPrefix) ->
     Link = {index(TimeSeconds, HandleId), HandleId},
 
     lists:foreach(fun(TreeId) ->
@@ -80,38 +84,47 @@ add(TimeSeconds, HandleId, HandleServiceId) ->
             {ok, _} -> ok;
             {error, already_exists} -> throw(?ERROR_ALREADY_EXISTS)
         end
-    end, [?ALL_TREE_ID, ?HSERVICE_TREE_ID(HandleServiceId)]).
+    end, [
+        ?ALL_TREE_ID,
+        ?HSERVICE_TREE_ID(HandleServiceId),
+        ?HANDLE_METADATA_FORMAT_TREE_ID(MetadataPrefix),
+        ?METADATA_FORMAT_HSERVICE_TREE_ID(HandleServiceId, MetadataPrefix)
+        ]).
 
 
--spec delete(time:seconds(), od_handle:id(), od_handle_service:id()) -> ok.
-delete(TimeSeconds, HandleId, HandleServiceId) ->
+-spec delete(time:seconds(), od_handle:id(), od_handle_service:id(), od_handle:metadata_prefix()) -> ok.
+delete(TimeSeconds, HandleId, HandleServiceId, MetadataPrefix) ->
     Index = index(TimeSeconds, HandleId),
     lists:foreach(fun(TreeId) ->
         case datastore_model:delete_links(?CTX, ?FOREST, TreeId, Index) of
             ok -> ok;
             {error, not_found} -> ok
         end
-    end, [?ALL_TREE_ID, ?HSERVICE_TREE_ID(HandleServiceId)]).
+    end, [
+        ?ALL_TREE_ID,
+        ?HSERVICE_TREE_ID(HandleServiceId),
+        ?HANDLE_METADATA_FORMAT_TREE_ID(MetadataPrefix),
+        ?METADATA_FORMAT_HSERVICE_TREE_ID(HandleServiceId, MetadataPrefix)
+    ]).
 
 
--spec list(all | od_handle_service:id(), listing_opts()) -> [od_handle:id()] |
+-spec list(listing_opts()) -> [od_handle:id()] |
 {[od_handle:id()], resumption_token()}.
 list() ->
-    list(all, #{}).
-list(WhatToList, ListingOpts) ->
-    TreeId = case WhatToList of
-        all -> ?ALL_TREE_ID;
-        _ -> ?HSERVICE_TREE_ID(WhatToList)
+    list(#{}).
+list(ListingOpts) ->
+    ServiceId = resolve_when_undefined(service_id, ListingOpts, undefined),
+    MetadataPrefix = resolve_when_undefined(metadata_prefix, ListingOpts, undefined),
+
+    TreeId = case {ServiceId, MetadataPrefix} of
+        {undefined, undefined} -> ?ALL_TREE_ID;
+        {undefined, _} -> ?HANDLE_METADATA_FORMAT_TREE_ID(MetadataPrefix);
+        {_, undefined} -> ?HSERVICE_TREE_ID(ServiceId);
+        {_, _} -> ?METADATA_FORMAT_HSERVICE_TREE_ID(ServiceId, MetadataPrefix)
     end,
     Size = maps:get(size, ListingOpts, ?DEFAULT_LIST_LIMIT),
-    From = case maps:get(from, ListingOpts, <<>>) of
-        undefined -> <<>>;
-        NewFrom -> NewFrom
-    end,
-    Until = case maps:get(until, ListingOpts, <<>>) of
-        undefined -> <<>>;
-        NewUntil -> NewUntil
-    end,
+    From = resolve_when_undefined(from, ListingOpts, <<>>),
+    Until = resolve_when_undefined(until, ListingOpts, <<>>),
     Token = maps:get(resumption_token, ListingOpts, <<>>),
     StartIndex = case Token of
         <<>> -> index(first, From);
@@ -143,7 +156,7 @@ list(WhatToList, ListingOpts) ->
 -spec get_earliest_timestamp() -> none | calendar:datetime().
 get_earliest_timestamp() ->
     ListingOpts = #{size => 1},
-    {List, undefined} = handles:list(all, ListingOpts),
+    {List, undefined} = handles:list(ListingOpts),
     case List of
         [] -> none;
         [HandleId] ->
@@ -168,3 +181,12 @@ build_result_from_reversed_listing(InternalEntries, Token) ->
         true -> {Handles, undefined};
         false -> {Handles, NewToken}
     end.
+
+
+%% @private
+resolve_when_undefined(Atom, ListingOpts, WhenUndefined) ->
+    DefinedElement = case maps:get(Atom, ListingOpts, undefined) of
+        undefined -> WhenUndefined;
+        Element -> Element
+    end,
+    DefinedElement.

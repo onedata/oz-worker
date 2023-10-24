@@ -15,6 +15,7 @@
 -include("http/handlers/oai.hrl").
 -include("http/handlers/oai_errors.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([serialize_datestamp/1, deserialize_datestamp/1,
@@ -132,7 +133,7 @@ deserialize_datestamp(Datestamp) ->
 harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, SetSpec, HarvestingFun) ->
     From = deserialize_datestamp(FromDatestamp),
     Until = deserialize_datestamp(UntilDatestamp),
-    {Identifiers, undefined} = handles:list(all,
+    {Identifiers, undefined} = handles:list(
         #{
             from => case From of
                 undefined -> From;
@@ -141,34 +142,20 @@ harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, SetSpec, HarvestingFun) -
             until => case Until of
                 undefined -> Until;
                 _ -> time:datetime_to_seconds(Until)
-            end
+            end,
+            service_id => SetSpec,
+            metadata_prefix => MetadataPrefix
         }
     ),
-    HarvestedMetadata = lists:filtermap(fun(Identifier) ->
+    HarvestedMetadata = lists:map(fun(Identifier) ->
         Handle = get_handle(Identifier),
-        case should_be_harvested(From, Until, MetadataPrefix, SetSpec, Handle) of
-            false ->
-                false;
-            true ->
-                {true, HarvestingFun(Identifier, Handle)}
-        end
+        HarvestingFun(Identifier, Handle)
     end, Identifiers),
     case HarvestedMetadata of
         [] ->
             throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
         _ -> HarvestedMetadata
     end.
-
-%%%--------------------------------------------------------------------
-%%% @doc
-%%% Function returns true if Datestamp is in range [From, Until].
-%%% @end
-%%%--------------------------------------------------------------------
--spec is_in_time_range(
-    supported_datestamp(), supported_datestamp(), supported_datestamp()) -> boolean().
-is_in_time_range(From, Until, Datestamp) ->
-    is_earlier_or_equal(From, Datestamp)
-        and is_earlier_or_equal(Datestamp, Until).
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -346,26 +333,6 @@ get_handle(HandleId) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-%%%--------------------------------------------------------------------
-%%% @private
-%%% @doc
-%%% Returns true when the metadata matches requested time range and the set filter.
-%%% @end
-%%%--------------------------------------------------------------------
--spec should_be_harvested(supported_datestamp(), supported_datestamp(),
-    binary(), undefined | oai_set_spec(), #od_handle{}) -> boolean().
-should_be_harvested(_, _, _, _, #od_handle{metadata = undefined}) ->
-    false;
-should_be_harvested(From, Until, MetadataPrefix, undefined, #od_handle{handle_service = HSId} = Handle) ->
-    % if the set spec is undefined, there is no filtration by set (all handles are considered)
-    should_be_harvested(From, Until, MetadataPrefix, HSId, Handle);
-should_be_harvested(_From, _Until, _MetadataPrefix, SetSpec, #od_handle{handle_service = HSId}) when SetSpec /= HSId ->
-   false;
-should_be_harvested(From, Until, MetadataPrefix, _SetSpec, #od_handle{timestamp = Timestamp}) ->
-    MetadataFormats = metadata_formats:supported_formats(),
-    is_in_time_range(From, Until, time:seconds_to_datetime(Timestamp)) andalso
-        lists:member(MetadataPrefix, MetadataFormats).
 
 %%%-------------------------------------------------------------------
 %%% @private

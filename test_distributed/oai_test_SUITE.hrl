@@ -26,3 +26,24 @@
     "<dc:rights>CC-0<\/dc:rights>",
     "<\/metadata>">>
 ).
+
+-define(EDM_METADATA_XML,
+    <<"<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+    <RDF xmlns=\"http:\/\/www.w3.org\/1999\/02\/22-rdf-syntax-ns#\"
+         xmlns:edm=\"http:\/\/www.europeana.eu\/schemas\/edm\/\"
+         xmlns:rdfs=\"http:\/\/www.w3.org\/2000\/01\/rdf-schema#\"
+         xmlns:skos=\"http:\/\/www.w3.org\/2004\/02\/skos\/core#\"
+         xmlns:ore=\"http:\/\/www.openarchives.org\/ore\/terms\/\"
+         xmlns:rdf=\"http:\/\/www.w3.org\/1999\/02\/22-rdf-syntax-ns#\"
+         elementFormDefault=\"qualified\"
+         attributeFormDefault=\"qualified\">
+
+      <edm:ProvidedCHO>
+        <edm:title>Test dataset<\/edm:title>
+        <edm:creator>John Doe<\/edm:creator>
+        <edm:subject>Test of datacite<\/edm:subject>
+      <\/edm:ProvidedCHO>
+
+    <\/RDF>
+">>
+).

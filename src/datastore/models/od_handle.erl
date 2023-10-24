@@ -31,12 +31,13 @@
 -type resource_type() :: binary().
 -type resource_id() :: binary().
 -type public_handle() :: binary().
+-type metadata_prefix() :: binary().
 -type metadata() :: binary().
 -type timestamp() :: time:seconds().
 
 -export_type([id/0, record/0]).
--export_type([resource_type/0, resource_id/0, public_handle/0, metadata/0,
-    timestamp/0]).
+-export_type([resource_type/0, resource_id/0, public_handle/0,
+    metadata_prefix/0, metadata/0, timestamp/0]).
 
 -define(CTX, #{
     model => od_handle,
@@ -161,6 +162,7 @@ get_record_struct(1) ->
         {public_handle, string},
         {resource_type, string},
         {resource_id, string},
+        {metadata_prefix, string},
         {metadata, string},
         {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
         {handle_service, string},
@@ -174,6 +176,7 @@ get_record_struct(2) ->
     {record, [
         {public_handle, string},
         {resource_type, string},
+        {metadata_prefix, string},
         {metadata, string},
         {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
         {resource_id, string},
@@ -194,6 +197,7 @@ get_record_struct(4) ->
     {record, [
         {public_handle, string},
         {resource_type, string},
+        {metadata_prefix, string},
         {metadata, string},
         {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
         {resource_id, string},
@@ -218,6 +222,7 @@ get_record_struct(5) ->
     {record, [
         {public_handle, string},
         {resource_type, string},
+        {metadata_prefix, string},
         {metadata, string},
         {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
         {resource_id, string},
@@ -242,6 +247,7 @@ get_record_struct(6) ->
     {record, [
         {public_handle, string},
         {resource_type, string},
+        {metadata_prefix, string},
         {metadata, string},
         {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
         {resource_id, string},
@@ -265,6 +271,7 @@ get_record_struct(7) ->
     {record, [
         {public_handle, string},
         {resource_type, string},
+        {metadata_prefix, string},
         {metadata, string},
         {timestamp, integer},  % changed field
         {resource_id, string},
@@ -296,6 +303,7 @@ upgrade_record(1, Handle) ->
         PublicHandle,
         ResourceType,
         ResourceId,
+        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -311,6 +319,7 @@ upgrade_record(1, Handle) ->
     {2, {od_handle,
         PublicHandle,
         ResourceType,
+        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -328,6 +337,7 @@ upgrade_record(2, Handle) ->
     {od_handle,
         PublicHandle,
         ResourceType,
+        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -344,6 +354,7 @@ upgrade_record(2, Handle) ->
     {3, {od_handle,
         PublicHandle,
         ResourceType,
+        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -361,6 +372,7 @@ upgrade_record(3, Handle) ->
     {od_handle,
         PublicHandle,
         ResourceType,
+        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -378,6 +390,7 @@ upgrade_record(3, Handle) ->
         od_handle,
         PublicHandle,
         ResourceType,
+        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -399,6 +412,7 @@ upgrade_record(4, Handle) ->
         od_handle,
         PublicHandle,
         ResourceType,
+        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -419,6 +433,7 @@ upgrade_record(4, Handle) ->
         od_handle,
         PublicHandle,
         ResourceType,
+        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -440,6 +455,7 @@ upgrade_record(5, Handle) ->
         od_handle,
         PublicHandle,
         ResourceType,
+        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -459,6 +475,7 @@ upgrade_record(5, Handle) ->
     {6, #od_handle{
         public_handle = PublicHandle,
         resource_type = ResourceType,
+        metadata_prefix = MetadataPrefix,
         metadata = Metadata,
         timestamp = Timestamp,
 
@@ -480,6 +497,7 @@ upgrade_record(6, Handle) ->
         od_handle,
         PublicHandle,
         ResourceType,
+        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -499,6 +517,7 @@ upgrade_record(6, Handle) ->
     {7, #od_handle{
         public_handle = PublicHandle,
         resource_type = ResourceType,
+        metadata_prefix = MetadataPrefix,
         metadata = Metadata,
         timestamp = time:datetime_to_seconds(Timestamp),
 

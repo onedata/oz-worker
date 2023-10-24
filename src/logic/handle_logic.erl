@@ -17,7 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([
-    create/5, create/2
+    create/6, create/2
 ]).
 -export([
     get/2,
@@ -71,13 +71,15 @@
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), HandleId :: od_handle_service:id(),
     ResourceType :: od_handle:resource_type(), ResourceId :: od_handle:resource_id(),
-    Metadata :: od_handle:metadata()) -> {ok, od_handle:id()} | errors:error().
-create(Auth, HServiceId, ResourceType, ResourceId, Metadata) ->
+    Metadata :: od_handle:metadata(), MetadataPrefix :: od_handle:metadata_prefix())
+        -> {ok, od_handle:id()} | errors:error().
+create(Auth, HServiceId, ResourceType, ResourceId, Metadata, MetadataPrefix) ->
     create(Auth, #{
         <<"handleServiceId">> => HServiceId,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
-        <<"metadata">> => Metadata
+        <<"metadata">> => Metadata,
+        <<"metadataPrefix">> => MetadataPrefix
     }).
 
 
