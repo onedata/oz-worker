@@ -265,9 +265,10 @@ create_test(Config) ->
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         data_spec = #data_spec{
             required = [
-                <<"token">>, <<"name">>, <<"subdomain">>, <<"ipList">>,
+                <<"token">>, <<"name">>, <<"subdomain">>,
                 <<"adminEmail">>, <<"subdomainDelegation">>
             ],
+            at_least_one = [<<"ipList">>, <<"ips">>],
             optional = [<<"latitude">>, <<"longitude">>],
             correct_values = #{
                 <<"token">> => [fun() ->
@@ -281,6 +282,7 @@ create_test(Config) ->
                 <<"subdomainDelegation">> => [true],
                 <<"subdomain">> => [<<"prov-sub">>],
                 <<"ipList">> => [[<<"2.4.6.8">>, <<"255.253.251.2">>]],
+                <<"ips">> => [#{<<>> => [<<"2.4.6.8">>], <<"s3">> => [<<"255.253.251.2">>]}],
                 <<"adminEmail">> => [?ADMIN_EMAIL],
                 <<"latitude">> => [rand:uniform() * 90],
                 <<"longitude">> => [rand:uniform() * 180]
@@ -296,7 +298,9 @@ create_test(Config) ->
                 {<<"subdomain">>, <<"https://protocol">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
                 {<<"ipList">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
                 {<<"ipList">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)}
+                {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ips">>, atom, ?ERROR_BAD_VALUE_JSON(<<"ips">>)},
+                {<<"ips">>, #{<<"s3">> => 2}, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ips.s3">>)}
             ]
         }
     },
@@ -2023,13 +2027,13 @@ update_subdomain_test(Config) ->
             expected_result_op = ?OK_RES
         },
         data_spec = DataSpec = #data_spec{
-            required = [
-                <<"subdomainDelegation">>, <<"subdomain">>, <<"ipList">>
-            ],
+            required = [<<"subdomainDelegation">>, <<"subdomain">>],
+            at_least_one = [<<"ipList">>, <<"ips">>],
             correct_values = #{
                 <<"subdomainDelegation">> => [true],
                 <<"subdomain">> => [Subdomain],
-                <<"ipList">> => [IPs]
+                <<"ipList">> => [IPs],
+                <<"ips">> => [#{<<>> => IPs, <<"s3">> => IPs}]
             },
             bad_values = [
                 {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
@@ -2043,7 +2047,9 @@ update_subdomain_test(Config) ->
                 {<<"subdomain">>, <<"https://protocol">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
                 {<<"ipList">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
                 {<<"ipList">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)}
+                {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ips">>, atom, ?ERROR_BAD_VALUE_JSON(<<"ips">>)},
+                {<<"ips">>, #{<<"s3">> => 2}, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ips.s3">>)}
             ]
         }
     },
@@ -2059,7 +2065,8 @@ update_subdomain_test(Config) ->
             bad_values = [
                 {<<"ipList">>, [{256, 256, 256, 256}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
                 {<<"ipList">>, [{-1, -1, -1, -1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ipList">>, [{1, 1, 1, 1, 1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)}
+                {<<"ipList">>, [{1, 1, 1, 1, 1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ips">>, #{<<"s3">> => [{1, 1, 1, 1, 1}]}, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ips.s3">>)}
             ]
         }
     },
@@ -2251,6 +2258,7 @@ get_domain_config_test(Config) ->
         <<"subdomainDelegation">> => false,
         <<"domain">> => ExpDomain,
         <<"ipList">> => [],
+        <<"ips">> => #{<<>> => []},
         <<"subdomain">> => null
     },
     ApiTestSpec = #api_test_spec{
@@ -2296,19 +2304,23 @@ get_domain_config_test(Config) ->
     % test enabled subdomain delegation
     ExpSubdomain = <<"subdomain">>,
     ExpIPs = [{5, 8, 2, 4}, {10, 12, 255, 255}],
+    ExpProviderIPs = #{<<>> => ExpIPs, <<"s3">> => ExpIPs},
     ExpIPsBin = [<<"5.8.2.4">>, <<"10.12.255.255">>],
+    ExpProviderIPsBin = #{<<>> => ExpIPsBin, <<"s3">> => ExpIPsBin},
+
     OZDomain = oz_test_utils:oz_domain(Config),
     ExpDomain2 = <<ExpSubdomain/binary, ".", OZDomain/binary>>,
 
-    oz_test_utils:enable_subdomain_delegation(Config, P1, ExpSubdomain, ExpIPs),
+    oz_test_utils:enable_subdomain_delegation(Config, P1, ExpSubdomain, ExpProviderIPs),
 
     ExpBody2 = #{
         <<"subdomainDelegation">> => true,
         <<"domain">> => ExpDomain2,
         <<"ipList">> => ExpIPs,
+        <<"ips">> => ExpProviderIPs,
         <<"subdomain">> => ExpSubdomain
     },
-    ExpBody2Bin = ExpBody2#{<<"ipList">> => ExpIPsBin},
+    ExpBody2Bin = ExpBody2#{<<"ipList">> => ExpIPsBin, <<"ips">> => ExpProviderIPsBin},
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         logic_spec = LogicSpec#logic_spec{expected_result = ?OK_MAP(ExpBody2)},
         rest_spec = RestSpec#rest_spec{expected_body = {contains, ExpBody2Bin}},
@@ -2331,6 +2343,7 @@ get_own_domain_config_test(Config) ->
         <<"subdomainDelegation">> => false,
         <<"domain">> => ExpDomain,
         <<"ipList">> => [],
+        <<"ips">> => #{<<>> => []},
         <<"subdomain">> => null
     },
     ApiTestSpec = #api_test_spec{

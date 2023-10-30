@@ -1645,12 +1645,23 @@ unsupport_space(Config, StorageId, SpaceId) ->
 %%--------------------------------------------------------------------
 -spec enable_subdomain_delegation(Config :: term(),
     ProviderId :: od_provider:id(), Subdomain :: binary(),
-    IPs :: [inet:ip4_address()]) -> ok.
+    IPs :: [inet:ip4_address()] | dns_state:provider_ips()
+) ->
+    ok.
+enable_subdomain_delegation(Config, ProviderId, Subdomain, IPs) when is_list(IPs) ->
+    Data = #{
+        <<"subdomainDelegation">> => true,
+        <<"subdomain">> => Subdomain,
+        <<"ipList">> => IPs
+    },
+    ?assertMatch(ok, call_oz(Config, provider_logic, update_domain_config, [?ROOT, ProviderId, Data]));
+
 enable_subdomain_delegation(Config, ProviderId, Subdomain, IPs) ->
     Data = #{
         <<"subdomainDelegation">> => true,
         <<"subdomain">> => Subdomain,
-        <<"ipList">> => IPs},
+        <<"ips">> => IPs
+    },
     ?assertMatch(ok, call_oz(Config, provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
 
 
