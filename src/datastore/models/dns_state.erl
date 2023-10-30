@@ -17,9 +17,18 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([set_delegation_config/3, get_delegation_config/1,
-    remove_delegation_config/1, get_subdomains_to_ips/0]).
--export([set_txt_record/3, set_txt_record/4, get_txt_records/0, remove_txt_record/2]).
+-export([
+    set_delegation_config/3,
+    get_delegation_config/1,
+    remove_delegation_config/1,
+
+    get_subdomains_to_ips/0
+]).
+-export([
+    set_txt_record/3, set_txt_record/4,
+    get_txt_records/0,
+    remove_txt_record/2
+]).
 
 -export([get_dns_state/0]).
 
@@ -32,10 +41,11 @@
 -type doc() :: datastore_doc:doc(record()).
 -type diff() :: datastore_doc:diff(record()).
 
--type subdomain() :: binary().
+%% Mapping between provider service and its external ips
+-type provider_ips() :: #{binary() => [inet:ip4_address()]}.
 -type ttl() :: time:seconds() | undefined.
 -export_type([id/0, record/0, doc/0]).
--export_type([subdomain/0, ttl/0]).
+-export_type([provider_ips/0, ttl/0]).
 
 -define(CTX, #{model => ?MODULE}).
 
@@ -52,8 +62,7 @@
 %% Updates subdomain delegation config of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec set_delegation_config(ProviderId :: od_provider:id(),
-    Subdomain :: subdomain(), IPs :: [inet:ip4_address()]) ->
+-spec set_delegation_config(od_provider:id(), dns_utils:subdomain(), provider_ips()) ->
     ok | {error, subdomain_exists}.
 set_delegation_config(ProviderId, Subdomain, IPs) ->
     Result = case is_subdomain_reserved(Subdomain) of
@@ -62,7 +71,7 @@ set_delegation_config(ProviderId, Subdomain, IPs) ->
             {error, subdomain_exists};
         false ->
             Diff = fun(DnsState) ->
-                StateOrError = case get_provider_by_subdomain(DnsState, Subdomain) of
+                StateOrError = case find_provider_by_subdomain(DnsState, Subdomain) of
                     {true, ProviderId} ->
                         DnsState; % subdomain is already set
                     {true, OtherProvider} ->
@@ -98,8 +107,7 @@ set_delegation_config(ProviderId, Subdomain, IPs) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_delegation_config(od_provider:id()) ->
-    {ok, Subdomain :: subdomain(), IPs :: [inet:ip4_address()]} |
-    {error, not_found}.
+    {ok, dns_utils:subdomain(), provider_ips()} |{error, not_found}.
 get_delegation_config(ProviderId) ->
     {ok, DnsState} = get_dns_state(),
     #dns_state{
@@ -178,27 +186,25 @@ remove_txt_record(ProviderId, Name) ->
 remove_delegation_config(ProviderId) ->
     {ok, _} = update(fun(DnsState) ->
         DnsState2 = unset_subdomain(DnsState, ProviderId),
-        DnsState3 = remove_txt_by_provider(DnsState2, ProviderId),
+        DnsState3 = remove_txt_records(DnsState2, ProviderId),
         {ok, unset_ips(DnsState3, ProviderId)}
     end, #dns_state{}),
     node_manager_plugin:reconcile_dns_config(),
     ok.
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns all provider subdomains and associated IPs.
-%% @end
-%%--------------------------------------------------------------------
--spec get_subdomains_to_ips() -> #{subdomain() => [inet:ip4_address()]}.
+-spec get_subdomains_to_ips() -> #{dns_utils:subdomain() => [inet:ip4_address()]}.
 get_subdomains_to_ips() ->
-    {ok, DnsState} = get_dns_state(),
-    #dns_state{
-        provider_to_ips = PtIPs,
-        subdomain_to_provider = StP} = DnsState,
-    maps:map(fun(_Subdomain, ProviderId) ->
-        maps:get(ProviderId, PtIPs, [])
-    end, StP).
+    {ok, DnsState = #dns_state{provider_to_ips = PtIPs}} = get_dns_state(),
+
+    maps:fold(fun(ProviderSubdomain, ProviderId, OuterAcc) ->
+
+        maps:fold(fun(ServiceSubdomain, ServiceIPs, InnerAcc) ->
+            Subdomain = dns_utils:build_domain(ServiceSubdomain, ProviderSubdomain),
+            InnerAcc#{Subdomain => ServiceIPs}
+        end, OuterAcc, maps:get(ProviderId, PtIPs))
+
+    end, #{}, DnsState#dns_state.subdomain_to_provider).
 
 
 %%--------------------------------------------------------------------
@@ -231,7 +237,7 @@ get_txt_records() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 
 %%--------------------------------------------------------------------
@@ -248,11 +254,20 @@ get_record_struct(1) ->
         {provider_to_ips, #{string => [{integer, integer, integer, integer}]}},
         {provider_to_txt_records, #{string => [{string, string}]}}
     ]};
+
 get_record_struct(2) ->
     {record, [
         {subdomain_to_provider, #{string => string}},
         {provider_to_subdomain, #{string => string}},
         {provider_to_ips, #{string => [{integer, integer, integer, integer}]}},
+        {provider_to_txt_records, #{string => [{string, string, integer}]}}
+    ]};
+
+get_record_struct(3) ->
+    {record, [
+        {subdomain_to_provider, #{string => string}},
+        {provider_to_subdomain, #{string => string}},
+        {provider_to_ips, #{string => #{string => [{integer, integer, integer, integer}]}}},
         {provider_to_txt_records, #{string => [{string, string, integer}]}}
     ]}.
 
@@ -264,22 +279,36 @@ get_record_struct(2) ->
 %%--------------------------------------------------------------------
 -spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
     {datastore_model:record_version(), datastore_model:record()}.
-upgrade_record(1, DnsState) ->
-    {
-        dns_state,
-        SubdomainToProvider,
-        ProviderToSubdomain,
-        ProviderToIPS,
-        ProviderToTxt
-    } = DnsState,
+upgrade_record(1, {
+    ?MODULE,
+    SubdomainToProvider,
+    ProviderToSubdomain,
+    ProviderToIPS,
+    ProviderToTxt
+}) ->
     {2, {
-        dns_state,
+        ?MODULE,
         SubdomainToProvider,
         ProviderToSubdomain,
         ProviderToIPS,
         maps:map(fun(_Provider, TxtRecords) ->
             [{Name, Content, undefined} || {Name, Content} <- TxtRecords]
         end, ProviderToTxt)
+    }};
+
+upgrade_record(2, {
+    ?MODULE,
+    SubdomainToProvider,
+    ProviderToSubdomain,
+    ProviderToIPS,
+    ProviderToTxt
+}) ->
+    {3, {
+        ?MODULE,
+        SubdomainToProvider,
+        ProviderToSubdomain,
+        maps:map(fun(_Provider, WorkerIps) -> #{<<>> => WorkerIps} end, ProviderToIPS),
+        ProviderToTxt
     }}.
 
 
@@ -294,7 +323,8 @@ upgrade_record(1, DnsState) ->
 %% Checks if subdomain is reserved for a static entry or nameserver.
 %% @end
 %%--------------------------------------------------------------------
--spec is_subdomain_reserved(subdomain()) -> boolean().
+-spec is_subdomain_reserved(dns_utils:subdomain()) -> boolean().
+%% TODO
 is_subdomain_reserved(Subdomain) ->
     % Get all reserved values
     Static = lists:flatmap(fun(Env) ->
@@ -309,13 +339,8 @@ is_subdomain_reserved(Subdomain) ->
         match == re:run(Subdomain, <<"^ns[0-9]*$">>, [{capture, none}]).
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Sets provider subdomain in the dns state record.
-%% @end
-%%--------------------------------------------------------------------
--spec set_subdomain(record(), od_provider:id(), subdomain()) -> record().
+-spec set_subdomain(record(), od_provider:id(), dns_utils:subdomain()) -> record().
 set_subdomain(DnsState, ProviderId, Subdomain) ->
     #dns_state{
         provider_to_subdomain = PtS,
@@ -330,40 +355,8 @@ set_subdomain(DnsState, ProviderId, Subdomain) ->
     }.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Sets provider IPs in the dns state record.
-%% @end
-%%--------------------------------------------------------------------
--spec set_ips(record(), od_provider:id(), [inet:ip4_address()]) ->
-    record().
-set_ips(#dns_state{provider_to_ips = PtIPs} = DnsState, ProviderId, IPs) ->
-    DnsState#dns_state{provider_to_ips = PtIPs#{ProviderId => IPs}}.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Removes txt records of given provider from dns state document.
-%% @end
-%%--------------------------------------------------------------------
--spec remove_txt_by_provider(#dns_state{}, od_provider:id()) ->
-    #dns_state{}.
-remove_txt_by_provider(#dns_state{provider_to_txt_records = PtTR} = DnsState, ProviderId) ->
-    DnsState#dns_state{
-        provider_to_txt_records = maps:remove(ProviderId, PtTR)
-    }.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Removes subdomain of given provider from dns state document.
-%% @end
-%%--------------------------------------------------------------------
--spec unset_subdomain(record(), od_provider:id()) ->
-    record().
+-spec unset_subdomain(record(), od_provider:id()) -> record().
 unset_subdomain(DnsState, ProviderId) ->
     #dns_state{
         provider_to_subdomain = PtS,
@@ -375,18 +368,16 @@ unset_subdomain(DnsState, ProviderId) ->
     }.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Removes IPs of given provider from dns state document.
-%% @end
-%%--------------------------------------------------------------------
--spec unset_ips(record(), od_provider:id()) ->
-    record().
+-spec set_ips(record(), od_provider:id(), provider_ips()) -> record().
+set_ips(#dns_state{provider_to_ips = PtIPs} = DnsState, ProviderId, IPs) ->
+    DnsState#dns_state{provider_to_ips = PtIPs#{ProviderId => IPs}}.
+
+
+%% @private
+-spec unset_ips(record(), od_provider:id()) -> record().
 unset_ips(#dns_state{provider_to_ips = PtIPs} = DnsState, ProviderId) ->
-    DnsState#dns_state{
-        provider_to_ips = maps:remove(ProviderId, PtIPs)
-    }.
+    DnsState#dns_state{provider_to_ips = maps:remove(ProviderId, PtIPs)}.
 
 
 %%--------------------------------------------------------------------
@@ -396,55 +387,44 @@ unset_ips(#dns_state{provider_to_ips = PtIPs} = DnsState, ProviderId) ->
 %% Overwrites existing content for given name if any.
 %% @end
 %%--------------------------------------------------------------------
--spec set_txt_record(#dns_state{}, od_provider:id(),
-    Name :: binary(), Content :: binary(), TTL :: ttl()) -> #dns_state{}.
-set_txt_record(#dns_state{provider_to_txt_records = PtTR} = DnsState,
-    ProviderId, Name, Content, TTL) ->
+-spec set_txt_record(record(), od_provider:id(), binary(), binary(), ttl()) ->
+    record().
+set_txt_record(#dns_state{provider_to_txt_records = PtTR} = DnsState, ProviderId, Name, Content, TTL) ->
     TxtRecords = maps:get(ProviderId, PtTR, []),
     TxtRecords2 = lists:keystore(Name, 1, TxtRecords, {Name, Content, TTL}),
-    DnsState#dns_state{provider_to_txt_records =
-    PtTR#{ProviderId => TxtRecords2}}.
+    DnsState#dns_state{provider_to_txt_records = PtTR#{ProviderId => TxtRecords2}}.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Finds provider associated with given subdomain.
-%% @end
-%%--------------------------------------------------------------------
--spec get_provider_by_subdomain(record(), subdomain()) ->
+-spec remove_txt_records(record(), od_provider:id()) -> record().
+remove_txt_records(#dns_state{provider_to_txt_records = PtTR} = DnsState, ProviderId) ->
+    DnsState#dns_state{provider_to_txt_records = maps:remove(ProviderId, PtTR)}.
+
+
+%% @private
+-spec find_provider_by_subdomain(record(), dns_utils:subdomain()) ->
     {true, od_provider:id()} | false.
-get_provider_by_subdomain(#dns_state{subdomain_to_provider = StP}, Subdomain) ->
+find_provider_by_subdomain(#dns_state{subdomain_to_provider = StP}, Subdomain) ->
     case maps:find(Subdomain, StP) of
-        error ->
-            false;
-        {ok, Found} ->
-            {true, Found}
+        error -> false;
+        {ok, Found} -> {true, Found}
     end.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Returns dns state document.
-%% @end
-%%--------------------------------------------------------------------
 -spec get_dns_state() -> {ok, record()} | {error, term()}.
 get_dns_state() ->
     case datastore_model:get(?CTX, ?DNS_STATE_KEY) of
-        {ok, #document{value = #dns_state{} = DnsState}} -> {ok, DnsState};
+        {ok, #document{value = #dns_state{} = DnsState}} ->
+            {ok, DnsState};
         {error, not_found} ->
             {ok, #dns_state{}};
-        Error -> Error
+        Error ->
+            Error
     end.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Updates dns state. If record does not exist, inserts Default.
-%% @end
-%%--------------------------------------------------------------------
 -spec update(diff(), record()) -> {ok, record()} | {error, term()}.
 update(Diff, Default) ->
     case datastore_model:update(?CTX, ?DNS_STATE_KEY, Diff, Default) of

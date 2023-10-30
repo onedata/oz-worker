@@ -558,9 +558,9 @@ end).
 }).
 
 -record(dns_state, {
-    subdomain_to_provider = #{} :: #{dns_state:subdomain() => od_provider:id()},
-    provider_to_subdomain = #{} :: #{od_provider:id() => dns_state:subdomain()},
-    provider_to_ips = #{} :: #{od_provider:id() => [inet:ip4_address()]},
+    subdomain_to_provider = #{} :: #{dns_utils:subdomain() => od_provider:id()},
+    provider_to_subdomain = #{} :: #{od_provider:id() => dns_utils:subdomain()},
+    provider_to_ips = #{} :: #{od_provider:id() => #{binary() => [inet:ip4_address()]}},
     provider_to_txt_records = #{} :: #{od_provider:id() => [{binary(), binary(), integer() | undefined}]}
 }).
 
