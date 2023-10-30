@@ -361,14 +361,16 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         <<"online">> => Online
     };
 
-translate_resource(_, #gri{type = od_provider, aspect = domain_config}, Data) ->
-    case maps:find(<<"ipList">>, Data) of
-        {ok, IPList} ->
-            IPBinaries = [list_to_binary(inet:ntoa(IP)) || IP <- IPList],
-            Data#{<<"ipList">> := IPBinaries};
-        error ->
-            Data
-    end;
+translate_resource(_, #gri{type = od_provider, aspect = domain_config}, Data = #{
+    <<"ipList">> := OpWorkerIPs,
+    <<"ips">> := ProviderIPs
+}) ->
+    T = fun(IPList) -> [list_to_binary(inet:ntoa(IP)) || IP <- IPList] end,
+
+    Data#{
+        <<"ipList">> := T(OpWorkerIPs),
+        <<"ips">> := maps:map(fun(_, ServiceIPs) -> T(ServiceIPs) end, ProviderIPs)
+    };
 
 translate_resource(_, #gri{type = od_handle_service, aspect = instance, scope = private}, HService) ->
     #{

@@ -233,14 +233,17 @@ get(#el_req{gri = #gri{aspect = domain_config, id = ProviderId}}, Provider) ->
         <<"domain">> => Domain,
         <<"subdomainDelegation">> => SubdomainDelegation,
         <<"subdomain">> => null,
-        <<"ipList">> => []
+        <<"ipList">> => [],
+        <<"ips">> => #{<<>> => []}
     },
     case SubdomainDelegation of
         true ->
             {ok, Subdomain, IPs} = dns_state:get_delegation_config(ProviderId),
             {ok, Response#{
                 <<"subdomain">> => Subdomain,
-                <<"ipList">> => IPs
+                %% TODO VFS-11504 rm in 24.02.x
+                <<"ipList">> => maps:get(<<>>, IPs, []),
+                <<"ips">> => IPs
             }};
         false ->
             {ok, Response}
@@ -604,28 +607,35 @@ required_admin_privileges(_) ->
 validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}) ->
     SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
     SubdomainDelegationParam = maps:get(<<"subdomainDelegation">>, Data, undefined),
-    DomainRelatedFields = case {SubdomainDelegationParam, SubdomainDelegationSupported} of
+    {RequiredDomainRelatedFields, AtLeastOneDomainRelatedFields} = case
+        {SubdomainDelegationParam, SubdomainDelegationSupported}
+    of
         {true, false} ->
             throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED);
         {true, true} ->
-            #{
-                <<"subdomain">> => {binary, subdomain},
-                <<"ipList">> => {list_of_ipv4_addresses, any}
+            {
+                #{<<"subdomain">> => {binary, subdomain}},
+                #{
+                    <<"ips">> => build_provider_ips_parameter_spec(),
+                    %% TODO VFS-11504 rm in 24.02.x
+                    <<"ipList">> => {list_of_ipv4_addresses, any}
+                }
             };
         {false, _} ->
-            #{<<"domain">> => {binary, domain}};
+            {#{<<"domain">> => {binary, domain}}, #{}};
         {_, _} ->
             % valid subdomainDelegation field was not sent, which will cause
             % BAD_DATA error. No need to generate domain related fields.
-            #{}
+            {#{}, #{}}
     end,
     #{
-        required => DomainRelatedFields#{
+        required => RequiredDomainRelatedFields#{
             <<"token">> => {invite_token, ?REGISTER_ONEPROVIDER},
             <<"name">> => {binary, name},
             <<"subdomainDelegation">> => {boolean, any},
             <<"adminEmail">> => {binary, email}
         },
+        at_least_one => AtLeastOneDomainRelatedFields,
         optional => #{
             <<"latitude">> => {float, {between, -90, 90}},
             <<"longitude">> => {float, {between, -180, 180}}
@@ -705,11 +715,17 @@ validate(#el_req{operation = update, gri = #gri{aspect = domain_config}, data = 
         true ->
             true == oz_worker:get_env(subdomain_delegation_supported, true) orelse
                 throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED),
-            #{required => #{
-                <<"subdomainDelegation">> => {boolean, any},
-                <<"subdomain">> => {binary, subdomain},
-                <<"ipList">> => {list_of_ipv4_addresses, any}
-            }};
+            #{
+                required => #{
+                    <<"subdomainDelegation">> => {boolean, any},
+                    <<"subdomain">> => {binary, subdomain}
+                },
+                at_least_one => #{
+                    <<"ips">> => build_provider_ips_parameter_spec(),
+                    %% TODO VFS-11504 rm in 24.02.x
+                    <<"ipList">> => {list_of_ipv4_addresses, any}
+                }
+            };
         false ->
             #{required => #{
                 <<"subdomainDelegation">> => {boolean, any},
@@ -777,8 +793,8 @@ update_provider_domain(ProviderId, Data) ->
     Data :: entity_logic:data()) -> entity_logic:update_result().
 update_provider_subomain(ProviderId, Data) ->
     Subdomain = maps:get(<<"subdomain">>, Data),
-    Domain = dns_config:build_fqdn_from_subdomain(Subdomain),
-    IPs = maps:get(<<"ipList">>, Data),
+    Domain = dns_utils:build_fqdn_from_subdomain(Subdomain),
+    IPs = get_ips(Data),
     Result = case dns_state:set_delegation_config(ProviderId, Subdomain, IPs) of
         ok ->
             od_provider:update(ProviderId, fun(Provider) ->
@@ -819,10 +835,10 @@ create_provider(Auth, Data, ProviderId, GRI) ->
                 {maps:get(<<"domain">>, Data), undefined};
             true ->
                 ReqSubdomain = maps:get(<<"subdomain">>, Data),
-                IPs = maps:get(<<"ipList">>, Data),
+                IPs = get_ips(Data),
                 case dns_state:set_delegation_config(ProviderId, ReqSubdomain, IPs) of
                     ok ->
-                        {dns_config:build_fqdn_from_subdomain(ReqSubdomain), ReqSubdomain};
+                        {dns_utils:build_fqdn_from_subdomain(ReqSubdomain), ReqSubdomain};
                     {error, subdomain_exists} ->
                         throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>))
                 end
@@ -856,3 +872,38 @@ create_provider(Auth, Data, ProviderId, GRI) ->
             ?ERROR_INTERNAL_SERVER_ERROR
         end
     end).
+
+
+%% @private
+-spec build_provider_ips_parameter_spec() -> entity_logic_sanitizer:parameter_spec().
+build_provider_ips_parameter_spec() ->
+    {json, fun(ProviderIps) ->
+        maps:foreach(fun(ServiceSubdomain, ServiceIPs) ->
+            is_binary(ServiceSubdomain) orelse throw(?ERROR_BAD_DATA(<<"ips">>)),
+            is_ip_list(ServiceIPs) orelse throw(
+                ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ips.", ServiceSubdomain/binary>>)
+            )
+        end, ProviderIps),
+
+        true
+    end}.
+
+
+%% @private
+-spec is_ip_list([ip_utils:ip()] | term()) -> boolean().
+is_ip_list(List) when is_list(List) ->
+    lists:all(fun(Elem) ->
+        case ip_utils:to_ip4_address(Elem) of
+            {ok, _} -> true;
+            {error, ?EINVAL} -> false
+        end
+    end, List);
+
+is_ip_list(_) ->
+    false.
+
+
+%% @private
+-spec get_ips(map()) -> dns_state:provider_ips().
+get_ips(#{<<"ips">> := IPs}) -> IPs;
+get_ips(#{<<"ipList">> := WorkerIPs}) -> #{<<>> => WorkerIPs}.

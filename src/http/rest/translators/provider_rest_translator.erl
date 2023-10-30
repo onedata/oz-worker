@@ -88,9 +88,16 @@ get_response(#gri{id = ProviderId, aspect = instance, scope = protected}, Provid
         <<"creationTime">> => CreationTime
     });
 
-get_response(#gri{aspect = domain_config}, #{<<"ipList">> := IPList} = DomainConfig) ->
-    IPBinaries = [list_to_binary(inet:ntoa(IP)) || IP <- IPList],
-    rest_translator:ok_body_reply(DomainConfig#{<<"ipList">> := IPBinaries});
+get_response(#gri{aspect = domain_config}, DomainConfig = #{
+    <<"ipList">> := OpWorkerIPs,
+    <<"ips">> := ProviderIPs
+}) ->
+    T = fun(IPList) -> [list_to_binary(inet:ntoa(IP)) || IP <- IPList] end,
+
+    rest_translator:ok_body_reply(DomainConfig#{
+        <<"ipList">> := T(OpWorkerIPs),
+        <<"ips">> := maps:map(fun(_, ServiceIPs) -> T(ServiceIPs) end, ProviderIPs)
+    });
 
 get_response(#gri{aspect = {user_spaces, _}}, SpaceIds) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => SpaceIds});
