@@ -136,16 +136,14 @@ wrap_like_signed_32bit(Integer) -> wrap_like_signed_32bit(Integer - (1 bsl 32)).
 build_a_records(NSDomains, OneZoneIPs) ->
     OneZoneDomain = oz_worker:get_domain(),
 
-    ProviderSubdomains = dns_state:get_subdomains_to_ips(),
+    ProviderServicesSubdomains = dns_state:get_provider_services_subdomains_to_ips(),
 
     % check if there are any overlapping records
-    StaticSubdomains = filter_shadowed_entries(
-        oz_worker:get_env(dns_static_a_records, []), ProviderSubdomains
-    ),
+    StaticSubdomains = filter_shadowed_entries(oz_worker:get_env(dns_static_a_records, [])),
 
     ProviderDomains = [
         {dns_utils:build_domain(Sub, OneZoneDomain), IPs}
-        || {Sub, IPs} <- StaticSubdomains ++ maps:to_list(ProviderSubdomains)
+        || {Sub, IPs} <- StaticSubdomains ++ maps:to_list(ProviderServicesSubdomains)
     ],
 
     Entries = [{OneZoneDomain, OneZoneIPs} | ProviderDomains ++ NSDomains],
@@ -278,12 +276,6 @@ build_cname_records() ->
     end, StaticEntries).
 
 
-%% @private
--spec filter_shadowed_entries([T]) -> [T] when T :: tuple().
-filter_shadowed_entries(StaticEntries) ->
-    filter_shadowed_entries(StaticEntries, dns_state:get_subdomains_to_ips()).
-
-
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -291,19 +283,22 @@ filter_shadowed_entries(StaticEntries) ->
 %% by a provider, logging the fact.
 %% @end
 %%--------------------------------------------------------------------
--spec filter_shadowed_entries([T], #{dns_utils:subdomain() => [inet:ip4_address()]}) ->
-    [T] when T :: tuple().
-%% TODO
-filter_shadowed_entries(StaticEntries, ProviderSubdomains) ->
+-spec filter_shadowed_entries([T]) -> [T] when T :: tuple().
+filter_shadowed_entries(StaticEntries) ->
+    ProviderSubdomains = dns_state:get_provider_subdomains(),
+
     % check if there are any overlapping records
     lists:filter(fun(Entry) ->
         Subdomain = element(1, Entry), % not all tuples are 2-element, eg. MX entries
         NormalizedSubdomain = string:lowercase(Subdomain),
-        case maps:is_key(NormalizedSubdomain, ProviderSubdomains) of
-            false -> true;
+        IsSubdomain = fun(Domain) -> dns_utils:is_equal_or_subdomain(NormalizedSubdomain, Domain) end,
+
+        case lists:any(IsSubdomain, ProviderSubdomains) of
+            false ->
+                true;
             _ ->
                 ?warning("Ignoring static entry for subdomain \"~ts\" "
-                "as the subdomain is already used by a provider.", [Subdomain]),
+                "as the domain is already used by a provider.", [Subdomain]),
                 false
         end
     end, StaticEntries).

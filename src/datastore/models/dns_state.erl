@@ -22,7 +22,8 @@
     get_delegation_config/1,
     remove_delegation_config/1,
 
-    get_subdomains_to_ips/0
+    get_provider_subdomains/0,
+    get_provider_services_subdomains_to_ips/0
 ]).
 -export([
     set_txt_record/3, set_txt_record/4,
@@ -123,6 +124,43 @@ get_delegation_config(ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Deletes all information about given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_delegation_config(od_provider:id()) -> ok.
+remove_delegation_config(ProviderId) ->
+    {ok, _} = update(fun(DnsState) ->
+        DnsState2 = unset_subdomain(DnsState, ProviderId),
+        DnsState3 = remove_txt_records(DnsState2, ProviderId),
+        {ok, unset_ips(DnsState3, ProviderId)}
+    end, #dns_state{}),
+    node_manager_plugin:reconcile_dns_config(),
+    ok.
+
+
+-spec get_provider_subdomains() -> [dns_utils:subdomain()].
+get_provider_subdomains() ->
+    {ok, #dns_state{provider_to_subdomain = PtS}} = get_dns_state(),
+    maps:values(PtS).
+
+
+-spec get_provider_services_subdomains_to_ips() ->
+    #{dns_utils:subdomain() => [inet:ip4_address()]}.
+get_provider_services_subdomains_to_ips() ->
+    {ok, DnsState = #dns_state{provider_to_ips = PtIPs}} = get_dns_state(),
+
+    maps:fold(fun(ProviderSubdomain, ProviderId, OuterAcc) ->
+
+        maps:fold(fun(ServiceSubdomain, ServiceIPs, InnerAcc) ->
+            Subdomain = dns_utils:build_domain(ServiceSubdomain, ProviderSubdomain),
+            InnerAcc#{Subdomain => ServiceIPs}
+        end, OuterAcc, maps:get(ProviderId, PtIPs))
+
+    end, #{}, DnsState#dns_state.subdomain_to_provider).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Sets txt record under given name in provider's subdomain.
 %% Given provider mus have an associated subdomain, otherwise
 %% error is returned.
@@ -158,6 +196,25 @@ set_txt_record(ProviderId, Name, Content, TTL) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Returns all txt records, building their names using provider subdomains
+%% @end
+%%--------------------------------------------------------------------
+-spec get_txt_records() ->
+    [{Subdomain :: binary(), {Content :: binary(), TTL :: ttl()}}].
+get_txt_records() ->
+    {ok, DnsState} = get_dns_state(),
+    #dns_state{
+        provider_to_subdomain = PtS,
+        provider_to_txt_records = PtTR} = DnsState,
+    lists:flatmap(fun({ProviderId, Records}) ->
+        ProviderSubdomain = maps:get(ProviderId, PtS),
+        [{<<Name/binary, $., ProviderSubdomain/binary>>, {Content, TTL}}
+            || {Name, Content, TTL} <- Records]
+    end, maps:to_list(PtTR)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Removes TXT record identified by a provider and record name.
 %% @end
 %%--------------------------------------------------------------------
@@ -176,54 +233,6 @@ remove_txt_record(ProviderId, Name) ->
     node_manager_plugin:reconcile_dns_config(),
     ok.
 
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Deletes all information about given provider.
-%% @end
-%%--------------------------------------------------------------------
--spec remove_delegation_config(od_provider:id()) -> ok.
-remove_delegation_config(ProviderId) ->
-    {ok, _} = update(fun(DnsState) ->
-        DnsState2 = unset_subdomain(DnsState, ProviderId),
-        DnsState3 = remove_txt_records(DnsState2, ProviderId),
-        {ok, unset_ips(DnsState3, ProviderId)}
-    end, #dns_state{}),
-    node_manager_plugin:reconcile_dns_config(),
-    ok.
-
-
--spec get_subdomains_to_ips() -> #{dns_utils:subdomain() => [inet:ip4_address()]}.
-get_subdomains_to_ips() ->
-    {ok, DnsState = #dns_state{provider_to_ips = PtIPs}} = get_dns_state(),
-
-    maps:fold(fun(ProviderSubdomain, ProviderId, OuterAcc) ->
-
-        maps:fold(fun(ServiceSubdomain, ServiceIPs, InnerAcc) ->
-            Subdomain = dns_utils:build_domain(ServiceSubdomain, ProviderSubdomain),
-            InnerAcc#{Subdomain => ServiceIPs}
-        end, OuterAcc, maps:get(ProviderId, PtIPs))
-
-    end, #{}, DnsState#dns_state.subdomain_to_provider).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns all txt records, building their names using provider subdomains
-%% @end
-%%--------------------------------------------------------------------
--spec get_txt_records() ->
-    [{Subdomain :: binary(), {Content :: binary(), TTL :: ttl()}}].
-get_txt_records() ->
-    {ok, DnsState} = get_dns_state(),
-    #dns_state{
-        provider_to_subdomain = PtS,
-        provider_to_txt_records = PtTR} = DnsState,
-    lists:flatmap(fun({ProviderId, Records}) ->
-        ProviderSubdomain = maps:get(ProviderId, PtS),
-        [{<<Name/binary, $., ProviderSubdomain/binary>>, {Content, TTL}}
-            || {Name, Content, TTL} <- Records]
-    end, maps:to_list(PtTR)).
 
 %%%===================================================================
 %%% datastore_model callbacks
