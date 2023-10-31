@@ -3918,6 +3918,15 @@ get_record(dns_state, 2) -> {dns_state,
         {<<"second">>, <<"value">>, undefined}
     ]}
 };
+get_record(dns_state, 3) -> {dns_state,
+    #{<<"sub">> => <<"p1">>},
+    #{<<"p1">> => <<"sub">>},
+    #{<<"p1">> => #{<<>> => [{1, 2, 3, 4}, {192, 168, 192, 1}]}},
+    #{<<"p1">> => [
+        {<<"_acme-challenge">>, <<"token">>, undefined},
+        {<<"second">>, <<"value">>, undefined}
+    ]}
+};
 
 
 get_record(macaroon_auth, 1) -> {macaroon_auth,
