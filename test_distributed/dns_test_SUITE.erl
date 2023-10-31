@@ -72,10 +72,13 @@ all() -> ?ALL([
 %%%===================================================================
 %%% Example data
 %%%===================================================================
+
 -define(PROVIDER_NAME1, <<"test_provider">>).
 -define(PROVIDER_NAME2, <<"second_provider">>).
--define(PROVIDER_IPS1, lists:sort([{240, 1, 1, 0}, {240, 1, 1, 1}, {240, 1, 1, 2}])).
--define(PROVIDER_IPS2, lists:sort([{241, 1, 1, 0}, {241, 1, 1, 1}, {241, 1, 1, 2}])).
+-define(OP_WORKER_IPS1, lists:sort([{240, 1, 1, 0}, {240, 1, 1, 1}, {240, 1, 1, 2}])).
+-define(ONES3_IPS1, lists:sort([{240, 1, 1, 2}, {240, 1, 1, 3}])).
+-define(OP_WORKER_IPS2, lists:sort([{241, 1, 1, 0}, {241, 1, 1, 1}, {241, 1, 1, 2}])).
+-define(ONES3_IPS2, lists:sort([{241, 1, 1, 2}, {241, 1, 1, 3}])).
 -define(STATIC_SUBDOMAIN_IPS1, lists:sort([{1, 2, 3, 4}, {5, 6, 7, 8}])).
 -define(STATIC_SUBDOMAIN_IPS2, lists:sort([{122, 255, 255, 32}])).
 -define(PROVIDER_SUBDOMAIN1, "provsub").
@@ -150,22 +153,25 @@ dns_server_resolves_oz_domain_test(Config) ->
 dns_state_stores_provider_data_test(Config) ->
     %% given
     ProviderName = ?PROVIDER_NAME1,
+    OpWorkerIPs = ?OP_WORKER_IPS1,
+    OneS3IPs = ?ONES3_IPS1,
     SubdomainBin = <<?PROVIDER_SUBDOMAIN1>>,
-    ProviderIPs = ?PROVIDER_IPS1,
+    ProviderIPs = #{<<>> => OpWorkerIPs, <<"s3">> => OneS3IPs},
 
     %% when
-    {ok, {ProviderId, _}} = oz_test_utils:create_provider(
-        Config, ProviderName),
-    oz_test_utils:enable_subdomain_delegation(
-        Config, ProviderId, SubdomainBin, ProviderIPs),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ProviderName),
+    oz_test_utils:enable_subdomain_delegation(Config, ProviderId, SubdomainBin, ProviderIPs),
 
     %% then
-    ?assertEqual({ok, SubdomainBin, ProviderIPs}, oz_test_utils:call_oz(Config,
-        dns_state, get_delegation_config, [ProviderId])),
+    ?assertEqual(
+        {ok, SubdomainBin, ProviderIPs},
+        oz_test_utils:call_oz(Config, dns_state, get_delegation_config, [ProviderId])
+    ),
 
-    StIP = oz_test_utils:call_oz(Config,
-        dns_state, get_subdomains_to_ips, []),
-    ?assertEqual(ProviderIPs, lists:sort(maps:get(SubdomainBin, StIP))).
+    ?assertEqual(
+        #{SubdomainBin => OpWorkerIPs, <<"s3.", SubdomainBin/binary>> => OneS3IPs},
+        oz_test_utils:call_oz(Config, dns_state, get_provider_services_subdomains_to_ips, [])
+    ).
 
 
 %%--------------------------------------------------------------------
@@ -177,23 +183,34 @@ dns_state_stores_provider_data_test(Config) ->
 dns_server_resolves_delegated_subdomain_test(Config) ->
     %% given
     Name = ?PROVIDER_NAME1,
-    ProviderIPs = ?PROVIDER_IPS1,
+    NestedSubdomain = "not.every.single.level.need.its.own.dns.zone",
+    OpWorkerIPs = ?OP_WORKER_IPS1,
+    OneS3IPs = ?ONES3_IPS1,
+    ProviderIPs = #{
+        <<>> => OpWorkerIPs,
+        str_utils:to_binary(NestedSubdomain) => OpWorkerIPs,
+        <<"s3">> => OneS3IPs
+    },
     OZIPs = ?config(oz_ips, Config),
 
     Subdomain = ?PROVIDER_SUBDOMAIN1,
     SubdomainBin = <<?PROVIDER_SUBDOMAIN1>>,
     OZDomain = ?config(oz_domain, Config),
-    FullDomain = Subdomain ++ "." ++ OZDomain,
+    OpWorkerDomain = Subdomain ++ "." ++ OZDomain,
+    OneS3Domain = "s3." ++ OpWorkerDomain,
+    NestedDomain = NestedSubdomain ++ "." ++ OpWorkerDomain,
 
     %% when
     {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, Name),
-    oz_test_utils:enable_subdomain_delegation(
-        Config, ProviderId, SubdomainBin, ProviderIPs),
+    oz_test_utils:enable_subdomain_delegation(Config, ProviderId, SubdomainBin, ProviderIPs),
 
     %% then
     {ok, ProviderDoc} = oz_test_utils:get_provider(Config, ProviderId),
-    ?assertEqual(list_to_binary(FullDomain), ProviderDoc#od_provider.domain),
-    assert_dns_answer(OZIPs, FullDomain, a, ProviderIPs).
+    ?assertEqual(list_to_binary(OpWorkerDomain), ProviderDoc#od_provider.domain),
+
+    assert_dns_answer(OZIPs, OpWorkerDomain, a, OpWorkerIPs),
+    assert_dns_answer(OZIPs, NestedDomain, a, OpWorkerIPs),
+    assert_dns_answer(OZIPs, OneS3Domain, a, OneS3IPs).
 
 
 %%--------------------------------------------------------------------
@@ -205,31 +222,36 @@ dns_server_resolves_delegated_subdomain_test(Config) ->
 dns_server_resolves_changed_subdomain_test(Config) ->
     %% given
     Name = ?PROVIDER_NAME1,
-    ProviderIPs = ?PROVIDER_IPS1,
+    OpWorkerIPs = ?OP_WORKER_IPS1,
+    OneS3IPs = ?ONES3_IPS1,
+    ProviderIPs = #{<<>> => OpWorkerIPs, <<"s3">> => OneS3IPs},
     OZIPs = ?config(oz_ips, Config),
 
     OZDomain = ?config(oz_domain, Config),
     Subdomain1 = ?PROVIDER_SUBDOMAIN1,
     SubdomainBin1 = <<?PROVIDER_SUBDOMAIN1>>,
-    FullDomain1 = Subdomain1 ++ "." ++ OZDomain,
+    OpWorkerDomain1 = Subdomain1 ++ "." ++ OZDomain,
+    OneS3Domain1 = "s3." ++ OpWorkerDomain1,
 
     Subdomain2 = ?PROVIDER_SUBDOMAIN2,
     SubdomainBin2 = <<?PROVIDER_SUBDOMAIN2>>,
-    FullDomain2 = Subdomain2 ++ "." ++ OZDomain,
+    OpWorkerDomain2 = Subdomain2 ++ "." ++ OZDomain,
+    OneS3Domain2 = "s3." ++ OpWorkerDomain2,
 
     %% when
     {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, Name),
-    oz_test_utils:enable_subdomain_delegation(
-        Config, ProviderId, SubdomainBin1, ProviderIPs),
+    oz_test_utils:enable_subdomain_delegation(Config, ProviderId, SubdomainBin1, ProviderIPs),
 
-    assert_dns_answer(OZIPs, FullDomain1, a, ProviderIPs),
+    assert_dns_answer(OZIPs, OpWorkerDomain1, a, OpWorkerIPs),
+    assert_dns_answer(OZIPs, OneS3Domain1, a, OneS3IPs),
 
-    oz_test_utils:enable_subdomain_delegation(
-        Config, ProviderId, SubdomainBin2, ProviderIPs),
+    oz_test_utils:enable_subdomain_delegation(Config, ProviderId, SubdomainBin2, ProviderIPs),
 
     %% then
-    assert_dns_answer(OZIPs, FullDomain1, a, []),
-    assert_dns_answer(OZIPs, FullDomain2, a, ProviderIPs).
+    assert_dns_answer(OZIPs, OpWorkerDomain1, a, []),
+    assert_dns_answer(OZIPs, OneS3Domain1, a, []),
+    assert_dns_answer(OZIPs, OpWorkerDomain2, a, OpWorkerIPs),
+    assert_dns_answer(OZIPs, OneS3Domain2, a, OneS3IPs).
 
 
 %%--------------------------------------------------------------------
@@ -305,22 +327,27 @@ update_fails_on_duplicated_subdomain_test(Config) ->
     Name1 = ?PROVIDER_NAME1,
     Name2 = ?PROVIDER_NAME2,
     SubdomainBin = <<?PROVIDER_SUBDOMAIN1>>,
-    StaticSubdomain = <<"test">>,
-    StaticNSSubdomain = <<"test">>,
+    StaticSubdomain = <<"static-subdomain">>,
+    NestedStaticSubdomainTopElement = <<"test-subdomain">>,
+    NestedStaticSubdomain = <<"nested.static.", NestedStaticSubdomainTopElement/binary>>,
+    StaticNSSubdomain = <<"ns-subdomain">>,
 
-    oz_test_utils:set_env(Config, dns_static_a_records, [{StaticSubdomain, [{1, 1, 1, 1}]}]),
+    oz_test_utils:set_env(Config, dns_static_a_records, [
+        {StaticSubdomain, [{1, 1, 1, 1}]},
+        {NestedStaticSubdomain, [{1, 1, 1, 1}]}
+    ]),
     % ns records should also block setting subdomain
     oz_test_utils:set_env(Config, dns_static_ns_records, [{StaticNSSubdomain, [StaticNSSubdomain]}]),
     {ok, {P1, _}} = oz_test_utils:create_provider(Config, Name1),
     {ok, {P2, _}} = oz_test_utils:create_provider(Config, Name2),
-
 
     oz_test_utils:enable_subdomain_delegation(Config, P1, SubdomainBin, []),
 
     Data = #{
         <<"subdomainDelegation">> => true,
         <<"subdomain">> => SubdomainBin,
-        <<"ipList">> => []},
+        <<"ipList">> => []
+    },
 
     % subdomain used by another provider
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
@@ -335,20 +362,26 @@ update_fails_on_duplicated_subdomain_test(Config) ->
             provider_logic, update_domain_config, [?ROOT, P2, Data2])
     ),
 
-    % subdomain configured in app config
+    % static subdomain configured in app config
     Data3 = Data#{<<"subdomain">> := StaticSubdomain},
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
         oz_test_utils:call_oz(Config,
             provider_logic, update_domain_config, [?ROOT, P2, Data3])
     ),
 
-    % subdomain configured in app config for ns server
-    Data4 = Data#{<<"subdomain">> := StaticNSSubdomain},
+    % nested static subdomain configured in app config
+    Data4 = Data#{<<"subdomain">> := NestedStaticSubdomainTopElement},
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
         oz_test_utils:call_oz(Config,
             provider_logic, update_domain_config, [?ROOT, P2, Data4])
-    ).
+    ),
 
+    % subdomain configured in app config for ns server
+    Data6 = Data#{<<"subdomain">> := StaticNSSubdomain},
+    ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
+        oz_test_utils:call_oz(Config,
+            provider_logic, update_domain_config, [?ROOT, P2, Data6])
+    ).
 
 
 dns_server_resolves_static_records(Config) ->
@@ -367,8 +400,8 @@ dns_server_resolves_static_records(Config) ->
         {
             a,
             dns_static_a_records,
-            [{<<"A">>, ?PROVIDER_IPS1}],
-            {"a." ++ OZDomain, ?PROVIDER_IPS1}},
+            [{<<"A">>, ?OP_WORKER_IPS1}],
+            {"a." ++ OZDomain, ?OP_WORKER_IPS1}},
         {
             mx,
             dns_static_mx_records,
@@ -400,7 +433,6 @@ dns_server_resolves_static_records(Config) ->
     end, Records).
 
 
-
 %%--------------------------------------------------------------------
 %% @doc
 %% When a static subdomain entry is set after a provider has registered
@@ -411,13 +443,14 @@ dns_server_resolves_static_records(Config) ->
 static_subdomain_does_not_shadow_provider_subdomain_test(Config) ->
     %% given
     ProviderName = ?PROVIDER_NAME1,
-    ProviderIPs1 = ?PROVIDER_IPS1,
+    ProviderIPs1 = ?OP_WORKER_IPS1,
     StaticIPs = ?STATIC_SUBDOMAIN_IPS1,
 
     OZIPs = ?config(oz_ips, Config),
 
     Subdomain = ?PROVIDER_SUBDOMAIN1,
     SubdomainBin = <<?PROVIDER_SUBDOMAIN1>>,
+    NestedSubdomainBin = <<"nested.", SubdomainBin/binary>>,
     UpperSubdomainBin = string:uppercase(<<?PROVIDER_SUBDOMAIN1>>),
     OZDomain = ?config(oz_domain, Config),
     FullDomain = Subdomain ++ "." ++ OZDomain,
@@ -430,8 +463,11 @@ static_subdomain_does_not_shadow_provider_subdomain_test(Config) ->
         Config, ProviderId, SubdomainBin, ProviderIPs1),
 
     % subdomain is set as static entry statically
-    oz_test_utils:set_env(Config, dns_static_a_records,
-        [{SubdomainBin, StaticIPs}, {UpperSubdomainBin, StaticIPs}]),
+    oz_test_utils:set_env(Config, dns_static_a_records, [
+        {SubdomainBin, StaticIPs},
+        {NestedSubdomainBin, StaticIPs},
+        {UpperSubdomainBin, StaticIPs}
+    ]),
 
     % DNS update is sent
     ?assertEqual(ok, oz_test_utils:call_oz(Config,
@@ -439,7 +475,10 @@ static_subdomain_does_not_shadow_provider_subdomain_test(Config) ->
 
     % provider IPs are still resolved
     assert_dns_answer(OZIPs, FullDomain, a, ProviderIPs1),
-    assert_dns_answer(OZIPs, UpperFullDomain, a, ProviderIPs1).
+    assert_dns_answer(OZIPs, UpperFullDomain, a, ProviderIPs1),
+
+    % and nested static subdomain is not
+    assert_dns_answer(OZIPs, NestedSubdomainBin, a, []).
 
 
 %%--------------------------------------------------------------------
@@ -451,29 +490,33 @@ static_subdomain_does_not_shadow_provider_subdomain_test(Config) ->
 dns_server_does_not_resolve_removed_subdomain_test(Config) ->
     %% given
     Name = ?PROVIDER_NAME1,
-    ProviderIPs = ?PROVIDER_IPS1,
+    OpWorkerIPs = ?OP_WORKER_IPS1,
+    OneS3IPs = ?ONES3_IPS1,
+    ProviderIPs = #{<<>> => OpWorkerIPs, <<"s3">> => OneS3IPs},
     OZIPs = ?config(oz_ips, Config),
 
     OZDomain = ?config(oz_domain, Config),
     Subdomain = ?PROVIDER_SUBDOMAIN1,
     SubdomainBin = <<?PROVIDER_SUBDOMAIN1>>,
-    FullDomain = Subdomain ++ "." ++ OZDomain,
+    OpWorkerDomain = Subdomain ++ "." ++ OZDomain,
+    OneS3Domain = "s3." ++ OpWorkerDomain,
 
     Domain = ?EXTERNAL_DOMAIN1,
     DomainBin = list_to_binary(Domain),
 
     %% when
     {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, Name),
-    oz_test_utils:enable_subdomain_delegation(
-        Config, ProviderId, SubdomainBin, ProviderIPs),
+    oz_test_utils:enable_subdomain_delegation(Config, ProviderId, SubdomainBin, ProviderIPs),
 
-    assert_dns_answer(OZIPs, FullDomain, a, ProviderIPs),
+    assert_dns_answer(OZIPs, OpWorkerDomain, a, OpWorkerIPs),
+    assert_dns_answer(OZIPs, OneS3Domain, a, OneS3IPs),
 
     % disable subdomain delegation
     oz_test_utils:set_provider_domain(Config, ProviderId, DomainBin),
 
     %% then
-    assert_dns_answer(OZIPs, FullDomain, a, []),
+    assert_dns_answer(OZIPs, OpWorkerDomain, a, []),
+    assert_dns_answer(OZIPs, OneS3Domain, a, []),
     % this domain should not be handled by OZ dns
     assert_dns_answer(OZIPs, DomainBin, a, []).
 
