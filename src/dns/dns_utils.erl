@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
-%%% @author Wojciech Geisler
-%%% @copyright (C) 2017 ACK CYFRONET AGH
+%%% @author Bartosz Walkowicz
+%%% @copyright (C) 2023 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -10,9 +10,14 @@
 %%% @end
 %%%-------------------------------------------------------------------
 -module(dns_utils).
--author("Wojciech Geisler").
+-author("Bartosz Walkowicz").
 
--export([build_domain/2, build_fqdn_from_subdomain/1]).
+-export([
+    build_domain/2,
+    build_fqdn_from_subdomain/1,
+
+    is_equal_or_subdomain/2
+]).
 
 -type domain() :: binary().
 -type subdomain() :: binary().
@@ -49,3 +54,25 @@ build_domain(Subdomain, Domain) ->
 -spec build_fqdn_from_subdomain(Subdomain :: domain()) -> domain().
 build_fqdn_from_subdomain(Subdomain) ->
     build_domain(Subdomain, oz_worker:get_domain()).
+
+
+-spec is_equal_or_subdomain(subdomain(), subdomain()) -> boolean().
+is_equal_or_subdomain(Domain, ReferenceDomain) ->
+    DomainSize = byte_size(Domain),
+    ReferenceDomainSize = byte_size(ReferenceDomain),
+
+    if
+        DomainSize > ReferenceDomainSize ->
+            PrefixSize = DomainSize - ReferenceDomainSize - 1,
+
+            case Domain of
+                <<_Prefix:PrefixSize/binary, ".", ReferenceDomain/binary>> -> true;
+                _ -> false
+            end;
+
+        DomainSize == ReferenceDomainSize ->
+            Domain == ReferenceDomain;
+
+        true ->
+            false
+    end.

@@ -324,19 +324,23 @@ upgrade_record(2, {
 %% @end
 %%--------------------------------------------------------------------
 -spec is_subdomain_reserved(dns_utils:subdomain()) -> boolean().
-%% TODO
-is_subdomain_reserved(Subdomain) ->
+is_subdomain_reserved(ProviderSubdomain) ->
     % Get all reserved values
     Static = lists:flatmap(fun(Env) ->
         proplists:get_keys(oz_worker:get_env(Env, []))
     end, [dns_static_a_records, dns_static_ns_records, dns_static_cname_records]),
-    Static2 = lists:map(fun({_Name, Value, _Preference}) ->
-        Value
-    end, oz_worker:get_env(dns_static_mx_records, [])) ++ Static,
+    Static2 = lists:foldl(fun({_Name, Value, _Preference}, Acc) ->
+        [Value | Acc]
+    end, Static, oz_worker:get_env(dns_static_mx_records, [])),
+
+    IsReservedByStaticEntry = lists:any(fun(StaticSubdomain) ->
+        dns_utils:is_equal_or_subdomain(StaticSubdomain, ProviderSubdomain)
+    end, Static2),
 
     % subdomains "ns" or "nsX" where X is a number are reserved for nameserver.
-    lists:member(Subdomain, Static2) orelse
-        match == re:run(Subdomain, <<"^ns[0-9]*$">>, [{capture, none}]).
+    IsReservedByStaticEntry orelse match == re:run(
+        ProviderSubdomain, <<"^ns[0-9]*$">>, [{capture, none}]
+    ).
 
 
 %% @private
