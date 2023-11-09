@@ -291,8 +291,9 @@ filter_shadowed_entries(StaticEntries) ->
     lists:filter(fun(Entry) ->
         SubdomainLabel = element(1, Entry), % not all tuples are 2-element, eg. MX entries
         NormalizedSubdomainLabel = string:lowercase(SubdomainLabel),
+        IsSubdomain = fun(Domain) -> dns_utils:is_equal_or_subdomain(NormalizedSubdomainLabel, Domain) end,
 
-        case lists:member(NormalizedSubdomainLabel, ProviderSubdomainLabels) of
+        case lists:any(IsSubdomain, ProviderSubdomainLabels) of
             false ->
                 true;
             _ ->
