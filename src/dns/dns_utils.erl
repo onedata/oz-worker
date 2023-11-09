@@ -19,10 +19,13 @@
     is_equal_or_subdomain/2
 ]).
 
--type domain() :: binary().
--type subdomain() :: binary().
+% A string, up to 63 characters long, build of alphanumerics and hyphens.
+-type domain_label() :: binary().
+% A domain name consists of one or more labels, that are delimited by dots,
+% such as 'example.com'.
+-type domain_name() :: binary().
 
--export_type([domain/0, subdomain/0]).
+-export_type([domain_label/0, domain_name/0]).
 
 
 %%%===================================================================
@@ -39,7 +42,7 @@
 %% and is not always passed through this function.
 %% @end
 %%--------------------------------------------------------------------
--spec build_domain(Subdomain :: domain(), Domain :: domain()) -> domain().
+-spec build_domain(Subdomain :: domain_name(), Domain :: domain_name()) -> domain_name().
 build_domain(<<>>, Domain) ->
     string:lowercase(Domain);
 build_domain(Subdomain, Domain) ->
@@ -51,12 +54,12 @@ build_domain(Subdomain, Domain) ->
 %% Joins provided subdomain with onezone domain.
 %% @end
 %%--------------------------------------------------------------------
--spec build_fqdn_from_subdomain(Subdomain :: domain()) -> domain().
+-spec build_fqdn_from_subdomain(Subdomain :: domain_name()) -> domain_name().
 build_fqdn_from_subdomain(Subdomain) ->
     build_domain(Subdomain, oz_worker:get_domain()).
 
 
--spec is_equal_or_subdomain(subdomain(), subdomain()) -> boolean().
+-spec is_equal_or_subdomain(domain_label(), domain_label()) -> boolean().
 is_equal_or_subdomain(Domain, ReferenceDomain) ->
     DomainSize = byte_size(Domain),
     ReferenceDomainSize = byte_size(ReferenceDomain),

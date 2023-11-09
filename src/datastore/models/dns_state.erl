@@ -18,12 +18,12 @@
 
 %% API
 -export([
-    set_delegation_config/3,
+    set_delegation_config/4,
     get_delegation_config/1,
     remove_delegation_config/1,
 
-    get_provider_subdomains/0,
-    get_provider_services_subdomains_to_ips/0
+    get_provider_subdomain_labels/0,
+    get_provider_relative_domain_names_to_ips/0
 ]).
 -export([
     set_txt_record/3, set_txt_record/4,
@@ -43,7 +43,7 @@
 -type diff() :: datastore_doc:diff(record()).
 
 %% Mapping between provider service and its external ips
--type provider_ips() :: #{binary() => [inet:ip4_address()]}.
+-type provider_ips() :: #{dns_utils:domain_label() => [inet:ip4_address()]}.
 -type ttl() :: time:seconds() | undefined.
 -export_type([id/0, record/0, doc/0]).
 -export_type([provider_ips/0, ttl/0]).
@@ -63,34 +63,43 @@
 %% Updates subdomain delegation config of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec set_delegation_config(od_provider:id(), dns_utils:subdomain(), provider_ips()) ->
+-spec set_delegation_config(
+    od_provider:id(),
+    dns_utils:domain_label(),
+    [inet:ip4_address()],
+    [inet:ip4_address()]
+) ->
     ok | {error, subdomain_exists}.
-set_delegation_config(ProviderId, Subdomain, IPs) ->
-    Result = case is_subdomain_reserved(Subdomain) of
+set_delegation_config(ProviderId, ProviderSubdomainLabel, OpWorkerIps, OneS3Ips) ->
+    OpIps = #{<<>> => OpWorkerIps, <<"s3">> => OneS3Ips},
+
+    Result = case is_subdomain_label_reserved(ProviderSubdomainLabel) of
         true ->
-            ?info("Refusing to register provider subdomain '~ts' as it is reserved", [Subdomain]),
+            ?info("Refusing to register provider subdomain '~ts' as it is reserved", [ProviderSubdomainLabel]),
             {error, subdomain_exists};
         false ->
             Diff = fun(DnsState) ->
-                StateOrError = case find_provider_by_subdomain(DnsState, Subdomain) of
+                StateOrError = case find_provider_by_subdomain_label(DnsState, ProviderSubdomainLabel) of
                     {true, ProviderId} ->
                         DnsState; % subdomain is already set
                     {true, OtherProvider} ->
                         ?debug("Refusing to set provider's ~ts subdomain to ~ts as it is used by provider ~ts",
-                            [ProviderId, Subdomain, OtherProvider]),
+                            [ProviderId, ProviderSubdomainLabel, OtherProvider]),
                         {error, subdomain_exists};
                     false ->
                         % remove old subdomain of provider begin updated before setting new
-                        DnsState2 = unset_subdomain(DnsState, ProviderId),
-                        set_subdomain(DnsState2, ProviderId, Subdomain)
+                        DnsState2 = unset_subdomain_label(DnsState, ProviderId),
+                        set_subdomain_label(DnsState2, ProviderId, ProviderSubdomainLabel)
                 end,
                 case StateOrError of
                     {error, subdomain_exists} -> {error, subdomain_exists};
-                    NewState -> {ok, set_ips(NewState, ProviderId, IPs)}
+                    NewState -> {ok, set_ips(NewState, ProviderId, OpIps)}
                 end
             end,
-            Default = set_ips(set_subdomain(#dns_state{}, ProviderId, Subdomain),
-                ProviderId, IPs),
+            Default = set_ips(
+                set_subdomain_label(#dns_state{}, ProviderId, ProviderSubdomainLabel),
+                ProviderId, OpIps
+            ),
             update(Diff, Default)
     end,
     case Result of
@@ -108,7 +117,7 @@ set_delegation_config(ProviderId, Subdomain, IPs) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_delegation_config(od_provider:id()) ->
-    {ok, dns_utils:subdomain(), provider_ips()} |{error, not_found}.
+    {ok, dns_utils:domain_label(), [inet:ip4_address()], [inet:ip4_address()]} | {error, not_found}.
 get_delegation_config(ProviderId) ->
     {ok, DnsState} = get_dns_state(),
     #dns_state{
@@ -116,7 +125,8 @@ get_delegation_config(ProviderId) ->
         provider_to_ips = PtIPs} = DnsState,
     case maps:find(ProviderId, PtS) of
         {ok, Subdomain} ->
-            {ok, Subdomain, maps:get(ProviderId, PtIPs, [])};
+            #{<<>> := OpWorkerIps, <<"s3">> := OneS3Ips} = maps:get(ProviderId, PtIPs, []),
+            {ok, Subdomain, OpWorkerIps, OneS3Ips};
         error ->
             {error, not_found}
     end.
@@ -130,7 +140,7 @@ get_delegation_config(ProviderId) ->
 -spec remove_delegation_config(od_provider:id()) -> ok.
 remove_delegation_config(ProviderId) ->
     {ok, _} = update(fun(DnsState) ->
-        DnsState2 = unset_subdomain(DnsState, ProviderId),
+        DnsState2 = unset_subdomain_label(DnsState, ProviderId),
         DnsState3 = remove_txt_records(DnsState2, ProviderId),
         {ok, unset_ips(DnsState3, ProviderId)}
     end, #dns_state{}),
@@ -138,22 +148,25 @@ remove_delegation_config(ProviderId) ->
     ok.
 
 
--spec get_provider_subdomains() -> [dns_utils:subdomain()].
-get_provider_subdomains() ->
+-spec get_provider_subdomain_labels() -> [dns_utils:domain_label()].
+get_provider_subdomain_labels() ->
     {ok, #dns_state{provider_to_subdomain = PtS}} = get_dns_state(),
     maps:values(PtS).
 
 
--spec get_provider_services_subdomains_to_ips() ->
-    #{dns_utils:subdomain() => [inet:ip4_address()]}.
-get_provider_services_subdomains_to_ips() ->
+-spec get_provider_relative_domain_names_to_ips() ->
+    #{dns_utils:domain_name() => [inet:ip4_address()]}.
+get_provider_relative_domain_names_to_ips() ->
     {ok, DnsState = #dns_state{provider_to_ips = PtIPs}} = get_dns_state(),
 
-    maps:fold(fun(ProviderSubdomain, ProviderId, OuterAcc) ->
+    maps:fold(fun(ProviderSubdomainLabel, ProviderId, OuterAcc) ->
 
-        maps:fold(fun(ServiceSubdomain, ServiceIPs, InnerAcc) ->
-            Subdomain = dns_utils:build_domain(ServiceSubdomain, ProviderSubdomain),
-            InnerAcc#{Subdomain => ServiceIPs}
+        maps:fold(fun
+            (_OpServiceSubdomainLabel, [], InnerAcc) ->
+                InnerAcc;
+            (OpServiceSubdomainLabel, ServiceIPs, InnerAcc) ->
+                OpServiceDomain = dns_utils:build_domain(OpServiceSubdomainLabel, ProviderSubdomainLabel),
+                InnerAcc#{OpServiceDomain => ServiceIPs}
         end, OuterAcc, maps:get(ProviderId, PtIPs))
 
     end, #{}, DnsState#dns_state.subdomain_to_provider).
@@ -316,7 +329,7 @@ upgrade_record(2, {
         ?MODULE,
         SubdomainToProvider,
         ProviderToSubdomain,
-        maps:map(fun(_Provider, WorkerIps) -> #{<<>> => WorkerIps} end, ProviderToIPS),
+        maps:map(fun(_Provider, OpWorkerIps) -> #{<<>> => OpWorkerIps} end, ProviderToIPS),
         ProviderToTxt
     }}.
 
@@ -332,8 +345,8 @@ upgrade_record(2, {
 %% Checks if subdomain is reserved for a static entry or nameserver.
 %% @end
 %%--------------------------------------------------------------------
--spec is_subdomain_reserved(dns_utils:subdomain()) -> boolean().
-is_subdomain_reserved(ProviderSubdomain) ->
+-spec is_subdomain_label_reserved(dns_utils:domain_label()) -> boolean().
+is_subdomain_label_reserved(ProviderSubdomainLabel) ->
     % Get all reserved values
     Static = lists:flatmap(fun(Env) ->
         proplists:get_keys(oz_worker:get_env(Env, []))
@@ -343,18 +356,18 @@ is_subdomain_reserved(ProviderSubdomain) ->
     end, Static, oz_worker:get_env(dns_static_mx_records, [])),
 
     IsReservedByStaticEntry = lists:any(fun(StaticSubdomain) ->
-        dns_utils:is_equal_or_subdomain(StaticSubdomain, ProviderSubdomain)
+        dns_utils:is_equal_or_subdomain(StaticSubdomain, ProviderSubdomainLabel)
     end, Static2),
 
     % subdomains "ns" or "nsX" where X is a number are reserved for nameserver.
     IsReservedByStaticEntry orelse match == re:run(
-        ProviderSubdomain, <<"^ns[0-9]*$">>, [{capture, none}]
+        ProviderSubdomainLabel, <<"^ns[0-9]*$">>, [{capture, none}]
     ).
 
 
 %% @private
--spec set_subdomain(record(), od_provider:id(), dns_utils:subdomain()) -> record().
-set_subdomain(DnsState, ProviderId, Subdomain) ->
+-spec set_subdomain_label(record(), od_provider:id(), dns_utils:domain_label()) -> record().
+set_subdomain_label(DnsState, ProviderId, SubdomainLabel) ->
     #dns_state{
         provider_to_subdomain = PtS,
         subdomain_to_provider = StP} = DnsState,
@@ -363,14 +376,14 @@ set_subdomain(DnsState, ProviderId, Subdomain) ->
         error -> StP
     end,
     DnsState#dns_state{
-        provider_to_subdomain = PtS#{ProviderId => Subdomain},
-        subdomain_to_provider = NewStP#{Subdomain => ProviderId}
+        provider_to_subdomain = PtS#{ProviderId => SubdomainLabel},
+        subdomain_to_provider = NewStP#{SubdomainLabel => ProviderId}
     }.
 
 
 %% @private
--spec unset_subdomain(record(), od_provider:id()) -> record().
-unset_subdomain(DnsState, ProviderId) ->
+-spec unset_subdomain_label(record(), od_provider:id()) -> record().
+unset_subdomain_label(DnsState, ProviderId) ->
     #dns_state{
         provider_to_subdomain = PtS,
         subdomain_to_provider = StP} = DnsState,
@@ -415,10 +428,10 @@ remove_txt_records(#dns_state{provider_to_txt_records = PtTR} = DnsState, Provid
 
 
 %% @private
--spec find_provider_by_subdomain(record(), dns_utils:subdomain()) ->
+-spec find_provider_by_subdomain_label(record(), dns_utils:domain_label()) ->
     {true, od_provider:id()} | false.
-find_provider_by_subdomain(#dns_state{subdomain_to_provider = StP}, Subdomain) ->
-    case maps:find(Subdomain, StP) of
+find_provider_by_subdomain_label(#dns_state{subdomain_to_provider = StP}, SubdomainLabel) ->
+    case maps:find(SubdomainLabel, StP) of
         error -> false;
         {ok, Found} -> {true, Found}
     end.
