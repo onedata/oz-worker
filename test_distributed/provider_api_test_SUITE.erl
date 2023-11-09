@@ -2374,9 +2374,12 @@ get_own_domain_config_test(Config) ->
     ExpBody = #{
         <<"subdomainDelegation">> => false,
         <<"domain">> => ExpDomain,
+        <<"subdomain">> => null,
         <<"ipList">> => [],
-        <<"ips">> => #{<<>> => []},
-        <<"subdomain">> => null
+        <<"opWorkerIpAddresses">> => [],
+        <<"opWorkerPort">> => 443,
+        <<"oneS3IpAddresses">> => [],
+        <<"oneS3Port">> => null
     },
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
