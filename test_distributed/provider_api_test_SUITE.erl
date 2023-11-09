@@ -135,6 +135,8 @@ create_test(Config) ->
         ProviderTokenDeserialized = ozt_tokens:ensure_deserialized(ProviderToken),
         ExpRootTokenId = ProviderTokenDeserialized#token.id,
         ExpSubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
+        ExpOpWorkerPort = maps:get(<<"opWorkerPort">>, Data, 443),
+        ExpOneS3Port = utils:null_to_undefined(maps:get(<<"oneS3Port">>, Data, null)),
         ExpAdminEmail = maps:get(<<"adminEmail">>, Data),
         ExpLatitude = maps:get(<<"latitude">>, Data, 0.0),
         ExpLongitude = maps:get(<<"longitude">>, Data, 0.0),
@@ -153,6 +155,8 @@ create_test(Config) ->
         ?assertEqual(ExpDomain, Provider#od_provider.domain),
         ?assertEqual(ExpSubdomainDelegation, Provider#od_provider.subdomain_delegation),
         ?assertEqual(ExpSubdomain, Provider#od_provider.subdomain),
+        ?assertEqual(ExpOpWorkerPort, Provider#od_provider.op_worker_port),
+        ?assertEqual(ExpOneS3Port, Provider#od_provider.ones3_port),
         ?assertEqual(ExpAdminEmail, Provider#od_provider.admin_email),
         ?assertEqual(ExpClusterId, ProviderId),
         ?assertEqual(ExpLatitude, Provider#od_provider.latitude),
@@ -176,6 +180,27 @@ create_test(Config) ->
         oz_test_utils:delete_provider(Config, ProviderId),
         true
     end,
+
+    CorrectValues = #{
+        <<"token">> => [fun() ->
+            {ok, RegistrationToken} = oz_test_utils:create_provider_registration_token(
+                Config, ?USER(CreatorUserId), CreatorUserId
+            ),
+            {ok, Serialized} = tokens:serialize(RegistrationToken),
+            Serialized
+        end],
+        <<"name">> => [ExpName],
+        <<"domain">> => [<<"multilevel.provider-domain.org">>],
+        <<"subdomain">> => [<<"prov-sub">>],
+        <<"ipList">> => [[<<"2.4.6.8">>, <<"255.253.251.2">>]],
+        <<"opWorkerIpAddresses">> => [[<<"2.4.6.8">>, <<"255.253.251.2">>]],
+        <<"opWorkerPort">> => [9999],
+        <<"oneS3IpAddresses">> => [[<<"255.253.251.1">>]],
+        <<"oneS3Port">> => [6666],
+        <<"adminEmail">> => [?ADMIN_EMAIL],
+        <<"latitude">> => [rand:uniform() * 90],
+        <<"longitude">> => [rand:uniform() * 180]
+    },
 
     %% Create provider with subdomain delegation turned off
     oz_test_utils:set_env(Config, subdomain_delegation_supported, false),
@@ -212,22 +237,8 @@ create_test(Config) ->
             required = [
                 <<"token">>, <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>
             ],
-            optional = [<<"latitude">>, <<"longitude">>],
-            correct_values = #{
-                <<"token">> => [fun() ->
-                    {ok, RegistrationToken} = oz_test_utils:create_provider_registration_token(
-                        Config, ?USER(CreatorUserId), CreatorUserId
-                    ),
-                    {ok, Serialized} = tokens:serialize(RegistrationToken),
-                    Serialized
-                end],
-                <<"name">> => [ExpName],
-                <<"domain">> => [<<"multilevel.provider-domain.org">>],
-                <<"subdomainDelegation">> => [false],
-                <<"adminEmail">> => [?ADMIN_EMAIL],
-                <<"latitude">> => [rand:uniform() * 90],
-                <<"longitude">> => [rand:uniform() * 180]
-            },
+            optional = [<<"latitude">>, <<"longitude">>, <<"opWorkerPort">>, <<"oneS3Port">>],
+            correct_values = CorrectValues#{<<"subdomainDelegation">> => [false]},
             bad_values = [
                 {<<"domain">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"domain">>)},
                 {<<"domain">>, <<"https://domain.com">>, ?ERROR_BAD_VALUE_DOMAIN},
@@ -248,6 +259,12 @@ create_test(Config) ->
                 {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
                 {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
                 {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"opWorkerPort">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_INTEGER(<<"opWorkerPort">>)},
+                {<<"opWorkerPort">>, -1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"opWorkerPort">>, 0, 65535)},
+                {<<"opWorkerPort">>, 65536, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"opWorkerPort">>, 0, 65535)},
+                {<<"oneS3Port">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_INTEGER(<<"oneS3Port">>)},
+                {<<"oneS3Port">>, -1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"oneS3Port">>, 0, 65535)},
+                {<<"oneS3Port">>, 65536, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"oneS3Port">>, 0, 65535)},
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
                 {<<"token">>, <<"zxvcsadfgasdfasdf">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
                 {<<"token">>, ClientToken, ?ERROR_BAD_VALUE_TOKEN(
@@ -260,7 +277,7 @@ create_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-    %% Create provider with subdomain delegation turned on
+    %% Create provider with subdomain delegation turned on and no ones3
     oz_test_utils:set_env(Config, subdomain_delegation_supported, true),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         data_spec = #data_spec{
@@ -268,25 +285,9 @@ create_test(Config) ->
                 <<"token">>, <<"name">>, <<"subdomain">>,
                 <<"adminEmail">>, <<"subdomainDelegation">>
             ],
-            at_least_one = [<<"ipList">>, <<"ips">>],
+            at_least_one = [<<"ipList">>, <<"opWorkerIpAddresses">>],
             optional = [<<"latitude">>, <<"longitude">>],
-            correct_values = #{
-                <<"token">> => [fun() ->
-                    {ok, RegistrationToken} = oz_test_utils:create_provider_registration_token(
-                        Config, ?USER(CreatorUserId), CreatorUserId
-                    ),
-                    {ok, Serialized} = tokens:serialize(RegistrationToken),
-                    Serialized
-                end],
-                <<"name">> => [ExpName],
-                <<"subdomainDelegation">> => [true],
-                <<"subdomain">> => [<<"prov-sub">>],
-                <<"ipList">> => [[<<"2.4.6.8">>, <<"255.253.251.2">>]],
-                <<"ips">> => [#{<<>> => [<<"2.4.6.8">>], <<"s3">> => [<<"255.253.251.2">>]}],
-                <<"adminEmail">> => [?ADMIN_EMAIL],
-                <<"latitude">> => [rand:uniform() * 90],
-                <<"longitude">> => [rand:uniform() * 180]
-            },
+            correct_values = CorrectValues#{<<"subdomainDelegation">> => [true]},
             bad_values = [
                 {<<"subdomain">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"subdomain">>)},
                 {<<"subdomain">>, <<"port:443">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
@@ -299,12 +300,33 @@ create_test(Config) ->
                 {<<"ipList">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
                 {<<"ipList">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
                 {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ips">>, atom, ?ERROR_BAD_VALUE_JSON(<<"ips">>)},
-                {<<"ips">>, #{<<"s3">> => 2}, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ips.s3">>)}
+                {<<"opWorkerIpAddresses">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
+                {<<"opWorkerIpAddresses">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
+                {<<"opWorkerIpAddresses">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)}
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    %% Create provider with subdomain delegation turned on and ones3
+    ApiTestSpec3 = ApiTestSpec#api_test_spec{
+        data_spec = #data_spec{
+            required = [
+                <<"token">>, <<"name">>, <<"subdomain">>,
+                <<"adminEmail">>, <<"subdomainDelegation">>,
+                <<"oneS3IpAddresses">>, <<"oneS3Port">>
+            ],
+            at_least_one = [<<"ipList">>, <<"opWorkerIpAddresses">>],
+            optional = [<<"latitude">>, <<"longitude">>],
+            correct_values = CorrectValues#{<<"subdomainDelegation">> => [true]},
+            bad_values = [
+                {<<"oneS3Addresses">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3Addresses">>)},
+                {<<"oneS3Addresses">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3Addresses">>)},
+                {<<"oneS3Addresses">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3Addresses">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
 
 
 get_test(Config) ->
