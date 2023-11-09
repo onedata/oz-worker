@@ -2279,9 +2279,12 @@ get_domain_config_test(Config) ->
     ExpBody = #{
         <<"subdomainDelegation">> => false,
         <<"domain">> => ExpDomain,
+        <<"subdomain">> => null,
         <<"ipList">> => [],
-        <<"ips">> => #{<<>> => []},
-        <<"subdomain">> => null
+        <<"opWorkerIpAddresses">> => [],
+        <<"opWorkerPort">> => 443,
+        <<"oneS3IpAddresses">> => [],
+        <<"oneS3Port">> => null
     },
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -2325,24 +2328,31 @@ get_domain_config_test(Config) ->
 
     % test enabled subdomain delegation
     ExpSubdomain = <<"subdomain">>,
-    ExpIPs = [{5, 8, 2, 4}, {10, 12, 255, 255}],
-    ExpProviderIPs = #{<<>> => ExpIPs, <<"s3">> => ExpIPs},
-    ExpIPsBin = [<<"5.8.2.4">>, <<"10.12.255.255">>],
-    ExpProviderIPsBin = #{<<>> => ExpIPsBin, <<"s3">> => ExpIPsBin},
+    ExpOpWorkerIPs = [{5, 8, 2, 4}, {10, 12, 255, 255}],
+    ExpOneS3IPs = [{10, 12, 255, 1}],
+    ExpOpWorkerIPsBin = [<<"5.8.2.4">>, <<"10.12.255.255">>],
+    ExpOneS3IPsBin = [<<"10.12.255.1">>],
 
     OZDomain = oz_test_utils:oz_domain(Config),
     ExpDomain2 = <<ExpSubdomain/binary, ".", OZDomain/binary>>,
 
-    oz_test_utils:enable_subdomain_delegation(Config, P1, ExpSubdomain, ExpProviderIPs),
+    oz_test_utils:enable_subdomain_delegation(Config, P1, ExpSubdomain, ExpOpWorkerIPs, {ExpOneS3IPs, 9999}),
 
     ExpBody2 = #{
         <<"subdomainDelegation">> => true,
         <<"domain">> => ExpDomain2,
-        <<"ipList">> => ExpIPs,
-        <<"ips">> => ExpProviderIPs,
-        <<"subdomain">> => ExpSubdomain
+        <<"subdomain">> => ExpSubdomain,
+        <<"ipList">> => ExpOpWorkerIPs,
+        <<"opWorkerIpAddresses">> => ExpOpWorkerIPs,
+        <<"opWorkerPort">> => 443,
+        <<"oneS3IpAddresses">> => ExpOneS3IPs,
+        <<"oneS3Port">> => 9999
     },
-    ExpBody2Bin = ExpBody2#{<<"ipList">> => ExpIPsBin, <<"ips">> => ExpProviderIPsBin},
+    ExpBody2Bin = ExpBody2#{
+        <<"ipList">> => ExpOpWorkerIPsBin,
+        <<"opWorkerIpAddresses">> => ExpOpWorkerIPsBin,
+        <<"oneS3IpAddresses">> => ExpOneS3IPsBin
+    },
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         logic_spec = LogicSpec#logic_spec{expected_result = ?OK_MAP(ExpBody2)},
         rest_spec = RestSpec#rest_spec{expected_body = {contains, ExpBody2Bin}},
