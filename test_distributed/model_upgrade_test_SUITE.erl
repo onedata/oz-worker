@@ -3045,7 +3045,37 @@ get_record(od_provider, 6) -> {od_provider,
 
     true
 };
-get_record(od_provider, 7) -> #od_provider{
+get_record(od_provider, 7) -> {od_provider,
+    <<"name">>,
+    undefined,
+    undefined,
+
+    false,
+    <<"redirection_point">>,
+    undefined,
+
+    -93.2341,
+    17,
+
+    #{
+        <<"space1">> => 0,
+        <<"space2">> => 0,
+        <<"space3">> => 0,
+        <<"space4">> => 0
+    },
+    [],
+
+    #{},
+    #{},
+    #{},
+    #{},
+
+    ozt_mocks:get_frozen_time_seconds(),
+    0,
+
+    true
+};
+get_record(od_provider, 8) -> #od_provider{
     name = <<"name">>,
     admin_email = undefined,
     root_token = undefined,
@@ -3053,6 +3083,8 @@ get_record(od_provider, 7) -> #od_provider{
     subdomain_delegation = false,
     domain = <<"redirection_point">>,
     subdomain = undefined,
+    op_worker_port = 443,
+    ones3_port = undefined,
 
     latitude = -93.2341,
     longitude = 17,

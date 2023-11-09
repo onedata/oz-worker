@@ -312,6 +312,8 @@ end).
     subdomain_delegation = false :: boolean(),
     domain :: binary(),
     subdomain = undefined :: undefined | binary(),
+    op_worker_port :: inet:port_number(),
+    ones3_port = undefined :: undefined | inet:port_number(),
 
     latitude = 0.0 :: float(),
     longitude = 0.0 :: float(),
