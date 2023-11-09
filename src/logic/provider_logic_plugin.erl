@@ -26,6 +26,7 @@
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
 -define(MINIMUM_SUPPORT_SIZE, oz_worker:get_env(minimum_space_support_size, 1000000)).
+-define(DEFAULT_OP_WORKER_PORT, 443).
 
 %%%===================================================================
 %%% API
@@ -227,23 +228,29 @@ get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Provider) ->
 
 get(#el_req{gri = #gri{aspect = domain_config, id = ProviderId}}, Provider) ->
     #od_provider{
-        domain = Domain, subdomain_delegation = SubdomainDelegation
+        domain = Domain, subdomain_delegation = SubdomainDelegation,
+        op_worker_port = OpWorkerPort, ones3_port = Ones3Port
     } = Provider,
     Response = #{
         <<"domain">> => Domain,
         <<"subdomainDelegation">> => SubdomainDelegation,
         <<"subdomain">> => null,
+        %% TODO VFS-11504 rm in 23.02.x
         <<"ipList">> => [],
-        <<"ips">> => #{<<>> => []}
+        <<"opWorkerIpAddresses">> => [],
+        <<"opWorkerPort">> => OpWorkerPort,
+        <<"oneS3IpAddresses">> => [],
+        <<"oneS3Port">> => utils:undefined_to_null(Ones3Port)
     },
     case SubdomainDelegation of
         true ->
-            {ok, Subdomain, IPs} = dns_state:get_delegation_config(ProviderId),
+            {ok, Subdomain, OpWorkerIps, OneS3Ips} = dns_state:get_delegation_config(ProviderId),
             {ok, Response#{
                 <<"subdomain">> => Subdomain,
-                %% TODO VFS-11504 rm in 24.02.x
-                <<"ipList">> => maps:get(<<>>, IPs, []),
-                <<"ips">> => IPs
+                %% TODO VFS-11504 rm in 23.02.x
+                <<"ipList">> => OpWorkerIps,
+                <<"opWorkerIpAddresses">> => OpWorkerIps,
+                <<"oneS3IpAddresses">> => OneS3Ips
             }};
         false ->
             {ok, Response}
@@ -605,42 +612,52 @@ required_admin_privileges(_) ->
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}) ->
+    AlwaysRequiredFields = #{
+        <<"token">> => {invite_token, ?REGISTER_ONEPROVIDER},
+        <<"name">> => {binary, name},
+        <<"subdomainDelegation">> => {boolean, any},
+        <<"adminEmail">> => {binary, email}
+    },
+    OptionalFields = #{
+        <<"opWorkerPort">> => {integer, {between, 0, 65535}},
+        <<"latitude">> => {float, {between, -90, 90}},
+        <<"longitude">> => {float, {between, -180, 180}}
+    },
+
     SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
-    SubdomainDelegationParam = maps:get(<<"subdomainDelegation">>, Data, undefined),
-    {RequiredDomainRelatedFields, AtLeastOneDomainRelatedFields} = case
-        {SubdomainDelegationParam, SubdomainDelegationSupported}
-    of
-        {true, false} ->
-            throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED);
-        {true, true} ->
-            {
-                #{<<"subdomain">> => {binary, subdomain}},
-                #{
-                    <<"ips">> => build_provider_ips_parameter_spec(),
-                    %% TODO VFS-11504 rm in 24.02.x
-                    <<"ipList">> => {list_of_ipv4_addresses, any}
-                }
+
+    case maps:get(<<"subdomainDelegation">>, Data, undefined) of
+        false ->
+            #{
+                required => AlwaysRequiredFields#{<<"domain">> => {binary, domain}},
+                optional => OptionalFields#{<<"oneS3Port">> => {integer, {between, 0, 65535}}}
             };
-        {false, _} ->
-            {#{<<"domain">> => {binary, domain}}, #{}};
-        {_, _} ->
+        true when SubdomainDelegationSupported ->
+            #{
+                required => case is_map_key(<<"oneS3Port">>, Data) orelse is_map_key(<<"oneS3IpAddresses">>, Data) of
+                    true ->
+                        AlwaysRequiredFields#{
+                            <<"subdomain">> => {binary, subdomain},
+                            <<"oneS3IpAddresses">> => {list_of_ipv4_addresses, any},
+                            <<"oneS3Port">> => {integer, {between, 0, 65535}}
+                        };
+                    false ->
+                        AlwaysRequiredFields#{<<"subdomain">> => {binary, subdomain}}
+                end,
+                at_least_one => #{
+                    <<"opWorkerIpAddresses">> => {list_of_ipv4_addresses, any},
+                    %% TODO VFS-11504 rm in 23.02.x
+                    <<"ipList">> => {list_of_ipv4_addresses, any}
+                },
+                optional => OptionalFields
+            };
+        true ->
+            throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED);
+        _ ->
             % valid subdomainDelegation field was not sent, which will cause
             % BAD_DATA error. No need to generate domain related fields.
-            {#{}, #{}}
-    end,
-    #{
-        required => RequiredDomainRelatedFields#{
-            <<"token">> => {invite_token, ?REGISTER_ONEPROVIDER},
-            <<"name">> => {binary, name},
-            <<"subdomainDelegation">> => {boolean, any},
-            <<"adminEmail">> => {binary, email}
-        },
-        at_least_one => AtLeastOneDomainRelatedFields,
-        optional => #{
-            <<"latitude">> => {float, {between, -90, 90}},
-            <<"longitude">> => {float, {between, -180, 180}}
-        }
-    };
+            #{required => AlwaysRequiredFields, optional => OptionalFields}
+    end;
 
 validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = instance_dev}}) ->
     ValidationRules = #{required := Required} = validate(Req#el_req{gri = GRI#gri{aspect = instance}}),
@@ -711,30 +728,39 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = domain_config}, data = Data}) ->
+    AlwaysRequiredFields = #{<<"subdomainDelegation">> => {boolean, any}},
+    OptionalFields = #{<<"opWorkerPort">> => {integer, {between, 0, 65535}}},
+
     case maps:get(<<"subdomainDelegation">>, Data, undefined) of
         true ->
             true == oz_worker:get_env(subdomain_delegation_supported, true) orelse
                 throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED),
+
             #{
-                required => #{
-                    <<"subdomainDelegation">> => {boolean, any},
-                    <<"subdomain">> => {binary, subdomain}
-                },
+                required => case is_map_key(<<"oneS3Port">>, Data) orelse is_map_key(<<"oneS3IpAddresses">>, Data) of
+                    true ->
+                        AlwaysRequiredFields#{
+                            <<"subdomain">> => {binary, subdomain},
+                            <<"oneS3IpAddresses">> => {list_of_ipv4_addresses, any},
+                            <<"oneS3Port">> => {integer, {between, 0, 65535}}
+                        };
+                    false ->
+                        AlwaysRequiredFields#{<<"subdomain">> => {binary, subdomain}}
+                end,
                 at_least_one => #{
-                    <<"ips">> => build_provider_ips_parameter_spec(),
-                    %% TODO VFS-11504 rm in 24.02.x
+                    <<"opWorkerIpAddresses">> => {list_of_ipv4_addresses, any},
+                    %% TODO VFS-11504 rm in 23.02.x
                     <<"ipList">> => {list_of_ipv4_addresses, any}
-                }
+                },
+                optional => OptionalFields
             };
         false ->
-            #{required => #{
-                <<"subdomainDelegation">> => {boolean, any},
-                <<"domain">> => {binary, domain}
-            }};
+            #{
+                required => AlwaysRequiredFields#{<<"domain">> => {binary, domain}},
+                optional => OptionalFields#{<<"oneS3Port">> => {integer, {between, 0, 65535}}}
+            };
         _ ->
-            #{required => #{
-                <<"subdomainDelegation">> => {boolean, any}
-            }}
+            #{required => AlwaysRequiredFields}
     end.
 
 %%%===================================================================
@@ -767,11 +793,11 @@ auth_by_self_or_cluster_privilege(Req, _) ->
 -spec update_provider_domain(ProviderId :: od_provider:id(),
     Data :: entity_logic:data()) -> entity_logic:update_result().
 update_provider_domain(ProviderId, Data) ->
-    Domain = maps:get(<<"domain">>, Data),
+    OpDomainName = maps:get(<<"domain">>, Data),
     Result = od_provider:update(ProviderId, fun(Provider) ->
         {ok, Provider#od_provider{
             subdomain_delegation = false,
-            domain = Domain,
+            domain = OpDomainName,
             subdomain = undefined
         }}
     end),
@@ -792,16 +818,20 @@ update_provider_domain(ProviderId, Data) ->
 -spec update_provider_subomain(ProviderId :: od_provider:id(),
     Data :: entity_logic:data()) -> entity_logic:update_result().
 update_provider_subomain(ProviderId, Data) ->
-    Subdomain = maps:get(<<"subdomain">>, Data),
-    Domain = dns_utils:build_fqdn_from_subdomain(Subdomain),
-    IPs = get_ips(Data),
-    Result = case dns_state:set_delegation_config(ProviderId, Subdomain, IPs) of
+    OpSubdomainLabel = maps:get(<<"subdomain">>, Data),
+    OpDomainName = dns_utils:build_fqdn_from_subdomain(OpSubdomainLabel),
+    OpWorkerIps = get_op_worker_ips(Data),
+    OneS3Ips = maps:get(<<"oneS3IpAddresses">>, Data, []),
+
+    Result = case dns_state:set_delegation_config(ProviderId, OpSubdomainLabel, OpWorkerIps, OneS3Ips) of
         ok ->
             od_provider:update(ProviderId, fun(Provider) ->
                 {ok, Provider#od_provider{
                     subdomain_delegation = true,
-                    domain = Domain,
-                    subdomain = Subdomain
+                    domain = OpDomainName,
+                    subdomain = OpSubdomainLabel,
+                    op_worker_port = maps:get(<<"opWorkerPort">>, Data, ?DEFAULT_OP_WORKER_PORT),
+                    ones3_port = utils:null_to_undefined(maps:get(<<"oneS3Port">>, Data, null))
                 }}
             end);
         {error, subdomain_exists} ->
@@ -834,11 +864,12 @@ create_provider(Auth, Data, ProviderId, GRI) ->
             false ->
                 {maps:get(<<"domain">>, Data), undefined};
             true ->
-                ReqSubdomain = maps:get(<<"subdomain">>, Data),
-                IPs = get_ips(Data),
-                case dns_state:set_delegation_config(ProviderId, ReqSubdomain, IPs) of
+                OpSubdomainLabel = maps:get(<<"subdomain">>, Data),
+                OpWorkerIps = get_op_worker_ips(Data),
+                OneS3Ips = maps:get(<<"oneS3IpAddresses">>, Data, []),
+                case dns_state:set_delegation_config(ProviderId, OpSubdomainLabel, OpWorkerIps, OneS3Ips) of
                     ok ->
-                        {dns_utils:build_fqdn_from_subdomain(ReqSubdomain), ReqSubdomain};
+                        {dns_utils:build_fqdn_from_subdomain(OpSubdomainLabel), OpSubdomainLabel};
                     {error, subdomain_exists} ->
                         throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>))
                 end
@@ -847,7 +878,10 @@ create_provider(Auth, Data, ProviderId, GRI) ->
         ProviderRecord = #od_provider{
             name = Name,
             subdomain_delegation = SubdomainDelegation,
-            domain = Domain, subdomain = Subdomain,
+            domain = Domain,
+            subdomain = Subdomain,
+            op_worker_port = maps:get(<<"opWorkerPort">>, Data, ?DEFAULT_OP_WORKER_PORT),
+            ones3_port = utils:null_to_undefined(maps:get(<<"oneS3Port">>, Data, null)),
             latitude = Latitude, longitude = Longitude,
             admin_email = AdminEmail,
             creation_time = global_clock:timestamp_seconds()
@@ -875,35 +909,6 @@ create_provider(Auth, Data, ProviderId, GRI) ->
 
 
 %% @private
--spec build_provider_ips_parameter_spec() -> entity_logic_sanitizer:parameter_spec().
-build_provider_ips_parameter_spec() ->
-    {json, fun(ProviderIps) ->
-        maps:foreach(fun(ServiceSubdomain, ServiceIPs) ->
-            is_binary(ServiceSubdomain) orelse throw(?ERROR_BAD_DATA(<<"ips">>)),
-            is_ip_list(ServiceIPs) orelse throw(
-                ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ips.", ServiceSubdomain/binary>>)
-            )
-        end, ProviderIps),
-
-        true
-    end}.
-
-
-%% @private
--spec is_ip_list([ip_utils:ip()] | term()) -> boolean().
-is_ip_list(List) when is_list(List) ->
-    lists:all(fun(Elem) ->
-        case ip_utils:to_ip4_address(Elem) of
-            {ok, _} -> true;
-            {error, ?EINVAL} -> false
-        end
-    end, List);
-
-is_ip_list(_) ->
-    false.
-
-
-%% @private
--spec get_ips(map()) -> dns_state:provider_ips().
-get_ips(#{<<"ips">> := IPs}) -> IPs;
-get_ips(#{<<"ipList">> := WorkerIPs}) -> #{<<>> => WorkerIPs}.
+-spec get_op_worker_ips(map()) -> [inet:ip4_address()].
+get_op_worker_ips(#{<<"opWorkerIpAddresses">> := Ips}) -> Ips;
+get_op_worker_ips(#{<<"ipList">> := Ips}) -> Ips.

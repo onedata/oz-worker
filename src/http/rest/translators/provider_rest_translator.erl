@@ -90,13 +90,15 @@ get_response(#gri{id = ProviderId, aspect = instance, scope = protected}, Provid
 
 get_response(#gri{aspect = domain_config}, DomainConfig = #{
     <<"ipList">> := OpWorkerIPs,
-    <<"ips">> := ProviderIPs
+    <<"oneS3IpAddresses">> := OneS3Ips
 }) ->
     T = fun(IPList) -> [list_to_binary(inet:ntoa(IP)) || IP <- IPList] end,
+    TranslatedOpWorkerIps = T(OpWorkerIPs),
 
     rest_translator:ok_body_reply(DomainConfig#{
-        <<"ipList">> := T(OpWorkerIPs),
-        <<"ips">> := maps:map(fun(_, ServiceIPs) -> T(ServiceIPs) end, ProviderIPs)
+        <<"ipList">> := TranslatedOpWorkerIps,
+        <<"opWorkerIpAddresses">> := TranslatedOpWorkerIps,
+        <<"oneS3IpAddresses">> := T(OneS3Ips)
     });
 
 get_response(#gri{aspect = {user_spaces, _}}, SpaceIds) ->

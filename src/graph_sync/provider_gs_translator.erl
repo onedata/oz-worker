@@ -312,6 +312,8 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         subdomain_delegation = SubdomainDelegation,
         domain = Domain,
         subdomain = Subdomain,
+        op_worker_port = OpWorkerPort,
+        ones3_port = OneS3Port,
         admin_email = AdminEmail,
         latitude = Latitude,
         longitude = Longitude
@@ -322,10 +324,13 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
 
     #{
         <<"name">> => Name,
+        <<"version">> => Version,
+
         <<"subdomainDelegation">> => SubdomainDelegation,
         <<"domain">> => Domain,
         <<"subdomain">> => Subdomain,
-        <<"version">> => Version,
+        <<"opWorkerPort">> => OpWorkerPort,
+        <<"oneS3Port">> => utils:undefined_to_null(OneS3Port),
 
         <<"adminEmail">> => AdminEmail,
 
@@ -363,13 +368,15 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
 
 translate_resource(_, #gri{type = od_provider, aspect = domain_config}, Data = #{
     <<"ipList">> := OpWorkerIPs,
-    <<"ips">> := ProviderIPs
+    <<"oneS3IpAddresses">> := OneS3Ips
 }) ->
     T = fun(IPList) -> [list_to_binary(inet:ntoa(IP)) || IP <- IPList] end,
+    TranslatedOpWorkerIps = T(OpWorkerIPs),
 
     Data#{
-        <<"ipList">> := T(OpWorkerIPs),
-        <<"ips">> := maps:map(fun(_, ServiceIPs) -> T(ServiceIPs) end, ProviderIPs)
+        <<"ipList">> := TranslatedOpWorkerIps,
+        <<"opWorkerIpAddresses">> := TranslatedOpWorkerIps,
+        <<"oneS3IpAddresses">> := T(OneS3Ips)
     };
 
 translate_resource(_, #gri{type = od_handle_service, aspect = instance, scope = private}, HService) ->
