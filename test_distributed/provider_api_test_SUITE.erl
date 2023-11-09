@@ -1981,11 +1981,11 @@ map_group_test(Config) ->
     RunTest(ModernGroupId).
 
 
-
 update_subdomain_test(Config) ->
     OZDomain = oz_test_utils:oz_domain(Config),
     Subdomain = <<"proper-subdomain">>,
     IPs = [<<"1.2.3.4">>, <<"5.6.7.8">>],
+    OneS3Port = 9999,
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
     {ok, {P2, P2Token}} = oz_test_utils:create_provider(
@@ -2050,12 +2050,14 @@ update_subdomain_test(Config) ->
         },
         data_spec = DataSpec = #data_spec{
             required = [<<"subdomainDelegation">>, <<"subdomain">>],
-            at_least_one = [<<"ipList">>, <<"ips">>],
+            at_least_one = [<<"ipList">>, <<"opWorkerIpAddresses">>],
             correct_values = #{
                 <<"subdomainDelegation">> => [true],
                 <<"subdomain">> => [Subdomain],
                 <<"ipList">> => [IPs],
-                <<"ips">> => [#{<<>> => IPs, <<"s3">> => IPs}]
+                <<"opWorkerIpAddresses">> => [IPs],
+                <<"oneS3IpAddresses">> => [IPs],
+                <<"oneS3Port">> => [OneS3Port]
             },
             bad_values = [
                 {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
@@ -2070,8 +2072,9 @@ update_subdomain_test(Config) ->
                 {<<"ipList">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
                 {<<"ipList">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
                 {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ips">>, atom, ?ERROR_BAD_VALUE_JSON(<<"ips">>)},
-                {<<"ips">>, #{<<"s3">> => 2}, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ips.s3">>)}
+                {<<"opWorkerIpAddresses">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
+                {<<"opWorkerIpAddresses">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
+                {<<"opWorkerIpAddresses">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)}
             ]
         }
     },
@@ -2088,12 +2091,45 @@ update_subdomain_test(Config) ->
                 {<<"ipList">>, [{256, 256, 256, 256}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
                 {<<"ipList">>, [{-1, -1, -1, -1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
                 {<<"ipList">>, [{1, 1, 1, 1, 1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ips">>, #{<<"s3">> => [{1, 1, 1, 1, 1}]}, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ips.s3">>)}
+                {<<"opWorkerIpAddresses">>, [{256, 256, 256, 256}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
+                {<<"opWorkerIpAddresses">>, [{-1, -1, -1, -1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
+                {<<"opWorkerIpAddresses">>, [{1, 1, 1, 1, 1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)}
             ]
         }
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun, EnvTearDownFun, VerifyEndFun
+    )),
+
+    % Update ones3
+    ApiTestSpec3 = ApiTestSpec#api_test_spec{
+        data_spec = DataSpec#data_spec{
+            required = [<<"subdomainDelegation">>, <<"subdomain">>, <<"oneS3IpAddresses">>, <<"oneS3Port">>],
+            bad_values = [
+                {<<"oneS3IpAddresses">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
+                {<<"oneS3IpAddresses">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
+                {<<"oneS3IpAddresses">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
+                {<<"oneS3Port">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_INTEGER(<<"oneS3Port">>)},
+                {<<"oneS3Port">>, -1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"oneS3Port">>, 0, 65535)},
+                {<<"oneS3Port">>, 65536, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"oneS3Port">>, 0, 65535)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec3, EnvSetUpFun, EnvTearDownFun, VerifyEndFun
+    )),
+
+    ApiTestSpec4 = ApiTestSpec3#api_test_spec{
+        data_spec = DataSpec#data_spec{
+            bad_values = [
+                {<<"oneS3IpAddresses">>, [{256, 256, 256, 256}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
+                {<<"oneS3IpAddresses">>, [{-1, -1, -1, -1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
+                {<<"oneS3IpAddresses">>, [{1, 1, 1, 1, 1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec4, EnvSetUpFun, EnvTearDownFun, VerifyEndFun
     )).
 
 
