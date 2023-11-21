@@ -17,7 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, get_record/1, exists/1, update/2, force_delete/1, list/0]).
 -export([is_advertised_in_marketplace/1]).
 -export([insert_support_parameters/3, update_support_parameters/3, clear_support_parameters/2]).
 -export([to_string/1]).
@@ -62,38 +62,29 @@
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates space.
-%% @end
-%%--------------------------------------------------------------------
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns space by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(SpaceId) ->
     datastore_model:get(?CTX, SpaceId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks whether space given by ID exists.
-%% @end
-%%--------------------------------------------------------------------
+
+-spec get_record(id()) -> {ok, record()} | {error, term()}.
+get_record(SpaceId) ->
+    case get(SpaceId) of
+        {ok, #document{value = Record}} -> {ok, Record};
+        {error, _} = Error -> Error
+    end.
+
+
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(SpaceId) ->
     datastore_model:exists(?CTX, SpaceId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates space by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(SpaceId, Diff) ->
     datastore_model:update(?CTX, SpaceId, Diff).
@@ -101,7 +92,7 @@ update(SpaceId, Diff) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes space by ID.
+%% Deletes a space by ID.
 %% WARNING: Must not be used directly, as deleting a space that still has
 %% relations to other entities will cause serious inconsistencies in database.
 %% To safely delete a space use space_logic.
@@ -111,11 +102,7 @@ update(SpaceId, Diff) ->
 force_delete(SpaceId) ->
     datastore_model:delete(?CTX, SpaceId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all providers.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
@@ -153,20 +140,11 @@ clear_support_parameters(SpaceId, ProviderId) ->
     end).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns readable string representing the space with given id.
-%% @end
-%%--------------------------------------------------------------------
 -spec to_string(SpaceId :: id()) -> binary().
 to_string(SpaceId) ->
     <<"space:", SpaceId/binary>>.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns the entity logic plugin module that handles model logic.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     space_logic_plugin.

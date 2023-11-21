@@ -55,6 +55,9 @@ create_response(#gri{aspect = examine}, _, value, TokenData) ->
 create_response(#gri{aspect = confine}, _, value, Token) ->
     rest_translator:ok_body_reply(#{<<"token">> => ?SERIALIZE(Token)});
 
+create_response(#gri{aspect = infer_access_token_scope}, _, value, TokenScopeInfo) ->
+    rest_translator:ok_body_reply(TokenScopeInfo);
+
 create_response(#gri{aspect = verify_access_token}, _, value, Data) ->
     token_verification_reply(Data);
 create_response(#gri{aspect = verify_identity_token}, _, value, Data) ->

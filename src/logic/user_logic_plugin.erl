@@ -616,7 +616,6 @@ exists(#el_req{gri = #gri{id = Id}}, #od_user{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-
 %% Operations reserved for admins or available to users in certain circumstances
 authorize(Req = #el_req{operation = create, gri = #gri{id = UserId, aspect = provider_registration_token}}, _) ->
     case Req#el_req.auth of

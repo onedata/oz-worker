@@ -194,7 +194,8 @@ print_help() ->
 -spec all_collections() -> [collection()].
 all_collections() -> [
     users, groups, spaces, shares, providers, clusters,
-    handle_services, handles, harvesters, storages, atm_inventories,
+    handle_services, handles, harvesters, storages,
+    atm_inventories, atm_workflow_schemas, atm_lambdas,
 
     {user_groups, <<"user_id">>}, {user_spaces, <<"user_id">>},
     {user_providers, <<"user_id">>}, {user_clusters, <<"user_id">>},
@@ -234,6 +235,7 @@ all_collections() -> [
     {atm_inventory_users, <<"atm_inventory_id">>},
     {atm_inventory_groups, <<"atm_inventory_id">>},
     {atm_inventory_lambdas, <<"atm_inventory_id">>},
+    {atm_inventory_workflow_schemas, <<"atm_inventory_id">>},
 
     {atm_lambda_inventories, <<"atm_lambda_id">>},
 
@@ -532,6 +534,10 @@ format_collection({atm_inventory_groups, AtmInventoryId}, SortBy, SortOrder) ->
 format_collection({atm_inventory_lambdas, AtmInventoryId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_atm_inventory{atm_lambdas = AtmLambdas}}} = od_atm_inventory:get(AtmInventoryId),
     format_table(atm_lambdas, AtmLambdas, SortBy, SortOrder);
+
+format_collection({atm_inventory_workflow_schemas, AtmInventoryId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_atm_inventory{atm_workflow_schemas = AtmWorkflowSchemas}}} = od_atm_inventory:get(AtmInventoryId),
+    format_table(atm_workflow_schemas, AtmWorkflowSchemas, SortBy, SortOrder);
 
 format_collection({atm_lambda_inventories, AtmLambdaId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_atm_lambda{atm_inventories = AtmInventories}}} = od_atm_lambda:get(AtmLambdaId),
@@ -837,7 +843,7 @@ field_specs(atm_workflow_schemas) -> [
     {name, text, 28, fun(Doc) -> Doc#document.value#od_atm_workflow_schema.name end},
     {atm_inventory_id, text, 38, fun(Doc) -> Doc#document.value#od_atm_workflow_schema.atm_inventory end},
     {used_lambdas, integer, 12, fun(Doc) -> length(Doc#document.value#od_atm_workflow_schema.atm_lambdas) end},
-    {revisions, 9, fun(#document{value = #od_atm_workflow_schema{revision_registry = RevisionRegistry}}) ->
+    {revisions, integer, 9, fun(#document{value = #od_atm_workflow_schema{revision_registry = RevisionRegistry}}) ->
         atm_workflow_schema_revision_registry:size(RevisionRegistry)
     end},
     {stores, integer, 6, fun(Doc) ->
@@ -856,8 +862,8 @@ field_specs(atm_workflow_schemas) -> [
             end, PBoxes)
         end, (latest_workflow_schema_revision(Doc))#atm_workflow_schema_revision.lanes)
     ) end},
-    {state, integer, 10, fun(Doc) ->
-        length((latest_workflow_schema_revision(Doc))#atm_workflow_schema_revision.lanes) end},
+    {state, text, 10, fun(Doc) ->
+        (latest_workflow_schema_revision(Doc))#atm_workflow_schema_revision.state end},
     {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_atm_workflow_schema.creation_time end}
 ].
 

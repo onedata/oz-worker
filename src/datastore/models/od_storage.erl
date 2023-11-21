@@ -16,7 +16,7 @@
 -include_lib("ctool/include/privileges.hrl").
 
 %% API
--export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, get_record/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1, print_summary/0, print_summary/1]).
 -export([entity_logic_plugin/0]).
 
@@ -37,82 +37,69 @@
 -define(CTX, #{
     model => ?MODULE,
     secure_fold_enabled => true,
-    sync_enabled => true
+    sync_enabled => true,
+    memory_copies => all
 }).
+
+-compile({no_auto_import, [get/1]}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates space.
-%% @end
-%%--------------------------------------------------------------------
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns space by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec get(id()) -> {ok, doc()} | {error, term()}.
-get(SpaceId) ->
-    datastore_model:get(?CTX, SpaceId).
+get(StorageId) ->
+    datastore_model:get(?CTX, StorageId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks whether space given by ID exists.
-%% @end
-%%--------------------------------------------------------------------
+
+-spec get_record(id()) -> {ok, record()} | {error, term()}.
+get_record(StorageId) ->
+    case get(StorageId) of
+        {ok, #document{value = Record}} -> {ok, Record};
+        {error, _} = Error -> Error
+    end.
+
+
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
-exists(SpaceId) ->
-    datastore_model:exists(?CTX, SpaceId).
+exists(StorageId) ->
+    datastore_model:exists(?CTX, StorageId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates space by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
-update(SpaceId, Diff) ->
-    datastore_model:update(?CTX, SpaceId, Diff).
+update(StorageId, Diff) ->
+    datastore_model:update(?CTX, StorageId, Diff).
+
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes space by ID.
-%% WARNING: Must not be used directly, as deleting a space that still has
+%% Deletes a storage by ID.
+%% WARNING: Must not be used directly, as deleting a storage that still has
 %% relations to other entities will cause serious inconsistencies in database.
-%% To safely delete a space use space_logic.
+%% To safely delete a storage use storage_logic.
 %% @end
 %%--------------------------------------------------------------------
 -spec force_delete(id()) -> ok | {error, term()}.
-force_delete(SpaceId) ->
-    datastore_model:delete(?CTX, SpaceId).
+force_delete(StorageId) ->
+    datastore_model:delete(?CTX, StorageId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all providers.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns readable string representing the space with given id.
-%% @end
-%%--------------------------------------------------------------------
--spec to_string(SpaceId :: id()) -> binary().
+
+-spec to_string(StorageId :: id()) -> binary().
 to_string(StorageId) ->
     <<"storage:", StorageId/binary>>.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Prints all space records to the console in a nicely-formatted manner.
+%% Prints all storage records to the console in a nicely-formatted manner.
 %% Sorts the records in a default manner.
 %% @end
 %%--------------------------------------------------------------------

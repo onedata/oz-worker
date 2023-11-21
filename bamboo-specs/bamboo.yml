@@ -121,7 +121,8 @@ stages:
         - space_owners
         - space_users_api
         - storage_misc_api
-        - token_api
+        - token_misc_api
+        - token_named_temp_api
         - user_atm_inventories_api
         - user_clusters_api
         - user_groups_api
@@ -743,12 +744,19 @@ storage_misc_api:
     - <<: *ct_logs
       name: ct_logs_storage_misc_api.tar.gz
 
-token_api:
+token_misc_api:
+  <<: *ct-job
+  key: TMAPI
+  artifacts:
+    - <<: *ct_logs
+      name: ct_logs_token_misc_api.tar.gz
+
+token_named_temp_api:
   <<: *ct-job
   key: TAP
   artifacts:
     - <<: *ct_logs
-      name: ct_logs_token_api.tar.gz
+      name: ct_logs_token_named_temp_api.tar.gz
 
 user_atm_inventories_api:
   <<: *ct-job
@@ -939,7 +947,8 @@ Coverage report:
     - artifact: ct_logs_space_owners.tar.gz
     - artifact: ct_logs_space_users_api.tar.gz
     - artifact: ct_logs_storage_misc_api.tar.gz
-    - artifact: ct_logs_token_api.tar.gz
+    - artifact: ct_logs_token_misc_api.tar.gz
+    - artifact: ct_logs_token_named_temp_api.tar.gz
     - artifact: ct_logs_user_atm_inventories_api.tar.gz
     - artifact: ct_logs_user_clusters_api.tar.gz
     - artifact: ct_logs_user_groups_api.tar.gz
