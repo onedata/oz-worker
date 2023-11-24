@@ -1046,10 +1046,8 @@ verify_invite_token_base(AllClients, Token, PeerIp, Consumer, ExpType, ShouldSuc
 }).
 
 infer_access_token_scope(_Config) ->
-    % co jeśli dany token Ci nie pozwala zobaczyć żadnego spejsa?  "spaces": {}, "providers": {}
-    % jesli space nie ma supportów (albo wszyscy providerzy supportujący są zablokowani caveatami) to: "supports": {},
-
     SubjectUser = ozt_users:create(),
+    ConsumerUser = ozt_users:create(),
 
     Krakow = ozt_providers:create_for_admin_user(SubjectUser),
     Paris = ozt_providers:create_for_admin_user(SubjectUser),
@@ -1081,8 +1079,6 @@ infer_access_token_scope(_Config) ->
 
     add_support_with_new_storage(Delta, Paris, #{<<"readonly">> => true}),
     add_support_with_new_storage(Delta, Lisbon, #{<<"readonly">> => true}),
-
-    ozt:reconcile_entity_graph(),
 
     CommonSpec = #infer_access_token_scope_test_spec{
         subject_user = SubjectUser,
@@ -1180,6 +1176,39 @@ infer_access_token_scope(_Config) ->
         exp_allowed_spaces = [],
         exp_allowed_providers = []
     })),
+    ?assert(run_infer_access_token_scope_test(CommonSpec#infer_access_token_scope_test_spec{
+        token_caveats = [
+            #cv_service{whitelist = [?SERVICE(?OP_WORKER, Krakow)]},
+            #cv_data_path{whitelist = [?RAND_CANONICAL_PATH(Gamma)]},
+            #cv_consumer{whitelist = [?SUB(user, ConsumerUser)]},
+            #cv_ip{whitelist = [{{123, 4, 5, 6}, 24}, {get_testmaster_ip(), 32}]}
+        ],
+        consumer_token = ozt_tokens:ensure_serialized(create_user_temporary_token(ConsumerUser, ?IDENTITY_TOKEN)),
+        exp_allowed_spaces = [Gamma],
+        exp_allowed_providers = [Krakow]
+    })),
+
+    lists:foreach(fun(UnverifiableCaveat) ->
+        ?assert(run_infer_access_token_scope_test(CommonSpec#infer_access_token_scope_test_spec{
+            token_caveats = ?SHUFFLED([UnverifiableCaveat] ++ ?RAND_SUBLIST([
+                #cv_service{whitelist = [?SERVICE(?OP_WORKER, Krakow)]},
+                #cv_data_path{whitelist = [?RAND_CANONICAL_PATH(Alpha)]},
+                #cv_data_objectid{whitelist = [?RAND_OBJECTID(Kappa)]},
+                #cv_data_readonly{},
+                #cv_interface{interface = ?RAND_CHOICE(rest, oneclient, graphsync)},
+                #cv_api{whitelist = [{oz_worker, get, ?GRI_PATTERN(od_space, <<"*">>, <<"*">>, private)}]}
+            ])),
+            exp_general_result = ?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiableCaveat)
+        }))
+    end, [
+        #cv_time{valid_until = ozt:timestamp_seconds() - 999999},
+        #cv_ip{whitelist = [{{8, 8, 8, 8}, 32}]},
+        #cv_asn{whitelist = [997]},
+        #cv_country{type = whitelist, list = [<<"XX">>]},
+        #cv_region{type = whitelist, list = [<<"Antarctica">>]},
+        #cv_scope{scope = identity_token},
+        #cv_consumer{whitelist = [?SUB(user, <<"123456789">>)]}
+    ]),
 
     % passing a provider token should result in null data access scope
     ProviderToken = create_provider_named_token(Krakow, ?ACCESS_TOKEN, [#cv_time{valid_until = 17171717171}]),
@@ -1197,14 +1226,28 @@ infer_access_token_scope(_Config) ->
     ?assertEqual(
         ?ERROR_NOT_AN_ACCESS_TOKEN(?INVITE_TOKEN(?USER_JOIN_SPACE, Alpha)),
         ozt:rpc(token_logic, infer_access_token_scope, [?NOBODY, #{<<"token">> => InviteToken}])
-    ).
+    ),
+
+    % make sure that immediately after adding a user to a space, the space shows up in the results
+    lists_utils:pforeach(fun(_) ->
+        NewUser = ozt_users:create(),
+        NewUserToken = create_user_temporary_token(NewUser, ?ACCESS_TOKEN),
+        ozt_spaces:add_user(Delta, NewUser),
+        ?assertMatch(
+            {ok, #{<<"dataAccessScope">> := #{
+                <<"spaces">> := #{Delta := #{<<"supports">> := #{Paris := _, Lisbon := _}}},
+                <<"providers">> := #{Paris := _, Lisbon := _}
+            }}},
+            ozt:rpc(token_logic, infer_access_token_scope, [?NOBODY, #{<<"token">> => NewUserToken}])
+        )
+    end, lists:seq(1, 50)).
 
 
 run_infer_access_token_scope_test(#infer_access_token_scope_test_spec{
     subject_user = SubjectUser,
     providers = Providers,
     space_supports = SpaceSupports,
-    token_caveats = TokenCaveats,  % sprawdzic weryfikowanie asn, ip etc generalnie wszystkich
+    token_caveats = TokenCaveats,
     consumer_token = ConsumerToken,
     exp_general_result = ExpGeneralResult,
     exp_allowed_spaces = ExpAllowedSpaces,

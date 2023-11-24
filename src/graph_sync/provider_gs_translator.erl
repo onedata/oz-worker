@@ -474,8 +474,17 @@ translate_resource(_, #gri{type = temporary_token_secret, scope = shared}, Gener
     #{<<"generation">> => Generation};
 
 translate_resource(_, #gri{type = od_atm_inventory, aspect = instance, scope = private}, AtmInventory) ->
-    fun(?PROVIDER(ProviderId)) ->
-        AtmAvailable = is_automation_available_for_provider(ProviderId),
+    fun(?USER = #auth{caveats = Caveats}) ->
+        % Since op_worker uses auth overrides on the GS channel, this is the only
+        % way to "guess" (without 100% confidence) that it is actually a provider
+        % service trying to learn user's lambdas and workflow schemas (GUI tokens
+        % include such a service caveat)
+        AtmAvailable = case service_caveats:filter(Caveats) of
+            [#cv_service{whitelist = [?SERVICE(?OP_WORKER, ProviderId)]}] ->
+                is_automation_available_for_provider(ProviderId);
+            _ ->
+                true
+        end,
         #{
             <<"name">> => AtmInventory#od_atm_inventory.name,
             <<"atmLambdas">> => case AtmAvailable of
@@ -551,5 +560,3 @@ is_automation_available_for_provider(ProviderId) ->
                 _ -> true
             end
     end.
-
-% @fixme add tests for the above ^

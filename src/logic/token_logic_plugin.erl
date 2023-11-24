@@ -557,8 +557,13 @@ validate_create_operation(temporary, Subject, Data) -> #{
 %% @end
 %%--------------------------------------------------------------------
 -spec optional_invite_token_parameter_specs(entity_logic:data()) -> entity_logic_sanitizer:parameter_specs().
-optional_invite_token_parameter_specs(#{<<"type">> := JSON} = Data) when is_map(JSON) ->
-    optional_invite_token_parameter_specs(Data#{<<"type">> := token_type:from_json(JSON)});
+optional_invite_token_parameter_specs(#{<<"type">> := TokenTypeJSON} = Data) when is_map(TokenTypeJSON) ->
+    case token_type:sanitize(TokenTypeJSON) of
+        {true, SanitizedType} ->
+            optional_invite_token_parameter_specs(Data#{<<"type">> := SanitizedType});
+        false ->
+            throw(?ERROR_BAD_VALUE_TOKEN_TYPE(<<"type">>))
+    end;
 optional_invite_token_parameter_specs(#{<<"type">> := ?INVITE_TOKEN(InviteType, _)}) ->
     token_metadata:optional_invite_token_parameter_specs(InviteType);
 optional_invite_token_parameter_specs(_) ->
