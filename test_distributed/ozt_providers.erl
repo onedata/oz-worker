@@ -36,7 +36,7 @@
 -export([get_name/1]).
 -export([set_up_support_for_user/2]).
 -export([get_root_token/1]).
--export([create_storage/1, create_storage/3, ensure_storage/2]).
+-export([create_storage/1, create_storage/2, create_storage/3, try_create_storage/3, ensure_storage/2]).
 -export([support_space/2, support_space/3, support_space/4]).
 -export([support_space_using_token/3, support_space_using_token/4]).
 -export([support_space_with_legacy_storage/2]).
@@ -121,15 +121,26 @@ get_root_token(ProviderId) ->
 
 -spec create_storage(od_provider:id()) -> od_storage:id().
 create_storage(ProviderId) ->
-    create_storage(ProviderId, <<"of-provider-", ProviderId/binary>>, #{}).
+    create_storage(ProviderId, #{}).
+
+
+-spec create_storage(od_provider:id(), entity_logic:data()) -> od_storage:id().
+create_storage(ProviderId, Data = #{<<"name">> := _}) ->
+    {ok, StorageId} = ?assertMatch({ok, _}, try_create_storage(ProviderId, datastore_key:new(), Data)),
+    StorageId;
+create_storage(ProviderId, Data) ->
+    create_storage(ProviderId, Data#{<<"name">> => <<"of-provider-", ProviderId/binary>>}).
 
 
 -spec create_storage(od_provider:id(), od_storage:name(), od_storage:qos_parameters()) -> od_storage:id().
 create_storage(ProviderId, Name, QosParameters) ->
-    {ok, StorageId} = ?assertMatch({ok, _}, ozt:rpc(storage_logic, create, [
-        ?PROVIDER(ProviderId), datastore_key:new(), #{<<"name">> => Name, <<"qos_parameters">> => QosParameters}
-    ])),
-    StorageId.
+    create_storage(ProviderId, #{<<"name">> => Name, <<"qos_parameters">> => QosParameters}).
+
+
+-spec try_create_storage(od_provider:id(), od_storage:id(), entity_logic:data()) ->
+    {ok, od_storage:id()} | errors:error().
+try_create_storage(ProviderId, StorageId, Data) ->
+    ozt:rpc(storage_logic, create, [?PROVIDER(ProviderId), StorageId, Data]).
 
 
 -spec ensure_storage(od_provider:id(), od_storage:id()) -> ok.

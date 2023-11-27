@@ -272,7 +272,32 @@ get_test(Config) ->
             expected_result = api_test_expect:protected_atm_inventory(logic, AtmInventory, AtmInventoryData, ?SUB(user, UserWithoutViewPrivs))
         }
     },
-    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
+
+    % when a provider makes a request (on behalf of a user) to fetch his inventories,
+    % it's checked if its version is >= 21.02.3, otherwise empty lists of lambdas/workflow_schemas is sent
+    SessionId = ozt_http:simulate_login(UserWithViewPrivs),
+    GetInventoryWithOpGs = fun(Version) ->
+        ProviderId = ozt_providers:create_as_support_for_user(UserWithViewPrivs),
+        ozt_providers:simulate_version(ProviderId, Version),
+        ProviderToken = ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, ProviderId)),
+        UserToken = ozt_tokens:create_access_token_for_gui(UserWithViewPrivs, SessionId, ?SERVICE(?OP_WORKER, ProviderId)),
+        {ok, #gs_resp_graph{data = Data}} = ozt_gs:connect_and_request(oneprovider, {token, ProviderToken}, #gs_req{
+            subtype = graph,
+            request = #gs_req_graph{
+                gri = ?GRI(od_atm_inventory, AtmInventory, instance, private),
+                operation = get
+            },
+            auth_override = #auth_override{client_auth = ozt_gs:normalize_client_auth({token, UserToken})}
+        }),
+        Data
+    end,
+    ?assertMatch(#{<<"atmLambdas">> := [], <<"atmWorkflowSchemas">> := []}, GetInventoryWithOpGs(<<"20.02.0-rc18">>)),
+    ?assertMatch(#{<<"atmLambdas">> := [], <<"atmWorkflowSchemas">> := []}, GetInventoryWithOpGs(<<"21.02.0-alpha21">>)),
+    ?assertMatch(#{<<"atmLambdas">> := [], <<"atmWorkflowSchemas">> := []}, GetInventoryWithOpGs(<<"21.02.2">>)),
+    ?assertMatch(#{<<"atmLambdas">> := [_], <<"atmWorkflowSchemas">> := [_]}, GetInventoryWithOpGs(<<"21.02.3">>)),
+    ?assertMatch(#{<<"atmLambdas">> := [_], <<"atmWorkflowSchemas">> := [_]}, GetInventoryWithOpGs(<<"21.02.4">>)),
+    ?assertMatch(#{<<"atmLambdas">> := [_], <<"atmWorkflowSchemas">> := [_]}, GetInventoryWithOpGs(<<"22.02.1">>)).
 
 
 get_atm_lambdas_test(Config) ->

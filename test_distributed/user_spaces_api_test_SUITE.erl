@@ -719,7 +719,18 @@ list_eff_spaces_test(Config) ->
     ),
     ?assert(not oz_test_utils:call_oz(
         Config, user_logic, has_eff_space, [U2, <<"asdiucyaie827346w">>])
-    ).
+    ),
+
+    % after adding a user to a space, the spaces should immediately show up among his eff spaces
+    % (although the entity graph may not yet be recalculated) - thanks to the direct+eff relations
+    % merging logic in entity_graph
+    OwnerUserId = ozt_users:create(),
+    utils:repeat(100, fun() ->
+        SpaceId = ozt_users:create_space_for(OwnerUserId),
+        AddedUserId = ozt_users:create(),
+        ozt_spaces:add_user(SpaceId, AddedUserId),
+        ?assertEqual({ok, [SpaceId]}, ozt:rpc(user_logic, get_eff_spaces, [?ROOT, AddedUserId]))
+    end).
 
 
 get_eff_space_test(Config) ->

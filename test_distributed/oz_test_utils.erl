@@ -308,6 +308,11 @@
     get_gs_supported_proto_versions/1
 ]).
 
+-define(CONNECT_OPTS, [
+    {connect_timeout, 60000},
+    {recv_timeout, 60000}
+]).
+
 %%%===================================================================
 %%% API functions
 %%%===================================================================
@@ -3049,7 +3054,7 @@ request_gui_token(Config, Cookie, GuiType, ClusterId) ->
             ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
         },
         <<"">>,
-        [{ssl_options, [{cacerts, gui_ca_certs(Config)}]}]
+        [{ssl_options, [{cacerts, gui_ca_certs(Config)}]}] ++ ?CONNECT_OPTS
     ),
     case Result of
         {ok, 200, _, Response} ->
