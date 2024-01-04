@@ -39,6 +39,12 @@ routes() -> [
         method = 'POST',
         b_gri = #b_gri{type = od_token, id = undefined, aspect = confine, scope = public}
     }},
+    %% Infer access token scope
+    %% This operation does not require any specific privileges.
+    {<<"/tokens/infer_access_token_scope">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_token, id = undefined, aspect = infer_access_token_scope, scope = public}
+    }},
     %% Verify an access token
     %% This operation does not require any specific privileges.
     {<<"/tokens/verify_access_token">>, #rest_req{

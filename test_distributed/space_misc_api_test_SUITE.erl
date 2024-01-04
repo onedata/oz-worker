@@ -865,6 +865,10 @@ delete_test(Config) ->
         {ok, S1} = oz_test_utils:create_space(Config, ?USER(Owner), SpaceData),
         ozt_spaces:add_user(S1, U1, []),
         ozt_spaces:add_user(S1, U2, [?SPACE_DELETE]),
+        % add multiple users to test if deletion works although the owner is (most likely) not
+        % removed from the space as the last user (they are removed in random order)
+        lists_utils:pforeach(fun(_) -> ozt_spaces:add_user(S1, ozt_users:create()) end, lists:seq(1, 50)),
+        ozt:reconcile_entity_graph(),
         #{spaceId => S1, in_marketplace => AdvertisedInMarketplace}
     end,
     DeleteEntityFun = fun(#{spaceId := SpaceId} = _Env) ->

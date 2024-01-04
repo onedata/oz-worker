@@ -72,6 +72,7 @@ fetch_entity(#gri{id = TokenId}) ->
     entity_logic:scope()) -> boolean().
 operation_supported(create, examine, public) -> true;
 operation_supported(create, confine, public) -> true;
+operation_supported(create, infer_access_token_scope, public) -> true;
 operation_supported(create, verify_access_token, public) -> true;
 operation_supported(create, verify_identity_token, public) -> true;
 operation_supported(create, verify_invite_token, public) -> true;
@@ -144,6 +145,22 @@ create(#el_req{gri = #gri{id = undefined, aspect = confine}, data = Data}) ->
     Caveats = maps:get(<<"caveats">>, Data),
     validate_subject_and_service(Type, Subject, Caveats),
     {ok, value, tokens:confine(Token, Caveats)};
+
+create(ElReq = #el_req{gri = #gri{id = undefined, aspect = infer_access_token_scope}, data = Data}) ->
+    Token = maps:get(<<"token">>, Data),
+    AuthCtxWithoutConsumer = #auth_ctx{
+        ip = ElReq#el_req.auth#auth.peer_ip,
+        ignored_caveats = [cv_service, cv_interface],
+        data_access_caveats_policy = allow_data_access_caveats,
+        session_id = any
+    },
+    Consumer = case maps:find(<<"consumerToken">>, Data) of
+        error -> Token#token.subject;
+        {ok, null} -> undefined;
+        {ok, ConsumerToken} -> ?check(token_auth:verify_consumer_token(ConsumerToken, AuthCtxWithoutConsumer))
+    end,
+    Auth = ?check(token_auth:verify_access_token(Token, AuthCtxWithoutConsumer#auth_ctx{consumer = Consumer})),
+    {ok, value, infer_access_token_scope(Auth, Token)};
 
 create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_access_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
@@ -342,6 +359,8 @@ authorize(#el_req{operation = create, gri = #gri{aspect = examine}}, _) ->
     true;
 authorize(#el_req{operation = create, gri = #gri{aspect = confine}}, _) ->
     true;
+authorize(#el_req{operation = create, gri = #gri{aspect = infer_access_token_scope}}, _) ->
+    true;
 authorize(#el_req{operation = create, gri = #gri{aspect = verify_access_token}}, _) ->
     true;
 authorize(#el_req{operation = create, gri = #gri{aspect = verify_identity_token}}, _) ->
@@ -443,6 +462,14 @@ validate(#el_req{operation = create, gri = #gri{aspect = confine}}) ->
             <<"caveats">> => {caveats, any}
         }
     };
+validate(#el_req{operation = create, gri = #gri{aspect = infer_access_token_scope}}) -> #{
+    required => #{
+        <<"token">> => {token, any}
+    },
+    optional => #{
+        <<"consumerToken">> => {token, any}
+    }
+};
 validate(#el_req{operation = create, gri = #gri{aspect = verify_access_token}}) ->
     validate_verify_operation(#{
         <<"interface">> => {atom, cv_interface:valid_interfaces()},
@@ -530,8 +557,13 @@ validate_create_operation(temporary, Subject, Data) -> #{
 %% @end
 %%--------------------------------------------------------------------
 -spec optional_invite_token_parameter_specs(entity_logic:data()) -> entity_logic_sanitizer:parameter_specs().
-optional_invite_token_parameter_specs(#{<<"type">> := JSON} = Data) when is_map(JSON) ->
-    optional_invite_token_parameter_specs(Data#{<<"type">> := token_type:from_json(JSON)});
+optional_invite_token_parameter_specs(#{<<"type">> := TokenTypeJSON} = Data) when is_map(TokenTypeJSON) ->
+    case token_type:sanitize(TokenTypeJSON) of
+        {true, SanitizedType} ->
+            optional_invite_token_parameter_specs(Data#{<<"type">> := SanitizedType});
+        false ->
+            throw(?ERROR_BAD_VALUE_TOKEN_TYPE(<<"type">>))
+    end;
 optional_invite_token_parameter_specs(#{<<"type">> := ?INVITE_TOKEN(InviteType, _)}) ->
     token_metadata:optional_invite_token_parameter_specs(InviteType);
 optional_invite_token_parameter_specs(_) ->
@@ -584,10 +616,7 @@ build_token_verification_auth_ctx(Auth, Data) ->
         {ok, null} ->
             undefined;
         {ok, ConsumerToken} ->
-            case token_auth:verify_consumer_token(ConsumerToken, #auth_ctx{ip = PeerIp, interface = Interface}) of
-                {ok, Csm} -> Csm;
-                {error, _} = Error2 -> throw(Error2)
-            end
+            ?check(token_auth:verify_consumer_token(ConsumerToken, #auth_ctx{ip = PeerIp, interface = Interface}))
     end,
     DataAccessCaveatsPolicy = case maps:get(<<"allowDataAccessCaveats">>, Data, false) of
         true -> allow_data_access_caveats;
@@ -705,4 +734,74 @@ to_token_data(TokenId, NamedToken) ->
         <<"metadata">> => NamedToken#od_token.metadata,
         <<"revoked">> => NamedToken#od_token.revoked,
         <<"token">> => od_token:named_token_to_token(TokenId, NamedToken)
+    }.
+
+
+%% @private
+-spec infer_access_token_scope(aai:auth(), tokens:token()) -> json_utils:json_map().
+infer_access_token_scope(Auth, Token) ->
+    Caveats = tokens:get_caveats(Token),
+    #{
+        <<"validUntil">> => utils:undefined_to_null(caveats:infer_expiration_time(Caveats)),
+        <<"dataAccessScope">> => case Auth of
+            ?USER(UserId) ->
+                EffSpaces = ?check(user_logic:get_eff_spaces(?ROOT, UserId)),
+                AvailableSpaces = data_access_caveats:match_available_spaces(
+                    data_access_caveats:filter(Caveats), EffSpaces
+                ),
+                build_data_access_scope_info(AvailableSpaces, Caveats);
+            _ ->
+                null
+        end
+        % NOTE: this object structure is designed to allow extensions;
+        %       e.g. "apiAccessScope" may be added in the future if needed
+    }.
+
+
+%% @private
+-spec build_data_access_scope_info([od_space:id()], [caveats:caveat()]) -> json_utils:json_map().
+build_data_access_scope_info(SpaceIds, Caveats) ->
+    SpacesById = maps_utils:generate_from_list(fun(S) -> ?check(od_space:get_record(S)) end, SpaceIds),
+
+    StorageIds = lists:usort(maps:fold(fun(_, #od_space{storages = Storages}, Acc) ->
+        maps:keys(Storages) ++ Acc
+    end, [], SpacesById)),
+    StoragesById = maps_utils:generate_from_list(fun(S) -> ?check(od_storage:get_record(S)) end, StorageIds),
+
+    AllProviderIds = lists:usort(maps:fold(fun(_, #od_storage{provider = P}, Acc) -> [P | Acc] end, [], StoragesById)),
+    AllowedProviderIds = service_caveats:match_allowed_service_ids(
+        service_caveats:filter(Caveats), ?OP_WORKER, AllProviderIds
+    ),
+    AllowedProvidersById = maps_utils:generate_from_list(fun(P) ->
+        ?check(od_provider:get_record(P))
+    end, AllowedProviderIds),
+
+    #{
+        <<"readonly">> => lists:member(#cv_data_readonly{}, Caveats),
+        <<"spaces">> => maps:map(fun(_SpaceId, #od_space{name = Name, storages = Storages}) ->
+            #{
+                <<"name">> => Name,
+                <<"supports">> => maps:fold(fun(StorageId, _, Acc) ->
+                    #od_storage{provider = ProviderId, readonly = Readonly} = maps:get(StorageId, StoragesById),
+                    case lists:member(ProviderId, AllowedProviderIds) of
+                        true ->
+                            Acc#{ProviderId => #{
+                                % the support of a provider is marked as readonly when
+                                % all its supporting storages are readonly
+                                <<"readonly">> => Readonly andalso kv_utils:get([ProviderId, <<"readonly">>], Acc, true)
+                            }};
+                        false ->
+                            Acc
+                    end
+                end, #{}, Storages)
+            }
+        end, SpacesById),
+        <<"providers">> => maps:map(fun(ProviderId, #od_provider{name = Name, domain = Domain}) ->
+            #{
+                <<"name">> => Name,
+                <<"domain">> => Domain,
+                <<"version">> => ?check(cluster_logic:get_worker_release_version(?ROOT, ProviderId)),
+                <<"online">> => provider_connections:is_online(ProviderId)
+            }
+        end, AllowedProvidersById)
     }.

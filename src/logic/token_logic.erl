@@ -24,6 +24,7 @@
 -export([verify_access_token/2]).
 -export([verify_identity_token/2]).
 -export([verify_invite_token/2]).
+-export([infer_access_token_scope/2]).
 -export([create_user_named_token/3, create_provider_named_token/3]).
 -export([create_user_temporary_token/3, create_provider_temporary_token/3]).
 -export([create_access_token_for_gui/4]).
@@ -100,6 +101,17 @@ verify_invite_token(Auth, Data) ->
         operation = create,
         auth = Auth,
         gri = #gri{type = od_token, id = undefined, aspect = verify_invite_token, scope = public},
+        data = Data
+    })).
+
+
+-spec infer_access_token_scope(aai:auth(), entity_logic:data()) ->
+    {ok, entity_logic:data()} | errors:error().
+infer_access_token_scope(Auth, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_token, id = undefined, aspect = infer_access_token_scope, scope = public},
         data = Data
     })).
 

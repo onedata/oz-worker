@@ -16,7 +16,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, get_record/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([get_ctx/0]).
@@ -40,49 +40,42 @@
     memory_copies => all
 }).
 
+-compile({no_auto_import, [get/1]}).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates provider.
-%% @end
-%%--------------------------------------------------------------------
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns provider by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(ProviderId) ->
     datastore_model:get(?CTX, ProviderId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks whether provider given by ID exists.
-%% @end
-%%--------------------------------------------------------------------
+
+-spec get_record(id()) -> {ok, record()} | {error, term()}.
+get_record(ProviderId) ->
+    case get(ProviderId) of
+        {ok, #document{value = Record}} -> {ok, Record};
+        {error, _} = Error -> Error
+    end.
+
+
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(ProviderId) ->
     datastore_model:exists(?CTX, ProviderId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates provider by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(ProviderId, Diff) ->
     datastore_model:update(?CTX, ProviderId, Diff).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes provider by ID.
+%% Deletes a provider by ID.
 %% WARNING: Must not be used directly, as deleting a provider that still has
 %% relations to other entities will cause serious inconsistencies in database.
 %% To safely delete a provider use provider_logic.
@@ -92,32 +85,21 @@ update(ProviderId, Diff) ->
 force_delete(ProviderId) ->
     datastore_model:delete(?CTX, ProviderId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all providers.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns readable string representing the provider with given id.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec to_string(ProviderId :: id()) -> binary().
 to_string(ProviderId) ->
     <<"provider:", ProviderId/binary>>.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns the entity logic plugin module that handles model logic.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     provider_logic_plugin.
+
 
 -spec get_ctx() -> datastore:ctx().
 get_ctx() ->

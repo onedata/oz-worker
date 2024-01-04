@@ -39,10 +39,6 @@
 -define(INCORRECT_MASK_1, {{1, 2, 3, 4}, 19}).
 -define(INCORRECT_MASK_2, {{100, 78, 9, 0}, 22}).
 
--define(RAND_OBJECTID(SpaceId),
-    element(2, {ok, _} = file_id:guid_to_objectid(file_id:pack_guid(str_utils:rand_hex(4), SpaceId)))
-).
-
 % Examples of IP's GEO data - pairs of country code and regions
 -define(GEO_EXAMPLES, [
     {<<"EG">>, [<<"Africa">>]},
