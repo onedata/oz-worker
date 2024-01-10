@@ -106,34 +106,3 @@ get_response(<<"compression">>, _Args) -> <<"">>;
 %%% compressions other than 'Identity' must be enumerated in Identify request
 get_response(<<"description">>, _Args) -> [].
 %%% TODO VFS-7454  add repository description
-
-
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-%%%%%-------------------------------------------------------------------
-%%%%% @private
-%%%%% @doc
-%%%%% Returns earliest metadata datestamp.
-%%%%% @end
-%%%%%-------------------------------------------------------------------
-%%-spec get_earliest_datestamp() -> none | calendar:datetime().
-%%get_earliest_datestamp() ->
-%%    ListingOpts = #{ size => 1},
-%%    List = handles:list(all, ListingOpts),
-%%    case List of
-%%        [{EarliestTime, _HandleId}] ->
-%%            time:seconds_to_datetime(binary_to_integer(EarliestTime));
-%%        [] -> none
-%%    end.
-%%    Ids = oai_utils:list_handles(),
-%%    Datestamps = lists:map(fun(Id) ->
-%%        #od_handle{timestamp = Timestamp} = oai_utils:get_handle(Id),
-%%        time:seconds_to_datetime(Timestamp)
-%%    end, Ids),
-%%    case Datestamps of
-%%        [] -> none;
-%%        _ -> hd(lists:sort(fun oai_utils:is_earlier_or_equal/2, Datestamps))
-%%    end.

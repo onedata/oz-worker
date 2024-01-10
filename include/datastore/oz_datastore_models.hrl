@@ -358,7 +358,7 @@ end).
     resource_type :: od_handle:resource_type() | undefined,
     metadata_prefix :: od_handle:metadata_prefix() | undefined,
     metadata :: od_handle:metadata() | undefined,
-    timestamp = od_handle:actual_timestamp() :: od_handle:timestamp(),
+    timestamp = od_handle:current_timestamp() :: od_handle:timestamp(),
 
     % Direct relations to other entities
     resource_id :: od_handle:resource_id() | undefined,
@@ -370,9 +370,7 @@ end).
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_privilege()]),
 
-%%   TODO dlaczego creation time ma global_clock:timestamp_seconds()
-%%   a timestamp od_handle:actual_timestamp() ?
-    creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),
+    creation_time = od_handle:current_timestamp() :: od_handle:timestamp(),
     creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.

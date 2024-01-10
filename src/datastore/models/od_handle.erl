@@ -19,7 +19,7 @@
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([get_ctx/0]).
--export([actual_timestamp/0]).
+-export([current_timestamp/0]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -133,8 +133,8 @@ get_ctx() ->
 %% @equiv global_clock:timestamp_seconds().
 %% @end
 %%--------------------------------------------------------------------
--spec actual_timestamp() -> timestamp().
-actual_timestamp() ->
+-spec current_timestamp() -> timestamp().
+current_timestamp() ->
     global_clock:timestamp_seconds().
 
 %%%===================================================================
@@ -148,7 +148,7 @@ actual_timestamp() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    7.
+    8.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -162,7 +162,6 @@ get_record_struct(1) ->
         {public_handle, string},
         {resource_type, string},
         {resource_id, string},
-        {metadata_prefix, string},
         {metadata, string},
         {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
         {handle_service, string},
@@ -176,7 +175,6 @@ get_record_struct(2) ->
     {record, [
         {public_handle, string},
         {resource_type, string},
-        {metadata_prefix, string},
         {metadata, string},
         {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
         {resource_id, string},
@@ -197,7 +195,6 @@ get_record_struct(4) ->
     {record, [
         {public_handle, string},
         {resource_type, string},
-        {metadata_prefix, string},
         {metadata, string},
         {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
         {resource_id, string},
@@ -222,7 +219,6 @@ get_record_struct(5) ->
     {record, [
         {public_handle, string},
         {resource_type, string},
-        {metadata_prefix, string},
         {metadata, string},
         {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
         {resource_id, string},
@@ -247,7 +243,6 @@ get_record_struct(6) ->
     {record, [
         {public_handle, string},
         {resource_type, string},
-        {metadata_prefix, string},
         {metadata, string},
         {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
         {resource_id, string},
@@ -271,9 +266,30 @@ get_record_struct(7) ->
     {record, [
         {public_handle, string},
         {resource_type, string},
-        {metadata_prefix, string},
         {metadata, string},
         {timestamp, integer},  % changed field
+        {resource_id, string},
+
+        {handle_service, string},
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(8) ->
+    % added new field metadata_prefix
+    {record, [
+        {public_handle, string},
+        {resource_type, string},
+        {metadata_prefix, string}, % new field
+        {metadata, string},
+        {timestamp, integer},
         {resource_id, string},
 
         {handle_service, string},
@@ -303,7 +319,6 @@ upgrade_record(1, Handle) ->
         PublicHandle,
         ResourceType,
         ResourceId,
-        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -319,7 +334,6 @@ upgrade_record(1, Handle) ->
     {2, {od_handle,
         PublicHandle,
         ResourceType,
-        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -337,7 +351,6 @@ upgrade_record(2, Handle) ->
     {od_handle,
         PublicHandle,
         ResourceType,
-        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -354,7 +367,6 @@ upgrade_record(2, Handle) ->
     {3, {od_handle,
         PublicHandle,
         ResourceType,
-        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -372,7 +384,6 @@ upgrade_record(3, Handle) ->
     {od_handle,
         PublicHandle,
         ResourceType,
-        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -390,7 +401,6 @@ upgrade_record(3, Handle) ->
         od_handle,
         PublicHandle,
         ResourceType,
-        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -412,7 +422,6 @@ upgrade_record(4, Handle) ->
         od_handle,
         PublicHandle,
         ResourceType,
-        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -433,7 +442,6 @@ upgrade_record(4, Handle) ->
         od_handle,
         PublicHandle,
         ResourceType,
-        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -455,7 +463,6 @@ upgrade_record(5, Handle) ->
         od_handle,
         PublicHandle,
         ResourceType,
-        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -472,32 +479,31 @@ upgrade_record(5, Handle) ->
 
         BottomUpDirty
     } = Handle,
-    {6, #od_handle{
-        public_handle = PublicHandle,
-        resource_type = ResourceType,
-        metadata_prefix = MetadataPrefix,
-        metadata = Metadata,
-        timestamp = Timestamp,
+    {6, {
+        od_handle,
+        PublicHandle,
+        ResourceType,
+        Metadata,
+        Timestamp,
 
-        resource_id = ResourceId,
-        handle_service = HandleService,
-        users = Users,
-        groups = Groups,
+        ResourceId,
+        HandleService,
+        Users,
+        Groups,
 
-        eff_users = EffUsers,
-        eff_groups = EffGroups,
+        EffUsers,
+        EffGroups,
 
-        creation_time = CreationTime,
-        creator = upgrade_common:upgrade_subject_record(Creator),
+        CreationTime,
+        upgrade_common:upgrade_subject_record(Creator),
 
-        bottom_up_dirty = BottomUpDirty
+        BottomUpDirty
     }};
 upgrade_record(6, Handle) ->
     {
         od_handle,
         PublicHandle,
         ResourceType,
-        MetadataPrefix,
         Metadata,
         Timestamp,
 
@@ -514,10 +520,51 @@ upgrade_record(6, Handle) ->
 
         BottomUpDirty
     } = Handle,
-    {7, #od_handle{
+    {7, {
+        od_handle,
+        PublicHandle,
+        ResourceType,
+        Metadata,
+        time:datetime_to_seconds(Timestamp),
+
+        ResourceId,
+        HandleService,
+        Users,
+        Groups,
+
+        EffUsers,
+        EffGroups,
+
+        CreationTime,
+        Creator,
+
+        BottomUpDirty
+    }};
+upgrade_record(7, Handle) ->
+    {
+        od_handle,
+        PublicHandle,
+        ResourceType,
+        Metadata,
+        Timestamp,
+
+        ResourceId,
+        HandleService,
+        Users,
+        Groups,
+
+        EffUsers,
+        EffGroups,
+
+        CreationTime,
+        Creator,
+
+        BottomUpDirty
+    } = Handle,
+    {8, #od_handle{
         public_handle = PublicHandle,
         resource_type = ResourceType,
-        metadata_prefix = MetadataPrefix,
+        metadata_prefix = <<"oai_dc">>,
         metadata = Metadata,
         timestamp = time:datetime_to_seconds(Timestamp),
 

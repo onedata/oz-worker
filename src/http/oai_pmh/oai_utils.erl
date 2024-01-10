@@ -24,7 +24,6 @@
     oai_identifier_encode/1, oai_identifier_decode/1,
     build_oai_header/2, build_oai_record/3
 ]).
-%%-export([list_handles/0, get_handle/1]).
 -export([get_handle/1]).
 
 %%%--------------------------------------------------------------------
@@ -129,7 +128,7 @@ deserialize_datestamp(Datestamp) ->
 %%% Throws with noRecordsMatch if nothing is harvested.
 %%% @end
 %%%--------------------------------------------------------------------
--spec harvest(binary(), binary(), binary(), undefined | oai_set_spec(), function()) -> [term()].
+-spec harvest(binary(), time:iso8601(), time:iso8601(), undefined | oai_set_spec(), function()) -> [term()].
 harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, SetSpec, HarvestingFun) ->
     From = deserialize_datestamp(FromDatestamp),
     Until = deserialize_datestamp(UntilDatestamp),
@@ -306,17 +305,6 @@ to_xml(Content) -> #xmlText{value = str_utils:to_list(Content)}.
 ensure_list(undefined) -> [];
 ensure_list(Arg) when is_list(Arg) -> Arg;
 ensure_list(Arg) -> [Arg].
-
-
-%%%%%-------------------------------------------------------------------
-%%%%% @doc
-%%%%% Returns the list of all handles in the system.
-%%%%% @end
-%%%%%-------------------------------------------------------------------
-%%-spec list_handles() -> [od_handle:id()].
-%%list_handles() ->
-%%    {ok, HandlesList} = handle_logic:list(?ROOT),
-%%    HandlesList.
 
 
 %%%-------------------------------------------------------------------

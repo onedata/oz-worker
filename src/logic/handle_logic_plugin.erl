@@ -117,8 +117,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     ResourceType = <<"Share">> = maps:get(<<"resourceType">>, Req#el_req.data),
     ResourceId = ShareId = maps:get(<<"resourceId">>, Req#el_req.data),
     Metadata = maps:get(<<"metadata">>, Req#el_req.data),
-    MetadataPrefix = maps:get(<<"metadataPrefix">>, Req#el_req.data),
-    CreationTime = od_handle:actual_timestamp(),
+    MetadataPrefix = maps:get(<<"metadataPrefix">>, Req#el_req.data, <<"oai_dc">>),
+    CreationTime = od_handle:current_timestamp(),
 
     % ensure no race conditions when creating a handle for a share (only one may be created)
     critical_section:run({create_handle, ResourceId}, fun() ->
@@ -166,7 +166,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             od_share, ShareId
         ),
 
-        handles:add(CreationTime, HandleId, HandleServiceId, MetadataPrefix),
+        handles:add(MetadataPrefix, HandleServiceId, HandleId, CreationTime),
         {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
         {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}
     end);
@@ -205,7 +205,9 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
-    {HandleList, undefined} = handles:list(#{}),
+    {HandleList, undefined} = lists:flatmap(fun(MetadataFormat) ->
+        handles:list(#{metadata_prefix => MetadataFormat})
+    end, metadata_formats:supported_formats()),
     {ok, HandleList};
 
 get(#el_req{gri = #gri{aspect = privileges}}, _) ->
@@ -219,7 +221,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Handle) ->
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
     #od_handle{handle_service = HandleService, public_handle = PublicHandle,
         resource_type = ResourceType, resource_id = ResourceId,
-        metadata = Metadata, metadata_prefix=MetadataPrefix,
+        metadata = Metadata, metadata_prefix = MetadataPrefix,
         timestamp = Timestamp, creation_time = CreationTime, creator = Creator
     } = Handle,
     {ok, #{
@@ -237,7 +239,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = public}}, Handle) ->
     #od_handle{
         public_handle = PublicHandle,
         resource_type = ResourceType, resource_id = ResourceId,
-        metadata = Metadata, metadata_prefix=MetadataPrefix,
+        metadata = Metadata, metadata_prefix = MetadataPrefix,
         timestamp = Timestamp, creation_time = CreationTime
     } = Handle,
     {ok, #{
@@ -280,7 +282,7 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
         handle_service = HandleService,
         timestamp = TimeStamp,
         metadata_prefix = MetadataPrefix
-        }}} = od_handle:get(HandleId),
+    }}} = od_handle:get(HandleId),
     NewMetadata = maps:get(<<"metadata">>, Data),
     NewTimeStamp = maps:get(<<"timestamp">>, Data),
     {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
@@ -291,7 +293,7 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
     end),
     %%  after handle modification we need to update handle timestamp in tree
     handles:delete(TimeStamp, HandleId, HandleService, MetadataPrefix),
-    handles:add(NewTimeStamp, HandleId, HandleService, MetadataPrefix),
+    handles:add(MetadataPrefix, HandleService, HandleId, NewTimeStamp),
     handle_proxy:modify_handle(HandleId, NewMetadata),
     ok;
 

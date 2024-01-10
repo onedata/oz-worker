@@ -124,6 +124,23 @@ accept_resource(Req, State) ->
 %%% Internal functions
 %%%===================================================================
 
+%% @private
+-spec handle_request(QueryParams :: [proplists:property()], Req :: cowboy_req:req()) -> tuple().
+handle_request(QueryParams, Req) ->
+    try
+        handle_request_unsafe(QueryParams, Req)
+    catch
+        Class:Reason:Stacktrace ->
+            Error = ?examine_exception(Class, Reason, Stacktrace),
+            ReqE = cowboy_req:reply(
+                errors:to_http_code(Error),
+                #{},
+                json_utils:encode(#{<<"error">> => errors:to_json(Error)}),
+                Req
+            ),
+            throw({stop, ReqE})
+    end.
+
 %%%--------------------------------------------------------------------
 %%% @private
 %%% @doc
@@ -133,18 +150,14 @@ accept_resource(Req, State) ->
 %%% returned.
 %%% @end
 %%%--------------------------------------------------------------------
--spec handle_request(QueryParams :: [proplists:property()], Req :: cowboy_req:req()) -> tuple().
-handle_request(QueryParams, Req) ->
+-spec handle_request_unsafe(QueryParams :: [proplists:property()], Req :: cowboy_req:req()) -> tuple().
+handle_request_unsafe(QueryParams, Req) ->
     Response = try
         {Verb, ParsedArgs} = oai_parser:process_and_validate_args(QueryParams),
         generate_response(Verb, ParsedArgs)
     catch
         throw:Error ->
-            oai_errors:handle(Error);
-        ErrorType:Error:Stacktrace ->
-            ?error_stacktrace("Unhandled exception in OAI-PMH request ~p:~p", [ErrorType, Error], Stacktrace),
-            ReqE = cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req),
-            throw({stop, ReqE})
+            oai_errors:handle(Error)
     end,
 
     RequestElement = case Response of
