@@ -18,8 +18,8 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([serialize_datestamp/1, deserialize_datestamp/1,
-    is_harvesting/1, verb_to_module/1, is_earlier_or_equal/2,
+-export([serialize_datestamp/1, deserialize_datestamp/1, is_harvesting/1,
+    verb_to_module/1, sanitize_metadata/2, is_earlier_or_equal/2,
     dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/5,
     oai_identifier_encode/1, oai_identifier_decode/1,
     build_oai_header/2, build_oai_record/3
@@ -68,14 +68,12 @@ build_oai_header(OaiId, Handle) ->
 -spec build_oai_record(MetadataPrefix :: binary(), oai_id(), od_handle:record()) ->
     #oai_record{}.
 build_oai_record(MetadataPrefix, OaiId, Handle) ->
+    Mod = metadata_formats:module(MetadataPrefix),
     #oai_record{
         header = build_oai_header(OaiId, Handle),
         metadata = #oai_metadata{
             metadata_format = #oai_metadata_format{metadataPrefix = MetadataPrefix},
-            additional_identifiers = [
-                Handle#od_handle.public_handle,
-                share_logic:build_public_url(Handle#od_handle.resource_id)
-            ],
+            additional_identifiers = Mod:resolve_additional_identifiers(Handle),
             value = Handle#od_handle.metadata
         }
     }.
@@ -155,6 +153,18 @@ harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, SetSpec, HarvestingFun) -
             throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
         _ -> HarvestedMetadata
     end.
+
+
+%%%--------------------------------------------------------------------
+%%% @doc
+%%% Function checks whether metadata is valid.
+%%% @end
+%%%--------------------------------------------------------------------
+-spec sanitize_metadata(Metadata :: od_handle:metadata(), MetadataPrefix :: od_handle:metadata_prefix())
+        -> ok | errors:error().
+sanitize_metadata(MetadataPrefix, Metadata) ->
+    Mod = metadata_formats:module(MetadataPrefix),
+    Mod:sanitize_metadata(Metadata).
 
 %%%--------------------------------------------------------------------
 %%% @doc

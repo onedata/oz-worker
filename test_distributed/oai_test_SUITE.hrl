@@ -26,24 +26,44 @@
     "<dc:rights>CC-0<\/dc:rights>",
     "<\/metadata>">>
 ).
+-define(NAMESPACES, "xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\" xmlns:dcterms=\"http:\/\/purl.org\/dc\/terms\/\" xmlns:edm=\"http:\/\/www.europeana.eu\/schemas\/edm\/\" xmlns:ore=\"http:\/\/www.openarchives.org\/ore\/terms\/\" xmlns:owl=\"http:\/\/www.w3.org\/2002\/07\/owl#\" xmlns:rdf=\"http:\/\/www.w3.org\/1999\/02\/22-rdf-syntax-ns#\" xmlns:foaf=\"http:\/\/xmlns.com\/foaf\/0.1\/\" xmlns:skos=\"http:\/\/www.w3.org\/2004\/02\/skos\/core#\" xmlns:rdaGr2=\"http:\/\/rdvocab.info\/ElementsGr2\/\" xmlns:wgs84_pos=\"http:\/\/www.w3.org\/2003\/01\/geo\/wgs84_pos#\" xmlns:crm=\"http:\/\/www.cidoc-crm.org\/cidoc--crm\/\" xmlns:cc=\"http:\/\/creativecommons.org\/ns#\"").
+
 
 -define(EDM_METADATA_XML,
-    <<"<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-    <RDF xmlns=\"http:\/\/www.w3.org\/1999\/02\/22-rdf-syntax-ns#\"
-         xmlns:edm=\"http:\/\/www.europeana.eu\/schemas\/edm\/\"
-         xmlns:rdfs=\"http:\/\/www.w3.org\/2000\/01\/rdf-schema#\"
-         xmlns:skos=\"http:\/\/www.w3.org\/2004\/02\/skos\/core#\"
-         xmlns:ore=\"http:\/\/www.openarchives.org\/ore\/terms\/\"
-         xmlns:rdf=\"http:\/\/www.w3.org\/1999\/02\/22-rdf-syntax-ns#\"
-         elementFormDefault=\"qualified\"
-         attributeFormDefault=\"qualified\">
+    <<"<?xml version=\"1.0\"?>",
+        "<rdf:RDF ", ?NAMESPACES,">",
+        "<edm:ProvidedCHO rdf:about=\"??????\">",
+        "<dc:title xml:lang=\"en\">Metadata Example Record Tier A<\/dc:title>",
+        "<dc:type>book<\/dc:type>",
+        "<dc:language>deu<\/dc:language>",
+        "<edm:type>TEXT<\/edm:type>",
+        "<dcterms:isPartOf>Europeana Foundation Example Records<\/dcterms:isPartOf>",
+        "<dc:identifier>??????</dc:identifier>",
+        "<\/edm:ProvidedCHO>",
+        "<ore:Aggregation rdf:about=\"??????\">",
+        "<edm:aggregatedCHO rdf:resource=\"??????\"\/>",
+        "<edm:dataProvider>Europeana Foundation<\/edm:dataProvider>",
+        "<edm:isShownBy rdf:resource=\"http:\/\/media.culturegrid.org.uk\/mediaLibrary\/Partage\/LoveArtNouveau\/Glasgow\/DSCF4092.JPG\"\/>",
+        "<edm:provider>Europeana Foundation<\/edm:provider>",
+        "<edm:rights rdf:resource=\"http:\/\/rightsstatements.org\/vocab\/NoC-OKLR\/1.0\/\"\/>",
+        "<\/ore:Aggregation>",
+        "<\/rdf:RDF>">>).
 
-      <edm:ProvidedCHO>
-        <edm:title>Test dataset<\/edm:title>
-        <edm:creator>John Doe<\/edm:creator>
-        <edm:subject>Test of datacite<\/edm:subject>
-      <\/edm:ProvidedCHO>
-
-    <\/RDF>
-">>
-).
+-define(EDM_METADATA_XML_SPECIFIED_HANDLE(PublicHandle), <<"<?xml version=\"1.0\"?>",
+    "<rdf:RDF ", ?NAMESPACES,">",
+    "<edm:ProvidedCHO rdf:about=\"", PublicHandle/binary,"\">",
+    "<dc:title xml:lang=\"en\">Metadata Example Record Tier A<\/dc:title>",
+    "<dc:type>book<\/dc:type>",
+    "<dc:language>deu<\/dc:language>",
+    "<edm:type>TEXT<\/edm:type>",
+    "<dcterms:isPartOf>Europeana Foundation Example Records<\/dcterms:isPartOf>",
+    "<dc:identifier>", PublicHandle/binary,"</dc:identifier>",
+    "<\/edm:ProvidedCHO>",
+    "<ore:Aggregation rdf:about=\"", PublicHandle/binary,"_AGG\">",
+    "<edm:aggregatedCHO rdf:resource=\"", PublicHandle/binary,"\"\/>",
+    "<edm:dataProvider>Europeana Foundation<\/edm:dataProvider>",
+    "<edm:isShownBy rdf:resource=\"http:\/\/media.culturegrid.org.uk\/mediaLibrary\/Partage\/LoveArtNouveau\/Glasgow\/DSCF4092.JPG\"\/>",
+    "<edm:provider>Europeana Foundation<\/edm:provider>",
+    "<edm:rights rdf:resource=\"http:\/\/rightsstatements.org\/vocab\/NoC-OKLR\/1.0\/\"\/>",
+    "<\/ore:Aggregation>",
+    "<\/rdf:RDF>">>).

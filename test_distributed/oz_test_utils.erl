@@ -1903,7 +1903,7 @@ handle_service_set_group_privileges(
     ResourceType :: od_handle:resource_type(),
     ResourceId :: od_handle:resource_id(), Metadata :: od_handle:metadata(),
     MetadataPrefix :: od_handle:metadata_prefix()) ->
-    {ok, od_handle:id()}.
+    {ok, od_handle:id()} | errors:error().
 create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId,
     Metadata, MetadataPrefix) ->
     Result = case Client of
@@ -1918,7 +1918,12 @@ create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId,
                 Metadata, MetadataPrefix
             ])
     end,
-    ?assertMatch({ok, _}, Result).
+    case Result of
+        {ok, _} -> Result;
+        {error,{badrpc,{error,{bad_value_xml,BadMetadata}}}} ->
+            throw(?ERROR_BAD_VALUE_XML(BadMetadata))
+    end.
+
 
 
 %%--------------------------------------------------------------------
@@ -1945,7 +1950,11 @@ create_handle(Config, Client, Data) ->
 %%--------------------------------------------------------------------
 -spec list_handles(Config :: term()) -> {ok, [od_handle:id()]}.
 list_handles(Config) ->
-    {Handles, undefined} = call_oz(Config, handles, list, [#{}]),
+    Handles = lists:flatmap(fun(MetadataPrefix) ->
+        {HandlesPerMetadata, undefined} = call_oz(Config, handles, list,
+            [#{metadata_prefix => MetadataPrefix}]),
+        HandlesPerMetadata
+    end, metadata_formats:supported_formats()),
     {ok, Handles}.
 
 

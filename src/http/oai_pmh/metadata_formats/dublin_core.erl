@@ -12,13 +12,15 @@
 -author("Jakub Kudzia").
 
 -include("http/handlers/oai.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -behaviour(metadata_format_behaviour).
 
 %% API
--export([elements/0, encode/2, metadata_prefix/0, schema_URL/0,
-    extra_namespaces/0, schema_location/0, main_namespace/0]).
+-export([elements/0, sanitize_metadata/1, encode/2, metadata_prefix/0, schema_URL/0,
+    extra_namespaces/0, schema_location/0, main_namespace/0,
+    resolve_additional_identifiers/1]).
 
 
 %%%===================================================================
@@ -94,6 +96,20 @@ elements() -> [
     <<"rights">>
 ].
 
+-spec sanitize_metadata(MetadataPrefix :: od_handle:metadata_prefix())
+        -> ok | errors:error().
+sanitize_metadata(Metadata) ->
+    try xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]) of
+        {#xmlElement{content = _}, _} ->
+            ok
+    catch Class:Reason:Stacktrace ->
+        ?debug_exception(
+            "Cannot parse dublin core metadata",
+            Class, Reason, Stacktrace
+        ),
+        throw(?ERROR_BAD_VALUE_XML(Metadata))
+    end.
+
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% {@link metadata_format_behaviour} callback encode/2
@@ -111,28 +127,20 @@ encode(Metadata, AdditionalIdentifiers) ->
     %%                content=[str_utils:to_list(Value)]}]
     %%        end
     %%    end, elements()),
-
-    MetadataContent = try xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]) of
-        {#xmlElement{content = Content}, _} ->
-            %% Xmerl works on strings in UTF8 (essentially the result of binary_to_list(<<_/utf8>>),
-            %% not unicode erlang-strings! However, its output IS expressed in unicode erlang-strings!
-            %% This is why we need to transform the resulting unicode strings to UTF8
-            %% strings before encoding and sending back to the client.
-            lists:map(fun
-                (#xmlElement{content = [#xmlText{value = Value} = Text]} = Element) when is_list(Value) ->
-                    Element#xmlElement{content = [
-                        Text#xmlText{value = binary_to_list(str_utils:unicode_list_to_binary(Value))}
-                    ]};
-                (Other) ->
-                    Other
-            end, Content)
-    catch Class:Reason:Stacktrace ->
-        ?debug_exception(
-            "Cannot parse dublin core metadata, identifiers: ~p", [AdditionalIdentifiers],
-            Class, Reason, Stacktrace
-        ),
-        []
-    end,
+    {#xmlElement{content = Content}, _} = xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]),
+    MetadataContent =
+        %% Xmerl works on strings in UTF8 (essentially the result of binary_to_list(<<_/utf8>>),
+        %% not unicode erlang-strings! However, its output IS expressed in unicode erlang-strings!
+        %% This is why we need to transform the resulting unicode strings to UTF8
+        %% strings before encoding and sending back to the client.
+        lists:map(fun
+            (#xmlElement{content = [#xmlText{value = Value} = Text]} = Element) when is_list(Value) ->
+                Element#xmlElement{content = [
+                    Text#xmlText{value = binary_to_list(str_utils:unicode_list_to_binary(Value))}
+                ]};
+            (Other) ->
+                Other
+        end, Content),
 
     IdentifiersMetadata = lists:map(fun(Identifier) ->
         #xmlElement{
@@ -140,12 +148,19 @@ encode(Metadata, AdditionalIdentifiers) ->
             content = [#xmlText{value = binary_to_list(Identifier)}]
         }
     end, AdditionalIdentifiers),
-
     #xmlElement{
         name = 'oai_dc:dc',
         attributes = get_attributes(),
         content = MetadataContent ++ IdentifiersMetadata
     }.
+
+
+resolve_additional_identifiers(Handle) ->
+    AdditionalIdentifiers = [
+        Handle#od_handle.public_handle,
+        share_logic:build_public_url(Handle#od_handle.resource_id)
+    ],
+    AdditionalIdentifiers.
 
 
 %%%===================================================================

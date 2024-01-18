@@ -131,6 +131,7 @@ handle_request(QueryParams, Req) ->
         handle_request_unsafe(QueryParams, Req)
     catch
         Class:Reason:Stacktrace ->
+            ct:pal("~n Class ~n ~p~n , Reason ~n ~p~n , Stacktrace~n ~p~n ", [Class, Reason, Stacktrace]),
             Error = ?examine_exception(Class, Reason, Stacktrace),
             ReqE = cowboy_req:reply(
                 errors:to_http_code(Error),
@@ -159,7 +160,6 @@ handle_request_unsafe(QueryParams, Req) ->
         throw:Error ->
             oai_errors:handle(Error)
     end,
-
     RequestElement = case Response of
         #oai_error{code = badVerb} -> generate_request_element(Req);
         #oai_error{code = badArgument} -> generate_request_element(Req);
@@ -174,7 +174,9 @@ handle_request_unsafe(QueryParams, Req) ->
 
     XML = insert_to_root_xml_element([ResponseDateXML, RequestElementXML, ResponseXML]),
     Prolog = ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"],
+    ?warning("EEEEEEEEEEEEEEEEEEEEEE ~n ~p ~n ", [XML]),
     ResponseBody = xmerl:export_simple([XML], xmerl_xml, [{prolog, Prolog}]),
+    ?warning("FFFFFFFFFFFFFFFFFFFFFFF"),
     Req2 = cowboy_req:set_resp_header(?HDR_CONTENT_TYPE, ?RESPONSE_CONTENT_TYPE, Req),
     {ResponseBody, Req2}.
 

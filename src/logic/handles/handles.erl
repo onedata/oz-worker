@@ -105,7 +105,9 @@ delete(TimeSeconds, HandleId, HandleServiceId, MetadataPrefix) ->
         ?METADATA_FORMAT_HSERVICE_TREE_ID(HandleServiceId, MetadataPrefix)
     ]).
 
--spec add(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(), time:seconds()) -> ok.
+
+-spec update(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
+    time:seconds(), time:seconds()) -> ok.
 update(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, NewTimestamp) ->
     delete(OldTimestamp, HandleId, HandleServiceId, MetadataPrefix),
     add(MetadataPrefix, HandleServiceId, HandleId, NewTimestamp).
@@ -156,23 +158,27 @@ list(ListingOpts) ->
         [] -> {InternalEntries, undefined};
         _ -> build_result_from_reversed_listing(InternalEntries, Size)
     end.
-%%list(ListingOpts) ->
-%%    lists:flatmap(fun(MetadataFormat) ->
-%%        handles:list(ListingOpts#{metadata_prefix => MetadataFormat})
-%%    end, metadata_formats:supported_formats()).
 
 
 -spec get_earliest_timestamp() -> none | calendar:datetime().
 get_earliest_timestamp() ->
-    ListingOpts = #{size => 1},
-    {List, undefined} = list(ListingOpts),
-    case List of
+    EarliestTimestamps= lists:flatmap(fun(MetadataFormat) ->
+        ListingOpts = #{size => 1, metadata_prefix => MetadataFormat},
+        {List, undefined} = list(ListingOpts),
+        List
+    end, metadata_formats:supported_formats()),
+
+    case EarliestTimestamps of
         [] -> none;
-        [HandleId] ->
-            {ok, #document{value = #od_handle{
-                timestamp = TimeSecondsBin
-            }}} = od_handle:get(HandleId),
-            time:seconds_to_datetime(TimeSecondsBin)
+        _ ->
+            Timestamps = lists:map(fun(HandleId) ->
+                {ok, #document{value = #od_handle{
+                    timestamp = TimeSecondsBin
+                }}} = od_handle:get(HandleId),
+                TimeSecondsBin
+            end, EarliestTimestamps),
+            TimeSecondsMin = lists:min(Timestamps),
+            time:seconds_to_datetime(TimeSecondsMin)
     end.
 
 

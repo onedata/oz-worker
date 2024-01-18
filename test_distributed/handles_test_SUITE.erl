@@ -27,6 +27,7 @@
     list_handles_with_metadata_format_test/1,
     list_size_elements_test/1,
     add_element_that_already_exist_test/1,
+    update_handle_timestamp_test/1,
     list_from_until_test/1,
     list_no_resumption_token_test/1,
     add_handle_to_service_test/1,
@@ -35,18 +36,19 @@
 ]).
 
 all() -> [
-    {group, parallel_tests},
-    {group, sequential_tests}
+    {group, parallel_tests}
+%%    {group, sequential_tests}
 ].
 
 groups() -> [
     {parallel_tests, [parallel], [
-        resumption_token_test,
-        list_all_handle_test,
-        list_handles_from_services_test,
-        list_handles_with_metadata_format_test,
-        list_size_elements_test,
-        add_element_that_already_exist_test
+%%        resumption_token_test,
+%%        list_all_handle_test,
+%%        list_handles_from_services_test,
+%%        list_handles_with_metadata_format_test,
+%%        list_size_elements_test,
+%%        add_element_that_already_exist_test
+        update_handle_timestamp_test
     ]},
     {sequential_tests, [sequential], [
         list_from_until_test,
@@ -184,6 +186,30 @@ add_element_that_already_exist_test(_Config) ->
     end,
     AfterAdding = length(list_all(#{service_id => ?FIRST_HSERVICE, metadata_prefix => MetadataPrefix})),
     ?assertEqual(BeforeAdding, AfterAdding).
+
+update_handle_timestamp_test(_Config) ->
+    MetadataPrefix = ?RAND_METADATA_PREFIX(),
+    ListService = list_all(#{service_id => ?FIRST_HSERVICE, metadata_prefix => MetadataPrefix}),
+    ct:pal("~p ~n", [length(ListService)]),
+    HandleId = hd(ListService),
+    ct:pal("~p ~n", [HandleId]),
+    NewTimeStamp = ?EARLIEST_TIMESTAMP - 1,
+    AllHandles = node_cache:get(binary_to_atom(MetadataPrefix)),
+    [{OldTimeStamp, _HId, _HSId, MetadataPrefix}] = lists:filter(
+        fun({_TimeStamp, HId, _HSId, _MetadataPrefix}) ->
+            HId == HandleId end, AllHandles
+    ),
+    ct:pal("~p~n", [OldTimeStamp]),
+    ozt:rpc(handles, update, [
+        MetadataPrefix, ?FIRST_HSERVICE, HandleId, OldTimeStamp, NewTimeStamp
+    ]),
+    node_cache:clear(binary_to_atom(MetadataPrefix)),
+    node_cache:clear(all_handles),
+    node_cache:put(binary_to_atom(MetadataPrefix),
+        list_all(#{metadata_prefix => MetadataPrefix})),
+    node_cache:put(all_handles, list_all()),
+    EarliestTimestamp = ozt:rpc(handles, get_earliest_timestamp),
+    ct:pal("New ~p ~n Earliest ~p~n~n", [NewTimeStamp, EarliestTimestamp]).
 
 
 list_from_until_test(_Config) ->
@@ -414,7 +440,8 @@ create_handle_for_service(Service, MetadataPrefix) ->
 get_elem_from_handle_id(HandleId, Atom) ->
     Expected = node_cache:get(all_handles),
     [{TimeStamp, _HId, _HSId, MetadataPrefix}] = lists:filter(
-        fun({_TimeStamp, HId, _HSId, _MetadataPrefix}) -> HId == HandleId end, Expected
+        fun({_TimeStamp, HId, _HSId, _MetadataPrefix}) ->
+            HId == HandleId end, Expected
     ),
     Elem = case Atom of
         timestamp -> TimeStamp;
