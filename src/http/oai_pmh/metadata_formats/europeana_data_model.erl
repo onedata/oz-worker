@@ -54,27 +54,41 @@ schema_URL() -> <<"https://www.europeana.eu/schemas/edm/EDM.xsd">>.
 main_namespace() ->
     {'xmlns:edm', <<"http://www.europeana.eu/schemas/edm/">>}.
 
-%%%%%-------------------------------------------------------------------
-%%%%% @doc
-%%%%% {@link metadata_format_behaviour} callback extra_namespaces/0
-%%%%% @end
-%%%%%-------------------------------------------------------------------
-%%-spec extra_namespaces() -> [{atom(), binary()}].
-%%extra_namespaces() -> [
-%%    {'xmlns:dc', <<"http://purl.org/dc/elements/1.1/">>},
-%%    {'xmlns:dcterms', <<"http://purl.org/dc/terms/">>},
-%%    {'xmlns:edm', <<"http://www.europeana.eu/schemas/edm/">>},
-%%    {'xmlns:ore', <<"http://www.openarchives.org/ore/terms/">>},
-%%    {'xmlns:owl', <<"http://www.w3.org/2002/07/owl#">>},
-%%    {'xmlns:rdf', <<"http://www.w3.org/1999/02/22‐rdf-syntax-ns#">>},
-%%    {'xmlns:foaf', <<"http://xmlns.com/foaf/0.1/">>},
-%%    {'xmlns:skos', <<"http://www.w3.org/2004/02/skos/core#">>},
-%%    {'xmlns:rdaGr2', <<"http://rdvocab.info/ElementsGr2/">>},
-%%    {'xmlns:wgs84_pos', <<"http://www.w3.org/2003/01/geo/wgs84_pos#">>},
-%%    {'xmlns:crm', <<"http://www.cidoc-crm.org/cidoc-‐crm/">>},
-%%    {'xmlns:cc', <<"http://creativecommons.org/ns#">>}
-%%
-%%].
+
+%%-define(NAMESPACES, "xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\"
+%% xmlns:dcterms=\"http:\/\/purl.org\/dc\/terms\/\"
+%% xmlns:edm=\"http:\/\/www.europeana.eu\/schemas\/edm\/\"
+%% xmlns:ore=\"http:\/\/www.openarchives.org\/ore\/terms\/\"
+%% xmlns:owl=\"http:\/\/www.w3.org\/2002\/07\/owl#\"
+%% xmlns:rdf=\"http:\/\/www.w3.org\/1999\/02\/22-rdf-syntax-ns#\"
+%% xmlns:foaf=\"http:\/\/xmlns.com\/foaf\/0.1\/\"
+%% xmlns:skos=\"http:\/\/www.w3.org\/2004\/02\/skos\/core#\"
+%% xmlns:rdaGr2=\"http:\/\/rdvocab.info\/ElementsGr2\/\"
+%% xmlns:wgs84_pos=\"http:\/\/www.w3.org\/2003\/01\/geo\/wgs84_pos#\"
+%% xmlns:crm=\"http:\/\/www.cidoc-crm.org\/cidoc--crm\/\"
+%% xmlns:cc=\"http:\/\/creativecommons.org\/ns#\"").
+
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link metadata_format_behaviour} callback extra_namespaces/0
+%%% @end
+%%%-------------------------------------------------------------------
+-spec extra_namespaces() -> [{atom(), binary()}].
+extra_namespaces() -> [
+    {'xmlns:dc', <<"http://purl.org/dc/elements/1.1/">>},
+    {'xmlns:dcterms', <<"http://purl.org/dc/terms/">>},
+    {'xmlns:edm', <<"http://www.europeana.eu/schemas/edm/">>},
+    {'xmlns:ore', <<"http://www.openarchives.org/ore/terms/">>},
+    {'xmlns:owl', <<"http://www.w3.org/2002/07/owl#">>},
+    {'xmlns:rdf', <<"http://www.w3.org/1999/02/22-rdf-syntax-ns#">>},
+    {'xmlns:foaf', <<"http://xmlns.com/foaf/0.1/">>},
+    {'xmlns:skos', <<"http://www.w3.org/2004/02/skos/core#">>},
+    {'xmlns:rdaGr2', <<"http://rdvocab.info/ElementsGr2/">>},
+    {'xmlns:wgs84_pos', <<"http://www.w3.org/2003/01/geo/wgs84_pos#">>},
+    {'xmlns:crm', <<"http://www.cidoc-crm.org/cidoc--crm/">>},
+    {'xmlns:cc', <<"http://creativecommons.org/ns#">>}
+
+].
 
 
 %%%-------------------------------------------------------------------
@@ -107,19 +121,18 @@ elements() -> [
 sanitize_metadata(Metadata) ->
 %%    ?warning("Metadata ~p~n", [Metadata]),
     try xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]) of
-        {#xmlElement{content = _}, _} ->
-%%            MetadataContent = lists:map(fun
-%%                (#xmlElement{content = [#xmlText{value = Value} = Text]} = Element) when is_list(Value) ->
-%%                    Element#xmlElement{content = [
-%%                        Text#xmlText{value = binary_to_list(str_utils:unicode_list_to_binary(Value))}
-%%                    ]};
-%%                (Other) ->
-%%                    Other
-%%            end, Content),
-%%%%            ?warning("MetadataContent ~p~n", [MetadataContent]),
-%%            [#xmlElement{name = 'edm:ProvidedCHO', namespace = _, content = _, attributes = _},
-%%                #xmlElement{name = 'ore:Aggregation', namespace = _, content = _, attributes = _} | _] =
-%%                MetadataContent,
+        {#xmlElement{content = Content}, _} ->
+            MetadataContent = lists:map(fun
+                (#xmlElement{content = [#xmlText{value = Value} = Text]} = Element) when is_list(Value) ->
+                    Element#xmlElement{content = [
+                        Text#xmlText{value = binary_to_list(str_utils:unicode_list_to_binary(Value))}
+                    ]};
+                (Other) ->
+                    Other
+            end, Content),
+            [#xmlElement{name = 'edm:ProvidedCHO', namespace = _, content = _, attributes = _},
+                #xmlElement{name = 'ore:Aggregation', namespace = _, content = _, attributes = _} | _] =
+                MetadataContent,
             ok
     catch Class:Reason:Stacktrace ->
         ?debug_exception(
@@ -161,29 +174,31 @@ encode(Metadata, [Identifier]) ->
             Other
     end, Content),
 
-    case MetadataContent of
-        #xmlElement{content = _} ->
-            #xmlElement{
-                content = lists:map(fun
-                    (#xmlElement{
-                        name = 'edm:ProvidedCHO', namespace = CHONamespace, content = CHOContent, attributes = CHOAttributes}
-                        = CHOElement) ->
-                        NewCHOAttributes = ensure_rdf_about_attribute(CHOAttributes, Identifier, CHONamespace),
-                        NewCHOContent =  ensure_dc_identifier_element(CHOContent, Identifier),
-                        CHOElement#xmlElement{content = NewCHOContent, attributes = NewCHOAttributes};
-                    (#xmlElement{
-                        name = 'ore:Aggregation', namespace = AggNamespace, content = AggContent, attributes = AggAttributes}
-                        = AggElement) ->
-                        NewAggAttributes = ensure_rdf_about_attribute(
-                            AggAttributes, <<Identifier/binary, <<"_AGG">>/binary>>, AggNamespace),
-                        NewAggContent =  ensure_aggregated_element(AggContent, Identifier),
-                        AggElement#xmlElement{content = NewAggContent, attributes = NewAggAttributes};
-                    (Other) ->
-                        Other
-                end, MetadataContent#xmlElement.content)
-            };
-        _ -> MetadataContent
-    end.
+    EncodedMetadataContent = #xmlElement{
+        content = lists:map(fun
+            (#xmlElement{
+                name = 'edm:ProvidedCHO', namespace = CHONamespace, content = CHOContent, attributes = CHOAttributes}
+                = CHOElement) ->
+                NewCHOAttributes = ensure_rdf_about_attribute(CHOAttributes, Identifier, CHONamespace),
+                NewCHOContent =  ensure_dc_identifier_element(CHOContent, Identifier),
+                CHOElement#xmlElement{content = NewCHOContent, attributes = NewCHOAttributes};
+            (#xmlElement{
+                name = 'ore:Aggregation', namespace = AggNamespace, content = AggContent, attributes = AggAttributes}
+                = AggElement) ->
+                NewAggAttributes = ensure_rdf_about_attribute(
+                    AggAttributes, <<Identifier/binary, <<"_AGG">>/binary>>, AggNamespace),
+                NewAggContent =  ensure_aggregated_element(AggContent, Identifier),
+                AggElement#xmlElement{content = NewAggContent, attributes = NewAggAttributes};
+            (Other) ->
+                Other
+        end, MetadataContent)
+    },
+
+    #xmlElement{
+        name = 'rdf:RDF',
+        attributes = extra_namespaces_attr(),
+        content = EncodedMetadataContent
+    }.
 
 
 resolve_additional_identifiers(Handle) ->
@@ -256,3 +271,13 @@ ensure_aggregated_element(Content, Identifier) ->
         {ok, Found} ->
             lists_utils:replace(Found, Found#xmlElement{attributes=[NewAttr]}, Content)
     end.
+
+
+%% @private
+-spec extra_namespaces_attr() -> [#xmlAttribute{}].
+extra_namespaces_attr() ->
+    lists:map(fun({Name, Value}) ->
+        #xmlAttribute{
+            name = Name,
+            value = str_utils:to_list(Value)}
+    end, extra_namespaces()).
