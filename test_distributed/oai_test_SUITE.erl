@@ -117,90 +117,90 @@
 %%%===================================================================
 
 all() -> ?ALL([
-%%    identify_get_test,
-%%    identify_post_test,
-%%    identify_change_earliest_datestamp_get_test,
-%%    identify_change_earliest_datestamp_post_test,
-%%
-%%    get_record_get_test,
-%%    get_record_post_test,
-%%
-%%    list_metadata_formats_get_test,
-%%    list_metadata_formats_post_test,
-%%    list_identifiers_get_test,
-%%    list_identifiers_post_test,
-%%    selective_list_identifiers1_get_test,
-%%    selective_list_identifiers1_post_test,
-%%    selective_list_identifiers2_get_test,
-%%    selective_list_identifiers2_post_test,
-%%    selective_list_identifiers3_get_test,
-%%    selective_list_identifiers3_post_test,
-%%    selective_list_identifiers4_get_test,
-%%    selective_list_identifiers4_post_test,
-%%    list_identifiers_modify_timestamp_get_test,
-%%    list_identifiers_modify_timestamp_post_test,
-%%    list_identifiers_modify_timestamp1_get_test,
-%%    list_identifiers_modify_timestamp1_post_test,
-%%    list_identifiers_modify_timestamp2_get_test,
-%%    list_identifiers_modify_timestamp2_post_test,
+    identify_get_test,
+    identify_post_test,
+    identify_change_earliest_datestamp_get_test,
+    identify_change_earliest_datestamp_post_test,
 
-    list_records_get_test
-%%    list_records_post_test,
-%%    selective_list_records1_get_test,
-%%    selective_list_records1_post_test,
-%%    selective_list_records2_get_test,
-%%    selective_list_records2_post_test,
-%%    selective_list_records3_get_test,
-%%    selective_list_records3_post_test,
-%%    selective_list_records4_get_test,
-%%    selective_list_records4_post_test,
-%%    list_records_modify_timestamp_get_test,
-%%    list_records_modify_timestamp_post_test,
-%%    list_records_modify_timestamp1_get_test,
-%%    list_records_modify_timestamp1_post_test,
-%%    list_records_modify_timestamp2_get_test,
-%%    list_records_modify_timestamp2_post_test
+    get_record_get_test,
+    get_record_post_test,
 
-%%    list_sets_get_test,
-%%    list_sets_post_test,
-%%    list_sets_empty_repository_get_test,
-%%    list_sets_empty_repository_post_test,
-%%
-%%    no_verb_get_test,
-%%    no_verb_post_test,
-%%    empty_verb_get_test,
-%%    empty_verb_post_test,
-%%    invalid_verb_get_test,
-%%    invalid_verb_post_test,
-%%    illegal_arg_get_test,
-%%    illegal_arg_post_test,
-%%    missing_arg_get_test,
-%%    missing_arg_post_test,
-%%    id_not_existing_get_test,
-%%    id_not_existing_post_test,
-%%    list_metadata_formats_no_format_error_get_test,
-%%    list_metadata_formats_no_format_error_post_test,
-%%    cannot_disseminate_format_get_test,
-%%    cannot_disseminate_format_post_test,
-%%    list_identifiers_empty_repository_error_get_test,
-%%    list_identifiers_empty_repository_error_post_test,
-%%    list_identifiers_no_records_match_error1_get_test,
-%%    list_identifiers_no_records_match_error1_post_test,
-%%    list_identifiers_no_records_match_error2_get_test,
-%%    list_identifiers_no_records_match_error2_post_test,
-%%    list_identifiers_granularity_mismatch_error_post_test,
-%%    list_identifiers_granularity_mismatch_error_get_test,
-%%    list_identifiers_wrong_date_format_error1_get_test,
-%%    list_identifiers_wrong_date_format_error1_post_test,
-%%    list_identifiers_wrong_date_format_error2_get_test,
-%%    list_identifiers_wrong_date_format_error2_post_test,
-%%    list_identifiers_wrong_date_format_error3_get_test,
-%%    list_identifiers_wrong_date_format_error3_post_test,
-%%
-%%    list_records_no_records_match_error1_get_test,
-%%    list_records_no_records_match_error1_post_test,
-%%    list_records_no_records_match_error2_get_test,
-%%    list_records_no_records_match_error2_post_test
+    list_metadata_formats_get_test,
+    list_metadata_formats_post_test,
+    list_identifiers_get_test,
+    list_identifiers_post_test,
+    selective_list_identifiers1_get_test,
+    selective_list_identifiers1_post_test,
+    selective_list_identifiers2_get_test,
+    selective_list_identifiers2_post_test,
+    selective_list_identifiers3_get_test,
+    selective_list_identifiers3_post_test,
+    selective_list_identifiers4_get_test,
+    selective_list_identifiers4_post_test,
+    list_identifiers_modify_timestamp_get_test,
+    list_identifiers_modify_timestamp_post_test,
+    list_identifiers_modify_timestamp1_get_test,
+    list_identifiers_modify_timestamp1_post_test,
+    list_identifiers_modify_timestamp2_get_test,
+    list_identifiers_modify_timestamp2_post_test,
+
+    list_records_get_test,
+    list_records_post_test,
+    selective_list_records1_get_test,
+    selective_list_records1_post_test,
+    selective_list_records2_get_test,
+    selective_list_records2_post_test,
+    selective_list_records3_get_test,
+    selective_list_records3_post_test,
+    selective_list_records4_get_test,
+    selective_list_records4_post_test,
+    list_records_modify_timestamp_get_test,
+    list_records_modify_timestamp_post_test,
+    list_records_modify_timestamp1_get_test,
+    list_records_modify_timestamp1_post_test,
+    list_records_modify_timestamp2_get_test,
+    list_records_modify_timestamp2_post_test,
+
+    list_sets_get_test,
+    list_sets_post_test,
+    list_sets_empty_repository_get_test,
+    list_sets_empty_repository_post_test,
+
+    no_verb_get_test,
+    no_verb_post_test,
+    empty_verb_get_test,
+    empty_verb_post_test,
+    invalid_verb_get_test,
+    invalid_verb_post_test,
+    illegal_arg_get_test,
+    illegal_arg_post_test,
+    missing_arg_get_test,
+    missing_arg_post_test,
+    id_not_existing_get_test,
+    id_not_existing_post_test,
+    list_metadata_formats_no_format_error_get_test,
+    list_metadata_formats_no_format_error_post_test,
+    cannot_disseminate_format_get_test,
+    cannot_disseminate_format_post_test,
+    list_identifiers_empty_repository_error_get_test,
+    list_identifiers_empty_repository_error_post_test,
+    list_identifiers_no_records_match_error1_get_test,
+    list_identifiers_no_records_match_error1_post_test,
+    list_identifiers_no_records_match_error2_get_test,
+    list_identifiers_no_records_match_error2_post_test,
+    list_identifiers_granularity_mismatch_error_post_test,
+    list_identifiers_granularity_mismatch_error_get_test,
+    list_identifiers_wrong_date_format_error1_get_test,
+    list_identifiers_wrong_date_format_error1_post_test,
+    list_identifiers_wrong_date_format_error2_get_test,
+    list_identifiers_wrong_date_format_error2_post_test,
+    list_identifiers_wrong_date_format_error3_get_test,
+    list_identifiers_wrong_date_format_error3_post_test,
+
+    list_records_no_records_match_error1_get_test,
+    list_records_no_records_match_error1_post_test,
+    list_records_no_records_match_error2_get_test,
+    list_records_no_records_match_error2_post_test
 ]).
 
 %% useful macros
@@ -222,10 +222,8 @@ all() -> ?ALL([
         list_to_binary("space" ++ integer_to_list(N))
     end, lists:seq(0, Num - 1))).
 -define(RAND_METADATA_PREFIX(), case ?RAND_BOOL() of
-%%    true -> <<"oai_dc">>;
-%%    false -> <<"oai_dc">>
-    true -> <<"edm">>;
-    false -> <<"edm">>
+    true -> ?OAI_DC_METADATA_PREFIX;
+    false -> ?EDM_METADATA_PREFIX
 end).
 
 -define(DC_NAMESPACE, <<"http://www.openarchives.org/OAI/2.0/oai_dc/">>).
@@ -545,10 +543,9 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     Metadata = get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
     Identifier1 = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId1,
         Metadata, MetadataPrefix, Timestamp1),
-    MetadataPrefix2 = ?RAND_METADATA_PREFIX(),
     Metadata2 = get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
     _Identifier2 = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId2,
-        Metadata2, MetadataPrefix2, Timestamp2),
+        Metadata2, MetadataPrefix, Timestamp2),
 
     ExpResponseContent = [
         #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
@@ -602,32 +599,44 @@ get_record_test_base(Config, Method) ->
 
 
 list_metadata_formats_test_base(Config, Method) ->
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    {Schema, Namespace} = case MetadataPrefix of
-        <<"oai_dc">> -> {?DC_SCHEMA, ?DC_NAMESPACE};
-        <<"edm">> -> {?EDM_SCHEMA, ?EDM_NAMESPACE}
-    end,
     ExpResponseContent = [
         #xmlElement{
             name = metadataFormat,
             content = [
                 #xmlElement{
                     name = metadataPrefix,
-                    content = [#xmlText{value = binary_to_list(MetadataPrefix)}]
+                    content = [#xmlText{value = binary_to_list(?OAI_DC_METADATA_PREFIX)}]
                 },
                 #xmlElement{
                     name = schema,
-                    content = [#xmlText{value = binary_to_list(Schema)}]
+                    content = [#xmlText{value = binary_to_list(?DC_SCHEMA)}]
                 },
                 #xmlElement{
                     name = metadataNamespace,
-                    content = [#xmlText{value = binary_to_list(Namespace)}]
+                    content = [#xmlText{value = binary_to_list(?DC_NAMESPACE)}]
+                }
+            ]
+        },
+        #xmlElement{
+            name = metadataFormat,
+            content = [
+                #xmlElement{
+                    name = metadataPrefix,
+                    content = [#xmlText{value = binary_to_list(?EDM_METADATA_PREFIX)}]
+                },
+                #xmlElement{
+                    name = schema,
+                    content = [#xmlText{value = binary_to_list(?EDM_SCHEMA)}]
+                },
+                #xmlElement{
+                    name = metadataNamespace,
+                    content = [#xmlText{value = binary_to_list(?EDM_NAMESPACE)}]
                 }
             ]
         }
     ],
-
     ?assert(check_list_metadata_formats(200, [], Method, ExpResponseContent, Config)).
+
 
 list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
     BeginTime = ?CURRENT_DATETIME(),
@@ -1011,7 +1020,6 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
         none -> Args;
         _ -> add_verb(Verb, Args)
     end,
-    ct:pal("Args ~n ~p ~n ~n ", [Args]),
     ResponseDate = ?CURRENT_DATETIME(),
     ExpectedBody = expected_body(Config, ExpResponseContent, ResponseType, Args2, ResponseDate),
 
@@ -1037,7 +1045,6 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
             headers => ?CONTENT_TYPE_HEADER
         }
     end,
-    ct:pal("DUPA"),
     Check = rest_test_utils:check_rest_call(Config, #{
         request => Request,
         expect => #{
@@ -1046,9 +1053,7 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
             headers => {contains, ?RESPONSE_CONTENT_TYPE_HEADER}
         }
     }),
-    ct:pal("DUPA2"),
     ok = test_utils:mock_validate_and_unload(Nodes, oai_handler),
-    ct:pal("Check ~p ~n", [Check]),
     Check.
 
 
@@ -1187,7 +1192,7 @@ modify_handle_with_mocked_timestamp(Config, HId, Metadata, Timestamp) ->
     ok = test_utils:mock_expect(Nodes, od_handle, current_timestamp, fun() ->
         time:datetime_to_seconds(Timestamp)
     end),
-    ok = modify_handle(Config, HId, Metadata, time:datetime_to_seconds(Timestamp)),
+    ok = modify_handle(Config, HId, Metadata),
     ok = test_utils:mock_validate_and_unload(Nodes, od_handle).
 
 setup_test_for_harvesting(Config, RecordsNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix) ->
@@ -1244,9 +1249,8 @@ create_handle(Config, User, HandleServiceId, ResourceId, Metadata, MetadataPrefi
         _ -> Result
     end.
 
-modify_handle(Config, HandleId, Metadata, Timestamp) ->
+modify_handle(Config, HandleId, Metadata) ->
     Data = #{
-        <<"timestamp">> => Timestamp,
         <<"metadata">> => Metadata
     },
     ok = oz_test_utils:update_handle(Config, HandleId, Data).
@@ -1326,15 +1330,15 @@ random_out_of_range(Lower, Upper, Max) ->
         _ -> Number
     end.
 
-expected_metadata(Config, HandleId, <<"oai_dc">>) ->
-    MetadataXml = get_metadata_compatible_with_metadata_prefix(<<"oai_dc">>),
+expected_metadata(Config, HandleId, ?OAI_DC_METADATA_PREFIX) ->
+    MetadataXml = get_metadata_compatible_with_metadata_prefix(?OAI_DC_METADATA_PREFIX),
     {#xmlElement{content = Metadata}, _} = xmerl_scan:string(binary_to_list(MetadataXml)),
     Metadata ++ expected_identifiers(Config, HandleId);
-expected_metadata(Config, HandleId, <<"edm">>) ->
+expected_metadata(Config, HandleId, ?EDM_METADATA_PREFIX) ->
     {ok, #od_handle{
         public_handle = PublicHandle
     }} = oz_test_utils:get_handle(Config, HandleId),
-    MetadataXml = get_metadata_compatible_with_metadata_prefix(<<"edm">>, PublicHandle),
+    MetadataXml = get_metadata_compatible_with_metadata_prefix(?EDM_METADATA_PREFIX, PublicHandle),
     {#xmlElement{content = Metadata}, _} = xmerl_scan:string(binary_to_list(MetadataXml)),
     Metadata.
 
@@ -1376,7 +1380,7 @@ expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedDCMetadata, Metadat
         {"xmlns:cc", "http:\/\/creativecommons.org\/ns#"}
     ],
     Content = case MetadataPrefix of
-        <<"edm">> ->
+        ?EDM_METADATA_PREFIX ->
             Name = 'rdf:RDF',
             #xmlElement{
                 name = Name,
@@ -1385,7 +1389,7 @@ expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedDCMetadata, Metadat
                 end, Attributes),
                 content = ExpectedDCMetadata
             };
-        <<"oai_dc">> ->
+        ?OAI_DC_METADATA_PREFIX ->
             Name = 'oai_dc:dc',
             #xmlElement{
                 name = Name,
@@ -1429,16 +1433,16 @@ expected_oai_header_xml(Config, HandleId, Timestamp) ->
 %% @private
 get_metadata_compatible_with_metadata_prefix(MetadataPrefix) ->
     Metadata = case MetadataPrefix of
-        <<"oai_dc">> -> ?DC_METADATA_XML;
-        <<"edm">> -> ?EDM_METADATA_XML
+        ?OAI_DC_METADATA_PREFIX -> ?DC_METADATA_XML;
+        ?EDM_METADATA_PREFIX -> ?EDM_METADATA_XML
     end,
     Metadata.
 
 %% @private
 get_metadata_compatible_with_metadata_prefix(MetadataPrefix, PublicHandle) ->
     Metadata = case MetadataPrefix of
-        <<"oai_dc">> -> ?DC_METADATA_XML;
-        <<"edm">> -> ?EDM_METADATA_XML_SPECIFIED_HANDLE(PublicHandle)
+        ?OAI_DC_METADATA_PREFIX -> ?DC_METADATA_XML;
+        ?EDM_METADATA_PREFIX -> ?EDM_METADATA_XML_SPECIFIED_HANDLE(PublicHandle)
     end,
     Metadata.
 

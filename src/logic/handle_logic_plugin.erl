@@ -25,6 +25,7 @@
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
 -define(METADATA_SIZE_LIMIT, 100000).
+-define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
 
 %%%===================================================================
 %%% API
@@ -117,7 +118,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     ResourceType = <<"Share">> = maps:get(<<"resourceType">>, Req#el_req.data),
     ResourceId = ShareId = maps:get(<<"resourceId">>, Req#el_req.data),
     Metadata = maps:get(<<"metadata">>, Req#el_req.data),
-    MetadataPrefix = maps:get(<<"metadataPrefix">>, Req#el_req.data, <<"oai_dc">>),
+    MetadataPrefix = maps:get(<<"metadataPrefix">>, Req#el_req.data, ?OAI_DC_METADATA_PREFIX),
     CreationTime = od_handle:current_timestamp(),
 
     try
@@ -289,7 +290,7 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
         metadata_prefix = MetadataPrefix
     }}} = od_handle:get(HandleId),
     NewMetadata = maps:get(<<"metadata">>, Data),
-    NewTimeStamp = maps:get(<<"timestamp">>, Data),
+    NewTimeStamp = od_handle:current_timestamp(),
     {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
         {ok, Handle#od_handle{
             metadata = NewMetadata,
@@ -297,8 +298,7 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
         }}
     end),
     %%  after handle modification we need to update handle timestamp in tree
-    handles:delete(TimeStamp, HandleId, HandleService, MetadataPrefix),
-    handles:add(MetadataPrefix, HandleService, HandleId, NewTimeStamp),
+    handles:update(MetadataPrefix, HandleService, HandleId, TimeStamp, NewTimeStamp),
     handle_proxy:modify_handle(HandleId, NewMetadata),
     ok;
 
@@ -344,7 +344,7 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
             Class, Reason, Stacktrace
         )
     end,
-    handles:delete(TimeStamp, HandleId, HandleService, MetadataPrefix),
+    handles:delete(MetadataPrefix, HandleService, HandleId,  TimeStamp),
     entity_graph:delete_with_relations(od_handle, HandleId);
 
 delete(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}}) ->

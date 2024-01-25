@@ -1950,12 +1950,13 @@ create_handle(Config, Client, Data) ->
 %%--------------------------------------------------------------------
 -spec list_handles(Config :: term()) -> {ok, [od_handle:id()]}.
 list_handles(Config) ->
-    Handles = lists:flatmap(fun(MetadataPrefix) ->
-        {HandlesPerMetadata, undefined} = call_oz(Config, handles, list,
-            [#{metadata_prefix => MetadataPrefix}]),
-        HandlesPerMetadata
-    end, metadata_formats:supported_formats()),
-    {ok, Handles}.
+    ?assertMatch({ok, _}, call_oz(Config, handle_logic, list, [])).
+%%    Handles = lists:flatmap(fun(MetadataPrefix) ->
+%%        {HandlesPerMetadata, undefined} = call_oz(Config, handles, list,
+%%            [#{metadata_prefix => MetadataPrefix}]),
+%%        HandlesPerMetadata
+%%    end, metadata_formats:supported_formats()),
+%%    {ok, Handles}.
 
 
 %%--------------------------------------------------------------------

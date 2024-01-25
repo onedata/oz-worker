@@ -157,7 +157,7 @@ check_rest_call(Config, ArgsMap) ->
 %%        "   HeadersPlusAuth: ~p~n"
 %%        "   ReqBody: ~p~n"
 %%        "   Opts: ~p~n", [
-%%            ReqMethod, URL, HeadersPlusAuth, ReqBody, [{pool, false}, ?CONNECT_OPTS ++ CompleteOpts]
+%%            ReqMethod, URL, HeadersPlusAuth, ReqBody, [{pool, false}, ReqOptsPlusAuth]
 %%        ]),
 
         CaCerts = oz_test_utils:gui_ca_certs(Config),
@@ -174,7 +174,6 @@ check_rest_call(Config, ArgsMap) ->
             ReqBody,
             ?CONNECT_OPTS ++ CompleteOpts
         ),
-
         % Check response code if specified
         case ExpCode of
             undefined ->

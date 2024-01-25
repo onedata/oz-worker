@@ -119,7 +119,6 @@ elements() -> [
 -spec sanitize_metadata(MetadataPrefix :: od_handle:metadata_prefix())
         -> ok | errors:error().
 sanitize_metadata(Metadata) ->
-%%    ?warning("Metadata ~p~n", [Metadata]),
     try xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]) of
         {#xmlElement{content = Content}, _} ->
             MetadataContent = lists:map(fun
@@ -174,8 +173,7 @@ encode(Metadata, [Identifier]) ->
             Other
     end, Content),
 
-    EncodedMetadataContent = #xmlElement{
-        content = lists:map(fun
+    EncodedMetadataContent = lists:map(fun
             (#xmlElement{
                 name = 'edm:ProvidedCHO', namespace = CHONamespace, content = CHOContent, attributes = CHOAttributes}
                 = CHOElement) ->
@@ -191,8 +189,7 @@ encode(Metadata, [Identifier]) ->
                 AggElement#xmlElement{content = NewAggContent, attributes = NewAggAttributes};
             (Other) ->
                 Other
-        end, MetadataContent)
-    },
+        end, MetadataContent),
 
     #xmlElement{
         name = 'rdf:RDF',
