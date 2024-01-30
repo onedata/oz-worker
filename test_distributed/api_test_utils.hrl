@@ -222,6 +222,7 @@
     }
 ).
 
+-define(DC_METADATA_PREFIX, <<"oai_dc">>).
 %% Example test data for handles
 -define(DC_METADATA, <<"<?xml version=\"1.0\"?>",
     "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
@@ -260,7 +261,8 @@
         <<"handleServiceId">> => HandleServiceId,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ResourceId,
-        <<"metadata">> => ?DC_METADATA
+        <<"metadata">> => ?DC_METADATA,
+        <<"metadataPrefix">> => ?DC_METADATA_PREFIX
     }
 ).
 

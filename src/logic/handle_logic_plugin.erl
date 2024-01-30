@@ -211,8 +211,9 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
-    {HandleList, undefined} = lists:flatmap(fun(MetadataFormat) ->
-        handles:list(#{metadata_prefix => MetadataFormat})
+    HandleList= lists:flatmap(fun(MetadataFormat) ->
+        {HandlesPerMetadata, undefined} = handles:list(#{metadata_prefix => MetadataFormat}),
+        HandlesPerMetadata
     end, metadata_formats:supported_formats()),
     {ok, HandleList};
 

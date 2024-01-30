@@ -188,6 +188,7 @@ create_test(Config) ->
         ?assertEqual(<<"Share">>, Handle#od_handle.resource_type),
         ?assertEqual(ShareId, Handle#od_handle.resource_id),
         ?assertEqual(?DC_METADATA, Handle#od_handle.metadata),
+        ?assertEqual(?DC_METADATA_PREFIX, Handle#od_handle.metadata_prefix),
         ?assertEqual(HService, Handle#od_handle.handle_service),
         true
     end,
@@ -284,7 +285,8 @@ get_test(Config) ->
         <<"handleServiceId">> => HService,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ShareId,
-        <<"metadata">> => ?DC_METADATA
+        <<"metadata">> => ?DC_METADATA,
+        <<"metadataPrefix">> => ?DC_METADATA_PREFIX
     },
     {ok, HandleId} = oz_test_utils:create_handle(
         Config, ?USER(U1), HandleData

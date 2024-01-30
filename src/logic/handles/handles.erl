@@ -25,6 +25,7 @@
 %  2) handle id - this part allows to distinguish links associated with handles
 %                that have the same timestamp.
 -type index() :: binary().
+-type resumption_token() :: binary().
 
 -type limit() :: pos_integer().
 -type size() :: pos_integer().
@@ -40,8 +41,6 @@
     service_id => service_id()
 }.
 %% @formatter:on
-
--type resumption_token() :: index().
 
 -define(CTX, (od_handle:get_ctx())).
 
@@ -74,10 +73,31 @@ index(TimeSeconds, HandleId) ->
     <<(FormattedTimeSeconds)/binary, ?INDEX_SEP, HandleId/binary>>.
 
 
+-spec resumption_token(time:seconds(), od_handle:id(), size(), time:seconds(),
+    time:seconds()) -> resumption_token().
+resumption_token(TimeSeconds, HandleId, Size, From, Until) ->
+    FormattedTimeSeconds = str_utils:format_bin("~11..0B", [TimeSeconds]),
+    FormattedSize = str_utils:format_bin("~5..0B", [Size]),
+    FormattedFrom = str_utils:format_bin("~11..0B", [case From of undefined -> 0; _ -> From end]),
+    FormattedUntil = str_utils:format_bin("~11..0B", [Until]),
+    <<(FormattedTimeSeconds)/binary, ?INDEX_SEP, FormattedSize/binary, ?INDEX_SEP,
+        FormattedFrom/binary, ?INDEX_SEP, FormattedUntil/binary, ?INDEX_SEP, HandleId/binary>>.
+
+
+
 -spec decode_index(index()) -> {time:seconds(), od_handle:id()}.
 decode_index(Index) ->
     <<TimeSeconds:11/binary, 0, HandleId/binary>> = Index,
     {binary_to_integer(TimeSeconds), HandleId}.
+
+
+-spec decode_resumption_token(resumption_token()) -> {time:seconds(), od_handle:id(),
+    size(), time:seconds(), time:seconds()}.
+decode_resumption_token(Token) ->
+    <<TimeSeconds:11/binary, 0, Size:5/binary, 0, From:11/binary,
+        0, Until:11/binary, 0, HandleId/binary>> = Token,
+    {binary_to_integer(TimeSeconds), HandleId, binary_to_integer(Size),
+        binary_to_integer(From), binary_to_integer(Until)}.
 
 
 -spec add(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(), time:seconds()) -> ok.
@@ -112,8 +132,12 @@ delete(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
 -spec update(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
     time:seconds(), time:seconds()) -> ok.
 update(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, NewTimestamp) ->
-    delete(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
-    add(MetadataPrefix, HandleServiceId, HandleId, NewTimestamp).
+    case OldTimestamp == NewTimestamp of
+        true -> ok;
+        false ->
+            delete(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
+            add(MetadataPrefix, HandleServiceId, HandleId, NewTimestamp)
+    end.
 
 
 -spec list(listing_opts()) -> [od_handle:id()] | {[od_handle:id()], resumption_token()}.
@@ -124,13 +148,24 @@ list(ListingOpts) ->
         {undefined, _} -> ?TREE_FOR_METADATA_PREFIX(MetadataPrefix);
         {_, _} -> ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, ServiceId)
     end,
-    Size = maps:get(size, ListingOpts, ?DEFAULT_LIST_LIMIT),
-    From = maps:get(from, ListingOpts, undefined),
-    Until = maps:get(until, ListingOpts, ?MAX_TIMESTAMP),
+
     Token = maps:get(resumption_token, ListingOpts, <<>>),
+    {Size, From, Until} = case Token of
+        <<>> ->
+            Size1 = maps:get(size, ListingOpts, ?DEFAULT_LIST_LIMIT),
+            From1 = maps:get(from, ListingOpts, undefined),
+            Until1 = maps:get(until, ListingOpts, ?MAX_TIMESTAMP),
+            {Size1, From1, Until1};
+        _ ->
+            {_, _, Size2, From2, Until2} = decode_resumption_token(Token),
+            {Size2, From2, Until2}
+    end,
     StartIndex = case Token of
-        <<>> -> index(From, first);
-        _ -> Token
+        <<>> ->
+            index(From, first);
+        _ ->
+            {TimeSecondsToken, HandleID, _, _, _} = decode_resumption_token(Token),
+            index(TimeSecondsToken, HandleID)
     end,
     FoldOpts = case Token == <<>> andalso From == undefined of
         true -> #{
@@ -158,7 +193,7 @@ list(ListingOpts) ->
     ),
     case InternalEntries of
         [] -> {InternalEntries, undefined};
-        _ -> build_result_from_reversed_listing(InternalEntries, Size)
+        _ -> build_result_from_reversed_listing(InternalEntries, Size, From, Until)
     end.
 
 
@@ -169,7 +204,6 @@ get_earliest_timestamp() ->
         {List, undefined} = list(ListingOpts),
         List
     end, metadata_formats:supported_formats()),
-    ?warning("EARLIEST TIMESTAMPS ~p~n", [EarliestTimestamps] ),
     case EarliestTimestamps of
         [] -> none;
         _ ->
@@ -184,18 +218,18 @@ get_earliest_timestamp() ->
 
 
 %% @private
-build_result_from_reversed_listing(InternalEntries, Size) ->
-    NewToken = pack_resumption_token(InternalEntries, Size),
+build_result_from_reversed_listing(InternalEntries, Size, From, Until) ->
+    NewToken = pack_resumption_token(InternalEntries, Size, From, Until),
     ReversedEntries = lists:reverse(InternalEntries),
     Handles = lists:map(fun({_, HandleId}) -> HandleId end, ReversedEntries),
     {Handles, NewToken}.
 
 
 %% @private
-pack_resumption_token(InternalEntries, Size) ->
+pack_resumption_token(InternalEntries, Size, From, Until) ->
     case length(InternalEntries) < Size orelse Size < ?MAX_LIST_LIMIT of
         true -> undefined;
         false ->
             {TimeSeconds, HandleId} = hd(InternalEntries),
-            index(TimeSeconds, HandleId)
+            resumption_token(TimeSeconds, HandleId, Size, From, Until)
     end.
