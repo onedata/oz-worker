@@ -23,7 +23,7 @@
     get/2,
     get_protected_data/2,
     get_public_data/2,
-    list/0,
+    list/1,
     list_privileges/0
 ]).
 -export([
@@ -146,15 +146,14 @@ get_public_data(Auth, HandleId) ->
 %% Lists all handles (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
--spec list() ->
+-spec list(Auth :: aai:auth()) ->
     {ok, [od_handle:id()]} | errors:error().
-list() ->
-    Handles = lists:flatmap(fun(MetadataPrefix) ->
-        {HandlesPerMetadata, undefined} = handles:list(
-            #{metadata_prefix => MetadataPrefix}),
-        HandlesPerMetadata
-    end, metadata_formats:supported_formats()),
-    {ok, Handles}.
+list(Auth) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_handle, id = undefined, aspect = list}
+    }).
 
 
 %%--------------------------------------------------------------------

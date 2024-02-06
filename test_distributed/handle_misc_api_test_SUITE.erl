@@ -231,13 +231,14 @@ create_test(Config) ->
         data_spec = #data_spec{
             required = [
                 <<"handleServiceId">>, <<"resourceType">>,
-                <<"resourceId">>, <<"metadata">>
+                <<"resourceId">>, <<"metadata">>, <<"metadataPrefix">>
             ],
             correct_values = #{
                 <<"handleServiceId">> => [DoiHService, PidHService],
                 <<"resourceType">> => [<<"Share">>],
                 <<"resourceId">> => [fun(#{shareId := ShareId} = _Env) -> ShareId end],
-                <<"metadata">> => [?DC_METADATA]
+                <<"metadata">> => [?DC_METADATA],
+                <<"metadataPrefix">> => [?DC_METADATA_PREFIX]
             },
             bad_values = [
                 {<<"handleServiceId">>, <<"">>,
@@ -258,7 +259,9 @@ create_test(Config) ->
                 {<<"metadata">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
                 {<<"metadata">>, ?RAND_UNICODE_STR(100001),
-                    ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"metadata">>, 100000)}
+                    ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"metadata">>, 100000)},
+                {<<"metadata">>, <<"null">>, ?ERROR_BAD_VALUE_XML(<<"null">>)},
+                {<<"metadata">>, <<"<a></b>">>, ?ERROR_BAD_VALUE_XML(<<"<a></b>">>)}
             ]
         }
     },

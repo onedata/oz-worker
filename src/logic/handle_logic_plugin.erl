@@ -174,7 +174,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}
         end)
     catch throw:{error,{bad_value_xml,_}} ->
-            throw(?ERROR_BAD_VALUE_XML(Metadata))
+            ?ERROR_BAD_VALUE_XML(Metadata)
     end;
 
 create(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}, data = Data}) ->
