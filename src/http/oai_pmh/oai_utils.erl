@@ -126,24 +126,25 @@ deserialize_datestamp(Datestamp) ->
 %%% Throws with noRecordsMatch if nothing is harvested.
 %%% @end
 %%%--------------------------------------------------------------------
--spec harvest(binary(), time:iso8601(), time:iso8601(), undefined | oai_set_spec(), function()) -> [term()].
+-spec harvest(binary(), undefined | od_handle:timestamp_seconds(), undefined | od_handle:timestamp_seconds(),
+    undefined | oai_set_spec(), function()) -> [term()].
 harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, SetSpec, HarvestingFun) ->
-    From = deserialize_datestamp(FromDatestamp),
-    Until = deserialize_datestamp(UntilDatestamp),
-    {Identifiers, Token} = handles:list(
-        #{
-            from => case From of
-                undefined -> From;
-                _ -> time:datetime_to_seconds(From)
-            end,
-            until => case Until of
-                undefined -> Until;
-                _ -> time:datetime_to_seconds(Until)
-            end,
-            service_id => SetSpec,
-            metadata_prefix => MetadataPrefix
-        }
-    ),
+    From = case deserialize_datestamp(FromDatestamp) of
+        undefined -> undefined;
+        FromDeserialized -> time:datetime_to_seconds(FromDeserialized)
+    end,
+    Until = case deserialize_datestamp(UntilDatestamp) of
+        undefined -> undefined;
+        UntilDeserialized -> time:datetime_to_seconds(UntilDeserialized)
+    end,
+    ListingOpts = #{
+        from => From,
+        until => Until,
+        service_id => SetSpec,
+        metadata_prefix => MetadataPrefix
+    },
+    {Identifiers, _} = handles:list(ListingOpts),
+
     HarvestedMetadata = lists:map(fun(Identifier) ->
         Handle = get_handle(Identifier),
         HarvestingFun(Identifier, Handle)
@@ -151,7 +152,7 @@ harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, SetSpec, HarvestingFun) -
     case HarvestedMetadata of
         [] ->
             throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
-        _ -> {HarvestedMetadata, Token}
+        _ -> HarvestedMetadata
     end.
 
 
@@ -160,8 +161,8 @@ harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, SetSpec, HarvestingFun) -
 %%% Function checks whether metadata is valid.
 %%% @end
 %%%--------------------------------------------------------------------
--spec sanitize_metadata(Metadata :: od_handle:metadata(), MetadataPrefix :: od_handle:metadata_prefix())
-        -> ok | errors:error().
+-spec sanitize_metadata(Metadata :: od_handle:metadata(), MetadataPrefix :: od_handle:metadata_prefix()) ->
+    ok | errors:error().
 sanitize_metadata(MetadataPrefix, Metadata) ->
     Mod = metadata_formats:module(MetadataPrefix),
     Mod:sanitize_metadata(Metadata).
@@ -303,9 +304,7 @@ to_xml({Name, Content, Attributes}) ->
             #xmlAttribute{name = ensure_atom(N), value = str_utils:to_list(V)}
         end, Attributes)
     };
-to_xml([]) ->
-    #xmlText{value = []};
-to_xml(Content) when is_binary(Content) ->
+to_xml(Content) ->
     #xmlText{value = str_utils:to_list(Content)}.
 
 

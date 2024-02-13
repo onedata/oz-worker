@@ -14,13 +14,13 @@
 -include("http/handlers/oai.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -behaviour(metadata_format_behaviour).
 
 %% API
 -export([elements/0, sanitize_metadata/1, encode/2, metadata_prefix/0, schema_URL/0,
-    extra_namespaces/0, schema_location/0, main_namespace/0,
-    resolve_additional_identifiers/1]).
+    main_namespace/0, resolve_additional_identifiers/1]).
 
 
 %%%===================================================================
@@ -54,26 +54,6 @@ main_namespace() ->
 
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% {@link metadata_format_behaviour} callback extra_namespaces/0
-%%% @end
-%%%-------------------------------------------------------------------
--spec extra_namespaces() -> [{atom(), binary()}].
-extra_namespaces() -> [
-    {'xmlns:dc', <<"http://purl.org/dc/elements/1.1/">>}
-].
-
-%%%-------------------------------------------------------------------
-%%% @doc
-%%% {@link metadata_format_behaviour} callback schema_location/0
-%%% @end
-%%%-------------------------------------------------------------------
--spec schema_location() -> binary().
-schema_location() ->
-    {_, MainNamespace} = main_namespace(),
-    str_utils:format_bin("~s ~s", [MainNamespace, schema_URL()]).
-
-%%%-------------------------------------------------------------------
-%%% @doc
 %%% {@link metadata_format_behaviour} callback elements/0
 %%% @end
 %%%-------------------------------------------------------------------
@@ -96,11 +76,16 @@ elements() -> [
     <<"rights">>
 ].
 
--spec sanitize_metadata(MetadataPrefix :: od_handle:metadata_prefix())
-        -> ok | errors:error().
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link metadata_format_behaviour} callback sanitize_metadata/1
+%%% @end
+%%%-------------------------------------------------------------------
+-spec sanitize_metadata(MetadataPrefix :: od_handle:metadata_prefix()) ->
+    ok | errors:error().
 sanitize_metadata(Metadata) ->
-    try xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]) of
-        {#xmlElement{content = _}, _} ->
+    try
+        {#xmlElement{content = _}, _} = xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]),
             ok
     catch Class:Reason:Stacktrace ->
         ?debug_exception(
@@ -154,18 +139,32 @@ encode(Metadata, AdditionalIdentifiers) ->
         content = MetadataContent ++ IdentifiersMetadata
     }.
 
-
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% {@link metadata_format_behaviour} callback resolve_additional_identifiers/1
+%%% @end
+%%%-------------------------------------------------------------------
+-spec resolve_additional_identifiers(Handle :: od_handle:record()) -> [od_handle:public_handle()].
 resolve_additional_identifiers(Handle) ->
-    AdditionalIdentifiers = [
+    [
         Handle#od_handle.public_handle,
         share_logic:build_public_url(Handle#od_handle.resource_id)
-    ],
-    AdditionalIdentifiers.
-
+    ].
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%%%-------------------------------------------------------------------
+%%% @private
+%%% @doc
+%%% Returns list of extra XML namespaces for given metadata format.
+%%% @end
+%%%-------------------------------------------------------------------
+-spec extra_namespaces() -> [{atom(), binary()}].
+extra_namespaces() -> [
+    {'xmlns:dc', <<"http://purl.org/dc/elements/1.1/">>}
+].
 
 %%%-------------------------------------------------------------------
 %%% @private
@@ -189,7 +188,6 @@ main_namespace_attr() ->
         value = str_utils:to_list(Value)
     }.
 
-
 -spec extra_namespaces_attr() -> [#xmlAttribute{}].
 extra_namespaces_attr() ->
     lists:map(fun({Name, Value}) ->
@@ -204,7 +202,8 @@ schema_url_attr() ->
 
 -spec schema_location_attr() -> #xmlAttribute{}.
 schema_location_attr() ->
-    Value = schema_location(),
+    {_, MainNamespace} = main_namespace(),
+    Value = str_utils:format_bin("~s ~s", [MainNamespace, schema_URL()]),
     #xmlAttribute{
         name = 'xsi:schemaLocation',
         value = str_utils:to_list(Value)

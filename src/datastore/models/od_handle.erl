@@ -33,11 +33,11 @@
 -type public_handle() :: binary().
 -type metadata_prefix() :: binary().
 -type metadata() :: binary().
--type timestamp() :: time:seconds().
+-type timestamp_seconds() :: time:seconds().
 
 -export_type([id/0, record/0]).
 -export_type([resource_type/0, resource_id/0, public_handle/0,
-    metadata_prefix/0, metadata/0, timestamp/0]).
+    metadata_prefix/0, metadata/0, timestamp_seconds/0]).
 
 -define(CTX, #{
     model => od_handle,
@@ -133,7 +133,7 @@ get_ctx() ->
 %% @equiv global_clock:timestamp_seconds().
 %% @end
 %%--------------------------------------------------------------------
--spec current_timestamp() -> timestamp().
+-spec current_timestamp() -> timestamp_seconds().
 current_timestamp() ->
     global_clock:timestamp_seconds().
 

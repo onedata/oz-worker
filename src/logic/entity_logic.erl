@@ -108,11 +108,7 @@
 %%--------------------------------------------------------------------
 -spec handle(req()) -> result().
 handle(ElReq) ->
-    try
-        handle(ElReq, {undefined, 1})
-    catch Error ->
-        throw(Error)
-    end.
+    handle(ElReq, {undefined, 1}).
 
 
 %%--------------------------------------------------------------------
@@ -124,16 +120,9 @@ handle(ElReq) ->
 -spec handle(req(), VersionedEntity :: versioned_entity()) -> result().
 handle(#el_req{gri = #gri{type = EntityType}} = ElReq, VersionedEntity) ->
     ElPlugin = EntityType:entity_logic_plugin(),
-    try
-        handle_unsafe(#state{
-            req = ElReq, plugin = ElPlugin, versioned_entity = VersionedEntity
-        })
-    catch
-        throw:{error,{bad_value_xml,Metadata}} ->
-            throw(?ERROR_BAD_VALUE_XML(Metadata));
-        Class:Reason:Stacktrace ->
-            ?examine_exception(Class, Reason, Stacktrace)
-    end.
+    ?catch_exceptions(handle_unsafe(#state{
+        req = ElReq, plugin = ElPlugin, versioned_entity = VersionedEntity
+    })).
 
 
 %%--------------------------------------------------------------------
@@ -171,32 +160,29 @@ is_authorized(#el_req{gri = #gri{type = EntityType}} = ElReq, VersionedEntity) -
 %%--------------------------------------------------------------------
 -spec handle_unsafe(#state{}) -> result().
 handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
-    try
-        Result = call_create(
-            ensure_valid(
-                ensure_authorized(
-                    fetch_entity(
-                        ensure_operation_supported(
-                            State))))),
-        case {Result, Req} of
-            {{ok, resource, Resource}, #el_req{gri = #gri{aspect = instance}, auth = Auth}} ->
-                % If an entity instance is created, log an information about it
-                % (it's a significant operation and this information might be useful).
-                {EntType, EntId} = case Resource of
-                    {#gri{type = Type, id = Id}, _} -> {Type, Id};
-                    {#gri{type = Type, id = Id}, _, _} -> {Type, Id}
-                end,
-                ?debug("~s has been created by client: ~s", [
-                    EntType:to_string(EntId),
-                    aai:auth_to_printable(Auth)
-                ]);
-            _ ->
-                ok
-        end,
-        Result
-    catch Error ->
-        throw(Error)
-    end;
+    Result = call_create(
+        ensure_valid(
+            ensure_authorized(
+                fetch_entity(
+                    ensure_operation_supported(
+                        State))))),
+    case {Result, Req} of
+        {{ok, resource, Resource}, #el_req{gri = #gri{aspect = instance}, auth = Auth}} ->
+            % If an entity instance is created, log an information about it
+            % (it's a significant operation and this information might be useful).
+            {EntType, EntId} = case Resource of
+                {#gri{type = Type, id = Id}, _} -> {Type, Id};
+                {#gri{type = Type, id = Id}, _, _} -> {Type, Id}
+            end,
+            ?debug("~s has been created by client: ~s", [
+                EntType:to_string(EntId),
+                aai:auth_to_printable(Auth)
+            ]);
+        _ ->
+            ok
+    end,
+    Result;
+
 
 handle_unsafe(State = #state{req = #el_req{operation = get}}) ->
     NewState = ensure_authorized(

@@ -204,9 +204,6 @@ generate_response(Verb, Args) ->
 generate_required_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
         case Module:get_response(ElementName, Args) of
-            {Elements, _Token} when is_list(Elements) ->
-                [{ElementName, Element} || Element <- Elements];
-            {Element, _Token} -> oai_utils:ensure_list({ElementName, Element});
             Elements when is_list(Elements) ->
                 [{ElementName, Element} || Element <- Elements];
             Element -> oai_utils:ensure_list({ElementName, Element})
@@ -228,9 +225,6 @@ generate_optional_response_elements(Module, Args) ->
         try Module:get_response(ElementName, Args) of
             <<"">> -> [];
             [] -> [];
-            {Elements, _Token} when is_list(Elements) ->
-                [{ElementName, Element} || Element <- Elements];
-            {Element, _Token} -> oai_utils:ensure_list({ElementName, Element});
             Elements when is_list(Elements) ->
                 [{ElementName, Element} || Element <- Elements];
             Element -> oai_utils:ensure_list({ElementName, Element})

@@ -65,26 +65,29 @@ groups() -> [
 -define(HANDLE_COUNT_IN_SMALL_HSERVICE, 600).
 -define(EARLIEST_TIMESTAMP, 1200000000).
 -define(LATEST_TIMESTAMP, 1700000000).
--define(FIRST_HSERVICE, <<"first">>).
--define(ANOTHER_HSERVICE, <<"another">>).
--define(SMALL_HSERVICE, <<"small">>).
--define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
--define(EDM_METADATA_PREFIX, <<"edm">>).
-
 -define(RAND_NAME(), ?RAND_UNICODE_STR(200)).
 -define(RAND_ID(), str_utils:rand_hex(16)).
--define(RAND_SERVICE(), case ?RAND_BOOL() of
-    true -> ?FIRST_HSERVICE;
-    false -> ?ANOTHER_HSERVICE
-end).
+
+-define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
+-define(EDM_METADATA_PREFIX, <<"edm">>).
 -define(RAND_METADATA_PREFIX(), case ?RAND_BOOL() of
     true -> ?OAI_DC_METADATA_PREFIX;
     false -> ?EDM_METADATA_PREFIX
 end).
+
+-define(FIRST_HSERVICE, <<"first">>).
+-define(ANOTHER_HSERVICE, <<"another">>).
+% the list of handles for this service is not modified during the tests for it to remain small (less than 1000 handles)
+-define(SMALL_HSERVICE, <<"small">>).
+-define(RAND_SERVICE(), case ?RAND_BOOL() of % see above
+    true -> ?FIRST_HSERVICE;
+    false -> ?ANOTHER_HSERVICE
+end).
+
 -define(checkListing(Opts), ?assertEqual(length(expected_handles(Opts)), length(list_all(Opts)))).
 
 -record(handle_entry, {
-    timestamp :: od_handle:timestamp(),
+    timestamp :: od_handle:timestamp_seconds(),
     metadata_prefix :: binary(),
     handle_id :: od_handle:id(),
     service :: undefined | binary()
@@ -362,7 +365,7 @@ update_handle(HandleId, NewTimeStamp) ->
         service = Service
     } = Handle = lookup_handle(HandleId),
 
-    ozt:rpc(handles, update, [
+    ozt:rpc(handles, update_timestamp, [
         MetadataPrefix, Service, HandleId, OldTimeStamp, NewTimeStamp
     ]),
     UpdatedHandle = Handle#handle_entry{timestamp = NewTimeStamp},

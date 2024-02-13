@@ -112,7 +112,7 @@ is_subscribable(_, _) -> false.
 %% Creates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
--spec create(entity_logic:req()) -> entity_logic:create_result() | errors:error().
+-spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     HandleServiceId = maps:get(<<"handleServiceId">>, Req#el_req.data),
     ResourceType = <<"Share">> = maps:get(<<"resourceType">>, Req#el_req.data),
@@ -121,61 +121,57 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     MetadataPrefix = maps:get(<<"metadataPrefix">>, Req#el_req.data, ?OAI_DC_METADATA_PREFIX),
     CreationTime = od_handle:current_timestamp(),
 
-    try
-        oai_utils:sanitize_metadata(MetadataPrefix, Metadata),
-        % ensure no race conditions when creating a handle for a share (only one may be created)
-        critical_section:run({create_handle, ResourceId}, fun() ->
-            case od_share:get_handle(ResourceId) of
-                {ok, undefined} -> ok;
-                {ok, _HandleId} -> throw(?ERROR_ALREADY_EXISTS)
-            end,
+    oai_utils:sanitize_metadata(MetadataPrefix, Metadata),
+    % ensure no race conditions when creating a handle for a share (only one may be created)
+    critical_section:run({create_handle, ResourceId}, fun() ->
+        case od_share:get_handle(ResourceId) of
+            {ok, undefined} -> ok;
+            {ok, _HandleId} -> throw(?ERROR_ALREADY_EXISTS)
+        end,
 
-            {ok, PublicHandle} = handle_proxy:register_handle(
-                HandleServiceId, ResourceType, ResourceId, Metadata
-            ),
-            Handle = #document{value = #od_handle{
-                handle_service = HandleServiceId,
-                resource_type = ResourceType,
-                resource_id = ResourceId,
-                public_handle = PublicHandle,
-                metadata = Metadata,
-                metadata_prefix = MetadataPrefix,
-                creator = aai:normalize_subject(Auth#auth.subject),
-                creation_time = CreationTime
-            }},
-            {ok, #document{key = HandleId}} = od_handle:create(Handle),
-            entity_graph:add_relation(
-                od_handle, HandleId,
-                od_handle_service, HandleServiceId
-            ),
-            case Req#el_req.auth_hint of
-                ?AS_USER(UserId) ->
-                    entity_graph:add_relation(
-                        od_user, UserId,
-                        od_handle, HandleId,
-                        privileges:handle_admin()
-                    );
-                ?AS_GROUP(GroupId) ->
-                    entity_graph:add_relation(
-                        od_group, GroupId,
-                        od_handle, HandleId,
-                        privileges:handle_admin()
-                    );
-                _ ->
-                    ok
-            end,
-            entity_graph:add_relation(
-                od_handle, HandleId,
-                od_share, ShareId
-            ),
+        {ok, PublicHandle} = handle_proxy:register_handle(
+            HandleServiceId, ResourceType, ResourceId, Metadata
+        ),
+        Handle = #document{value = #od_handle{
+            handle_service = HandleServiceId,
+            resource_type = ResourceType,
+            resource_id = ResourceId,
+            public_handle = PublicHandle,
+            metadata = Metadata,
+            metadata_prefix = MetadataPrefix,
+            creator = aai:normalize_subject(Auth#auth.subject),
+            creation_time = CreationTime
+        }},
+        {ok, #document{key = HandleId}} = od_handle:create(Handle),
+        entity_graph:add_relation(
+            od_handle, HandleId,
+            od_handle_service, HandleServiceId
+        ),
+        case Req#el_req.auth_hint of
+            ?AS_USER(UserId) ->
+                entity_graph:add_relation(
+                    od_user, UserId,
+                    od_handle, HandleId,
+                    privileges:handle_admin()
+                );
+            ?AS_GROUP(GroupId) ->
+                entity_graph:add_relation(
+                    od_group, GroupId,
+                    od_handle, HandleId,
+                    privileges:handle_admin()
+                );
+            _ ->
+                ok
+        end,
+        entity_graph:add_relation(
+            od_handle, HandleId,
+            od_share, ShareId
+        ),
 
-            handles:add(MetadataPrefix, HandleServiceId, HandleId, CreationTime),
-            {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
-            {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}
-        end)
-    catch throw:{error,{bad_value_xml,_}} ->
-            ?ERROR_BAD_VALUE_XML(Metadata)
-    end;
+        handles:add(MetadataPrefix, HandleServiceId, HandleId, CreationTime),
+        {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
+        {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}
+    end);
 
 create(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:handle_member()),
@@ -211,8 +207,8 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
-    HandleList= lists:flatmap(fun(MetadataFormat) ->
-        {HandlesPerMetadata, undefined} = handles:list(#{metadata_prefix => MetadataFormat}),
+    HandleList= lists:flatmap(fun(MetadataPrefix) ->
+        {HandlesPerMetadata, _} = handles:list(#{metadata_prefix => MetadataPrefix}),
         HandlesPerMetadata
     end, metadata_formats:supported_formats()),
     {ok, HandleList};
@@ -299,7 +295,9 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
         }}
     end),
     %%  after handle modification we need to update handle timestamp in tree
-    handles:update(MetadataPrefix, HandleService, HandleId, TimeStamp, NewTimeStamp),
+    critical_section:run({update_timestamp, HandleId}, fun() ->
+        handles:update_timestamp(MetadataPrefix, HandleService, HandleId, TimeStamp, NewTimeStamp)
+    end),
     handle_proxy:modify_handle(HandleId, NewMetadata),
     ok;
 
@@ -330,23 +328,24 @@ update(Req = #el_req{gri = #gri{id = HandleId, aspect = {group_privileges, Group
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
-    {ok, #document{value = #od_handle{
+    fun(#od_handle{
         public_handle = PublicHandle,
         handle_service = HandleService,
         timestamp = TimeStamp,
         metadata_prefix = MetadataPrefix
-    }}} = od_handle:get(HandleId),
-    try
-        handle_proxy:unregister_handle(HandleId)
-    catch Class:Reason:Stacktrace ->
-        ?warning_exception(
-            "Handle ~s (~s) was removed but it failed to be unregistered from handle service ~s",
-            [HandleId, PublicHandle, HandleService],
-            Class, Reason, Stacktrace
-        )
-    end,
-    handles:delete(MetadataPrefix, HandleService, HandleId,  TimeStamp),
-    entity_graph:delete_with_relations(od_handle, HandleId);
+    }) ->
+        try
+            handle_proxy:unregister_handle(HandleId)
+        catch Class:Reason:Stacktrace ->
+            ?warning_exception(
+                "Handle ~s (~s) was removed but it failed to be unregistered from handle service ~s",
+                [HandleId, PublicHandle, HandleService],
+                Class, Reason, Stacktrace
+            )
+        end,
+        handles:delete(MetadataPrefix, HandleService, HandleId,  TimeStamp),
+        entity_graph:delete_with_relations(od_handle, HandleId)
+    end;
 
 delete(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}}) ->
     entity_graph:remove_relation(
@@ -627,9 +626,6 @@ validate(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) -> #{
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"metadata">> => {binary, {text_length_limit, ?METADATA_SIZE_LIMIT}}
-    },
-    optional => #{
-        <<"timestamp">> => {integer, {not_lower_than, 0}}
     }
 };
 

@@ -87,9 +87,11 @@ get_response(<<"baseURL">>, _Args) ->
 get_response(<<"protocolVersion">>, _Args) ->
     ?PROTOCOL_VERSION;
 get_response(<<"earliestDatestamp">>, _Args) ->
-    case time:seconds_to_datetime(handles:get_earliest_timestamp()) of
-        none -> <<"Repository is empty">>;
-        Datestamp -> oai_utils:serialize_datestamp(Datestamp)
+    case handles:get_earliest_timestamp() of
+        undefined -> <<"Repository is empty">>;
+        TimeSeconds ->
+            Datestamp = time:seconds_to_datetime(TimeSeconds),
+            oai_utils:serialize_datestamp(Datestamp)
     end;
 get_response(<<"deletedRecord">>, _Args) ->
     <<"no">>;

@@ -828,8 +828,7 @@ cannot_disseminate_format_test_base(Config, Method) ->
     {HSId, _} = create_handle_service(Config, User),
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     Metadata = get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
-    Identifier = create_handle(Config, User, HSId, ShareId, Metadata,
-        MetadataPrefix),
+    Identifier = create_handle(Config, User, HSId, ShareId, MetadataPrefix, Metadata),
 
     Args = [
         {<<"identifier">>, oai_identifier(Config, Identifier)},
@@ -847,8 +846,7 @@ list_metadata_formats_no_format_error_test_base(Config, Method) ->
     {HSId, _} = create_handle_service(Config, User),
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     Metadata =get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
-    Identifier = create_handle(Config, User, HSId, ShareId, Metadata,
-        MetadataPrefix),
+    Identifier = create_handle(Config, User, HSId, ShareId, MetadataPrefix, Metadata),
     % Modify handle metadata to undefined (this should not occur in normal
     % conditions because entity logic won't accept undefined metadata,
     % but check if returned OAI error in such case is correct).
@@ -1237,13 +1235,13 @@ create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId,
     ok = test_utils:mock_expect(Nodes, od_handle, current_timestamp, fun() ->
         time:datetime_to_seconds(Timestamp)
     end),
-    HId = create_handle(Config, User, HandleServiceId, ResourceId, Metadata, MetadataPrefix),
+    HId = create_handle(Config, User, HandleServiceId, ResourceId, MetadataPrefix, Metadata),
     ok = test_utils:mock_validate_and_unload(Nodes, od_handle),
     HId.
 
-create_handle(Config, User, HandleServiceId, ResourceId, Metadata, MetadataPrefix) ->
+create_handle(Config, User, HandleServiceId, ResourceId, MetadataPrefix, Metadata) ->
     Result = oz_test_utils:create_handle(Config, ?USER(User),
-        HandleServiceId, ?HANDLE_RESOURCE_TYPE, ResourceId, Metadata, MetadataPrefix),
+        HandleServiceId, ?HANDLE_RESOURCE_TYPE, ResourceId, MetadataPrefix, Metadata),
     case Result of
         {ok, HId} -> HId;
         _ -> Result

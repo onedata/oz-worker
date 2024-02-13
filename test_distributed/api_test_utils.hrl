@@ -261,8 +261,8 @@
         <<"handleServiceId">> => HandleServiceId,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ResourceId,
-        <<"metadata">> => ?DC_METADATA,
-        <<"metadataPrefix">> => ?DC_METADATA_PREFIX
+        <<"metadataPrefix">> => ?DC_METADATA_PREFIX,
+        <<"metadata">> => ?DC_METADATA
     }
 ).
 

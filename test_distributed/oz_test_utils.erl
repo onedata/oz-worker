@@ -1899,23 +1899,21 @@ handle_service_set_group_privileges(
 %% @end
 %%--------------------------------------------------------------------
 -spec create_handle(Config :: term(), Client :: aai:auth(),
-    HandleServiceId :: od_handle_service:id(),
-    ResourceType :: od_handle:resource_type(),
-    ResourceId :: od_handle:resource_id(), Metadata :: od_handle:metadata(),
-    MetadataPrefix :: od_handle:metadata_prefix()) ->
+    HandleServiceId :: od_handle_service:id(), ResourceType :: od_handle:resource_type(),
+    ResourceId :: od_handle:resource_id(), MetadataPrefix :: od_handle:metadata_prefix(),
+    Metadata :: od_handle:metadata()) ->
     {ok, od_handle:id()} | errors:error().
-create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId,
-    Metadata, MetadataPrefix) ->
+create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, MetadataPrefix, Metadata) ->
     Result = case Client of
         ?USER(UserId) ->
             call_oz(Config, user_logic, create_handle, [
                 Client, UserId, HandleServiceId, ResourceType, ResourceId,
-                Metadata, MetadataPrefix
+                MetadataPrefix, Metadata
             ]);
         _ ->
             call_oz(Config, handle_logic, create, [
                 Client, HandleServiceId, ResourceType, ResourceId,
-                Metadata, MetadataPrefix
+                MetadataPrefix, Metadata
             ])
     end,
     case Result of

@@ -36,17 +36,17 @@
 
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Returns list of extra XML namespaces for given metadata format.
-%%% @end
-%%%-------------------------------------------------------------------
--callback extra_namespaces() -> [{atom(), binary()}].
-
-%%%-------------------------------------------------------------------
-%%% @doc
 %%% Returns lists of attributes of given metadata format.
 %%% @end
 %%%-------------------------------------------------------------------
 -callback elements() -> [binary()].
+
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% This function validates whether the provided metadata conforms to XML standards.
+%%% @end
+%%%-------------------------------------------------------------------
+-callback sanitize_metadata(Metadata :: od_handle:metadata()) -> ok | errors:error().
 
 %%%-------------------------------------------------------------------
 %%% @doc
@@ -56,3 +56,10 @@
 %%%-------------------------------------------------------------------
 -callback encode(Metadata :: #{} | binary(), AdditionalIdentifiers :: [binary()]) ->
     #xmlElement{}.
+
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% Returns lists of additional identifiers for given handle.
+%%% @end
+%%%-------------------------------------------------------------------
+-callback resolve_additional_identifiers(Handle :: od_handle:record()) -> [od_handle:public_handle()].

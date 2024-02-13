@@ -288,8 +288,8 @@ get_test(Config) ->
         <<"handleServiceId">> => HService,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ShareId,
-        <<"metadata">> => ?DC_METADATA,
-        <<"metadataPrefix">> => ?DC_METADATA_PREFIX
+        <<"metadataPrefix">> => ?DC_METADATA_PREFIX,
+        <<"metadata">> => ?DC_METADATA
     },
     {ok, HandleId} = oz_test_utils:create_handle(
         Config, ?USER(U1), HandleData
