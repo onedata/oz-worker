@@ -21,7 +21,8 @@
 %% node_manager_plugin_default callbacks
 -export([cluster_generations/0]).
 -export([oldest_upgradable_cluster_generation/0]).
--export([app_name/0, cm_nodes/0, db_nodes/0]).
+-export([app_name/0, release_version/0, build_version/0]).
+-export([cm_nodes/0, db_nodes/0]).
 -export([before_init/0]).
 -export([before_cluster_upgrade/0]).
 -export([upgrade_cluster/1]).
@@ -72,15 +73,32 @@ cluster_generations() ->
 oldest_upgradable_cluster_generation() ->
     ?OLDEST_UPGRADABLE_CLUSTER_GENERATION.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:app_name/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec app_name() -> atom().
+app_name() ->
+    oz_worker.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:release_version/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec release_version() -> string() | binary().
+release_version() ->
+    oz_worker:get_release_version().
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Overrides {@link node_manager_plugin_default:app_name/0}.
 %% @end
 %%--------------------------------------------------------------------
--spec app_name() -> {ok, Name :: atom()}.
-app_name() ->
-    {ok, ?APP_NAME}.
+-spec build_version() -> string() | binary().
+build_version() ->
+    oz_worker:get_build_version().
 
 %%--------------------------------------------------------------------
 %% @doc
