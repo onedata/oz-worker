@@ -9,7 +9,7 @@
 %%% This module can be used to implement custom IdP entitlement parsing per IdP.
 %%% Please refer to Onedata documentation to learn the entitlement format used
 %%% in onedata. Custom parsers must return results in this format.
-%%% https://onedata.org/#/home/documentation/doc/administering_onedata/openid_saml_configuration[custom-entitlement-parsers-advanced].html
+%%% https://onedata.org/#/home/documentation/topic/latest/oidc-saml-custom-entitlement-parsers
 %%%
 %%% validation_examples/0 callback can be used to provide examples to be
 %%% evaluated upon the start of Onezone to make sure that parser logic works
