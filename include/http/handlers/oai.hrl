@@ -87,6 +87,8 @@
 -type supported_datestamp() :: calendar:datetime() | calendar:date() | undefined.
 -type oai_date_granularity() :: day_granularity | seconds_granularity.
 
+-define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
+-define(EDM_METADATA_PREFIX, <<"edm">>).
 
 -define(OAI_XML_NAMESPACE, #xmlAttribute{
         name=xmlns,

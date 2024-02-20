@@ -28,7 +28,7 @@
 -type resumption_token() :: binary().
 
 -type size() :: pos_integer().
--type metadata_prefix() :: binary().
+-type metadata_prefix() :: binary().  % ?OAI_DC_METADATA_PREFIX | ?EDM_METADATA_PREFIX   - @see oai.hrl
 -type service_id() :: binary().
 
 %% @formatter:off
