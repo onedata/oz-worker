@@ -259,7 +259,7 @@ list_marketplace_with_data(Auth, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    NameOrData :: binary() | #{}) -> ok | errors:error().
+    NameOrData :: od_space:name() | #{}) -> ok | errors:error().
 update(Auth, SpaceId, NewName) when is_binary(NewName) ->
     update(Auth, SpaceId, #{<<"name">> => NewName});
 update(Auth, SpaceId, Data) ->

@@ -40,9 +40,11 @@
 
     list_spaces/1,
     create_space/3,
+    add_user_to_space/3,
     create_space_support_token/2,
     get_space_protected_data/2,
     space_set_user_privileges/4,
+    update_space_name/3,
     delete_space/2,
 
     create_inventory_for_user/3,
@@ -156,6 +158,12 @@ create_space(Config, UserId, NameOrData) ->
     user_logic:create_space(Config, UserId, NameOrData).
 
 
+-spec add_user_to_space(aai:auth(), od_space:id(), od_user:id()) ->
+    {ok, od_user:id()} | errors:error().
+add_user_to_space(Auth, SpaceId, UserId) ->
+    space_logic:add_user(Auth, SpaceId, UserId).
+
+
 -spec create_space_support_token(aai:auth(), od_space:id()) ->
     {ok, tokens:token()} | errors:error().
 create_space_support_token(Auth, SpaceId) ->
@@ -181,6 +189,12 @@ space_set_user_privileges(Auth, SpaceId, UserId, Privileges) ->
     space_logic:update_user_privileges(
         Auth, SpaceId, UserId, Privileges, lists_utils:subtract(privileges:space_admin(), Privileges)
     ).
+
+
+-spec update_space_name(aai:auth(), od_space:id(), od_space:name()) ->
+    {ok, od_user:id()} | errors:error().
+update_space_name(Auth, SpaceId, NewName) ->
+    space_logic:update(Auth, SpaceId, NewName).
 
 
 -spec delete_space(aai:auth(), od_space:id()) -> ok | errors:error().
