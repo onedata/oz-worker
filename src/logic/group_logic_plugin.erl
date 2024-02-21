@@ -304,11 +304,16 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Group) ->
     {ok, Group};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Group) ->
     #od_group{
-        name = Name, type = Type, creation_time = CreationTime, creator = Creator
+        name = Name,
+        type = Type,
+        creation_time = CreationTime,
+        creator = Creator,
+        bottom_up_dirty = BottomUpDirty
     } = Group,
     {ok, #{
         <<"name">> => Name,
         <<"type">> => Type,
+        <<"areEffPrivilegesRecalculated">> => not BottomUpDirty,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
     }};
