@@ -166,8 +166,11 @@ add_user_to_space(Auth, SpaceId, UserId) ->
 
 -spec create_space_support_token(aai:auth(), od_space:id()) ->
     {ok, tokens:token()} | errors:error().
-create_space_support_token(Auth, SpaceId) ->
-    space_logic:create_space_support_token(Auth, SpaceId).
+create_space_support_token(Auth = ?USER(UserId), SpaceId) ->
+    token_logic:create_user_temporary_token(Auth, UserId, #{
+        <<"type">> => ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId),
+        <<"caveats">> => [#cv_time{valid_until = global_clock:timestamp_seconds() + 3600}]
+    }).
 
 
 -spec list_spaces(aai:auth()) ->
