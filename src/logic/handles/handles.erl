@@ -16,7 +16,6 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([index/2]).
 -export([add/4, delete/4, update_timestamp/5]).
 -export([list/1, get_earliest_timestamp/0]).
 
@@ -27,16 +26,15 @@
 -type index() :: binary().
 -type resumption_token() :: binary().
 
--type size() :: pos_integer().
 -type metadata_prefix() :: binary().  % ?OAI_DC_METADATA_PREFIX | ?EDM_METADATA_PREFIX   - @see oai.hrl
--type service_id() :: binary().
+-type limit() :: pos_integer().
 
 %% @formatter:off
 -type listing_opts() :: #{
-    size => size(),
-    start_index => index(),
     metadata_prefix := metadata_prefix(),
-    service_id => service_id(),
+    limit => limit(),
+    start_index => index(),
+    service_id => od_handle_service:id(),
     from => undefined | od_handle:timestamp_seconds(),
     until => undefined | od_handle:timestamp_seconds()
 }.
@@ -62,21 +60,11 @@
 %%%===================================================================
 
 
--spec index(od_handle:timestamp_seconds(), od_handle:id() | first) -> index().
-index(From, first) ->
-    case From of
-        undefined -> <<>>;
-        _ -> str_utils:format_bin("~11..0B", [From])
-    end;
-index(TimeSeconds, HandleId) ->
-    FormattedTimeSeconds = str_utils:format_bin("~11..0B", [TimeSeconds]),
-    <<(FormattedTimeSeconds)/binary, ?INDEX_SEP, HandleId/binary>>.
-
 
 -spec add(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds()) -> ok.
 add(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
-    Link = {index(TimeSeconds, HandleId), HandleId},
+    Link = {encode_index(TimeSeconds, HandleId), HandleId},
 
     lists:foreach(fun(TreeId) ->
         case datastore_model:add_links(?CTX, ?FOREST, TreeId, Link) of
@@ -92,7 +80,7 @@ add(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
 -spec delete(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds()) -> ok.
 delete(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
-    Index = index(TimeSeconds, HandleId),
+    Index = encode_index(TimeSeconds, HandleId),
     lists:foreach(fun(TreeId) ->
         case datastore_model:delete_links(?CTX, ?FOREST, TreeId, Index) of
             ok -> ok;
@@ -104,6 +92,10 @@ delete(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
     ]).
 
 
+%%--------------------------------------------------------------------
+%% @doc NOTE: cannot be run in parallel!
+%% @end
+%%--------------------------------------------------------------------
 -spec update_timestamp(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> ok.
 update_timestamp(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, NewTimestamp) ->
@@ -117,44 +109,32 @@ update_timestamp(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, NewTim
 
 -spec list(listing_opts()) -> [od_handle:id()] | {[od_handle:id()], resumption_token()}.
 list(ListingOpts) ->
-    ServiceId = maps:get(service_id, ListingOpts, undefined),
+    HServiceId = maps:get(service_id, ListingOpts, undefined),
     MetadataPrefix = maps:get(metadata_prefix, ListingOpts),
-    TreeId = case {ServiceId, MetadataPrefix} of
-        {undefined, _} -> ?TREE_FOR_METADATA_PREFIX(MetadataPrefix);
-        {_, _} -> ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, ServiceId)
+    TreeId = case HServiceId of
+        undefined -> ?TREE_FOR_METADATA_PREFIX(MetadataPrefix);
+        _ -> ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HServiceId)
     end,
 
     Token = maps:get(resumption_token, ListingOpts, <<>>),
-    {Size, From, Until} = case Token of
+    {Limit, From, Until, StartIndex} = case Token of
         <<>> ->
-            Size1 = maps:get(size, ListingOpts, ?DEFAULT_LIST_LIMIT),
+            Limit1 = maps:get(limit, ListingOpts, ?DEFAULT_LIST_LIMIT),
             From1 = maps:get(from, ListingOpts, undefined),
             Until1 = maps:get(until, ListingOpts, ?MAX_TIMESTAMP),
-            {Size1, From1, Until1};
+            StartIndex1 = encode_index(From1, first),
+            {Limit1, From1, Until1, StartIndex1};
         _ ->
-            {_, _, Size2, From2, Until2} = unpack_resumption_token(Token),
-            {Size2, From2, Until2}
+            {TimeSecondsToken, HandleID, Limit2, From2, Until2} = unpack_resumption_token(Token),
+            StartIndex2 = encode_index(TimeSecondsToken, HandleID),
+            {Limit2, From2, Until2, StartIndex2}
     end,
-    StartIndex = case Token of
-        <<>> ->
-            index(From, first);
-        _ ->
-            {TimeSecondsToken, HandleID, _, _, _} = unpack_resumption_token(Token),
-            index(TimeSecondsToken, HandleID)
-    end,
-    FoldOpts = case Token == <<>> andalso From == undefined of
-        true -> #{
-            size => Size,
-            prev_tree_id => TreeId,
-            inclusive => false
-        };
-        false -> #{
-            size => Size,
-            prev_link_name => StartIndex,
-            prev_tree_id => TreeId,
-            inclusive => false
-        }
-    end,
+    FoldOpts =  #{
+        size => Limit,
+        prev_link_name => StartIndex,
+        prev_tree_id => TreeId,
+        inclusive => false
+    },
     FoldFun = fun(#link{name = Index, target = HandleId}, Acc) ->
         {TimeSeconds, _HId} = decode_index(Index),
         Result = case TimeSeconds > Until of
@@ -163,19 +143,17 @@ list(ListingOpts) ->
         end,
         Result
     end,
-    {ok, InternalEntries} = datastore_model:fold_links(
+    {ok, ReversedEntries} = datastore_model:fold_links(
         ?CTX, ?FOREST, TreeId, FoldFun, [], FoldOpts
     ),
-    case InternalEntries of
-        [] -> {InternalEntries, undefined};
-        _ -> build_result_from_reversed_listing(InternalEntries, Size, From, Until)
-    end.
+    build_result_from_reversed_listing(ReversedEntries, Limit, From, Until).
+
 
 
 -spec get_earliest_timestamp() -> undefined | od_handle:timestamp_seconds().
 get_earliest_timestamp() ->
     EarliestTimestamps = lists:flatmap(fun(MetadataPrefix) ->
-        ListingOpts = #{size => 1, metadata_prefix => MetadataPrefix},
+        ListingOpts = #{limit => 1, metadata_prefix => MetadataPrefix},
         {List, _} = list(ListingOpts),
         List
     end, metadata_formats:supported_formats()),
@@ -197,6 +175,18 @@ get_earliest_timestamp() ->
 %%%===================================================================
 
 %% @private
+-spec encode_index(undefined | od_handle:timestamp_seconds(), od_handle:id() | first) -> index().
+encode_index(From, first) ->
+    case From of
+        undefined -> <<>>;
+        _ -> str_utils:format_bin("~11..0B", [From])
+    end;
+encode_index(TimeSeconds, HandleId) ->
+    FormattedTimeSeconds = str_utils:format_bin("~11..0B", [TimeSeconds]),
+    <<(FormattedTimeSeconds)/binary, ?INDEX_SEP, HandleId/binary>>.
+
+
+%% @private
 -spec decode_index(index()) -> {od_handle:timestamp_seconds(), od_handle:id()}.
 decode_index(Index) ->
     <<TimeSeconds:11/binary, 0, HandleId/binary>> = Index,
@@ -204,37 +194,37 @@ decode_index(Index) ->
 
 
 %% @private
--spec pack_resumption_token(od_handle:timestamp_seconds(), od_handle:id(), size(),
+-spec pack_resumption_token(od_handle:timestamp_seconds(), od_handle:id(), limit(),
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> resumption_token().
-pack_resumption_token(TimeSeconds, HandleId, Size, From, Until) ->
+pack_resumption_token(TimeSeconds, HandleId, Limit, From, Until) ->
     FormattedTimeSeconds = str_utils:format_bin("~11..0B", [TimeSeconds]),
-    FormattedSize = str_utils:format_bin("~5..0B", [Size]),
-    FormattedFrom = str_utils:format_bin("~11..0B", [case From of undefined -> 0; _ -> From end]),
+    FormattedLimit = str_utils:format_bin("~5..0B", [Limit]),
+    FormattedFrom = str_utils:format_bin("~11..0B", [utils:ensure_defined(From, 0)]),
     FormattedUntil = str_utils:format_bin("~11..0B", [Until]),
-    <<(FormattedTimeSeconds)/binary, ?INDEX_SEP, FormattedSize/binary, ?INDEX_SEP,
+    <<(FormattedTimeSeconds)/binary, ?INDEX_SEP, FormattedLimit/binary, ?INDEX_SEP,
         FormattedFrom/binary, ?INDEX_SEP, FormattedUntil/binary, ?INDEX_SEP, HandleId/binary>>.
 
 
 %% @private
 -spec unpack_resumption_token(resumption_token()) -> {od_handle:timestamp_seconds(), od_handle:id(),
-    size(), od_handle:timestamp_seconds(), od_handle:timestamp_seconds()}.
+    limit(), od_handle:timestamp_seconds(), od_handle:timestamp_seconds()}.
 unpack_resumption_token(Token) ->
-    <<TimeSeconds:11/binary, 0, Size:5/binary, 0, From:11/binary,
+    <<TimeSeconds:11/binary, 0, Limit:5/binary, 0, From:11/binary,
         0, Until:11/binary, 0, HandleId/binary>> = Token,
-    {binary_to_integer(TimeSeconds), HandleId, binary_to_integer(Size),
+    {binary_to_integer(TimeSeconds), HandleId, binary_to_integer(Limit),
         binary_to_integer(From), binary_to_integer(Until)}.
 
 
 %% @private
--spec build_result_from_reversed_listing(datastore:fold_acc(), size(), od_handle:timestamp_seconds(),
+-spec build_result_from_reversed_listing(datastore:fold_acc(), limit(), od_handle:timestamp_seconds(),
     od_handle:timestamp_seconds()) -> {[od_handle:id()], resumption_token()}.
-build_result_from_reversed_listing(InternalEntries, Size, From, Until) ->
-    NewToken = case length(InternalEntries) < Size orelse Size < ?MAX_LIST_LIMIT of
+build_result_from_reversed_listing(ReversedEntries, Limit, From, Until) ->
+    NewToken = case length(ReversedEntries) < Limit orelse Limit < ?MAX_LIST_LIMIT of
         true -> undefined;
         false ->
-            {TimeSeconds, HandleId} = hd(InternalEntries),
-            pack_resumption_token(TimeSeconds, HandleId, Size, From, Until)
+            {TimeSeconds, HandleId} = hd(ReversedEntries),
+            pack_resumption_token(TimeSeconds, HandleId, Limit, From, Until)
     end,
-    ReversedEntries = lists:reverse(InternalEntries),
-    Handles = lists:map(fun({_, HandleId}) -> HandleId end, ReversedEntries),
+    Entries = lists:reverse(ReversedEntries),
+    Handles = lists:map(fun({_, HandleId}) -> HandleId end, Entries),
     {Handles, NewToken}.

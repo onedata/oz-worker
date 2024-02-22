@@ -19,13 +19,15 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/errors.hrl").
+-include("http/handlers/oai.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
 -define(METADATA_SIZE_LIMIT, 100000).
--define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
+-define(AVAILABLE_METADATA_FORMATS, metadata_formats:supported_formats()).
+-define(DEFAULT_METADATA_PREFIX, <<"oai_dc">>).
 
 %%%===================================================================
 %%% API
@@ -118,7 +120,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     ResourceType = <<"Share">> = maps:get(<<"resourceType">>, Req#el_req.data),
     ResourceId = ShareId = maps:get(<<"resourceId">>, Req#el_req.data),
     Metadata = maps:get(<<"metadata">>, Req#el_req.data),
-    MetadataPrefix = maps:get(<<"metadataPrefix">>, Req#el_req.data, ?OAI_DC_METADATA_PREFIX),
+    MetadataPrefix = maps:get(<<"metadataPrefix">>, Req#el_req.data, ?DEFAULT_METADATA_PREFIX),
     CreationTime = od_handle:current_timestamp(),
 
     oai_utils:sanitize_metadata(MetadataPrefix, Metadata),
@@ -281,24 +283,25 @@ get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Handle) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
-    {ok, #document{value = #od_handle{
-        handle_service = HandleService,
-        timestamp = TimeStamp,
-        metadata_prefix = MetadataPrefix
-    }}} = od_handle:get(HandleId),
-    NewMetadata = maps:get(<<"metadata">>, Data),
-    NewTimeStamp = od_handle:current_timestamp(),
-    {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
-        {ok, Handle#od_handle{
-            metadata = NewMetadata,
-            timestamp = NewTimeStamp
-        }}
-    end),
-    %%  after handle modification we need to update handle timestamp in tree
     critical_section:run({update_timestamp, HandleId}, fun() ->
-        handles:update_timestamp(MetadataPrefix, HandleService, HandleId, TimeStamp, NewTimeStamp)
+        {ok, #document{value = #od_handle{
+            handle_service = HandleService,
+            timestamp = TimeStamp,
+            metadata_prefix = MetadataPrefix
+        }}} = od_handle:get(HandleId),
+        NewMetadata = maps:get(<<"metadata">>, Data),
+        NewTimeStamp = od_handle:current_timestamp(),
+        {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
+            {ok, Handle#od_handle{
+                metadata = NewMetadata,
+                timestamp = NewTimeStamp
+            }}
+        end),
+        %%  after handle modification we need to update handle timestamp in tree
+        handles:update_timestamp(MetadataPrefix, HandleService, HandleId, TimeStamp, NewTimeStamp),
+        handle_proxy:modify_handle(HandleId, NewMetadata)
     end),
-    handle_proxy:modify_handle(HandleId, NewMetadata),
+
     ok;
 
 
@@ -328,24 +331,26 @@ update(Req = #el_req{gri = #gri{id = HandleId, aspect = {group_privileges, Group
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
-    fun(#od_handle{
-        public_handle = PublicHandle,
-        handle_service = HandleService,
-        timestamp = TimeStamp,
-        metadata_prefix = MetadataPrefix
-    }) ->
-        try
-            handle_proxy:unregister_handle(HandleId)
-        catch Class:Reason:Stacktrace ->
-            ?warning_exception(
-                "Handle ~s (~s) was removed but it failed to be unregistered from handle service ~s",
-                [HandleId, PublicHandle, HandleService],
-                Class, Reason, Stacktrace
-            )
-        end,
-        handles:delete(MetadataPrefix, HandleService, HandleId,  TimeStamp),
-        entity_graph:delete_with_relations(od_handle, HandleId)
-    end;
+    critical_section:run({delete, HandleId}, fun() ->
+        fun(#od_handle{
+            public_handle = PublicHandle,
+            handle_service = HandleService,
+            timestamp = TimeStamp,
+            metadata_prefix = MetadataPrefix
+        }) ->
+            try
+                handle_proxy:unregister_handle(HandleId)
+            catch Class:Reason:Stacktrace ->
+                ?warning_exception(
+                    "Handle ~s (~s) was removed but it failed to be unregistered from handle service ~s",
+                    [HandleId, PublicHandle, HandleService],
+                    Class, Reason, Stacktrace
+                )
+            end,
+            handles:delete(MetadataPrefix, HandleService, HandleId,  TimeStamp),
+            entity_graph:delete_with_relations(od_handle, HandleId)
+        end
+    end);
 
 delete(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}}) ->
     entity_graph:remove_relation(
@@ -596,8 +601,9 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"resourceId">> => {any, {exists, fun(Value) ->
             share_logic:exists(Value) end
         }},
-        <<"metadata">> => {binary, {text_length_limit, ?METADATA_SIZE_LIMIT}},
-        <<"metadataPrefix">> => {binary, {text_length_limit, ?METADATA_SIZE_LIMIT}}
+        <<"metadataPrefix">> => {binary, ?AVAILABLE_METADATA_FORMATS},
+        <<"metadata">> => {binary, {text_length_limit, ?METADATA_SIZE_LIMIT}}
+
     }
 };
 

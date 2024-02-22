@@ -9,9 +9,6 @@
 %%%-------------------------------------------------------------------
 -author("Jakub Kudzia").
 
--define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
--define(EDM_METADATA_PREFIX, <<"edm">>).
-
 -define(DC_METADATA_XML,
     <<"<?xml version=\"1.0\"?>",
     "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"

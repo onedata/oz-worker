@@ -100,7 +100,7 @@ sanitize_metadata(Metadata) ->
 %%% {@link metadata_format_behaviour} callback encode/2
 %%% @end
 %%%-------------------------------------------------------------------
--spec encode(#{} | binary(), AdditionalIdentifiers :: [binary()]) -> #xmlElement{}.
+-spec encode(binary(), AdditionalIdentifiers :: [binary()]) -> #xmlElement{}.
 encode(Metadata, AdditionalIdentifiers) ->
 
     %% @TODO VFS-7454 currently bare xml is saved in  handle

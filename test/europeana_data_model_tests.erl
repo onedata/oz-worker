@@ -17,7 +17,18 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include("entity_logic.hrl").
 
--define(NAMESPACES, "xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\" xmlns:dcterms=\"http:\/\/purl.org\/dc\/terms\/\" xmlns:edm=\"http:\/\/www.europeana.eu\/schemas\/edm\/\" xmlns:ore=\"http:\/\/www.openarchives.org\/ore\/terms\/\" xmlns:owl=\"http:\/\/www.w3.org\/2002\/07\/owl#\" xmlns:rdf=\"http:\/\/www.w3.org\/1999\/02\/22-rdf-syntax-ns#\" xmlns:foaf=\"http:\/\/xmlns.com\/foaf\/0.1\/\" xmlns:skos=\"http:\/\/www.w3.org\/2004\/02\/skos\/core#\" xmlns:rdaGr2=\"http:\/\/rdvocab.info\/ElementsGr2\/\" xmlns:wgs84_pos=\"http:\/\/www.w3.org\/2003\/01\/geo\/wgs84_pos#\" xmlns:crm=\"http:\/\/www.cidoc-crm.org\/cidoc--crm\/\" xmlns:cc=\"http:\/\/creativecommons.org\/ns#\"").
+-define(NAMESPACES, "xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\"",
+    "xmlns:dcterms=\"http:\/\/purl.org\/dc\/terms\/\"",
+    "xmlns:edm=\"http:\/\/www.europeana.eu\/schemas\/edm\/\"",
+    "xmlns:ore=\"http:\/\/www.openarchives.org\/ore\/terms\/\"",
+    "xmlns:owl=\"http:\/\/www.w3.org\/2002\/07\/owl#\"",
+    "xmlns:rdf=\"http:\/\/www.w3.org\/1999\/02\/22-rdf-syntax-ns#\"",
+    "xmlns:foaf=\"http:\/\/xmlns.com\/foaf\/0.1\/\"",
+    "xmlns:skos=\"http:\/\/www.w3.org\/2004\/02\/skos\/core#\"",
+    "xmlns:rdaGr2=\"http:\/\/rdvocab.info\/ElementsGr2\/\"",
+    "xmlns:wgs84_pos=\"http:\/\/www.w3.org\/2003\/01\/geo\/wgs84_pos#\"",
+    "xmlns:crm=\"http:\/\/www.cidoc-crm.org\/cidoc--crm\/\"",
+    "xmlns:cc=\"http:\/\/creativecommons.org\/ns#\"").
 
 -define(EXPECTED, <<"<?xml version=\"1.0\"?>",
     "<rdf:RDF ", ?NAMESPACES,">",

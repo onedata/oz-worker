@@ -49,19 +49,19 @@
 %%%===================================================================
 
 all() -> ?ALL([
-%%    user_upgrade_test,
-%%    group_upgrade_test,
-%%    space_upgrade_test,
-%%    share_upgrade_test,
-%%    provider_upgrade_test,
-%%    handle_service_upgrade_test,
-    handle_upgrade_test
-%%    harvester_upgrade_test,
-%%    cluster_upgrade_test,
-%%    storage_upgrade_test,
-%%    dns_state_upgrade_test,
-%%    macaroon_auth_upgrade_test,
-%%    generate_cluster_for_a_legacy_provider_test
+    user_upgrade_test,
+    group_upgrade_test,
+    space_upgrade_test,
+    share_upgrade_test,
+    provider_upgrade_test,
+    handle_service_upgrade_test,
+    handle_upgrade_test,
+    harvester_upgrade_test,
+    cluster_upgrade_test,
+    storage_upgrade_test,
+    dns_state_upgrade_test,
+    macaroon_auth_upgrade_test,
+    generate_cluster_for_a_legacy_provider_test
 ]).
 
 

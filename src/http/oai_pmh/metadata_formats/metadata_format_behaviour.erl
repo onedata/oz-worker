@@ -54,7 +54,7 @@
 %%% AdditionalIdentifiers should be injected into the metadata.
 %%% @end
 %%%-------------------------------------------------------------------
--callback encode(Metadata :: #{} | binary(), AdditionalIdentifiers :: [binary()]) ->
+-callback encode(Metadata :: binary(), AdditionalIdentifiers :: [binary()]) ->
     #xmlElement{}.
 
 %%%-------------------------------------------------------------------

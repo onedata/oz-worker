@@ -17,6 +17,7 @@
 
 -behaviour(metadata_format_behaviour).
 
+-define(find_matching_element(Pattern, List), lists_utils:find(fun(Pattern) -> true; (_) -> false end, List)).
 
 %% API
 -export([elements/0, sanitize_metadata/1, encode/2, metadata_prefix/0, schema_URL/0,
@@ -88,18 +89,10 @@ elements() -> [
     ok | errors:error().
 sanitize_metadata(Metadata) ->
     try
-        {#xmlElement{content = Content}, _} = xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]),
-        MetadataContent = lists:map(fun
-            (#xmlElement{content = [#xmlText{value = Value} = Text]} = Element) when is_list(Value) ->
-                Element#xmlElement{content = [
-                    Text#xmlText{value = binary_to_list(str_utils:unicode_list_to_binary(Value))}
-                ]};
-            (Other) ->
-                Other
-        end, Content),
-        [#xmlElement{name = 'edm:ProvidedCHO', namespace = _, content = _, attributes = _},
-            #xmlElement{name = 'ore:Aggregation', namespace = _, content = _, attributes = _} | _] =
-            MetadataContent,
+        {#xmlElement{name = 'rdf:RDF',  content = Content}, _} = xmerl_scan:string(
+            binary_to_list(Metadata), [{quiet, true}]),
+        {ok, _}= ?find_matching_element(#xmlElement{name = 'edm:ProvidedCHO'}, Content),
+        {ok, _}= ?find_matching_element(#xmlElement{name = 'ore:Aggregation'}, Content),
         ok
     catch Class:Reason:Stacktrace ->
         ?debug_exception(
@@ -115,7 +108,7 @@ sanitize_metadata(Metadata) ->
 %%% {@link metadata_format_behaviour} callback encode/2
 %%% @end
 %%%-------------------------------------------------------------------
--spec encode(#{} | binary(), AdditionalIdentifiers :: [binary()]) -> #xmlElement{}.
+-spec encode(binary(), AdditionalIdentifiers :: [binary()]) -> #xmlElement{}.
 encode(Metadata, [Identifier]) ->
     %% @TODO VFS-7454 currently bare xml is saved in  handle
     %%    MetadataXML = lists:flatmap(fun(Key) ->
@@ -127,7 +120,8 @@ encode(Metadata, [Identifier]) ->
     %%        end
     %%    end, elements()),
 
-    {#xmlElement{content = Content}, _} = xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]),
+    {#xmlElement{name = 'rdf:RDF', content = Content}, _} = xmerl_scan:string(
+        binary_to_list(Metadata), [{quiet, true}]),
     %% Xmerl works on strings in UTF8 (essentially the result of binary_to_list(<<_/utf8>>),
     %% not unicode erlang-strings! However, its output IS expressed in unicode erlang-strings!
     %% This is why we need to transform the resulting unicode strings to UTF8
@@ -206,14 +200,7 @@ extra_namespaces() -> [
 %% @private
 -spec ensure_rdf_about_attribute([#xmlAttribute{}], binary()) -> [#xmlAttribute{}].
 ensure_rdf_about_attribute(Attributes, Identifier) ->
-    FindElementResult = lists_utils:find(fun(Attr) ->
-        case Attr of
-            #xmlAttribute{name = 'rdf:about'} ->
-                true;
-            _ ->
-                false
-        end
-    end, Attributes),
+    FindElementResult = ?find_matching_element(#xmlAttribute{name = 'rdf:about'}, Attributes),
     case FindElementResult of
         error ->
             NewAttr = #xmlAttribute{
@@ -228,14 +215,7 @@ ensure_rdf_about_attribute(Attributes, Identifier) ->
 %% @private
 -spec ensure_dc_identifier_element([#xmlElement{}], binary()) -> [#xmlElement{}].
 ensure_dc_identifier_element(CHOContent, Identifier) ->
-    FindElementResult = lists_utils:find(fun(Content) ->
-        case Content of
-            #xmlElement{name = 'dc:identifier'} ->
-                true;
-            _ ->
-                false
-        end
-    end, CHOContent),
+    FindElementResult = ?find_matching_element(#xmlElement{name = 'dc:identifier'}, CHOContent),
     case FindElementResult of
         error ->
             lists:append(CHOContent, [#xmlElement{name = 'dc:identifier', content = [#xmlText{value = Identifier}]}]);
@@ -247,14 +227,7 @@ ensure_dc_identifier_element(CHOContent, Identifier) ->
 %% @private
 -spec ensure_aggregated_element([#xmlElement{}], binary()) -> [#xmlElement{}].
 ensure_aggregated_element(Content, Identifier) ->
-    FindElementResult = lists_utils:find(fun(Content) ->
-        case Content of
-            #xmlElement{name = 'edm:aggregatedCHO'} ->
-                true;
-            _ ->
-                false
-        end
-    end, Content),
+    FindElementResult = ?find_matching_element(#xmlElement{name = 'edm:aggregatedCHO'}, Content),
     NewAttr = #xmlAttribute{
         name = 'rdf:resource',
         value = Identifier

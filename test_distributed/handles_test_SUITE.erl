@@ -14,6 +14,7 @@
 
 -include_lib("ctool/include/test/test_utils.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include("http/handlers/oai.hrl").
 
 -export([
     groups/0, all/0,
@@ -68,8 +69,6 @@ groups() -> [
 -define(RAND_NAME(), ?RAND_UNICODE_STR(200)).
 -define(RAND_ID(), str_utils:rand_hex(16)).
 
--define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
--define(EDM_METADATA_PREFIX, <<"edm">>).
 -define(RAND_METADATA_PREFIX(), case ?RAND_BOOL() of
     true -> ?OAI_DC_METADATA_PREFIX;
     false -> ?EDM_METADATA_PREFIX
@@ -169,7 +168,7 @@ list_handles_with_metadata_format_test(_Config) ->
 
 list_size_elements_test(_Config) ->
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    {List, undefined} = list_once(#{size => 5, metadata_prefix => MetadataPrefix}),
+    {List, undefined} = list_once(#{limit => 5, metadata_prefix => MetadataPrefix}),
     ?assertEqual(lists:sublist(expected_handles(MetadataPrefix), 5), List),
     ?assertEqual(5, length(List)).
 

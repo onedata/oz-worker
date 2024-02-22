@@ -566,7 +566,7 @@ upgrade_record(7, Handle) ->
         resource_type = ResourceType,
         metadata_prefix = <<"oai_dc">>,
         metadata = Metadata,
-        timestamp = time:datetime_to_seconds(Timestamp),
+        timestamp = Timestamp,
 
         resource_id = ResourceId,
         handle_service = HandleService,
