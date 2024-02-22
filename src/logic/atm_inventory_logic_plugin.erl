@@ -25,9 +25,6 @@
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
-
--define(DOC(Record), #document{value = Record}).
-
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -48,9 +45,9 @@
     {true, entity_logic:versioned_entity()} | false | errors:error().
 fetch_entity(#gri{id = AtmInventoryId}) ->
     case od_atm_inventory:get(AtmInventoryId) of
-        {ok, #document{revs = [DbRev | _]} = Doc} ->
+        {ok, #document{value = AtmInventory, revs = [DbRev | _]}} ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
-            {true, {Doc, Revision}};
+            {true, {AtmInventory, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -256,15 +253,13 @@ get(#el_req{gri = #gri{aspect = privileges}}, _) ->
         <<"admin">> => privileges:atm_inventory_admin()
     }};
 
-get(#el_req{gri = #gri{aspect = instance, scope = private}}, Doc) ->
-    {ok, Doc};
-get(#el_req{gri = #gri{aspect = instance, scope = protected}}, #document{
-    value = #od_atm_inventory{
-        name = Name,
-        creation_time = CreationTime,
-        creator = Creator,
-        bottom_up_dirty = BottomUpDirty
-    }
+get(#el_req{gri = #gri{aspect = instance, scope = private}}, AtmInventory) ->
+    {ok, AtmInventory};
+get(#el_req{gri = #gri{aspect = instance, scope = protected}}, #od_atm_inventory{
+    name = Name,
+    creation_time = CreationTime,
+    creator = Creator,
+    bottom_up_dirty = BottomUpDirty
 }) ->
     {ok, #{
         <<"name">> => Name,
@@ -273,32 +268,32 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, #document{
         <<"creator">> => Creator
     }};
 
-get(#el_req{gri = #gri{aspect = users}}, ?DOC(AtmInventory)) ->
+get(#el_req{gri = #gri{aspect = users}}, AtmInventory) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_user, AtmInventory)};
-get(#el_req{gri = #gri{aspect = eff_users}}, ?DOC(AtmInventory)) ->
+get(#el_req{gri = #gri{aspect = eff_users}}, AtmInventory) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_user, AtmInventory)};
-get(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, ?DOC(AtmInventory)) ->
+get(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, AtmInventory) ->
     {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_user, UserId, AtmInventory)};
-get(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, ?DOC(AtmInventory)) ->
+get(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, AtmInventory) ->
     {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, AtmInventory)};
-get(#el_req{gri = #gri{aspect = {eff_user_membership, UserId}}}, ?DOC(AtmInventory)) ->
+get(#el_req{gri = #gri{aspect = {eff_user_membership, UserId}}}, AtmInventory) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_user, UserId, AtmInventory)};
 
-get(#el_req{gri = #gri{aspect = groups}}, ?DOC(AtmInventory)) ->
+get(#el_req{gri = #gri{aspect = groups}}, AtmInventory) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_group, AtmInventory)};
-get(#el_req{gri = #gri{aspect = eff_groups}}, ?DOC(AtmInventory)) ->
+get(#el_req{gri = #gri{aspect = eff_groups}}, AtmInventory) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_group, AtmInventory)};
-get(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, ?DOC(AtmInventory)) ->
+get(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, AtmInventory) ->
     {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_group, GroupId, AtmInventory)};
-get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, ?DOC(AtmInventory)) ->
+get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, AtmInventory) ->
     {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_group, GroupId, AtmInventory)};
-get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, ?DOC(AtmInventory)) ->
+get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, AtmInventory) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_group, GroupId, AtmInventory)};
 
-get(#el_req{gri = #gri{aspect = atm_lambdas}}, ?DOC(AtmInventory)) ->
+get(#el_req{gri = #gri{aspect = atm_lambdas}}, AtmInventory) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_atm_lambda, AtmInventory)};
 
-get(#el_req{gri = #gri{aspect = atm_workflow_schemas}}, ?DOC(AtmInventory)) ->
+get(#el_req{gri = #gri{aspect = atm_workflow_schemas}}, AtmInventory) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_atm_workflow_schema, AtmInventory)}.
 
 
@@ -341,7 +336,7 @@ update(Req = #el_req{gri = #gri{id = AtmInventoryId, aspect = {group_privileges,
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = AtmInventoryId, aspect = instance}}) ->
-    fun(?DOC(#od_atm_inventory{atm_lambdas = AtmLambdas, atm_workflow_schemas = AtmWorkflowSchemas})) ->
+    fun(#od_atm_inventory{atm_lambdas = AtmLambdas, atm_workflow_schemas = AtmWorkflowSchemas}) ->
         lists:foreach(fun(AtmWorkflowSchemaId) ->
             ok = atm_workflow_schema_logic:delete(?ROOT, AtmWorkflowSchemaId)
         end, AtmWorkflowSchemas),
@@ -374,7 +369,7 @@ delete(#el_req{gri = #gri{id = AtmInventoryId, aspect = {group, GroupId}}}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
-exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, ?DOC(AtmInventory)) ->
+exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, AtmInventory) ->
     case Req#el_req.auth_hint of
         ?THROUGH_USER(UserId) ->
             atm_inventory_logic:has_eff_user(AtmInventory, UserId);
@@ -384,32 +379,32 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, ?DOC(Atm
             true
     end;
 
-exists(#el_req{gri = #gri{aspect = {user, UserId}}}, ?DOC(AtmInventory)) ->
+exists(#el_req{gri = #gri{aspect = {user, UserId}}}, AtmInventory) ->
     entity_graph:has_relation(direct, bottom_up, od_user, UserId, AtmInventory);
 
-exists(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, ?DOC(AtmInventory)) ->
+exists(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, AtmInventory) ->
     entity_graph:has_relation(direct, bottom_up, od_user, UserId, AtmInventory);
 
-exists(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, ?DOC(AtmInventory)) ->
+exists(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, AtmInventory) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, AtmInventory);
 
-exists(#el_req{gri = #gri{aspect = {eff_user_membership, UserId}}}, ?DOC(AtmInventory)) ->
+exists(#el_req{gri = #gri{aspect = {eff_user_membership, UserId}}}, AtmInventory) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, AtmInventory);
 
-exists(#el_req{gri = #gri{aspect = {group, GroupId}}}, ?DOC(AtmInventory)) ->
+exists(#el_req{gri = #gri{aspect = {group, GroupId}}}, AtmInventory) ->
     entity_graph:has_relation(direct, bottom_up, od_group, GroupId, AtmInventory);
 
-exists(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, ?DOC(AtmInventory)) ->
+exists(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, AtmInventory) ->
     entity_graph:has_relation(direct, bottom_up, od_group, GroupId, AtmInventory);
 
-exists(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, ?DOC(AtmInventory)) ->
+exists(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, AtmInventory) ->
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, AtmInventory);
 
-exists(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, ?DOC(AtmInventory)) ->
+exists(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, AtmInventory) ->
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, AtmInventory);
 
 % All other aspects exist if inventory record exists.
-exists(#el_req{gri = #gri{id = Id}}, ?DOC(_)) ->
+exists(#el_req{gri = #gri{id = Id}}, #od_atm_inventory{}) ->
     Id =/= undefined.
 
 
@@ -440,20 +435,20 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
             false
     end;
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, auth = ?USER(UserId), data = #{<<"privileges">> := _}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, auth = ?USER(UserId), data = #{<<"privileges">> := _}}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_ADD_USER) andalso auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_SET_PRIVILEGES);
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, auth = ?USER(UserId), data = _}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, auth = ?USER(UserId), data = _}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_ADD_USER);
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, auth = ?USER(UserId), data = #{<<"privileges">> := _}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, auth = ?USER(UserId), data = #{<<"privileges">> := _}}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_ADD_GROUP) andalso
         auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_SET_PRIVILEGES) andalso
         group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_ADD_ATM_INVENTORY);
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, auth = ?USER(UserId), data = _}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, auth = ?USER(UserId), data = _}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_ADD_GROUP) andalso
         group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_ADD_ATM_INVENTORY);
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, AtmInventory) ->
     case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_ADD_GROUP);
@@ -464,10 +459,10 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, ?DOC(At
 authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
 
-authorize(#el_req{auth = ?USER(UserId), operation = get, gri = #gri{aspect = instance, scope = private}}, ?DOC(AtmInventory)) ->
+authorize(#el_req{auth = ?USER(UserId), operation = get, gri = #gri{aspect = instance, scope = private}}, AtmInventory) ->
     auth_by_privilege(UserId, AtmInventory, ?ATM_INVENTORY_VIEW);
 
-authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, AtmInventory) ->
     case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this inventory is checked in 'exists'
@@ -490,55 +485,55 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
 
 authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
     true;
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_VIEW_PRIVILEGES);
 
 authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
     true;
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_VIEW_PRIVILEGES);
 
 authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_membership, UserId}}}, _) ->
     true;
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_membership, _}}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_membership, _}}}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_VIEW);
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = {group_privileges, _}}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = {group_privileges, _}}}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_VIEW_PRIVILEGES);
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_group_privileges, _}}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_group_privileges, _}}}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_VIEW_PRIVILEGES);
 
-authorize(Req = #el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, AtmInventory) ->
     group_logic:has_eff_user(GroupId, UserId) orelse auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_VIEW);
 
-authorize(#el_req{operation = get, auth = ?USER(ClientUserId), gri = #gri{aspect = atm_lambdas}}, ?DOC(AtmInventory)) ->
+authorize(#el_req{operation = get, auth = ?USER(ClientUserId), gri = #gri{aspect = atm_lambdas}}, AtmInventory) ->
     atm_inventory_logic:has_eff_user(AtmInventory, ClientUserId);
 
-authorize(#el_req{operation = get, auth = ?USER(ClientUserId), gri = #gri{aspect = atm_workflow_schemas}}, ?DOC(AtmInventory)) ->
+authorize(#el_req{operation = get, auth = ?USER(ClientUserId), gri = #gri{aspect = atm_workflow_schemas}}, AtmInventory) ->
     atm_inventory_logic:has_eff_user(AtmInventory, ClientUserId);
 
-authorize(Req = #el_req{operation = get, auth = ?USER}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = get, auth = ?USER}, AtmInventory) ->
     % All other resources can be accessed with view privileges
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_VIEW);
 
-authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_UPDATE);
 
-authorize(Req = #el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_SET_PRIVILEGES);
 
-authorize(Req = #el_req{operation = update, gri = #gri{aspect = {group_privileges, _}}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = {group_privileges, _}}}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_SET_PRIVILEGES);
 
-authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_DELETE);
 
-authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, _}}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, _}}}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_REMOVE_USER);
 
-authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {group, _}}}, ?DOC(AtmInventory)) ->
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {group, _}}}, AtmInventory) ->
     auth_by_privilege(Req, AtmInventory, ?ATM_INVENTORY_REMOVE_GROUP);
 
 authorize(_, _) ->

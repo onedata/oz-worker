@@ -85,15 +85,11 @@ create(Auth, Data) ->
 -spec get(aai:auth(), od_atm_inventory:id()) ->
     {ok, od_atm_inventory:record()} | errors:error().
 get(Auth, AtmInventoryId) ->
-    Req = #el_req{
+    entity_logic:handle(#el_req{
         operation = get,
         auth = Auth,
         gri = #gri{type = od_atm_inventory, id = AtmInventoryId, aspect = instance}
-    },
-    case entity_logic:handle(Req) of
-        {ok, #document{value = AtmInventory}} -> {ok, AtmInventory};
-        {error, _} = Error -> Error
-    end.
+    }).
 
 
 -spec get_protected_data(aai:auth(), od_atm_inventory:id()) ->

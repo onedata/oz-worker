@@ -565,7 +565,7 @@ exists(Req = #el_req{gri = GRI = #gri{id = UserId, aspect = instance, scope = sh
             end;
         ?THROUGH_ATM_INVENTORY(AtmInventoryId) ->
             user_logic:has_eff_atm_inventory(User, AtmInventoryId) orelse begin
-                {true, {#document{value = AtmInventory}, _}} = atm_inventory_logic_plugin:fetch_entity(#gri{id = AtmInventoryId}),  % fixme
+                {true, {AtmInventory, _}} = atm_inventory_logic_plugin:fetch_entity(#gri{id = AtmInventoryId}),
                 AtmInventory#od_atm_inventory.creator =:= ?SUB(user, UserId)
             end;
         _ ->
@@ -723,7 +723,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
             end;
 
         {?USER(ClientUserId), ?THROUGH_ATM_INVENTORY(AtmInventoryId)} ->
-            {true, {#document{value = AtmInventory}, _}} = atm_inventory_logic_plugin:fetch_entity(#gri{id = AtmInventoryId}),  % fixme
+            {true, {AtmInventory, _}} = atm_inventory_logic_plugin:fetch_entity(#gri{id = AtmInventoryId}),
             % UserId's membership in inventory is checked in 'exists'
             atm_inventory_logic:has_eff_privilege(AtmInventory, ClientUserId, ?ATM_INVENTORY_VIEW) orelse begin
             % Members of a inventory can see the shared data of its creator

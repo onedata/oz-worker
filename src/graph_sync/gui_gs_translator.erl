@@ -907,17 +907,15 @@ translate_harvester(#gri{aspect = {index_stats, _}}, IndexStats) ->
 translate_cluster(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
     Privileges;
 
-translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, #document{
-    value = #od_cluster{
-        type = Type,
-        worker_version = WorkerVersion,
-        onepanel_version = OnepanelVersion,
-        onepanel_proxy = OnepanelProxy,
-        creation_time = CreationTime,
-        creator = Creator,
-        bottom_up_dirty = BottomUpDirty
-    } = Cluster
-}) ->
+translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, #od_cluster{
+    type = Type,
+    worker_version = WorkerVersion,
+    onepanel_version = OnepanelVersion,
+    onepanel_proxy = OnepanelProxy,
+    creation_time = CreationTime,
+    creator = Creator,
+    bottom_up_dirty = BottomUpDirty
+} = Cluster) ->
     ProviderId = ClusterId,
     fun(?USER(UserId)) -> #{
         <<"type">> => Type,
@@ -1049,14 +1047,12 @@ translate_cluster(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) -
 translate_atm_inventory(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
     Privileges;
 
-translate_atm_inventory(#gri{id = AtmInventoryId, aspect = instance, scope = private}, #document{
-    value = #od_atm_inventory{
-        name = Name,
-        creation_time = CreationTime,
-        creator = Creator,
-        bottom_up_dirty = BottomUpDirty
-    } = AtmInventory
-}) ->
+translate_atm_inventory(#gri{id = AtmInventoryId, aspect = instance, scope = private}, #od_atm_inventory{
+    name = Name,
+    creation_time = CreationTime,
+    creator = Creator,
+    bottom_up_dirty = BottomUpDirty
+} = AtmInventory) ->
     fun(?USER(UserId)) -> #{
         <<"scope">> => <<"private">>,
         <<"name">> => Name,

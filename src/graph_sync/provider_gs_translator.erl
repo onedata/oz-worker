@@ -473,7 +473,7 @@ translate_resource(_, #gri{type = od_token, aspect = instance, scope = shared}, 
 translate_resource(_, #gri{type = temporary_token_secret, scope = shared}, Generation) ->
     #{<<"generation">> => Generation};
 
-translate_resource(_, #gri{type = od_atm_inventory, aspect = instance, scope = private}, #document{value = AtmInventory}) ->
+translate_resource(_, #gri{type = od_atm_inventory, aspect = instance, scope = private}, AtmInventory) ->
     fun(?USER = #auth{caveats = Caveats}) ->
         % Since op_worker uses auth overrides on the GS channel, this is the only
         % way to "guess" (without 100% confidence) that it is actually a provider
