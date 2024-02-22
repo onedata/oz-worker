@@ -72,7 +72,10 @@
 %%--------------------------------------------------------------------
 -spec init(Req :: cowboy_req:req(), Opts :: opts()) ->
     {cowboy_rest, cowboy_req:req(), #state{}}.
-init(#{method := MethodBin} = Req, Opts) ->
+init(#{method := MethodBin} = InitialReq, Opts) ->
+    % The REST API accepts only tokens (rather than session cookies) so
+    % it's safe to allow it to be called from other origins.
+    Req = http_cors:allow_origin(<<"*">>, InitialReq),
     Method = binary_to_method(MethodBin),
     % If given method is not allowed, it is not in the map. Such request
     % will stop execution on allowed_methods/2 callback. Use undefined if
