@@ -32,6 +32,8 @@
 
     get_record_get_test/1,
     get_record_post_test/1,
+    get_dc_record_with_bad_metadata_get_test/1,
+    get_dc_record_with_bad_metadata_post_test/1,
 
     list_metadata_formats_get_test/1,
     list_metadata_formats_post_test/1,
@@ -124,6 +126,8 @@ all() -> ?ALL([
 
     get_record_get_test,
     get_record_post_test,
+    get_dc_record_with_bad_metadata_post_test,
+    get_dc_record_with_bad_metadata_post_test,
 
     list_metadata_formats_get_test,
     list_metadata_formats_post_test,
@@ -272,6 +276,12 @@ get_record_get_test(Config) ->
 
 get_record_post_test(Config) ->
     get_record_test_base(Config, post).
+
+get_dc_record_with_bad_metadata_get_test(Config) ->
+    get_dc_record_with_bad_metadata_test_base(Config, get).
+
+get_dc_record_with_bad_metadata_post_test(Config) ->
+    get_dc_record_with_bad_metadata_test_base(Config, post).
 
 list_metadata_formats_get_test(Config) ->
     list_metadata_formats_test_base(Config, get).
@@ -497,7 +507,7 @@ list_records_no_records_match_error2_post_test(Config) ->
 
 identify_test_base(Config, Method) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
-    Path = ?config(oai_pmh_path, Config),
+    Path = get_oai_pmh_api_path(),
     ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
 
     {ok, User} = oz_test_utils:create_user(Config),
@@ -509,7 +519,7 @@ identify_test_base(Config, Method) ->
     {HSId, _} = create_handle_service(Config, User),
     Timestamp = ?CURRENT_DATETIME(),
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
+    Metadata = input_metadata_for_prefix(MetadataPrefix),
     create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
         Metadata, MetadataPrefix, Timestamp),
 
@@ -529,7 +539,7 @@ identify_test_base(Config, Method) ->
 
 identify_change_earliest_datestamp_test_base(Config, Method) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
-    Path = ?config(oai_pmh_path, Config),
+    Path = get_oai_pmh_api_path(),
     ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
 
     {ok, User} = oz_test_utils:create_user(Config),
@@ -540,10 +550,10 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     Timestamp2 = increase_timestamp(Timestamp1, 1),
     Timestamp3 = increase_timestamp(Timestamp2, 1),
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
+    Metadata = input_metadata_for_prefix(MetadataPrefix),
     Identifier1 = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId1,
         Metadata, MetadataPrefix, Timestamp1),
-    Metadata2 = get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
+    Metadata2 = input_metadata_for_prefix(MetadataPrefix),
     _Identifier2 = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId2,
         Metadata2, MetadataPrefix, Timestamp2),
 
@@ -583,10 +593,10 @@ get_record_test_base(Config, Method) ->
     {HSId, _} = create_handle_service(Config, User),
     Timestamp = ?CURRENT_DATETIME(),
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
+    Metadata = input_metadata_for_prefix(MetadataPrefix),
     Identifier = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
         Metadata, MetadataPrefix, Timestamp),
-    ExpectedMetadata = expected_metadata(Config, Identifier, MetadataPrefix),
+    ExpectedMetadata = expected_metadata_for_prefix(Config, Identifier, MetadataPrefix),
 
     Args = [
         {<<"identifier">>, oai_identifier(Config, Identifier)},
@@ -596,6 +606,52 @@ get_record_test_base(Config, Method) ->
         expected_oai_record_xml(Config, Identifier, Timestamp, ExpectedMetadata, MetadataPrefix)
     ],
     ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config)).
+
+
+get_dc_record_with_bad_metadata_test_base(Config, Method) ->
+    {ok, User} = oz_test_utils:create_user(Config),
+    {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
+    {HSId, _} = create_handle_service(Config, User),
+    Timestamp = ?CURRENT_DATETIME(),
+
+    BadMetadataExamples = [
+        <<"">>,
+        <<"null">>,
+        <<"<bad-xml></yes-very-bad>">>
+    ],
+
+    lists:foreach(fun(Metadata) ->
+        ShareId = datastore_key:new(),
+        {ok, ShareId} = oz_test_utils:create_share(
+            Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
+        ),
+        MetadataPrefix = ?OAI_DC_METADATA_PREFIX,
+        {ok, PublicHandle} = ozt:rpc(handle_proxy, register_handle,
+            [HSId, ?HANDLE_RESOURCE_TYPE, ShareId, Metadata]
+        ),
+        {ok, #document{key = Identifier}} = ozt:rpc(od_handle, create, [#document{value = #od_handle{
+            handle_service = HSId,
+            resource_type = ?HANDLE_RESOURCE_TYPE,
+            resource_id = ShareId,
+            public_handle = PublicHandle,
+            metadata = Metadata,
+            metadata_prefix = MetadataPrefix,
+            creation_time = Timestamp
+        }}]),
+        Args = [
+            {<<"identifier">>, oai_identifier(Config, Identifier)},
+            {<<"metadataPrefix">>, MetadataPrefix}
+        ],
+
+        % Badly formatted metadata should result in only
+        % dc:identifiers being present in the OAI output
+        ExpectedDCMetadata = expected_identifiers(Config, Identifier),
+        ExpResponseContent = [
+            expected_oai_record_xml(Config, Identifier, Timestamp, ExpectedDCMetadata, MetadataPrefix)
+        ],
+
+        ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config))
+    end, BadMetadataExamples).
 
 
 list_metadata_formats_test_base(Config, Method) ->
@@ -642,7 +698,7 @@ list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffs
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
+    Metadata = input_metadata_for_prefix(MetadataPrefix),
     Identifiers = setup_test_for_harvesting(
         Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
     ),
@@ -657,7 +713,7 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
+    Metadata = input_metadata_for_prefix(MetadataPrefix),
 
     Identifiers = setup_test_for_harvesting(
         Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
@@ -679,7 +735,7 @@ list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) 
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
+    Metadata = input_metadata_for_prefix(MetadataPrefix),
     Identifiers = setup_test_for_harvesting(
         Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
     ),
@@ -695,7 +751,7 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
+    Metadata = input_metadata_for_prefix(MetadataPrefix),
     Identifiers = setup_test_for_harvesting(
         Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
     ),
@@ -720,7 +776,7 @@ list_with_time_offsets_test_base(Config, Method, ListedObjects,
             identifiers ->
                 expected_oai_header_xml(Config, HandleId, Timestamp);
             records ->
-                ExpectedMetadata = expected_metadata(Config, HandleId, MetadataPrefix),
+                ExpectedMetadata = expected_metadata_for_prefix(Config, HandleId, MetadataPrefix),
                 expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata, MetadataPrefix)
         end
     end,
@@ -827,7 +883,7 @@ cannot_disseminate_format_test_base(Config, Method) ->
     ),
     {HSId, _} = create_handle_service(Config, User),
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
+    Metadata = input_metadata_for_prefix(MetadataPrefix),
     Identifier = create_handle(Config, User, HSId, ShareId, MetadataPrefix, Metadata),
 
     Args = [
@@ -845,7 +901,7 @@ list_metadata_formats_no_format_error_test_base(Config, Method) ->
     ),
     {HSId, _} = create_handle_service(Config, User),
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata =get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
+    Metadata =input_metadata_for_prefix(MetadataPrefix),
     Identifier = create_handle(Config, User, HSId, ShareId, MetadataPrefix, Metadata),
     % Modify handle metadata to undefined (this should not occur in normal
     % conditions because entity logic won't accept undefined metadata,
@@ -869,7 +925,7 @@ list_identifiers_no_records_match_error_test_base(Config, Method, IdentifiersNum
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
+    Metadata = input_metadata_for_prefix(MetadataPrefix),
     setup_test_for_harvesting(Config, IdentifiersNum, BeginTime,
         TimeOffsets, Metadata, MetadataPrefix),
 
@@ -898,7 +954,7 @@ list_records_no_records_match_error_test_base(Config, Method, IdentifiersNum, Fr
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = get_metadata_compatible_with_metadata_prefix(MetadataPrefix),
+    Metadata = input_metadata_for_prefix(MetadataPrefix),
     setup_test_for_harvesting(Config, IdentifiersNum, BeginTime,
         TimeOffsets, Metadata, MetadataPrefix),
 
@@ -915,16 +971,9 @@ list_records_no_records_match_error_test_base(Config, Method, IdentifiersNum, Fr
 init_per_suite(Config) ->
     ssl:start(),
     application:ensure_all_started(hackney),
-    Posthook = fun(NewConfig) ->
-        [
-            {oai_pmh_url, get_oai_pmh_URL(NewConfig)},
-            {oai_pmh_path, get_oai_pmh_api_path(NewConfig)} | NewConfig
-        ]
-    end,
-    [
-        {?ENV_UP_POSTHOOK, Posthook},
+    ozt:init_per_suite([
         {?LOAD_MODULES, [oz_test_utils]} | Config
-    ].
+    ]).
 
 init_per_testcase(_, Config) ->
     mock_handle_proxy(Config),
@@ -1012,14 +1061,14 @@ check_list_records_no_records_match_error(Code, Args, Method, ExpResponseContent
         ExpResponseContent, {error, noRecordsMatch}, Config).
 
 check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Config) ->
-    URL = ?config(oai_pmh_url, Config),
-    Path = ?config(oai_pmh_path, Config),
+    URL = get_oai_pmh_URL(),
+    Path = get_oai_pmh_api_path(),
     Args2 = case Verb of
         none -> Args;
         _ -> add_verb(Verb, Args)
     end,
     ResponseDate = ?CURRENT_DATETIME(),
-    ExpectedBody = expected_body(Config, ExpResponseContent, ResponseType, Args2, ResponseDate),
+    ExpectedBody = expected_body(ExpResponseContent, ResponseType, Args2, ResponseDate),
 
     QueryString = prepare_querystring(Args2),
     Nodes = ?config(oz_worker_nodes, Config),
@@ -1059,15 +1108,11 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
 %%% Internal functions
 %%%===================================================================
 
-get_oai_pmh_URL(Config) ->
-    Schema = case rand:uniform(2) of
-        1 -> <<"http">>;
-        2 ->  <<"https">>
-    end,
-    oz_test_utils:oz_url(Config, Schema, <<>>).
+get_oai_pmh_URL() ->
+    str_utils:format_bin("http://~s", [ozt:get_domain()]).
 
-get_oai_pmh_api_path(Config) ->
-    list_to_binary(oz_test_utils:get_env(Config, oai_pmh_api_prefix)).
+get_oai_pmh_api_path() ->
+    list_to_binary(ozt:get_env(oai_pmh_api_prefix)).
 
 prepare_querystring(Proplist) ->
     QS = lists:foldl(fun({K, V}, Acc) ->
@@ -1093,9 +1138,9 @@ get_domain(Hostname) ->
     [_Node | Domain] = string:tokens(atom_to_list(Hostname), "."),
     string:join(Domain, ".").
 
-expected_body(Config, ExpectedResponse, ResponseType, Args, ResponseDate) ->
-    Path = ?config(oai_pmh_path, Config),
-    URL = ?config(oai_pmh_url, Config),
+expected_body(ExpectedResponse, ResponseType, Args, ResponseDate) ->
+    Path = get_oai_pmh_api_path(),
+    URL = get_oai_pmh_URL(),
     RequestURL = binary_to_list(<<URL/binary, Path/binary>>),
     ExpectedResponseElement = case ResponseType of
         {error, Code} -> expected_response_error(Code);
@@ -1240,18 +1285,14 @@ create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId,
     HId.
 
 create_handle(Config, User, HandleServiceId, ResourceId, MetadataPrefix, Metadata) ->
-    Result = oz_test_utils:create_handle(Config, ?USER(User),
+    {ok, HId} = oz_test_utils:create_handle(Config, ?USER(User),
         HandleServiceId, ?HANDLE_RESOURCE_TYPE, ResourceId, MetadataPrefix, Metadata),
-    case Result of
-        {ok, HId} -> HId;
-        _ -> Result
-    end.
+    HId.
 
 modify_handle(Config, HandleId, Metadata) ->
-    Data = #{
+    ok = oz_test_utils:update_handle(Config, HandleId, #{
         <<"metadata">> => Metadata
-    },
-    ok = oz_test_utils:update_handle(Config, HandleId, Data).
+    }).
 
 mock_handle_proxy(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
@@ -1328,18 +1369,6 @@ random_out_of_range(Lower, Upper, Max) ->
         _ -> Number
     end.
 
-expected_metadata(Config, HandleId, ?OAI_DC_METADATA_PREFIX) ->
-    MetadataXml = get_metadata_compatible_with_metadata_prefix(?OAI_DC_METADATA_PREFIX),
-    {#xmlElement{content = Metadata}, _} = xmerl_scan:string(binary_to_list(MetadataXml)),
-    Metadata ++ expected_identifiers(Config, HandleId);
-expected_metadata(Config, HandleId, ?EDM_METADATA_PREFIX) ->
-    {ok, #od_handle{
-        public_handle = PublicHandle
-    }} = oz_test_utils:get_handle(Config, HandleId),
-    MetadataXml = get_metadata_compatible_with_metadata_prefix(?EDM_METADATA_PREFIX, PublicHandle),
-    {#xmlElement{content = Metadata}, _} = xmerl_scan:string(binary_to_list(MetadataXml)),
-    Metadata.
-
 % Resulting metadata should include additional identifiers - public handle and public share url
 expected_identifiers(Config, HandleId) ->
     {ok, #od_handle{
@@ -1364,33 +1393,42 @@ expected_admin_emails(Config) ->
 
 expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedDCMetadata, MetadataPrefix) ->
     Attributes = [
-        { "xmlns:dc", "http:\/\/purl.org\/dc\/elements\/1.1\/"},
-        {"xmlns:dcterms", "http:\/\/purl.org\/dc\/terms\/"},
-        {"xmlns:edm", "http:\/\/www.europeana.eu\/schemas\/edm\/"},
-        {"xmlns:ore", "http:\/\/www.openarchives.org\/ore\/terms\/"},
-        {"xmlns:owl", "http:\/\/www.w3.org\/2002\/07\/owl#"},
-        {"xmlns:rdf", "http:\/\/www.w3.org\/1999\/02\/22-rdf-syntax-ns#"},
-        {"xmlns:foaf", "http:\/\/xmlns.com\/foaf\/0.1\/"},
-        {"xmlns:skos", "http:\/\/www.w3.org\/2004\/02\/skos\/core#"},
-        {"xmlns:rdaGr2", "http:\/\/rdvocab.info\/ElementsGr2\/"},
-        {"xmlns:wgs84_pos", "http:\/\/www.w3.org\/2003\/01\/geo\/wgs84_pos#"},
-        {"xmlns:crm", "http:\/\/www.cidoc-crm.org\/cidoc--crm\/"},
-        {"xmlns:cc", "http:\/\/creativecommons.org\/ns#"}
+        {'xmlns:dc', "http:\/\/purl.org\/dc\/elements\/1.1\/"},
+        {'xmlns:dcterms', "http:\/\/purl.org\/dc\/terms\/"},
+        {'xmlns:edm', "http:\/\/www.europeana.eu\/schemas\/edm\/"},
+        {'xmlns:ore', "http:\/\/www.openarchives.org\/ore\/terms\/"},
+        {'xmlns:owl', "http:\/\/www.w3.org\/2002\/07\/owl#"},
+        {'xmlns:rdf', "http:\/\/www.w3.org\/1999\/02\/22-rdf-syntax-ns#"},
+        {'xmlns:foaf', "http:\/\/xmlns.com\/foaf\/0.1\/"},
+        {'xmlns:skos', "http:\/\/www.w3.org\/2004\/02\/skos\/core#"},
+        {'xmlns:rdaGr2', "http:\/\/rdvocab.info\/ElementsGr2\/"},
+        {'xmlns:wgs84_pos', "http:\/\/www.w3.org\/2003\/01\/geo\/wgs84_pos#"},
+        {'xmlns:crm', "http:\/\/www.cidoc-crm.org\/cidoc--crm\/"},
+        {'xmlns:cc', "http:\/\/creativecommons.org\/ns#"}
+    ],
+
+
+    AttributesDC = [
+        {'xmlns:oai_dc', "http:\/\/www.openarchives.org\/OAI\/2.0\/oai_dc\/"},
+        {'xmlns:dc', "http:\/\/purl.org\/dc\/elements\/1.1\/"},
+        {'xmlns:xsi', "http:\/\/www.w3.org\/2001\/XMLSchema-instance"},
+        {'xsi:schemaLocation', "http:\/\/www.openarchives.org\/OAI\/2.0\/oai_dc\/ http:\/\/www.openarchives.org\/OAI\/2.0\/oai_dc.xsd"}
     ],
     Content = case MetadataPrefix of
         ?EDM_METADATA_PREFIX ->
-            Name = 'rdf:RDF',
             #xmlElement{
-                name = Name,
+                name = 'rdf:RDF',
                 attributes = lists:map(fun({N, V}) ->
-                    #xmlAttribute{name = ensure_atom(N), value = str_utils:to_list(V)}
+                    #xmlAttribute{name = N, value = V}
                 end, Attributes),
                 content = ExpectedDCMetadata
             };
         ?OAI_DC_METADATA_PREFIX ->
-            Name = 'oai_dc:dc',
             #xmlElement{
-                name = Name,
+                name = 'oai_dc:dc',
+                attributes = lists:map(fun({N, V}) ->
+                    #xmlAttribute{name = N, value = V}
+                end, AttributesDC),
                 content = ExpectedDCMetadata
             }
     end,
@@ -1429,7 +1467,7 @@ expected_oai_header_xml(Config, HandleId, Timestamp) ->
     }.
 
 %% @private
-get_metadata_compatible_with_metadata_prefix(MetadataPrefix) ->
+input_metadata_for_prefix(MetadataPrefix) ->
     Metadata = case MetadataPrefix of
         ?OAI_DC_METADATA_PREFIX -> ?DC_METADATA_XML;
         ?EDM_METADATA_PREFIX -> ?EDM_METADATA_XML
@@ -1437,10 +1475,20 @@ get_metadata_compatible_with_metadata_prefix(MetadataPrefix) ->
     Metadata.
 
 %% @private
-get_metadata_compatible_with_metadata_prefix(MetadataPrefix, PublicHandle) ->
-    Metadata = case MetadataPrefix of
-        ?OAI_DC_METADATA_PREFIX -> ?DC_METADATA_XML;
-        ?EDM_METADATA_PREFIX -> ?EDM_METADATA_XML_SPECIFIED_HANDLE(PublicHandle)
-    end,
+expected_metadata_for_prefix(Config, HandleId, ?OAI_DC_METADATA_PREFIX) ->
+    {ok, #od_handle{
+        resource_id = ShareId,
+        public_handle = PublicHandle
+    }} = oz_test_utils:get_handle(Config, HandleId),
+    ShareUrl = oz_test_utils:get_share_public_url(Config, ShareId),
+    MetadataXml = ?DC_METADATA_XML_WITH_IDENTIFIERS(PublicHandle, ShareUrl),
+    {#xmlElement{content = Metadata}, _} = xmerl_scan:string(binary_to_list(MetadataXml)),
+    Metadata;
+expected_metadata_for_prefix(Config, HandleId, ?EDM_METADATA_PREFIX) ->
+    {ok, #od_handle{
+        public_handle = PublicHandle
+    }} = oz_test_utils:get_handle(Config, HandleId),
+    MetadataXml = ?EDM_METADATA_WITH_IDENTIFIERS(PublicHandle),
+    {#xmlElement{content = Metadata}, _} = xmerl_scan:string(binary_to_list(MetadataXml)),
     Metadata.
 
