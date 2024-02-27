@@ -121,6 +121,7 @@ protected_group(logic, _Id, GroupData, Creator) ->
     ?OK_MAP(#{
         <<"name">> => maps:get(<<"name">>, GroupData),
         <<"type">> => maps:get(<<"type">>, GroupData),
+        <<"areEffPrivilegesRecalculated">> => true,
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => Creator
     });
@@ -174,6 +175,7 @@ protected_space(logic, _Id, SpaceData, Creator) ->
         <<"providers">> => maps:get(<<"providers">>, SpaceData, #{}),
         <<"supportParametersRegistry">> => maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
+        <<"areEffPrivilegesRecalculated">> => true,
         <<"creator">> => Creator,
         <<"sharesCount">> => 0
     });
@@ -335,6 +337,7 @@ protected_cluster(logic, _Id, Type, Creator) ->
         <<"workerVersion">> => expected_cluster_worker_version_info(Type),
         <<"onepanelVersion">> => expected_cluster_panel_version_info(),
         <<"onepanelProxy">> => true,
+        <<"areEffPrivilegesRecalculated">> => true,
         <<"creationTime">> => expected_cluster_creation_time(Type),
         <<"creator">> => Creator
     });
@@ -450,6 +453,7 @@ protected_harvester(logic, _Id, HarvesterData, Creator) ->
         <<"public">> => maps:get(<<"public">>, HarvesterData, false),
         <<"harvestingBackendEndpoint">> => maps:get(<<"harvestingBackendEndpoint">>, HarvesterData),
         <<"harvestingBackendType">> => maps:get(<<"harvestingBackendType">>, HarvesterData),
+        <<"areEffPrivilegesRecalculated">> => true,
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => Creator
     });
@@ -478,16 +482,17 @@ shared_or_public_harvester(rest, Id, HarvesterData) ->
 
 
 -spec protected_atm_inventory(interface(), od_handle_service:id(), map(), aai:subject()) -> expectation().
-protected_atm_inventory(logic, _Id, HServiceData, Creator) ->
+protected_atm_inventory(logic, _Id, AtmInventoryData, Creator) ->
     ?OK_MAP(#{
-        <<"name">> => maps:get(<<"name">>, HServiceData),
+        <<"name">> => maps:get(<<"name">>, AtmInventoryData),
+        <<"areEffPrivilegesRecalculated">> => true,
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => Creator
     });
-protected_atm_inventory(rest, Id, HServiceData, Creator) ->
+protected_atm_inventory(rest, Id, AtmInventoryData, Creator) ->
     #{
         <<"atmInventoryId">> => Id,
-        <<"name">> => maps:get(<<"name">>, HServiceData),
+        <<"name">> => maps:get(<<"name">>, AtmInventoryData),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     }.

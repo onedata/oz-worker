@@ -347,6 +347,7 @@ translate_group(#gri{id = GroupId, aspect = instance, scope = private}, Group) -
         <<"spaceList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = spaces}),
         <<"harvesterList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = eff_harvesters}),
         <<"atmInventoryList">> => gri:serialize(#gri{type = od_group, id = GroupId, aspect = eff_atm_inventories}),
+        <<"areEffPrivilegesRecalculated">> => not Group#od_group.bottom_up_dirty,
         <<"info">> => maps:merge(translate_creator(Group#od_group.creator), #{
             <<"creationTime">> => Group#od_group.creation_time
         })
@@ -356,12 +357,14 @@ translate_group(#gri{id = GroupId, aspect = instance, scope = protected}, Group)
     #{
         <<"name">> := Name,
         <<"type">> := Type,
+        <<"areEffPrivilegesRecalculated">> := AreEffPrivilegesRecalculated,
         <<"creator">> := Creator,
         <<"creationTime">> := CreationTime
     } = Group,
     fun(?USER(UserId)) -> #{
         <<"name">> => Name,
         <<"type">> => Type,
+        <<"areEffPrivilegesRecalculated">> => AreEffPrivilegesRecalculated,
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
         }),
@@ -478,6 +481,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
         <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_providers}),
         <<"harvesterList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = harvesters}),
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry),
+        <<"areEffPrivilegesRecalculated">> => not Space#od_space.bottom_up_dirty,
         <<"info">> => maps:merge(translate_creator(Space#od_space.creator), #{
             <<"creationTime">> => Space#od_space.creation_time,
             <<"sharesCount">> => length(Shares)
@@ -492,10 +496,11 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"tags">> := Tags,
         <<"advertisedInMarketplace">> := AdvertisedInMarketplace,
         <<"providers">> := SupportSizes,
-        <<"creationTime">> := CreationTime,
-        <<"creator">> := Creator,
         <<"sharesCount">> := SharesCount,
-        <<"supportParametersRegistry">> := SupportParametersRegistry
+        <<"supportParametersRegistry">> := SupportParametersRegistry,
+        <<"areEffPrivilegesRecalculated">> := AreEffPrivilegesRecalculated,
+        <<"creationTime">> := CreationTime,
+        <<"creator">> := Creator
     } = SpaceData,
     {ok, #document{value = Space}} = od_space:get(SpaceId),
 
@@ -512,6 +517,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"supportSizes">> => SupportSizes,
         <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_providers}),
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry),
+        <<"areEffPrivilegesRecalculated">> => AreEffPrivilegesRecalculated,
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime,
             <<"sharesCount">> => SharesCount
@@ -747,6 +753,7 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, 
         <<"effGroupList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = eff_groups}),
         <<"spaceList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = spaces}),
         <<"effProviderList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = eff_providers}),
+        <<"areEffPrivilegesRecalculated">> => not Harvester#od_harvester.bottom_up_dirty,
         <<"info">> => maps:merge(translate_creator(Harvester#od_harvester.creator), #{
             <<"creationTime">> => Harvester#od_harvester.creation_time
         })
@@ -758,6 +765,7 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
         <<"public">> := Public,
         <<"harvestingBackendType">> := HarvestingBackendType,
         <<"harvestingBackendEndpoint">> := Endpoint,
+        <<"areEffPrivilegesRecalculated">> := AreEffPrivilegesRecalculated,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator
     } = HarvesterData,
@@ -768,6 +776,7 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
         <<"harvestingBackendType">> => HarvestingBackendType,
         <<"harvestingBackendEndpoint">> => Endpoint,
         <<"directMembership">> => harvester_logic:has_direct_user(HarvesterId, UserId),
+        <<"areEffPrivilegesRecalculated">> => AreEffPrivilegesRecalculated,
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
         })},
@@ -902,16 +911,15 @@ translate_harvester(#gri{aspect = {index_stats, _}}, IndexStats) ->
 translate_cluster(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
     Privileges;
 
-translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Cluster) ->
-    #od_cluster{
-        type = Type,
-        worker_version = WorkerVersion,
-        onepanel_version = OnepanelVersion,
-        onepanel_proxy = OnepanelProxy,
-        creation_time = CreationTime,
-        creator = Creator
-    } = Cluster,
-
+translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, #od_cluster{
+    type = Type,
+    worker_version = WorkerVersion,
+    onepanel_version = OnepanelVersion,
+    onepanel_proxy = OnepanelProxy,
+    creation_time = CreationTime,
+    creator = Creator,
+    bottom_up_dirty = BottomUpDirty
+} = Cluster) ->
     ProviderId = ClusterId,
     fun(?USER(UserId)) -> #{
         <<"type">> => Type,
@@ -929,13 +937,14 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Clus
         <<"workerVersion">> => cluster_logic:version_info_to_json(WorkerVersion),
         <<"onepanelVersion">> => cluster_logic:version_info_to_json(OnepanelVersion),
         <<"onepanelProxy">> => OnepanelProxy,
-        <<"info">> => maps:merge(translate_creator(Creator), #{
-            <<"creationTime">> => CreationTime
-        }),
         <<"userList">> => gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = users}),
         <<"effUserList">> => gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = eff_users}),
         <<"groupList">> => gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = groups}),
-        <<"effGroupList">> => gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = eff_groups})
+        <<"effGroupList">> => gri:serialize(#gri{type = od_cluster, id = ClusterId, aspect = eff_groups}),
+        <<"areEffPrivilegesRecalculated">> => not BottomUpDirty,
+        <<"info">> => maps:merge(translate_creator(Creator), #{
+            <<"creationTime">> => CreationTime
+        })
     } end;
 
 translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cluster) ->
@@ -944,6 +953,7 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cl
         <<"workerVersion">> := WorkerVersion,
         <<"onepanelVersion">> := OnepanelVersion,
         <<"onepanelProxy">> := OnepanelProxy,
+        <<"areEffPrivilegesRecalculated">> := AreEffPrivilegesRecalculated,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator
     } = Cluster,
@@ -964,6 +974,7 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cl
         <<"workerVersion">> => WorkerVersion,
         <<"onepanelVersion">> => OnepanelVersion,
         <<"onepanelProxy">> => OnepanelProxy,
+        <<"areEffPrivilegesRecalculated">> => AreEffPrivilegesRecalculated,
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
         })
@@ -1040,13 +1051,12 @@ translate_cluster(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) -
 translate_atm_inventory(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
     Privileges;
 
-translate_atm_inventory(#gri{id = AtmInventoryId, aspect = instance, scope = private}, AtmInventory) ->
-    #od_atm_inventory{
-        name = Name,
-        creation_time = CreationTime,
-        creator = Creator
-    } = AtmInventory,
-
+translate_atm_inventory(#gri{id = AtmInventoryId, aspect = instance, scope = private}, #od_atm_inventory{
+    name = Name,
+    creation_time = CreationTime,
+    creator = Creator,
+    bottom_up_dirty = BottomUpDirty
+} = AtmInventory) ->
     fun(?USER(UserId)) -> #{
         <<"scope">> => <<"private">>,
         <<"name">> => Name,
@@ -1059,6 +1069,7 @@ translate_atm_inventory(#gri{id = AtmInventoryId, aspect = instance, scope = pri
         <<"effGroupList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = eff_groups}),
         <<"atmLambdaList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = atm_lambdas}),
         <<"atmWorkflowSchemaList">> => gri:serialize(#gri{type = od_atm_inventory, id = AtmInventoryId, aspect = atm_workflow_schemas}),
+        <<"areEffPrivilegesRecalculated">> => not BottomUpDirty,
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
         })
@@ -1067,6 +1078,7 @@ translate_atm_inventory(#gri{id = AtmInventoryId, aspect = instance, scope = pri
 translate_atm_inventory(#gri{id = AtmInventoryId, aspect = instance, scope = protected}, AtmInventoryData) ->
     #{
         <<"name">> := Name,
+        <<"areEffPrivilegesRecalculated">> := AreEffPrivilegesRecalculated,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator
     } = AtmInventoryData,
@@ -1077,6 +1089,7 @@ translate_atm_inventory(#gri{id = AtmInventoryId, aspect = instance, scope = pro
         <<"name">> => Name,
         <<"directMembership">> => atm_inventory_logic:has_direct_user(AtmInventory, UserId),
         <<"currentUserEffPrivileges">> => entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, AtmInventory),
+        <<"areEffPrivilegesRecalculated">> => AreEffPrivilegesRecalculated,
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
         })

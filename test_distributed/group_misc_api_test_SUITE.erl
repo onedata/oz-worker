@@ -690,7 +690,7 @@ get_eff_oz_privileges_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {Bottom, Mid, Top} = oz_test_utils:create_3_nested_groups(Config, U1),
+    {Bottom, _Mid, _Top} = oz_test_utils:create_3_nested_groups(Config, U1),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
