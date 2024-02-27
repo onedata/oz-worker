@@ -84,10 +84,14 @@ translate_value(_, #gri{aspect = TokenType}, Token) when
     serialize_token(Token);
 translate_value(_, #gri{aspect = {user_temporary_token, _}}, Token) ->
     serialize_token(Token);
-translate_value(_, #gri{type = od_space, aspect = list_marketplace}, {Entries, IsLast, _NextPageToken}) ->
-    #{<<"list">> => Entries, <<"isLast">> => IsLast};
-translate_value(_, #gri{type = od_space, aspect = list_marketplace_with_data}, {Entries, IsLast, _NextPageToken}) ->
-    #{<<"list">> => Entries, <<"isLast">> => IsLast};
+translate_value(_, #gri{type = od_space, aspect = Aspect}, {Entries, IsLast, _NextPageToken}) when
+    Aspect =:= list_marketplace;
+    Aspect =:= list_marketplace_with_data
+->
+    #{
+        <<"list">> => Entries,
+        <<"isLast">> => IsLast
+    };
 translate_value(_, #gri{type = od_space, aspect = membership_request}, RequestId) ->
     #{<<"requestId">> => RequestId};
 translate_value(_, #gri{type = od_harvester, aspect = {query, _}}, Response) ->
