@@ -253,7 +253,8 @@ end).
 
 -define(HANDLE_RESOURCE_TYPE, <<"Share">>).
 
--define(CURRENT_DATETIME(), time:seconds_to_datetime(global_clock:timestamp_seconds())).
+-define(NOW(), global_clock:timestamp_seconds()).
+-define(CURRENT_DATETIME(), time:seconds_to_datetime(?NOW())).
 
 %%%===================================================================
 %%% Test functions
@@ -612,7 +613,8 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     {HSId, _} = create_handle_service(Config, User),
-    Timestamp = ?CURRENT_DATETIME(),
+    Timestamp = ?NOW(),
+    DataTime = ?CURRENT_DATETIME(),
 
     BadMetadataExamples = [
         <<"">>,
@@ -621,6 +623,7 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
     ],
 
     lists:foreach(fun(Metadata) ->
+        % simulate a handle being added in the old system version, when metadata was not sanitized
         ShareId = datastore_key:new(),
         {ok, ShareId} = oz_test_utils:create_share(
             Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
@@ -636,8 +639,9 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
             public_handle = PublicHandle,
             metadata = Metadata,
             metadata_prefix = MetadataPrefix,
-            creation_time = Timestamp
+            timestamp = Timestamp
         }}]),
+        ozt:rpc(handles, add, [MetadataPrefix, HSId, Identifier, Timestamp]),
         Args = [
             {<<"identifier">>, oai_identifier(Config, Identifier)},
             {<<"metadataPrefix">>, MetadataPrefix}
@@ -647,7 +651,7 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
         % dc:identifiers being present in the OAI output
         ExpectedDCMetadata = expected_identifiers(Config, Identifier),
         ExpResponseContent = [
-            expected_oai_record_xml(Config, Identifier, Timestamp, ExpectedDCMetadata, MetadataPrefix)
+            expected_oai_record_xml(Config, Identifier, DataTime, ExpectedDCMetadata, MetadataPrefix)
         ],
 
         ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config))
