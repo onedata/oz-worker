@@ -15,6 +15,7 @@
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("gui/include/gui_session.hrl").
+-include("http/handlers/oai.hrl").
 
 %% @formatter:off
 -type auth() :: nobody | root | {user, UserId :: binary()} |
@@ -222,7 +223,6 @@
     }
 ).
 
--define(DC_METADATA_PREFIX, <<"oai_dc">>).
 %% Example test data for handles
 -define(DC_METADATA, <<"<?xml version=\"1.0\"?>",
     "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
@@ -261,7 +261,7 @@
         <<"handleServiceId">> => HandleServiceId,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ResourceId,
-        <<"metadataPrefix">> => ?DC_METADATA_PREFIX,
+        <<"metadataPrefix">> => ?OAI_DC_METADATA_PREFIX,
         <<"metadata">> => ?DC_METADATA
     }
 ).

@@ -112,20 +112,28 @@ encode(Metadata, AdditionalIdentifiers) ->
     %%                content=[str_utils:to_list(Value)]}]
     %%        end
     %%    end, elements()),
-    {#xmlElement{content = Content}, _} = xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]),
-    MetadataContent =
-        %% Xmerl works on strings in UTF8 (essentially the result of binary_to_list(<<_/utf8>>),
-        %% not unicode erlang-strings! However, its output IS expressed in unicode erlang-strings!
-        %% This is why we need to transform the resulting unicode strings to UTF8
-        %% strings before encoding and sending back to the client.
-        lists:map(fun
-            (#xmlElement{content = [#xmlText{value = Value} = Text]} = Element) when is_list(Value) ->
-                Element#xmlElement{content = [
-                    Text#xmlText{value = binary_to_list(str_utils:unicode_list_to_binary(Value))}
-                ]};
-            (Other) ->
-                Other
-        end, Content),
+
+    MetadataContent = try xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]) of
+        {#xmlElement{content = Content}, _} ->
+            %% Xmerl works on strings in UTF8 (essentially the result of binary_to_list(<<_/utf8>>),
+            %% not unicode erlang-strings! However, its output IS expressed in unicode erlang-strings!
+            %% This is why we need to transform the resulting unicode strings to UTF8
+            %% strings before encoding and sending back to the client.
+            lists:map(fun
+                (#xmlElement{content = [#xmlText{value = Value} = Text]} = Element) when is_list(Value) ->
+                    Element#xmlElement{content = [
+                        Text#xmlText{value = binary_to_list(str_utils:unicode_list_to_binary(Value))}
+                    ]};
+                (Other) ->
+                    Other
+            end, Content)
+    catch Class:Reason:Stacktrace ->
+        ?debug_exception(
+            "Cannot parse dublin core metadata, identifiers: ~p", [AdditionalIdentifiers],
+            Class, Reason, Stacktrace
+        ),
+        []
+    end,
 
     IdentifiersMetadata = lists:map(fun(Identifier) ->
         #xmlElement{

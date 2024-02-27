@@ -16,6 +16,7 @@
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include("http/handlers/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
@@ -188,7 +189,7 @@ create_test(Config) ->
         ?assertEqual(<<"Share">>, Handle#od_handle.resource_type),
         ?assertEqual(ShareId, Handle#od_handle.resource_id),
         ?assertEqual(?DC_METADATA, Handle#od_handle.metadata),
-        ?assertEqual(?DC_METADATA_PREFIX, Handle#od_handle.metadata_prefix),
+        ?assertEqual(?OAI_DC_METADATA_PREFIX, Handle#od_handle.metadata_prefix),
         ?assertEqual(HService, Handle#od_handle.handle_service),
         true
     end,
@@ -238,7 +239,7 @@ create_test(Config) ->
                 <<"resourceType">> => [<<"Share">>],
                 <<"resourceId">> => [fun(#{shareId := ShareId} = _Env) -> ShareId end],
                 <<"metadata">> => [?DC_METADATA],
-                <<"metadataPrefix">> => [?DC_METADATA_PREFIX]
+                <<"metadataPrefix">> => [?OAI_DC_METADATA_PREFIX]
             },
             bad_values = [
                 {<<"handleServiceId">>, <<"">>,
@@ -290,7 +291,7 @@ get_test(Config) ->
         <<"handleServiceId">> => HService,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ShareId,
-        <<"metadataPrefix">> => ?DC_METADATA_PREFIX,
+        <<"metadataPrefix">> => ?OAI_DC_METADATA_PREFIX,
         <<"metadata">> => ?DC_METADATA
     },
     {ok, HandleId} = oz_test_utils:create_handle(

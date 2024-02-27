@@ -1916,11 +1916,7 @@ create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, Metadat
                 MetadataPrefix, Metadata
             ])
     end,
-    case Result of
-        {ok, _} -> Result;
-        {error,{badrpc,{error,{bad_value_xml,BadMetadata}}}} ->
-            throw(?ERROR_BAD_VALUE_XML(BadMetadata))
-    end.
+    ?assertMatch({ok, _}, Result).
 
 
 
