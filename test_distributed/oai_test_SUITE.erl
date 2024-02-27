@@ -126,7 +126,7 @@ all() -> ?ALL([
 
     get_record_get_test,
     get_record_post_test,
-    get_dc_record_with_bad_metadata_post_test,
+    get_dc_record_with_bad_metadata_get_test,
     get_dc_record_with_bad_metadata_post_test,
 
     list_metadata_formats_get_test,
