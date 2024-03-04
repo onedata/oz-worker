@@ -195,13 +195,15 @@ create_handle_test(Config) ->
                 <<"handleServiceId">>,
                 <<"resourceType">>,
                 <<"resourceId">>,
-                <<"metadata">>
+                <<"metadata">>,
+                <<"metadataPrefix">>
             ],
             correct_values = #{
                 <<"handleServiceId">> => [HService],
                 <<"resourceType">> => [<<"Share">>],
                 <<"resourceId">> => [fun(#{shareId := ShareId} = _Env) -> ShareId end],
-                <<"metadata">> => [?DC_METADATA]
+                <<"metadata">> => [?DC_METADATA],
+                <<"metadataPrefix">> => [?OAI_DC_METADATA_PREFIX]
             },
             bad_values = [
                 {<<"handleServiceId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
@@ -214,8 +216,14 @@ create_handle_test(Config) ->
                 {<<"resourceId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"resourceId">>, 1234, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"resourceId">>, ShareIdThatAlreadyHasAHandle, ?ERROR_ALREADY_EXISTS},
+                {<<"metadataPrefix">>, <<"bad_metadata">>,
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"metadataPrefix">>, metadata_formats:supported_formats())},
                 {<<"metadata">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
+                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
+                {<<"metadata">>, ?RAND_UNICODE_STR(100001),
+                    ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"metadata">>, 100000)},
+                {<<"metadata">>, <<"null">>, ?ERROR_BAD_VALUE_XML(<<"null">>)},
+                {<<"metadata">>, <<"<a></b>">>, ?ERROR_BAD_VALUE_XML(<<"<a></b>">>)}
             ]
         }
     },

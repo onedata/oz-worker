@@ -14,6 +14,8 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include("http/handlers/oai.hrl").
+
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -3463,7 +3465,7 @@ get_record(od_handle, 7) -> {od_handle,
 get_record(od_handle, 8) -> #od_handle{
     public_handle = <<"public_handle">>,
     resource_type = <<"Share">>,
-    metadata_prefix = <<"oai_dc">>,
+    metadata_prefix = ?OAI_DC_METADATA_PREFIX,
     metadata = <<"<metadata_xml_string>">>,
     timestamp = 1459781793,
 

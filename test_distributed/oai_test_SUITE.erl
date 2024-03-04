@@ -975,9 +975,7 @@ list_records_no_records_match_error_test_base(Config, Method, IdentifiersNum, Fr
 init_per_suite(Config) ->
     ssl:start(),
     application:ensure_all_started(hackney),
-    ozt:init_per_suite([
-        {?LOAD_MODULES, [oz_test_utils]} | Config
-    ]).
+    ozt:init_per_suite(Config).
 
 init_per_testcase(_, Config) ->
     mock_handle_proxy(Config),
@@ -1395,8 +1393,32 @@ expected_identifiers(Config, HandleId) ->
 expected_admin_emails(Config) ->
     oz_test_utils:get_env(Config, admin_emails).
 
-expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedDCMetadata, MetadataPrefix) ->
-    Attributes = [
+expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata, MetadataPrefix) ->
+    {Name, Namespaces} = expected_oai_record_namespaces(MetadataPrefix),
+    Content = #xmlElement{
+        name = Name,
+        attributes = lists:map(fun({N, V}) ->
+            #xmlAttribute{name = N, value = V}
+        end, Namespaces),
+        content = ExpectedMetadata
+    },
+    #xmlElement{name = record, content = [
+        expected_oai_header_xml(Config, HandleId, Timestamp),
+        #xmlElement{
+            name = metadata,
+            content = [Content]
+        }
+    ]}.
+
+expected_oai_record_namespaces(?OAI_DC_METADATA_PREFIX) ->
+    {'oai_dc:dc', [
+        {'xmlns:oai_dc', "http:\/\/www.openarchives.org\/OAI\/2.0\/oai_dc\/"},
+        {'xmlns:dc', "http:\/\/purl.org\/dc\/elements\/1.1\/"},
+        {'xmlns:xsi', "http:\/\/www.w3.org\/2001\/XMLSchema-instance"},
+        {'xsi:schemaLocation', "http:\/\/www.openarchives.org\/OAI\/2.0\/oai_dc\/ http:\/\/www.openarchives.org\/OAI\/2.0\/oai_dc.xsd"}
+    ]};
+expected_oai_record_namespaces(?EDM_METADATA_PREFIX) ->
+    {'rdf:RDF', [
         {'xmlns:dc', "http:\/\/purl.org\/dc\/elements\/1.1\/"},
         {'xmlns:dcterms', "http:\/\/purl.org\/dc\/terms\/"},
         {'xmlns:edm', "http:\/\/www.europeana.eu\/schemas\/edm\/"},
@@ -1409,40 +1431,6 @@ expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedDCMetadata, Metadat
         {'xmlns:wgs84_pos', "http:\/\/www.w3.org\/2003\/01\/geo\/wgs84_pos#"},
         {'xmlns:crm', "http:\/\/www.cidoc-crm.org\/cidoc--crm\/"},
         {'xmlns:cc', "http:\/\/creativecommons.org\/ns#"}
-    ],
-
-
-    AttributesDC = [
-        {'xmlns:oai_dc', "http:\/\/www.openarchives.org\/OAI\/2.0\/oai_dc\/"},
-        {'xmlns:dc', "http:\/\/purl.org\/dc\/elements\/1.1\/"},
-        {'xmlns:xsi', "http:\/\/www.w3.org\/2001\/XMLSchema-instance"},
-        {'xsi:schemaLocation', "http:\/\/www.openarchives.org\/OAI\/2.0\/oai_dc\/ http:\/\/www.openarchives.org\/OAI\/2.0\/oai_dc.xsd"}
-    ],
-    Content = case MetadataPrefix of
-        ?EDM_METADATA_PREFIX ->
-            #xmlElement{
-                name = 'rdf:RDF',
-                attributes = lists:map(fun({N, V}) ->
-                    #xmlAttribute{name = N, value = V}
-                end, Attributes),
-                content = ExpectedDCMetadata
-            };
-        ?OAI_DC_METADATA_PREFIX ->
-            #xmlElement{
-                name = 'oai_dc:dc',
-                attributes = lists:map(fun({N, V}) ->
-                    #xmlAttribute{name = N, value = V}
-                end, AttributesDC),
-                content = ExpectedDCMetadata
-            }
-    end,
-
-    #xmlElement{name = record, content = [
-        expected_oai_header_xml(Config, HandleId, Timestamp),
-        #xmlElement{
-            name = metadata,
-            content = [Content]
-        }
     ]}.
 
 expected_oai_header_xml(Config, HandleId, Timestamp) ->
@@ -1471,12 +1459,8 @@ expected_oai_header_xml(Config, HandleId, Timestamp) ->
     }.
 
 %% @private
-input_metadata_for_prefix(MetadataPrefix) ->
-    Metadata = case MetadataPrefix of
-        ?OAI_DC_METADATA_PREFIX -> ?DC_METADATA_XML;
-        ?EDM_METADATA_PREFIX -> ?EDM_METADATA_XML
-    end,
-    Metadata.
+input_metadata_for_prefix(?OAI_DC_METADATA_PREFIX) -> ?DC_METADATA_XML;
+input_metadata_for_prefix(?EDM_METADATA_PREFIX) -> ?EDM_METADATA_XML.
 
 %% @private
 expected_metadata_for_prefix(Config, HandleId, ?OAI_DC_METADATA_PREFIX) ->

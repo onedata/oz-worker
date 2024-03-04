@@ -13,6 +13,7 @@
 -author("Tomasz Lichon").
 
 -include("datastore/oz_datastore_models.hrl").
+-include("http/handlers/oai.hrl").
 
 %% API
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
@@ -564,7 +565,7 @@ upgrade_record(7, Handle) ->
     {8, #od_handle{
         public_handle = PublicHandle,
         resource_type = ResourceType,
-        metadata_prefix = <<"oai_dc">>,
+        metadata_prefix = ?OAI_DC_METADATA_PREFIX,
         metadata = Metadata,
         timestamp = Timestamp,
 

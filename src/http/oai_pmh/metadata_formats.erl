@@ -12,6 +12,9 @@
 
 -include_lib("xmerl/include/xmerl.hrl").
 
+-define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
+-define(EDM_METADATA_PREFIX, <<"edm">>).
+
 %%% API
 -export([module/1, supported_formats/0, schema_URL/1,
         main_namespace/1]).
@@ -28,8 +31,8 @@
 %%%--------------------------------------------------------------------
 -spec supported_formats() -> [binary()].
 supported_formats() ->[
-    <<"oai_dc">>,
-    <<"edm">>
+    ?OAI_DC_METADATA_PREFIX,
+    ?EDM_METADATA_PREFIX
 ].
 
 %%%--------------------------------------------------------------------
@@ -38,8 +41,8 @@ supported_formats() ->[
 %%% @end
 %%%--------------------------------------------------------------------
 -spec module(MetadataPrefix :: binary()) -> atom().
-module(<<"oai_dc">>) -> dublin_core;
-module(<<"edm">>) -> europeana_data_model;
+module(?OAI_DC_METADATA_PREFIX) -> dublin_core;
+module(?EDM_METADATA_PREFIX) -> europeana_data_model;
 module(_MetadataPrefix) -> not_supported.
 
 %%%--------------------------------------------------------------------

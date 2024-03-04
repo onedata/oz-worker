@@ -47,12 +47,12 @@
     "<\/metadata>">>
 ).
 
--define(NAMESPACES, "xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\" xmlns:dcterms=\"http:\/\/purl.org\/dc\/terms\/\" xmlns:edm=\"http:\/\/www.europeana.eu\/schemas\/edm\/\" xmlns:ore=\"http:\/\/www.openarchives.org\/ore\/terms\/\" xmlns:owl=\"http:\/\/www.w3.org\/2002\/07\/owl#\" xmlns:rdf=\"http:\/\/www.w3.org\/1999\/02\/22-rdf-syntax-ns#\" xmlns:foaf=\"http:\/\/xmlns.com\/foaf\/0.1\/\" xmlns:skos=\"http:\/\/www.w3.org\/2004\/02\/skos\/core#\" xmlns:rdaGr2=\"http:\/\/rdvocab.info\/ElementsGr2\/\" xmlns:wgs84_pos=\"http:\/\/www.w3.org\/2003\/01\/geo\/wgs84_pos#\" xmlns:crm=\"http:\/\/www.cidoc-crm.org\/cidoc--crm\/\" xmlns:cc=\"http:\/\/creativecommons.org\/ns#\"").
+-define(EDM_NAMESPACES, "xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\" xmlns:dcterms=\"http:\/\/purl.org\/dc\/terms\/\" xmlns:edm=\"http:\/\/www.europeana.eu\/schemas\/edm\/\" xmlns:ore=\"http:\/\/www.openarchives.org\/ore\/terms\/\" xmlns:owl=\"http:\/\/www.w3.org\/2002\/07\/owl#\" xmlns:rdf=\"http:\/\/www.w3.org\/1999\/02\/22-rdf-syntax-ns#\" xmlns:foaf=\"http:\/\/xmlns.com\/foaf\/0.1\/\" xmlns:skos=\"http:\/\/www.w3.org\/2004\/02\/skos\/core#\" xmlns:rdaGr2=\"http:\/\/rdvocab.info\/ElementsGr2\/\" xmlns:wgs84_pos=\"http:\/\/www.w3.org\/2003\/01\/geo\/wgs84_pos#\" xmlns:crm=\"http:\/\/www.cidoc-crm.org\/cidoc--crm\/\" xmlns:cc=\"http:\/\/creativecommons.org\/ns#\"").
 
 
 -define(EDM_METADATA_XML,
     <<"<?xml version=\"1.0\"?>",
-        "<rdf:RDF ", ?NAMESPACES,">",
+        "<rdf:RDF ", ?EDM_NAMESPACES,">",
         "<edm:ProvidedCHO rdf:about=\"??????\">",
         "<dc:title xml:lang=\"en\">Metadata Example Record Tier A<\/dc:title>",
         "<dc:type>book<\/dc:type>",
@@ -71,7 +71,7 @@
         "<\/rdf:RDF>">>).
 
 -define(EDM_METADATA_WITH_IDENTIFIERS(PublicHandle), <<"<?xml version=\"1.0\"?>",
-    "<rdf:RDF ", ?NAMESPACES,">",
+    "<rdf:RDF ", ?EDM_NAMESPACES,">",
     "<edm:ProvidedCHO rdf:about=\"", PublicHandle/binary,"\">",
     "<dc:title xml:lang=\"en\">Metadata Example Record Tier A<\/dc:title>",
     "<dc:type>book<\/dc:type>",

@@ -27,7 +27,10 @@
 
 -define(METADATA_SIZE_LIMIT, 100000).
 -define(AVAILABLE_METADATA_FORMATS, metadata_formats:supported_formats()).
--define(DEFAULT_METADATA_PREFIX, <<"oai_dc">>).
+-define(DEFAULT_METADATA_PREFIX, ?OAI_DC_METADATA_PREFIX).
+
+-define(critical_section_for_handle(HandleId, Fun),
+    critical_section:run({?MODULE, HandleId}, Fun)).
 
 %%%===================================================================
 %%% API
@@ -125,7 +128,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
 
     oai_utils:sanitize_metadata(MetadataPrefix, Metadata),
     % ensure no race conditions when creating a handle for a share (only one may be created)
-    critical_section:run({create_handle, ResourceId}, fun() ->
+    ?critical_section_for_handle(ResourceId, fun() ->
         case od_share:get_handle(ResourceId) of
             {ok, undefined} -> ok;
             {ok, _HandleId} -> throw(?ERROR_ALREADY_EXISTS)
@@ -283,7 +286,7 @@ get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Handle) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
-    critical_section:run({update_timestamp, HandleId}, fun() ->
+    ?critical_section_for_handle(HandleId, fun() ->
         {ok, #document{value = #od_handle{
             handle_service = HandleService,
             timestamp = TimeStamp,
@@ -331,7 +334,7 @@ update(Req = #el_req{gri = #gri{id = HandleId, aspect = {group_privileges, Group
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
-    critical_section:run({delete, HandleId}, fun() ->
+    ?critical_section_for_handle(HandleId, fun() ->
         fun(#od_handle{
             public_handle = PublicHandle,
             handle_service = HandleService,

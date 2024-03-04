@@ -118,14 +118,14 @@ resumption_token_test(_Config) ->
     ?assertEqual(DefaultListLimit, length(List1)),
 
     %% second listing, resumption token from first listing
-    {List2, Token2} = list_once(#{resumption_token => Token1, metadata_prefix => ?OAI_DC_METADATA_PREFIX}),
+    {List2, Token2} = list_once(#{resumption_token => Token1}),
     ?assertEqual(undefined, Token2),
     ?assertEqual(infer_expected_handle_ids(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX}), List1 ++ List2),
     %% third listing, other prefix
     {List3, Token3} = list_once(#{metadata_prefix => ?EDM_METADATA_PREFIX}),
     ?assertEqual(DefaultListLimit, length(List3)),
 
-    {List4, Token4} = list_once(#{resumption_token => Token3, metadata_prefix => ?EDM_METADATA_PREFIX}),
+    {List4, Token4} = list_once(#{resumption_token => Token3}),
     ?assertEqual(undefined, Token4),
     ?assertEqual(infer_expected_handle_ids(#{metadata_prefix => ?EDM_METADATA_PREFIX}), List3 ++ List4),
     ?assertEqual(3300, length(List1) + length(List2) + length(List3) + length(List4)).
@@ -328,22 +328,20 @@ list_all() ->
 
 list_all(ListingOpts) ->
     {List, Token} = list_once(ListingOpts),
-    continue_listing(ListingOpts, Token, List).
+    continue_listing(Token, List).
 
-list_all(ListingOpts, Token, ListAll) ->
-
-    {List, NewToken} = list_once(#{metadata_prefix => maps:get(metadata_prefix, ListingOpts),
-        resumption_token => Token}),
+list_all(Token, ListAll) ->
+    {List, NewToken} = list_once(#{resumption_token => Token}),
     NewList = ListAll ++ List,
-    continue_listing(ListingOpts, NewToken, NewList) .
+    continue_listing(NewToken, NewList) .
 
 list_once(ListingOpts) ->
     ozt:rpc(handles, list, [ListingOpts]).
 
-continue_listing(ListingOpts, Token, List) ->
+continue_listing(Token, List) ->
     case Token == <<>> orelse Token == undefined of
         true -> List;
-        false -> list_all(ListingOpts, Token, List)
+        false -> list_all(Token, List)
     end.
 
 create_handle(HServiceId) ->
@@ -408,8 +406,8 @@ infer_expected_handle_ids(Opts) when is_map(Opts)->
     Until = maps:get(until, Opts, ?LATEST_TIMESTAMP),
     HService = maps:get(service_id, Opts, undefined),
     AllHandles = case HService of
-        ?SMALL_HSERVICE -> load_expected_handles(MetadataPrefix, HService);
-            _ -> load_expected_handles(MetadataPrefix)
+        undefined -> load_expected_handles(MetadataPrefix);
+            _ -> load_expected_handles(MetadataPrefix, HService)
     end,
     ListFrom = lists:dropwhile(fun(#handle_entry{timestamp = TimeStamp}) -> TimeStamp < From end, AllHandles),
     ListFromUntil = lists:takewhile(fun(#handle_entry{timestamp = TimeStamp}) -> TimeStamp =< Until end, ListFrom),
@@ -422,24 +420,17 @@ infer_all_expected_handles_ids() ->
 
 update_expected_handles(NewHandles) ->
     #handle_entry{metadata_prefix = MetadataPrefix, handle_service_id = HServiceId} = hd(NewHandles),
-    case HServiceId of
-        ?SMALL_HSERVICE -> update_expected_handles(NewHandles, ?SMALL_HSERVICE);
-        _ -> ok
-    end,
     OldHandles = load_expected_handles(MetadataPrefix),
     UpdatedHandles = lists:sort(OldHandles ++ NewHandles),
+    save_expected_handles(MetadataPrefix, HServiceId, UpdatedHandles),
     save_expected_handles(MetadataPrefix, UpdatedHandles).
 
-update_expected_handles(NewHandles, ?SMALL_HSERVICE) ->
-    #handle_entry{metadata_prefix = MetadataPrefix} = hd(NewHandles),
-    OldHandles = load_expected_handles(MetadataPrefix, ?SMALL_HSERVICE),
-    UpdatedHandles = lists:sort(OldHandles ++ NewHandles),
-    save_expected_handles(MetadataPrefix, ?SMALL_HSERVICE, UpdatedHandles).
 
 update_expected_handles_after_update(UpdatedHandle) ->
     Entry = lookup_expected_handle(UpdatedHandle#handle_entry.handle_id),
-    MetadataPrefix = UpdatedHandle#handle_entry.metadata_prefix,
+    #handle_entry{metadata_prefix = MetadataPrefix, handle_service_id = HServiceId} = UpdatedHandle,
     NewHandles = [UpdatedHandle | lists:delete(Entry, load_expected_handles(MetadataPrefix))],
+    save_expected_handles(MetadataPrefix, HServiceId, NewHandles),
     save_expected_handles(MetadataPrefix, NewHandles).
 
 
@@ -451,20 +442,23 @@ load_all_expected_handles() ->
 %% rerunning tests with --no-clean option
 load_expected_handles(MetadataPrefix) ->
     ozt:rpc(?OZ_RPC_FIRST_NODE(), node_cache, get, [MetadataPrefix, []]).
-load_expected_handles(MetadataPrefix, ?SMALL_HSERVICE) ->
+load_expected_handles(MetadataPrefix, HServiceId) ->
     ozt:rpc(?OZ_RPC_FIRST_NODE(), node_cache, get,
-        [<<MetadataPrefix/binary, <<"_small_hservice">>/binary>>, []]).
+        [<<MetadataPrefix/binary, (str_utils:to_binary(HServiceId))/binary>>, []]).
 
 
 save_expected_handles(MetadataPrefix, HandlesList) ->
     ozt:rpc(?OZ_RPC_FIRST_NODE(), node_cache, put, [MetadataPrefix, HandlesList]).
-save_expected_handles(MetadataPrefix, ?SMALL_HSERVICE, HandlesList) ->
+save_expected_handles(MetadataPrefix, HServiceId, HandlesList) ->
     ozt:rpc(?OZ_RPC_FIRST_NODE(), node_cache, put,
-        [<<MetadataPrefix/binary, <<"_small_hservice">>/binary>>, HandlesList]).
+        [<<MetadataPrefix/binary, (str_utils:to_binary(HServiceId))/binary>>, HandlesList]).
 
 
 clear_expected_handles(MetadataPrefix) ->
     ozt:rpc(?OZ_RPC_FIRST_NODE(), node_cache, clear, [MetadataPrefix]).
+clear_expected_handles(MetadataPrefix, HServiceId) ->
+    ozt:rpc(?OZ_RPC_FIRST_NODE(), node_cache, clear, [
+        <<MetadataPrefix/binary, (str_utils:to_binary(HServiceId))/binary>>]).
 
 
 %%%===================================================================
@@ -477,9 +471,13 @@ init_per_suite(Config) ->
         lists:foreach(fun(#handle_entry{handle_id = HandleID}) ->
             delete_handle(HandleID)
         end, load_all_expected_handles()),
-        ListToClear = [?OAI_DC_METADATA_PREFIX, ?EDM_METADATA_PREFIX,
-            <<"small_hservice">>, <<"oai_dc_small_hservice">>, <<"edm_small_hservice">>],
-        lists:foreach(fun(List) -> clear_expected_handles(List) end, ListToClear),
+        lists:foreach(fun(MetadataPrefix) -> clear_expected_handles(MetadataPrefix) end,
+            [?OAI_DC_METADATA_PREFIX, ?EDM_METADATA_PREFIX]),
+        lists:foreach(fun(MetadataPrefix) ->
+            lists:foreach(fun(HServiceId) ->
+                clear_expected_handles(MetadataPrefix, HServiceId)
+            end, [?FIRST_HSERVICE, ?ANOTHER_HSERVICE, ?SMALL_HSERVICE])
+        end, [?OAI_DC_METADATA_PREFIX, ?EDM_METADATA_PREFIX]),
         utils:repeat(?HANDLE_COUNT_IN_SMALL_HSERVICE, fun() -> create_handle(?SMALL_HSERVICE) end),
         utils:repeat(?TOTAL_HANDLE_COUNT - ?HANDLE_COUNT_IN_SMALL_HSERVICE,
             fun() -> create_handle(?RAND_SERVICE()) end)
