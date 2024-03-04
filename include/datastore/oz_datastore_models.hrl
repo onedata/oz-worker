@@ -189,7 +189,7 @@ end).
     last_activity = 0 :: time:seconds(),
 
     % Marks that the record's effective relations are not up to date.
-    top_down_dirty = true :: boolean()
+    top_down_dirty = false :: boolean()
 }).
 
 %% This record defines a group of users, it has: name, list of users that
@@ -234,8 +234,8 @@ end).
 
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
-    top_down_dirty = true :: boolean(),
-    bottom_up_dirty = true :: boolean()
+    top_down_dirty = false :: boolean(),
+    bottom_up_dirty = false :: boolean()
 }).
 
 %% This record defines a space that can be used by users to store their files
@@ -277,8 +277,8 @@ end).
 
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
-    top_down_dirty = true :: boolean(),
-    bottom_up_dirty = true :: boolean()
+    top_down_dirty = false :: boolean(),
+    bottom_up_dirty = false :: boolean()
 }).
 
 %% This record defines a file/directory public share
@@ -329,7 +329,7 @@ end).
     last_activity = 0 :: time:seconds(),
 
     % Marks that the record's effective relations are not up to date.
-    bottom_up_dirty = true :: boolean()
+    bottom_up_dirty = false :: boolean()
 }).
 
 -record(od_handle_service, {
@@ -350,7 +350,7 @@ end).
     creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.
-    bottom_up_dirty = true :: boolean()
+    bottom_up_dirty = false :: boolean()
 }).
 
 -record(od_handle, {
@@ -374,7 +374,7 @@ end).
     creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.
-    bottom_up_dirty = true :: boolean()
+    bottom_up_dirty = false :: boolean()
 }).
 
 -record(od_harvester, {
@@ -401,8 +401,8 @@ end).
     creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.
-    bottom_up_dirty = true :: boolean(),
-    top_down_dirty = true :: boolean()
+    bottom_up_dirty = false :: boolean(),
+    top_down_dirty = false :: boolean()
 }).
 
 %% This record defines a Onezone/Oneprovider cluster.
@@ -427,7 +427,7 @@ end).
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:cluster_privilege()]),
 
     % Marks that the record's effective relations are not up to date.
-    bottom_up_dirty = true :: boolean()
+    bottom_up_dirty = false :: boolean()
 }).
 
 -record(od_storage, {
@@ -454,8 +454,8 @@ end).
     creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.
-    bottom_up_dirty = true :: boolean(),
-    top_down_dirty = true :: boolean()
+    bottom_up_dirty = false :: boolean(),
+    top_down_dirty = false :: boolean()
 }).
 
 %% Stores information about a named token.
@@ -488,7 +488,7 @@ end).
     creator = undefined :: undefined | aai:subject(),
 
     % marks that the record's effective relations are not up to date
-    bottom_up_dirty = true :: boolean()
+    bottom_up_dirty = false :: boolean()
 }).
 
 -record(od_atm_lambda, {
