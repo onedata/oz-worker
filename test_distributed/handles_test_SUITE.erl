@@ -327,22 +327,13 @@ list_all() ->
     end, metadata_formats:supported_formats()).
 
 list_all(ListingOpts) ->
-    {List, Token} = list_once(ListingOpts),
-    continue_listing(Token, List).
-
-list_all(Token, ListAll) ->
-    {List, NewToken} = list_once(#{resumption_token => Token}),
-    NewList = ListAll ++ List,
-    continue_listing(NewToken, NewList) .
+    case list_once(ListingOpts) of
+        {List, undefined} -> List;
+        {List, ResumptionToken} -> List ++ list_all(#{resumption_token => ResumptionToken})
+    end.
 
 list_once(ListingOpts) ->
     ozt:rpc(handles, list, [ListingOpts]).
-
-continue_listing(Token, List) ->
-    case Token == <<>> orelse Token == undefined of
-        true -> List;
-        false -> list_all(Token, List)
-    end.
 
 create_handle(HServiceId) ->
     create_handle(HServiceId, ?RAND_METADATA_PREFIX()).
@@ -361,7 +352,7 @@ create_handle(HServiceId, MetadataPrefix, TimeSeconds, HandleId) ->
         handle_id = HandleId,
         handle_service_id = HServiceId
     },
-    update_expected_handles([Handle]),
+    update_expected_handles(Handle),
     Handle.
 
 update_handle(HandleId, NewTimeStamp) ->
@@ -405,10 +396,7 @@ infer_expected_handle_ids(Opts) when is_map(Opts)->
     From = maps:get(from, Opts, ?EARLIEST_TIMESTAMP),
     Until = maps:get(until, Opts, ?LATEST_TIMESTAMP),
     HService = maps:get(service_id, Opts, undefined),
-    AllHandles = case HService of
-        undefined -> load_expected_handles(MetadataPrefix);
-            _ -> load_expected_handles(MetadataPrefix, HService)
-    end,
+    AllHandles = load_expected_handles(MetadataPrefix, HService),
     ListFrom = lists:dropwhile(fun(#handle_entry{timestamp = TimeStamp}) -> TimeStamp < From end, AllHandles),
     ListFromUntil = lists:takewhile(fun(#handle_entry{timestamp = TimeStamp}) -> TimeStamp =< Until end, ListFrom),
     [HandleId || #handle_entry{handle_id = HandleId} <- ListFromUntil].
@@ -418,10 +406,10 @@ infer_all_expected_handles_ids() ->
     [HandleId || #handle_entry{handle_id = HandleId} <- HandlesList].
 
 
-update_expected_handles(NewHandles) ->
-    #handle_entry{metadata_prefix = MetadataPrefix, handle_service_id = HServiceId} = hd(NewHandles),
+update_expected_handles(NewHandle) ->
+    #handle_entry{metadata_prefix = MetadataPrefix, handle_service_id = HServiceId} = NewHandle,
     OldHandles = load_expected_handles(MetadataPrefix),
-    UpdatedHandles = lists:sort(OldHandles ++ NewHandles),
+    UpdatedHandles = lists:sort([NewHandle | OldHandles]),
     save_expected_handles(MetadataPrefix, HServiceId, UpdatedHandles),
     save_expected_handles(MetadataPrefix, UpdatedHandles).
 
@@ -441,21 +429,21 @@ load_all_expected_handles() ->
 %% expected handles are stored on the first oz-worker node to allow
 %% rerunning tests with --no-clean option
 load_expected_handles(MetadataPrefix) ->
-    ozt:rpc(?OZ_RPC_FIRST_NODE(), node_cache, get, [MetadataPrefix, []]).
+    load_expected_handles(MetadataPrefix, undefined).
 load_expected_handles(MetadataPrefix, HServiceId) ->
     ozt:rpc(?OZ_RPC_FIRST_NODE(), node_cache, get,
         [<<MetadataPrefix/binary, (str_utils:to_binary(HServiceId))/binary>>, []]).
 
 
 save_expected_handles(MetadataPrefix, HandlesList) ->
-    ozt:rpc(?OZ_RPC_FIRST_NODE(), node_cache, put, [MetadataPrefix, HandlesList]).
+    save_expected_handles(MetadataPrefix, undefined, HandlesList).
 save_expected_handles(MetadataPrefix, HServiceId, HandlesList) ->
     ozt:rpc(?OZ_RPC_FIRST_NODE(), node_cache, put,
         [<<MetadataPrefix/binary, (str_utils:to_binary(HServiceId))/binary>>, HandlesList]).
 
 
 clear_expected_handles(MetadataPrefix) ->
-    ozt:rpc(?OZ_RPC_FIRST_NODE(), node_cache, clear, [MetadataPrefix]).
+    clear_expected_handles(MetadataPrefix, undefined).
 clear_expected_handles(MetadataPrefix, HServiceId) ->
     ozt:rpc(?OZ_RPC_FIRST_NODE(), node_cache, clear, [
         <<MetadataPrefix/binary, (str_utils:to_binary(HServiceId))/binary>>]).

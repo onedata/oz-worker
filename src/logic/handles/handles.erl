@@ -205,8 +205,8 @@ pack_resumption_token(TimeSeconds, HandleId, MetadataPrefix, Limit, From, Until)
 
 
 %% @private
--spec unpack_resumption_token(resumption_token()) -> {od_handle:timestamp_seconds(), od_handle:id(),
-    limit(), od_handle:timestamp_seconds(), od_handle:timestamp_seconds()}.
+-spec unpack_resumption_token(resumption_token()) -> {od_handle:timestamp_seconds(), metadata_prefix(),
+    od_handle:id(), limit(), od_handle:timestamp_seconds(), od_handle:timestamp_seconds()}.
 unpack_resumption_token(Token) ->
     <<TimeSeconds:11/binary, 0, MetadataPrefix:11/binary, 0, Limit:5/binary, 0, From:11/binary,
         0, Until:11/binary, 0, HandleId/binary>> = Token,

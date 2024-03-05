@@ -10,10 +10,7 @@
 -module(metadata_formats).
 -author("Jakub Kudzia").
 
--include_lib("xmerl/include/xmerl.hrl").
-
--define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
--define(EDM_METADATA_PREFIX, <<"edm">>).
+-include("http/handlers/oai.hrl").
 
 %%% API
 -export([module/1, supported_formats/0, schema_URL/1,
