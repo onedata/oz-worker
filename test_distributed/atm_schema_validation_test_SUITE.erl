@@ -18,6 +18,7 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/automation/automation.hrl").
+-include_lib("ctool/include/onedata_file.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
@@ -962,7 +963,7 @@ example_invalid_data_specs_and_predefined_values() ->
         {#atm_time_series_measurement_data_spec{
             specs = lists_utils:random_sublist(atm_test_utils:example_time_series_measurement_specs())
         }, #{<<"key">> => <<"val">>}},
-        {#atm_file_data_spec{file_type = 'ANY', attributes = [file_id]}, -9},
+        {#atm_file_data_spec{file_type = 'ANY', attributes = [?attr_guid]}, -9},
         {#atm_array_data_spec{
             item_data_spec = #atm_string_data_spec{allowed_values = undefined}
         }, <<"string">>},
