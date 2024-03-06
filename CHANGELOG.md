@@ -4,6 +4,14 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.4
+
+-   **VFS-10999** Added the public "infer access token scope" endpoint,
+    which analyses the provided access token to infer the scope of data
+    access the token can be used for.
+-   **VFS-10649** Web GUI: added complex charts dashboard editor to the
+    automation GUI.
+
 ### 21.02.3
 
 -   **VFS-11231** Refactored oneclient connection pool to improve
