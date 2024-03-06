@@ -238,7 +238,8 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Cluster) ->
         onepanel_version = OnepanelVersion,
         onepanel_proxy = OnepanelProxy,
         creation_time = CreationTime,
-        creator = Creator
+        creator = Creator,
+        bottom_up_dirty = BottomUpDirty
     } = Cluster,
 
     {ok, #{
@@ -246,6 +247,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Cluster) ->
         <<"workerVersion">> => cluster_logic:version_info_to_json(WorkerVersion),
         <<"onepanelVersion">> => cluster_logic:version_info_to_json(OnepanelVersion),
         <<"onepanelProxy">> => OnepanelProxy,
+        <<"areEffPrivilegesRecalculated">> => not BottomUpDirty,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
     }};

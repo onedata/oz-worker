@@ -530,7 +530,8 @@ get(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
         shares = Shares,
         support_parameters_registry = SupportParametersRegistry,
         creation_time = CreationTime,
-        creator = Creator
+        creator = Creator,
+        bottom_up_dirty = BottomUpDirty
     } = Space,
     MarketplaceContactEmail = case can_view_marketplace_contact_email(Req, Space) of
         true -> Space#od_space.marketplace_contact_email;
@@ -545,9 +546,10 @@ get(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
         <<"marketplaceContactEmail">> => MarketplaceContactEmail,
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"supportParametersRegistry">> => SupportParametersRegistry,
+        <<"sharesCount">> => length(Shares),
+        <<"areEffPrivilegesRecalculated">> => not BottomUpDirty,
         <<"creationTime">> => CreationTime,
-        <<"creator">> => Creator,
-        <<"sharesCount">> => length(Shares)
+        <<"creator">> => Creator
     }};
 
 get(#el_req{gri = #gri{id = SpaceId, aspect = marketplace_data}}, Space = #od_space{

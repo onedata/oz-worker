@@ -255,15 +255,15 @@ get(#el_req{gri = #gri{aspect = privileges}}, _) ->
 
 get(#el_req{gri = #gri{aspect = instance, scope = private}}, AtmInventory) ->
     {ok, AtmInventory};
-get(#el_req{gri = #gri{aspect = instance, scope = protected}}, AtmInventory) ->
-    #od_atm_inventory{
-        name = Name,
-        creation_time = CreationTime,
-        creator = Creator
-    } = AtmInventory,
-
+get(#el_req{gri = #gri{aspect = instance, scope = protected}}, #od_atm_inventory{
+    name = Name,
+    creation_time = CreationTime,
+    creator = Creator,
+    bottom_up_dirty = BottomUpDirty
+}) ->
     {ok, #{
         <<"name">> => Name,
+        <<"areEffPrivilegesRecalculated">> => not BottomUpDirty,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
     }};

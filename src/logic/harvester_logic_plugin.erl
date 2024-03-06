@@ -455,14 +455,20 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Harvester) ->
     {ok, Harvester};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Harvester) ->
     #od_harvester{
-        name = Name, backend = HarvestingBackendType, endpoint = Endpoint, public = Public,
-        creator = Creator, creation_time = CreationTime
+        name = Name,
+        backend = HarvestingBackendType,
+        endpoint = Endpoint,
+        public = Public,
+        creation_time = CreationTime,
+        creator = Creator,
+        bottom_up_dirty = BottomUpDirty
     } = Harvester,
     {ok, #{
         <<"name">> => Name,
         <<"public">> => Public,
         <<"harvestingBackendType">> => HarvestingBackendType,
         <<"harvestingBackendEndpoint">> => Endpoint,
+        <<"areEffPrivilegesRecalculated">> => not BottomUpDirty,
         <<"creator">> => Creator,
         <<"creationTime">> => CreationTime
     }};
