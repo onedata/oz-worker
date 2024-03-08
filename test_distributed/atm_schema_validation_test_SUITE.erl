@@ -40,6 +40,8 @@
     atm_lambda_non_unique_result_spec_names/1,
     atm_lambda_disallowed_config_parameter_default_value/1,
     atm_lambda_disallowed_argument_default_value/1,
+    atm_lambda_invalid_config_parameter_data_spec/1,
+    atm_lambda_invalid_argument_data_spec/1,
     atm_workflow_schema_non_unique_store_ids/1,
     atm_workflow_schema_reserved_store_id/1,
     atm_workflow_schema_non_unique_lane_ids/1,
@@ -207,6 +209,46 @@ atm_lambda_disallowed_argument_default_value(_Config) ->
             end
         })
     end, example_invalid_data_specs_and_predefined_values()).
+
+
+atm_lambda_invalid_config_parameter_data_spec(_Config) ->
+    lists:foreach(fun({DataSpec, ErrorDataKeyNameSuffix}) ->
+        OffendingConfigParameterSpec = ozt_atm_lambdas:example_parameter_spec_json(DataSpec, undefined),
+        #{<<"name">> := ConfigParameterName} = OffendingConfigParameterSpec,
+        run_validation_tests(#test_spec{
+            schema_type = atm_lambda,
+            tested_data_field = <<"configParameterSpecs">>,
+            spoil_data_field_fun = fun(ConfigParameterSpecsJson, _AtmInventoryId) ->
+                {
+                    lists_utils:shuffle([OffendingConfigParameterSpec | ConfigParameterSpecsJson]),
+                    ?ERROR_BAD_DATA(
+                        <<"configParameterSpecs[", ConfigParameterName/binary, "].dataSpec", ErrorDataKeyNameSuffix/binary>>,
+                        <<"This field must be provided and must be a list containing at least one file attribute">>
+                    )
+                }
+            end
+        })
+    end, example_invalid_input_parameter_data_specs()).
+
+
+atm_lambda_invalid_argument_data_spec(_Config) ->
+    lists:foreach(fun({DataSpec, ErrorDataKeyNameSuffix}) ->
+        OffendingArgumentSpec = ozt_atm_lambdas:example_parameter_spec_json(DataSpec, undefined),
+        #{<<"name">> := ArgumentName} = OffendingArgumentSpec,
+        run_validation_tests(#test_spec{
+            schema_type = atm_lambda,
+            tested_data_field = <<"argumentSpecs">>,
+            spoil_data_field_fun = fun(ArgumentSpecsJson, _AtmInventoryId) ->
+                {
+                    lists_utils:shuffle([OffendingArgumentSpec | ArgumentSpecsJson]),
+                    ?ERROR_BAD_DATA(
+                        <<"argumentSpecs[", ArgumentName/binary, "].dataSpec", ErrorDataKeyNameSuffix/binary>>,
+                        <<"This field must be provided and must be a list containing at least one file attribute">>
+                    )
+                }
+            end
+        })
+    end, example_invalid_input_parameter_data_specs()).
 
 
 atm_workflow_schema_non_unique_store_ids(_Config) ->
@@ -954,33 +996,51 @@ spoil_data_field(#test_spec{
 
 
 %% @private
-example_invalid_data_specs_and_predefined_values() ->
-    [
-        {#atm_boolean_data_spec{}, [true, 157]},
-        {#atm_number_data_spec{integers_only = false, allowed_values = undefined}, [#{<<"obj1">> => <<"val">>}, #{<<"obj2">> => <<"val">>}]},
-        {#atm_string_data_spec{allowed_values = undefined}, 167.87},
-        {#atm_object_data_spec{}, <<"text">>},
-        {#atm_time_series_measurement_data_spec{
-            specs = lists_utils:random_sublist(atm_test_utils:example_time_series_measurement_specs())
-        }, #{<<"key">> => <<"val">>}},
-        {#atm_file_data_spec{file_type = 'ANY', attributes = [?attr_guid]}, -9},
-        {#atm_array_data_spec{
+example_invalid_data_specs_and_predefined_values() -> [
+    {#atm_boolean_data_spec{}, [true, 157]},
+    {#atm_number_data_spec{integers_only = false, allowed_values = undefined}, [#{<<"obj1">> => <<"val">>}, #{<<"obj2">> => <<"val">>}]},
+    {#atm_string_data_spec{allowed_values = undefined}, 167.87},
+    {#atm_object_data_spec{}, <<"text">>},
+    {#atm_time_series_measurement_data_spec{
+        specs = lists_utils:random_sublist(atm_test_utils:example_time_series_measurement_specs())
+    }, #{<<"key">> => <<"val">>}},
+    {#atm_file_data_spec{file_type = 'ANY', attributes = [?attr_guid]}, -9},
+    {#atm_array_data_spec{
+        item_data_spec = #atm_string_data_spec{allowed_values = undefined}
+    }, <<"string">>},
+    {#atm_array_data_spec{
+        item_data_spec = #atm_string_data_spec{allowed_values = undefined}
+    }, [123456]},
+    {#atm_array_data_spec{
+        item_data_spec = #atm_array_data_spec{
             item_data_spec = #atm_string_data_spec{allowed_values = undefined}
-        }, <<"string">>},
-        {#atm_array_data_spec{
+        }
+    }, [[<<"string">>, <<"string">>], #{<<"not-a">> => <<"list">>}]},
+    {#atm_array_data_spec{
+        item_data_spec = #atm_array_data_spec{
             item_data_spec = #atm_string_data_spec{allowed_values = undefined}
-        }, [123456]},
-        {#atm_array_data_spec{
-            item_data_spec = #atm_array_data_spec{
-                item_data_spec = #atm_string_data_spec{allowed_values = undefined}
-            }
-        }, [[<<"string">>, <<"string">>], #{<<"not-a">> => <<"list">>}]},
-        {#atm_array_data_spec{
-            item_data_spec = #atm_array_data_spec{
-                item_data_spec = #atm_string_data_spec{allowed_values = undefined}
-            }
-        }, [[<<"string">>, <<"string">>], [#{<<"not-a">> => <<"string">>}]]}
-    ].
+        }
+    }, [[<<"string">>, <<"string">>], [#{<<"not-a">> => <<"string">>}]]}
+].
+
+
+%% @private
+example_invalid_input_parameter_data_specs() -> [
+    {#atm_file_data_spec{attributes = undefined}, <<".attributes">>},
+    {#atm_file_data_spec{attributes = []}, <<".attributes">>}
+%%    {
+%%        #atm_array_data_spec{
+%%            item_data_spec = #atm_file_data_spec{attributes = []}
+%%        }, <<".itemDataSpec.attributes">>
+%%    },
+%%    {
+%%        #atm_array_data_spec{
+%%            item_data_spec = #atm_array_data_spec{
+%%                item_data_spec = #atm_file_data_spec{attributes = undefined}
+%%            }
+%%        }, <<".itemDataSpec.itemDataSpec.attributes">>
+%%    }.
+].
 
 
 %% @private
