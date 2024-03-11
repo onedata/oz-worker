@@ -212,43 +212,45 @@ atm_lambda_disallowed_argument_default_value(_Config) ->
 
 
 atm_lambda_invalid_config_parameter_data_spec(_Config) ->
-    lists:foreach(fun({DataSpec, ErrorDataKeyNameSuffix}) ->
-        OffendingConfigParameterSpec = ozt_atm_lambdas:example_parameter_spec_json(DataSpec, undefined),
-        #{<<"name">> := ConfigParameterName} = OffendingConfigParameterSpec,
+    ConfigParameterName = ?RAND_STR(),
+    DataKeyNamePrefix = <<"configParameterSpecs[", ConfigParameterName/binary, "].dataSpec">>,
+    lists:foreach(fun({DataSpec, ExpError}) ->
+        OffendingConfigParameterSpec = maps:merge(
+            ozt_atm_lambdas:example_parameter_spec_json(DataSpec, undefined),
+            #{<<"name">> => ConfigParameterName}
+        ),
         run_validation_tests(#test_spec{
             schema_type = atm_lambda,
             tested_data_field = <<"configParameterSpecs">>,
             spoil_data_field_fun = fun(ConfigParameterSpecsJson, _AtmInventoryId) ->
                 {
                     lists_utils:shuffle([OffendingConfigParameterSpec | ConfigParameterSpecsJson]),
-                    ?ERROR_BAD_DATA(
-                        <<"configParameterSpecs[", ConfigParameterName/binary, "].dataSpec", ErrorDataKeyNameSuffix/binary>>,
-                        <<"This field must be provided and must be a list containing at least one file attribute">>
-                    )
+                    ExpError
                 }
             end
         })
-    end, example_invalid_input_parameter_data_specs()).
+    end, example_invalid_input_parameter_data_specs(DataKeyNamePrefix)).
 
 
 atm_lambda_invalid_argument_data_spec(_Config) ->
-    lists:foreach(fun({DataSpec, ErrorDataKeyNameSuffix}) ->
-        OffendingArgumentSpec = ozt_atm_lambdas:example_parameter_spec_json(DataSpec, undefined),
-        #{<<"name">> := ArgumentName} = OffendingArgumentSpec,
+    ArgumentName = ?RAND_STR(),
+    DataKeyNamePrefix = <<"argumentSpecs[", ArgumentName/binary, "].dataSpec">>,
+    lists:foreach(fun({DataSpec, ExpError}) ->
+        OffendingArgumentSpec = maps:merge(
+            ozt_atm_lambdas:example_parameter_spec_json(DataSpec, undefined),
+            #{<<"name">> => ArgumentName}
+        ),
         run_validation_tests(#test_spec{
             schema_type = atm_lambda,
             tested_data_field = <<"argumentSpecs">>,
             spoil_data_field_fun = fun(ArgumentSpecsJson, _AtmInventoryId) ->
                 {
                     lists_utils:shuffle([OffendingArgumentSpec | ArgumentSpecsJson]),
-                    ?ERROR_BAD_DATA(
-                        <<"argumentSpecs[", ArgumentName/binary, "].dataSpec", ErrorDataKeyNameSuffix/binary>>,
-                        <<"This field must be provided and must be a list containing at least one file attribute">>
-                    )
+                    ExpError
                 }
             end
         })
-    end, example_invalid_input_parameter_data_specs()).
+    end, example_invalid_input_parameter_data_specs(DataKeyNamePrefix)).
 
 
 atm_workflow_schema_non_unique_store_ids(_Config) ->
@@ -394,7 +396,7 @@ atm_workflow_schema_disallowed_store_default_initial_content(_Config) ->
                 }
             end
         })
-    end, example_invalid_stores_and_default_initial_contents(DataKeyName)).
+    end, example_invalid_stores_and_default_initial_contents_with_errors(DataKeyName)).
 
 
 atm_workflow_schema_disallowed_iterated_store_type(_Config) ->
@@ -1025,33 +1027,45 @@ example_invalid_data_specs_and_predefined_values() -> [
 
 
 %% @private
-example_invalid_input_parameter_data_specs() -> [
-    {#atm_file_data_spec{attributes = undefined}, <<".attributes">>},
-    {#atm_file_data_spec{attributes = []}, <<".attributes">>}
-%%    {
-%%        #atm_array_data_spec{
-%%            item_data_spec = #atm_file_data_spec{attributes = []}
-%%        }, <<".itemDataSpec.attributes">>
-%%    },
-%%    {
-%%        #atm_array_data_spec{
-%%            item_data_spec = #atm_array_data_spec{
-%%                item_data_spec = #atm_file_data_spec{attributes = undefined}
-%%            }
-%%        }, <<".itemDataSpec.itemDataSpec.attributes">>
-%%    }.
+example_invalid_input_parameter_data_specs(DataKeyNamePrefix) -> [
+    {
+        #atm_file_data_spec{attributes = undefined},
+        exp_bad_attributes_in_file_data_spec_error(<<DataKeyNamePrefix/binary, ".attributes">>)
+    },
+    {
+        #atm_file_data_spec{attributes = []},
+        exp_bad_attributes_in_file_data_spec_error(<<DataKeyNamePrefix/binary, ".attributes">>)
+    },
+    {
+        #atm_array_data_spec{
+            item_data_spec = #atm_file_data_spec{attributes = []}
+        },
+        exp_bad_attributes_in_file_data_spec_error(<<DataKeyNamePrefix/binary, ".itemDataSpec.attributes">>)
+    },
+    {
+        #atm_array_data_spec{
+            item_data_spec = #atm_array_data_spec{
+                item_data_spec = #atm_array_data_spec{
+                    item_data_spec = #atm_file_data_spec{attributes = undefined}
+                }
+            }
+        },
+        exp_bad_attributes_in_file_data_spec_error(
+            <<DataKeyNamePrefix/binary, ".itemDataSpec.itemDataSpec.itemDataSpec.attributes">>
+        )
+    }
 ].
 
 
 %% @private
-example_invalid_stores_and_default_initial_contents(DataKeyName) ->
+example_invalid_stores_and_default_initial_contents_with_errors(DataKeyName) ->
     lists:flatmap(fun(StoreType) ->
-        example_invalid_default_initial_contents_for_store(DataKeyName, StoreType)
+        example_invalid_default_initial_contents_for_store_with_error(DataKeyName, StoreType)
     end, automation:all_store_types()).
 
 
 %% @private
-example_invalid_default_initial_contents_for_store(DataKeyName, single_value) ->
+example_invalid_default_initial_contents_for_store_with_error(DataKeyName, single_value) ->
     lists:map(fun({DataSpec, InvalidPredefinedValue}) ->
         {
             single_value,
@@ -1060,7 +1074,7 @@ example_invalid_default_initial_contents_for_store(DataKeyName, single_value) ->
             exp_disallowed_predefined_value_error(DataKeyName, DataSpec, InvalidPredefinedValue)
         }
     end, example_invalid_data_specs_and_predefined_values());
-example_invalid_default_initial_contents_for_store(DataKeyName, list) ->
+example_invalid_default_initial_contents_for_store_with_error(DataKeyName, list) ->
     lists:flatmap(fun({DataSpec, InvalidPredefinedValue}) ->
         lists:flatten([
             case is_list(InvalidPredefinedValue) of
@@ -1085,7 +1099,7 @@ example_invalid_default_initial_contents_for_store(DataKeyName, list) ->
             }
         ])
     end, example_invalid_data_specs_and_predefined_values());
-example_invalid_default_initial_contents_for_store(DataKeyName, tree_forest) ->
+example_invalid_default_initial_contents_for_store_with_error(DataKeyName, tree_forest) ->
     lists:flatmap(fun({DataSpec, InvalidPredefinedValue}) ->
         case lists:member(atm_data_spec:get_data_type(DataSpec), [atm_file_type, atm_dataset_type]) of
             true ->
@@ -1123,7 +1137,7 @@ example_invalid_default_initial_contents_for_store(DataKeyName, tree_forest) ->
                 }]
         end
     end, example_invalid_data_specs_and_predefined_values());
-example_invalid_default_initial_contents_for_store(DataKeyName, range) ->
+example_invalid_default_initial_contents_for_store_with_error(DataKeyName, range) ->
     lists:map(fun({_DataSpec, InvalidPredefinedValue}) ->
         {
             range,
@@ -1137,9 +1151,9 @@ example_invalid_default_initial_contents_for_store(DataKeyName, range) ->
         }
     end, example_invalid_data_specs_and_predefined_values());
 % time_series and audit_log stores have the default initial content implicitly set to undefined
-example_invalid_default_initial_contents_for_store(_DataKeyName, time_series) ->
+example_invalid_default_initial_contents_for_store_with_error(_DataKeyName, time_series) ->
     [];
-example_invalid_default_initial_contents_for_store(_DataKeyName, audit_log) ->
+example_invalid_default_initial_contents_for_store_with_error(_DataKeyName, audit_log) ->
     [].
 
 
@@ -1181,6 +1195,15 @@ exp_disallowed_predefined_value_error(DataKeyName, AtmDataSpec, _) ->
     ).
 
 
+%% @private
+exp_bad_attributes_in_file_data_spec_error(DataKeyName) ->
+    ?ERROR_BAD_DATA(
+        DataKeyName,
+        <<"This field must be provided and must be a list containing at least one file attribute">>
+    ).
+
+
+%% @private
 create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson) ->
     ozt_atm_lambdas:create(AtmInventoryId, #{
         <<"revision">> => #{

@@ -14,7 +14,6 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/errors.hrl").
--include_lib("ctool/include/logging.hrl"). %fixme
 
 -export([run_validation_procedures/2]).
 -export([raise_validation_error/2, raise_validation_error/3]).

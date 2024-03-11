@@ -120,7 +120,7 @@ sanitize_input_parameter_data_specs(ParameterSpecs, FieldName) ->
 
 
 %% @private
--spec sanitize_input_parameter_data_spec([atm_data_spec:record()], atm_schema_validator:data_key_name()) ->
+-spec sanitize_input_parameter_data_spec(atm_data_spec:record(), atm_schema_validator:data_key_name()) ->
     ok | no_return().
 sanitize_input_parameter_data_spec(#atm_file_data_spec{attributes = [_ | _]}, _DataKeyName) ->
     ok;
@@ -133,5 +133,7 @@ sanitize_input_parameter_data_spec(#atm_file_data_spec{attributes = _}, DataKeyN
         str_utils:format_bin("~s.attributes", [DataKeyName]),
         <<"This field must be provided and must be a list containing at least one file attribute">>
     );
+sanitize_input_parameter_data_spec(#atm_array_data_spec{item_data_spec = ItemDataSpec}, DataKeyName) ->
+    sanitize_input_parameter_data_spec(ItemDataSpec, <<DataKeyName/binary, ".itemDataSpec">>);
 sanitize_input_parameter_data_spec(_, _DataKeyName) ->
     ok.
