@@ -47,7 +47,6 @@ groups() -> [
         resumption_token_test,
         list_in_one_batch_test,
         list_all_handle_test,
-        list_handles_from_services_test,
         list_handles_with_metadata_format_test,
         list_size_elements_test,
         list_from_until_test,
@@ -55,6 +54,7 @@ groups() -> [
     ]},
 
     {sequential_tests, [sequential], [
+        list_handles_from_services_test,
         add_handle_to_service_test,
         add_handle_with_earlier_timestamp_test,
         update_handle_timestamp_test,
@@ -104,8 +104,6 @@ end).
 
 
 resumption_token_test(_Config) ->
-    DefaultListLimit = 1000,
-
     %% For every of 3300 handle metadata_prefix is drawn using ?RAND_BOOL() from
     %% ?OAI_DC_METADATA_PREFIX and ?EDM_METADATA_PREFIX. Statistically it is improbable
     %% for one prefix to come up more than about a half of 3300. Because of that each
@@ -115,20 +113,18 @@ resumption_token_test(_Config) ->
 
     %% first listing, no resumption_token
     {List1, Token1} = list_once(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX}),
-    ?assertEqual(DefaultListLimit, length(List1)),
+    ?assertEqual(?DEFAULT_LIST_LIMIT, length(List1)),
 
     %% second listing, resumption token from first listing
-    {List2, Token2} = list_once(#{resumption_token => Token1}),
-    ?assertEqual(undefined, Token2),
+    {List2, undefined} = list_once(#{resumption_token => Token1}),
     ?assertEqual(infer_expected_handle_ids(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX}), List1 ++ List2),
     %% third listing, other prefix
     {List3, Token3} = list_once(#{metadata_prefix => ?EDM_METADATA_PREFIX}),
-    ?assertEqual(DefaultListLimit, length(List3)),
+    ?assertEqual(?DEFAULT_LIST_LIMIT, length(List3)),
 
-    {List4, Token4} = list_once(#{resumption_token => Token3}),
-    ?assertEqual(undefined, Token4),
+    {List4, undefined} = list_once(#{resumption_token => Token3}),
     ?assertEqual(infer_expected_handle_ids(#{metadata_prefix => ?EDM_METADATA_PREFIX}), List3 ++ List4),
-    ?assertEqual(3300, length(List1) + length(List2) + length(List3) + length(List4)).
+    ?assertEqual(?TOTAL_HANDLE_COUNT, length(List1) + length(List2) + length(List3) + length(List4)).
 
 
 list_in_one_batch_test(_Config) ->
@@ -142,32 +138,6 @@ list_all_handle_test(_Config) ->
     ListAll = list_all(),
     ?assertEqual(?TOTAL_HANDLE_COUNT, length(ListAll)),
     ?assertEqual(lists:sort(infer_all_expected_handles_ids()), lists:sort(ListAll)).
-
-
-list_handles_from_services_test(_Config) ->
-    ListFirstHServiceDC = list_all(#{service_id => ?FIRST_HSERVICE, metadata_prefix => ?OAI_DC_METADATA_PREFIX}),
-    ListFirstHServiceEDM = list_all(#{service_id => ?FIRST_HSERVICE, metadata_prefix => ?EDM_METADATA_PREFIX}),
-
-    ListAnotherHServiceDC = list_all(#{service_id => ?ANOTHER_HSERVICE, metadata_prefix => ?OAI_DC_METADATA_PREFIX}),
-    ListAnotherHServiceEDM = list_all(#{service_id => ?ANOTHER_HSERVICE, metadata_prefix => ?EDM_METADATA_PREFIX}),
-
-    ListOptsSmallHServiceDC = #{service_id => ?SMALL_HSERVICE, metadata_prefix => ?OAI_DC_METADATA_PREFIX},
-    ListOptsSmallHServiceEDM = #{service_id => ?SMALL_HSERVICE, metadata_prefix => ?EDM_METADATA_PREFIX},
-    ListSmallHServiceDC = list_all(ListOptsSmallHServiceDC),
-    ListSmallHServiceEDM = list_all(ListOptsSmallHServiceEDM),
-
-    ?assertEqual(infer_expected_handle_ids(ListOptsSmallHServiceDC), ListSmallHServiceDC),
-    ?assertEqual(infer_expected_handle_ids(ListOptsSmallHServiceEDM), ListSmallHServiceEDM),
-    ?assertEqual(lists:sort(infer_expected_handle_ids(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})),
-        lists:sort(ListFirstHServiceDC ++ ListAnotherHServiceDC ++ ListSmallHServiceDC)),
-    ?assertEqual(lists:sort(infer_expected_handle_ids(#{metadata_prefix => ?EDM_METADATA_PREFIX})),
-        lists:sort(ListFirstHServiceEDM ++ ListAnotherHServiceEDM ++ ListSmallHServiceEDM)),
-    ?assertEqual(
-        ?TOTAL_HANDLE_COUNT,
-        length(ListFirstHServiceDC) + length(ListFirstHServiceEDM)
-            + length(ListAnotherHServiceDC) + length(ListAnotherHServiceEDM)
-            + length(ListSmallHServiceDC) + length(ListSmallHServiceEDM)
-    ).
 
 
 list_handles_with_metadata_format_test(_Config) ->
@@ -242,6 +212,46 @@ list_from_until_test(_Config) ->
     ?checkListing(#{from => FromOutside, until => UntilOutside, metadata_prefix => MetadataPrefix}).
 
 
+list_handles_from_services_test(_Config) ->
+    %% change default_handle_list_limit limit to check if listing with resumption
+    %% token is from correct tree
+    ozt:set_env(default_handle_list_limit, 500),
+    ListOptsFirstHServiceDC = #{service_id => ?FIRST_HSERVICE, metadata_prefix => ?OAI_DC_METADATA_PREFIX},
+    ListOptsFirstHServiceEDM = #{service_id => ?FIRST_HSERVICE, metadata_prefix => ?EDM_METADATA_PREFIX},
+    ListFirstHServiceDC = list_all(ListOptsFirstHServiceDC),
+    ListFirstHServiceEDM = list_all(ListOptsFirstHServiceEDM),
+
+    ?assertEqual(infer_expected_handle_ids(ListOptsFirstHServiceDC), ListFirstHServiceDC),
+    ?assertEqual(infer_expected_handle_ids(ListOptsFirstHServiceEDM), ListFirstHServiceEDM),
+
+    ListOptsAnotherHServiceDC = #{service_id => ?ANOTHER_HSERVICE, metadata_prefix => ?OAI_DC_METADATA_PREFIX},
+    ListOptsAnotherHServiceEDM = #{service_id => ?ANOTHER_HSERVICE, metadata_prefix => ?EDM_METADATA_PREFIX},
+    ListAnotherHServiceDC = list_all(ListOptsAnotherHServiceDC),
+    ListAnotherHServiceEDM = list_all(ListOptsAnotherHServiceEDM),
+
+    ?assertEqual(infer_expected_handle_ids(ListOptsAnotherHServiceDC), ListAnotherHServiceDC),
+    ?assertEqual(infer_expected_handle_ids(ListOptsAnotherHServiceEDM), ListAnotherHServiceEDM),
+
+    ListOptsSmallHServiceDC = #{service_id => ?SMALL_HSERVICE, metadata_prefix => ?OAI_DC_METADATA_PREFIX},
+    ListOptsSmallHServiceEDM = #{service_id => ?SMALL_HSERVICE, metadata_prefix => ?EDM_METADATA_PREFIX},
+    ListSmallHServiceDC = list_all(ListOptsSmallHServiceDC),
+    ListSmallHServiceEDM = list_all(ListOptsSmallHServiceEDM),
+
+    ?assertEqual(infer_expected_handle_ids(ListOptsSmallHServiceDC), ListSmallHServiceDC),
+    ?assertEqual(infer_expected_handle_ids(ListOptsSmallHServiceEDM), ListSmallHServiceEDM),
+
+    ?assertEqual(lists:sort(infer_expected_handle_ids(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})),
+        lists:sort(ListFirstHServiceDC ++ ListAnotherHServiceDC ++ ListSmallHServiceDC)),
+    ?assertEqual(lists:sort(infer_expected_handle_ids(#{metadata_prefix => ?EDM_METADATA_PREFIX})),
+        lists:sort(ListFirstHServiceEDM ++ ListAnotherHServiceEDM ++ ListSmallHServiceEDM)),
+    ?assertEqual(
+        ?TOTAL_HANDLE_COUNT,
+        length(ListFirstHServiceDC) + length(ListFirstHServiceEDM)
+            + length(ListAnotherHServiceDC) + length(ListAnotherHServiceEDM)
+            + length(ListSmallHServiceDC) + length(ListSmallHServiceEDM)
+    ).
+
+
 add_handle_to_service_test(_Config) ->
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     BeforeAddingHService1 = length(list_all(
@@ -268,9 +278,9 @@ add_handle_to_service_test(_Config) ->
 add_handle_with_earlier_timestamp_test(_Config) ->
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     HServiceId = ?RAND_SERVICE(),
-    FirstHandle = hd(list_all(#{metadata_prefix => MetadataPrefix})),
+    FirstHandleId = hd(list_all(#{metadata_prefix => MetadataPrefix})),
     RandNumber = ?RAND_INT(1, 10000),
-    TimeStamp = lookup_timestamp(FirstHandle) - RandNumber,
+    TimeStamp = lookup_timestamp(FirstHandleId) - RandNumber,
     [#handle_entry{handle_id = HandleId3}, #handle_entry{handle_id = HandleId2},
         #handle_entry{handle_id = HandleId1}] =
         lists:map(fun(Number) ->
@@ -285,15 +295,21 @@ add_handle_with_earlier_timestamp_test(_Config) ->
 
 
 update_handle_timestamp_test(_Config) ->
+    %% change default_handle_list_limit limit to check if listing after getting
+    %% resumption token is from correct tree
+    ozt:set_env(default_handle_list_limit, 500),
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    HandleId = lists:last(list_all(#{service_id => ?FIRST_HSERVICE, metadata_prefix => MetadataPrefix})),
+    ListOpts = #{service_id => ?FIRST_HSERVICE, metadata_prefix => MetadataPrefix},
+    HandleId = lists:last(list_all(ListOpts)),
     NewTimeStamp = ?EARLIEST_TIMESTAMP - ?RAND_INT(1, 10000),
 
     % after updating timestamp to ?EARLIEST_TIMESTAMP - ?RAND_INT(1, 10000) this handle will be at the beginning
     update_handle(HandleId, NewTimeStamp),
+    AllAfterUpdate = list_all(ListOpts),
+    ?assertEqual(HandleId, hd(AllAfterUpdate)),
 
-    EarliestHID = hd(list_all(#{service_id => ?FIRST_HSERVICE, metadata_prefix => MetadataPrefix})),
-    ?assertEqual(EarliestHID, HandleId).
+    %% list all after update from ?FIRST_HSERVICE
+    ?assertEqual(infer_expected_handle_ids(ListOpts), AllAfterUpdate).
 
 
 delete_handle_from_service_test(_Config) ->
@@ -334,7 +350,8 @@ list_all(ListingOpts) ->
     end.
 
 list_once(ListingOpts) ->
-    ozt:rpc(handles, list, [ListingOpts]).
+    {Handles, Token} =  ozt:rpc(handles, list, [ListingOpts]),
+    {[HandleId || {_, _, HandleId} <- Handles], Token}.
 
 create_handle(HServiceId) ->
     create_handle(HServiceId, ?RAND_METADATA_PREFIX()).
@@ -409,18 +426,17 @@ infer_all_expected_handles_ids() ->
 
 update_expected_handles(NewHandle) ->
     #handle_entry{metadata_prefix = MetadataPrefix, handle_service_id = HServiceId} = NewHandle,
-    OldHandles = load_expected_handles(MetadataPrefix),
-    UpdatedHandles = lists:sort([NewHandle | OldHandles]),
-    save_expected_handles(MetadataPrefix, HServiceId, UpdatedHandles),
-    save_expected_handles(MetadataPrefix, UpdatedHandles).
+    save_expected_handles(MetadataPrefix, HServiceId, lists:sort([NewHandle |
+        load_expected_handles(MetadataPrefix, HServiceId)])),
+    save_expected_handles(MetadataPrefix, lists:sort([NewHandle | load_expected_handles(MetadataPrefix)])).
 
 
 update_expected_handles_after_update(UpdatedHandle) ->
     Entry = lookup_expected_handle(UpdatedHandle#handle_entry.handle_id),
     #handle_entry{metadata_prefix = MetadataPrefix, handle_service_id = HServiceId} = UpdatedHandle,
-    NewHandles = [UpdatedHandle | lists:delete(Entry, load_expected_handles(MetadataPrefix))],
-    save_expected_handles(MetadataPrefix, HServiceId, NewHandles),
-    save_expected_handles(MetadataPrefix, NewHandles).
+    save_expected_handles(MetadataPrefix, HServiceId, [UpdatedHandle |
+        lists:delete(Entry, load_expected_handles(MetadataPrefix, HServiceId))]),
+    save_expected_handles(MetadataPrefix, [UpdatedHandle | lists:delete(Entry, load_expected_handles(MetadataPrefix))]).
 
 
 load_all_expected_handles() ->
@@ -471,6 +487,7 @@ init_per_suite(Config) ->
         utils:repeat(?TOTAL_HANDLE_COUNT - ?HANDLE_COUNT_IN_SMALL_HSERVICE,
             fun() -> create_handle(?RAND_SERVICE()) end)
     end).
+
 
 end_per_suite(_Config) ->
     ok.

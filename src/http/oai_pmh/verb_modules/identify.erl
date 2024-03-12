@@ -87,15 +87,15 @@ get_response(<<"baseURL">>, _Args) ->
 get_response(<<"protocolVersion">>, _Args) ->
     ?PROTOCOL_VERSION;
 get_response(<<"earliestDatestamp">>, _Args) ->
-    Datestamp = case handles:get_earliest_timestamp() of
+    Timestamp = case handles:get_earliest_timestamp() of
         undefined ->
             % return the current time as the lower bound for OAI-PMH queries,
             % but subtract a bit to avoid race conditions when a handle has just been created
             od_handle:current_timestamp() - 3600;
         TimeSeconds ->
-            time:seconds_to_datetime(TimeSeconds)
+            TimeSeconds
     end,
-    oai_utils:serialize_datestamp(Datestamp);
+    oai_utils:serialize_datestamp(time:seconds_to_datetime(Timestamp));
 get_response(<<"deletedRecord">>, _Args) ->
     <<"no">>;
 get_response(<<"granularity">>, _Args) ->

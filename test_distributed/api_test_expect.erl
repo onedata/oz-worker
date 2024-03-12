@@ -447,7 +447,7 @@ public_handle(rest, Id, HandleData) ->
     };
 public_handle(gs, Id, HandleData) ->
     ExpPublicHandle = expected_public_handle(Id),
-    ?OK_MAP(#{
+    ?OK_MAP_CONTAINS(#{
         <<"gri">> => gri:serialize(?GRI(od_handle, Id, instance, public)),
         <<"publicHandle">> => ExpPublicHandle,
         <<"metadataPrefix">> => maps:get(<<"metadataPrefix">>, HandleData),

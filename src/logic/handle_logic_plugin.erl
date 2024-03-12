@@ -215,8 +215,7 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
-    {ok, list_all_handles()};
-
+    {ok, [HId || {_TimeStamp, _HService, HId} <- list_all_handles()]};
 get(#el_req{gri = #gri{aspect = privileges}}, _) ->
     {ok, #{
         <<"member">> => privileges:handle_member(),
@@ -699,13 +698,13 @@ auth_by_privilege(UserId, HandleOrId, Privilege) ->
 
 
 %% @private
--spec list_all_handles() -> [od_handle:id()].
+-spec list_all_handles() -> [handles:listing_entry()].
 list_all_handles() ->
     lists:flatmap(fun(MetadataPrefix) ->
         list_all_handles(#{metadata_prefix => MetadataPrefix})
     end, oai_metadata:supported_formats()).
 
--spec list_all_handles(handles:listing_opts()) -> [od_handle:id()].
+-spec list_all_handles(handles:listing_opts()) -> [handles:listing_entry()].
 list_all_handles(ListingOpts) ->
     case handles:list(ListingOpts) of
         {List, undefined} -> List;
