@@ -295,10 +295,8 @@ get_test(Config) ->
     ?assertMatch(#{<<"atmLambdas">> := [], <<"atmWorkflowSchemas">> := []}, GetInventoryWithOpGs(<<"20.02.0-rc18">>)),
     ?assertMatch(#{<<"atmLambdas">> := [], <<"atmWorkflowSchemas">> := []}, GetInventoryWithOpGs(<<"21.02.0-alpha21">>)),
     ?assertMatch(#{<<"atmLambdas">> := [], <<"atmWorkflowSchemas">> := []}, GetInventoryWithOpGs(<<"21.02.2">>)),
-    ?assertMatch(#{<<"atmLambdas">> := [], <<"atmWorkflowSchemas">> := []}, GetInventoryWithOpGs(<<"21.02.3">>)),
-    ?assertMatch(#{<<"atmLambdas">> := [], <<"atmWorkflowSchemas">> := []}, GetInventoryWithOpGs(<<"21.02.4">>)),
-    ?assertMatch(#{<<"atmLambdas">> := [_], <<"atmWorkflowSchemas">> := [_]}, GetInventoryWithOpGs(<<"21.02.5">>)),
-    ?assertMatch(#{<<"atmLambdas">> := [_], <<"atmWorkflowSchemas">> := [_]}, GetInventoryWithOpGs(<<"21.02.6">>)),
+    ?assertMatch(#{<<"atmLambdas">> := [_], <<"atmWorkflowSchemas">> := [_]}, GetInventoryWithOpGs(<<"21.02.3">>)),
+    ?assertMatch(#{<<"atmLambdas">> := [_], <<"atmWorkflowSchemas">> := [_]}, GetInventoryWithOpGs(<<"21.02.4">>)),
     ?assertMatch(#{<<"atmLambdas">> := [_], <<"atmWorkflowSchemas">> := [_]}, GetInventoryWithOpGs(<<"22.02.1">>)).
 
 
