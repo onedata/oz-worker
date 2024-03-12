@@ -184,7 +184,8 @@ list_handles_with_metadata_format_test(_Config) ->
 
 list_size_elements_test(_Config) ->
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    {List, undefined} = list_once(#{limit => 5, metadata_prefix => MetadataPrefix}),
+    {List, ResumptionToken} = list_once(#{limit => 5, metadata_prefix => MetadataPrefix}),
+    ?assert(is_binary(ResumptionToken)),
     ?assertEqual(lists:sublist(infer_expected_handle_ids(#{metadata_prefix => MetadataPrefix}), 5), List),
     ?assertEqual(5, length(List)).
 

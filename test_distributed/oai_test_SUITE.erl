@@ -40,6 +40,10 @@
 
     list_identifiers_get_test/1,
     list_identifiers_post_test/1,
+    list_identifiers_resumption_token_get_test/1,
+    list_identifiers_resumption_token_post_test/1,
+    list_all_identifiers_no_resumption_token_get_test/1,
+    list_all_identifiers_no_resumption_token_post_test/1,
     selective_list_identifiers1_get_test/1,
     selective_list_identifiers1_post_test/1,
     selective_list_identifiers2_get_test/1,
@@ -57,6 +61,10 @@
 
     list_records_get_test/1,
     list_records_post_test/1,
+    list_records_resumption_token_get_test/1,
+    list_records_resumption_token_post_test/1,
+    list_all_records_no_resumption_token_get_test/1,
+    list_all_records_no_resumption_token_post_test/1,
     selective_list_records1_get_test/1,
     selective_list_records1_post_test/1,
     selective_list_records2_get_test/1,
@@ -133,6 +141,11 @@ all() -> ?ALL([
     list_metadata_formats_post_test,
     list_identifiers_get_test,
     list_identifiers_post_test,
+
+    list_identifiers_resumption_token_get_test,
+    list_identifiers_resumption_token_post_test,
+    list_all_identifiers_no_resumption_token_get_test,
+    list_all_identifiers_no_resumption_token_post_test,
     selective_list_identifiers1_get_test,
     selective_list_identifiers1_post_test,
     selective_list_identifiers2_get_test,
@@ -150,6 +163,10 @@ all() -> ?ALL([
 
     list_records_get_test,
     list_records_post_test,
+    list_records_resumption_token_get_test,
+    list_records_resumption_token_post_test,
+    list_all_records_no_resumption_token_get_test,
+    list_all_records_no_resumption_token_post_test,
     selective_list_records1_get_test,
     selective_list_records1_post_test,
     selective_list_records2_get_test,
@@ -296,6 +313,18 @@ list_identifiers_get_test(Config) ->
 list_identifiers_post_test(Config) ->
     list_identifiers_test_base(Config, post, 10, undefined, undefined).
 
+list_identifiers_resumption_token_get_test(Config) ->
+    list_resumption_token_test_base(Config, get, identifiers, 15, 10).
+
+list_identifiers_resumption_token_post_test(Config) ->
+    list_resumption_token_test_base(Config, post, identifiers, 15, 10).
+
+list_all_identifiers_no_resumption_token_get_test(Config) ->
+    list_no_resumption_token_test_base(Config, get, identifiers, 10).
+
+list_all_identifiers_no_resumption_token_post_test(Config) ->
+    list_no_resumption_token_test_base(Config, post, identifiers, 10).
+
 selective_list_identifiers1_get_test(Config) ->
     list_identifiers_test_base(Config, get, 10, 0, 5).
 
@@ -343,6 +372,18 @@ list_records_get_test(Config) ->
 
 list_records_post_test(Config) ->
     list_records_test_base(Config, post, 10, undefined, undefined).
+
+list_records_resumption_token_get_test(Config) ->
+    list_resumption_token_test_base(Config, get, records, 15, 10).
+
+list_records_resumption_token_post_test(Config) ->
+    list_resumption_token_test_base(Config, post, records, 15, 10).
+
+list_all_records_no_resumption_token_get_test(Config) ->
+    list_no_resumption_token_test_base(Config, get, records, 10).
+
+list_all_records_no_resumption_token_post_test(Config) ->
+    list_no_resumption_token_test_base(Config, post, records, 10).
 
 selective_list_records1_get_test(Config) ->
     list_records_test_base(Config, get, 10, 1, 7).
@@ -708,6 +749,65 @@ list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffs
     ),
     list_with_time_offsets_test_base(Config, Method, identifiers, Identifiers,
         TimeOffsets, BeginTime, FromOffset, UntilOffset, MetadataPrefix).
+
+
+list_resumption_token_test_base(Config, Method, ListedObjects, IdentifiersNum, Limit) ->
+    BeginTime = ?CURRENT_DATETIME(),
+    TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
+    MetadataPrefix = ?RAND_METADATA_PREFIX(),
+    Metadata = input_metadata_for_prefix(MetadataPrefix),
+    Identifiers = setup_test_for_harvesting(
+        Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
+    ),
+
+    Args = prepare_harvesting_args(MetadataPrefix, Limit),
+
+    BuildExpectedObject = fun(HandleId, TimeOffset) ->
+        Timestamp = increase_timestamp(BeginTime, TimeOffset),
+        case ListedObjects of
+            identifiers ->
+                expected_oai_header_xml(Config, HandleId, Timestamp);
+            records ->
+                ExpectedMetadata = expected_metadata_for_prefix(Config, HandleId, MetadataPrefix),
+                expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata, MetadataPrefix)
+        end
+    end,
+    All = lists:zip(Identifiers, TimeOffsets),
+    IdsAndTimestamps = lists:sublist(All, Limit),
+
+    ResumptionToken = check_response_with_resumption_token(BuildExpectedObject, IdsAndTimestamps,
+        ListedObjects, Args, Method, Config, true),
+    ?assert(is_binary(ResumptionToken)),
+    ArgsToken = add_to_args(<<"resumptionToken">>, ResumptionToken, []),
+    ?assertEqual(undefined, check_response_with_resumption_token(BuildExpectedObject,
+        lists:subtract(All, IdsAndTimestamps), ListedObjects, ArgsToken, Method, Config, false)).
+
+
+list_no_resumption_token_test_base(Config, Method, ListedObjects, IdentifiersNum) ->
+    BeginTime = ?CURRENT_DATETIME(),
+    TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
+    MetadataPrefix = ?RAND_METADATA_PREFIX(),
+    Metadata = input_metadata_for_prefix(MetadataPrefix),
+    Identifiers = setup_test_for_harvesting(
+        Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
+    ),
+
+    Args = prepare_harvesting_args(MetadataPrefix, undefined),
+
+    BuildExpectedObject = fun(HandleId, TimeOffset) ->
+        Timestamp = increase_timestamp(BeginTime, TimeOffset),
+        case ListedObjects of
+            identifiers ->
+                expected_oai_header_xml(Config, HandleId, Timestamp);
+            records ->
+                ExpectedMetadata = expected_metadata_for_prefix(Config, HandleId, MetadataPrefix),
+                expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata, MetadataPrefix)
+        end
+    end,
+    All = lists:zip(Identifiers, TimeOffsets),
+    ?assertEqual(undefined, check_response_with_resumption_token(BuildExpectedObject, All, ListedObjects,
+        Args, Method, Config, false)).
+
 
 list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     FromOffset, UntilOffset, IdentifiersToBeModified) ->
@@ -1105,6 +1205,54 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
     ok = test_utils:mock_validate_and_unload(Nodes, oai_handler),
     Check.
 
+check_oai_request_resumption_token(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Config) ->
+    URL = get_oai_pmh_URL(),
+    Path = get_oai_pmh_api_path(),
+    Args2 = case Verb of
+        none -> Args;
+        _ -> add_verb(Verb, Args)
+    end,
+    ResponseDate = ?CURRENT_DATETIME(),
+    ExpectedBody = expected_body(ExpResponseContent, ResponseType, Args2, ResponseDate),
+
+    QueryString = prepare_querystring(Args2),
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_new(Nodes, oai_handler, [passthrough]),
+    test_utils:mock_expect(Nodes, oai_handler, generate_response_date_element,
+        fun() ->
+            {responseDate, list_to_binary(to_datestamp(ResponseDate))}
+        end
+    ),
+    Request = case Method of
+        get -> #{
+            method => get,
+            url => URL,
+            path => str_utils:format_bin("~s?~s", [Path, QueryString])
+        };
+        post -> #{
+            method => post,
+            url => URL,
+            path => Path,
+            body => QueryString,
+            headers => ?CONTENT_TYPE_HEADER
+        }
+    end,
+    ArgsMap = #{
+        request => Request,
+        expect => #{
+            code => Code,
+            body => ExpectedBody,
+            headers => {contains, ?RESPONSE_CONTENT_TYPE_HEADER}
+        }
+    },
+    {ok, RespCode, RespHeaders, RespBody} = rest_test_utils:perform_rest_call(Config, ArgsMap),
+    ?assert(rest_test_utils:check_performed_rest_call(ArgsMap, RespCode, RespHeaders, RespBody)),
+    ok = test_utils:mock_validate_and_unload(Nodes, oai_handler),
+    case re:run(binary_to_list(RespBody), "<resumptionToken>(.*?)</resumptionToken>",
+        [{capture, all_but_first, binary}]) of
+        {match, [ResumptionToken]} -> ResumptionToken;
+        nomatch -> undefined
+    end.
 
 %%%===================================================================
 %%% Internal functions
@@ -1317,6 +1465,10 @@ unmock_handle_proxy(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_unload(Nodes, handle_proxy_client).
 
+prepare_harvesting_args(MetadataPrefix, Limit) ->
+    Args = add_to_args(<<"metadataPrefix">>, MetadataPrefix, []),
+    add_to_args(<<"limit">>, Limit, Args).
+
 prepare_harvesting_args(MetadataPrefix, From, Until) ->
     prepare_harvesting_args(MetadataPrefix, From, Until, undefined).
 
@@ -1479,4 +1631,24 @@ expected_metadata_for_prefix(Config, HandleId, ?EDM_METADATA_PREFIX) ->
     MetadataXml = ?EDM_METADATA_WITH_IDENTIFIERS(PublicHandle),
     {#xmlElement{content = Metadata}, _} = xmerl_scan:string(binary_to_list(MetadataXml)),
     Metadata.
+
+%% @private
+check_response_with_resumption_token(BuildExpectedObject, Expected, ListedObjects,
+    Args, Method, Config, ResumptionToken) ->
+    ExpectedBase = lists:map(fun({HandleId, TimeOffset}) ->
+        BuildExpectedObject(HandleId, TimeOffset)
+    end, Expected),
+    ExpResponseContent = case ResumptionToken of
+        true -> ExpectedBase ++ [#xmlElement{
+            name = resumptionToken,
+            content = [#xmlText{value = str_utils:to_list(<<"">>)}]
+        }];
+        false -> ExpectedBase
+    end,
+    Verb = case ListedObjects of
+        identifiers -> <<"ListIdentifiers">>;
+        records -> <<"ListRecords">>
+    end,
+    check_oai_request_resumption_token(200, Verb, Args, Method, ExpResponseContent,
+        binary_to_atom(Verb), Config).
 

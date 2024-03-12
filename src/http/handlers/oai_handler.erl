@@ -204,6 +204,12 @@ generate_response(Verb, Args) ->
 generate_required_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
         case Module:get_response(ElementName, Args) of
+            #oai_listing_result{
+                records = Elements,
+                resumption_token = ResumptionToken
+            } ->
+                Records = [{ElementName, Element} || Element <- Elements],
+                Records ++ [{<<"resumptionToken">>, ResumptionToken}];
             Elements when is_list(Elements) ->
                 [{ElementName, Element} || Element <- Elements];
             Element -> oai_utils:ensure_list({ElementName, Element})

@@ -38,7 +38,7 @@ required_arguments() -> [<<"metadataPrefix">>].
 %%% @end
 %%%-------------------------------------------------------------------
 -spec optional_arguments() -> [binary()].
-optional_arguments() -> [<<"from">>, <<"until">>, <<"set">>].
+optional_arguments() -> [<<"from">>, <<"until">>, <<"set">>, <<"limit">>].
 
 %%%-------------------------------------------------------------------
 %%% @doc
@@ -71,14 +71,22 @@ optional_response_elements() -> [].
 %%%-------------------------------------------------------------------
 -spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"record">>, Args) ->
-    MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
-    From = proplists:get_value(<<"from">>, Args),
-    Until = proplists:get_value(<<"until">>, Args),
-    SetSpec = proplists:get_value(<<"set">>, Args),
+    {MetadataPrefix, ListingOpts} = case proplists:get_value(<<"resumptionToken">>, Args) of
+        undefined -> {
+            proplists:get_value(<<"metadataPrefix">>, Args),
+            oai_utils:pack_listing_opts_from_args(Args)
+        };
+        ResumptionToken -> {
+            handles:get_metadata_prefix_from_resumption_token(ResumptionToken),
+            #{
+                resumption_token => ResumptionToken
+            }
+        }
+    end,
     HarvestingFun = fun(HandleId, Handle) ->
         OaiId = oai_utils:oai_identifier_encode(HandleId),
         oai_utils:build_oai_record(MetadataPrefix, OaiId, Handle)
     end,
-    oai_utils:harvest(MetadataPrefix, From, Until, SetSpec, HarvestingFun).
+    oai_utils:harvest(ListingOpts, HarvestingFun).
 
 %%% TODO VFS-7454 support resumptionToken

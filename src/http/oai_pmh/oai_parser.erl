@@ -31,7 +31,7 @@ process_and_validate_args(Args) ->
     process_and_validate_verb_specific_arguments(Module, Args2),
     case oai_utils:is_harvesting(Verb) of
         false -> ok;
-        true -> parse_harvesting_arguments(Args)
+        true -> parse_harvesting_arguments(Args2)
     end,
     {Verb, Args2}.
 
@@ -122,8 +122,16 @@ parse_required_arguments(Module, ArgsList) ->
 %%%-------------------------------------------------------------------
 -spec parse_harvesting_arguments([proplists:property()]) -> ok.
 parse_harvesting_arguments(ArgsList) ->
-    parse_harvesting_metadata_prefix(ArgsList),
-    parse_harvesting_datestamps(ArgsList).
+    case proplists:get_value(<<"resumptionToken">>, ArgsList) of
+        undefined ->
+            parse_harvesting_metadata_prefix(ArgsList),
+            parse_harvesting_datestamps(ArgsList);
+        _ ->
+            case length(ArgsList) of
+                1 -> ok;
+                _ -> throw({exclusiveResumptionTokenRequired, ArgsList})
+            end
+    end.
 
 %%%-------------------------------------------------------------------
 %%% @private

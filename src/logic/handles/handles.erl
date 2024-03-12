@@ -14,10 +14,11 @@
 -author("Katarzyna Such").
 
 -include("datastore/oz_datastore_models.hrl").
+-include("http/handlers/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([add/4, delete/4, update_timestamp/5]).
--export([list/1, get_earliest_timestamp/0]).
+-export([list/1, get_earliest_timestamp/0, get_metadata_prefix_from_resumption_token/1]).
 
 % index() consists of 2 parts:
 %  1) timestamp (in seconds) - so that links would be sorted by time.
@@ -50,7 +51,7 @@
 
 % Uses null for separator to ensure alphabetical sorting
 -define(INDEX_SEP, 0).
--define(DEFAULT_LIST_LIMIT, 1000).
+-define(TOKEN_SEP, ",").
 -define(MAX_LIST_LIMIT, 1000).
 -define(MAX_TIMESTAMP, 99999999999).
 
@@ -190,35 +191,38 @@ decode_index(Index) ->
     {binary_to_integer(TimeSeconds), HandleId}.
 
 
+-spec get_metadata_prefix_from_resumption_token(resumption_token()) -> metadata_prefix().
+get_metadata_prefix_from_resumption_token(ResumptionToken) ->
+    {_, MetadataPrefix, _, _, _, _} = unpack_resumption_token(ResumptionToken),
+    MetadataPrefix.
+
+
 %% @private
 -spec pack_resumption_token(od_handle:timestamp_seconds(), od_handle:id(), metadata_prefix(), limit(),
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> resumption_token().
 pack_resumption_token(TimeSeconds, HandleId, MetadataPrefix, Limit, From, Until) ->
-    FormattedTimeSeconds = str_utils:format_bin("~11..0B", [TimeSeconds]),
-    FormattedMetadataPrefix = str_utils:format_bin("~11..0s", [MetadataPrefix]),
-    FormattedLimit = str_utils:format_bin("~5..0B", [Limit]),
-    FormattedFrom = str_utils:format_bin("~11..0B", [utils:ensure_defined(From, 0)]),
-    FormattedUntil = str_utils:format_bin("~11..0B", [Until]),
-    <<FormattedTimeSeconds/binary, ?INDEX_SEP, FormattedMetadataPrefix/binary, ?INDEX_SEP,
-        FormattedLimit/binary, ?INDEX_SEP, FormattedFrom/binary, ?INDEX_SEP, FormattedUntil/binary,
-        ?INDEX_SEP, HandleId/binary>>.
+    FormattedLimit = integer_to_binary(utils:ensure_defined(Limit, ?MAX_LIST_LIMIT)),
+    FormattedFrom = integer_to_binary(utils:ensure_defined(From, 0)),
+    FormattedUntil = integer_to_binary(utils:ensure_defined(Until, ?MAX_TIMESTAMP)),
+    <<(integer_to_binary(TimeSeconds))/binary, ?TOKEN_SEP, MetadataPrefix/binary, ?TOKEN_SEP,
+        FormattedLimit/binary, ?TOKEN_SEP, FormattedFrom/binary, ?TOKEN_SEP, FormattedUntil/binary,
+        ?TOKEN_SEP, HandleId/binary>>.
 
 
 %% @private
 -spec unpack_resumption_token(resumption_token()) -> {od_handle:timestamp_seconds(), metadata_prefix(),
     od_handle:id(), limit(), od_handle:timestamp_seconds(), od_handle:timestamp_seconds()}.
 unpack_resumption_token(Token) ->
-    <<TimeSeconds:11/binary, 0, MetadataPrefix:11/binary, 0, Limit:5/binary, 0, From:11/binary,
-        0, Until:11/binary, 0, HandleId/binary>> = Token,
-    {binary_to_integer(TimeSeconds), binary:replace(MetadataPrefix, <<"0">>, <<"">>, [global]), HandleId,
-        binary_to_integer(Limit), binary_to_integer(From), binary_to_integer(Until)}.
+    [TimeSeconds, MetadataPrefix, Limit, From, Until, HandleId] = binary:split(Token, [<<",">>], [global]),
+    {binary_to_integer(TimeSeconds), MetadataPrefix, HandleId, binary_to_integer(Limit),
+        binary_to_integer(From), binary_to_integer(Until)}.
 
 
 %% @private
 -spec build_result_from_reversed_listing(datastore:fold_acc(), limit(), metadata_prefix(),
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> {[od_handle:id()], resumption_token()}.
 build_result_from_reversed_listing(ReversedEntries, Limit, MetadataPrefix, From, Until) ->
-    NewToken = case length(ReversedEntries) < Limit orelse Limit < ?MAX_LIST_LIMIT of
+    NewToken = case length(ReversedEntries) < Limit of
         true -> undefined;
         false ->
             {TimeSeconds, HandleId} = hd(ReversedEntries),

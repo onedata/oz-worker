@@ -18,7 +18,7 @@
 
 
 %% API
--export([check_rest_call/2]).
+-export([check_rest_call/2, perform_rest_call/2, check_performed_rest_call/4]).
 -export([compare_maps/2, contains_map/2]).
 
 
@@ -36,119 +36,57 @@ end).
 ]).
 
 
-%%--------------------------------------------------------------------
-%% Performs a REST call and check the output if it matches the expected.
-%% Returns true when id does and mismatch details when it does not, so
-%% it is strongly recommended to wrap the call to this function in an assertion.
-%% Args map looks like following:
-%% #{
-%%    request => #{
-%%      method => % Optional, default: get
-%%          get
-%%          post
-%%          put
-%%          patch
-%%          delete
-%%      path => % Mandatory
-%%          [<<"/parts">>, <<"/to/be">>, <<"/concatenated">>],
-%%      url => % Optional, default: {@link oz_test_utils:oz_rest_url/2}
-%%          <<"oz-domain-with:port/and/api/prefix">>
-%%      headers => % Optional, default: content-type=app/json
-%%          [{<<"key">>, <<"value">>}]
-%%      body => % Optional, default: <<"">>
-%%          <<"body content">>,
-%%      auth => % Optional, default: undefined
-%%          nobody
-%%          root
-%%          {user, <<"uid">>}
-%%          {user, <<"uid">>, <<"token">>}
-%%          {provider, <<"id">>}
-%%          {provider, <<"id">>, <<"token">>}
-%%          % Uses the same auth as provider, but indicates the service type
-%%          (in the auth header a.k.a. service access token)
-%%          {op_panel, <<"id">>}
-%%          {op_panel, <<"id">>, <<"token">>}
-%%          undefined
-%%      opts => % Optional, default: []
-%%          [http_client_option]
-%%    },
-%%    expect => #{
-%%      code => % Optional, by default not validated
-%%          200
-%%      headers => % Optional, by def. not validated
-%%          #{<<"key">> => <<"value">>}
-%%          fun(Headers) -> boolean() % Verification function
-%%          {contains, #{<<"key">> => <<"value">>}} % checks if given
-%%              (key, value) pair is included in response headers
-%%      body => % Optional, by default not validated
-%%          <<"binary">>
-%%          #{}
-%%          fun(Body) -> boolean() % Verification function
-%%          {check_type, binary}
-%%          {contains, #{}}
-%%      % Specifying a map here will cause validation of JSON content-wise
-%%      % (if the JSON object specified by map is equal to the one in reply)
-%%    }
-%% }
-%%--------------------------------------------------------------------
-check_rest_call(Config, ArgsMap) ->
-    try
-        RequestMap = maps:get(request, ArgsMap),
-        ExpectMap = maps:get(expect, ArgsMap),
+perform_rest_call(Config, ArgsMap) ->
+    RequestMap = maps:get(request, ArgsMap),
+    ReqMethod = maps:get(method, RequestMap, get),
+    ReqPath = case maps:get(path, RequestMap) of
+        Bin1 when is_binary(Bin1) ->
+            [Bin1];
+        List ->
+            List
+    end,
+    ReqHeaders = case maps:get(headers, RequestMap, undefined) of
+        undefined ->
+            #{?HDR_CONTENT_TYPE => <<"application/json">>};
+        Map2 when is_map(Map2) ->
+            Map2
+    end,
+    ReqBody = case maps:get(body, RequestMap, undefined) of
+        undefined ->
+            <<"">>;
+        Bin3 when is_binary(Bin3) ->
+            Bin3;
+        Map3 when is_map(Map3) ->
+            json_utils:encode(Map3)
+    end,
+    ReqOpts = maps:get(opts, RequestMap, []),
+    ReqURL = maps:get(url, RequestMap, oz_test_utils:oz_rest_url(Config, <<"">>)),
 
-        ReqMethod = maps:get(method, RequestMap, get),
-        ReqPath = case maps:get(path, RequestMap) of
-            Bin1 when is_binary(Bin1) ->
-                [Bin1];
-            List ->
-                List
-        end,
-        ReqHeaders = case maps:get(headers, RequestMap, undefined) of
-            undefined ->
-                #{?HDR_CONTENT_TYPE => <<"application/json">>};
-            Map2 when is_map(Map2) ->
-                Map2
-        end,
-        ReqBody = case maps:get(body, RequestMap, undefined) of
-            undefined ->
-                <<"">>;
-            Bin3 when is_binary(Bin3) ->
-                Bin3;
-            Map3 when is_map(Map3) ->
-                json_utils:encode(Map3)
-        end,
-        ReqOpts = maps:get(opts, RequestMap, []),
-        ReqURL = maps:get(url, RequestMap, oz_test_utils:oz_rest_url(Config, <<"">>)),
-
-        ExpCode = maps:get(code, ExpectMap, undefined),
-        ExpHeaders = maps:get(headers, ExpectMap, undefined),
-        ExpBody = maps:get(body, ExpectMap, undefined),
-
-        URL = str_utils:join_binary([ReqURL | ReqPath]),
-        ReqAuth = maps:get(auth, RequestMap, undefined),
-        HeadersPlusAuth = case ReqAuth of
-            undefined ->
-                ReqHeaders;
-            nobody ->
-                ReqHeaders;
-            {provider, ProviderId} ->
-                Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
-                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token));
-            {provider, _, Token} ->
-                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token));
-            {op_panel, ProviderId} ->
-                Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
-                ServiceToken = tokens:add_oneprovider_service_indication(?OP_PANEL, Token),
-                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(ServiceToken));
-            {op_panel, _, Token} ->
-                ServiceToken = tokens:add_oneprovider_service_indication(?OP_PANEL, Token),
-                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(ServiceToken));
-            {user, UserId} ->
-                Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(user, UserId)),
-                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token));
-            {user, _, Token} ->
-                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token))
-        end,
+    URL = str_utils:join_binary([ReqURL | ReqPath]),
+    ReqAuth = maps:get(auth, RequestMap, undefined),
+    HeadersPlusAuth = case ReqAuth of
+        undefined ->
+            ReqHeaders;
+        nobody ->
+            ReqHeaders;
+        {provider, ProviderId} ->
+            Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
+            maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token));
+        {provider, _, Token} ->
+            maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token));
+        {op_panel, ProviderId} ->
+            Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
+            ServiceToken = tokens:add_oneprovider_service_indication(?OP_PANEL, Token),
+            maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(ServiceToken));
+        {op_panel, _, Token} ->
+            ServiceToken = tokens:add_oneprovider_service_indication(?OP_PANEL, Token),
+            maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(ServiceToken));
+        {user, UserId} ->
+            Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(user, UserId)),
+            maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token));
+        {user, _, Token} ->
+            maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token))
+    end,
 
 %%        %% Useful for debug
 %%        ct:pal("[Req]: ~n"
@@ -160,20 +98,29 @@ check_rest_call(Config, ArgsMap) ->
 %%            ReqMethod, URL, HeadersPlusAuth, ReqBody, [{pool, false}, ReqOptsPlusAuth]
 %%        ]),
 
-        CaCerts = oz_test_utils:gui_ca_certs(Config),
-        SslOpts = proplists:get_value(ssl_options, ReqOpts, []),
-        CompleteOpts = [
-            {ssl_options, [{cacerts, CaCerts} | SslOpts]} |
-            proplists:delete(ssl_options, ReqOpts)
-        ],
+    CaCerts = oz_test_utils:gui_ca_certs(Config),
+    SslOpts = proplists:get_value(ssl_options, ReqOpts, []),
+    CompleteOpts = [
+        {ssl_options, [{cacerts, CaCerts} | SslOpts]} |
+        proplists:delete(ssl_options, ReqOpts)
+    ],
 
-        {ok, RespCode, RespHeaders, RespBody} = http_client:request(
-            ReqMethod,
-            URL,
-            HeadersPlusAuth,
-            ReqBody,
-            ?CONNECT_OPTS ++ CompleteOpts
-        ),
+    http_client:request(
+        ReqMethod,
+        URL,
+        HeadersPlusAuth,
+        ReqBody,
+        ?CONNECT_OPTS ++ CompleteOpts
+    ).
+
+
+check_performed_rest_call(ArgsMap, RespCode, RespHeaders, RespBody) ->
+    try
+        ExpectMap = maps:get(expect, ArgsMap),
+        ExpCode = maps:get(code, ExpectMap, undefined),
+        ExpHeaders = maps:get(headers, ExpectMap, undefined),
+        ExpBody = maps:get(body, ExpectMap, undefined),
+
         % Check response code if specified
         case ExpCode of
             undefined ->
@@ -335,6 +282,86 @@ check_rest_call(Config, ArgsMap) ->
             false
     end.
 
+%%--------------------------------------------------------------------
+%% Performs a REST call and check the output if it matches the expected.
+%% Returns true when id does and mismatch details when it does not, so
+%% it is strongly recommended to wrap the call to this function in an assertion.
+%% Args map looks like following:
+%% #{
+%%    request => #{
+%%      method => % Optional, default: get
+%%          get
+%%          post
+%%          put
+%%          patch
+%%          delete
+%%      path => % Mandatory
+%%          [<<"/parts">>, <<"/to/be">>, <<"/concatenated">>],
+%%      url => % Optional, default: {@link oz_test_utils:oz_rest_url/2}
+%%          <<"oz-domain-with:port/and/api/prefix">>
+%%      headers => % Optional, default: content-type=app/json
+%%          [{<<"key">>, <<"value">>}]
+%%      body => % Optional, default: <<"">>
+%%          <<"body content">>,
+%%      auth => % Optional, default: undefined
+%%          nobody
+%%          root
+%%          {user, <<"uid">>}
+%%          {user, <<"uid">>, <<"token">>}
+%%          {provider, <<"id">>}
+%%          {provider, <<"id">>, <<"token">>}
+%%          % Uses the same auth as provider, but indicates the service type
+%%          (in the auth header a.k.a. service access token)
+%%          {op_panel, <<"id">>}
+%%          {op_panel, <<"id">>, <<"token">>}
+%%          undefined
+%%      opts => % Optional, default: []
+%%          [http_client_option]
+%%    },
+%%    expect => #{
+%%      code => % Optional, by default not validated
+%%          200
+%%      headers => % Optional, by def. not validated
+%%          #{<<"key">> => <<"value">>}
+%%          fun(Headers) -> boolean() % Verification function
+%%          {contains, #{<<"key">> => <<"value">>}} % checks if given
+%%              (key, value) pair is included in response headers
+%%      body => % Optional, by default not validated
+%%          <<"binary">>
+%%          #{}
+%%          fun(Body) -> boolean() % Verification function
+%%          {check_type, binary}
+%%          {contains, #{}}
+%%      % Specifying a map here will cause validation of JSON content-wise
+%%      % (if the JSON object specified by map is equal to the one in reply)
+%%    }
+%% }
+%%--------------------------------------------------------------------
+check_rest_call(Config, ArgsMap) ->
+    try
+        {ok, RespCode, RespHeaders, RespBody} = perform_rest_call(Config, ArgsMap),
+        check_performed_rest_call(ArgsMap, RespCode, RespHeaders, RespBody)
+    catch
+        % Something wrong, return details. If assert is used, the test will fail
+        % and properly display the point of failure.
+        throw:{Type, Actual, Expected, {Code, Headers, Body}} ->
+            BodyMap = try json_utils:decode(Body) catch _:_ -> Body end,
+            {
+                Type,
+                {got, Actual},
+                {expected, Expected},
+                {response, {Code, Headers, BodyMap}}
+            };
+        % Unexpected error
+        Type:Message:Stacktrace ->
+            ct:pal(
+                "~p:check_rest_call failed with unexpected result - ~p:~p~n"
+                "Stacktrace: ~s", [
+                    ?MODULE, Type, Message, lager:pr_stacktrace(Stacktrace)
+                ]),
+            false
+    end.
+
 
 compare_headers(ActualHeadersInput, ExpectedHeadersInput) ->
     ExpectedMap = normalize_headers(ExpectedHeadersInput),
@@ -444,6 +471,12 @@ compare_xml(#xmlAttribute{name = N, value = V}, #xmlAttribute{name = N, value = 
     true;
 compare_xml(#xmlAttribute{name = _N1, value = _V1}, #xmlAttribute{name = _N2, value = _V2}) ->
     false;
+compare_xml(#xmlElement{name = resumptionToken, content = #xmlText{value = undefined}},
+    #xmlElement{name = resumptionToken, content = #xmlText{value = undefined}}) -> true;
+compare_xml(#xmlElement{name = resumptionToken, content = [#xmlText{value = V1}]},
+    #xmlElement{name = resumptionToken, content = [#xmlText{value = _V2}]}) ->
+    %% checks if resumption token is non empty string
+    is_list(V1) andalso length(V1) > 0;
 compare_xml(#xmlElement{name = Name, attributes = _, content = _},
     #xmlElement{name = Name, attributes = [], content = []}) -> true;
 compare_xml(#xmlElement{name = Name, attributes = RespAttributes, content = RespContent},

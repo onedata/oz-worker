@@ -44,6 +44,11 @@
 -define(CANNOT_DISSEMINATE_FORMAT(Description),
     ?OAI_ERROR(cannotDisseminateFormat, Description)).
 
+-define(EXCLUSIVE_RESUMPTION_TOKEN_REQUIRED, ?EXCLUSIVE_RESUMPTION_TOKEN_REQUIRED(
+    <<"Resumption token must be an exclusive argument.">>)).
+-define(EXCLUSIVE_RESUMPTION_TOKEN_REQUIRED(Description),
+    ?OAI_ERROR(exclusiveResumptionTokenRequired, Description)).
+
 -define(ID_DOES_NOT_EXIST, ?ID_DOES_NOT_EXIST(
     <<"The value of the identifier argument is unknown "
     "or illegal in this repository.">>)).
