@@ -117,7 +117,7 @@ deserialize_datestamp(Datestamp) ->
     end.
 
 
--spec pack_listing_opts_from_args([proplists:property()]) -> handles:listing_opts().
+-spec pack_listing_opts_from_args([proplists:property()]) -> listing_opts().
 pack_listing_opts_from_args(Args) ->
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
     Limit = case proplists:get_value(<<"limit">>, Args) of
@@ -151,7 +151,7 @@ pack_listing_opts_from_args(Args) ->
 %%% Throws with noRecordsMatch if nothing is harvested.
 %%% @end
 %%%--------------------------------------------------------------------
--spec harvest(handles:listing_opts(), function()) -> oai_response().
+-spec harvest(listing_opts(), function()) -> oai_response().
 harvest(ListingOpts, HarvestingFun) ->
     {Identifiers, NewResumptionToken} = handles:list(ListingOpts),
     HarvestedMetadata = lists:map(fun(Identifier) ->
