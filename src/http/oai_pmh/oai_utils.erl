@@ -21,8 +21,8 @@
 -export([serialize_datestamp/1, deserialize_datestamp/1, is_harvesting/1,
     verb_to_module/1, sanitize_metadata/2, is_earlier_or_equal/2,
     dates_have_the_same_granularity/2, to_xml/1, ensure_list/1,
-    pack_listing_opts_from_args/1, harvest/2, oai_identifier_encode/1,
-    oai_identifier_decode/1, build_oai_header/2, build_oai_record/3
+    request_arguments_to_handle_listing_opts/1, harvest/2, oai_identifier_encode/1,
+    oai_identifier_decode/1, build_oai_header/2, build_oai_record/2
 ]).
 -export([get_handle/1]).
 
@@ -65,9 +65,10 @@ build_oai_header(OaiId, Handle) ->
         set_spec = Handle#od_handle.handle_service
     }.
 
--spec build_oai_record(MetadataPrefix :: binary(), oai_id(), od_handle:record()) ->
+-spec build_oai_record(oai_id(), od_handle:record()) ->
     #oai_record{}.
-build_oai_record(MetadataPrefix, OaiId, Handle) ->
+build_oai_record(OaiId, Handle) ->
+    MetadataPrefix = Handle#od_handle.metadata_prefix,
     Mod = metadata_formats:module(MetadataPrefix),
     #oai_record{
         header = build_oai_header(OaiId, Handle),
@@ -117,29 +118,36 @@ deserialize_datestamp(Datestamp) ->
     end.
 
 
--spec pack_listing_opts_from_args([proplists:property()]) -> handles:listing_opts().
-pack_listing_opts_from_args(Args) ->
-    MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
-    Limit = case proplists:get_value(<<"limit">>, Args) of
-        undefined -> ?DEFAULT_LIST_LIMIT;
-        LimitBin -> binary_to_integer(LimitBin)
-    end,
-    From = case deserialize_datestamp(proplists:get_value(<<"from">>, Args)) of
-        undefined -> undefined;
-        FromDeserialized -> time:datetime_to_seconds(FromDeserialized)
-    end,
-    Until = case deserialize_datestamp(proplists:get_value(<<"until">>, Args)) of
-        undefined -> undefined;
-        UntilDeserialized -> time:datetime_to_seconds(UntilDeserialized)
-    end,
-    SetSpec = proplists:get_value(<<"set">>, Args),
-    #{
-        from => From,
-        until => Until,
-        service_id => SetSpec,
-        limit => Limit,
-        metadata_prefix => MetadataPrefix
-    }.
+-spec request_arguments_to_handle_listing_opts([proplists:property()]) -> handles:listing_opts().
+request_arguments_to_handle_listing_opts(Args) ->
+    case proplists:get_value(<<"resumptionToken">>, Args) of
+        undefined ->
+            MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
+            Limit = case proplists:get_value(<<"limit">>, Args) of
+                undefined -> ?DEFAULT_LIST_LIMIT;
+                LimitBin -> binary_to_integer(LimitBin)
+            end,
+            From = case deserialize_datestamp(proplists:get_value(<<"from">>, Args)) of
+                undefined -> undefined;
+                FromDeserialized -> time:datetime_to_seconds(FromDeserialized)
+            end,
+            Until = case deserialize_datestamp(proplists:get_value(<<"until">>, Args)) of
+                undefined -> undefined;
+                UntilDeserialized -> time:datetime_to_seconds(UntilDeserialized)
+            end,
+            SetSpec = proplists:get_value(<<"set">>, Args),
+            #{
+                from => From,
+                until => Until,
+                service_id => SetSpec,
+                limit => Limit,
+                metadata_prefix => MetadataPrefix
+            };
+        ResumptionToken ->
+            #{
+                resumption_token => ResumptionToken
+            }
+    end.
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -173,15 +181,10 @@ harvest(ListingOpts, HarvestingFun) ->
             end,
             throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
         _ ->
-            case NewResumptionToken of
-                undefined ->
-                    HarvestedMetadata;
-                _ ->
-                    #oai_listing_result{
-                        records = HarvestedMetadata,
-                        resumption_token = NewResumptionToken
-                    }
-            end
+            #oai_listing_result{
+                batch = HarvestedMetadata,
+                resumption_token = NewResumptionToken
+            }
     end.
 
 
@@ -312,12 +315,22 @@ to_xml(#oai_about{value = Value}) ->
         name = about,
         content = ensure_list(to_xml(Value))
     };
+to_xml(#oai_listing_result{batch = Batch, resumption_token = ResumptionToken}) ->
+    to_xml(Batch) ++ [#xmlElement{
+        name = resumptionToken,
+        content = [#xmlText{value = case ResumptionToken of
+            undefined -> <<>>;
+            _ -> ResumptionToken
+        end}]
+    }];
 to_xml({Name, Content}) ->
     to_xml({Name, Content, []});
 to_xml([{Name, Content}]) ->
     [to_xml({Name, Content})];
 to_xml([{Name, Content} | Rest]) ->
     [to_xml({Name, Content}) | ensure_list(to_xml(Rest))];
+to_xml([Element = #oai_header{}]) ->
+    [to_xml(Element)];
 to_xml({Name, ContentList = [{_, _} | _], Attributes}) ->
     #xmlElement{
         name = ensure_atom(Name),
@@ -329,7 +342,7 @@ to_xml({Name, ContentList = [{_, _} | _], Attributes}) ->
 to_xml({Name, Content, Attributes}) ->
     #xmlElement{
         name = ensure_atom(Name),
-        content = [to_xml(Content)],
+        content = ensure_list(to_xml(Content)),
         attributes = lists:map(fun({N, V}) ->
             #xmlAttribute{name = ensure_atom(N), value = str_utils:to_list(V)}
         end, Attributes)

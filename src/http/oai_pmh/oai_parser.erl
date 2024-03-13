@@ -12,6 +12,8 @@
 
 -include("http/handlers/oai.hrl").
 
+-include_lib("ctool/include/logging.hrl").
+
 %% API
 -export([process_and_validate_args/1]).
 
@@ -122,15 +124,11 @@ parse_required_arguments(Module, ArgsList) ->
 %%%-------------------------------------------------------------------
 -spec parse_harvesting_arguments([proplists:property()]) -> ok.
 parse_harvesting_arguments(ArgsList) ->
-    case proplists:get_value(<<"resumptionToken">>, ArgsList) of
+    case parse_harvesting_resumption_token(ArgsList) of
         undefined ->
             parse_harvesting_metadata_prefix(ArgsList),
             parse_harvesting_datestamps(ArgsList);
-        _ ->
-            case length(ArgsList) of
-                1 -> ok;
-                _ -> throw({exclusiveResumptionTokenRequired, ArgsList})
-            end
+        ok -> ok
     end.
 
 %%%-------------------------------------------------------------------
@@ -174,6 +172,25 @@ parse_harvesting_datestamps(ArgsList) ->
                         true -> ok;
                         false -> throw({wrong_datestamps_relation, From, Until})
                     end
+            end
+    end.
+
+%%%-------------------------------------------------------------------
+%%% @private
+%%% @doc
+%%% Parse harvesting resumption token.
+%%% Throws suitable error if resumption token is not an exclusive argument.
+%%% @end
+%%%-------------------------------------------------------------------
+-spec parse_harvesting_resumption_token([proplists:property()]) -> ok | undefined.
+parse_harvesting_resumption_token(ArgsList) ->
+    case proplists:get_value(<<"resumptionToken">>, ArgsList) of
+        undefined ->
+            undefined;
+        _ ->
+            case length(ArgsList) of
+                1 -> ok;
+                _ -> throw({exclusiveResumptionTokenRequired, ArgsList})
             end
     end.
 
@@ -238,7 +255,11 @@ is_valid_time({H, M, S}) ->
 illegal_arguments_do_not_exist(Module, ArgsList) ->
     KnownArgumentsSet = sets:from_list(Module:required_arguments() ++
         Module:optional_arguments() ++
-        Module:exclusive_arguments()),
+        Module:exclusive_arguments() ++
+        % this argument is needed for the resumptionToken test to prevent
+        % the creation of 1000 handles, as it consumes time.
+        [<<"limit">>]),
+
     ExistingArgumentsSet = sets:from_list(proplists:get_keys(ArgsList)),
     case sets:is_subset(ExistingArgumentsSet, KnownArgumentsSet) of
         true -> ok;

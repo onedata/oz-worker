@@ -59,7 +59,7 @@
 }).
 
 -record(oai_listing_result, {
-    records :: [oai_record()] | [oai_header()],
+    batch :: [oai_record()] | [oai_header()],
     resumption_token :: handles:resumption_token()
 }).
 
