@@ -1275,12 +1275,11 @@ bad_supplementary_lambdas_data_test(_Config) ->
             kv_utils:update_with([<<"revision">>, <<"supplementaryAtmLambdas">>], fun(SupplementaryAtmLambdas) ->
                 maps:map(fun(_AtmLambdaId, LambdaReferences) ->
                     maps:map(fun(_RevisionNumber, RevisionData) ->
-                        % include ONLY the checksum field and drop the actual lambda data
                         kv_utils:update_with([<<"revision">>, <<"atmLambdaRevision">>], fun
-                            (#{<<"_data">> := Data}) ->  % schemaFormatVersion == 3 dump
-                                #{<<"_data">> => maps:with([<<"checksum">>], Data)};
-                            (AtmLambdaRevisionData) ->
-                                maps:with([<<"checksum">>], AtmLambdaRevisionData)
+                            (#{<<"_data">> := _Data}) ->  % schemaFormatVersion == 3 dump
+                                #{<<"_data">> => #{<<"invalid data">> => <<"whatever">>}};
+                            (_AtmLambdaRevisionData) ->
+                                #{<<"invalid data">> => <<"whatever">>}
                         end, RevisionData)
                     end, LambdaReferences)
                 end, SupplementaryAtmLambdas)
@@ -1540,39 +1539,14 @@ recreate_atm_workflow_schema_from_dump_test_base(#recreate_test_spec{
 
         DumpedOriginalAtmWorkflowSchema = ozt_atm_workflow_schemas:dump_to_json(OriginalAtmWorkflowSchemaId, RevisionNumber),
 
-        % randomly change the checksums to invalid ones in supplementary lambda dumps;
-        % this should not impact the lambda deduplication logic as it should depend on
-        % checksums calculated from actual lambda specs, not the ones provided by the user
-        DumpedOriginalAtmWorkflowSchemaTweakedChecksums = kv_utils:update_with(
-            [<<"revision">>, <<"supplementaryAtmLambdas">>],
-            fun(SupplementaryAtmLambdas) ->
-                maps:map(fun(_AtmLambdaId, LambdaReferences) ->
-                    maps:map(fun(_RevisionNumber, RevisionData) ->
-                        case ?RAND_BOOL() of
-                            true ->
-                                RevisionData;
-                            false ->
-                                kv_utils:update_with([<<"revision">>, <<"atmLambdaRevision">>], fun
-                                    (#{<<"_data">> := Data} = AtmLambdaRevisionDbJson) ->  % schemaFormatVersion == 3 dump
-                                        AtmLambdaRevisionDbJson#{<<"_data">> => maps:put(<<"checksum">>, ?RAND_STR(), Data)};
-                                    (AtmLambdaRevisionData) ->
-                                        maps:put(<<"checksum">>, ?RAND_STR(), AtmLambdaRevisionData)
-                                end, RevisionData)
-                        end
-                    end, LambdaReferences)
-                end, SupplementaryAtmLambdas)
-            end,
-            DumpedOriginalAtmWorkflowSchema
-        ),
-
         DuplicateAtmWorkflowSchemaId = case AccCurrentAtmWorkflowSchemaId of
             undefined ->
                 ozt_atm_workflow_schemas:create(
-                    ?USER(CreatingUser), TargetAtmInventoryId, DumpedOriginalAtmWorkflowSchemaTweakedChecksums
+                    ?USER(CreatingUser), TargetAtmInventoryId, DumpedOriginalAtmWorkflowSchema
                 );
             _ ->
                 ozt_atm_workflow_schemas:update(
-                    ?USER(CreatingUser), AccCurrentAtmWorkflowSchemaId, DumpedOriginalAtmWorkflowSchemaTweakedChecksums
+                    ?USER(CreatingUser), AccCurrentAtmWorkflowSchemaId, DumpedOriginalAtmWorkflowSchema
                 ),
                 AccCurrentAtmWorkflowSchemaId
         end,

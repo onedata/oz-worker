@@ -262,9 +262,7 @@ build_lambda_search_ctx(OriginalAtmLambdaId, RevisionNumber, AtmLambdaData) ->
                         #{<<"atmLambdaRevision">> := AtmLambdaRevisionJson} ->
                             jsonable_record:from_json(AtmLambdaRevisionJson, atm_lambda_revision)
                     end,
-                    % we do not want to depend on the checksums provided in the JSON dumps,
-                    % as they may be tinkered with
-                    atm_lambda_revision:calculate_checksum(AtmLambdaRevision)
+                    AtmLambdaRevision#atm_lambda_revision.checksum
                 catch _:_ ->
                     throw(?ERROR_BAD_DATA(
                         <<"supplementaryAtmLambdas[", OriginalAtmLambdaId/binary, "].revision.atmLambdaRevision">>,

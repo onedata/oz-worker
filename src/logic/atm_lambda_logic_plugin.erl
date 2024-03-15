@@ -552,10 +552,7 @@ revision_data_to_lambda_revision(SanitizedRevisionData) ->
     AtmLambdaRevision = maps:get(<<"atmLambdaRevision">>, SanitizedRevisionData),
     try atm_lambda_validator:validate(AtmLambdaRevision) of
         ok ->
-            % we do not want to depend on the checksums provided in the JSON dumps, as they may be tinkered with
-            {ok, AtmLambdaRevision#atm_lambda_revision{
-                checksum = atm_lambda_revision:calculate_checksum(AtmLambdaRevision)
-            }}
+            {ok, AtmLambdaRevision}
     catch
         throw:{error, _} = Error ->
             Error
