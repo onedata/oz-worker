@@ -136,7 +136,7 @@ create(#el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth,
     end;
 
 create(#el_req{gri = #gri{id = undefined, aspect = parse_revision, scope = public}, data = Data}) ->
-    case validate_revision(Data) of
+    case revision_data_to_lambda_revision(Data) of
         {ok, AtmLambdaRevision} ->
             {ok, value, AtmLambdaRevision};
         {error, _} = Error ->
@@ -412,7 +412,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = dump}}) -> #{
 
 validate(#el_req{operation = create, data = Data, gri = #gri{aspect = {revision, TargetRevisionNumber}}}) ->
     SchemaFormatVersion = maps:get(<<"schemaFormatVersion">>, Data, undefined),
-    revision_sanitizer_spec(TargetRevisionNumber, SchemaFormatVersion);
+    revision_data_sanitizer_spec(TargetRevisionNumber, SchemaFormatVersion);
 
 validate(#el_req{operation = create, gri = #gri{aspect = {dump_revision, _}}}) -> #{
     required => #{
@@ -448,12 +448,12 @@ validate(#el_req{operation = update, gri = #gri{aspect = {revision, _}}}) -> #{
 %%%===================================================================
 
 %% @private
--spec revision_sanitizer_spec(
+-spec revision_data_sanitizer_spec(
     binary(),
     undefined | ?MIN_SUPPORTED_SCHEMA_FORMAT_VERSION..?CURRENT_SCHEMA_FORMAT_VERSION
 ) ->
     entity_logic_sanitizer:sanitizer_spec().
-revision_sanitizer_spec(TargetRevisionNumber, SchemaFormatVersion) ->
+revision_data_sanitizer_spec(TargetRevisionNumber, SchemaFormatVersion) ->
     % NOTE: the target revision is generally given in the aspect, but a special "auto"
     % keyword is accepted to indicate that the original revision number should be taken
     % and then originalRevisionNumber key is mandatory. This is used especially when
@@ -504,7 +504,7 @@ lookup_and_sanitize_revision_data(Data) ->
     SchemaFormatVersion = maps:get(<<"schemaFormatVersion">>, RevisionData, undefined),
 
     entity_logic_sanitizer:ensure_valid(
-        revision_sanitizer_spec(<<"auto">>, SchemaFormatVersion),
+        revision_data_sanitizer_spec(<<"auto">>, SchemaFormatVersion),
         {revision, <<"auto">>},
         RevisionData
     ).
@@ -516,7 +516,7 @@ lookup_and_sanitize_revision_data(Data) ->
 add_revision_to_lambda(AtmLambda = #od_atm_lambda{
     revision_registry = RevisionRegistry
 }, RevisionNumberBinary, SanitizedRevisionData) ->
-    case validate_revision(SanitizedRevisionData) of
+    case revision_data_to_lambda_revision(SanitizedRevisionData) of
         {error, _} = Error ->
             Error;
         {ok, AtmLambdaRevision} ->
@@ -537,9 +537,18 @@ add_revision_to_lambda(AtmLambda = #od_atm_lambda{
     end.
 
 
+
+%%--------------------------------------------------------------------
 %% @private
--spec validate_revision(entity_logic:sanitized_data()) -> {ok, atm_lambda_revision:record()} | errors:error().
-validate_revision(SanitizedRevisionData) ->
+%% @doc
+%% Revision data is the object under the <<"revision">> key, provided by the client,
+%% and one of its fields carries the encoded #atm_lambda_revision{} record. This function
+%% resolves the latter from the former, doing validation and required transformations.
+%% @end
+%%--------------------------------------------------------------------
+-spec revision_data_to_lambda_revision(entity_logic:sanitized_data()) ->
+    {ok, atm_lambda_revision:record()} | errors:error().
+revision_data_to_lambda_revision(SanitizedRevisionData) ->
     AtmLambdaRevision = maps:get(<<"atmLambdaRevision">>, SanitizedRevisionData),
     try atm_lambda_validator:validate(AtmLambdaRevision) of
         ok ->
