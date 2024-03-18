@@ -59,8 +59,8 @@
 }).
 
 -record(oai_listing_result, {
-    records :: [oai_record()] | [oai_header()],
-    resumption_token :: resumption_token()
+    batch :: [oai_record()] | [oai_header()],
+    resumption_token :: handles:resumption_token()
 }).
 
 -type oai_verb_module() :: identify | get_record | list_identifiers |
@@ -93,21 +93,6 @@
 -type maybe_invalid_datestamp() :: supported_datestamp() | maybe_invalid_date() | maybe_invalid_datetime().
 -type supported_datestamp() :: calendar:datetime() | calendar:date() | undefined.
 -type oai_date_granularity() :: day_granularity | seconds_granularity.
--type resumption_token() :: binary() | undefined.
-
--type metadata_prefix() :: binary().  % ?OAI_DC_METADATA_PREFIX | ?EDM_METADATA_PREFIX
--type limit() :: pos_integer().
-
-%% @formatter:off
--type listing_opts() :: #{
-    metadata_prefix => metadata_prefix(),   % required unless resumption_token is provided
-    resumption_token => resumption_token(),   % exclusive argument; if present, all other argument must not be provided
-    limit => limit(),
-    service_id => od_handle_service:id(),
-    from => undefined | od_handle:timestamp_seconds(),
-    until => undefined | od_handle:timestamp_seconds()
-}.
-%% @formatter:on
 
 -define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
 -define(EDM_METADATA_PREFIX, <<"edm">>).

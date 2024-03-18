@@ -40,7 +40,7 @@ required_arguments() -> [<<"metadataPrefix">>].
 %%% @end
 %%%-------------------------------------------------------------------
 -spec optional_arguments() -> [binary()].
-optional_arguments() -> [<<"from">>, <<"until">>, <<"set">>, <<"limit">>].
+optional_arguments() -> [<<"from">>, <<"until">>, <<"set">>].
 
 %%%-------------------------------------------------------------------
 %%% @doc
@@ -73,14 +73,7 @@ optional_response_elements() -> [].
 %%%-------------------------------------------------------------------
 -spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"header">>, Args) ->
-    ListingOpts = case proplists:get_value(<<"resumptionToken">>, Args) of
-        undefined ->
-            oai_utils:pack_listing_opts_from_args(Args);
-        ResumptionToken ->
-            #{
-                resumption_token => ResumptionToken
-            }
-    end,
+    ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
     HarvestingFun = fun(HandleId, Handle) ->
         OaiId = oai_utils:oai_identifier_encode(HandleId),
         oai_utils:build_oai_header(OaiId, Handle)

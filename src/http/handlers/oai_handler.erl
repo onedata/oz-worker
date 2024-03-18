@@ -155,7 +155,7 @@ handle_request_unsafe(QueryParams, Req) ->
     Response = try
         {Verb, ParsedArgs} = oai_parser:process_and_validate_args(QueryParams),
         generate_response(Verb, ParsedArgs)
-    catch
+        catch
         throw:Error ->
             oai_errors:handle(Error)
     end,
@@ -166,14 +166,19 @@ handle_request_unsafe(QueryParams, Req) ->
     end,
 
     ResponseDate = oai_handler:generate_response_date_element(),
-
+    ?alert("~p~n", [Response]),
     ResponseXML = oai_utils:to_xml(Response),
+
+
     RequestElementXML = oai_utils:to_xml(RequestElement),
     ResponseDateXML = oai_utils:to_xml(ResponseDate),
-
     XML = insert_to_root_xml_element([ResponseDateXML, RequestElementXML, ResponseXML]),
+
+
     Prolog = ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"],
     ResponseBody = xmerl:export_simple([XML], xmerl_xml, [{prolog, Prolog}]),
+    ?alert("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"),
+
     Req2 = cowboy_req:set_resp_header(?HDR_CONTENT_TYPE, ?RESPONSE_CONTENT_TYPE, Req),
     {ResponseBody, Req2}.
 
@@ -204,15 +209,20 @@ generate_response(Verb, Args) ->
 generate_required_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
         case Module:get_response(ElementName, Args) of
-            #oai_listing_result{
-                records = Elements,
-                resumption_token = ResumptionToken
-            } ->
-                Records = [{ElementName, Element} || Element <- Elements],
-                Records ++ [{<<"resumptionToken">>, ResumptionToken}];
+%%            #oai_listing_result{
+%%                batch = Elements,
+%%                resumption_token = ResumptionToken
+%%            } ->
+%%                ExpectedToken = case ResumptionToken of
+%%                    undefined -> <<>>;
+%%                    Token -> Token
+%%                end,
+%%                Records = [{ElementName, Element} || Element <- Elements],
+%%                Records ++ [{<<"resumptionToken">>, ExpectedToken}];
             Elements when is_list(Elements) ->
                 [{ElementName, Element} || Element <- Elements];
-            Element -> oai_utils:ensure_list({ElementName, Element})
+            Element ->
+                oai_utils:ensure_list({ElementName, Element})
         end
     end, Module:required_response_elements()).
 
@@ -281,3 +291,4 @@ generate_request_element(Req) ->
 generate_request_element(ParsedArgs, Req) ->
     URL = iolist_to_binary(cowboy_req:uri(Req, #{qs => undefined})),
     {request, URL, ParsedArgs}.
+

@@ -32,6 +32,7 @@
 -type resource_type() :: binary().
 -type resource_id() :: binary().
 -type public_handle() :: binary().
+-type metadata_prefix() :: binary().  % ?OAI_DC_METADATA_PREFIX | ?EDM_METADATA_PREFIX
 -type metadata() :: binary().
 -type timestamp_seconds() :: time:seconds().
 

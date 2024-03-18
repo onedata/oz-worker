@@ -120,7 +120,6 @@ check_performed_rest_call(ArgsMap, RespCode, RespHeaders, RespBody) ->
         ExpCode = maps:get(code, ExpectMap, undefined),
         ExpHeaders = maps:get(headers, ExpectMap, undefined),
         ExpBody = maps:get(body, ExpectMap, undefined),
-
         % Check response code if specified
         case ExpCode of
             undefined ->
@@ -179,7 +178,6 @@ check_performed_rest_call(ArgsMap, RespCode, RespHeaders, RespBody) ->
                         }})
                 end
         end,
-
         % Check response body if specified
         case ExpBody of
             undefined ->
@@ -471,8 +469,12 @@ compare_xml(#xmlAttribute{name = N, value = V}, #xmlAttribute{name = N, value = 
     true;
 compare_xml(#xmlAttribute{name = _N1, value = _V1}, #xmlAttribute{name = _N2, value = _V2}) ->
     false;
-compare_xml(#xmlElement{name = resumptionToken, content = #xmlText{value = undefined}},
-    #xmlElement{name = resumptionToken, content = #xmlText{value = undefined}}) -> true;
+compare_xml(#xmlElement{name = resumptionToken, content = C1},
+    #xmlElement{name = resumptionToken, content = C2}) ->
+    ct:pal("~p~n~p~n", [C1, C2]),
+    false;
+compare_xml(#xmlElement{name = resumptionToken, content = #xmlText{value = <<>>}},
+    #xmlElement{name = resumptionToken, content = #xmlText{value = <<>>}}) -> true;
 compare_xml(#xmlElement{name = resumptionToken, content = [#xmlText{value = V1}]},
     #xmlElement{name = resumptionToken, content = [#xmlText{value = _V2}]}) ->
     %% checks if resumption token is non empty string
