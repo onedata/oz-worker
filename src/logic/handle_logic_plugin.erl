@@ -212,9 +212,9 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
-    HandleList= lists:flatmap(fun(MetadataPrefix) ->
-        {HandlesPerMetadata, _} = handles:list(#{metadata_prefix => MetadataPrefix}),
-        HandlesPerMetadata
+    HandleList = lists:flatmap(fun(MetadataPrefix) ->
+        {HandlesPerMetadata, Token} = handles:list(#{metadata_prefix => MetadataPrefix}),
+        get_all_handles(Token, HandlesPerMetadata)
     end, metadata_formats:supported_formats()),
     {ok, HandleList};
 
@@ -671,3 +671,12 @@ auth_by_privilege(#el_req{auth = _OtherAuth}, _HandleOrId, _Privilege) ->
     false;
 auth_by_privilege(UserId, HandleOrId, Privilege) ->
     handle_logic:has_eff_privilege(HandleOrId, UserId, Privilege).
+
+
+%% @private
+-spec get_all_handles(handles:resumption_token(), [od_handle:id()]) -> [od_handle:id()].
+get_all_handles(undefined, Handles) ->
+    Handles;
+get_all_handles(Token, Handles) ->
+    {NewHandles, NewToken} = handles:list(#{resumption_token => Token}),
+    get_all_handles(NewToken, Handles ++ NewHandles).

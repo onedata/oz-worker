@@ -166,18 +166,14 @@ handle_request_unsafe(QueryParams, Req) ->
     end,
 
     ResponseDate = oai_handler:generate_response_date_element(),
-    ?alert("~p~n", [Response]),
     ResponseXML = oai_utils:to_xml(Response),
-
 
     RequestElementXML = oai_utils:to_xml(RequestElement),
     ResponseDateXML = oai_utils:to_xml(ResponseDate),
     XML = insert_to_root_xml_element([ResponseDateXML, RequestElementXML, ResponseXML]),
 
-
     Prolog = ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"],
     ResponseBody = xmerl:export_simple([XML], xmerl_xml, [{prolog, Prolog}]),
-    ?alert("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"),
 
     Req2 = cowboy_req:set_resp_header(?HDR_CONTENT_TYPE, ?RESPONSE_CONTENT_TYPE, Req),
     {ResponseBody, Req2}.
@@ -205,20 +201,21 @@ generate_response(Verb, Args) ->
 %%% @end
 %%%--------------------------------------------------------------------
 -spec generate_required_response_elements(Module :: oai_verb_module(),
-    Args :: [proplists:property()]) -> [{binary(), oai_response()}].
+    Args :: [proplists:property()]) -> [oai_response() | {binary(), oai_response()}].
+generate_required_response_elements(Module, Args) when Module == list_identifiers; Module == list_records ->
+    % These two operations do not fit the current framework for handling oai requests;
+    % they return two different types or elements (header/record + resumptionToken) in one
+    % get_response call. The ElementName can be either <<"header">> or <<"record">>, although
+    % it's not entirely true (we do not want to list two elements not to cause two listings).
+    [ElementName] = Module:required_response_elements(),
+    #oai_listing_result{
+        batch = Batch,
+        resumption_token = ResumptionToken
+    } = Module:get_response(ElementName, Args),
+    [{ElementName, Element} || Element <- Batch] ++ [{<<"resumptionToken">>, ResumptionToken}];
 generate_required_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
         case Module:get_response(ElementName, Args) of
-%%            #oai_listing_result{
-%%                batch = Elements,
-%%                resumption_token = ResumptionToken
-%%            } ->
-%%                ExpectedToken = case ResumptionToken of
-%%                    undefined -> <<>>;
-%%                    Token -> Token
-%%                end,
-%%                Records = [{ElementName, Element} || Element <- Elements],
-%%                Records ++ [{<<"resumptionToken">>, ExpectedToken}];
             Elements when is_list(Elements) ->
                 [{ElementName, Element} || Element <- Elements];
             Element ->

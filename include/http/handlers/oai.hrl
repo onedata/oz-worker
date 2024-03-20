@@ -96,7 +96,7 @@
 
 -define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
 -define(EDM_METADATA_PREFIX, <<"edm">>).
--define(DEFAULT_LIST_LIMIT, 1000).
+-define(DEFAULT_LIST_LIMIT, oz_worker:get_env(default_handle_list_limit, 1000)).
 
 -define(OAI_XML_NAMESPACE, #xmlAttribute{
         name=xmlns,
