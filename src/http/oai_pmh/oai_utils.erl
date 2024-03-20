@@ -123,10 +123,6 @@ request_arguments_to_handle_listing_opts(Args) ->
     case proplists:get_value(<<"resumptionToken">>, Args) of
         undefined ->
             MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
-            Limit = case proplists:get_value(<<"limit">>, Args) of
-                undefined -> ?DEFAULT_LIST_LIMIT;
-                LimitBin -> binary_to_integer(LimitBin)
-            end,
             From = case deserialize_datestamp(proplists:get_value(<<"from">>, Args)) of
                 undefined -> undefined;
                 FromDeserialized -> time:datetime_to_seconds(FromDeserialized)
@@ -140,7 +136,6 @@ request_arguments_to_handle_listing_opts(Args) ->
                 from => From,
                 until => Until,
                 service_id => SetSpec,
-                limit => Limit,
                 metadata_prefix => MetadataPrefix
             };
         ResumptionToken ->
@@ -256,6 +251,11 @@ is_harvesting(_) -> false.
 -spec to_xml(term()) -> #xmlElement{}.
 to_xml(undefined) -> [];
 to_xml([]) -> #xmlText{value = []};
+to_xml({<<"resumptionToken">>, undefined}) ->
+    #xmlElement{
+        name = resumptionToken,
+        content = []
+    };
 to_xml({_Name, undefined}) -> [];
 to_xml(#xmlElement{} = XML) -> XML;
 to_xml({_Name, Record = #oai_record{}}) -> to_xml(Record);
@@ -315,22 +315,12 @@ to_xml(#oai_about{value = Value}) ->
         name = about,
         content = ensure_list(to_xml(Value))
     };
-to_xml(#oai_listing_result{batch = Batch, resumption_token = ResumptionToken}) ->
-    to_xml(Batch) ++ [#xmlElement{
-        name = resumptionToken,
-        content = [#xmlText{value = case ResumptionToken of
-            undefined -> <<>>;
-            _ -> ResumptionToken
-        end}]
-    }];
 to_xml({Name, Content}) ->
     to_xml({Name, Content, []});
 to_xml([{Name, Content}]) ->
     [to_xml({Name, Content})];
 to_xml([{Name, Content} | Rest]) ->
     [to_xml({Name, Content}) | ensure_list(to_xml(Rest))];
-to_xml([Element = #oai_header{}]) ->
-    [to_xml(Element)];
 to_xml({Name, ContentList = [{_, _} | _], Attributes}) ->
     #xmlElement{
         name = ensure_atom(Name),

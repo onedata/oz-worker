@@ -52,6 +52,10 @@ exclusive_arguments() -> [<<"resumptionToken">>].
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% {@link oai_verb_behaviour} callback required_response_elements/0
+%%% NOTE: This operation does not fit the current framework for handling oai requests;
+%%% it returns two different types or elements (header/record + resumptionToken) in one
+%%% get_response call. We use only ElementName set to <<"header">> as w workaround -
+%%% we do not want to list the two elements not to cause two listings.
 %%% @end
 %%%-------------------------------------------------------------------
 -spec required_response_elements() -> [binary()].
