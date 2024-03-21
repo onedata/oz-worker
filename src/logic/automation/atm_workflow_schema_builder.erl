@@ -99,35 +99,7 @@
     ok | errors:error().
 insert_revision(Auth, AtmWorkflowSchemaId, RevisionNumber, Data) ->
     od_atm_workflow_schema:critical_section(AtmWorkflowSchemaId, fun() ->
-        try
-            {ok, #document{value = PreviousAtmWorkflowSchema}} = od_atm_workflow_schema:get(AtmWorkflowSchemaId),
-
-            SupplementaryAtmLambdas = maps:get(<<"supplementaryAtmLambdas">>, Data, #{}),
-            AtmWorkflowSchemaRevision = maps:get(<<"atmWorkflowSchemaRevision">>, Data),
-
-            FinalBuilderCtx = validate_revision_and_resolve_lambdas(#builder_ctx{
-                auth = Auth,
-                atm_workflow_schema_revision = AtmWorkflowSchemaRevision,
-                target_atm_inventory_id = PreviousAtmWorkflowSchema#od_atm_workflow_schema.atm_inventory,
-                supplementary_lambdas = SupplementaryAtmLambdas
-            }),
-
-            update_revision_registry_unsafe(AtmWorkflowSchemaId, PreviousAtmWorkflowSchema, fun(RevisionRegistry) ->
-                {ok, atm_workflow_schema_revision_registry:insert_revision(
-                    RevisionNumber, FinalBuilderCtx#builder_ctx.atm_workflow_schema_revision, RevisionRegistry
-                )}
-            end)
-        catch
-            throw:{error, _} = Error ->
-                Error;
-            Class:Reason:Stacktrace ->
-                ?error_stacktrace(
-                    "Unexpected error in ~w:~w - ~w:~p",
-                    [?MODULE, ?FUNCTION_NAME, Class, Reason],
-                    Stacktrace
-                ),
-                ?ERROR_INTERNAL_SERVER_ERROR
-        end
+        ?catch_exceptions(insert_revision_unsafe(Auth, AtmWorkflowSchemaId, RevisionNumber, Data))
     end).
 
 
@@ -158,6 +130,34 @@ delete_all_revisions(AtmWorkflowSchemaId) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%% @private
+-spec insert_revision_unsafe(
+    aai:auth(),
+    od_atm_workflow_schema:id(),
+    atm_workflow_schema_revision:revision_number(),
+    entity_logic:data()
+) ->
+    ok | errors:error().
+insert_revision_unsafe(Auth, AtmWorkflowSchemaId, RevisionNumber, Data) ->
+    {ok, #document{value = PreviousAtmWorkflowSchema}} = od_atm_workflow_schema:get(AtmWorkflowSchemaId),
+
+    SupplementaryAtmLambdas = maps:get(<<"supplementaryAtmLambdas">>, Data, #{}),
+    AtmWorkflowSchemaRevision = maps:get(<<"atmWorkflowSchemaRevision">>, Data),
+
+    FinalBuilderCtx = validate_revision_and_resolve_lambdas(#builder_ctx{
+        auth = Auth,
+        atm_workflow_schema_revision = AtmWorkflowSchemaRevision,
+        target_atm_inventory_id = PreviousAtmWorkflowSchema#od_atm_workflow_schema.atm_inventory,
+        supplementary_lambdas = SupplementaryAtmLambdas
+    }),
+
+    update_revision_registry_unsafe(AtmWorkflowSchemaId, PreviousAtmWorkflowSchema, fun(RevisionRegistry) ->
+        {ok, atm_workflow_schema_revision_registry:insert_revision(
+            RevisionNumber, FinalBuilderCtx#builder_ctx.atm_workflow_schema_revision, RevisionRegistry
+        )}
+    end).
+
 
 %% @private
 -spec validate_revision_and_resolve_lambdas(builder_ctx()) -> builder_ctx().
@@ -253,13 +253,21 @@ build_lambda_search_ctx(OriginalAtmLambdaId, RevisionNumber, AtmLambdaData) ->
             undefined ->
                 undefined;
             _ ->
-                case maps:get(<<"revision">>, AtmLambdaData, undefined) of
-                    #{<<"schemaFormatVersion">> := 3, <<"atmLambdaRevision">> := AtmLambdaRevision} ->
-                        kv_utils:get([<<"_data">>, <<"checksum">>], AtmLambdaRevision, undefined);
-                    AtmLambdaRevisionDump ->
-                        kv_utils:get(
-                            [<<"atmLambdaRevision">>, <<"checksum">>], AtmLambdaRevisionDump, undefined
-                        )
+                % in schema format version 3, dumps were reworked to use persistent record encoding
+                % rather than jsonable record encoding
+                try
+                    AtmLambdaRevision = case maps:get(<<"revision">>, AtmLambdaData, undefined) of
+                        #{<<"schemaFormatVersion">> := 3, <<"atmLambdaRevision">> := AtmLambdaRevisionJson} ->
+                            persistent_record:from_json(AtmLambdaRevisionJson, atm_lambda_revision);
+                        #{<<"atmLambdaRevision">> := AtmLambdaRevisionJson} ->
+                            jsonable_record:from_json(AtmLambdaRevisionJson, atm_lambda_revision)
+                    end,
+                    AtmLambdaRevision#atm_lambda_revision.checksum
+                catch _:_ ->
+                    throw(?ERROR_BAD_DATA(
+                        <<"supplementaryAtmLambdas[", OriginalAtmLambdaId/binary, "].revision.atmLambdaRevision">>,
+                        ?ERROR_BAD_DATA(<<"atmLambdaRevision">>)
+                    ))
                 end
         end,
         json_dump = AtmLambdaData

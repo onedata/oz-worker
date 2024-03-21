@@ -1275,12 +1275,11 @@ bad_supplementary_lambdas_data_test(_Config) ->
             kv_utils:update_with([<<"revision">>, <<"supplementaryAtmLambdas">>], fun(SupplementaryAtmLambdas) ->
                 maps:map(fun(_AtmLambdaId, LambdaReferences) ->
                     maps:map(fun(_RevisionNumber, RevisionData) ->
-                        % include ONLY the checksum field and drop the actual lambda data
                         kv_utils:update_with([<<"revision">>, <<"atmLambdaRevision">>], fun
-                            (#{<<"_data">> := Data}) ->  % schemaFormatVersion == 3 dump
-                                #{<<"_data">> => maps:with([<<"checksum">>], Data)};
-                            (AtmLambdaRevisionData) ->
-                               maps:with([<<"checksum">>], AtmLambdaRevisionData)
+                            (#{<<"_data">> := _Data}) ->  % schemaFormatVersion == 3 dump
+                                #{<<"_data">> => #{<<"invalid data">> => <<"whatever">>}};
+                            (_AtmLambdaRevisionData) ->
+                                #{<<"invalid data">> => <<"whatever">>}
                         end, RevisionData)
                     end, LambdaReferences)
                 end, SupplementaryAtmLambdas)
@@ -1539,6 +1538,7 @@ recreate_atm_workflow_schema_from_dump_test_base(#recreate_test_spec{
         end,
 
         DumpedOriginalAtmWorkflowSchema = ozt_atm_workflow_schemas:dump_to_json(OriginalAtmWorkflowSchemaId, RevisionNumber),
+
         DuplicateAtmWorkflowSchemaId = case AccCurrentAtmWorkflowSchemaId of
             undefined ->
                 ozt_atm_workflow_schemas:create(

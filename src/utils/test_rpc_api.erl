@@ -35,7 +35,9 @@
     create_user_temporary_access_token/1,
     are_basic_credentials_valid/2,
 
+    list_groups/1,
     create_group/2,
+    get_group_protected_data/2,
     get_group_users/2,
 
     list_spaces/1,
@@ -141,9 +143,20 @@ are_basic_credentials_valid(UserName, Password) ->
     end.
 
 
+-spec list_groups(aai:auth()) -> {ok, [od_group:id()]} | errors:error().
+list_groups(Auth) ->
+    group_logic:list(Auth).
+
+
 -spec create_group(aai:auth(), Data :: map()) -> {ok, od_user:id()} | errors:error().
 create_group(Auth, GroupName) ->
     group_logic:create(Auth, GroupName).
+
+
+-spec get_group_protected_data(aai:auth(), od_group:id()) ->
+    {ok, map()} | errors:error().
+get_group_protected_data(Auth, GroupId) ->
+    group_logic:get_protected_data(Auth, GroupId).
 
 
 -spec get_group_users(aai:auth(), od_group:id()) ->
