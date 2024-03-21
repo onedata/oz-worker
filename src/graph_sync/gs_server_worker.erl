@@ -102,9 +102,9 @@ handle_call(Request, _From, #state{} = State) ->
     {noreply, NewState :: state(), timeout() | hibernate} |
     {stop, Reason :: term(), NewState :: state()}.
 handle_cast({change, {ok, Docs}}, State) when is_list(Docs) ->
-    [handle_change(Doc) || Doc <- Docs],
+    [handle_change(Doc) || {change, Doc} <- Docs],
     {noreply, State};
-handle_cast({change, {ok, #document{} = Doc}}, State) ->
+handle_cast({change, {ok, {change, #document{} = Doc}}}, State) ->
     handle_change(Doc),
     {noreply, State};
 handle_cast({change, {ok, end_of_stream}}, State) ->
