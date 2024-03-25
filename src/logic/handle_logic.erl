@@ -71,7 +71,7 @@
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), HandleId :: od_handle_service:id(),
     ResourceType :: od_handle:resource_type(), ResourceId :: od_handle:resource_id(),
-    MetadataPrefix :: od_handle:metadata_prefix(), Metadata :: od_handle:metadata())
+    MetadataPrefix :: od_handle:metadata_prefix(), Metadata :: od_handle:raw_metadata())
         -> {ok, od_handle:id()} | errors:error().
 create(Auth, HServiceId, ResourceType, ResourceId, MetadataPrefix, Metadata) ->
     create(Auth, #{
@@ -178,7 +178,7 @@ list_privileges() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Auth :: aai:auth(), HandleId :: od_handle:id(),
-    MetadataOrData :: od_handle:metadata() | #{}) -> ok | errors:error().
+    MetadataOrData :: od_handle:raw_metadata() | #{}) -> ok | errors:error().
 update(Auth, HandleId, Metadata) when is_binary(Metadata) ->
     update(Auth, HandleId, #{<<"metadata">> => Metadata});
 update(Auth, HandleId, Data) ->

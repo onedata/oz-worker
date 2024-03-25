@@ -357,7 +357,7 @@ end).
     public_handle :: od_handle:public_handle() | undefined,
     resource_type :: od_handle:resource_type() | undefined,
     metadata_prefix :: od_handle:metadata_prefix() | undefined,
-    metadata :: od_handle:metadata() | undefined,
+    metadata :: od_handle:raw_metadata() | undefined,
     timestamp = od_handle:current_timestamp() :: od_handle:timestamp_seconds(),
 
     % Direct relations to other entities

@@ -36,7 +36,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec register_handle(od_handle_service:id(), od_handle:resource_type(),
-    od_handle:resource_id(), od_handle:metadata()) -> {ok, od_handle:public_handle()}.
+    od_handle:resource_id(), od_handle:raw_metadata()) -> {ok, od_handle:public_handle()}.
 register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
     {ok, #document{value = #od_handle_service{
         name = HandleServiceName,
@@ -114,7 +114,7 @@ unregister_handle(HandleId) ->
 %% Modify handle in external handle service
 %% @end
 %%--------------------------------------------------------------------
--spec modify_handle(od_handle:id(), od_handle:metadata()) ->
+-spec modify_handle(od_handle:id(), od_handle:raw_metadata()) ->
     ok.
 modify_handle(HandleId, NewMetadata) ->
     {ok, #document{value = #od_handle{

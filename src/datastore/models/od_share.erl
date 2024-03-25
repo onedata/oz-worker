@@ -15,7 +15,7 @@
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
--export([create/1, get/1, get_handle/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -53,14 +53,6 @@ create(Doc) ->
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(ShareId) ->
     datastore_model:get(?CTX, ShareId).
-
-
--spec get_handle(id()) -> {ok, undefined | od_handle:id()} | {error, term()}.
-get_handle(ShareId) ->
-    case datastore_model:get(?CTX, ShareId) of
-        {ok, #document{value = #od_share{handle = Handle}}} -> {ok, Handle};
-        {error, _} = Error -> Error
-    end.
 
 
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.

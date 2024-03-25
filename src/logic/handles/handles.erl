@@ -24,14 +24,13 @@
 %  2) handle id - this part allows to distinguish links associated with handles
 %                that have the same timestamp.
 -type index() :: binary().
--type resumption_token() :: binary().
 
--type metadata_prefix() :: binary().  % ?OAI_DC_METADATA_PREFIX | ?EDM_METADATA_PREFIX   - @see oai.hrl
+-type resumption_token() :: binary().
 -type limit() :: pos_integer().
 
 %% @formatter:off
 -type listing_opts() :: #{
-    metadata_prefix => metadata_prefix(),   % required unless resumption_token is provided
+    metadata_prefix => od_handle:metadata_prefix(),   % required unless resumption_token is provided
     resumption_token => resumption_token(),   % exclusive argument; if present, all other argument must not be provided
     limit => limit(),
     service_id => od_handle_service:id(),
@@ -153,7 +152,7 @@ get_earliest_timestamp() ->
         ListingOpts = #{limit => 1, metadata_prefix => MetadataPrefix},
         {List, _} = list(ListingOpts),
         List
-    end, metadata_formats:supported_formats()),
+    end, oai_metadata:supported_formats()),
     case EarliestTimestamps of
         [] -> undefined;
         _ ->
@@ -191,7 +190,7 @@ decode_index(Index) ->
 
 
 %% @private
--spec pack_resumption_token(od_handle:timestamp_seconds(), od_handle:id(), metadata_prefix(), limit(),
+-spec pack_resumption_token(od_handle:timestamp_seconds(), od_handle:id(), od_handle:metadata_prefix(), limit(),
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> resumption_token().
 pack_resumption_token(TimeSeconds, HandleId, MetadataPrefix, Limit, From, Until) ->
     FormattedTimeSeconds = str_utils:format_bin("~11..0B", [TimeSeconds]),
@@ -205,7 +204,7 @@ pack_resumption_token(TimeSeconds, HandleId, MetadataPrefix, Limit, From, Until)
 
 
 %% @private
--spec unpack_resumption_token(resumption_token()) -> {od_handle:timestamp_seconds(), metadata_prefix(),
+-spec unpack_resumption_token(resumption_token()) -> {od_handle:timestamp_seconds(), od_handle:metadata_prefix(),
     od_handle:id(), limit(), od_handle:timestamp_seconds(), od_handle:timestamp_seconds()}.
 unpack_resumption_token(Token) ->
     <<TimeSeconds:11/binary, 0, MetadataPrefix:11/binary, 0, Limit:5/binary, 0, From:11/binary,
@@ -215,7 +214,7 @@ unpack_resumption_token(Token) ->
 
 
 %% @private
--spec build_result_from_reversed_listing(datastore:fold_acc(), limit(), metadata_prefix(),
+-spec build_result_from_reversed_listing(datastore:fold_acc(), limit(), od_handle:metadata_prefix(),
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> {[od_handle:id()], resumption_token()}.
 build_result_from_reversed_listing(ReversedEntries, Limit, MetadataPrefix, From, Until) ->
     NewToken = case length(ReversedEntries) < Limit orelse Limit < ?MAX_LIST_LIMIT of

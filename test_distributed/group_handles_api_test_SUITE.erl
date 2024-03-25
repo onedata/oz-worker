@@ -50,6 +50,8 @@ all() ->
         get_eff_handle_details_test
     ]).
 
+% fixme adjust tests that create handles to the new logic
+
 
 %%%===================================================================
 %%% Test functions
@@ -243,7 +245,7 @@ create_handle_test(Config) ->
                 {<<"resourceId">>, 1234, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"resourceId">>, ShareIdThatAlreadyHasAHandle, ?ERROR_ALREADY_EXISTS},
                 {<<"metadataPrefix">>, <<"bad_metadata">>,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"metadataPrefix">>, metadata_formats:supported_formats())},
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"metadataPrefix">>, oai_metadata:supported_formats())},
                 {<<"metadata">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
                 {<<"metadata">>, ?RAND_UNICODE_STR(100001),

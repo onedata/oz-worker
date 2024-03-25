@@ -32,13 +32,19 @@
 -type resource_type() :: binary().
 -type resource_id() :: binary().
 -type public_handle() :: binary().
--type metadata_prefix() :: binary().  % ?OAI_DC_METADATA_PREFIX | ?EDM_METADATA_PREFIX   - @see oai.hrl
--type metadata() :: binary().
+% short literal (e.g. <<"oai_dc">>) that identifies a metadata format, allowed values depend on
+% loaded handle_metadata_plugins
+-type metadata_prefix() :: binary().
+% Metadata encoded to XML - used in the APIs and stored like this in the DB
+-type raw_metadata() :: binary().
+% Parsed metadata
+% The top element is always #xmlElement{name = metadata}, in which the proper metadata is nested
+-type parsed_metadata() :: #xmlElement{}.
 -type timestamp_seconds() :: time:seconds().
 
 -export_type([id/0, record/0]).
 -export_type([resource_type/0, resource_id/0, public_handle/0,
-    metadata_prefix/0, metadata/0, timestamp_seconds/0]).
+    metadata_prefix/0, raw_metadata/0, parsed_metadata/0, timestamp_seconds/0]).
 
 -define(CTX, #{
     model => od_handle,

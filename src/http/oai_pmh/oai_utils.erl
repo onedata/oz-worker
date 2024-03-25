@@ -19,8 +19,8 @@
 
 %% API
 -export([serialize_datestamp/1, deserialize_datestamp/1, is_harvesting/1,
-    verb_to_module/1, sanitize_metadata/2, is_earlier_or_equal/2,
-    dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/5,
+    verb_to_module/1, is_earlier_or_equal/2,
+    dates_have_the_same_granularity/2, to_xml/1, export_xml/2, ensure_list/1, harvest/5,
     oai_identifier_encode/1, oai_identifier_decode/1,
     build_oai_header/2, build_oai_record/3
 ]).
@@ -68,13 +68,12 @@ build_oai_header(OaiId, Handle) ->
 -spec build_oai_record(MetadataPrefix :: binary(), oai_id(), od_handle:record()) ->
     #oai_record{}.
 build_oai_record(MetadataPrefix, OaiId, Handle) ->
-    Mod = metadata_formats:module(MetadataPrefix),
     #oai_record{
         header = build_oai_header(OaiId, Handle),
         metadata = #oai_metadata{
-            metadata_format = #oai_metadata_format{metadataPrefix = MetadataPrefix},
-            additional_identifiers = Mod:resolve_additional_identifiers(Handle),
-            value = Handle#od_handle.metadata
+            metadata_prefix = MetadataPrefix,
+            raw_value = Handle#od_handle.metadata,
+            handle = Handle
         }
     }.
 
@@ -155,17 +154,6 @@ harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, SetSpec, HarvestingFun) -
         _ -> HarvestedMetadata
     end.
 
-
-%%%--------------------------------------------------------------------
-%%% @doc
-%%% Function checks whether metadata is valid.
-%%% @end
-%%%--------------------------------------------------------------------
--spec sanitize_metadata(Metadata :: od_handle:metadata(), MetadataPrefix :: od_handle:metadata_prefix()) ->
-    ok | errors:error().
-sanitize_metadata(MetadataPrefix, Metadata) ->
-    Mod = metadata_formats:module(MetadataPrefix),
-    Mod:sanitize_metadata(Metadata).
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -251,16 +239,37 @@ to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp, set_spec = Se
             ensure_list(to_xml({setSpec, SetSpec}))
         ])
     };
-to_xml(#oai_metadata{} = OaiMetadata) ->
-    #oai_metadata{
-        metadata_format = Format, value = Value,
-        additional_identifiers = AdditionalIdentifiers
-    } = OaiMetadata,
-    MetadataPrefix = Format#oai_metadata_format.metadataPrefix,
-    Mod = metadata_formats:module(MetadataPrefix),
+to_xml(#oai_metadata{metadata_prefix = MetadataPrefix, raw_value = RawValue, handle = Handle}) ->
+    ParsedMetadata = case oai_metadata:parse_and_normalize_xml(RawValue) of
+        {ok, Parsed} ->
+            Parsed;
+        error ->
+            % @TODO VFS-11365 Temporary workaround, rework
+            EmptyMetadata = case MetadataPrefix of
+                ?OAI_DC_METADATA_PREFIX ->
+                    #xmlElement{name = metadata, content = []};
+                ?EDM_METADATA_PREFIX ->
+                    #xmlElement{name = metadata, content = [
+                        #xmlElement{name = 'rdf:RDF', content = []}
+                    ]}
+            end,
+            {ok, RevisedMetadata} = oai_metadata:revise_for_publication(
+                MetadataPrefix,
+                EmptyMetadata,
+                Handle#od_handle.resource_id,
+                ?check(share_logic:get(?ROOT, Handle#od_handle.resource_id))
+            ),
+            oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, Handle#od_handle.public_handle)
+        % @TODO VFS-11365 This might be useful when we upgrade the models and ensure there are valid xmls in the DB
+%%            % this should theoretically never happen as the metadata is sanitized before
+%%            % being written to the DB, so let it crash in case of unforeseen errors
+%%            error({bad_metadata, RawValue})
+    end,
+
     #xmlElement{
         name = metadata,
-        content = ensure_list(to_xml(Mod:encode(Value, AdditionalIdentifiers)))};
+        content = ensure_list(to_xml(oai_metadata:adapt_for_oai_pmh(MetadataPrefix, ParsedMetadata)))
+    };
 to_xml(#oai_metadata_format{metadataPrefix = MetadataPrefix, schema = Schema,
     metadataNamespace = Namespace}) ->
     #xmlElement{
@@ -306,6 +315,16 @@ to_xml({Name, Content, Attributes}) ->
     };
 to_xml(Content) ->
     #xmlText{value = str_utils:to_list(Content)}.
+
+
+-spec export_xml(#xmlElement{}, no_prolog | include_prolog) -> binary().  %  fixme maybe we always want the prolog?
+export_xml(Xml, PrologOptions) ->
+    % NOTE: xmerl scans strings in UTF8 (essentially the result of binary_to_list(<<_/utf8>>),
+    % but exports as a unicode erlang string
+    str_utils:unicode_list_to_binary(xmerl:export_simple([Xml], xmerl_xml, [{prolog, case PrologOptions of
+        no_prolog -> "";
+        include_prolog -> ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"]
+    end}])).
 
 
 %%%-------------------------------------------------------------------

@@ -468,7 +468,7 @@ create_handle_service(Auth, GroupId, Data) ->
 -spec create_handle(Auth :: aai:auth(), GroupId :: od_group:id(),
     HServiceId :: od_handle_service:id(), ResourceType :: od_handle:resource_type(),
     ResourceId :: od_handle:resource_id(), MetadataPrefix :: od_handle:metadata_prefix(),
-    Metadata :: od_handle:metadata()) ->
+    Metadata :: od_handle:raw_metadata()) ->
     {ok, od_handle:id()} | errors:error().
 create_handle(Auth, GroupId, HServiceId, ResourceType, ResourceId, MetadataPrefix, Metadata) ->
     create_handle(Auth, GroupId, #{

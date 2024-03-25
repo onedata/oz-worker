@@ -124,28 +124,37 @@ create_test(Config) ->
     %   U3 gets the SPACE_MANAGE_SHARES privilege
     %   U2 gets the SPACE_MANAGE_SHARES privilege
     %   U1 gets all remaining privileges
-    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {SpaceId, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_MANAGE_SHARES
     ),
     {ok, U3} = oz_test_utils:create_user(Config),
-    {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
-    oz_test_utils:space_set_user_privileges(Config, S1, U3, [
+    {ok, U3} = oz_test_utils:space_add_user(Config, SpaceId, U3),
+    oz_test_utils:space_set_user_privileges(Config, SpaceId, U3, [
         ?SPACE_MANAGE_SHARES
     ], []),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    ProposedShareId = datastore_key:new(),
+
     VerifyFun = fun(ShareId, Data) ->
+        ?assertEqual(ShareId, ProposedShareId),
         {ok, Share} = oz_test_utils:get_share(Config, ShareId),
         ExpectedFileType = maps:get(<<"fileType">>, Data, dir),
         ExpectedDescription = maps:get(<<"description">>, Data, <<"">>),
         ?assertMatch(#od_share{
             name = ?CORRECT_NAME, description = ExpectedDescription,
-            space = S1, root_file = ?ROOT_FILE_ID,
+            space = SpaceId, root_file = ?ROOT_FILE_ID,
             file_type = ExpectedFileType
         }, Share),
         true
     end,
 
+    NotAGuid = datastore_key:new(),
+    ExampleFileUuid = datastore_key:new(),
+    NotAShareFileGuid = file_id:pack_guid(ExampleFileUuid, SpaceId),
+    ShareFileGuidWithBadSpaceId = file_id:pack_share_guid(ExampleFileUuid, datastore_key:new(), ProposedShareId),
+    ShareFileGuidWithUndefinedShareId = file_id:pack_share_guid(ExampleFileUuid, SpaceId, undefined),
+    ShareFileGuidWithBadFileUuid = file_id:pack_share_guid(<<"">>, SpaceId, ProposedShareId),
     BadDataValues = [
         {<<"shareId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"shareId">>)},
         {<<"shareId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"shareId">>)},
@@ -153,6 +162,12 @@ create_test(Config) ->
         {<<"description">>, ?RAND_UNICODE_STR(100001), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"description">>, 100000)},
         {<<"rootFileId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"rootFileId">>)},
         {<<"rootFileId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"rootFileId">>)},
+        {<<"rootFileId">>, NotAGuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, ExampleFileUuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, NotAShareFileGuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, ShareFileGuidWithBadSpaceId, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, ShareFileGuidWithUndefinedShareId, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, ShareFileGuidWithBadFileUuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
         {<<"fileType">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"fileType">>)},
         {<<"fileType">>, <<"">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [file, dir])},
         {<<"fileType">>, atom, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [file, dir])}
@@ -187,7 +202,7 @@ create_test(Config) ->
                     <<"handleId">> => null,
                     <<"name">> => ?CORRECT_NAME,
                     <<"rootFileId">> => ?ROOT_FILE_ID,
-                    <<"spaceId">> => S1,
+                    <<"spaceId">> => SpaceId,
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = gri:deserialize(EncodedGri),
                         VerifyFun(Id, Data)
@@ -203,12 +218,12 @@ create_test(Config) ->
                 <<"description">>, <<"fileType">>
             ],
             correct_values = #{
-                <<"shareId">> => [fun() -> ?UNIQUE_STRING end],
+                <<"shareId">> => [ProposedShareId],
                 <<"name">> => [?CORRECT_NAME],
                 <<"description">> => [<<"">>, ?RAND_UNICODE_STR(769)],
                 <<"rootFileId">> => [?ROOT_FILE_ID],
                 <<"fileType">> => [file, dir],
-                <<"spaceId">> => [S1]
+                <<"spaceId">> => [SpaceId]
             },
             bad_values = lists:append([
                 [{<<"spaceId">>, <<"">>, ?ERROR_FORBIDDEN},

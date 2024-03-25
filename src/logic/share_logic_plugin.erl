@@ -102,6 +102,14 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
     RootFileId = maps:get(<<"rootFileId">>, Req#el_req.data),
     FileType = maps:get(<<"fileType">>, Req#el_req.data, dir),
+
+    try
+        {FileUuid, SpaceId, ShareId} = file_id:unpack_share_guid(RootFileId),
+        true = is_binary(FileUuid) andalso byte_size(FileUuid) > 0
+    catch _:_ ->
+        ?ERROR_BAD_DATA(<<"rootFileId">>)
+    end,
+
     ShareDoc = #document{key = ShareId, value = #od_share{
         name = Name,
         description = Description,

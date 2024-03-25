@@ -26,6 +26,10 @@
 %%%
 %%%   openid_plugin - must implement openid_plugin_behaviour
 %%%
+%%%   harvesting_backend - must implement harvesting_backend_behaviour
+%%%
+%%%   handle_metadata_plugin - must implement handle_metadata_plugin_behaviour
+%%%
 %%% See the corresponding behaviours for more info.
 %%% entitlement_parser and attribute_mapper support validation examples that
 %%% will be evaluated upon startup and the results will be logged in Onezone logs.
@@ -36,6 +40,7 @@
 
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
+
 
 -define(PLUGINS_DIR, oz_worker:get_env(plugins_directory)).
 -define(INCLUDES_DIR, filename:join(code:lib_dir(?APP_NAME), "include")).
@@ -53,7 +58,7 @@
 %% Returns all loaded plugins of specified type. 
 %% @end
 %%--------------------------------------------------------------------
--spec get_plugins(Type :: atom()) -> [module()].
+-spec get_plugins(onezone_plugin_behaviour:type()) -> [module()].
 get_plugins(Type) ->
     AllPlugins = node_cache:get(?PLUGINS_KEY),
     [P || P <- AllPlugins, P:type() =:= Type].
@@ -88,11 +93,17 @@ init() ->
             {ok, Module} = compile:file(filename:join(PluginsDir, Plugin), ?COMPILE_OPTS),
             code:purge(Module),
             {module, Module} = code:load_file(Module),
-            validate_plugin(Module),
-            ?info("  -> ~p: successfully loaded", [Module]),
-            {ok, Module}
-        catch Type:Reason:Stacktrace ->
-            ?error_stacktrace("Cannot load ~s plugin due to ~p:~p", [Plugin, Type, Reason], Stacktrace),
+            lists:member(Module:type(), allowed_plugin_types()) orelse error({unknown_plugin_type, Module:type()}),
+            case validate_plugin(Module) of
+                ok ->
+                    ?info("  -> ~p: successfully loaded", [Module]),
+                    {ok, Module};
+                error ->
+                    ?warning("  -> ~p: plugin was loaded, but failed validation", [Module]),
+                    error
+            end
+        catch Class:Reason:Stacktrace ->
+            ?error_exception("Cannot load ~s plugin", [Plugin], Class, Reason, Stacktrace),
             error
         end
     end, PluginFiles),
@@ -104,55 +115,50 @@ init() ->
 %%% Internal functions
 %%%===================================================================
 
+%% @private
+-spec allowed_plugin_types() -> [onezone_plugin_behaviour:type()].
+allowed_plugin_types() ->
+    [entitlement_parser, openid_plugin, attribute_mapper, harvesting_backend, handle_metadata_plugin].
+
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Validates user-defined auth plugin depending on its type.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_plugin(module()) -> ok.
+-spec validate_plugin(module()) -> ok | error.
 validate_plugin(Module) ->
     validate_plugin(Module, Module:type()).
 
--spec validate_plugin(module(), onezone_plugin_behaviour:type()) -> ok.
-validate_plugin(Module, entitlement_parser) ->
-    try Module:validation_examples() of
-        Examples ->
-            ?info("  -> ~p: found ~B validation examples for plugin, testing...", [
-                Module, length(Examples)
-            ]),
-            [validate_entitlement_parsing_example(Module, E) || E <- Examples],
-            ?info("  -> ~p: all validation examples passed", [Module])
-    catch _:_ ->
-        ?info("  -> ~p: no validation examples found for ~p", [Module])
-    end;
-validate_plugin(Module, attribute_mapper) ->
-    try Module:validation_examples() of
-        Examples ->
-            ?info("  -> ~p: found ~B validation examples for plugin, testing...", [
-                Module, length(Examples)
-            ]),
-            [validate_attribute_mapping_example(Module, E) || E <- Examples],
-            ?info("  -> ~p: all validation examples passed", [Module])
-    catch _:_ ->
-        ?info("  -> ~p: no validation examples found for ~p", [Module])
-    end;
+-spec validate_plugin(module(), onezone_plugin_behaviour:type()) -> ok | error.
 validate_plugin(_, openid_plugin) ->
     % openid_plugin does not undergo validation
     ok;
 validate_plugin(_, harvesting_backend) ->
     % harvesting_backend does not undergo validation
     ok;
-validate_plugin(_, Type) ->
-    throw({bad_plugin_type, Type}).
+validate_plugin(Module, Type) ->
+    try
+        Examples = Module:validation_examples(),
+        ?info("  -> ~p: found ~B validation examples for plugin, testing...", [
+            Module, length(Examples)
+        ]),
+        ValidationFunction = case Type of
+            entitlement_parser -> fun validate_entitlement_parsing_example/2;
+            attribute_mapper -> fun validate_attribute_mapping_example/2;
+            handle_metadata_plugin -> fun handle_metadata_plugin_behaviour:validate_handle_metadata_plugin_example/2
+        end,
+        [erlang:apply(ValidationFunction, [Module, E]) || E <- Examples],
+        ?info("  -> ~p: all validation examples passed", [Module])
+    catch Class:Reason:Stacktrace ->
+        {Class, Reason} /= {throw, validation_failed} andalso ?error_exception(Class, Reason, Stacktrace),
+        ?error("  -> ~p: failed to test validation examples (see the error above)", [Module]),
+        error
+    end.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Validates a single entitlement parsing example.
-%% @end
-%%--------------------------------------------------------------------
 -spec validate_entitlement_parsing_example(module(), {auth_config:idp(),
     entitlement_mapping:raw_entitlement(), auth_config:parser_config(),
     entitlement_mapping:idp_entitlement() | {error, malformed}}) -> ok.
@@ -179,7 +185,7 @@ validate_entitlement_parsing_example(Module, {IdP, Input, ParserConfig, Expected
                 IdP, Input, ParserConfig, ExpectedOutput, {EType, EReason},
                 iolist_to_binary(lager:pr_stacktrace(EStacktrace))
             ]),
-            throw({validation_failed, IdP});
+            throw(validation_failed);
         {_, Got} ->
             ?error("Validation example failed:~n"
             "IdP: ~p~n"
@@ -187,16 +193,11 @@ validate_entitlement_parsing_example(Module, {IdP, Input, ParserConfig, Expected
             "ParserConfig: ~p~n"
             "Expected: ~p~n"
             "Got: ~p", [IdP, Input, ParserConfig, ExpectedOutput, Got]),
-            throw({validation_failed, IdP})
+            throw(validation_failed)
     end.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Validates a single attribute mapping example.
-%% @end
-%%--------------------------------------------------------------------
 -spec validate_attribute_mapping_example(module(), {auth_config:idp(),
     attribute_mapping:onedata_attribute(), attribute_mapping:idp_attributes(),
     {ok, term()} | {error, not_found} | {error, attribute_mapping_error}}) -> ok.
@@ -223,7 +224,7 @@ validate_attribute_mapping_example(Module, {IdP, Attribute, IdPAttributes, Expec
                 IdP, Attribute, IdPAttributes, ExpectedOutput, {EType, EReason},
                 iolist_to_binary(lager:pr_stacktrace(EStacktrace))
             ]),
-            throw({validation_failed, IdP});
+            throw(validation_failed);
         {_, Got} ->
             ?error("Validation example failed:~n"
             "IdP: ~p~n"
@@ -231,5 +232,5 @@ validate_attribute_mapping_example(Module, {IdP, Attribute, IdPAttributes, Expec
             "IdPAttributes: ~p~n"
             "Expected: ~p~n"
             "Got: ~p", [IdP, Attribute, IdPAttributes, ExpectedOutput, Got]),
-            throw({validation_failed, IdP})
+            throw(validation_failed)
     end.
