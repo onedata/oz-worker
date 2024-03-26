@@ -81,7 +81,7 @@ get_response(<<"record">>, Args) ->
     %% @TODO VFS-7454 check if metadataPrefix is available for given identifier
     case lists:member(MetadataPrefix, metadata_formats:supported_formats()) of
         true ->
-            oai_utils:build_oai_record(OaiId, Handle);
+            oai_utils:build_oai_record(oai_utils:oai_identifier_decode(OaiId), Handle);
         false ->
             throw({cannotDisseminateFormat, MetadataPrefix})
     end.

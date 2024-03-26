@@ -15,7 +15,6 @@
 -include("registered_names.hrl").
 -include("http/handlers/oai_errors.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include_lib("ctool/include/logging.hrl").
 
 -behaviour(oai_verb_behaviour).
 

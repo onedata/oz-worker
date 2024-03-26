@@ -125,10 +125,12 @@ parse_required_arguments(Module, ArgsList) ->
 -spec parse_harvesting_arguments([proplists:property()]) -> ok.
 parse_harvesting_arguments(ArgsList) ->
     case parse_harvesting_resumption_token(ArgsList) of
-        undefined ->
+        not_provided ->
             parse_harvesting_metadata_prefix(ArgsList),
             parse_harvesting_datestamps(ArgsList);
-        ok -> ok
+        provided ->
+            %% resumption token is an exclusive argument
+            ok
     end.
 
 %%%-------------------------------------------------------------------
@@ -182,16 +184,11 @@ parse_harvesting_datestamps(ArgsList) ->
 %%% Throws suitable error if resumption token is not an exclusive argument.
 %%% @end
 %%%-------------------------------------------------------------------
--spec parse_harvesting_resumption_token([proplists:property()]) -> ok | undefined.
+-spec parse_harvesting_resumption_token([proplists:property()]) -> provided | not_provided.
 parse_harvesting_resumption_token(ArgsList) ->
     case proplists:get_value(<<"resumptionToken">>, ArgsList) of
-        undefined ->
-            undefined;
-        _ ->
-            case length(ArgsList) of
-                1 -> ok;
-                _ -> throw({exclusiveResumptionTokenRequired, ArgsList})
-            end
+        undefined -> not_provided;
+        _ -> provided
     end.
 
 %%%-------------------------------------------------------------------
@@ -255,10 +252,7 @@ is_valid_time({H, M, S}) ->
 illegal_arguments_do_not_exist(Module, ArgsList) ->
     KnownArgumentsSet = sets:from_list(Module:required_arguments() ++
         Module:optional_arguments() ++
-        Module:exclusive_arguments() ++
-        % this argument is needed for the resumptionToken test to prevent
-        % the creation of 1000 handles, as it consumes time.
-        [<<"limit">>]),
+        Module:exclusive_arguments()),
 
     ExistingArgumentsSet = sets:from_list(proplists:get_keys(ArgsList)),
     case sets:is_subset(ExistingArgumentsSet, KnownArgumentsSet) of

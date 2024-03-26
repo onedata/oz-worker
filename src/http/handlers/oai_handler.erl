@@ -155,7 +155,7 @@ handle_request_unsafe(QueryParams, Req) ->
     Response = try
         {Verb, ParsedArgs} = oai_parser:process_and_validate_args(QueryParams),
         generate_response(Verb, ParsedArgs)
-        catch
+    catch
         throw:Error ->
             oai_errors:handle(Error)
     end,
@@ -201,18 +201,18 @@ generate_response(Verb, Args) ->
 %%% @end
 %%%--------------------------------------------------------------------
 -spec generate_required_response_elements(Module :: oai_verb_module(),
-    Args :: [proplists:property()]) -> [oai_response() | {binary(), oai_response()}].
+    Args :: [proplists:property()]) -> [{binary(), oai_response()}].
 generate_required_response_elements(Module, Args) when Module == list_identifiers; Module == list_records ->
     % These two operations do not fit the current framework for handling oai requests;
     % they return two different types or elements (header/record + resumptionToken) in one
     % get_response call. The ElementName can be either <<"header">> or <<"record">>, although
     % it's not entirely true (we do not want to list two elements not to cause two listings).
     [ElementName] = Module:required_response_elements(),
-    #oai_listing_result{
-        batch = Batch,
-        resumption_token = ResumptionToken
-    } = Module:get_response(ElementName, Args),
-    [{ElementName, Element} || Element <- Batch] ++ [{<<"resumptionToken">>, ResumptionToken}];
+    case Module:get_response(ElementName, Args) of
+        #oai_listing_result{batch = Batch, resumption_token = ResumptionToken} ->
+            [{ElementName, Element} || Element <- Batch] ++ [{<<"resumptionToken">>, ResumptionToken}];
+        List -> [{ElementName, Element} || Element <- List]
+    end;
 generate_required_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
         case Module:get_response(ElementName, Args) of

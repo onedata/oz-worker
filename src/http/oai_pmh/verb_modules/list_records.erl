@@ -14,7 +14,6 @@
 -include("http/handlers/oai.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([required_arguments/0, optional_arguments/0, exclusive_arguments/0,
@@ -77,10 +76,6 @@ optional_response_elements() -> [].
 -spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"record">>, Args) ->
     ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
-    HarvestingFun = fun(HandleId, Handle) ->
-        OaiId = oai_utils:oai_identifier_encode(HandleId),
-        oai_utils:build_oai_record(OaiId, Handle)
-    end,
-    oai_utils:harvest(ListingOpts, HarvestingFun).
+    oai_utils:harvest(ListingOpts, fun oai_utils:build_oai_record/2).
 
 %%% TODO VFS-7454 support resumptionToken

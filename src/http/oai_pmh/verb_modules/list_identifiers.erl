@@ -78,10 +78,6 @@ optional_response_elements() -> [].
 -spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"header">>, Args) ->
     ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
-    HarvestingFun = fun(HandleId, Handle) ->
-        OaiId = oai_utils:oai_identifier_encode(HandleId),
-        oai_utils:build_oai_header(OaiId, Handle)
-    end,
-    oai_utils:harvest(ListingOpts, HarvestingFun).
+    oai_utils:harvest(ListingOpts, fun oai_utils:build_oai_header/2).
 
 %%% TODO VFS-7454 support resumptionToken

@@ -101,6 +101,8 @@
     list_metadata_formats_no_format_error_post_test/1,
     cannot_disseminate_format_get_test/1,
     cannot_disseminate_format_post_test/1,
+    exclusive_resumption_token_required_get_test/1,
+    exclusive_resumption_token_required_post_test/1,
     list_identifiers_empty_repository_error_get_test/1,
     list_identifiers_empty_repository_error_post_test/1,
     list_identifiers_no_records_match_error1_get_test/1,
@@ -205,6 +207,8 @@ all() -> ?ALL([
     list_metadata_formats_no_format_error_post_test,
     cannot_disseminate_format_get_test,
     cannot_disseminate_format_post_test,
+    exclusive_resumption_token_required_get_test,
+    exclusive_resumption_token_required_post_test,
     list_identifiers_empty_repository_error_get_test,
     list_identifiers_empty_repository_error_post_test,
     list_identifiers_no_records_match_error1_get_test,
@@ -316,16 +320,16 @@ list_identifiers_post_test(Config) ->
     list_identifiers_test_base(Config, post, 10, undefined, undefined).
 
 list_identifiers_resumption_token_get_test(Config) ->
-    list_resumption_token_test_base(Config, get, identifiers, (?TESTED_HANDLE_LIST_LIMIT * 5) div 2).
+    list_resumption_token_test_base(Config, get, <<"ListIdentifiers">>, (?TESTED_HANDLE_LIST_LIMIT * 5) div 2).
 
 list_identifiers_resumption_token_post_test(Config) ->
-    list_resumption_token_test_base(Config, post, identifiers, (?TESTED_HANDLE_LIST_LIMIT * 5) div 2).
+    list_resumption_token_test_base(Config, post, <<"ListIdentifiers">>, (?TESTED_HANDLE_LIST_LIMIT * 5) div 2).
 
 list_all_identifiers_no_resumption_token_get_test(Config) ->
-    list_no_resumption_token_test_base(Config, get, identifiers, ?TESTED_HANDLE_LIST_LIMIT).
+    list_no_resumption_token_test_base(Config, get, <<"ListIdentifiers">>, ?TESTED_HANDLE_LIST_LIMIT).
 
 list_all_identifiers_no_resumption_token_post_test(Config) ->
-    list_no_resumption_token_test_base(Config, post, identifiers, ?TESTED_HANDLE_LIST_LIMIT).
+    list_no_resumption_token_test_base(Config, post, <<"ListIdentifiers">>, ?TESTED_HANDLE_LIST_LIMIT).
 
 selective_list_identifiers1_get_test(Config) ->
     list_identifiers_test_base(Config, get, 10, 0, 5).
@@ -376,16 +380,16 @@ list_records_post_test(Config) ->
     list_records_test_base(Config, post, 10, undefined, undefined).
 
 list_records_resumption_token_get_test(Config) ->
-    list_resumption_token_test_base(Config, get, records, (?TESTED_HANDLE_LIST_LIMIT * 5) div 2).
+    list_resumption_token_test_base(Config, get, <<"ListRecords">>, (?TESTED_HANDLE_LIST_LIMIT * 5) div 2).
 
 list_records_resumption_token_post_test(Config) ->
-    list_resumption_token_test_base(Config, post, records, (?TESTED_HANDLE_LIST_LIMIT * 5) div 2).
+    list_resumption_token_test_base(Config, post, <<"ListRecords">>, (?TESTED_HANDLE_LIST_LIMIT * 5) div 2).
 
 list_all_records_no_resumption_token_get_test(Config) ->
-    list_no_resumption_token_test_base(Config, get, records, ?TESTED_HANDLE_LIST_LIMIT).
+    list_no_resumption_token_test_base(Config, get, <<"ListRecords">>, ?TESTED_HANDLE_LIST_LIMIT).
 
 list_all_records_no_resumption_token_post_test(Config) ->
-    list_no_resumption_token_test_base(Config, post, records, ?TESTED_HANDLE_LIST_LIMIT).
+    list_no_resumption_token_test_base(Config, post, <<"ListRecords">>, ?TESTED_HANDLE_LIST_LIMIT).
 
 selective_list_records1_get_test(Config) ->
     list_records_test_base(Config, get, 10, 1, 7).
@@ -484,6 +488,12 @@ cannot_disseminate_format_get_test(Config) ->
 
 cannot_disseminate_format_post_test(Config) ->
     cannot_disseminate_format_test_base(Config, post).
+
+exclusive_resumption_token_required_get_test(Config) ->
+    exclusive_resumption_token_required_error(Config, get).
+
+exclusive_resumption_token_required_post_test(Config) ->
+    exclusive_resumption_token_required_error(Config, post).
 
 list_metadata_formats_no_format_error_get_test(Config) ->
     list_metadata_formats_no_format_error_test_base(Config, get).
@@ -753,7 +763,7 @@ list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffs
         TimeOffsets, BeginTime, FromOffset, UntilOffset, MetadataPrefix).
 
 
-list_resumption_token_test_base(Config, Method, ListedObjects, IdentifiersNum) ->
+list_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
@@ -764,28 +774,20 @@ list_resumption_token_test_base(Config, Method, ListedObjects, IdentifiersNum) -
     Args = prepare_harvesting_args(MetadataPrefix, undefined, undefined),
     BuildExpectedObject = fun(HandleId, TimeOffset) ->
         Timestamp = increase_timestamp(BeginTime, TimeOffset),
-        case ListedObjects of
-            identifiers ->
+        case Verb of
+            <<"ListIdentifiers">> ->
                 expected_oai_header_xml(Config, HandleId, Timestamp);
-            records ->
+            <<"ListRecords">> ->
                 ExpectedMetadata = expected_metadata_for_prefix(Config, HandleId, MetadataPrefix),
                 expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata, MetadataPrefix)
         end
     end,
     All = lists:zip(Identifiers, TimeOffsets),
-    IdsAndTimestamps = lists:sublist(All, ?TESTED_HANDLE_LIST_LIMIT),
-    ExpIdsAndTimestamps = expected_metadata_resumption_token(BuildExpectedObject, IdsAndTimestamps, Args),
-    Verb = case ListedObjects of
-        identifiers -> <<"ListIdentifiers">>;
-        records -> <<"ListRecords">>
-    end,
-    ResumptionToken = check_oai_request_resumption_token(200, Verb, Args, Method, ExpIdsAndTimestamps,
-        binary_to_atom(Verb), Config),
-    ok = list_all_handles(ResumptionToken, BuildExpectedObject, lists:subtract(All, IdsAndTimestamps), Verb,
-        Method, Config).
+    check_all_handles(Config, Method, Verb, All, Args, BuildExpectedObject,
+        oai_utils:request_arguments_to_handle_listing_opts(Args)).
 
 
-list_no_resumption_token_test_base(Config, Method, ListedObjects, IdentifiersNum) ->
+list_no_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
@@ -798,22 +800,21 @@ list_no_resumption_token_test_base(Config, Method, ListedObjects, IdentifiersNum
 
     BuildExpectedObject = fun(HandleId, TimeOffset) ->
         Timestamp = increase_timestamp(BeginTime, TimeOffset),
-        case ListedObjects of
-            identifiers ->
+        case Verb of
+            <<"ListIdentifiers">> ->
                 expected_oai_header_xml(Config, HandleId, Timestamp);
-            records ->
+            <<"ListRecords">> ->
                 ExpectedMetadata = expected_metadata_for_prefix(Config, HandleId, MetadataPrefix),
                 expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata, MetadataPrefix)
         end
     end,
-    All = lists:zip(Identifiers, TimeOffsets),
-    ExpResponseContent = expected_metadata_resumption_token(BuildExpectedObject, All, Args),
-    Verb = case ListedObjects of
-        identifiers -> <<"ListIdentifiers">>;
-        records -> <<"ListRecords">>
-    end,
-    ?assert(check_oai_request(200, Verb, Args, Method, ExpResponseContent,
-        binary_to_atom(Verb), Config)).
+    ExpectedBase = lists:map(fun({HandleId, TimeOffset}) ->
+        BuildExpectedObject(HandleId, TimeOffset)
+    end, lists:zip(Identifiers, TimeOffsets)),
+    case Verb of
+        <<"ListIdentifiers">> -> ?assert(check_list_identifiers(200, Args, Method, ExpectedBase, Config));
+        <<"ListRecords">> -> ?assert(check_list_records(200, Args, Method, ExpectedBase, Config))
+    end.
 
 
 list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
@@ -897,29 +898,20 @@ list_with_time_offsets_test_base(Config, Method, ListedObjects,
     Args = prepare_harvesting_args(MetadataPrefix, From, Until),
 
     IdsAndTimestamps = ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset),
-
-    ExpResponseContent = expected_metadata_resumption_token(BuildExpectedObject, IdsAndTimestamps, Args),
+    ExpectedBase = lists:map(fun({HandleId, TimeOffset}) ->
+        BuildExpectedObject(HandleId, TimeOffset)
+    end, IdsAndTimestamps),
     case ListedObjects of
         identifiers ->
-            ?assert(check_list_identifiers(200, Args, Method, ExpResponseContent, Config));
+            ?assert(check_list_identifiers(200, Args, Method, ExpectedBase, Config));
         records ->
-            ?assert(check_list_records(200, Args, Method, ExpResponseContent, Config))
+            ?assert(check_list_records(200, Args, Method, ExpectedBase, Config))
     end,
 
     % check filtering by sets
     {ok, HandleServices} = oz_test_utils:list_handle_services(Config),
     lists:foreach(fun(HandleServiceId) ->
         ArgsWithSet = [{<<"set">>, HandleServiceId} | Args],
-        ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(ArgsWithSet),
-        { _, ExpectedToken} = ozt:rpc(handles, list, [ListingOpts]),
-        TokenElement = [#xmlElement{
-            name = resumptionToken,
-            content = case ExpectedToken of
-                undefined -> [];
-                _ -> [#xmlText{value = binary_to_list(ExpectedToken)}]
-            end
-
-        }],
         ExpResponseBySetContent = lists:filtermap(fun({HandleId, TimeOffset}) ->
             case lookup_handle_service_of_handle(Config, HandleId) of
                 HandleServiceId ->
@@ -932,11 +924,11 @@ list_with_time_offsets_test_base(Config, Method, ListedObjects,
             {[], identifiers} ->
                 ?assert(check_list_identifiers_no_records_match_error(200, ArgsWithSet, Method, [], Config));
             {_, identifiers} ->
-                ?assert(check_list_identifiers(200, ArgsWithSet, Method, ExpResponseBySetContent ++ TokenElement, Config));
+                ?assert(check_list_identifiers(200, ArgsWithSet, Method, ExpResponseBySetContent, Config));
             {[], records} ->
                 ?assert(check_list_records_no_records_match_error(200, ArgsWithSet, Method, [], Config));
             {_, records} ->
-                ?assert(check_list_records(200, ArgsWithSet, Method, ExpResponseBySetContent ++ TokenElement, Config))
+                ?assert(check_list_records(200, ArgsWithSet, Method, ExpResponseBySetContent, Config))
         end
     end, HandleServices).
 
@@ -1010,6 +1002,13 @@ cannot_disseminate_format_test_base(Config, Method) ->
         {<<"metadataPrefix">>, <<"not_supported_format">>}
     ],
     ?assert(check_cannot_disseminate_format_error(200, Args, Method, [], Config)).
+
+exclusive_resumption_token_required_error(Config, Method) ->
+    Args = [
+        {<<"metadataPrefix">>, ?RAND_METADATA_PREFIX()},
+        {<<"resumptionToken">>, <<"example_token">>}
+    ],
+    ?assert(check_exclusive_resumption_token_required_error(200, Args, Method, [], Config)).
 
 list_metadata_formats_no_format_error_test_base(Config, Method) ->
     {ok, User} = oz_test_utils:create_user(Config),
@@ -1090,8 +1089,10 @@ list_records_no_records_match_error_test_base(Config, Method, IdentifiersNum, Fr
 init_per_suite(Config) ->
     ssl:start(),
     application:ensure_all_started(hackney),
-    ozt:init_per_suite(Config, fun() -> ozt:set_env(default_handle_list_limit,
-        ?TESTED_HANDLE_LIST_LIMIT) end).
+    ozt:init_per_suite(Config, fun() ->
+        ozt:set_env(default_handle_list_limit,
+        ?TESTED_HANDLE_LIST_LIMIT)
+    end).
 
 init_per_testcase(_, Config) ->
     mock_handle_proxy(Config),
@@ -1150,6 +1151,10 @@ check_cannot_disseminate_format_error(Code, Args, Method, ExpResponseContent, Co
     check_oai_request(Code, <<"GetRecord">>, Args, Method, ExpResponseContent,
         {error, cannotDisseminateFormat}, Config).
 
+check_exclusive_resumption_token_required_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"ListRecords">>, Args, Method, ExpResponseContent,
+        {error, badArgument}, Config).
+
 check_list_metadata_formats(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListMetadataFormats">>, Args, Method,
         ExpResponseContent, 'ListMetadataFormats', Config).
@@ -1160,7 +1165,7 @@ check_list_metadata_formats_error(Code, Args, Method, ExpResponseContent, Config
 
 check_list_identifiers(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListIdentifiers">>, Args, Method,
-        ExpResponseContent, 'ListIdentifiers', Config).
+        ExpResponseContent, 'ListIdentifiers',  Config).
 
 check_list_identifiers_no_records_match_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListIdentifiers">>, Args, Method,
@@ -1220,55 +1225,6 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
     }),
     ok = test_utils:mock_validate_and_unload(Nodes, oai_handler),
     Check.
-
-check_oai_request_resumption_token(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Config) ->
-    URL = get_oai_pmh_URL(),
-    Path = get_oai_pmh_api_path(),
-    Args2 = case Verb of
-        none -> Args;
-        _ -> add_verb(Verb, Args)
-    end,
-    ResponseDate = ?CURRENT_DATETIME(),
-    ExpectedBody = expected_body(ExpResponseContent, ResponseType, Args2, ResponseDate),
-    QueryString = prepare_querystring(Args2),
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_new(Nodes, oai_handler, [passthrough]),
-    test_utils:mock_expect(Nodes, oai_handler, generate_response_date_element,
-        fun() ->
-            {responseDate, list_to_binary(to_datestamp(ResponseDate))}
-        end
-    ),
-    Request = case Method of
-        get -> #{
-            method => get,
-            url => URL,
-            path => str_utils:format_bin("~s?~s", [Path, QueryString])
-        };
-        post -> #{
-            method => post,
-            url => URL,
-            path => Path,
-            body => QueryString,
-            headers => ?CONTENT_TYPE_HEADER
-        }
-    end,
-    ArgsMap = #{
-        request => Request,
-        expect => #{
-            code => Code,
-            body => ExpectedBody,
-            headers => {contains, ?RESPONSE_CONTENT_TYPE_HEADER}
-        }
-    },
-    {ok, RespCode, RespHeaders, RespBody} = rest_test_utils:perform_rest_call(Config, ArgsMap),
-    ?assert(rest_test_utils:check_performed_rest_call(ArgsMap, RespCode, RespHeaders, RespBody)),
-    ok = test_utils:mock_validate_and_unload(Nodes, oai_handler),
-    Token = case re:run(binary_to_list(RespBody), "<resumptionToken>(.*?)</resumptionToken>",
-        [{capture, all_but_first, binary}]) of
-        {match, [ResumptionToken]} -> ResumptionToken;
-        nomatch -> undefined
-    end,
-    Token.
 
 %%%===================================================================
 %%% Internal functions
@@ -1644,30 +1600,33 @@ expected_metadata_for_prefix(Config, HandleId, ?EDM_METADATA_PREFIX) ->
     {#xmlElement{content = Metadata}, _} = xmerl_scan:string(binary_to_list(MetadataXml)),
     Metadata.
 
-expected_metadata_resumption_token(BuildExpectedObject, Expected, Args) ->
+expected_metadata_with_resumption_token(BuildExpectedObject, Expected, ExpResumptionToken) ->
     ExpectedBase = lists:map(fun({HandleId, TimeOffset}) ->
         BuildExpectedObject(HandleId, TimeOffset)
     end, Expected),
-    ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
-    { _, ExpectedToken} = ozt:rpc(handles, list, [ListingOpts]),
-    ExpectedBase ++ [#xmlElement{
-        name = resumptionToken,
-        content = case ExpectedToken of
-            undefined -> [];
-            _ -> [#xmlText{value = binary_to_list(ExpectedToken)}]
-        end
-    }].
+    ExpectedBase ++ [expected_token_element(ExpResumptionToken)].
 
-list_all_handles(ResumptionToken, BuildExpectedObject, Rest, Verb, Method, Config) when length(Rest) =< ?TESTED_HANDLE_LIST_LIMIT ->
-    ArgsToken = add_to_args(<<"resumptionToken">>, ResumptionToken, []),
-    ExpResponseContent =  expected_metadata_resumption_token(BuildExpectedObject, Rest, ArgsToken),
-    undefined = check_oai_request_resumption_token(200, Verb, ArgsToken, Method, ExpResponseContent,
-        binary_to_atom(Verb), Config),
+
+expected_token_element(ExpResumptionToken) ->
+    #xmlElement{name = resumptionToken,
+        content = case ExpResumptionToken of
+            undefined -> [];
+            _ -> [#xmlText{value = binary_to_list(ExpResumptionToken)}]
+        end
+    }.
+
+check_all_handles(_Config, _Method, _Verb, _Rest, _Args, _BuildExpectedObject, #{resumption_token := undefined}) ->
     ok;
-list_all_handles(ResumptionToken, BuildExpectedObject, Rest, Verb, Method, Config) ->
+check_all_handles(Config, Method, Verb, Rest, Args, BuildExpectedObject, ListingOpts) ->
+    Sublist = lists:sublist(Rest, ?TESTED_HANDLE_LIST_LIMIT),
+    {_, ResumptionToken} = ozt:rpc(handles, list, [ListingOpts]),
+    ExpIdsAndTimestamps = expected_metadata_with_resumption_token(BuildExpectedObject,
+        Sublist, ResumptionToken),
+    case Verb of
+        <<"ListIdentifiers">> -> ?assert(check_list_identifiers(200, Args, Method, ExpIdsAndTimestamps, Config));
+        <<"ListRecords">> -> ?assert(check_list_records(200, Args, Method, ExpIdsAndTimestamps, Config))
+    end,
     ArgsToken = add_to_args(<<"resumptionToken">>, ResumptionToken, []),
-    SubList = lists:sublist(Rest, ?TESTED_HANDLE_LIST_LIMIT),
-    ExpRest =  expected_metadata_resumption_token(BuildExpectedObject, SubList, ArgsToken),
-    NewToken = check_oai_request_resumption_token(200, Verb, ArgsToken, Method, ExpRest,
-        binary_to_atom(Verb), Config),
-    list_all_handles(NewToken, BuildExpectedObject, lists:subtract(Rest, SubList), Verb, Method, Config).
+    check_all_handles(Config, Method, Verb, lists:subtract(Rest, Sublist), ArgsToken, BuildExpectedObject,
+        #{resumption_token => ResumptionToken}).
+
