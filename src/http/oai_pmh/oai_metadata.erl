@@ -19,10 +19,11 @@
 
 
 %% API
--export([supported_formats/0, module/1]).
+-export([supported_formats/0]).
 -export([clear_plugin_cache/0]).
 -export([schema_URL/1, main_namespace/1]).
 -export([revise_for_publication/4, insert_public_handle/3, adapt_for_oai_pmh/2]).
+-export([validation_examples/1]).
 -export([parse_and_normalize_xml/1]).
 
 
@@ -33,19 +34,10 @@
 %%% API
 %%%===================================================================
 
+
 -spec supported_formats() -> [od_handle:metadata_prefix()].
 supported_formats() ->
     maps:keys(acquire_prefix_to_plugin_mapping()).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Maps MetadataPrefix to name of module handling given format.
-%% @end
-%%--------------------------------------------------------------------
--spec module(od_handle:metadata_prefix()) -> module().
-module(MetadataPrefix) ->
-    maps:get(MetadataPrefix, acquire_prefix_to_plugin_mapping()).
 
 
 -spec clear_plugin_cache() -> ok.
@@ -53,12 +45,6 @@ clear_plugin_cache() ->
     node_cache:clear(?PLUGIN_CACHE_KEY).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns URL of XML schema of given metadata prefix (associated with
-%% MetadataPrefix).
-%% @end
-%%--------------------------------------------------------------------
 -spec schema_URL(od_handle:metadata_prefix()) -> binary().
 schema_URL(MetadataPrefix) ->
     Module = module(MetadataPrefix),
@@ -86,7 +72,7 @@ main_namespace(MetadataPrefix) ->
 ) ->
     {ok, od_handle:parsed_metadata()} | error.
 revise_for_publication(MetadataPrefix, Metadata, ShareId, ShareRecord) ->
-    Module = oai_metadata:module(MetadataPrefix),
+    Module = module(MetadataPrefix),
     Module:revise_for_publication(Metadata, ShareId, ShareRecord).
 
 
@@ -95,15 +81,21 @@ revise_for_publication(MetadataPrefix, Metadata, ShareId, ShareRecord) ->
 -spec insert_public_handle(od_handle:metadata_prefix(), od_handle:parsed_metadata(), od_handle:public_handle()) ->
     od_handle:parsed_metadata().
 insert_public_handle(MetadataPrefix, Metadata, PublicHandle) ->
-    Module = oai_metadata:module(MetadataPrefix),
+    Module = module(MetadataPrefix),
     Module:insert_public_handle(Metadata, PublicHandle).
 
 
 -spec adapt_for_oai_pmh(od_handle:metadata_prefix(), od_handle:parsed_metadata()) ->
     {ok, od_handle:parsed_metadata()} | errors:error().
 adapt_for_oai_pmh(MetadataPrefix, Metadata) ->
-    Module = oai_metadata:module(MetadataPrefix),
+    Module = module(MetadataPrefix),
     Module:adapt_for_oai_pmh(Metadata).
+
+
+-spec validation_examples(od_handle:metadata_prefix()) -> [handle_metadata_plugin_behaviour:validation_example()].
+validation_examples(MetadataPrefix) ->
+    Module = module(MetadataPrefix),
+    Module:validation_examples().
 
 
 -spec parse_and_normalize_xml(od_handle:raw_metadata()) -> {ok, od_handle:parsed_metadata()} | error.
@@ -127,6 +119,12 @@ parse_and_normalize_xml(Metadata) ->
 %%%===================================================================
 %%% helpers
 %%%===================================================================
+
+%% @private
+-spec module(od_handle:metadata_prefix()) -> module().
+module(MetadataPrefix) ->
+    maps:get(MetadataPrefix, acquire_prefix_to_plugin_mapping()).
+
 
 %% @private
 -spec acquire_prefix_to_plugin_mapping() -> #{od_handle:metadata_prefix() => module()}.

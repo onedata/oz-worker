@@ -37,15 +37,13 @@ encode_decode_utf8_test() ->
     >>,
     % normalization of the metadata XML should ensure that it is wrapped in top-level
     % "metadata" tags
-    eunit_utils:debug_log("~ts", [<<"<metadata>", RawXmlWithUtf8Chars/binary, "</metadata>">>]),
-    eunit_utils:debug_log("~ts", [call_encode_and_decode(RawXmlWithUtf8Chars, no_prolog)]),
     ?assertEqual(
-        <<"<metadata>", RawXmlWithUtf8Chars/binary, "</metadata>">>,
-        call_encode_and_decode(RawXmlWithUtf8Chars, no_prolog)
+        <<Prolog/binary, "<metadata>", RawXmlWithUtf8Chars/binary, "</metadata>">>,
+        parse_and_normalize_and_encode(RawXmlWithUtf8Chars)
     ),
     ?assertEqual(
         <<Prolog/binary, "<metadata>", RawXmlWithUtf8Chars/binary, "</metadata>">>,
-        call_encode_and_decode(RawXmlWithUtf8Chars, include_prolog)
+        parse_and_normalize_and_encode(<<Prolog/binary, RawXmlWithUtf8Chars/binary>>)
     ),
 
     RawXmlWithUtf8CharsWrappedInMetadataTags = <<
@@ -62,19 +60,19 @@ encode_decode_utf8_test() ->
         "</metadata>"/utf8
     >>,
     ?assertEqual(
-        RawXmlWithUtf8CharsWrappedInMetadataTags,
-        call_encode_and_decode(RawXmlWithUtf8CharsWrappedInMetadataTags, no_prolog)
+        <<Prolog/binary, RawXmlWithUtf8CharsWrappedInMetadataTags/binary>>,
+        parse_and_normalize_and_encode(RawXmlWithUtf8CharsWrappedInMetadataTags)
     ),
     ?assertEqual(
         <<Prolog/binary, RawXmlWithUtf8CharsWrappedInMetadataTags/binary>>,
-        call_encode_and_decode(RawXmlWithUtf8CharsWrappedInMetadataTags, include_prolog)
+        parse_and_normalize_and_encode(<<Prolog/binary, RawXmlWithUtf8CharsWrappedInMetadataTags/binary>>)
     ).
 
 
 %% @private
-call_encode_and_decode(RawXml, PrologOption) ->
+parse_and_normalize_and_encode(RawXml) ->
     {ok, ParsedXml} = oai_metadata:parse_and_normalize_xml(RawXml),
-    oai_utils:export_xml(ParsedXml, PrologOption).
+    oai_utils:encode_xml(ParsedXml).
 
 
 -endif.

@@ -71,7 +71,7 @@ list_test(Config) ->
         fun(SpaceId) ->
             ShareId = ?UNIQUE_STRING,
             {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
             ),
             ShareId
         end, [S1, S1, S1, S2, S2]
@@ -135,6 +135,7 @@ create_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ProposedShareId = datastore_key:new(),
+    RootFileId = ?GEN_ROOT_FILE_ID(SpaceId, ProposedShareId),
 
     VerifyFun = fun(ShareId, Data) ->
         ?assertEqual(ShareId, ProposedShareId),
@@ -143,10 +144,14 @@ create_test(Config) ->
         ExpectedDescription = maps:get(<<"description">>, Data, <<"">>),
         ?assertMatch(#od_share{
             name = ?CORRECT_NAME, description = ExpectedDescription,
-            space = SpaceId, root_file = ?ROOT_FILE_ID,
+            space = SpaceId, root_file = RootFileId,
             file_type = ExpectedFileType
         }, Share),
         true
+    end,
+
+    EnvTearDownFun = fun(_) ->
+        ozt:rpc(share_logic, delete, [?ROOT, ProposedShareId])
     end,
 
     NotAGuid = datastore_key:new(),
@@ -201,7 +206,7 @@ create_test(Config) ->
                 ?OK_MAP_CONTAINS(#{
                     <<"handleId">> => null,
                     <<"name">> => ?CORRECT_NAME,
-                    <<"rootFileId">> => ?ROOT_FILE_ID,
+                    <<"rootFileId">> => RootFileId,
                     <<"spaceId">> => SpaceId,
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = gri:deserialize(EncodedGri),
@@ -221,7 +226,7 @@ create_test(Config) ->
                 <<"shareId">> => [ProposedShareId],
                 <<"name">> => [?CORRECT_NAME],
                 <<"description">> => [<<"">>, ?RAND_UNICODE_STR(769)],
-                <<"rootFileId">> => [?ROOT_FILE_ID],
+                <<"rootFileId">> => [RootFileId],
                 <<"fileType">> => [file, dir],
                 <<"spaceId">> => [SpaceId]
             },
@@ -232,7 +237,7 @@ create_test(Config) ->
                 ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)])
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, undefined, EnvTearDownFun, undefined)),
 
     % Root client bypasses authorization checks,
     % hence wrong values of handleServiceId or resourceId
@@ -252,7 +257,7 @@ create_test(Config) ->
                 ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)])
         }
     },
-    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec, undefined, EnvTearDownFun, undefined)).
 
 
 get_test(Config) ->
@@ -274,7 +279,7 @@ get_test(Config, ShareId, FileType) ->
         <<"spaceId">> => S1,
         <<"name">> => ?SHARE_NAME1,
         <<"description">> => str_utils:rand_hex(rand:uniform(1000) - 1),
-        <<"rootFileId">> => ?ROOT_FILE_ID,
+        <<"rootFileId">> => ?GEN_ROOT_FILE_ID(S1, ShareId),
         <<"fileType">> => FileType
     },
     {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(Owner), ShareData),
@@ -377,7 +382,7 @@ update_test(Config) ->
                 <<"shareId">> => ShareId,
                 <<"name">> => InitialName,
                 <<"description">> => InitialDescription,
-                <<"rootFileId">> => ?ROOT_FILE_ID,
+                <<"rootFileId">> => ?GEN_ROOT_FILE_ID(S1, ShareId),
                 <<"spaceId">> => S1
             }
         ),
@@ -459,7 +464,7 @@ delete_test(Config) ->
     EnvSetUpFun = fun() ->
         ShareId = ?UNIQUE_STRING,
         {ok, ShareId} = oz_test_utils:create_share(
-            Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+            Config, ?ROOT, ShareId, ?SHARE_NAME1, S1
         ),
         #{shareId => ShareId}
     end,
@@ -517,7 +522,7 @@ get_shared_file_or_directory_data_test_base(Config, SubpathWithQs) ->
         <<"spaceId">> => SpaceId,
         <<"name">> => ?SHARE_NAME1,
         <<"description">> => str_utils:rand_hex(rand:uniform(1000) - 1),
-        <<"rootFileId">> => ?ROOT_FILE_ID,
+        <<"rootFileId">> => ?GEN_ROOT_FILE_ID(SpaceId, ShareId),
         <<"fileType">> => file
     }),
     CorrectObjectId = gen_example_object_id(ShareId),
@@ -641,7 +646,7 @@ choose_provider_for_public_share_handling_test(Config) ->
 
     ShareId = str_utils:rand_hex(16),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
+        Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
     ),
 
     ChooseProvider = fun() ->

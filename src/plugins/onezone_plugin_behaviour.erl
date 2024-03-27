@@ -24,7 +24,7 @@
 %%      entitlement_parser -> entitlement_parser_behaviour
 %%      openid_plugin -> openid_plugin_behaviour
 %%      attribute_mapper -> attribute_mapper_behaviour
-%%      harvesting_backend -> attribute_mapper_behaviour
+%%      harvesting_backend -> harvesting_backend_behaviour
 %%      handle_metadata_plugin -> handle_metadata_plugin_behaviour
 %% @end
 %%--------------------------------------------------------------------

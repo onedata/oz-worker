@@ -143,7 +143,7 @@
     space_harvest_metadata/7
 ]).
 -export([
-    create_share/6,
+    create_share/5,
     create_share/3,
     list_shares/1,
     get_share/2,
@@ -1394,11 +1394,11 @@ space_has_effective_user(Config, SpaceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_share(Config :: term(), Client :: aai:auth(),
-    ShareId :: od_share:id(), Name :: od_share:name(), RootFileId :: binary(),
+    ShareId :: od_share:id(), Name :: od_share:name(),
     SpaceId :: od_space:id()) -> {ok, od_share:id()}.
-create_share(Config, Client, ShareId, Name, RootFileId, SpaceId) ->
+create_share(Config, Client, ShareId, Name, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(Config, share_logic, create, [
-        Client, ShareId, Name, RootFileId, SpaceId
+        Client, ShareId, Name, ?GEN_ROOT_FILE_ID(SpaceId, ShareId), SpaceId
     ])).
 
 

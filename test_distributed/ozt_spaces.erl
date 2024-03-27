@@ -221,8 +221,9 @@ create_support_token(SpaceId, UserId) ->
 
 -spec create_share(od_space:id(), od_share:name()) -> od_share:id().
 create_share(SpaceId, Name) ->
+    ShareId = datastore_key:new(),
     {ok, ShareId} = ?assertMatch({ok, _}, ozt:rpc(share_logic, create, [
-        ?ROOT, str_utils:rand_hex(16), Name, ?ROOT_FILE_ID, SpaceId
+        ?ROOT, ShareId, Name, ?GEN_ROOT_FILE_ID(SpaceId, ShareId), SpaceId
     ])),
     ShareId.
 

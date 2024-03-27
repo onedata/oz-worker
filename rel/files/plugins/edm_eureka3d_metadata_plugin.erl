@@ -4,7 +4,7 @@
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @doc
-%%% Implementation of a onezone plugin and the handle_metadata_plugin_behaviour
+%%% Implementation of the onezone_plugin_behaviour and the handle_metadata_plugin_behaviour
 %%% for handling EDM (Europeana Data Model) metadata format in the scope of the Eureka3D project.
 %%%
 %%% @see handle_metadata_plugin_behaviour for general information about metadata plugins.
@@ -78,12 +78,14 @@ type() ->
 
 %% @doc {@link metadata_format_behaviour} callback metadata_prefix/0
 -spec metadata_prefix() -> binary().
-metadata_prefix() -> ?EDM_METADATA_PREFIX.
+metadata_prefix() ->
+    ?EDM_METADATA_PREFIX.
 
 
 %% @doc {@link metadata_format_behaviour} callback schema_URL/0
 -spec schema_URL() -> binary().
-schema_URL() -> <<"https://www.europeana.eu/schemas/edm/EDM.xsd">>.
+schema_URL() ->
+    <<"https://www.europeana.eu/schemas/edm/EDM.xsd">>.
 
 
 %% @doc {@link metadata_format_behaviour} callback main_namespace/0
@@ -92,6 +94,7 @@ main_namespace() ->
     {'xmlns:edm', <<"http://www.europeana.eu/schemas/edm/">>}.
 
 
+%% @TODO VFS-11365 check the cardinality of submitted elements (e.g. ProvidedCHO 1, Aggregation 1, WebResource 0..N)
 %% @doc {@link handle_metadata_plugin_behaviour} callback revise_for_publication/3
 -spec revise_for_publication(od_handle:parsed_metadata(), od_share:id(), od_share:record()) ->
     {ok, od_handle:parsed_metadata()} | error.
@@ -275,6 +278,8 @@ insert_aggregated_cho_element(Elements, Identifier) ->
     "xmlns:cc=\"http://creativecommons.org/ns#\""
 ]).
 
+-define(RAND_ELEMENT(L), lists_utils:random_element(L)).
+
 
 %% @private
 -spec gen_validation_examples() -> [handle_metadata_plugin_behaviour:validation_example()].
@@ -298,23 +303,17 @@ gen_validation_examples() -> lists:flatten([
         >>,
         input_qualifies_for_publication = false  % the top level <rdf:RDF> is required
     },
-    [
+    % do not generate all the combinations, otherwise validation may take a substantial amount of time
+    lists_utils:generate(fun() ->
         gen_validation_example(#validation_example_builder_ctx{
-            metadata_tags = MetadataTags,
-            provided_cho_about_attr = ProvidedChoAboutAttr,
-            ore_aggregation_about_attr = OreAggregationAboutAttr,
-            aggregated_cho_resource_attr = AggregatedChoResourceAttr,
-            is_shown_by_resource_attr = IsShownByResourceAttr,
-            is_shown_at_resource_attr = IsShownAtResourceAttr
+            metadata_tags = ?RAND_ELEMENT([included, skipped]),
+            provided_cho_about_attr = ?RAND_ELEMENT([attr_not_provided, <<"oai:325sa/ffa72790ef7">>]),
+            ore_aggregation_about_attr = ?RAND_ELEMENT([attr_not_provided, <<"oai:kv8ds/kjf7ahi13f">>]),
+            aggregated_cho_resource_attr = ?RAND_ELEMENT([attr_not_provided, element_not_provided, <<"oai:ks72a/bma9w8hfdalb">>]),
+            is_shown_by_resource_attr = ?RAND_ELEMENT([attr_not_provided, element_not_provided, <<"https://example.com/about/oai:83jjd:sdfnb1m9x98">>]),
+            is_shown_at_resource_attr = ?RAND_ELEMENT([attr_not_provided, element_not_provided, <<"https://example.com/show/oai:zxpp0/dfgs22bma9w">>])
         })
-        ||
-        MetadataTags <- [included, skipped],
-        ProvidedChoAboutAttr <- [attr_not_provided, <<"oai:325sa/ffa72790ef7">>],
-        OreAggregationAboutAttr <- [attr_not_provided, <<"oai:kv8ds/kjf7ahi13f">>],
-        AggregatedChoResourceAttr <- [attr_not_provided, element_not_provided, <<"oai:ks72a/bma9w8hfdalb">>],
-        IsShownByResourceAttr <- [attr_not_provided, element_not_provided, <<"https://example.com/about/oai:83jjd:sdfnb1m9x98">>],
-        IsShownAtResourceAttr <- [attr_not_provided, element_not_provided, <<"https://example.com/show/oai:zxpp0/dfgs22bma9w">>]
-    ]
+    end, 30)
 ]).
 
 
@@ -399,18 +398,15 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
     is_shown_by_resource_attr = IsShownByResourceAttr,
     is_shown_at_resource_attr = IsShownAtResourceAttr
 }) ->
-    ExpProvChoRdfAboutStr = case MetadataType of
-        revised -> <<"">>;
-        final -> <<" rdf:about=\"", PublicHandle/binary, "\"">>
+    {ExpProvChoRdfAboutStr, ExpOreAggRdfAboutStr, ExpAggChoElement} = case MetadataType of
+        revised -> {<<"">>, <<"">>, <<"">>};
+        final -> {
+            <<" rdf:about=\"", PublicHandle/binary, "\"">>,
+            <<" rdf:about=\"", PublicHandle/binary, "_AGG\"">>,
+            <<"<edm:aggregatedCHO rdf:resource=\"", PublicHandle/binary, "\"/>">>
+        }
     end,
-    ExpOreAggRdfAboutStr = case MetadataType of
-        revised -> <<"">>;
-        final -> <<" rdf:about=\"", PublicHandle/binary, "_AGG\"">>
-    end,
-    ExpAggChoElement = case MetadataType of
-        revised -> <<"">>;
-        final -> <<"<edm:aggregatedCHO rdf:resource=\"", PublicHandle/binary, "\"/>">>
-    end,
+
     ShareRootFileId = ?check(file_id:guid_to_objectid(ShareRecord#od_share.root_file)),
     ExpIsShownAtResource = case IsShownAtResourceAttr of
         Value when is_binary(Value) -> Value;

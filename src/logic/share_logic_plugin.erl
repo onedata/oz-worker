@@ -107,7 +107,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         {FileUuid, SpaceId, ShareId} = file_id:unpack_share_guid(RootFileId),
         true = is_binary(FileUuid) andalso byte_size(FileUuid) > 0
     catch _:_ ->
-        ?ERROR_BAD_DATA(<<"rootFileId">>)
+        throw(?ERROR_BAD_DATA(<<"rootFileId">>))
     end,
 
     ShareDoc = #document{key = ShareId, value = #od_share{

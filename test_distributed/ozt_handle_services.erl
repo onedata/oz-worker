@@ -15,14 +15,16 @@
 -author("Lukasz Opiola").
 
 -include("ozt.hrl").
+-include("plugins/onezone_plugins.hrl").
 
 %% API
 -export([create/0, create/1]).
--export([create_handle/2]).
+
 
 %%%===================================================================
 %%% API
 %%%===================================================================
+
 
 -spec create() -> od_handle_service:id().
 create() ->
@@ -39,8 +41,3 @@ create(Name) ->
         ?ROOT, Data#{<<"name">> => Name}
     ])),
     HServiceId.
-
-
-create_handle(HServiceId, ShareId) ->
-    {ok, HandleId} = ?assertMatch({ok, _}, ozt:rpc(handle_logic, create, [?ROOT, ?HANDLE(HServiceId, ShareId)])),
-    HandleId.

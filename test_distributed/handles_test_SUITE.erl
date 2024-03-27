@@ -324,7 +324,7 @@ delete_handle_from_service_test(_Config) ->
 list_all() ->
     lists:flatmap(fun(MetadataPrefix) ->
         list_all(#{metadata_prefix => MetadataPrefix})
-    end, oai_metadata:supported_formats()).
+    end, ozt_handles:supported_metadata_prefixes()).
 
 list_all(ListingOpts) ->
     case list_once(ListingOpts) of

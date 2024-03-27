@@ -17,7 +17,6 @@
 -include_lib("ctool/include/http/headers.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
--include("oai_test_SUITE.hrl").
 -include("http/handlers/oai.hrl").
 
 
@@ -226,15 +225,7 @@ all() -> ?ALL([
     lists:map(fun(N) ->
         list_to_binary("space" ++ integer_to_list(N))
     end, lists:seq(0, Num - 1))).
--define(RAND_METADATA_PREFIX(), case ?RAND_BOOL() of
-    true -> ?OAI_DC_METADATA_PREFIX;
-    false -> ?EDM_METADATA_PREFIX
-end).
-
--define(DC_NAMESPACE, <<"http://www.openarchives.org/OAI/2.0/oai_dc/">>).
--define(DC_SCHEMA, <<"http://www.openarchives.org/OAI/2.0/oai_dc.xsd">>).
--define(EDM_NAMESPACE, <<"http://www.europeana.eu/schemas/edm/">>).
--define(EDM_SCHEMA, <<"https://www.europeana.eu/schemas/edm/EDM.xsd">>).
+-define(RAND_METADATA_PREFIX(), ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes())).
 
 -define(PROXY_ENDPOINT, <<"172.17.0.9:8080/api/v1">>).
 
@@ -516,12 +507,12 @@ identify_test_base(Config, Method) ->
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     ShareId = datastore_key:new(),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
+        Config, ?USER(User), ShareId, ShareId, Space1
     ),
     {HSId, _} = create_handle_service(Config, User),
     Timestamp = ?CURRENT_DATETIME(),
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = input_metadata_for_prefix(MetadataPrefix),
+    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
     create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
         Metadata, MetadataPrefix, Timestamp),
 
@@ -552,10 +543,10 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     Timestamp2 = increase_timestamp(Timestamp1, 1),
     Timestamp3 = increase_timestamp(Timestamp2, 1),
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = input_metadata_for_prefix(MetadataPrefix),
+    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
     Identifier1 = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId1,
         Metadata, MetadataPrefix, Timestamp1),
-    Metadata2 = input_metadata_for_prefix(MetadataPrefix),
+    Metadata2 = ozt_handles:example_input_metadata(MetadataPrefix),
     _Identifier2 = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId2,
         Metadata2, MetadataPrefix, Timestamp2),
 
@@ -590,22 +581,22 @@ get_record_test_base(Config, Method) ->
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     ShareId = datastore_key:new(),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
+        Config, ?USER(User), ShareId, ShareId, Space1
     ),
     {HSId, _} = create_handle_service(Config, User),
     Timestamp = ?CURRENT_DATETIME(),
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = input_metadata_for_prefix(MetadataPrefix),
-    Identifier = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
+    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    HandleId = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
         Metadata, MetadataPrefix, Timestamp),
-    ExpectedMetadata = expected_metadata_for_prefix(Config, Identifier, MetadataPrefix),
+    ExpectedMetadata = expected_final_metadata(MetadataPrefix, HandleId),
 
     Args = [
-        {<<"identifier">>, oai_identifier(Config, Identifier)},
+        {<<"identifier">>, oai_identifier(Config, HandleId)},
         {<<"metadataPrefix">>, MetadataPrefix}
     ],
     ExpResponseContent = [
-        expected_oai_record_xml(Config, Identifier, Timestamp, ExpectedMetadata, MetadataPrefix)
+        expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata)
     ],
     ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config)).
 
@@ -627,7 +618,8 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
         % simulate a handle being added in the old system version, when metadata was not sanitized
         ShareId = datastore_key:new(),
         {ok, ShareId} = oz_test_utils:create_share(
-            Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
+            Config, ?USER(User), ShareId, ShareId,
+            Space1
         ),
         MetadataPrefix = ?OAI_DC_METADATA_PREFIX,
         {ok, PublicHandle} = ozt:rpc(handle_proxy, register_handle,
@@ -650,9 +642,14 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
 
         % Badly formatted metadata should result in only
         % dc:identifiers being present in the OAI output
-        ExpectedDCMetadata = expected_identifiers(Config, Identifier),
+        ExpectedDCMetadata = [
+            ozt:rpc(oai_metadata, adapt_for_oai_pmh, [
+                MetadataPrefix,
+                #xmlElement{name = metadata, content = expected_dc_identifiers(Config, Identifier)}
+            ])
+        ],
         ExpResponseContent = [
-            expected_oai_record_xml(Config, Identifier, DataTime, ExpectedDCMetadata, MetadataPrefix)
+            expected_oai_record_xml(Config, Identifier, DataTime, ExpectedDCMetadata)
         ],
 
         ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config))
@@ -660,42 +657,26 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
 
 
 list_metadata_formats_test_base(Config, Method) ->
-    ExpResponseContent = [
+    ExpResponseContent = lists:map(fun(MetadataPrefix) ->
+        {_, Namespace} = ozt:rpc(oai_metadata, main_namespace, [MetadataPrefix]),
         #xmlElement{
             name = metadataFormat,
             content = [
                 #xmlElement{
                     name = metadataPrefix,
-                    content = [#xmlText{value = binary_to_list(?OAI_DC_METADATA_PREFIX)}]
+                    content = [#xmlText{value = binary_to_list(MetadataPrefix)}]
                 },
                 #xmlElement{
                     name = schema,
-                    content = [#xmlText{value = binary_to_list(?DC_SCHEMA)}]
+                    content = [#xmlText{value = binary_to_list(ozt:rpc(oai_metadata, schema_URL, [MetadataPrefix]))}]
                 },
                 #xmlElement{
                     name = metadataNamespace,
-                    content = [#xmlText{value = binary_to_list(?DC_NAMESPACE)}]
-                }
-            ]
-        },
-        #xmlElement{
-            name = metadataFormat,
-            content = [
-                #xmlElement{
-                    name = metadataPrefix,
-                    content = [#xmlText{value = binary_to_list(?EDM_METADATA_PREFIX)}]
-                },
-                #xmlElement{
-                    name = schema,
-                    content = [#xmlText{value = binary_to_list(?EDM_SCHEMA)}]
-                },
-                #xmlElement{
-                    name = metadataNamespace,
-                    content = [#xmlText{value = binary_to_list(?EDM_NAMESPACE)}]
+                    content = [#xmlText{value = binary_to_list(Namespace)}]
                 }
             ]
         }
-    ],
+    end, ozt_handles:supported_metadata_prefixes()),
     ?assert(check_list_metadata_formats(200, [], Method, ExpResponseContent, Config)).
 
 
@@ -703,7 +684,7 @@ list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffs
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = input_metadata_for_prefix(MetadataPrefix),
+    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
     Identifiers = setup_test_for_harvesting(
         Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
     ),
@@ -718,7 +699,7 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = input_metadata_for_prefix(MetadataPrefix),
+    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
 
     Identifiers = setup_test_for_harvesting(
         Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
@@ -740,7 +721,7 @@ list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) 
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = input_metadata_for_prefix(MetadataPrefix),
+    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
     Identifiers = setup_test_for_harvesting(
         Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
     ),
@@ -756,7 +737,7 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = input_metadata_for_prefix(MetadataPrefix),
+    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
     Identifiers = setup_test_for_harvesting(
         Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
     ),
@@ -781,8 +762,8 @@ list_with_time_offsets_test_base(Config, Method, ListedObjects,
             identifiers ->
                 expected_oai_header_xml(Config, HandleId, Timestamp);
             records ->
-                ExpectedMetadata = expected_metadata_for_prefix(Config, HandleId, MetadataPrefix),
-                expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata, MetadataPrefix)
+                ExpectedMetadata = expected_final_metadata(MetadataPrefix, HandleId),
+                expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata)
         end
     end,
 
@@ -884,11 +865,11 @@ cannot_disseminate_format_test_base(Config, Method) ->
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     ShareId = datastore_key:new(),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
+        Config, ?USER(User), ShareId, ShareId, Space1
     ),
     {HSId, _} = create_handle_service(Config, User),
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = input_metadata_for_prefix(MetadataPrefix),
+    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
     Identifier = create_handle(Config, User, HSId, ShareId, MetadataPrefix, Metadata),
 
     Args = [
@@ -902,11 +883,11 @@ list_metadata_formats_no_format_error_test_base(Config, Method) ->
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     ShareId = datastore_key:new(),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?USER(User), ShareId, ShareId, <<"root">>, Space1
+        Config, ?USER(User), ShareId, ShareId, Space1
     ),
     {HSId, _} = create_handle_service(Config, User),
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata =input_metadata_for_prefix(MetadataPrefix),
+    Metadata =ozt_handles:example_input_metadata(MetadataPrefix),
     Identifier = create_handle(Config, User, HSId, ShareId, MetadataPrefix, Metadata),
     % Modify handle metadata to undefined (this should not occur in normal
     % conditions because entity logic won't accept undefined metadata,
@@ -930,7 +911,7 @@ list_identifiers_no_records_match_error_test_base(Config, Method, IdentifiersNum
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = input_metadata_for_prefix(MetadataPrefix),
+    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
     setup_test_for_harvesting(Config, IdentifiersNum, BeginTime,
         TimeOffsets, Metadata, MetadataPrefix),
 
@@ -959,7 +940,7 @@ list_records_no_records_match_error_test_base(Config, Method, IdentifiersNum, Fr
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = input_metadata_for_prefix(MetadataPrefix),
+    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
     setup_test_for_harvesting(Config, IdentifiersNum, BeginTime,
         TimeOffsets, Metadata, MetadataPrefix),
 
@@ -1211,7 +1192,7 @@ create_shares(Config, SpaceIds) ->
     ShareIds = ?SHARE_IDS(length(SpaceIds)),
     lists:map(fun({ShareId, SpaceId}) ->
         {ok, ShareId} = oz_test_utils:create_share(
-            Config, ?ROOT, ShareId, ShareId, <<"root_file_id">>, SpaceId
+            Config, ?ROOT, ShareId, ShareId, SpaceId
         ),
         ShareId
     end, lists:zip(ShareIds, SpaceIds)).
@@ -1373,7 +1354,7 @@ random_out_of_range(Lower, Upper, Max) ->
     end.
 
 % Resulting metadata should include additional identifiers - public handle and public share url
-expected_identifiers(Config, HandleId) ->
+expected_dc_identifiers(Config, HandleId) ->
     {ok, #od_handle{
         resource_id = ShareId,
         public_handle = PublicHandle
@@ -1394,44 +1375,13 @@ expected_identifiers(Config, HandleId) ->
 expected_admin_emails(Config) ->
     oz_test_utils:get_env(Config, admin_emails).
 
-expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata, MetadataPrefix) ->
-    {Name, Namespaces} = expected_oai_record_namespaces(MetadataPrefix),
-    Content = #xmlElement{
-        name = Name,
-        attributes = lists:map(fun({N, V}) ->
-            #xmlAttribute{name = N, value = V}
-        end, Namespaces),
-        content = ExpectedMetadata
-    },
+expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata) ->
     #xmlElement{name = record, content = [
         expected_oai_header_xml(Config, HandleId, Timestamp),
         #xmlElement{
             name = metadata,
-            content = [Content]
+            content = ExpectedMetadata
         }
-    ]}.
-
-expected_oai_record_namespaces(?OAI_DC_METADATA_PREFIX) ->
-    {'oai_dc:dc', [
-        {'xmlns:oai_dc', "http:\/\/www.openarchives.org\/OAI\/2.0\/oai_dc\/"},
-        {'xmlns:dc', "http:\/\/purl.org\/dc\/elements\/1.1\/"},
-        {'xmlns:xsi', "http:\/\/www.w3.org\/2001\/XMLSchema-instance"},
-        {'xsi:schemaLocation', "http:\/\/www.openarchives.org\/OAI\/2.0\/oai_dc\/ http:\/\/www.openarchives.org\/OAI\/2.0\/oai_dc.xsd"}
-    ]};
-expected_oai_record_namespaces(?EDM_METADATA_PREFIX) ->
-    {'rdf:RDF', [
-        {'xmlns:dc', "http:\/\/purl.org\/dc\/elements\/1.1\/"},
-        {'xmlns:dcterms', "http:\/\/purl.org\/dc\/terms\/"},
-        {'xmlns:edm', "http:\/\/www.europeana.eu\/schemas\/edm\/"},
-        {'xmlns:ore', "http:\/\/www.openarchives.org\/ore\/terms\/"},
-        {'xmlns:owl', "http:\/\/www.w3.org\/2002\/07\/owl#"},
-        {'xmlns:rdf', "http:\/\/www.w3.org\/1999\/02\/22-rdf-syntax-ns#"},
-        {'xmlns:foaf', "http:\/\/xmlns.com\/foaf\/0.1\/"},
-        {'xmlns:skos', "http:\/\/www.w3.org\/2004\/02\/skos\/core#"},
-        {'xmlns:rdaGr2', "http:\/\/rdvocab.info\/ElementsGr2\/"},
-        {'xmlns:wgs84_pos', "http:\/\/www.w3.org\/2003\/01\/geo\/wgs84_pos#"},
-        {'xmlns:crm', "http:\/\/www.cidoc-crm.org\/cidoc--crm\/"},
-        {'xmlns:cc', "http:\/\/creativecommons.org\/ns#"}
     ]}.
 
 expected_oai_header_xml(Config, HandleId, Timestamp) ->
@@ -1459,25 +1409,10 @@ expected_oai_header_xml(Config, HandleId, Timestamp) ->
         ]
     }.
 
-%% @private
-input_metadata_for_prefix(?OAI_DC_METADATA_PREFIX) -> ?DC_METADATA_XML;
-input_metadata_for_prefix(?EDM_METADATA_PREFIX) -> ?EDM_METADATA_XML.
 
 %% @private
-expected_metadata_for_prefix(Config, HandleId, ?OAI_DC_METADATA_PREFIX) ->
-    {ok, #od_handle{
-        resource_id = ShareId,
-        public_handle = PublicHandle
-    }} = oz_test_utils:get_handle(Config, HandleId),
-    ShareUrl = oz_test_utils:get_share_public_url(Config, ShareId),
-    MetadataXml = ?DC_METADATA_XML_WITH_IDENTIFIERS(PublicHandle, ShareUrl),
-    {#xmlElement{content = Metadata}, _} = xmerl_scan:string(binary_to_list(MetadataXml)),
-    Metadata;
-expected_metadata_for_prefix(Config, HandleId, ?EDM_METADATA_PREFIX) ->
-    {ok, #od_handle{
-        public_handle = PublicHandle
-    }} = oz_test_utils:get_handle(Config, HandleId),
-    MetadataXml = ?EDM_METADATA_WITH_IDENTIFIERS(PublicHandle),
-    {#xmlElement{content = Metadata}, _} = xmerl_scan:string(binary_to_list(MetadataXml)),
-    Metadata.
+expected_final_metadata(MetadataPrefix, HandleId) ->
+    ExpFinalMetadata = ozt_handles:expected_final_metadata(HandleId),
+    ParsedXml = ?check(oai_metadata:parse_and_normalize_xml(ExpFinalMetadata)),
+    ozt:rpc(oai_metadata, adapt_for_oai_pmh, [MetadataPrefix, ParsedXml]).
 

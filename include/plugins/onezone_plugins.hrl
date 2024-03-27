@@ -22,8 +22,12 @@
     % provide only valid XMLs here; invalid ones are handled before the plugin is even called
     input_raw_xml :: binary(),
     input_qualifies_for_publication :: boolean(),
-    exp_revised_metadata_generator:: undefined | fun((od_share:id(), od_share:record()) -> (binary())),
-    exp_final_metadata_generator:: undefined | fun((od_share:id(), od_share:record(), od_handle:public_handle()) -> (binary()))
+    exp_revised_metadata_generator:: undefined | fun(
+        (od_share:id(), od_share:record()) -> (binary())
+    ),
+    exp_final_metadata_generator:: undefined | fun(
+        (od_share:id(), od_share:record(), od_handle:public_handle()) -> (binary())
+    )
 }).
 %% @formatter:on
 

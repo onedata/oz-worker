@@ -34,10 +34,11 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--export([validate_handle_metadata_plugin_example/2]).
+-export([validate_example/2]).
 
 
 -type validation_example() :: #handle_metadata_plugin_validation_example{}.
+-export_type([validation_example/0]).
 
 
 %%-------------------------------------------------------------------
@@ -95,7 +96,8 @@
 
 %%-------------------------------------------------------------------
 %% @doc
-%% Transforms (if needed) the metadata to be conformant to OAI-PMH spec.
+%% Returns validation examples that will be tested when the plugin is loaded.
+%% They serve as unit tests for the plugin.
 %% @end
 %%-------------------------------------------------------------------
 -callback validation_examples() -> [validation_example()].
@@ -106,44 +108,10 @@
 %%%===================================================================
 
 
--spec validate_handle_metadata_plugin_example(module(), validation_example()) -> ok.
-validate_handle_metadata_plugin_example(Module, #handle_metadata_plugin_validation_example{
-    input_raw_xml = InputRawXml,
-    input_qualifies_for_publication = InputQualifiesForPublication,
-    exp_revised_metadata_generator = ExpRevisedMetadataGenerator,
-    exp_final_metadata_generator = ExpFinalMetadataGenerator
-}) ->
+-spec validate_example(module(), validation_example()) -> ok | no_return().
+validate_example(Module, ValidationExample) ->
     try
-        DummyShareId = datastore_key:new(),
-        DummyShareRecord = #od_share{
-            name = str_utils:rand_hex(5),
-            description = str_utils:rand_hex(50),
-            space = datastore_key:new(),
-            handle = datastore_key:new(),
-            root_file = ?check(file_id:guid_to_objectid(file_id:pack_guid(datastore_key:new(), datastore_key:new()))),
-            file_type = case rand:uniform(2) of 1 -> file; 2 -> dir end,
-            creation_time = global_clock:timestamp_seconds(),
-            creator = ?SUB(user, datastore_key:new())
-        },
-        DummyPublicHandle = str_utils:format_bin("http://hdl.handle.net/~s/~s", [datastore_key:new(), datastore_key:new()]),
-        {ok, ParsedMetadata} = oai_metadata:parse_and_normalize_xml(InputRawXml),
-        case Module:revise_for_publication(ParsedMetadata, DummyShareId, DummyShareRecord) of
-            error when InputQualifiesForPublication == false ->
-                ok;
-            {ok, RevisedMetadata} when InputQualifiesForPublication == true ->
-                ExpRevisedMetadata = ExpRevisedMetadataGenerator(DummyShareId, DummyShareRecord),
-                assert_expectation_equal_to_result(
-                    revised, InputRawXml, oai_utils:export_xml(RevisedMetadata, include_prolog), ExpRevisedMetadata
-                ),
-                FinalMetadata = Module:insert_public_handle(RevisedMetadata, DummyPublicHandle),
-                ExpFinalMetadata = ExpFinalMetadataGenerator(DummyShareId, DummyShareRecord, DummyPublicHandle),
-                assert_expectation_equal_to_result(
-                    final, InputRawXml, oai_utils:export_xml(FinalMetadata, include_prolog), ExpFinalMetadata
-                );
-            RevisionResult ->
-                ?error("Unmet expectation~ts", [?autoformat(InputQualifiesForPublication, RevisionResult)]),
-                error(unmet_expectation)
-        end
+        validate_handle_metadata_plugin_example_unsafe(Module, ValidationExample)
     catch Class:Reason:Stacktrace ->
         ?error_exception("Validation of an example for ~s crashed", [Module], Class, Reason, Stacktrace),
         throw(validation_failed)
@@ -153,6 +121,50 @@ validate_handle_metadata_plugin_example(Module, #handle_metadata_plugin_validati
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+
+%% @private
+-spec validate_handle_metadata_plugin_example_unsafe(module(), validation_example()) -> ok | no_return().
+validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_validation_example{
+    input_raw_xml = InputRawXml,
+    input_qualifies_for_publication = InputQualifiesForPublication,
+    exp_revised_metadata_generator = ExpRevisedMetadataGenerator,
+    exp_final_metadata_generator = ExpFinalMetadataGenerator
+}) ->
+    DummyShareId = datastore_key:new(),
+    DummyShareRecord = #od_share{
+        name = str_utils:rand_hex(5),
+        description = str_utils:rand_hex(50),
+        space = datastore_key:new(),
+        handle = datastore_key:new(),
+        root_file = ?check(file_id:guid_to_objectid(file_id:pack_guid(datastore_key:new(), datastore_key:new()))),
+        file_type = case rand:uniform(2) of 1 -> file; 2 -> dir end,
+        creation_time = global_clock:timestamp_seconds(),
+        creator = ?SUB(user, datastore_key:new())
+    },
+    DummyPublicHandle = str_utils:format_bin("http://hdl.handle.net/~s/~s", [datastore_key:new(), datastore_key:new()]),
+
+    {ok, ParsedMetadata} = oai_metadata:parse_and_normalize_xml(InputRawXml),
+
+    case Module:revise_for_publication(ParsedMetadata, DummyShareId, DummyShareRecord) of
+        error when InputQualifiesForPublication == false ->
+            ok;
+
+        {ok, RevisedMetadata} when InputQualifiesForPublication == true ->
+            ExpRevisedMetadata = ExpRevisedMetadataGenerator(DummyShareId, DummyShareRecord),
+            assert_expectation_equal_to_result(
+                revised, InputRawXml, oai_utils:encode_xml(RevisedMetadata), ExpRevisedMetadata
+            ),
+            FinalMetadata = Module:insert_public_handle(RevisedMetadata, DummyPublicHandle),
+            ExpFinalMetadata = ExpFinalMetadataGenerator(DummyShareId, DummyShareRecord, DummyPublicHandle),
+            assert_expectation_equal_to_result(
+                final, InputRawXml, oai_utils:encode_xml(FinalMetadata), ExpFinalMetadata
+            );
+
+        RevisionResult ->
+            ?error("Unmet expectation~ts", [?autoformat(InputQualifiesForPublication, RevisionResult)]),
+            error(unmet_expectation)
+    end.
 
 
 %% @private

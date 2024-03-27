@@ -258,7 +258,7 @@ get_user_test(Config) ->
     ),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(Creator), ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
     {ok, Handle} = oz_test_utils:create_handle(Config, ?USER(Creator), ?HANDLE(HService, ShareId)),

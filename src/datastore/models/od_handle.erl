@@ -35,10 +35,9 @@
 % short literal (e.g. <<"oai_dc">>) that identifies a metadata format, allowed values depend on
 % loaded handle_metadata_plugins
 -type metadata_prefix() :: binary().
-% Metadata encoded to XML - used in the APIs and stored like this in the DB
+% metadata encoded to XML - used in the APIs and stored like this in the DB
 -type raw_metadata() :: binary().
-% Parsed metadata
-% The top element is always #xmlElement{name = metadata}, in which the proper metadata is nested
+% parsed metadata; the top element is always #xmlElement{name = metadata}, in which the proper metadata is nested
 -type parsed_metadata() :: #xmlElement{}.
 -type timestamp_seconds() :: time:seconds().
 

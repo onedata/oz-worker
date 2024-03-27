@@ -8,13 +8,18 @@
 %%% @doc
 %%% Plugins are user-defined erlang modules that can be injected into the
 %%% Onezone service and used to customize it.
-%%% All plugins are expected to be found in the directory
+%%%
+%%% All custom plugins are expected to be found in the directory
 %%% /etc/oz_worker/plugins, and must be erlang files with ".erl" extension.
 %%% They will be loaded upon Onezone startup. When using a deployment with more
 %%% than one node, the same plugins must be provisioned on all nodes.
 %%%
+%%% The /etc/oz_worker/plugins directory contains some predefined plugins to be
+%%% used as reference, containing those specific for different projects within
+%%% which Onedata is used.
+%%%
 %%% Plugins must conform to predefined API that is specified in erlang behaviour
-%%% modules. Please refer to the oz-worker source code for the behaviours and
+%%% modules. Refer to the oz-worker source code for the behaviours and
 %%% implementation guide.
 %%%
 %%% Each plugin must implement the 'onezone_plugin_behaviour', which has one
@@ -31,9 +36,12 @@
 %%%   handle_metadata_plugin - must implement handle_metadata_plugin_behaviour
 %%%
 %%% See the corresponding behaviours for more info.
-%%% entitlement_parser and attribute_mapper support validation examples that
-%%% will be evaluated upon startup and the results will be logged in Onezone logs.
 %%%
+%%% NOTE: some of the above behaviours are not only implemented by custom plugins, but
+%%% also by internal modules that provide built-in functionalities.
+%%%
+%%% Some plugins support validation examples that will be evaluated upon Onezone startup
+%%% and the results will be logged in Onezone logs. They serve as a form of unit tests.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(onezone_plugins).
@@ -145,9 +153,9 @@ validate_plugin(Module, Type) ->
             Module, length(Examples)
         ]),
         ValidationFunction = case Type of
-            entitlement_parser -> fun validate_entitlement_parsing_example/2;
-            attribute_mapper -> fun validate_attribute_mapping_example/2;
-            handle_metadata_plugin -> fun handle_metadata_plugin_behaviour:validate_handle_metadata_plugin_example/2
+            entitlement_parser -> fun entitlement_parser_behaviour:validate_example/2;
+            attribute_mapper -> fun attribute_mapper_behaviour:validate_example/2;
+            handle_metadata_plugin -> fun handle_metadata_plugin_behaviour:validate_example/2
         end,
         [erlang:apply(ValidationFunction, [Module, E]) || E <- Examples],
         ?info("  -> ~p: all validation examples passed", [Module])
@@ -155,82 +163,4 @@ validate_plugin(Module, Type) ->
         {Class, Reason} /= {throw, validation_failed} andalso ?error_exception(Class, Reason, Stacktrace),
         ?error("  -> ~p: failed to test validation examples (see the error above)", [Module]),
         error
-    end.
-
-
-%% @private
--spec validate_entitlement_parsing_example(module(), {auth_config:idp(),
-    entitlement_mapping:raw_entitlement(), auth_config:parser_config(),
-    entitlement_mapping:idp_entitlement() | {error, malformed}}) -> ok.
-validate_entitlement_parsing_example(Module, {IdP, Input, ParserConfig, ExpectedOutput}) ->
-    ParsingResult = try
-        Module:parse(IdP, Input, ParserConfig)
-    catch
-        Type:Reason:Stacktrace ->
-            {error, malformed, Type, Reason, Stacktrace}
-    end,
-    case {ExpectedOutput, ParsingResult} of
-        {Same, Same} ->
-            ok;
-        {{error, malformed}, {error, malformed, _, _, _}} ->
-            ok;
-        {_, {error, malformed, EType, EReason, EStacktrace}} ->
-            ?error("Validation example crashed:~n"
-            "IdP: ~p~n"
-            "Input: ~p~n"
-            "ParserConfig: ~p~n"
-            "Expected: ~p~n"
-            "Error: ~p~n"
-            "Stacktrace: ~s~n", [
-                IdP, Input, ParserConfig, ExpectedOutput, {EType, EReason},
-                iolist_to_binary(lager:pr_stacktrace(EStacktrace))
-            ]),
-            throw(validation_failed);
-        {_, Got} ->
-            ?error("Validation example failed:~n"
-            "IdP: ~p~n"
-            "Input: ~p~n"
-            "ParserConfig: ~p~n"
-            "Expected: ~p~n"
-            "Got: ~p", [IdP, Input, ParserConfig, ExpectedOutput, Got]),
-            throw(validation_failed)
-    end.
-
-
-%% @private
--spec validate_attribute_mapping_example(module(), {auth_config:idp(),
-    attribute_mapping:onedata_attribute(), attribute_mapping:idp_attributes(),
-    {ok, term()} | {error, not_found} | {error, attribute_mapping_error}}) -> ok.
-validate_attribute_mapping_example(Module, {IdP, Attribute, IdPAttributes, ExpectedOutput}) ->
-    ParsingResult = try
-        Module:map_attribute(IdP, Attribute, IdPAttributes)
-    catch
-        Type:Reason:Stacktrace ->
-            {error, attribute_mapping_error, Type, Reason, Stacktrace}
-    end,
-    case {ExpectedOutput, ParsingResult} of
-        {Same, Same} ->
-            ok;
-        {{error, attribute_mapping_error}, {error, attribute_mapping_error, _, _, _}} ->
-            ok;
-        {_, {error, attribute_mapping_error, EType, EReason, EStacktrace}} ->
-            ?error("Validation example crashed:~n"
-            "IdP: ~p~n"
-            "Attribute: ~p~n"
-            "IdPAttributes: ~p~n"
-            "Expected: ~p~n"
-            "Error: ~p~n"
-            "Stacktrace: ~s~n", [
-                IdP, Attribute, IdPAttributes, ExpectedOutput, {EType, EReason},
-                iolist_to_binary(lager:pr_stacktrace(EStacktrace))
-            ]),
-            throw(validation_failed);
-        {_, Got} ->
-            ?error("Validation example failed:~n"
-            "IdP: ~p~n"
-            "Attribute: ~p~n"
-            "IdPAttributes: ~p~n"
-            "Expected: ~p~n"
-            "Got: ~p", [IdP, Attribute, IdPAttributes, ExpectedOutput, Got]),
-            throw(validation_failed)
     end.

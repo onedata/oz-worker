@@ -20,7 +20,7 @@
 %% API
 -export([serialize_datestamp/1, deserialize_datestamp/1, is_harvesting/1,
     verb_to_module/1, is_earlier_or_equal/2,
-    dates_have_the_same_granularity/2, to_xml/1, export_xml/2, ensure_list/1, harvest/5,
+    dates_have_the_same_granularity/2, to_xml/1, encode_xml/1, ensure_list/1, harvest/5,
     oai_identifier_encode/1, oai_identifier_decode/1,
     build_oai_header/2, build_oai_record/3
 ]).
@@ -317,14 +317,13 @@ to_xml(Content) ->
     #xmlText{value = str_utils:to_list(Content)}.
 
 
--spec export_xml(#xmlElement{}, no_prolog | include_prolog) -> binary().  %  fixme maybe we always want the prolog?
-export_xml(Xml, PrologOptions) ->
+-spec encode_xml(#xmlElement{}) -> binary().
+encode_xml(Xml) ->
     % NOTE: xmerl scans strings in UTF8 (essentially the result of binary_to_list(<<_/utf8>>),
     % but exports as a unicode erlang string
-    str_utils:unicode_list_to_binary(xmerl:export_simple([Xml], xmerl_xml, [{prolog, case PrologOptions of
-        no_prolog -> "";
-        include_prolog -> ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"]
-    end}])).
+    str_utils:unicode_list_to_binary(xmerl:export_simple([Xml], xmerl_xml, [
+        {prolog, ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"]}
+    ])).
 
 
 %%%-------------------------------------------------------------------

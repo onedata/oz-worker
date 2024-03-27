@@ -150,7 +150,7 @@
 -define(SHARE_NAME2, <<"share2">>).
 -define(SHARE_ID_1, <<"shareId1">>).
 -define(SHARE_ID_2, <<"shareId2">>).
--define(ROOT_FILE_ID, <<"c2hhcmVHdWlkIzkxNzg0ZjM3ZmRjOTg3MGFiNzcyNDg2Y2Y2MTYzNmUyIzkxNTM4ZDQwMmYwOWY0MzVhY2JjZDJlMzA2YTViZmIxIzFhNTgxMDUyYTExODRhOGZiYjA5OWI5ZDA1MzhiZmUy">>).
+-define(GEN_ROOT_FILE_ID(SpaceId, ShareId), file_id:pack_share_guid(datastore_key:new(), SpaceId, ShareId)).
 -define(SHARE_PUBLIC_URL(ZoneDomain, ShareId),
     str_utils:format_bin("https://~s/share/~s", [ZoneDomain, ShareId])
 ).
@@ -223,46 +223,28 @@
     }
 ).
 
-%% Example test data for handles
--define(DC_METADATA, <<"<?xml version=\"1.0\"?>",
-    "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
-    "<dc:title>Test dataset<\/dc:title>",
-    "<dc:creator>John Johnson<\/dc:creator>",
-    "<dc:creator>Jane Doe<\/dc:creator>",
-    "<dc:subject>Test of datacite<\/dc:subject>",
-    "<dc:description>Lorem ipsum lorem ipusm<\/dc:description>",
-    "<dc:publisher>Onedata<\/dc:publisher>",
-    "<dc:publisher>EGI<\/dc:publisher>",
-    "<dc:date>2016<\/dc:date>",
-    "<dc:format>application\/pdf<\/dc:format>",
-    "<dc:identifier>onedata:LKJHASKFJHASLKDJHKJHuah132easd<\/dc:identifier>",
-    "<dc:language>eng<\/dc:language>",
-    "<dc:rights>CC-0<\/dc:rights>",
-    "<\/metadata>">>).
-
--define(DC_METADATA2, <<"<?xml version=\"1.0\"?>",
-    "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
-    "<dc:title>Test dataset<\/dc:title>",
-    "<dc:creator>Jane Johnson<\/dc:creator>",
-    "<dc:creator>John Doe<\/dc:creator>",
-    "<dc:subject>Test of datacite<\/dc:subject>",
-    "<dc:description>Dolor sit amet<\/dc:description>",
-    "<dc:publisher>Onedata<\/dc:publisher>",
-    "<dc:publisher>EGI<\/dc:publisher>",
-    "<dc:date>2017<\/dc:date>",
-    "<dc:format>application\/pdf<\/dc:format>",
-    "<dc:identifier>onedata:LKJHASKFJHASLKDJHKJHuah132easd<\/dc:identifier>",
-    "<dc:language>eng<\/dc:language>",
-    "<dc:rights>CC-0<\/dc:rights>",
-    "<\/metadata>">>).
-
 -define(HANDLE(HandleServiceId, ResourceId),
     #{
         <<"handleServiceId">> => HandleServiceId,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ResourceId,
         <<"metadataPrefix">> => ?OAI_DC_METADATA_PREFIX,
-        <<"metadata">> => ?DC_METADATA
+        <<"metadata">> => <<"<?xml version=\"1.0\"?>",
+            "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
+            "<dc:title>Test dataset<\/dc:title>",
+            "<dc:creator>John Johnson<\/dc:creator>",
+            "<dc:creator>Jane Doe<\/dc:creator>",
+            "<dc:subject>Test of datacite<\/dc:subject>",
+            "<dc:description>Lorem ipsum lorem ipusm<\/dc:description>",
+            "<dc:publisher>Onedata<\/dc:publisher>",
+            "<dc:publisher>EGI<\/dc:publisher>",
+            "<dc:date>2016<\/dc:date>",
+            "<dc:format>application\/pdf<\/dc:format>",
+            "<dc:identifier>onedata:LKJHASKFJHASLKDJHKJHuah132easd<\/dc:identifier>",
+            "<dc:language>eng<\/dc:language>",
+            "<dc:rights>CC-0<\/dc:rights>",
+            "<\/metadata>"
+        >>
     }
 ).
 

@@ -135,7 +135,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataPrefix, RawMetadata, ShareId, ShareRecord),
 
         {ok, PublicHandle} = handle_proxy:register_handle(
-            HandleServiceId, ResourceType, ShareId, oai_utils:export_xml(RevisedMetadata, no_prolog)  % fixme maybe we always want the prolog?
+            HandleServiceId, ResourceType, ShareId, oai_utils:encode_xml(RevisedMetadata)
         ),
 
         FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
@@ -146,7 +146,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             resource_type = ResourceType,
             resource_id = ShareId,
             metadata_prefix = MetadataPrefix,
-            metadata = oai_utils:export_xml(FinalMetadata, no_prolog),
+            metadata = oai_utils:encode_xml(FinalMetadata),
             creator = aai:normalize_subject(Auth#auth.subject),
             creation_time = CreationTime
         }}),
@@ -299,20 +299,20 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
         }}} = od_handle:get(HandleId),
         {ok, #document{value = ShareRecord}} = od_share:get(ShareId),
 
-        NewRawMetadata = maps:get(<<"metadata">>, Data),
-        RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataPrefix, NewRawMetadata, ShareId, ShareRecord),
+        InputRawMetadata = maps:get(<<"metadata">>, Data),
+        RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataPrefix, InputRawMetadata, ShareId, ShareRecord),
         FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
-        FinalRawMetadata = oai_utils:export_xml(FinalMetadata, no_prolog),
+        FinalRawMetadata = oai_utils:encode_xml(FinalMetadata),
 
-        NewTimestamp = od_handle:current_timestamp(),
+        CurrentTimestamp = od_handle:current_timestamp(),
         {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
             {ok, Handle#od_handle{
-                timestamp = NewTimestamp,
+                timestamp = CurrentTimestamp,
                 metadata = FinalRawMetadata
             }}
         end),
         %%  after handle modification we need to update handle timestamp in tree
-        handles:update_timestamp(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, NewTimestamp),
+        handles:update_timestamp(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp),
         handle_proxy:modify_handle(HandleId, FinalRawMetadata)
     end),
 

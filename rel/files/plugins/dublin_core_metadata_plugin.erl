@@ -4,7 +4,7 @@
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @doc
-%%% Implementation of a onezone plugin and the handle_metadata_plugin_behaviour
+%%% Implementation of the onezone_plugin_behaviour and the handle_metadata_plugin_behaviour
 %%% for handling DC (Dublin Core) metadata format.
 %%%
 %%% @see handle_metadata_plugin_behaviour for general information about metadata plugins.
@@ -56,12 +56,14 @@ type() ->
 
 %% @doc {@link handle_metadata_plugin_behaviour} callback metadata_prefix/0
 -spec metadata_prefix() -> binary().
-metadata_prefix() -> ?OAI_DC_METADATA_PREFIX.
+metadata_prefix() ->
+    ?OAI_DC_METADATA_PREFIX.
 
 
 %% @doc {@link handle_metadata_plugin_behaviour} callback schema_URL/0
 -spec schema_URL() -> binary().
-schema_URL() -> <<"http://www.openarchives.org/OAI/2.0/oai_dc.xsd">>.
+schema_URL() ->
+    <<"http://www.openarchives.org/OAI/2.0/oai_dc.xsd">>.
 
 
 %% @doc {@link handle_metadata_plugin_behaviour} callback main_namespace/0
@@ -98,13 +100,14 @@ insert_public_handle(#xmlElement{name = metadata, content = Content} = MetadataX
 -spec adapt_for_oai_pmh(od_handle:parsed_metadata()) -> od_handle:parsed_metadata().
 adapt_for_oai_pmh(#xmlElement{name = metadata, content = Content}) ->
     {MainNamespaceName, MainNamespaceValue} = main_namespace(),
+    SchemaLocation = str_utils:format("~s ~s", [MainNamespaceValue, schema_URL()]),
     #xmlElement{
         name = 'oai_dc:dc',
         attributes = [
             #xmlAttribute{name = MainNamespaceName, value = str_utils:to_list(MainNamespaceValue)},
             #xmlAttribute{name = 'xmlns:dc', value = "http://purl.org/dc/elements/1.1/"},
             ?OAI_XML_SCHEMA_NAMESPACE,
-            #xmlAttribute{name = 'xsi:schemaLocation', value = str_utils:format("~s ~s", [MainNamespaceValue, schema_URL()])}
+            #xmlAttribute{name = 'xsi:schemaLocation', value = SchemaLocation}
         ],
         content = Content
     }.
@@ -117,25 +120,55 @@ validation_examples() -> [
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
-            "<metadata>",
-            "<dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>",
-            "<dc:type>book</dc:type>",
+            "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
+            "<dc:title>Test dataset<\/dc:title>",
+            "<dc:creator>John Johnson<\/dc:creator>",
+            "<dc:creator>Jane Doe<\/dc:creator>",
+            "<dc:subject>Test of datacite<\/dc:subject>",
+            "<dc:description>Lorem ipsum<\/dc:description>",
+            "<dc:publisher>Onedata<\/dc:publisher>",
+            "<dc:publisher>EGI<\/dc:publisher>",
+            "<dc:date>2016<\/dc:date>",
+            "<dc:format>application\/pdf<\/dc:format>",
+            "<dc:identifier>some/preexisting/identifier/1234567<\/dc:identifier>",
+            "<dc:language>eng<\/dc:language>",
+            "<dc:rights>CC-0<\/dc:rights>",
             "</metadata>"
         >>,
         input_qualifies_for_publication = true,
         exp_revised_metadata_generator = fun(ShareId, _ShareRecord) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
-            "<metadata>",
-            "<dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>",
-            "<dc:type>book</dc:type>",
+            "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
+            "<dc:title>Test dataset<\/dc:title>",
+            "<dc:creator>John Johnson<\/dc:creator>",
+            "<dc:creator>Jane Doe<\/dc:creator>",
+            "<dc:subject>Test of datacite<\/dc:subject>",
+            "<dc:description>Lorem ipsum<\/dc:description>",
+            "<dc:publisher>Onedata<\/dc:publisher>",
+            "<dc:publisher>EGI<\/dc:publisher>",
+            "<dc:date>2016<\/dc:date>",
+            "<dc:format>application\/pdf<\/dc:format>",
+            "<dc:identifier>some/preexisting/identifier/1234567<\/dc:identifier>",
+            "<dc:language>eng<\/dc:language>",
+            "<dc:rights>CC-0<\/dc:rights>",
             "<dc:identifier>", (share_logic:build_public_url(ShareId))/binary, "</dc:identifier>",
             "</metadata>"
         >> end,
         exp_final_metadata_generator = fun(ShareId, _ShareRecord, PublicHandle) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
-            "<metadata>",
-            "<dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>",
-            "<dc:type>book</dc:type>",
+            "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
+            "<dc:title>Test dataset<\/dc:title>",
+            "<dc:creator>John Johnson<\/dc:creator>",
+            "<dc:creator>Jane Doe<\/dc:creator>",
+            "<dc:subject>Test of datacite<\/dc:subject>",
+            "<dc:description>Lorem ipsum<\/dc:description>",
+            "<dc:publisher>Onedata<\/dc:publisher>",
+            "<dc:publisher>EGI<\/dc:publisher>",
+            "<dc:date>2016<\/dc:date>",
+            "<dc:format>application\/pdf<\/dc:format>",
+            "<dc:identifier>some/preexisting/identifier/1234567<\/dc:identifier>",
+            "<dc:language>eng<\/dc:language>",
+            "<dc:rights>CC-0<\/dc:rights>",
             "<dc:identifier>", (share_logic:build_public_url(ShareId))/binary, "</dc:identifier>",
             "<dc:identifier>", PublicHandle/binary, "</dc:identifier>",
             "</metadata>"

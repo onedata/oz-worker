@@ -173,7 +173,7 @@ handle_request_unsafe(QueryParams, Req) ->
 
     Req2 = cowboy_req:set_resp_header(?HDR_CONTENT_TYPE, ?XML_RESPONSE_CONTENT_TYPE, Req),
     Xml = insert_to_root_xml_element([ResponseDateXML, RequestElementXML, ResponseXML]),
-    {oai_utils:export_xml(Xml, include_prolog), Req2}.
+    {oai_utils:encode_xml(Xml), Req2}.
 
 %%%--------------------------------------------------------------------
 %%% @private
