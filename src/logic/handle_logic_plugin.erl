@@ -679,7 +679,7 @@ list_all_handles() ->
 -spec list_all_handles(handles:listing_opts()) -> [od_handle:id()].
 list_all_handles(ListingOpts) ->
     case handles:list(ListingOpts) of
+        {List, none} -> List;
         {List, undefined} -> List;
-        {List, ResumptionToken} -> List ++ list_all_handles(#{resumption_token => ResumptionToken});
-        List -> List
+        {List, ResumptionToken} -> List ++ list_all_handles(#{resumption_token => ResumptionToken})
     end.

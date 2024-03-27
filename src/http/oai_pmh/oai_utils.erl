@@ -147,18 +147,10 @@ request_arguments_to_handle_listing_opts(Args) ->
 %%%--------------------------------------------------------------------
 -spec harvest(handles:listing_opts(), function()) -> oai_response().
 harvest(ListingOpts, HarvestingFun) ->
-    HarvestedMetadata = case handles:list(ListingOpts) of
-        {Identifiers, NewResumptionToken} ->
-            {lists:map(fun(Identifier) ->
-                Handle = get_handle(Identifier),
-            HarvestingFun(Identifier, Handle) end, Identifiers), NewResumptionToken};
-        Identifiers ->
-            lists:map(fun(Identifier) ->
-                Handle = get_handle(Identifier),
-                HarvestingFun(Identifier, Handle)
-            end, Identifiers)
-
-    end,
+    {Identifiers, NewResumptionToken} = handles:list(ListingOpts),
+    HarvestedMetadata = lists:map(fun(Identifier) ->
+        Handle = get_handle(Identifier),
+        HarvestingFun(Identifier, Handle) end, Identifiers),
 
     case HarvestedMetadata of
         [] ->
@@ -173,12 +165,11 @@ harvest(ListingOpts, HarvestingFun) ->
                 Until -> serialize_datestamp(time:seconds_to_datetime(Until))
             end,
             throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
-        {Metadata, Token} ->
+        _ ->
             #oai_listing_result{
-                batch = Metadata,
-                resumption_token = Token
-            };
-        Metadata -> Metadata
+                batch = HarvestedMetadata,
+                resumption_token = NewResumptionToken
+            }
     end.
 
 

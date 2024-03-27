@@ -782,9 +782,9 @@ list_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
                 expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata, MetadataPrefix)
         end
     end,
-    All = lists:zip(Identifiers, TimeOffsets),
-    check_all_handles(Config, Method, Verb, All, Args, BuildExpectedObject,
-        oai_utils:request_arguments_to_handle_listing_opts(Args)).
+    ExpIdentifiersAndTimeOffsets = lists:zip(Identifiers, TimeOffsets),
+    check_list_continuously_with_resumption_token(Config, Method, Verb, ExpIdentifiersAndTimeOffsets,
+        Args, BuildExpectedObject).
 
 
 list_no_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
@@ -1182,6 +1182,25 @@ check_list_records(Code, Args, Method, ExpResponseContent, Config) ->
 check_list_records_no_records_match_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListRecords">>, Args, Method,
         ExpResponseContent, {error, noRecordsMatch}, Config).
+
+check_list_continuously_with_resumption_token(_Config, _Method, _Verb, _Rest, [], _BuildExpectedObject) ->
+    ok;
+check_list_continuously_with_resumption_token(Config, Method, Verb, Rest, Args, BuildExpectedObject) ->
+    Sublist = lists:sublist(Rest, ?TESTED_HANDLE_LIST_LIMIT),
+    ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
+    {_, ResumptionToken} = ozt:rpc(handles, list, [ListingOpts]),
+    ExpectedBase = lists:map(fun({HandleId, TimeOffset}) ->
+        BuildExpectedObject(HandleId, TimeOffset)
+    end, Sublist),
+    ExpIdsAndTimestamps = ExpectedBase ++ [expected_resumption_token_element(ResumptionToken)],
+
+    case Verb of
+        <<"ListIdentifiers">> -> ?assert(check_list_identifiers(200, Args, Method, ExpIdsAndTimestamps, Config));
+        <<"ListRecords">> -> ?assert(check_list_records(200, Args, Method, ExpIdsAndTimestamps, Config))
+    end,
+    ArgsToken = add_to_args(<<"resumptionToken">>, ResumptionToken, []),
+    check_list_continuously_with_resumption_token(Config, Method, Verb, lists:subtract(Rest, Sublist),
+        ArgsToken, BuildExpectedObject).
 
 check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Config) ->
     URL = get_oai_pmh_URL(),
@@ -1600,33 +1619,12 @@ expected_metadata_for_prefix(Config, HandleId, ?EDM_METADATA_PREFIX) ->
     {#xmlElement{content = Metadata}, _} = xmerl_scan:string(binary_to_list(MetadataXml)),
     Metadata.
 
-expected_metadata_with_resumption_token(BuildExpectedObject, Expected, ExpResumptionToken) ->
-    ExpectedBase = lists:map(fun({HandleId, TimeOffset}) ->
-        BuildExpectedObject(HandleId, TimeOffset)
-    end, Expected),
-    ExpectedBase ++ [expected_token_element(ExpResumptionToken)].
-
-
-expected_token_element(ExpResumptionToken) ->
+%% @private
+expected_resumption_token_element(ExpResumptionToken) ->
     #xmlElement{name = resumptionToken,
         content = case ExpResumptionToken of
             undefined -> [];
             _ -> [#xmlText{value = binary_to_list(ExpResumptionToken)}]
         end
     }.
-
-check_all_handles(_Config, _Method, _Verb, _Rest, _Args, _BuildExpectedObject, #{resumption_token := undefined}) ->
-    ok;
-check_all_handles(Config, Method, Verb, Rest, Args, BuildExpectedObject, ListingOpts) ->
-    Sublist = lists:sublist(Rest, ?TESTED_HANDLE_LIST_LIMIT),
-    {_, ResumptionToken} = ozt:rpc(handles, list, [ListingOpts]),
-    ExpIdsAndTimestamps = expected_metadata_with_resumption_token(BuildExpectedObject,
-        Sublist, ResumptionToken),
-    case Verb of
-        <<"ListIdentifiers">> -> ?assert(check_list_identifiers(200, Args, Method, ExpIdsAndTimestamps, Config));
-        <<"ListRecords">> -> ?assert(check_list_records(200, Args, Method, ExpIdsAndTimestamps, Config))
-    end,
-    ArgsToken = add_to_args(<<"resumptionToken">>, ResumptionToken, []),
-    check_all_handles(Config, Method, Verb, lists:subtract(Rest, Sublist), ArgsToken, BuildExpectedObject,
-        #{resumption_token => ResumptionToken}).
 

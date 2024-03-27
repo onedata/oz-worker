@@ -208,10 +208,10 @@ generate_required_response_elements(Module, Args) when Module == list_identifier
     % get_response call. The ElementName can be either <<"header">> or <<"record">>, although
     % it's not entirely true (we do not want to list two elements not to cause two listings).
     [ElementName] = Module:required_response_elements(),
-    case Module:get_response(ElementName, Args) of
-        #oai_listing_result{batch = Batch, resumption_token = ResumptionToken} ->
-            [{ElementName, Element} || Element <- Batch] ++ [{<<"resumptionToken">>, ResumptionToken}];
-        List -> [{ElementName, Element} || Element <- List]
+    #oai_listing_result{batch = Batch, resumption_token = ResumptionToken} = Module:get_response(ElementName, Args),
+    case ResumptionToken of
+        none -> [{ElementName, Element} || Element <- Batch];
+        _ -> [{ElementName, Element} || Element <- Batch] ++ [{<<"resumptionToken">>, ResumptionToken}]
     end;
 generate_required_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->

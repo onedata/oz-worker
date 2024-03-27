@@ -26,7 +26,7 @@
 %                that have the same timestamp.
 -type index() :: binary().
 
--type resumption_token() :: binary() | undefined.
+-type resumption_token() :: binary() | undefined | none.
 
 -type limit() :: pos_integer().
 
@@ -133,6 +133,8 @@ list(ListingOpts) ->
         _ -> ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HServiceId)
     end,
     FoldOpts =  #{
+        %% Limit + 1 is used to determine if it's the end of the list
+        %% and if a resumption token needs to be included
         size => Limit + 1,
         prev_link_name => StartIndex,
         prev_tree_id => TreeId,
@@ -154,7 +156,7 @@ list(ListingOpts) ->
 
     %% if the entire list is returned at once, the resumptionToken is not included in the response
     case NewToken == undefined andalso Token == <<>> of
-        true -> Handles;
+        true -> {Handles, none};
         false -> {Handles, NewToken}
     end.
 
@@ -163,10 +165,8 @@ list(ListingOpts) ->
 get_earliest_timestamp() ->
     EarliestTimestamps = lists:flatmap(fun(MetadataPrefix) ->
         ListingOpts = #{limit => 1, metadata_prefix => MetadataPrefix},
-        case list(ListingOpts) of
-            {List, _} -> List;
-            List -> List
-        end
+        {List, _} = list(ListingOpts),
+        List
     end, metadata_formats:supported_formats()),
     case EarliestTimestamps of
         [] -> undefined;
@@ -229,14 +229,15 @@ unpack_resumption_token(Token) ->
 -spec build_result_from_reversed_listing(datastore:fold_acc(), limit(), od_handle:metadata_prefix(),
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> {[od_handle:id()], resumption_token()}.
 build_result_from_reversed_listing(ReversedEntries, Limit, MetadataPrefix, From, Until) ->
-    {NewToken, ReversedLimitedEntries} = case length(ReversedEntries) =< Limit of
-        true ->
-            {undefined, ReversedEntries};
+    % the internal listing limit is always one element greater than the requested limit,
+    % which allows determining if this is the last batch of the complete list
+    {ReversedLimitedEntries, NewToken} = case length(ReversedEntries) =:= Limit + 1 of
         false ->
-            ReversedLimitedEnt = tl(ReversedEntries),
-            {TimeSeconds, HandleId} = hd(ReversedLimitedEnt),
-            {pack_resumption_token(TimeSeconds, HandleId, MetadataPrefix, Limit, From, Until),
-                ReversedLimitedEnt}
+            {ReversedEntries, undefined};
+        true ->
+            ReversedEntriesTail = tl(ReversedEntries),
+            {TimeSeconds, HandleId} = hd(ReversedEntriesTail),
+            {ReversedEntriesTail, pack_resumption_token(TimeSeconds, HandleId, MetadataPrefix, Limit, From, Until)}
     end,
     LimitedEntries = lists:reverse(ReversedLimitedEntries),
     Handles = lists:map(fun({_, HandleId}) -> HandleId end, LimitedEntries),

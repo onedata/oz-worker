@@ -134,7 +134,7 @@ resumption_token_test(_Config) ->
 list_in_one_batch_test(_Config) ->
     MetadataPrefix =  ?RAND_METADATA_PREFIX(),
     ListOpts = #{service_id => ?SMALL_HSERVICE, metadata_prefix => MetadataPrefix},
-    List = list_once(ListOpts),
+    {List, none} = list_once(ListOpts),
     ?assertEqual(infer_expected_handle_ids(ListOpts), List).
 
 
@@ -329,9 +329,9 @@ list_all() ->
 
 list_all(ListingOpts) ->
     case list_once(ListingOpts) of
+        {List, none} -> List;
         {List, undefined} -> List;
-        {List, ResumptionToken} -> List ++ list_all(#{resumption_token => ResumptionToken});
-        List -> List
+        {List, ResumptionToken} -> List ++ list_all(#{resumption_token => ResumptionToken})
     end.
 
 list_once(ListingOpts) ->
