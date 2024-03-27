@@ -223,30 +223,6 @@
     }
 ).
 
--define(HANDLE(HandleServiceId, ResourceId),
-    #{
-        <<"handleServiceId">> => HandleServiceId,
-        <<"resourceType">> => <<"Share">>,
-        <<"resourceId">> => ResourceId,
-        <<"metadataPrefix">> => ?OAI_DC_METADATA_PREFIX,
-        <<"metadata">> => <<"<?xml version=\"1.0\"?>",
-            "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
-            "<dc:title>Test dataset<\/dc:title>",
-            "<dc:creator>John Johnson<\/dc:creator>",
-            "<dc:creator>Jane Doe<\/dc:creator>",
-            "<dc:subject>Test of datacite<\/dc:subject>",
-            "<dc:description>Lorem ipsum lorem ipusm<\/dc:description>",
-            "<dc:publisher>Onedata<\/dc:publisher>",
-            "<dc:publisher>EGI<\/dc:publisher>",
-            "<dc:date>2016<\/dc:date>",
-            "<dc:format>application\/pdf<\/dc:format>",
-            "<dc:identifier>onedata:LKJHASKFJHASLKDJHKJHuah132easd<\/dc:identifier>",
-            "<dc:language>eng<\/dc:language>",
-            "<dc:rights>CC-0<\/dc:rights>",
-            "<\/metadata>"
-        >>
-    }
-).
 
 %% Example test data for harvesters
 -define(HARVESTER_NAME1, <<"harvester1">>).

@@ -78,9 +78,7 @@ list_test(Config) ->
             {ok, ShareId} = oz_test_utils:create_share(
                 Config, ?ROOT, ShareId, ?SHARE_NAME1, S1
             ),
-            {ok, HandleId} = oz_test_utils:create_handle(
-                Config, ?USER(U1), ?HANDLE(HService, ShareId)
-            ),
+            HandleId = ozt_users:create_handle_for(U1, HService, ShareId),
             HandleId
         end, lists:seq(1, 5)
     ),
@@ -172,9 +170,7 @@ create_test(Config) ->
     {ok, ShareIdThatAlreadyHasAHandle} = oz_test_utils:create_share(
         Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, S1
     ),
-    {ok, _} = oz_test_utils:create_handle(
-        Config, ?ROOT, ?HANDLE(DoiHService, ShareIdThatAlreadyHasAHandle)
-    ),
+    HandleId = ozt_handles:create(DoiHService, ShareIdThatAlreadyHasAHandle),
 
     MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
     RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix),
@@ -546,9 +542,7 @@ delete_test(Config) ->
         {ok, ShareId} = oz_test_utils:create_share(
             Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, S1
         ),
-        {ok, HandleId} = oz_test_utils:create_handle(
-            Config, ?ROOT, ?HANDLE(HService, ShareId)
-        ),
+        HandleId = ozt_handles:create(HService, ShareId),
 
         {ok, U1} = oz_test_utils:handle_add_user(Config, HandleId, U1),
         oz_test_utils:handle_set_user_privileges(Config, HandleId, U1,

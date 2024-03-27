@@ -78,9 +78,7 @@ list_handles_test(Config) ->
             {ok, ShareId} = oz_test_utils:create_share(
                 Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
             ),
-            {ok, HandleId} = oz_test_utils:create_handle(
-                Config, ?ROOT, ?HANDLE(HService, ShareId)
-            ),
+            HandleId = ozt_handles:create(HService, ShareId),
             {ok, G1} = oz_test_utils:handle_add_group(Config, HandleId, G1),
             HandleId
         end, [S1, S1, S2]
@@ -136,9 +134,7 @@ create_handle_test(Config) ->
     {ok, ShareIdThatAlreadyHasAHandle} = oz_test_utils:create_share(
         Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, S1
     ),
-    {ok, _} = oz_test_utils:create_handle(
-        Config, ?ROOT, ?HANDLE(HService, ShareIdThatAlreadyHasAHandle)
-    ),
+    ozt_handles:create(HService, ShareIdThatAlreadyHasAHandle),
 
     AllHandlePrivs = privileges:handle_privileges(),
     ExpResourceType = <<"Share">>,
@@ -370,9 +366,7 @@ leave_handle_test(Config) ->
         {ok, ShareId} = oz_test_utils:create_share(
             Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, S1
         ),
-        {ok, HandleId} = oz_test_utils:create_handle(
-            Config, ?ROOT, ?HANDLE(HService, ShareId)
-        ),
+        HandleId = ozt_handles:create(HService, ShareId),
         {ok, G1} = oz_test_utils:handle_add_group(Config, HandleId, G1),
         #{handleId => HandleId}
     end,

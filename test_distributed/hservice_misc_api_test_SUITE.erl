@@ -534,10 +534,7 @@ list_handles_test(Config) ->
             {ok, ShareId} = oz_test_utils:create_share(
                 Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
             ),
-            {ok, HandleId} = oz_test_utils:create_handle(
-                Config, ?ROOT, ?HANDLE(HService, ShareId)
-            ),
-            HandleId
+            ozt_handles:create(HService, ShareId)
         end, [S1, S1, S2]
     ),
 

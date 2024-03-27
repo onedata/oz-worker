@@ -682,11 +682,8 @@ create_basic_handle_env(Config, Privs) ->
         Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
-    HandleDetails = ?HANDLE(HService, ShareId),
     AllHandlePrivs = privileges:handle_privileges(),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
-    ),
+    HandleId = ozt_users:create_handle_for(U1, HService, ShareId),
     oz_test_utils:handle_set_user_privileges(
         Config, HandleId, U1, [], Privs
     ),
@@ -1086,11 +1083,8 @@ create_handle_eff_users_env(Config) ->
         Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
-    HandleDetails = ?HANDLE(HService, ShareId),
     AllHandlePrivs = privileges:handle_privileges(),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
-    ),
+    HandleId = ozt_users:create_handle_for(U1, HService, ShareId),
     oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, [],
         [?HANDLE_VIEW]
     ),
