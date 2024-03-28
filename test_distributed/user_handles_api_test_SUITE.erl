@@ -219,8 +219,8 @@ create_handle_test(Config) ->
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"metadataPrefix">>, ozt_handles:supported_metadata_prefixes())},
                 {<<"metadata">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
-%%                {<<"metadata">>, ?RAND_UNICODE_STR(100001), fixme
-%%                    ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"metadata">>, 100000)},
+                {<<"metadata">>, ?RAND_UNICODE_STR(100001),
+                    ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"metadata">>, 100000)},
                 {<<"metadata">>, <<"null">>, ?ERROR_BAD_VALUE_XML(<<"metadata">>)},
                 {<<"metadata">>, <<"<a></b>">>, ?ERROR_BAD_VALUE_XML(<<"metadata">>)}
             ]

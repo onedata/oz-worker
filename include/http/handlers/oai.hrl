@@ -61,6 +61,11 @@
     description :: binary()
 }).
 
+-record(oai_listing_result, {
+    batch :: [oai_record()] | [oai_header()],
+    resumption_token :: handles:resumption_token()
+}).
+
 %% @formatter:off
 -type oai_verb_module() :: identify | get_record | list_identifiers |
                            list_medatada_formats | list_records | list_sets.
@@ -78,11 +83,13 @@
 -type oai_set() :: #oai_set{}.
 -type oai_set_spec() :: od_handle_service:id().
 -type oai_error() :: #oai_error{}.
+-type oai_listing_result() :: #oai_listing_result{}.
 -type oai_response() :: binary() | [binary()] |
                         oai_record() | [oai_record()] |
                         [oai_set()] |
                         oai_header() | [oai_header()] |
-                        oai_metadata_format() | [oai_metadata_format()].
+                        oai_metadata_format() | [oai_metadata_format()] |
+                        oai_listing_result().
 %% @formatter:on
 
 -type maybe_invalid_date() :: {non_neg_integer(), non_neg_integer(), non_neg_integer()}.

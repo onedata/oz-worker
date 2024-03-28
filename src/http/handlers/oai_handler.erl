@@ -166,8 +166,8 @@ handle_request_unsafe(QueryParams, Req) ->
     end,
 
     ResponseDate = oai_handler:generate_response_date_element(),
-
     ResponseXML = oai_utils:to_xml(Response),
+
     RequestElementXML = oai_utils:to_xml(RequestElement),
     ResponseDateXML = oai_utils:to_xml(ResponseDate),
 
@@ -199,12 +199,24 @@ generate_response(Verb, Args) ->
 %%%--------------------------------------------------------------------
 -spec generate_required_response_elements(Module :: oai_verb_module(),
     Args :: [proplists:property()]) -> [{binary(), oai_response()}].
+generate_required_response_elements(Module, Args) when Module == list_identifiers; Module == list_records ->
+    % These two operations do not fit the current framework for handling oai requests;
+    % they return two different types or elements (header/record + resumptionToken) in one
+    % get_response call. The ElementName can be either <<"header">> or <<"record">>, although
+    % it's not entirely true (we do not want to list two elements not to cause two listings).
+    [ElementName] = Module:required_response_elements(),
+    #oai_listing_result{batch = Batch, resumption_token = ResumptionToken} = Module:get_response(ElementName, Args),
+    case ResumptionToken of
+        undefined -> [{ElementName, Element} || Element <- Batch];
+        _ -> [{ElementName, Element} || Element <- Batch] ++ [{<<"resumptionToken">>, ResumptionToken}]
+    end;
 generate_required_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
         case Module:get_response(ElementName, Args) of
             Elements when is_list(Elements) ->
                 [{ElementName, Element} || Element <- Elements];
-            Element -> oai_utils:ensure_list({ElementName, Element})
+            Element ->
+                oai_utils:ensure_list({ElementName, Element})
         end
     end, Module:required_response_elements()).
 
