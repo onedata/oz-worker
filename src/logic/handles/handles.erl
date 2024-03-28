@@ -26,6 +26,8 @@
 %                that have the same timestamp.
 -type index() :: binary().
 
+% the resumption token is used to continue listing when an incomplete list (batch) is returned;
+% an 'undefined' value is returned when there are no more entries to list
 -type resumption_token() :: binary() | undefined.
 
 -type limit() :: pos_integer().

@@ -31,6 +31,10 @@
 %%%   * add an the edm:AggregatedCHO element
 %%%     (the rdf:resource attr value equal to the public handle)
 %%%
+%%% Adaptation for OAI-PMH step:
+%%%   * drop the outermost "metadata" element and return the metadata
+%%%     nested in the "rdf:RDF"
+%%%
 %%% @end
 %%%-------------------------------------------------------------------
 -module(edm_eureka3d_metadata_plugin).
@@ -334,6 +338,9 @@ gen_validation_example(Ctx) ->
         end,
         exp_final_metadata_generator = fun(_ShareId, ShareRecord, PublicHandle) ->
             gen_exp_metadata(final, OpeningRdfTag, ShareRecord, PublicHandle, Ctx)
+        end,
+        exp_oai_pmh_metadata_generator = fun(_ShareId, ShareRecord, PublicHandle) ->
+            gen_exp_metadata(oai_pmh, OpeningRdfTag, ShareRecord, PublicHandle, Ctx)
         end
     }.
 
@@ -392,7 +399,11 @@ gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
 
 %% @private
 -spec gen_exp_metadata(
-    revised | final, binary(), od_share:record(), od_handle:public_handle(), #validation_example_builder_ctx{}
+    revised | final | oai_pmh,
+    binary(),
+    od_share:record(),
+    od_handle:public_handle(),
+    #validation_example_builder_ctx{}
 ) ->
     binary().
 gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #validation_example_builder_ctx{
@@ -401,7 +412,7 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
 }) ->
     {ExpProvChoRdfAboutStr, ExpOreAggRdfAboutStr, ExpAggChoElement} = case MetadataType of
         revised -> {<<"">>, <<"">>, <<"">>};
-        final -> {
+        _ -> {
             <<" rdf:about=\"", PublicHandle/binary, "\"">>,
             <<" rdf:about=\"", PublicHandle/binary, "_AGG\"">>,
             <<"<edm:aggregatedCHO rdf:resource=\"", PublicHandle/binary, "\"/>">>
@@ -420,7 +431,7 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
 
     <<
         "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
-        "<metadata>",
+        (case MetadataType of oai_pmh -> <<"">>; _ -> <<"<metadata>">> end)/binary,
         OpeningRdfTag/binary,
         "<edm:ProvidedCHO", ExpProvChoRdfAboutStr/binary, ">",
         "<dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>",
@@ -441,5 +452,5 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
         ExpAggChoElement/binary,
         "</ore:Aggregation>",
         "</rdf:RDF>",
-        "</metadata>"
+        (case MetadataType of oai_pmh -> <<"">>; _ -> <<"</metadata>">> end)/binary
     >>.

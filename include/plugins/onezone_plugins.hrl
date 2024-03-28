@@ -27,6 +27,9 @@
     ),
     exp_final_metadata_generator:: undefined | fun(
         (od_share:id(), od_share:record(), od_handle:public_handle()) -> (binary())
+    ),
+    exp_oai_pmh_metadata_generator:: undefined | fun(
+        (od_share:id(), od_share:record(), od_handle:public_handle()) -> (binary())
     )
 }).
 %% @formatter:on

@@ -129,7 +129,8 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
     input_raw_xml = InputRawXml,
     input_qualifies_for_publication = InputQualifiesForPublication,
     exp_revised_metadata_generator = ExpRevisedMetadataGenerator,
-    exp_final_metadata_generator = ExpFinalMetadataGenerator
+    exp_final_metadata_generator = ExpFinalMetadataGenerator,
+    exp_oai_pmh_metadata_generator = ExpOaiPmhMetadataGenerator
 }) ->
     DummyShareId = datastore_key:new(),
     DummyShareRecord = #od_share{
@@ -155,10 +156,17 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
             assert_expectation_equal_to_result(
                 revised, InputRawXml, oai_utils:encode_xml(RevisedMetadata), ExpRevisedMetadata
             ),
+
             FinalMetadata = Module:insert_public_handle(RevisedMetadata, DummyPublicHandle),
             ExpFinalMetadata = ExpFinalMetadataGenerator(DummyShareId, DummyShareRecord, DummyPublicHandle),
             assert_expectation_equal_to_result(
                 final, InputRawXml, oai_utils:encode_xml(FinalMetadata), ExpFinalMetadata
+            ),
+
+            OaiPmhMetadata = Module:adapt_for_oai_pmh(FinalMetadata),
+            ExpOaiPmhMetadata = ExpOaiPmhMetadataGenerator(DummyShareId, DummyShareRecord, DummyPublicHandle),
+            assert_expectation_equal_to_result(
+                final, InputRawXml, oai_utils:encode_xml(OaiPmhMetadata), ExpOaiPmhMetadata
             );
 
         RevisionResult ->

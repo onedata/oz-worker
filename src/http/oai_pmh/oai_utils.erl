@@ -112,21 +112,17 @@ deserialize_datestamp(Datestamp) ->
 request_arguments_to_handle_listing_opts(Args) ->
     case proplists:get_value(<<"resumptionToken">>, Args) of
         undefined ->
-            MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
-            From = case deserialize_datestamp(proplists:get_value(<<"from">>, Args)) of
-                undefined -> undefined;
-                FromDeserialized -> time:datetime_to_seconds(FromDeserialized)
-            end,
-            Until = case deserialize_datestamp(proplists:get_value(<<"until">>, Args)) of
-                undefined -> undefined;
-                UntilDeserialized -> time:datetime_to_seconds(UntilDeserialized)
-            end,
-            SetSpec = proplists:get_value(<<"set">>, Args),
             #{
-                from => From,
-                until => Until,
-                service_id => SetSpec,
-                metadata_prefix => MetadataPrefix
+                metadata_prefix => proplists:get_value(<<"metadataPrefix">>, Args),
+                service_id => proplists:get_value(<<"set">>, Args, undefined),
+                from => utils:convert_defined(
+                    deserialize_datestamp(proplists:get_value(<<"from">>, Args, undefined)),
+                    fun time:datetime_to_seconds/1
+                ),
+                until => utils:convert_defined(
+                    deserialize_datestamp(proplists:get_value(<<"until">>, Args, undefined)),
+                    fun time:datetime_to_seconds/1
+                )
             };
         ResumptionToken ->
             #{
@@ -151,6 +147,10 @@ harvest(ListingOpts, HarvestingFun) ->
         Handle = get_handle(Identifier),
         HarvestingFun(Identifier, Handle) end, Identifiers),
 
+    % TODO VFS-11906 consider a situation when a resumption token has been returned because
+    % there is still one entry to be listed, but in the meantime it is deleted - then, the listing
+    % may return an empty result with a token and the code below will crash
+    % this however cannot happen if we support deletions (report deleted handles) in OAI-PMH
     case HarvestedMetadata of
         [] ->
             MetadataPrefix = maps:get(metadata_prefix, ListingOpts),
@@ -165,16 +165,18 @@ harvest(ListingOpts, HarvestingFun) ->
             end,
             throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
         _ ->
-            % According to OAI-PMH spec, the token MUST be present in the response if an incomplete list is returned,
-            % and MUST be present and MUST be empty when the last batch that completes the list is returned.
-            % However, if the whole list is returned in one response, there should be no resumption token element at all.
-            ResultResumptionToken = case {NewResumptionToken, ListingOpts} of
-                {undefined, #{resumption_token := _}} ->  <<>>;
-                _ -> NewResumptionToken
-            end,
             #oai_listing_result{
                 batch = HarvestedMetadata,
-                resumption_token = ResultResumptionToken
+                % According to OAI-PMH spec, the token MUST be present in the response
+                % if an incomplete list is returned, and MUST be present and MUST be empty (<<>>)
+                % when the last batch that completes the list is returned.
+                % However, if the whole list is returned in one response,
+                % there should be no resumption token element at all (undefined).
+                resumption_token = case {NewResumptionToken, ListingOpts} of
+                    {undefined, #{resumption_token := _}} ->  <<>>;
+                    {undefined, _} ->  undefined;
+                    {Binary, _} when is_binary(Binary) -> Binary
+                end
             }
     end.
 

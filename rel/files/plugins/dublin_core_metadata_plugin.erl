@@ -15,6 +15,9 @@
 %%% Public handle insertion step:
 %%%   * add a dc:identifier element with the value equal to the public handle
 %%%
+%%% Adaptation for OAI-PMH step:
+%%%   * rewrap the metadata in an "oai_dc:dc" element instead of the "metadata" element
+%%%
 %%% @end
 %%%-------------------------------------------------------------------
 -module(dublin_core_metadata_plugin).
@@ -118,58 +121,82 @@ validation_examples() -> [
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
-            "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
-            "<dc:title>Test dataset<\/dc:title>",
-            "<dc:creator>John Johnson<\/dc:creator>",
-            "<dc:creator>Jane Doe<\/dc:creator>",
-            "<dc:subject>Test of datacite<\/dc:subject>",
-            "<dc:description>Lorem ipsum<\/dc:description>",
-            "<dc:publisher>Onedata<\/dc:publisher>",
-            "<dc:publisher>EGI<\/dc:publisher>",
-            "<dc:date>2016<\/dc:date>",
-            "<dc:format>application\/pdf<\/dc:format>",
-            "<dc:identifier>some/preexisting/identifier/1234567<\/dc:identifier>",
-            "<dc:language>eng<\/dc:language>",
-            "<dc:rights>CC-0<\/dc:rights>",
+            "<metadata xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">"
+            "<dc:title>Test dataset</dc:title>",
+            "<dc:creator>John Johnson</dc:creator>",
+            "<dc:creator>Jane Doe</dc:creator>",
+            "<dc:subject>Test of datacite</dc:subject>",
+            "<dc:description>Lorem ipsum</dc:description>",
+            "<dc:publisher>Onedata</dc:publisher>",
+            "<dc:publisher>EGI</dc:publisher>",
+            "<dc:date>2016</dc:date>",
+            "<dc:format>application/pdf</dc:format>",
+            "<dc:identifier>some/preexisting/identifier/1234567</dc:identifier>",
+            "<dc:language>eng</dc:language>",
+            "<dc:rights>CC-0</dc:rights>",
             "</metadata>"
         >>,
         input_qualifies_for_publication = true,
         exp_revised_metadata_generator = fun(ShareId, _ShareRecord) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
-            "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
-            "<dc:title>Test dataset<\/dc:title>",
-            "<dc:creator>John Johnson<\/dc:creator>",
-            "<dc:creator>Jane Doe<\/dc:creator>",
-            "<dc:subject>Test of datacite<\/dc:subject>",
-            "<dc:description>Lorem ipsum<\/dc:description>",
-            "<dc:publisher>Onedata<\/dc:publisher>",
-            "<dc:publisher>EGI<\/dc:publisher>",
-            "<dc:date>2016<\/dc:date>",
-            "<dc:format>application\/pdf<\/dc:format>",
-            "<dc:identifier>some/preexisting/identifier/1234567<\/dc:identifier>",
-            "<dc:language>eng<\/dc:language>",
-            "<dc:rights>CC-0<\/dc:rights>",
+            "<metadata xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">"
+            "<dc:title>Test dataset</dc:title>",
+            "<dc:creator>John Johnson</dc:creator>",
+            "<dc:creator>Jane Doe</dc:creator>",
+            "<dc:subject>Test of datacite</dc:subject>",
+            "<dc:description>Lorem ipsum</dc:description>",
+            "<dc:publisher>Onedata</dc:publisher>",
+            "<dc:publisher>EGI</dc:publisher>",
+            "<dc:date>2016</dc:date>",
+            "<dc:format>application/pdf</dc:format>",
+            "<dc:identifier>some/preexisting/identifier/1234567</dc:identifier>",
+            "<dc:language>eng</dc:language>",
+            "<dc:rights>CC-0</dc:rights>",
             "<dc:identifier>", (share_logic:build_public_url(ShareId))/binary, "</dc:identifier>",
             "</metadata>"
         >> end,
         exp_final_metadata_generator = fun(ShareId, _ShareRecord, PublicHandle) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
-            "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
-            "<dc:title>Test dataset<\/dc:title>",
-            "<dc:creator>John Johnson<\/dc:creator>",
-            "<dc:creator>Jane Doe<\/dc:creator>",
-            "<dc:subject>Test of datacite<\/dc:subject>",
-            "<dc:description>Lorem ipsum<\/dc:description>",
-            "<dc:publisher>Onedata<\/dc:publisher>",
-            "<dc:publisher>EGI<\/dc:publisher>",
-            "<dc:date>2016<\/dc:date>",
-            "<dc:format>application\/pdf<\/dc:format>",
-            "<dc:identifier>some/preexisting/identifier/1234567<\/dc:identifier>",
-            "<dc:language>eng<\/dc:language>",
-            "<dc:rights>CC-0<\/dc:rights>",
+            "<metadata xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">"
+            "<dc:title>Test dataset</dc:title>",
+            "<dc:creator>John Johnson</dc:creator>",
+            "<dc:creator>Jane Doe</dc:creator>",
+            "<dc:subject>Test of datacite</dc:subject>",
+            "<dc:description>Lorem ipsum</dc:description>",
+            "<dc:publisher>Onedata</dc:publisher>",
+            "<dc:publisher>EGI</dc:publisher>",
+            "<dc:date>2016</dc:date>",
+            "<dc:format>application/pdf</dc:format>",
+            "<dc:identifier>some/preexisting/identifier/1234567</dc:identifier>",
+            "<dc:language>eng</dc:language>",
+            "<dc:rights>CC-0</dc:rights>",
             "<dc:identifier>", (share_logic:build_public_url(ShareId))/binary, "</dc:identifier>",
             "<dc:identifier>", PublicHandle/binary, "</dc:identifier>",
             "</metadata>"
+        >> end,
+        exp_oai_pmh_metadata_generator = fun(ShareId, _ShareRecord, PublicHandle) -> <<
+            "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
+            "<oai_dc:dc"
+            " xmlns:oai_dc=\"http://www.openarchives.org/OAI/2.0/oai_dc/\"",
+            " xmlns:dc=\"http://purl.org/dc/elements/1.1/\"",
+            " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"",
+            " xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd\"",
+            ">"
+            "<dc:title>Test dataset</dc:title>",
+            "<dc:creator>John Johnson</dc:creator>",
+            "<dc:creator>Jane Doe</dc:creator>",
+            "<dc:subject>Test of datacite</dc:subject>",
+            "<dc:description>Lorem ipsum</dc:description>",
+            "<dc:publisher>Onedata</dc:publisher>",
+            "<dc:publisher>EGI</dc:publisher>",
+            "<dc:date>2016</dc:date>",
+            "<dc:format>application/pdf</dc:format>",
+            "<dc:identifier>some/preexisting/identifier/1234567</dc:identifier>",
+            "<dc:language>eng</dc:language>",
+            "<dc:rights>CC-0</dc:rights>",
+            "<dc:identifier>", (share_logic:build_public_url(ShareId))/binary, "</dc:identifier>",
+            "<dc:identifier>", PublicHandle/binary, "</dc:identifier>",
+            "</oai_dc:dc>"
         >> end
     },
     #handle_metadata_plugin_validation_example{
@@ -192,6 +219,19 @@ validation_examples() -> [
             "<dc:identifier>", (share_logic:build_public_url(ShareId))/binary, "</dc:identifier>",
             "<dc:identifier>", PublicHandle/binary, "</dc:identifier>",
             "</metadata>"
+        >> end,
+        exp_oai_pmh_metadata_generator = fun(ShareId, _ShareRecord, PublicHandle) -> <<
+            "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
+            "<oai_dc:dc"
+            " xmlns:oai_dc=\"http://www.openarchives.org/OAI/2.0/oai_dc/\"",
+            " xmlns:dc=\"http://purl.org/dc/elements/1.1/\"",
+            " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"",
+            " xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd\"",
+            ">",
+            "<dc:contributor>John Doe</dc:contributor>",
+            "<dc:identifier>", (share_logic:build_public_url(ShareId))/binary, "</dc:identifier>",
+            "<dc:identifier>", PublicHandle/binary, "</dc:identifier>",
+            "</oai_dc:dc>"
         >> end
     }
 ].
