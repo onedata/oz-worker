@@ -76,7 +76,7 @@ revise_for_publication(MetadataPrefix, Metadata, ShareId, ShareRecord) ->
     Module:revise_for_publication(Metadata, ShareId, ShareRecord).
 
 
-% TODO VFS-11365 the upgrade procedure should call revise_for_publication and insert_public_handle on
+% TODO VFS-11906 the upgrade procedure should call revise_for_publication and insert_public_handle on
 % DC metadata added in previous system versions, and handle cases when it's not a valid XML
 -spec insert_public_handle(od_handle:metadata_prefix(), od_handle:parsed_metadata(), od_handle:public_handle()) ->
     od_handle:parsed_metadata().
@@ -110,7 +110,7 @@ parse_and_normalize_xml(Metadata) ->
             Other ->
                 #xmlElement{name = metadata, content = [Other]}
         end,
-        {ok, MetadataElement}   % TODO VFS-11365 consider returning errors from xmerl to the client
+        {ok, MetadataElement}   % TODO VFS-11906 consider returning errors from xmerl to the client
     catch Class:Reason:Stacktrace ->
         ?debug_exception("Cannot parse handle metadata", Class, Reason, Stacktrace),
         error

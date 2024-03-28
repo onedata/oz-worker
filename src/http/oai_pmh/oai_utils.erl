@@ -244,7 +244,7 @@ to_xml(#oai_metadata{metadata_prefix = MetadataPrefix, raw_value = RawValue, han
         {ok, Parsed} ->
             Parsed;
         error ->
-            % @TODO VFS-11365 Temporary workaround, rework
+            % @TODO VFS-11906 Temporary workaround, rework
             EmptyMetadata = case MetadataPrefix of
                 ?OAI_DC_METADATA_PREFIX ->
                     #xmlElement{name = metadata, content = []};
@@ -260,7 +260,7 @@ to_xml(#oai_metadata{metadata_prefix = MetadataPrefix, raw_value = RawValue, han
                 ?check(share_logic:get(?ROOT, Handle#od_handle.resource_id))
             ),
             oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, Handle#od_handle.public_handle)
-        % @TODO VFS-11365 This might be useful when we upgrade the models and ensure there are valid xmls in the DB
+        % @TODO VFS-11906 This might be useful when we upgrade the models and ensure there are valid xmls in the DB
 %%            % this should theoretically never happen as the metadata is sanitized before
 %%            % being written to the DB, so let it crash in case of unforeseen errors
 %%            error({bad_metadata, RawValue})

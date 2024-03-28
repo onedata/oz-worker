@@ -299,6 +299,7 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
         }}} = od_handle:get(HandleId),
         {ok, #document{value = ShareRecord}} = od_share:get(ShareId),
 
+        % only the metadata field can be updated
         InputRawMetadata = maps:get(<<"metadata">>, Data),
         RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataPrefix, InputRawMetadata, ShareId, ShareRecord),
         FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
@@ -311,7 +312,8 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
                 metadata = FinalRawMetadata
             }}
         end),
-        %%  after handle modification we need to update handle timestamp in tree
+        % every handle modification must be reflected in the handle registry
+        % TODO VFS-11906 maybe rename handles -> handle_registry
         handles:update_timestamp(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp),
         handle_proxy:modify_handle(HandleId, FinalRawMetadata)
     end),

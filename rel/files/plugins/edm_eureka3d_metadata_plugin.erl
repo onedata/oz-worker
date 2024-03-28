@@ -94,7 +94,7 @@ main_namespace() ->
     {'xmlns:edm', <<"http://www.europeana.eu/schemas/edm/">>}.
 
 
-%% @TODO VFS-11365 check the cardinality of submitted elements (e.g. ProvidedCHO 1, Aggregation 1, WebResource 0..N)
+%% @TODO VFS-11906 check the cardinality of submitted elements (e.g. ProvidedCHO 1, Aggregation 1, WebResource 0..N)
 %% @doc {@link handle_metadata_plugin_behaviour} callback revise_for_publication/3
 -spec revise_for_publication(od_handle:parsed_metadata(), od_share:id(), od_share:record()) ->
     {ok, od_handle:parsed_metadata()} | error.

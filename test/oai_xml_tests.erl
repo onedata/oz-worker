@@ -29,7 +29,7 @@ encode_decode_utf8_test() ->
         "<description>l;'\\zxcvbnm,./əł</description>"
         "<item action=\"/library/index\" method=\"get\" target=\"_parent\">"
         "<param name=\"default_action\" type=\"hidden\" value=\"import_to_histories\"/>"
-%%        TODO VFS-11365 xmerl strips comments: https://github.com/erlang/otp/issues/5697
+%%        TODO VFS-11906 xmerl strips comments: https://github.com/erlang/otp/issues/5697
 %%                       consider using a different lib...
 %%        "<!-- This is a comment d'ŋ-ジ(ャパル -->"
         "</item>"
@@ -50,7 +50,7 @@ encode_decode_utf8_test() ->
         "<metadata>"
         "<tool name=\"óœę↓©’ŋśð←æŋ\" id=\"µńćźżąśð日本を- 旅す. d'ŋ-ジ(ャ\" version=\"1.0.0\">"
         "<description>l;'\\zxcvbnm,./əł</description>"
-%%        TODO VFS-11365 xmerl strips comments: https://github.com/erlang/otp/issues/5697
+%%        TODO VFS-11906 xmerl strips comments: https://github.com/erlang/otp/issues/5697
 %%                       consider using a different lib...
 %%        "<!-- This is a comment d'ŋ-ジ(ャパル -->"
         "<item action=\"/library/index\" method=\"get\" target=\"_parent\">"

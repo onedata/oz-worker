@@ -130,7 +130,7 @@ create_handle_service_for(UserId) ->
 create_handle_for(UserId, HandleServiceId, ShareId) ->
     MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
     RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix),
-    {ok, HandleId} = ?assertMatch({ok, _}, ozt:rpc(handle_logic, create, [?USER(UserId), #{
+    {ok, HandleId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create_handle, [?USER(UserId), UserId, #{
         <<"handleServiceId">> => HandleServiceId,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ShareId,

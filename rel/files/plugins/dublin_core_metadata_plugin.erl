@@ -116,7 +116,7 @@ adapt_for_oai_pmh(#xmlElement{name = metadata, content = Content}) ->
 %% @doc {@link handle_metadata_plugin_behaviour} callback validation_examples/0
 -spec validation_examples() -> [handle_metadata_plugin_behaviour:validation_example()].
 validation_examples() -> [
-    % TODO VFS-11365 add better validation of the DC XML; currently, any XML is accepted
+    % TODO VFS-11906 add better validation of the DC XML; currently, any XML is accepted
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",

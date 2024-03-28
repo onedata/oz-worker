@@ -405,7 +405,7 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
         <<"publicHandle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
-        <<"metadataPrefix">> => MetadataPrefix,  % @TODO VFS-11365 add to REST and swaggers
+        <<"metadataPrefix">> => MetadataPrefix,  % @TODO VFS-11906 add to REST and swaggers
         <<"metadata">> => Metadata,
         <<"timestamp">> => time:seconds_to_iso8601(Timestamp),  % @TODO VFS-6309 to be removed in 21.02
         <<"handleServiceId">> => HandleServiceId,
@@ -423,7 +423,7 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public},
     } = HandleData,
     #{
         <<"publicHandle">> => PublicHandle,
-        <<"metadataPrefix">> => MetadataPrefix,  % @TODO VFS-11365 add to REST and swaggers
+        <<"metadataPrefix">> => MetadataPrefix,  % @TODO VFS-11906 add to REST and swaggers
         <<"metadata">> => Metadata,
         <<"timestamp">> => time:seconds_to_iso8601(Timestamp)  % @TODO VFS-6309 to be removed in 21.02
     };
