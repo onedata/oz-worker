@@ -36,7 +36,6 @@ create(HandleServiceId, ShareId) ->
     RawMetadata = example_input_metadata(MetadataPrefix),
     create(HandleServiceId, ShareId, MetadataPrefix, RawMetadata).
 
-
 -spec create(od_handle_service:id(), od_share:id(), od_handle:metadata_prefix(), od_handle:raw_metadata()) ->
     od_handle:id().
 create(HandleServiceId, ShareId, MetadataPrefix, RawMetadata) ->
@@ -75,7 +74,6 @@ example_input_metadata(MetadataPrefix, ExampleNumber) ->
     od_handle:raw_metadata().
 expected_final_metadata(HandleOrId) ->
     expected_final_metadata(HandleOrId, 1).
-
 
 -spec expected_final_metadata(od_handle:record() | od_handle:id(), pos_integer()) ->
     od_handle:raw_metadata().

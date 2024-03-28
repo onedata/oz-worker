@@ -10,12 +10,10 @@
 %%% @see handle_metadata_plugin_behaviour for general information about metadata plugins.
 %%%
 %%% Metadata revision step:
-%%%   * dc:identifier element is added, with the value equal to
-%%%     the public share URL
+%%%   * add a dc:identifier element with the value equal to the public share URL
 %%%
 %%% Public handle insertion step:
-%%%   * dc:identifier element is added, with the value equal to
-%%%     the public handle
+%%%   * add a dc:identifier element with the value equal to the public handle
 %%%
 %%% @end
 %%%-------------------------------------------------------------------

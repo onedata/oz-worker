@@ -765,7 +765,7 @@ expected_final_handle_metadata(#{
     <<"resourceId">> := ShareId
 }, PublicHandle) ->
     ShareRecord = ?check(ozt:rpc(share_logic, get, [?ROOT, ShareId])),
-    {ok, ParsedMetadata} = oai_metadata:parse_and_normalize_xml(RawMetadata),
+    {ok, ParsedMetadata} = ozt:rpc(oai_metadata, parse_and_normalize_xml, [RawMetadata]),
     {ok, RevisedMetadata} = ozt:rpc(oai_metadata, revise_for_publication, [
         MetadataPrefix, ParsedMetadata, ShareId, ShareRecord
     ]),

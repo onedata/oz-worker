@@ -19,8 +19,9 @@
 %%%     (to be added when public handle is known)
 %%%   * insert (and overwrite if exists) edm:isShownBy element,
 %%%     pointing to a resource based on root FileId
-%%%   * ensure edm:isShownAt element; do not change if exists,
-%%%     otherwise, add one pointing to a resource based on root FileId
+%%%   * ensure edm:isShownAt element with a defined rdf:resource attribute;
+%%%     do not change if exists, otherwise, add one pointing to
+%%%     a resource based on root FileId
 %%%
 %%% Public handle insertion step:
 %%%   * add an rdf:about attr to edm:ProvidedCHO
