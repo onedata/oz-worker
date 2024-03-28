@@ -20,22 +20,12 @@
 %% API
 -export([serialize_datestamp/1, deserialize_datestamp/1, is_harvesting/1,
     verb_to_module/1, sanitize_metadata/2, is_earlier_or_equal/2,
-    dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/5,
-    oai_identifier_encode/1, oai_identifier_decode/1,
-    build_oai_header/2, build_oai_record/3
+    dates_have_the_same_granularity/2, to_xml/1, ensure_list/1,
+    request_arguments_to_handle_listing_opts/1, harvest/2, oai_identifier_decode/1,
+    build_oai_header/2, build_oai_record/2
 ]).
 -export([get_handle/1]).
 
-%%%--------------------------------------------------------------------
-%%% @doc
-%%% Encode handle id to oai identifier supported by oz-worker.
-%%% oai identifier is in form:
-%%%     oai:<onezone-domain>:<handle_id>
-%%% @end
-%%%--------------------------------------------------------------------
--spec oai_identifier_encode(od_handle:id()) -> oai_id().
-oai_identifier_encode(Id) ->
-    <<?OAI_IDENTIFIER_PREFIX/binary, Id/binary>>.
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -55,8 +45,9 @@ oai_identifier_decode(OAIId) ->
             throw({illegalId, OAIId})
     end.
 
--spec build_oai_header(oai_id(), od_handle:record()) -> #oai_header{}.
-build_oai_header(OaiId, Handle) ->
+-spec build_oai_header(od_handle:id(), od_handle:record()) -> #oai_header{}.
+build_oai_header(HandleId, Handle) ->
+    OaiId = oai_identifier_encode(HandleId),
     #oai_header{
         identifier = OaiId,
         datestamp = serialize_datestamp(
@@ -65,12 +56,13 @@ build_oai_header(OaiId, Handle) ->
         set_spec = Handle#od_handle.handle_service
     }.
 
--spec build_oai_record(MetadataPrefix :: binary(), oai_id(), od_handle:record()) ->
+-spec build_oai_record(od_handle:id(), od_handle:record()) ->
     #oai_record{}.
-build_oai_record(MetadataPrefix, OaiId, Handle) ->
+build_oai_record(HandleId, Handle) ->
+    MetadataPrefix = Handle#od_handle.metadata_prefix,
     Mod = metadata_formats:module(MetadataPrefix),
     #oai_record{
-        header = build_oai_header(OaiId, Handle),
+        header = build_oai_header(HandleId, Handle),
         metadata = #oai_metadata{
             metadata_format = #oai_metadata_format{metadataPrefix = MetadataPrefix},
             additional_identifiers = Mod:resolve_additional_identifiers(Handle),
@@ -116,6 +108,33 @@ deserialize_datestamp(Datestamp) ->
         {error, invalid_date_format}
     end.
 
+
+-spec request_arguments_to_handle_listing_opts([proplists:property()]) -> handles:listing_opts().
+request_arguments_to_handle_listing_opts(Args) ->
+    case proplists:get_value(<<"resumptionToken">>, Args) of
+        undefined ->
+            MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
+            From = case deserialize_datestamp(proplists:get_value(<<"from">>, Args)) of
+                undefined -> undefined;
+                FromDeserialized -> time:datetime_to_seconds(FromDeserialized)
+            end,
+            Until = case deserialize_datestamp(proplists:get_value(<<"until">>, Args)) of
+                undefined -> undefined;
+                UntilDeserialized -> time:datetime_to_seconds(UntilDeserialized)
+            end,
+            SetSpec = proplists:get_value(<<"set">>, Args),
+            #{
+                from => From,
+                until => Until,
+                service_id => SetSpec,
+                metadata_prefix => MetadataPrefix
+            };
+        ResumptionToken ->
+            #{
+                resumption_token => ResumptionToken
+            }
+    end.
+
 %%%--------------------------------------------------------------------
 %%% @doc
 %%% Function responsible for performing harvesting.
@@ -126,33 +145,38 @@ deserialize_datestamp(Datestamp) ->
 %%% Throws with noRecordsMatch if nothing is harvested.
 %%% @end
 %%%--------------------------------------------------------------------
--spec harvest(binary(), undefined | od_handle:timestamp_seconds(), undefined | od_handle:timestamp_seconds(),
-    undefined | oai_set_spec(), function()) -> [term()].
-harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, SetSpec, HarvestingFun) ->
-    From = case deserialize_datestamp(FromDatestamp) of
-        undefined -> undefined;
-        FromDeserialized -> time:datetime_to_seconds(FromDeserialized)
-    end,
-    Until = case deserialize_datestamp(UntilDatestamp) of
-        undefined -> undefined;
-        UntilDeserialized -> time:datetime_to_seconds(UntilDeserialized)
-    end,
-    ListingOpts = #{
-        from => From,
-        until => Until,
-        service_id => SetSpec,
-        metadata_prefix => MetadataPrefix
-    },
-    {Identifiers, _} = handles:list(ListingOpts),
-
+-spec harvest(handles:listing_opts(), function()) -> oai_response().
+harvest(ListingOpts, HarvestingFun) ->
+    {Identifiers, NewResumptionToken} = handles:list(ListingOpts),
     HarvestedMetadata = lists:map(fun(Identifier) ->
         Handle = get_handle(Identifier),
-        HarvestingFun(Identifier, Handle)
-    end, Identifiers),
+        HarvestingFun(Identifier, Handle) end, Identifiers),
+
     case HarvestedMetadata of
         [] ->
+            MetadataPrefix = maps:get(metadata_prefix, ListingOpts),
+            SetSpec = maps:get(service_id, ListingOpts),
+            FromDatestamp = case maps:get(from, ListingOpts) of
+                undefined -> undefined;
+                From -> serialize_datestamp(time:seconds_to_datetime(From))
+            end,
+            UntilDatestamp = case maps:get(until, ListingOpts) of
+                undefined -> undefined;
+                Until -> serialize_datestamp(time:seconds_to_datetime(Until))
+            end,
             throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
-        _ -> HarvestedMetadata
+        _ ->
+            % According to OAI-PMH spec, the token MUST be present in the response if an incomplete list is returned,
+            % and MUST be present and MUST be empty when the last batch that completes the list is returned.
+            % However, if the whole list is returned in one response, there should be no resumption token element at all.
+            ResultResumptionToken = case {NewResumptionToken, ListingOpts} of
+                {undefined, #{resumption_token := _}} ->  <<>>;
+                _ -> NewResumptionToken
+            end,
+            #oai_listing_result{
+                batch = HarvestedMetadata,
+                resumption_token = ResultResumptionToken
+            }
     end.
 
 
@@ -223,6 +247,7 @@ is_harvesting(_) -> false.
 %%%-------------------------------------------------------------------
 -spec to_xml(term()) -> #xmlElement{}.
 to_xml(undefined) -> [];
+to_xml([]) -> [];
 to_xml({_Name, undefined}) -> [];
 to_xml(#xmlElement{} = XML) -> XML;
 to_xml({_Name, Record = #oai_record{}}) -> to_xml(Record);
@@ -299,12 +324,12 @@ to_xml({Name, ContentList = [{_, _} | _], Attributes}) ->
 to_xml({Name, Content, Attributes}) ->
     #xmlElement{
         name = ensure_atom(Name),
-        content = [to_xml(Content)],
+        content = ensure_list(to_xml(Content)),
         attributes = lists:map(fun({N, V}) ->
             #xmlAttribute{name = ensure_atom(N), value = str_utils:to_list(V)}
         end, Attributes)
     };
-to_xml(Content) ->
+to_xml(Content) when is_binary(Content) ->
     #xmlText{value = str_utils:to_list(Content)}.
 
 
@@ -373,3 +398,14 @@ ensure_atom(Arg) when is_atom(Arg) -> Arg;
 ensure_atom(Arg) when is_binary(Arg) -> binary_to_atom(Arg, latin1);
 ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
 
+%%%--------------------------------------------------------------------
+%%% @private
+%%% @doc
+%%% Encode handle id to oai identifier supported by oz-worker.
+%%% oai identifier is in form:
+%%%     oai:<onezone-domain>:<handle_id>
+%%% @end
+%%%--------------------------------------------------------------------
+-spec oai_identifier_encode(od_handle:id()) -> oai_id().
+oai_identifier_encode(Id) ->
+    <<?OAI_IDENTIFIER_PREFIX/binary, Id/binary>>.

@@ -232,7 +232,6 @@ check_rest_call(Config, ArgsMap) ->
                         }})
                 end
         end,
-
         % Check response body if specified
         case ExpBody of
             undefined ->
