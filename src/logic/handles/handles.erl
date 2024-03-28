@@ -26,7 +26,7 @@
 %                that have the same timestamp.
 -type index() :: binary().
 
--type resumption_token() :: binary() | undefined | none.
+-type resumption_token() :: binary() | undefined.
 
 -type limit() :: pos_integer().
 
@@ -151,14 +151,7 @@ list(ListingOpts) ->
     {ok, ReversedEntries} = datastore_model:fold_links(
         ?CTX, ?FOREST, TreeId, FoldFun, [], FoldOpts
     ),
-    {Handles, NewToken} = build_result_from_reversed_listing(ReversedEntries, Limit,
-        MetadataPrefix, From, Until),
-
-    %% if the entire list is returned at once, the resumptionToken is not included in the response
-    case NewToken == undefined andalso Token == <<>> of
-        true -> {Handles, none};
-        false -> {Handles, NewToken}
-    end.
+    build_result_from_reversed_listing(ReversedEntries, Limit, MetadataPrefix, From, Until).
 
 
 -spec get_earliest_timestamp() -> undefined | od_handle:timestamp_seconds().

@@ -210,7 +210,7 @@ generate_required_response_elements(Module, Args) when Module == list_identifier
     [ElementName] = Module:required_response_elements(),
     #oai_listing_result{batch = Batch, resumption_token = ResumptionToken} = Module:get_response(ElementName, Args),
     case ResumptionToken of
-        none -> [{ElementName, Element} || Element <- Batch];
+        undefined -> [{ElementName, Element} || Element <- Batch];
         _ -> [{ElementName, Element} || Element <- Batch] ++ [{<<"resumptionToken">>, ResumptionToken}]
     end;
 generate_required_response_elements(Module, Args) ->

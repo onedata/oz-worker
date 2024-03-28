@@ -166,9 +166,16 @@ harvest(ListingOpts, HarvestingFun) ->
             end,
             throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
         _ ->
+            % According to OAI-PMH spec, the token MUST be present in the response if an incomplete list is returned,
+            % and MUST be present and MUST be empty when the last batch that completes the list is returned.
+            % However, if the whole list is returned in one response, there should be no resumption token element at all.
+            ResultResumptionToken = case {NewResumptionToken, ListingOpts} of
+                {undefined, #{resumption_token := _}} ->  <<>>;
+                _ -> NewResumptionToken
+            end,
             #oai_listing_result{
                 batch = HarvestedMetadata,
-                resumption_token = NewResumptionToken
+                resumption_token = ResultResumptionToken
             }
     end.
 
@@ -241,11 +248,6 @@ is_harvesting(_) -> false.
 -spec to_xml(term()) -> #xmlElement{}.
 to_xml(undefined) -> [];
 to_xml([]) -> [];
-to_xml({<<"resumptionToken">>, undefined}) ->
-    #xmlElement{
-        name = resumptionToken,
-        content = []
-    };
 to_xml({_Name, undefined}) -> [];
 to_xml(#xmlElement{} = XML) -> XML;
 to_xml({_Name, Record = #oai_record{}}) -> to_xml(Record);

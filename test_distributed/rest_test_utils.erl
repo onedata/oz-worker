@@ -438,33 +438,18 @@ sort_map(OriginalMap) ->
 % Compares two XML terms
 compare_xml(_, []) -> true;
 compare_xml(#xmlText{value = V}, #xmlText{value = V}) -> true;
+compare_xml(#xmlText{value = _V1}, #xmlText{value = _V2}) -> false;
 compare_xml(#xmlAttribute{name = N, value = V}, #xmlAttribute{name = N, value = V}) ->
     true;
 compare_xml(#xmlAttribute{name = _N1, value = _V1}, #xmlAttribute{name = _N2, value = _V2}) ->
     false;
-compare_xml(#xmlElement{name = Name, content = [#xmlText{value = V}]},
-    #xmlElement{name = Name, content = [#xmlText{value = V}]}) ->
-    true;
-compare_xml(#xmlElement{name = error, attributes = A1}, #xmlElement{name = error, attributes = A2}) ->
-    compare_xml(A1, A2);
-compare_xml(#xmlElement{name = Name, content = [#xmlText{value = _V1}]},
-    #xmlElement{name = Name, content = [#xmlText{value = _V2}]}) ->
-    false;
-compare_xml(#xmlElement{name = resumptionToken, content = []},
-    #xmlElement{name = resumptionToken, content = []}) ->
-    true;
 compare_xml(#xmlElement{name = Name, attributes = _, content = _},
     #xmlElement{name = Name, attributes = [], content = []}) -> true;
 compare_xml(#xmlElement{name = Name, attributes = RespAttributes, content = RespContent},
     #xmlElement{name = Name, attributes = ExpAttributes, content = ExpContent}) ->
     case compare_xml(RespAttributes, ExpAttributes) of
-        false ->
-            false;
-        true ->
-            case length(RespContent) == length(ExpContent) of
-                false -> false;
-                true -> compare_xml(lists:keysort(2, RespContent), lists:keysort(2, ExpContent))
-            end
+        false -> false;
+        true -> compare_xml(RespContent, ExpContent)
     end;
 compare_xml(Resp, [Exp | ExpRest]) when is_list(Resp) ->
     compare_xml(Resp, Exp) and compare_xml(Resp, ExpRest);

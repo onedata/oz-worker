@@ -1090,8 +1090,7 @@ init_per_suite(Config) ->
     ssl:start(),
     application:ensure_all_started(hackney),
     ozt:init_per_suite(Config, fun() ->
-        ozt:set_env(default_handle_list_limit,
-        ?TESTED_HANDLE_LIST_LIMIT)
+        ozt:set_env(default_handle_list_limit, ?TESTED_HANDLE_LIST_LIMIT)
     end).
 
 init_per_testcase(_, Config) ->
@@ -1198,7 +1197,7 @@ check_list_continuously_with_resumption_token(Config, Method, Verb, Rest, Args, 
         <<"ListIdentifiers">> -> ?assert(check_list_identifiers(200, Args, Method, ExpIdsAndTimestamps, Config));
         <<"ListRecords">> -> ?assert(check_list_records(200, Args, Method, ExpIdsAndTimestamps, Config))
     end,
-    ArgsToken = add_to_args(<<"resumptionToken">>, ResumptionToken, []),
+    ArgsToken = add_to_args_if_defined(<<"resumptionToken">>, ResumptionToken, []),
     check_list_continuously_with_resumption_token(Config, Method, Verb, lists:subtract(Rest, Sublist),
         ArgsToken, BuildExpectedObject).
 
@@ -1268,11 +1267,11 @@ prepare_querystring(Proplist) ->
     end.
 
 add_verb(Verb, Args) ->
-    add_to_args(<<"verb">>, Verb, Args).
+    add_to_args_if_defined(<<"verb">>, Verb, Args).
 
-add_to_args(_Key, undefined, Args) ->
+add_to_args_if_defined(_Key, undefined, Args) ->
     Args;
-add_to_args(Key, Value, Args) ->
+add_to_args_if_defined(Key, Value, Args) ->
     [{str_utils:to_binary(Key), str_utils:to_binary(Value)} | Args].
 
 get_domain(Hostname) ->
@@ -1460,10 +1459,10 @@ prepare_harvesting_args(MetadataPrefix, From, Until) ->
     prepare_harvesting_args(MetadataPrefix, From, Until, undefined).
 
 prepare_harvesting_args(MetadataPrefix, From, Until, Set) ->
-    Args = add_to_args(<<"metadataPrefix">>, MetadataPrefix, []),
-    Args2 = add_to_args(<<"from">>, From, Args),
-    Args3 = add_to_args(<<"until">>, Until, Args2),
-    add_to_args(<<"set">>, Set, Args3).
+    Args = add_to_args_if_defined(<<"metadataPrefix">>, MetadataPrefix, []),
+    Args2 = add_to_args_if_defined(<<"from">>, From, Args),
+    Args3 = add_to_args_if_defined(<<"until">>, Until, Args2),
+    add_to_args_if_defined(<<"set">>, Set, Args3).
 
 ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset) ->
     lists:filter(fun({_Id, TimeOffset}) ->
@@ -1619,7 +1618,14 @@ expected_metadata_for_prefix(Config, HandleId, ?EDM_METADATA_PREFIX) ->
     {#xmlElement{content = Metadata}, _} = xmerl_scan:string(binary_to_list(MetadataXml)),
     Metadata.
 
-%% @private
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% @private
+%%% According to OAI-PMH spec, the token MUST be present in the response if an incomplete list is returned,
+%%% and MUST be present and MUST be empty when the last batch that completes the list is returned.
+%%% However, if the whole list is returned in one response, there should be no resumption token element at all.
+%%% @end
+%%%-------------------------------------------------------------------
 expected_resumption_token_element(ExpResumptionToken) ->
     #xmlElement{name = resumptionToken,
         content = case ExpResumptionToken of
