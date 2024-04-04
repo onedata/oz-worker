@@ -103,9 +103,9 @@ translate_value(_, #gri{type = od_atm_workflow_schema, aspect = {dump_revision, 
 
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n"
-    "ProtocolVersion: ~p~n"
-    "GRI: ~p~n"
-    "Data: ~p~n", [
+    "ProtocolVersion: ~tp~n"
+    "GRI: ~tp~n"
+    "Data: ~tp~n", [
         ProtocolVersion, GRI, Data
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
@@ -530,9 +530,9 @@ translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, sco
 
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate Oneprovider graph sync get result for:~n
-    ProtocolVersion: ~p~n
-    GRI: ~p~n
-    Data: ~p~n", [
+    ProtocolVersion: ~tp~n
+    GRI: ~tp~n
+    Data: ~tp~n", [
         ProtocolVersion, GRI, Data
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).

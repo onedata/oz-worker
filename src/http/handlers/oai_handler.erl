@@ -142,7 +142,7 @@ handle_request(QueryParams, Req) ->
         throw:Error ->
             oai_errors:handle(Error);
         ErrorType:Error:Stacktrace ->
-            ?error_stacktrace("Unhandled exception in OAI-PMH request ~p:~p", [ErrorType, Error], Stacktrace),
+            ?error_stacktrace("Unhandled exception in OAI-PMH request ~tp:~tp", [ErrorType, Error], Stacktrace),
             ReqE = cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req),
             throw({stop, ReqE})
     end,

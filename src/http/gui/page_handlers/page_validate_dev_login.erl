@@ -43,14 +43,14 @@ handle(<<"GET">>, Req) ->
                     Req2;
                 {ok, _AnotherUser, _SessionId, Req2} ->
                     Req3 = gui_session:log_out(Req2),
-                    ?info("[DEV MODE] User ~p logged in", [UserId]),
+                    ?info("[DEV MODE] User ~tp logged in", [UserId]),
                     gui_session:log_in(UserId, Req3);
                 {error, _} ->
                     case UserId of
                         undefined ->
                             Req;
                         _ ->
-                            ?info("[DEV MODE] User ~p logged in", [UserId]),
+                            ?info("[DEV MODE] User ~tp logged in", [UserId]),
                             gui_session:log_in(UserId, Req)
                     end
             end,

@@ -107,7 +107,7 @@ gather_log(Loglevel, Format, Args) ->
         false ->
             ok;
         true ->
-            append_to_log(str_utils:format("~s ~ts", [
+            append_to_log(str_utils:format("~ts ~ts", [
                 format_loglevel(Loglevel),
                 str_utils:format(Format, Args)
             ]))

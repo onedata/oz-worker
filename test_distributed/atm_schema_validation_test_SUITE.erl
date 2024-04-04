@@ -911,7 +911,7 @@ run_validation_tests(TestSpec) ->
         try
             run_validation_test(TestSpec)
         catch Class:Reason:Stacktrace ->
-            ct:pal("Validation test crashed due to ~p:~p~nStacktrace: ~s", [
+            ct:pal("Validation test crashed due to ~tp:~tp~nStacktrace: ~ts", [
                 Class, Reason, lager:pr_stacktrace(Stacktrace)
             ]),
             error(fail)

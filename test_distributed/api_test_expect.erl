@@ -686,12 +686,12 @@ json_dump_of_atm_workflow_schema_revision(gs, RevisionData, RevisionNumber) ->
 
 %% @private
 expected_public_share_url(ShareId) ->
-    str_utils:format_bin("https://~s/share/~s", [ozt:get_domain(), ShareId]).
+    str_utils:format_bin("https://~ts/share/~ts", [ozt:get_domain(), ShareId]).
 
 
 %% @private
 expected_public_share_rest_url(ShareId) ->
-    str_utils:format_bin("https://~s/api/v3/onezone/shares/~s/public", [ozt:get_domain(), ShareId]).
+    str_utils:format_bin("https://~ts/api/v3/onezone/shares/~ts/public", [ozt:get_domain(), ShareId]).
 
 
 %% @private

@@ -1030,7 +1030,7 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
         get -> #{
             method => get,
             url => URL,
-            path => str_utils:format_bin("~s?~s", [Path, QueryString])
+            path => str_utils:format_bin("~ts?~ts", [Path, QueryString])
         };
         post -> #{
             method => post,
@@ -1059,7 +1059,7 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
 
 get_oai_pmh_URL(Node) ->
     OZ_IP_1 = test_utils:get_docker_ip(Node),
-    str_utils:format_bin("http://~s", [OZ_IP_1]).
+    str_utils:format_bin("http://~ts", [OZ_IP_1]).
 
 get_oai_pmh_api_path(Config) ->
     list_to_binary(oz_test_utils:get_env(Config, oai_pmh_api_prefix)).

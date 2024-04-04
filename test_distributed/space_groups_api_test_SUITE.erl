@@ -767,7 +767,7 @@ get_eff_group_privileges_test(Config) ->
     %%                  Space
     %%                 /  ||  \
     %%                /   ||   \
-    %%     [~space_view]  ||  [space_view]
+    %%     [~tspace_view]  ||  [space_view]
     %%           /        ||        \
     %%        User1      /  \      User2
     %%                  /    \

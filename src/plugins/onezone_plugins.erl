@@ -70,15 +70,15 @@ init() ->
     PluginsDir = ?PLUGINS_DIR,
     PluginFiles = case file:list_dir(PluginsDir) of
         {error, Error} ->
-            ?warning("Cannot read plugins directory, no plugins will be loaded: ~p", [
+            ?warning("Cannot read plugins directory, no plugins will be loaded: ~tp", [
                 {error, Error}
             ]),
             [];
         {ok, Files} ->
             ErlFiles = [F || F <- Files, filename:extension(F) == ".erl"],
             case length(ErlFiles) of
-                0 -> ?info("No plugins found in ~s", [PluginsDir]);
-                N -> ?info("Found ~B plugins in ~s", [N, PluginsDir])
+                0 -> ?info("No plugins found in ~ts", [PluginsDir]);
+                N -> ?info("Found ~B plugins in ~ts", [N, PluginsDir])
             end,
             ErlFiles
     end,
@@ -89,10 +89,10 @@ init() ->
             code:purge(Module),
             {module, Module} = code:load_file(Module),
             validate_plugin(Module),
-            ?info("  -> ~p: successfully loaded", [Module]),
+            ?info("  -> ~tp: successfully loaded", [Module]),
             {ok, Module}
         catch Type:Reason:Stacktrace ->
-            ?error_stacktrace("Cannot load ~s plugin due to ~p:~p", [Plugin, Type, Reason], Stacktrace),
+            ?error_stacktrace("Cannot load ~ts plugin due to ~tp:~tp", [Plugin, Type, Reason], Stacktrace),
             error
         end
     end, PluginFiles),
@@ -118,24 +118,24 @@ validate_plugin(Module) ->
 validate_plugin(Module, entitlement_parser) ->
     try Module:validation_examples() of
         Examples ->
-            ?info("  -> ~p: found ~B validation examples for plugin, testing...", [
+            ?info("  -> ~tp: found ~B validation examples for plugin, testing...", [
                 Module, length(Examples)
             ]),
             [validate_entitlement_parsing_example(Module, E) || E <- Examples],
-            ?info("  -> ~p: all validation examples passed", [Module])
+            ?info("  -> ~tp: all validation examples passed", [Module])
     catch _:_ ->
-        ?info("  -> ~p: no validation examples found for ~p", [Module])
+        ?info("  -> ~tp: no validation examples found for ~tp", [Module])
     end;
 validate_plugin(Module, attribute_mapper) ->
     try Module:validation_examples() of
         Examples ->
-            ?info("  -> ~p: found ~B validation examples for plugin, testing...", [
+            ?info("  -> ~tp: found ~B validation examples for plugin, testing...", [
                 Module, length(Examples)
             ]),
             [validate_attribute_mapping_example(Module, E) || E <- Examples],
-            ?info("  -> ~p: all validation examples passed", [Module])
+            ?info("  -> ~tp: all validation examples passed", [Module])
     catch _:_ ->
-        ?info("  -> ~p: no validation examples found for ~p", [Module])
+        ?info("  -> ~tp: no validation examples found for ~tp", [Module])
     end;
 validate_plugin(_, openid_plugin) ->
     % openid_plugin does not undergo validation
@@ -170,23 +170,23 @@ validate_entitlement_parsing_example(Module, {IdP, Input, ParserConfig, Expected
             ok;
         {_, {error, malformed, EType, EReason, EStacktrace}} ->
             ?error("Validation example crashed:~n"
-            "IdP: ~p~n"
-            "Input: ~p~n"
-            "ParserConfig: ~p~n"
-            "Expected: ~p~n"
-            "Error: ~p~n"
-            "Stacktrace: ~s~n", [
+            "IdP: ~tp~n"
+            "Input: ~tp~n"
+            "ParserConfig: ~tp~n"
+            "Expected: ~tp~n"
+            "Error: ~tp~n"
+            "Stacktrace: ~ts~n", [
                 IdP, Input, ParserConfig, ExpectedOutput, {EType, EReason},
                 iolist_to_binary(lager:pr_stacktrace(EStacktrace))
             ]),
             throw({validation_failed, IdP});
         {_, Got} ->
             ?error("Validation example failed:~n"
-            "IdP: ~p~n"
-            "Input: ~p~n"
-            "ParserConfig: ~p~n"
-            "Expected: ~p~n"
-            "Got: ~p", [IdP, Input, ParserConfig, ExpectedOutput, Got]),
+            "IdP: ~tp~n"
+            "Input: ~tp~n"
+            "ParserConfig: ~tp~n"
+            "Expected: ~tp~n"
+            "Got: ~tp", [IdP, Input, ParserConfig, ExpectedOutput, Got]),
             throw({validation_failed, IdP})
     end.
 
@@ -214,22 +214,22 @@ validate_attribute_mapping_example(Module, {IdP, Attribute, IdPAttributes, Expec
             ok;
         {_, {error, attribute_mapping_error, EType, EReason, EStacktrace}} ->
             ?error("Validation example crashed:~n"
-            "IdP: ~p~n"
-            "Attribute: ~p~n"
-            "IdPAttributes: ~p~n"
-            "Expected: ~p~n"
-            "Error: ~p~n"
-            "Stacktrace: ~s~n", [
+            "IdP: ~tp~n"
+            "Attribute: ~tp~n"
+            "IdPAttributes: ~tp~n"
+            "Expected: ~tp~n"
+            "Error: ~tp~n"
+            "Stacktrace: ~ts~n", [
                 IdP, Attribute, IdPAttributes, ExpectedOutput, {EType, EReason},
                 iolist_to_binary(lager:pr_stacktrace(EStacktrace))
             ]),
             throw({validation_failed, IdP});
         {_, Got} ->
             ?error("Validation example failed:~n"
-            "IdP: ~p~n"
-            "Attribute: ~p~n"
-            "IdPAttributes: ~p~n"
-            "Expected: ~p~n"
-            "Got: ~p", [IdP, Attribute, IdPAttributes, ExpectedOutput, Got]),
+            "IdP: ~tp~n"
+            "Attribute: ~tp~n"
+            "IdPAttributes: ~tp~n"
+            "Expected: ~tp~n"
+            "Got: ~tp", [IdP, Attribute, IdPAttributes, ExpectedOutput, Got]),
             throw({validation_failed, IdP})
     end.

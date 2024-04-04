@@ -154,7 +154,7 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
     catch error:{parallel_call_failed, {failed_processes, Errors}}:Stacktrace ->
         ?error_stacktrace(
             ?prepare_log(
-                "Submit batch in harvester ~p failed due to: ~p",
+                "Submit batch in harvester ~tp failed due to: ~tp",
                 [HarvesterId, Errors]
             ),
             Stacktrace
@@ -356,14 +356,14 @@ do_request(Method, Endpoint, IndexId, Path, Data, Headers, ExpectedCodes) ->
                 true ->
                     Response;
                 _ ->
-                    ?error(?prepare_log("~p ~p returned unexpected response ~p:~n ~p~n~p",
+                    ?error(?prepare_log("~tp ~tp returned unexpected response ~tp:~n ~tp~n~tp",
                         [Method, Url, Code, RespHeaders, json_utils:decode(Body)])),
                     ?ERROR_BAD_DATA(<<"payload">>)
             end;
         {ok, _, _, _} = Response ->
             Response;
         {error, _} = Error ->
-            ?error(?prepare_log("~p ~p was unsuccessful due to ~w",
+            ?error(?prepare_log("~tp ~tp was unsuccessful due to ~w",
                 [Method, Url, Error])),
             ?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(get_name())
     end.
@@ -705,7 +705,7 @@ parse_batch_result(Result, IgnoreSchemaErrors) ->
                         {true, false} ->
                             {rejected, retrieve_rejected_field(ErrorReason), ErrorReason};
                         {true, true} ->
-                            ?debug(?prepare_log("Entry submit dropped due to non-matching schema: ~p",
+                            ?debug(?prepare_log("Entry submit dropped due to non-matching schema: ~tp",
                                 [EntryResponse])),
                             ok;
                         {false, _} ->

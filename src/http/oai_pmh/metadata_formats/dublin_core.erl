@@ -68,7 +68,7 @@ extra_namespaces() -> [
 -spec schema_location() -> binary().
 schema_location() ->
     {_, MainNamespace} = main_namespace(),
-    str_utils:format_bin("~s ~s", [MainNamespace, schema_URL()]).
+    str_utils:format_bin("~ts ~ts", [MainNamespace, schema_URL()]).
 
 %%%-------------------------------------------------------------------
 %%% @doc
@@ -128,7 +128,7 @@ encode(Metadata, AdditionalIdentifiers) ->
             end, Content)
     catch Class:Reason:Stacktrace ->
         ?debug_exception(
-            "Cannot parse dublin core metadata, identifiers: ~p", [AdditionalIdentifiers],
+            "Cannot parse dublin core metadata, identifiers: ~tp", [AdditionalIdentifiers],
             Class, Reason, Stacktrace
         ),
         []

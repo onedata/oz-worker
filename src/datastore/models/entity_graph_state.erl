@@ -65,7 +65,7 @@ get() ->
         {ok, #document{value = State}} ->
             State;
         Error ->
-            ?error("Cannot retrieve state of effective graph: ~p", [Error]),
+            ?error("Cannot retrieve state of effective graph: ~tp", [Error]),
             error(cannot_get_state)
     end.
 

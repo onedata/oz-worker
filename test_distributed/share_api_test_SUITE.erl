@@ -746,7 +746,7 @@ check_shares_data_redirector(Config, ShareId, ProviderId, ProviderVersion, Subpa
 
     ExampleObjectId = gen_example_object_id(ShareId),
     Result = http_client:get(
-        str_utils:format_bin("https://~s/api/v3/onezone/shares/data/~s~s", [OzDomain, ExampleObjectId, SubpathWithQs]),
+        str_utils:format_bin("https://~ts/api/v3/onezone/shares/data/~ts~ts", [OzDomain, ExampleObjectId, SubpathWithQs]),
         #{}, <<"">>, [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
     ),
     ParsedResult = case Result of
@@ -788,7 +788,7 @@ expected_shared_data_redirect(Config, ProviderId, ObjectId, SubpathWithQs) ->
         <<"/?", Rest/binary>> -> <<"?", Rest/binary>>;
         Other -> Other
     end,
-    str_utils:format_bin("https://~s/api/v3/oneprovider/data/~s~s", [
+    str_utils:format_bin("https://~ts/api/v3/oneprovider/data/~ts~ts", [
         OpDomain, ObjectId, ExpectedSubpathWithQs
     ]).
 

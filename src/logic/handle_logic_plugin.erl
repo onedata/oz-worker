@@ -312,7 +312,7 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
             handle_service = HandleService
         }}} = od_handle:get(HandleId),
         ?warning_exception(
-            "Handle ~s (~s) was removed but it failed to be unregistered from handle service ~s",
+            "Handle ~ts (~ts) was removed but it failed to be unregistered from handle service ~ts",
             [HandleId, PublicHandle, HandleService],
             Class, Reason, Stacktrace
         )

@@ -174,7 +174,7 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
                 {#gri{type = Type, id = Id}, _} -> {Type, Id};
                 {#gri{type = Type, id = Id}, _, _} -> {Type, Id}
             end,
-            ?debug("~s has been created by client: ~s", [
+            ?debug("~ts has been created by client: ~ts", [
                 EntType:to_string(EntId),
                 aai:auth_to_printable(Auth)
             ]);
@@ -221,7 +221,7 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = delete}}) ->
         {ok, #el_req{gri = #gri{type = Type, id = Id, aspect = instance}, auth = Auth}} ->
             % If an entity instance is deleted, log an information about it
             % (it's a significant operation and this information might be useful).
-            ?debug("~s has been deleted by client: ~s", [
+            ?debug("~ts has been deleted by client: ~ts", [
                 Type:to_string(Id),
                 aai:auth_to_printable(Auth)
             ]),

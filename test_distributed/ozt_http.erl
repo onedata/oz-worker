@@ -108,7 +108,7 @@ build_url(Scheme, Urn) ->
         443 -> <<"">>;
         Port -> <<":", Port/binary>>
     end,
-    str_utils:format_bin("~s://~s~s~s", [
+    str_utils:format_bin("~ts://~ts~ts~ts", [
         Scheme,
         ozt:get_domain(),
         PortStr,

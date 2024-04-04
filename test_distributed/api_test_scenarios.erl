@@ -85,7 +85,7 @@ run_scenario(Function, Args) ->
             false;
         Type:Message:Stacktrace ->
             ct:pal(
-                "Unexpected error in ~p:run_scenario - ~p:~p~nStacktrace: ~s",
+                "Unexpected error in ~tp:run_scenario - ~tp:~tp~nStacktrace: ~ts",
                 [
                     ?MODULE, Type, Message,
                     lager:pr_stacktrace(Stacktrace)
@@ -565,7 +565,7 @@ create_basic_group_env(Config, Privs) ->
     %%                  Group
     %%                 /     \
     %%                /       \
-    %%       [~privileges]  [privileges]
+    %%       [~tprivileges]  [privileges]
     %%              /           \
     %%           User1         User2
 
@@ -593,7 +593,7 @@ create_basic_space_env(Config, Privs) ->
     %%                  Space
     %%                 /  |  \
     %%                /   |   \
-    %%    [~privileges]   |   [privileges]
+    %%    [~tprivileges]   |   [privileges]
     %%              /     |     \
     %%          User1   Owner   User2
 
@@ -628,7 +628,7 @@ create_basic_doi_hservice_env(Config, Privs) ->
     %%              HandleService
     %%                 /      \
     %%                /        \
-    %%       [~privileges]  [privileges]
+    %%       [~tprivileges]  [privileges]
     %%              /            \
     %%           User1         User2
 
@@ -664,7 +664,7 @@ create_basic_handle_env(Config, Privs) ->
     %%                  Handle
     %%                 /      \
     %%                /        \
-    %%       [~privileges]  [privileges]
+    %%       [~tprivileges]  [privileges]
     %%              /            \
     %%           User1         User2
 
@@ -708,7 +708,7 @@ create_basic_harvester_env(Config, Privs) ->
     %%                Harvester
     %%                 /     \
     %%                /       \
-    %%       [~privileges]  [privileges]
+    %%       [~tprivileges]  [privileges]
     %%              /           \
     %%           User1         User2
 
@@ -738,7 +738,7 @@ create_basic_cluster_env(Config, Privs) ->
     %%                  Cluster
     %%                 /     \
     %%                /       \
-    %%       [~privileges]  [privileges]
+    %%       [~tprivileges]  [privileges]
     %%              /           \
     %%           User1         User2
 
@@ -771,7 +771,7 @@ create_basic_atm_inventory_env(Privs) ->
     %%                  AtmInventory
     %%                    /     \
     %%                   /       \
-    %%          [~privileges]  [privileges]
+    %%          [~tprivileges]  [privileges]
     %%                 /           \
     %% UserWithoutPrivileges  UserWithPrivileges
 
@@ -906,7 +906,7 @@ create_space_eff_users_env(Config) ->
     %%                  Space
     %%                 /  |  \
     %%                /   |   \
-    %%     [~space_view]  |  [space_view]
+    %%     [~tspace_view]  |  [space_view]
     %%           /        |        \
     %%        User1     Group1    User2
     %%                 /      \
@@ -958,7 +958,7 @@ create_provider_eff_users_env(Config) ->
     %%                  Space
     %%                 /  |  \
     %%                /   |   \
-    %%     [~space_view]  |  [space_view]
+    %%     [~tspace_view]  |  [space_view]
     %%           /        |        \
     %%        User1     Group1    User2
     %%                 /      \
@@ -1111,7 +1111,7 @@ create_harvester_eff_users_env(Config) ->
     %%                Harvester
     %%                 /  |  \
     %%                /   |   \
-    %%     [~space_view]  |  [space_view]
+    %%     [~tspace_view]  |  [space_view]
     %%           /        |        \
     %%        User1     Group1    User2
     %%                 /      \

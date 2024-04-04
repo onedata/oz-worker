@@ -205,7 +205,7 @@ verify_state_of_all_entities() ->
                         fun(Direction) ->
                             case is_dirty(Direction, Entity) of
                                 true ->
-                                    ?info("Scheduling ~p refresh of dirty entity: ~s", [
+                                    ?info("Scheduling ~tp refresh of dirty entity: ~ts", [
                                         Direction, EntityType:to_string(EntityId)
                                     ]),
                                     update_dirty_queue(
@@ -793,7 +793,7 @@ remove_all_relations(EntityType, EntityId, Entity) ->
         maps:map(fun(ParType, ParentIds) ->
             lists:foreach(fun(ParId) ->
                 ok = delete_with_relations(ParType, ParId),
-                ?debug("~s has been deleted because it depended on ~s "
+                ?debug("~ts has been deleted because it depended on ~ts "
                 "(which is being deleted)", [
                     ParType:to_string(ParId),
                     EntityType:to_string(EntityId)
@@ -803,7 +803,7 @@ remove_all_relations(EntityType, EntityId, Entity) ->
         maps:map(fun(ChType, ChIds) ->
             lists:foreach(fun(ChId) ->
                 ok = delete_with_relations(ChType, ChId),
-                ?debug("~s has been deleted because it depended on ~s "
+                ?debug("~ts has been deleted because it depended on ~ts "
                 "(which is being deleted)", [
                     ChType:to_string(ChId),
                     EntityType:to_string(EntityId)
@@ -816,7 +816,7 @@ remove_all_relations(EntityType, EntityId, Entity) ->
             throw(Error);
         Type:Message:Stacktrace ->
             ?error_stacktrace(
-                "Unexpected error while removing relations of ~p#~s - ~p:~p",
+                "Unexpected error while removing relations of ~tp#~ts - ~tp:~tp",
                 [EntityType, EntityId, Type, Message],
                 Stacktrace
             ),
@@ -1014,7 +1014,7 @@ refresh_if_needed() ->
                     refresh_entity_graph(entity_graph_state:get())
                 catch Type:Message:Stacktrace ->
                     ?error_stacktrace(
-                        "Cannot refresh entity graph - ~p:~p",
+                        "Cannot refresh entity graph - ~tp:~tp",
                         [Type, Message],
                         Stacktrace
                     ),
@@ -1138,7 +1138,7 @@ refresh_entity(Direction, EntityType, EntityId, Entity) ->
             Direction, Ent, AggregatedEffRelations
         ))}
     end),
-    ?debug("Entity refreshed: ~s", [EntityType:to_string(EntityId)]),
+    ?debug("Entity refreshed: ~ts", [EntityType:to_string(EntityId)]),
     ok.
 
 

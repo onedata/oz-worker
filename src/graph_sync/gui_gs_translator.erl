@@ -167,9 +167,9 @@ translate_value(_, #gri{type = od_atm_workflow_schema, aspect = {dump_revision, 
     JsonMap;
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n"
-    "ProtocolVersion: ~p~n"
-    "GRI: ~p~n"
-    "Data: ~p~n", [
+    "ProtocolVersion: ~tp~n"
+    "GRI: ~tp~n"
+    "Data: ~tp~n", [
         ProtocolVersion, GRI, Data
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
@@ -210,9 +210,9 @@ translate_resource(_, GRI = #gri{type = oz_worker}, Data) ->
 
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate GUI graph sync get result for:~n
-    ProtocolVersion: ~p~n
-    GRI: ~p~n
-    Data: ~p~n", [
+    ProtocolVersion: ~tp~n
+    GRI: ~tp~n
+    Data: ~tp~n", [
         ProtocolVersion, GRI, Data
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).

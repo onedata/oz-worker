@@ -425,7 +425,7 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
             end
         end, maps:keys(Destination))
     catch error:{parallel_call_failed, {failed_processes, Errors}} ->
-        ?error("Harvesting metadata in space ~p failed due to: ~p",
+        ?error("Harvesting metadata in space ~tp failed due to: ~tp",
             [SpaceId, Errors]),
         throw(?ERROR_TEMPORARY_FAILURE)
     end,
@@ -740,7 +740,7 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
             space_marketplace:delete(SpaceName, SpaceId, Tags),
             entity_graph:delete_with_relations(od_space, SpaceId)
         end),
-        ?info("Space '~ts' has been deleted (~s)", [Name, SpaceId])
+        ?info("Space '~ts' has been deleted (~ts)", [Name, SpaceId])
     end;
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
