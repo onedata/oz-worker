@@ -42,6 +42,8 @@
     list_identifiers_post_test/1,
     list_identifiers_resumption_token_get_test/1,
     list_identifiers_resumption_token_post_test/1,
+    list_deleted_identifier_get_test/1,
+    list_deleted_identifier_post_test/1,
     list_all_identifiers_no_resumption_token_get_test/1,
     list_all_identifiers_no_resumption_token_post_test/1,
     selective_list_identifiers1_get_test/1,
@@ -63,6 +65,8 @@
     list_records_post_test/1,
     list_records_resumption_token_get_test/1,
     list_records_resumption_token_post_test/1,
+    list_deleted_record_get_test/1,
+    list_deleted_record_post_test/1,
     list_all_records_no_resumption_token_get_test/1,
     list_all_records_no_resumption_token_post_test/1,
     selective_list_records1_get_test/1,
@@ -150,6 +154,9 @@ all() -> ?ALL([
     list_identifiers_resumption_token_post_test,
     list_all_identifiers_no_resumption_token_get_test,
     list_all_identifiers_no_resumption_token_post_test,
+
+    list_deleted_identifier_get_test,
+    list_deleted_identifier_post_test,
     selective_list_identifiers1_get_test,
     selective_list_identifiers1_post_test,
     selective_list_identifiers2_get_test,
@@ -169,6 +176,9 @@ all() -> ?ALL([
     list_records_post_test,
     list_records_resumption_token_get_test,
     list_records_resumption_token_post_test,
+
+    list_deleted_record_get_test,
+    list_deleted_record_post_test,
     list_all_records_no_resumption_token_get_test,
     list_all_records_no_resumption_token_post_test,
     selective_list_records1_get_test,
@@ -317,6 +327,12 @@ list_identifiers_resumption_token_get_test(Config) ->
 list_identifiers_resumption_token_post_test(Config) ->
     list_resumption_token_test_base(Config, post, <<"ListIdentifiers">>, (?TESTED_HANDLE_LIST_LIMIT * 5) div 2).
 
+list_deleted_identifier_get_test(Config) ->
+    list_deleted_test_base(Config, get, <<"ListIdentifiers">>).
+
+list_deleted_identifier_post_test(Config) ->
+    list_deleted_test_base(Config, post, <<"ListIdentifiers">>).
+
 list_all_identifiers_no_resumption_token_get_test(Config) ->
     list_no_resumption_token_test_base(Config, get, <<"ListIdentifiers">>, ?TESTED_HANDLE_LIST_LIMIT).
 
@@ -382,6 +398,12 @@ list_all_records_no_resumption_token_get_test(Config) ->
 
 list_all_records_no_resumption_token_post_test(Config) ->
     list_no_resumption_token_test_base(Config, post, <<"ListRecords">>, ?TESTED_HANDLE_LIST_LIMIT).
+
+list_deleted_record_get_test(Config) ->
+    list_deleted_test_base(Config, get, <<"ListRecords">>).
+
+list_deleted_record_post_test(Config) ->
+    list_deleted_test_base(Config, post, <<"ListRecords">>).
 
 selective_list_records1_get_test(Config) ->
     list_records_test_base(Config, get, 10, 1, 7).
@@ -574,7 +596,7 @@ identify_test_base(Config, Method) ->
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = to_datestamp(Timestamp)}]},
-        #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
+        #xmlElement{name = deletedRecord, content = [#xmlText{value = "persistent"}]},
         #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
     ] ++ [
         #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
@@ -608,7 +630,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = to_datestamp(Timestamp1)}]},
-        #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
+        #xmlElement{name = deletedRecord, content = [#xmlText{value = "persistent"}]},
         #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
     ] ++ [
         #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
@@ -622,7 +644,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = to_datestamp(Timestamp2)}]},
-        #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
+        #xmlElement{name = deletedRecord, content = [#xmlText{value = "persistent"}]},
         #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
     ] ++ [
         #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
@@ -684,7 +706,7 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
             metadata_prefix = MetadataPrefix,
             timestamp = Timestamp
         }}]),
-        ozt:rpc(handles, add, [MetadataPrefix, HSId, Identifier, Timestamp]),
+        ozt:rpc(handles, add, [MetadataPrefix, HSId, Identifier, Timestamp, 1]),
         Args = [
             {<<"identifier">>, oai_identifier(Config, Identifier)},
             {<<"metadataPrefix">>, MetadataPrefix}
@@ -764,6 +786,49 @@ list_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
     ExpIdentifiersAndTimeOffsets = lists:zip(Identifiers, TimeOffsets),
     check_list_entries_continuously_with_resumption_token(Config, Method, Verb, ExpIdentifiersAndTimeOffsets,
         Args, BuildExpectedObject).
+
+
+list_deleted_test_base(Config, Method, Verb) ->
+    {ok, User} = oz_test_utils:create_user(Config),
+    {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
+    ShareId = datastore_key:new(),
+    {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(User), ShareId, ShareId, Space1),
+    {HSId, _} = create_handle_service(Config, User),
+    DateTime = ?CURRENT_DATETIME(),
+    DateTime2 = increase_timestamp(DateTime, 1),
+    MetadataPrefix = ?RAND_METADATA_PREFIX(),
+    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    Identifier = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
+        Metadata, MetadataPrefix, DateTime),
+    Timestamp = time:datetime_to_seconds(DateTime),
+    Timestamp2 = time:datetime_to_seconds(DateTime2),
+    Args = prepare_harvesting_args(MetadataPrefix, undefined, undefined),
+
+    ExpResponseContent = case Verb of
+        <<"ListIdentifiers">> ->
+            [expected_oai_header_xml(Config, Identifier, DateTime)];
+        <<"ListRecords">> ->
+            ExpectedMetadata = expected_final_metadata(MetadataPrefix, Identifier),
+            [expected_oai_record_xml(Config, Identifier, DateTime, ExpectedMetadata)]
+
+    end,
+    check_oai_request(200, Verb, Args, Method, ExpResponseContent, binary_to_atom(Verb), Config),
+
+    ozt:rpc(handles, delete, [MetadataPrefix, HSId, Identifier, Timestamp, Timestamp2]),
+    oz_test_utils:call_oz(Config, od_handle, update, [
+        Identifier, fun(Handle = #od_handle{}) ->
+            {ok, Handle#od_handle{timestamp = Timestamp2}}
+        end]
+    ),
+    ExpResponseContent2 = ExpResponseContent = case Verb of
+        <<"ListIdentifiers">> ->
+            [expected_oai_header_xml(Config, Identifier, DateTime2, deleted)];
+        <<"ListRecords">> ->
+            [expected_oai_record_xml(Config, Identifier, DateTime2, deleted)]
+    end,
+
+    ?assertEqual(0, ozt:rpc(handles, get_exists_flag, [Identifier])),
+    check_oai_request(200, Verb, Args, Method, ExpResponseContent2, binary_to_atom(Verb), Config).
 
 
 list_no_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
@@ -1183,6 +1248,7 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
             {responseDate, list_to_binary(to_datestamp(ResponseDate))}
         end
     ),
+
     Request = case Method of
         get -> #{
             method => get,
@@ -1205,6 +1271,7 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
             headers => {contains, ?RESPONSE_CONTENT_TYPE_HEADER}
         }
     }),
+
     ok = test_utils:mock_validate_and_unload(Nodes, oai_handler),
     Check.
 
@@ -1495,6 +1562,10 @@ expected_dc_identifiers(Config, HandleId) ->
 expected_admin_emails(Config) ->
     oz_test_utils:get_env(Config, admin_emails).
 
+expected_oai_record_xml(Config, HandleId, Timestamp, deleted) ->
+    #xmlElement{name = record, content = [
+        expected_oai_header_xml(Config, HandleId, Timestamp, deleted)
+    ]};
 expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata) ->
     #xmlElement{name = record, content = [
         expected_oai_header_xml(Config, HandleId, Timestamp),
@@ -1529,6 +1600,11 @@ expected_oai_header_xml(Config, HandleId, Timestamp) ->
         ]
     }.
 
+expected_oai_header_xml(Config, HandleId, Timestamp, deleted) ->
+    XMLBase = expected_oai_header_xml(Config, HandleId, Timestamp),
+    XMLBase#xmlElement{
+        attributes =  [#xmlAttribute{name = status, value = "deleted"}]
+    }.
 
 %% @private
 expected_final_metadata(MetadataPrefix, HandleId) ->
@@ -1558,4 +1634,3 @@ expected_response_body_wrt_resumption_token(ExpResumptionToken, _) ->
             end
         }
     ].
-

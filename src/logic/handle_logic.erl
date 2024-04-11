@@ -24,13 +24,15 @@
     get_protected_data/2,
     get_public_data/2,
     list/1,
+    list_no_deleted/1,
     list_privileges/0
 ]).
 -export([
     update/3
 ]).
 -export([
-    delete/2
+    delete/2,
+    purge/2
 ]).
 -export([
 
@@ -155,6 +157,20 @@ list(Auth) ->
         gri = #gri{type = od_handle, id = undefined, aspect = list}
     }).
 
+%--------------------------------------------------------------------
+%% @doc
+%% Lists no deleted handles (their ids) in database.
+%% @end
+%%--------------------------------------------------------------------
+-spec list_no_deleted(Auth :: aai:auth()) ->
+    {ok, [od_handle:id()]} | errors:error().
+list_no_deleted(Auth) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_handle, id = undefined, aspect = list_no_deleted}
+    }).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -200,6 +216,22 @@ update(Auth, HandleId, Data) ->
 delete(Auth, HandleId) ->
     entity_logic:handle(#el_req{
         operation = delete,
+        auth = Auth,
+        gri = #gri{type = od_handle, id = HandleId, aspect = instance}
+    }).
+
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Purges given handle from database. Used in tests.
+%% @end
+%%--------------------------------------------------------------------
+-spec purge(Auth :: aai:auth(), HandleId :: od_handle:id()) ->
+    ok | errors:error().
+purge(Auth, HandleId) ->
+    entity_logic:handle(#el_req{
+        operation = purge,
         auth = Auth,
         gri = #gri{type = od_handle, id = HandleId, aspect = instance}
     }).

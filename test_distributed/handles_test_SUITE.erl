@@ -68,6 +68,7 @@ groups() -> [
 -define(LATEST_TIMESTAMP, 1700000000).
 -define(RAND_NAME(), ?RAND_UNICODE_STR(200)).
 -define(RAND_ID(), str_utils:rand_hex(16)).
+-define(DEFAULT_LIST_LIMIT, oz_worker:get_env(default_handle_list_limit, 1000)).
 
 -define(RAND_METADATA_PREFIX(), case ?RAND_BOOL() of
     true -> ?OAI_DC_METADATA_PREFIX;
@@ -322,16 +323,16 @@ delete_handle_from_service_test(_Config) ->
         delete_handle(HandleId1)
     end, lists:sublist(ListHService1, 10)),
 
-    ?assertEqual(length(ListAll) - 10, length(list_all(#{metadata_prefix => MetadataPrefix}))),
+    ?assertEqual(length(ListAll) - 10, length(list_all(#{metadata_prefix => MetadataPrefix}, not_deleted))),
 
     [HandleId2 | _RestList] = ListHService2,
     delete_handle(HandleId2),
 
     ?assertEqual(length(ListHService1) - 10,
-        length(list_all(#{service_id => ?FIRST_HSERVICE, metadata_prefix => MetadataPrefix}))),
+        length(list_all(#{service_id => ?FIRST_HSERVICE, metadata_prefix => MetadataPrefix}, not_deleted))),
     ?assertEqual(length(ListHService2) - 1,
-        length(list_all(#{service_id => ?ANOTHER_HSERVICE, metadata_prefix => MetadataPrefix}))),
-    ?assertEqual(length(ListAll) - 11, length(list_all(#{metadata_prefix => MetadataPrefix}))).
+        length(list_all(#{service_id => ?ANOTHER_HSERVICE, metadata_prefix => MetadataPrefix}, not_deleted))),
+    ?assertEqual(length(ListAll) - 11, length(list_all(#{metadata_prefix => MetadataPrefix}, not_deleted))).
 
 
 %%%===================================================================
@@ -340,18 +341,28 @@ delete_handle_from_service_test(_Config) ->
 
 list_all() ->
     lists:flatmap(fun(MetadataPrefix) ->
-        list_all(#{metadata_prefix => MetadataPrefix})
+        list_all(#{metadata_prefix => MetadataPrefix}, all)
     end, ozt_handles:supported_metadata_prefixes()).
 
 list_all(ListingOpts) ->
-    case list_once(ListingOpts) of
+    list_all(ListingOpts, all).
+
+list_all(ListingOpts, RecordFilter) ->
+    case list_once(ListingOpts, RecordFilter) of
         {List, undefined} -> List;
-        {List, ResumptionToken} -> List ++ list_all(#{resumption_token => ResumptionToken})
+        {List, ResumptionToken} -> List ++ list_all(#{resumption_token => ResumptionToken}, RecordFilter)
     end.
 
 list_once(ListingOpts) ->
+    list_once(ListingOpts, all).
+
+list_once(ListingOpts, all) ->
     {Handles, Token} =  ozt:rpc(handles, list, [ListingOpts]),
-    {[HandleId || {_, _, HandleId} <- Handles], Token}.
+    {[HandleId || {_, _, HandleId, _} <- Handles], Token};
+list_once(ListingOpts, not_deleted) ->
+    {Handles, Token} =  ozt:rpc(handles, list, [ListingOpts]),
+    {[HandleId || {_, _, HandleId, ExistsFlag} <- Handles, ExistsFlag =:= 1], Token}.
+
 
 create_handle(HServiceId) ->
     create_handle(HServiceId, ?RAND_METADATA_PREFIX()).
@@ -363,7 +374,7 @@ create_handle(HServiceId, MetadataPrefix, TimeSeconds) ->
     create_handle(HServiceId, MetadataPrefix, TimeSeconds, ?RAND_ID()).
 
 create_handle(HServiceId, MetadataPrefix, TimeSeconds, HandleId) ->
-    ozt:rpc(handles, add, [MetadataPrefix, HServiceId, HandleId, TimeSeconds]),
+    ozt:rpc(handles, add, [MetadataPrefix, HServiceId, HandleId, TimeSeconds, 1]),
     Handle = #handle_entry{
         timestamp = TimeSeconds,
         metadata_prefix = MetadataPrefix,
@@ -394,7 +405,16 @@ delete_handle(HandleId) ->
         metadata_prefix = MetadataPrefix,
         handle_service_id = HServiceId
     } = lookup_expected_handle(HandleId),
-    ozt:rpc(handles, delete, [MetadataPrefix, HServiceId, HandleId, TimeStamp]).
+    ozt:rpc(handles, delete, [MetadataPrefix, HServiceId, HandleId, TimeStamp,
+        od_handle:current_timestamp()]).
+
+purge_record(HandleId) ->
+    #handle_entry{
+        timestamp = TimeStamp,
+        metadata_prefix = MetadataPrefix,
+        handle_service_id = HServiceId
+    } = lookup_expected_handle(HandleId),
+    ozt:rpc(handles, purge, [MetadataPrefix, HServiceId, HandleId, TimeStamp]).
 
 lookup_expected_handle(HandleId) ->
     Expected = load_all_expected_handles(),
@@ -474,7 +494,7 @@ clear_expected_handles(MetadataPrefix, HServiceId) ->
 init_per_suite(Config) ->
     ozt:init_per_suite(Config, fun() ->
         lists:foreach(fun(#handle_entry{handle_id = HandleID}) ->
-            delete_handle(HandleID)
+            purge_record(HandleID)
         end, load_all_expected_handles()),
         lists:foreach(fun(MetadataPrefix) -> clear_expected_handles(MetadataPrefix) end,
             [?OAI_DC_METADATA_PREFIX, ?EDM_METADATA_PREFIX]),

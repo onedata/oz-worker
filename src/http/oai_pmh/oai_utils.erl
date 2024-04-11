@@ -22,7 +22,7 @@
     verb_to_module/1, is_earlier_or_equal/2, dates_have_the_same_granularity/2,
     to_xml/1, encode_xml/1, ensure_list/1,
     request_arguments_to_handle_listing_opts/1, harvest/2, oai_identifier_decode/1,
-    build_oai_header/3, build_oai_record/3
+    build_oai_header/4, build_oai_record/4
 ]).
 -export([get_handle/1]).
 
@@ -46,27 +46,39 @@ oai_identifier_decode(OAIId) ->
     end.
 
 -spec build_oai_header(od_handle:timestamp_seconds(), od_handle_service:id(),
-    od_handle:id()) -> #oai_header{}.
-build_oai_header(TimeSeconds, HandleServiceId, HandleId) ->
+    od_handle:id(), handles:exists_flag()) -> #oai_header{}.
+build_oai_header(TimeSeconds, HandleServiceId, HandleId, 1) ->
     OaiId = oai_identifier_encode(HandleId),
     #oai_header{
         identifier = OaiId,
         datestamp = serialize_datestamp(time:seconds_to_datetime(TimeSeconds)),
         set_spec = HandleServiceId
+    };
+build_oai_header(TimeSeconds, HandleServiceId, HandleId, 0) ->
+    OaiId = oai_identifier_encode(HandleId),
+    #oai_header{
+        identifier = OaiId,
+        datestamp = serialize_datestamp(time:seconds_to_datetime(TimeSeconds)),
+        set_spec = HandleServiceId,
+        status = deleted
     }.
 
 -spec build_oai_record(od_handle:timestamp_seconds(), od_handle_service:id(),
-    od_handle:id()) -> #oai_record{}.
-build_oai_record(TimeSeconds, HandleServiceId, HandleId) ->
+    od_handle:id(), handles:exists_flag()) -> #oai_record{}.
+build_oai_record(TimeSeconds, HandleServiceId, HandleId, 1) ->
     Handle = get_handle(HandleId),
     MetadataPrefix = Handle#od_handle.metadata_prefix,
     #oai_record{
-        header = build_oai_header(TimeSeconds, HandleServiceId, HandleId),
+        header = build_oai_header(TimeSeconds, HandleServiceId, HandleId, 1),
         metadata = #oai_metadata{
             metadata_prefix = MetadataPrefix,
             raw_value = Handle#od_handle.metadata,
             handle = Handle
         }
+    };
+build_oai_record(TimeSeconds, HandleServiceId, HandleId, 0) ->
+    #oai_record{
+        header = build_oai_header(TimeSeconds, HandleServiceId, HandleId, 0)
     }.
 
 %%%--------------------------------------------------------------------
@@ -143,8 +155,8 @@ request_arguments_to_handle_listing_opts(Args) ->
 -spec harvest(handles:listing_opts(), function()) -> oai_response().
 harvest(ListingOpts, HarvestingFun) ->
     {Identifiers, NewResumptionToken} = handles:list(ListingOpts),
-    HarvestedMetadata = lists:map(fun({TimeSeconds, HandleServiceId, HandleId}) ->
-        HarvestingFun(TimeSeconds, HandleServiceId, HandleId) end, Identifiers),
+    HarvestedMetadata = lists:map(fun({TimeSeconds, HandleServiceId, HandleId, ExistsFlag}) ->
+        HarvestingFun(TimeSeconds, HandleServiceId, HandleId, ExistsFlag) end, Identifiers),
 
     % TODO VFS-11906 consider a situation when a resumption token has been returned because
     % there is still one entry to be listed, but in the meantime it is deleted - then, the listing
@@ -255,6 +267,17 @@ to_xml(#oai_record{header = Header, metadata = Metadata, about = About}) ->
         content = ensure_list(to_xml(Header)) ++
             ensure_list(to_xml(Metadata)) ++
             ensure_list(to_xml(About))
+    };
+to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp,
+    set_spec = SetSpec, status = deleted}) ->
+    #xmlElement{
+        name = header,
+        attributes =  [#xmlAttribute{name = status, value = "deleted"}],
+        content = lists:flatten([
+            ensure_list(to_xml({identifier, Identifier})),
+            ensure_list(to_xml({datestamp, Datestamp})),
+            ensure_list(to_xml({setSpec, SetSpec}))
+        ])
     };
 to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp, set_spec = SetSpec}) ->
     #xmlElement{
@@ -427,3 +450,4 @@ ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
 -spec oai_identifier_encode(od_handle:id()) -> oai_id().
 oai_identifier_encode(Id) ->
     <<?OAI_IDENTIFIER_PREFIX/binary, Id/binary>>.
+

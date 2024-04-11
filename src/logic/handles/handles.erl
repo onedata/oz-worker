@@ -17,20 +17,28 @@
 -include("http/handlers/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([add/4, delete/4, update_timestamp/5]).
--export([list/1, get_earliest_timestamp/0]).
+-export([add/5, delete/5, update_timestamp/5]).
+-export([list/1, get_earliest_timestamp/0, get_exists_flag/1]).
+-export([purge/4]).
 
-% index() consists of 2 parts:
+% link_key() consists of 2 parts:
 %  1) timestamp (in seconds) - so that links would be sorted by time.
 %  2) handle id - this part allows to distinguish links associated with handles
 %                that have the same timestamp.
 -type link_key() :: binary().
+
+% link value() consists of 2 parts:
+%  1) handle_service_id - id of the handle service in which the handle has been registered.
+%  2) exists flag - if record exists flag value is 1, otherwise it's 0
+-type link_value() :: binary().
 
 % the resumption token is used to continue listing when an incomplete list (batch) is returned;
 % an 'undefined' value is returned when there are no more entries to list
 -type resumption_token() :: binary() | undefined.
 
 -type limit() :: pos_integer().
+
+-type exists_flag() :: 0 | 1.
 
 %% @formatter:off
 -type listing_opts() :: #{
@@ -45,7 +53,7 @@
 
 -type listing_entry() :: {od_handle:timestamp_seconds(), od_handle_service:id(), od_handle:id()}.
 
--export_type([listing_opts/0, resumption_token/0, listing_entry/0]).
+-export_type([listing_opts/0, resumption_token/0, listing_entry/0, exists_flag/0]).
 
 -define(CTX, (od_handle:get_ctx())).
 
@@ -61,6 +69,7 @@
 
 % uses null for separator to ensure alphabetical sorting
 -define(KEY_SEP, 0).
+-define(VALUE_SEP, <<":">>).
 -define(RESUMPTION_TOKEN_SEP, <<",">>).
 
 -define(MAX_TIMESTAMP, 99999999999).
@@ -72,9 +81,9 @@
 
 
 -spec add(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
-    od_handle:timestamp_seconds()) -> ok.
-add(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
-    Link = {encode_link_key(TimeSeconds, HandleId), HandleServiceId},
+    od_handle:timestamp_seconds(), exists_flag()) -> ok.
+add(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds, ExistsFlag) ->
+    Link = {encode_link_key(TimeSeconds, HandleId), encode_link_value(HandleServiceId, ExistsFlag)},
 
     lists:foreach(fun(TreeId) ->
         case datastore_model:add_links(?CTX, ?FOREST, TreeId, Link) of
@@ -88,18 +97,10 @@ add(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
 
 
 -spec delete(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
-    od_handle:timestamp_seconds()) -> ok.
-delete(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
-    Key = encode_link_key(TimeSeconds, HandleId),
-    lists:foreach(fun(TreeId) ->
-        case datastore_model:delete_links(?CTX, ?FOREST, TreeId, Key) of
-            ok -> ok;
-            {error, not_found} -> ok
-        end
-    end, [
-        ?TREE_FOR_METADATA_PREFIX(MetadataPrefix),
-        ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HandleServiceId)
-    ]).
+    od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> ok.
+delete(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, DeletionTimestamp) ->
+    purge(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
+    add(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp, 0).
 
 
 %%--------------------------------------------------------------------
@@ -112,8 +113,8 @@ update_timestamp(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, NewTim
     case OldTimestamp == NewTimestamp of
         true -> ok;
         false ->
-            delete(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
-            add(MetadataPrefix, HandleServiceId, HandleId, NewTimestamp)
+            purge(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
+            add(MetadataPrefix, HandleServiceId, HandleId, NewTimestamp, 1)
     end.
 
 
@@ -150,11 +151,12 @@ list(ListingOpts) ->
         prev_tree_id => TreeId,
         inclusive => false
     },
-    FoldFun = fun(#link{name = Key, target = HandleServiceId}, Acc) ->
+    FoldFun = fun(#link{name = Key, target = Value}, Acc) ->
         {TimeSeconds, HandleId} = decode_link_key(Key),
+        {HandleServiceId, ExistsFlag} = decode_link_value(Value),
         Result = case TimeSeconds > Until of
             true -> {stop, Acc};
-            false -> {ok, [{TimeSeconds, HandleServiceId, HandleId} | Acc]}
+            false -> {ok, [{TimeSeconds, HandleServiceId, HandleId, ExistsFlag} | Acc]}
         end,
         Result
     end,
@@ -176,9 +178,43 @@ get_earliest_timestamp() ->
         [] ->
             undefined;
         _ ->
-            {Timestamps, _, _} = lists:unzip3(EntriesWithEarliestTimestamps),
-            lists:min(Timestamps)
+            lists:min([Timestamp || {Timestamp, _, _, _} <- EntriesWithEarliestTimestamps])
     end.
+
+
+get_exists_flag(HandleId) ->
+    #od_handle{
+        handle_service = HandleService,
+        timestamp = TimeStamp,
+        metadata_prefix = MetadataPrefix
+    } = oai_utils:get_handle(HandleId),
+
+    {List, _Token} = handles:list(#{
+        metadata_prefix => MetadataPrefix,
+        handle_service_id => HandleService,
+        from => TimeStamp,
+        until => TimeStamp
+    }),
+    [ExistsFlag] = [
+        ExsFlag || {_TimeStamp, _HService, HId, ExsFlag} <- List,
+        HId =:= HandleId
+    ],
+    ExistsFlag.
+
+
+-spec purge(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
+    od_handle:timestamp_seconds()) -> ok.
+purge(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
+    Key = encode_link_key(Timestamp, HandleId),
+    lists:foreach(fun(TreeId) ->
+        case datastore_model:delete_links(?CTX, ?FOREST, TreeId, Key) of
+            ok -> ok;
+            {error, not_found} -> ok
+        end
+    end, [
+        ?TREE_FOR_METADATA_PREFIX(MetadataPrefix),
+        ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HandleServiceId)
+    ]).
 
 
 %%%===================================================================
@@ -199,11 +235,23 @@ encode_link_key(TimeSeconds, HandleId) ->
 
 
 %% @private
+-spec encode_link_value(od_handle_service:id(), exists_flag()) -> link_value().
+encode_link_value(HandleServiceId, ExistsFlag) ->
+    str_utils:join_binary([integer_to_binary(ExistsFlag), HandleServiceId], ?VALUE_SEP).
+
+
+%% @private
 -spec decode_link_key(link_key()) -> {od_handle:timestamp_seconds(), od_handle:id()}.
 decode_link_key(Key) ->
     <<TimeSeconds:11/binary, ?KEY_SEP, HandleId/binary>> = Key,
     {binary_to_integer(TimeSeconds), HandleId}.
 
+
+%% @private
+-spec decode_link_value(link_value()) -> {od_handle_service:id(), exists_flag()}.
+decode_link_value(Value) ->
+    [ExistsFlag, HandleServiceId] = binary:split(Value, [?VALUE_SEP], [global]),
+    {HandleServiceId, binary_to_integer(ExistsFlag)}.
 
 %% @private
 -spec pack_resumption_token(od_handle:metadata_prefix(), limit(), od_handle:timestamp_seconds(),
@@ -214,7 +262,7 @@ pack_resumption_token(MetadataPrefix, Limit, From, Until, HServiceId, LastListed
     FormattedUntil = integer_to_binary(utils:ensure_defined(Until, ?MAX_TIMESTAMP)),
     %% If HServiceId in ListingOpts was <<>>, then in token must also be
     %% <<>> in order to list from the correct tree.
-    {TimeSeconds, _HServiceId, HandleId} = LastListedEntry,
+    {TimeSeconds, _HServiceId, HandleId, _ExistsFlag} = LastListedEntry,
     str_utils:join_binary([integer_to_binary(TimeSeconds), MetadataPrefix,
         FormattedLimit, FormattedFrom, FormattedUntil, HandleId, HServiceId], ?RESUMPTION_TOKEN_SEP).
 

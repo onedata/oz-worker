@@ -21,7 +21,8 @@
 -record(oai_header, {
     identifier :: oai_id(),
     datestamp :: binary(),
-    set_spec :: oai_set_spec()
+    set_spec :: oai_set_spec(),
+    status :: deleted | undefined
 }).
 
 -record(oai_metadata_format, {

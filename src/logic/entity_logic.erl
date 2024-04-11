@@ -229,6 +229,26 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = delete}}) ->
             ok;
         _ ->
             Result
+    end;
+
+handle_unsafe(State = #state{req = Req = #el_req{operation = purge}}) ->
+    Result = call_purge(
+        ensure_authorized(
+            ensure_exists(
+                fetch_entity(
+                    ensure_operation_supported(
+                        State))))),
+    case {Result, Req} of
+        {ok, #el_req{gri = #gri{type = Type, id = Id, aspect = instance}, auth = Auth}} ->
+            % If an entity instance is purged, log an information about it
+            % (it's a significant operation and this information might be useful).
+            ?debug("~s has been purged by client: ~s", [
+                Type:to_string(Id),
+                aai:auth_to_printable(Auth)
+            ]),
+            ok;
+        _ ->
+            Result
     end.
 
 
@@ -325,6 +345,18 @@ call_update(State) ->
 -spec call_delete(State :: #state{}) -> delete_result().
 call_delete(State) ->
     call_plugin(delete, State).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Deletes an aspect of entity specified in request by calling back
+%% proper entity logic plugin.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_purge(State :: #state{}) -> delete_result().
+call_purge(State) ->
+    call_plugin(purge, State).
 
 
 %%--------------------------------------------------------------------
@@ -513,7 +545,7 @@ call_plugin(required_admin_privileges, #state{plugin = Plugin, req = ElReq}) ->
 call_plugin(get, #state{plugin = Plugin, req = ElReq, versioned_entity = {Entity, _}}) ->
     Plugin:get(ElReq, Entity);
 call_plugin(Operation, #state{plugin = Plugin, req = ElReq, versioned_entity = {Entity, _}}) ->
-    % covers create, update, delete, validate
+    % covers create, update, delete, validate, purge
     case Plugin:Operation(ElReq) of
         Fun when is_function(Fun, 1) ->
             Fun(Entity);
