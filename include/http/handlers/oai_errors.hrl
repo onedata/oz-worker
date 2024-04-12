@@ -8,7 +8,6 @@
 %%% http://www.openarchives.org/OAI/2.0/openarchivesprotocol.htm#ErrorConditions
 %%% @end
 %%%-------------------------------------------------------------------
--author("Jakub Kudzia").
 
 -include("oai.hrl").
 

@@ -24,7 +24,7 @@
 -export([schema_URL/1, main_namespace/1]).
 -export([revise_for_publication/4, insert_public_handle/3, adapt_for_oai_pmh/2]).
 -export([validation_examples/1]).
--export([parse_and_normalize_xml/1]).
+-export([parse_xml/1]).
 
 
 -define(PLUGIN_CACHE_KEY, ?MODULE).
@@ -98,19 +98,14 @@ validation_examples(MetadataPrefix) ->
     Module:validation_examples().
 
 
--spec parse_and_normalize_xml(od_handle:raw_metadata()) -> {ok, od_handle:parsed_metadata()} | error.
-parse_and_normalize_xml(Metadata) ->
+-spec parse_xml(od_handle:raw_metadata()) -> {ok, od_handle:parsed_metadata()} | error.
+parse_xml(Metadata) ->
     try
         % NOTE: xmerl scans strings in UTF8 (essentially the result of binary_to_list(<<_/utf8>>),
-        % but exports as a unicode erlang string
+        % but exports as a unicode erlang string - str_utils:unicode_list_to_binary/1
+        % must be called after the export
         {RootElement, _} = xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]),
-        MetadataElement = case RootElement of
-            #xmlElement{name = metadata} ->
-                RootElement;
-            Other ->
-                #xmlElement{name = metadata, content = [Other]}
-        end,
-        {ok, MetadataElement}   % TODO VFS-11906 consider returning errors from xmerl to the client
+        {ok, RootElement}   % TODO VFS-11906 consider returning errors from xmerl to the client
     catch Class:Reason:Stacktrace ->
         ?debug_exception("Cannot parse handle metadata", Class, Reason, Stacktrace),
         error

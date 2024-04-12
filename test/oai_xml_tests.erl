@@ -35,43 +35,19 @@ encode_decode_utf8_test() ->
         "</item>"
         "</tool>"/utf8
     >>,
-    % normalization of the metadata XML should ensure that it is wrapped in top-level
-    % "metadata" tags
     ?assertEqual(
-        <<Prolog/binary, "<metadata>", RawXmlWithUtf8Chars/binary, "</metadata>">>,
-        parse_and_normalize_and_encode(RawXmlWithUtf8Chars)
+        <<Prolog/binary, RawXmlWithUtf8Chars/binary>>,
+        parse_and_encode(RawXmlWithUtf8Chars)
     ),
     ?assertEqual(
-        <<Prolog/binary, "<metadata>", RawXmlWithUtf8Chars/binary, "</metadata>">>,
-        parse_and_normalize_and_encode(<<Prolog/binary, RawXmlWithUtf8Chars/binary>>)
-    ),
-
-    RawXmlWithUtf8CharsWrappedInMetadataTags = <<
-        "<metadata>"
-        "<tool name=\"óœę↓©’ŋśð←æŋ\" id=\"µńćźżąśð日本を- 旅す. d'ŋ-ジ(ャ\" version=\"1.0.0\">"
-        "<description>l;'\\zxcvbnm,./əł</description>"
-%%        TODO VFS-11906 xmerl strips comments: https://github.com/erlang/otp/issues/5697
-%%                       consider using a different lib...
-%%        "<!-- This is a comment d'ŋ-ジ(ャパル -->"
-        "<item action=\"/library/index\" method=\"get\" target=\"_parent\">"
-        "<param name=\"default_action\" type=\"hidden\" value=\"import_to_histories\"/>"
-        "</item>"
-        "</tool>"
-        "</metadata>"/utf8
-    >>,
-    ?assertEqual(
-        <<Prolog/binary, RawXmlWithUtf8CharsWrappedInMetadataTags/binary>>,
-        parse_and_normalize_and_encode(RawXmlWithUtf8CharsWrappedInMetadataTags)
-    ),
-    ?assertEqual(
-        <<Prolog/binary, RawXmlWithUtf8CharsWrappedInMetadataTags/binary>>,
-        parse_and_normalize_and_encode(<<Prolog/binary, RawXmlWithUtf8CharsWrappedInMetadataTags/binary>>)
+        <<Prolog/binary, RawXmlWithUtf8Chars/binary>>,
+        parse_and_encode(<<Prolog/binary, RawXmlWithUtf8Chars/binary>>)
     ).
 
 
 %% @private
-parse_and_normalize_and_encode(RawXml) ->
-    {ok, ParsedXml} = oai_metadata:parse_and_normalize_xml(RawXml),
+parse_and_encode(RawXml) ->
+    {ok, ParsedXml} = oai_metadata:parse_xml(RawXml),
     oai_utils:encode_xml(ParsedXml).
 
 

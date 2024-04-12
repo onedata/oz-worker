@@ -267,7 +267,7 @@ to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp, set_spec = Se
         ])
     };
 to_xml(#oai_metadata{metadata_prefix = MetadataPrefix, raw_value = RawValue, handle = Handle}) ->
-    ParsedMetadata = case oai_metadata:parse_and_normalize_xml(RawValue) of
+    ParsedMetadata = case oai_metadata:parse_xml(RawValue) of
         {ok, Parsed} ->
             Parsed;
         error ->

@@ -8,7 +8,6 @@
 %%% across modules handling OAI-PMH protocol.
 %%% @end
 %%%-------------------------------------------------------------------
--author("Jakub Kudzia").
 
 -ifndef(OAI_HRL).
 -define(OAI_HRL, 1).

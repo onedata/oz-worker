@@ -145,7 +145,7 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
     },
     DummyPublicHandle = str_utils:format_bin("http://hdl.handle.net/~s/~s", [datastore_key:new(), datastore_key:new()]),
 
-    {ok, ParsedMetadata} = oai_metadata:parse_and_normalize_xml(InputRawXml),
+    {ok, ParsedMetadata} = oai_metadata:parse_xml(InputRawXml),
 
     case Module:revise_for_publication(ParsedMetadata, DummyShareId, DummyShareRecord) of
         error when InputQualifiesForPublication == false ->

@@ -16,7 +16,7 @@
 %%%   * add a dc:identifier element with the value equal to the public handle
 %%%
 %%% Adaptation for OAI-PMH step:
-%%%   * rewrap the metadata in an "oai_dc:dc" element instead of the "metadata" element
+%%%   * change the outermost "metadata" element to "oai_dc:dc"
 %%%
 %%% @end
 %%%-------------------------------------------------------------------
@@ -202,7 +202,9 @@ validation_examples() -> [
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
-            "<dc:contributor>John Doe</dc:contributor>"
+            "<metadata>",
+            "<dc:contributor>John Doe</dc:contributor>",
+            "</metadata>"
         >>,
         input_qualifies_for_publication = true,
         exp_revised_metadata_generator = fun(ShareId, _ShareRecord) -> <<

@@ -37,7 +37,7 @@
 -type metadata_prefix() :: binary().
 % metadata encoded to XML - used in the APIs and stored like this in the DB
 -type raw_metadata() :: binary().
-% parsed metadata; the top element is always #xmlElement{name = metadata}, in which the proper metadata is nested
+% parsed metadata expressed as nested xmerl records
 -type parsed_metadata() :: #xmlElement{}.
 -type timestamp_seconds() :: time:seconds().
 

@@ -32,8 +32,7 @@
 %%%     (the rdf:resource attr value equal to the public handle)
 %%%
 %%% Adaptation for OAI-PMH step:
-%%%   * drop the outermost "metadata" element and return the metadata
-%%%     nested in the "rdf:RDF"
+%%%   * no changes needed, return the metadata in the "rdf:RDF" tags
 %%%
 %%% @end
 %%%-------------------------------------------------------------------
@@ -103,9 +102,9 @@ main_namespace() ->
 %% @doc {@link handle_metadata_plugin_behaviour} callback revise_for_publication/3
 -spec revise_for_publication(od_handle:parsed_metadata(), od_share:id(), od_share:record()) ->
     {ok, od_handle:parsed_metadata()} | error.
-revise_for_publication(#xmlElement{name = metadata, content = [
-    #xmlElement{name = 'rdf:RDF', content = MetadataElements} = RdfXml
-]} = MetadataXml, _ShareId, ShareRecord) ->
+revise_for_publication(#xmlElement{
+    name = 'rdf:RDF', content = MetadataElements
+} = RdfXml, _ShareId, ShareRecord) ->
     MetadataElementsWithPublicHandles = lists:map(fun
         (#xmlElement{name = 'edm:ProvidedCHO', attributes = CHOAttrs} = CHOElement) ->
             CHOElement#xmlElement{
@@ -124,9 +123,7 @@ revise_for_publication(#xmlElement{name = metadata, content = [
             Other
     end, MetadataElements),
 
-    {ok, MetadataXml#xmlElement{content = [
-        RdfXml#xmlElement{content = MetadataElementsWithPublicHandles}
-    ]}};
+    {ok, RdfXml#xmlElement{content = MetadataElementsWithPublicHandles}};
 
 revise_for_publication(_InvalidXml, _ShareId, _ShareRecord) ->
     error.
@@ -135,9 +132,9 @@ revise_for_publication(_InvalidXml, _ShareId, _ShareRecord) ->
 %% @doc {@link handle_metadata_plugin_behaviour} callback insert_public_handle/1
 -spec insert_public_handle(od_handle:parsed_metadata(), od_handle:public_handle()) ->
     od_handle:parsed_metadata().
-insert_public_handle(#xmlElement{name = metadata, content = [
-    #xmlElement{name = 'rdf:RDF', content = MetadataElements} = RdfXml
-]} = MetadataXml, PublicHandle) ->
+insert_public_handle(#xmlElement{
+    name = 'rdf:RDF', content = MetadataElements
+} = RdfXml, PublicHandle) ->
     MetadataElementsWithPublicHandles = lists:map(fun
         (#xmlElement{name = 'edm:ProvidedCHO', attributes = CHOAttrs} = CHOElement) ->
             CHOElement#xmlElement{
@@ -152,14 +149,12 @@ insert_public_handle(#xmlElement{name = metadata, content = [
             Other
     end, MetadataElements),
 
-    MetadataXml#xmlElement{content = [
-        RdfXml#xmlElement{content = MetadataElementsWithPublicHandles}
-    ]}.
+    RdfXml#xmlElement{content = MetadataElementsWithPublicHandles}.
 
 
 %% @doc {@link handle_metadata_plugin_behaviour} callback adapt_for_oai_pmh/1
 -spec adapt_for_oai_pmh(od_handle:parsed_metadata()) -> od_handle:parsed_metadata().
-adapt_for_oai_pmh(#xmlElement{name = metadata, content = [RdfXml]}) ->
+adapt_for_oai_pmh(RdfXml) ->
     RdfXml.
 
 
@@ -257,9 +252,6 @@ insert_aggregated_cho_element(Elements, Identifier) ->
 % auxiliary macro to help build validation examples with different combinations of
 % pre-existing properties
 -record(validation_example_builder_ctx, {
-    % these tags are not obligatory in the user input,
-    % but will be always added automatically before publication
-    metadata_tags :: included | skipped,
     provided_cho_about_attr :: attr_not_provided | binary(),
     ore_aggregation_about_attr :: attr_not_provided | binary(),
     aggregated_cho_resource_attr :: element_not_provided | attr_not_provided | binary(),
@@ -299,19 +291,16 @@ gen_validation_examples() -> lists:flatten([
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
-            "<metadata>",
             "<edm:ProvidedCHO>",
             "<dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>",
             "<dc:type>book</dc:type>",
-            "</edm:ProvidedCHO>",
-            "</metadata>"
+            "</edm:ProvidedCHO>"
         >>,
         input_qualifies_for_publication = false  % the top level <rdf:RDF> is required
     },
     % do not generate all the combinations, otherwise validation may take a substantial amount of time
     lists_utils:generate(fun() ->
         gen_validation_example(#validation_example_builder_ctx{
-            metadata_tags = ?RAND_ELEMENT([included, skipped]),
             provided_cho_about_attr = ?RAND_ELEMENT([attr_not_provided, <<"oai:325sa/ffa72790ef7">>]),
             ore_aggregation_about_attr = ?RAND_ELEMENT([attr_not_provided, <<"oai:kv8ds/kjf7ahi13f">>]),
             aggregated_cho_resource_attr = ?RAND_ELEMENT([attr_not_provided, element_not_provided, <<"oai:ks72a/bma9w8hfdalb">>]),
@@ -348,7 +337,6 @@ gen_validation_example(Ctx) ->
 %% @private
 -spec gen_input_raw_xml_example(binary(), #validation_example_builder_ctx{}) -> binary().
 gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
-    metadata_tags = MetadataTags,
     provided_cho_about_attr = ProvidedChoAboutAttr,
     ore_aggregation_about_attr = OreAggregationAboutAttr,
     aggregated_cho_resource_attr = AggregatedChoResourceAttr,
@@ -374,7 +362,6 @@ gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
 
     <<
         "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
-        (case MetadataTags of included -> <<"<metadata>">>; skipped -> <<"">> end)/binary,
         OpeningRdfTag/binary,
         "<edm:ProvidedCHO", (BuildAboutAttrStr(ProvidedChoAboutAttr))/binary, ">",
         "<dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>",
@@ -392,8 +379,7 @@ gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
         "<edm:rights rdf:resource=\"http://rightsstatements.org/vocab/NoC-OKLR/1.0/\"/>",
         (BuildElementWithResource(<<"edm:isShownAt">>, IsShownAtResourceAttr))/binary,
         "</ore:Aggregation>",
-        "</rdf:RDF>",
-        (case MetadataTags of included -> <<"</metadata>">>; skipped -> <<"">> end)/binary
+        "</rdf:RDF>"
     >>.
 
 
@@ -431,7 +417,6 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
 
     <<
         "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
-        (case MetadataType of oai_pmh -> <<"">>; _ -> <<"<metadata>">> end)/binary,
         OpeningRdfTag/binary,
         "<edm:ProvidedCHO", ExpProvChoRdfAboutStr/binary, ">",
         "<dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>",
@@ -451,6 +436,5 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
         (case IsShownAtResourceAttr of element_not_provided -> ExpIsShownAtElement; _ -> <<"">> end)/binary,
         ExpAggChoElement/binary,
         "</ore:Aggregation>",
-        "</rdf:RDF>",
-        (case MetadataType of oai_pmh -> <<"">>; _ -> <<"</metadata>">> end)/binary
+        "</rdf:RDF>"
     >>.

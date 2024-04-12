@@ -669,7 +669,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 ) ->
     od_handle:parsed_metadata().
 raw_metadata_to_revised_for_publication(MetadataPrefix, RawMetadata, ShareId, ShareRecord) ->
-    ParsedMetadata = case oai_metadata:parse_and_normalize_xml(RawMetadata) of
+    ParsedMetadata = case oai_metadata:parse_xml(RawMetadata) of
         {ok, Parsed} -> Parsed;
         error -> throw(?ERROR_BAD_VALUE_XML(<<"metadata">>))
     end,
