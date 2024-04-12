@@ -406,15 +406,7 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadataPrefix">> => MetadataPrefix,  % @TODO VFS-11906 add to REST and swaggers
-        <<"metadata">> => case MetadataPrefix of
-            <<"edm">> ->
-                % TODO VFS-11906 temporary workaround as current GUI version does not like the "metadata" tags
-                oai_utils:encode_xml(oai_metadata:adapt_for_oai_pmh(
-                    MetadataPrefix, ?check(oai_metadata:parse_and_normalize_xml(Metadata))
-                ));
-            _ ->
-                Metadata
-        end,
+        <<"metadata">> => Metadata,
         <<"timestamp">> => time:seconds_to_iso8601(Timestamp),  % @TODO VFS-6309 to be removed in 21.02
         <<"handleServiceId">> => HandleServiceId,
 
@@ -432,15 +424,7 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public},
     #{
         <<"publicHandle">> => PublicHandle,
         <<"metadataPrefix">> => MetadataPrefix,  % @TODO VFS-11906 add to REST and swaggers
-        <<"metadata">> => case MetadataPrefix of
-            <<"edm">> ->
-                % TODO VFS-11906 temporary workaround as current GUI version does not like the "metadata" tags
-                oai_utils:encode_xml(oai_metadata:adapt_for_oai_pmh(
-                    MetadataPrefix, ?check(oai_metadata:parse_and_normalize_xml(Metadata))
-                ));
-            _ ->
-                Metadata
-        end,
+        <<"metadata">> => Metadata,
         <<"timestamp">> => time:seconds_to_iso8601(Timestamp)  % @TODO VFS-6309 to be removed in 21.02
     };
 
