@@ -19,6 +19,7 @@
 
 %% API
 -export([parse/3]).
+-export([validation_examples/0]).
 
 %%%===================================================================
 %%% API functions
@@ -38,3 +39,10 @@ parse(IdP, Entitlement, ParserConfig) ->
     #idp_entitlement{idp = IdP, path = [
         #idp_group{type = Type, name = Entitlement, privileges = GroupPrivilegesInVo}
     ], privileges = UserPrivileges}.
+
+
+-spec validation_examples() ->
+    [{auth_config:idp(), entitlement_mapping:raw_entitlement(), auth_config:parser_config(),
+        entitlement_mapping:idp_entitlement() | {error, malformed}}].
+validation_examples() ->
+    [].

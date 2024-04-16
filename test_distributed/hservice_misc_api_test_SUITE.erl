@@ -532,12 +532,9 @@ list_handles_test(Config) ->
         fun(SpaceId) ->
             ShareId = ?UNIQUE_STRING,
             {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
             ),
-            {ok, HandleId} = oz_test_utils:create_handle(
-                Config, ?ROOT, ?HANDLE(HService, ShareId)
-            ),
-            HandleId
+            ozt_handles:create(HService, ShareId)
         end, [S1, S1, S2]
     ),
 
@@ -582,10 +579,18 @@ get_handle_test(Config) ->
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
-    HandleData = ?HANDLE(HService, ShareId),
+    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
+    RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    HandleData = #{
+        <<"handleServiceId">> => HService,
+        <<"resourceType">> => <<"Share">>,
+        <<"resourceId">> => ShareId,
+        <<"metadataPrefix">> => MetadataPrefix,
+        <<"metadata">> => RawMetadata
+    },
     {ok, HandleId} = oz_test_utils:create_handle(Config, ?ROOT, HandleData),
 
     ApiTestSpec = #api_test_spec{

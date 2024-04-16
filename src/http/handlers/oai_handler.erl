@@ -170,13 +170,10 @@ handle_request_unsafe(QueryParams, Req) ->
 
     RequestElementXML = oai_utils:to_xml(RequestElement),
     ResponseDateXML = oai_utils:to_xml(ResponseDate),
-    XML = insert_to_root_xml_element([ResponseDateXML, RequestElementXML, ResponseXML]),
 
-    Prolog = ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"],
-    ResponseBody = xmerl:export_simple([XML], xmerl_xml, [{prolog, Prolog}]),
-
-    Req2 = cowboy_req:set_resp_header(?HDR_CONTENT_TYPE, ?RESPONSE_CONTENT_TYPE, Req),
-    {ResponseBody, Req2}.
+    Req2 = cowboy_req:set_resp_header(?HDR_CONTENT_TYPE, ?XML_RESPONSE_CONTENT_TYPE, Req),
+    Xml = insert_to_root_xml_element([ResponseDateXML, RequestElementXML, ResponseXML]),
+    {oai_utils:encode_xml(Xml), Req2}.
 
 %%%--------------------------------------------------------------------
 %%% @private
@@ -288,4 +285,3 @@ generate_request_element(Req) ->
 generate_request_element(ParsedArgs, Req) ->
     URL = iolist_to_binary(cowboy_req:uri(Req, #{qs => undefined})),
     {request, URL, ParsedArgs}.
-

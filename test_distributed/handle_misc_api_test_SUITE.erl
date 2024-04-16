@@ -76,12 +76,9 @@ list_test(Config) ->
         fun(_) ->
             ShareId = ?UNIQUE_STRING,
             {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, S1
             ),
-            {ok, HandleId} = oz_test_utils:create_handle(
-                Config, ?USER(U1), ?HANDLE(HService, ShareId)
-            ),
-            HandleId
+            ozt_users:create_handle_for(U1, HService, ShareId)
         end, lists:seq(1, 5)
     ),
 
@@ -170,26 +167,28 @@ create_test(Config) ->
     ),
 
     {ok, ShareIdThatAlreadyHasAHandle} = oz_test_utils:create_share(
-        Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, S1
     ),
-    {ok, _} = oz_test_utils:create_handle(
-        Config, ?ROOT, ?HANDLE(DoiHService, ShareIdThatAlreadyHasAHandle)
-    ),
+    ozt_handles:create(DoiHService, ShareIdThatAlreadyHasAHandle),
+
+    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
+    RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix),
 
     EnvSetUpFun = fun() ->
         ShareId = datastore_key:new(),
         {ok, ShareId} = oz_test_utils:create_share(
-            Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+            Config, ?ROOT, ShareId, ?SHARE_NAME1, S1
         ),
         #{shareId => ShareId}
     end,
 
     VerifyResult = fun(#{shareId := ShareId}, HandleId, HService) ->
-        {ok, Handle} = oz_test_utils:get_handle(Config, HandleId),
+        Handle = ozt_handles:get(HandleId),
+        ?assert(is_binary(Handle#od_handle.public_handle)),
         ?assertEqual(<<"Share">>, Handle#od_handle.resource_type),
         ?assertEqual(ShareId, Handle#od_handle.resource_id),
-        ?assertEqual(?DC_METADATA, Handle#od_handle.metadata),
-        ?assertEqual(?OAI_DC_METADATA_PREFIX, Handle#od_handle.metadata_prefix),
+        ?assertEqual(ozt_handles:expected_final_metadata(Handle), Handle#od_handle.metadata),
+        ?assertEqual(MetadataPrefix, Handle#od_handle.metadata_prefix),
         ?assertEqual(HService, Handle#od_handle.handle_service),
         true
     end,
@@ -238,8 +237,8 @@ create_test(Config) ->
                 <<"handleServiceId">> => [DoiHService, PidHService],
                 <<"resourceType">> => [<<"Share">>],
                 <<"resourceId">> => [fun(#{shareId := ShareId} = _Env) -> ShareId end],
-                <<"metadata">> => [?DC_METADATA],
-                <<"metadataPrefix">> => [?OAI_DC_METADATA_PREFIX]
+                <<"metadata">> => [RawMetadata],
+                <<"metadataPrefix">> => [MetadataPrefix]
             },
             bad_values = [
                 {<<"handleServiceId">>, <<"">>,
@@ -258,13 +257,13 @@ create_test(Config) ->
                 {<<"resourceId">>, 1234,
                     ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"metadataPrefix">>, <<"bad_metadata">>,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"metadataPrefix">>, metadata_formats:supported_formats())},
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"metadataPrefix">>, ozt_handles:supported_metadata_prefixes())},
                 {<<"metadata">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
                 {<<"metadata">>, ?RAND_UNICODE_STR(100001),
                     ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"metadata">>, 100000)},
-                {<<"metadata">>, <<"null">>, ?ERROR_BAD_VALUE_XML(<<"null">>)},
-                {<<"metadata">>, <<"<a></b>">>, ?ERROR_BAD_VALUE_XML(<<"<a></b>">>)}
+                {<<"metadata">>, <<"null">>, ?ERROR_BAD_VALUE_XML(<<"metadata">>)},
+                {<<"metadata">>, <<"<a></b>">>, ?ERROR_BAD_VALUE_XML(<<"metadata">>)}
             ]
         }
     },
@@ -284,19 +283,22 @@ get_test(Config) ->
     ),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
+    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
+    RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix),
     HandleData = #{
         <<"handleServiceId">> => HService,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ShareId,
-        <<"metadataPrefix">> => ?OAI_DC_METADATA_PREFIX,
-        <<"metadata">> => ?DC_METADATA
+        <<"metadataPrefix">> => MetadataPrefix,
+        <<"metadata">> => RawMetadata
     },
     {ok, HandleId} = oz_test_utils:create_handle(
         Config, ?USER(U1), HandleData
     ),
+    ExpFinalMetadata = ozt_handles:expected_final_metadata(HandleId),
     oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, [], [
         ?HANDLE_VIEW
     ]),
@@ -339,7 +341,7 @@ get_test(Config) ->
 
                     bottom_up_dirty = false
                 }) ->
-                    ?assertEqual(?DC_METADATA, Metadata),
+                    ?assertEqual(ExpFinalMetadata, Metadata),
                     ?assertEqual(ShareId, ResourceId),
                     ?assertEqual(HService, HServiceId),
                     ?assertEqual(Users, #{
@@ -362,7 +364,7 @@ get_test(Config) ->
                 },
                 <<"effectiveGroups">> => #{},
                 <<"handleServiceId">> => HService,
-                <<"metadata">> => ?DC_METADATA,
+                <<"metadata">> => ExpFinalMetadata,
                 <<"resourceId">> => ShareId,
                 <<"resourceType">> => <<"Share">>,
                 <<"gri">> => fun(EncodedGri) ->
@@ -438,6 +440,11 @@ get_test(Config) ->
 
 
 update_test(Config) ->
+    lists:foreach(fun(MetadataPrefix) ->
+        update_test(Config, MetadataPrefix)
+    end, ozt_handles:supported_metadata_prefixes()).
+
+update_test(Config, MetadataPrefix) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -447,15 +454,16 @@ update_test(Config) ->
     ),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
 
+    PreexistingRawMetadata = ozt_handles:example_input_metadata(MetadataPrefix, 1),
+    TargetRawMetadata = ozt_handles:example_input_metadata(MetadataPrefix, 2),
+
     AllPrivs = privileges:handle_privileges(),
     EnvSetUpFun = fun() ->
         {ok, ShareId} = oz_test_utils:create_share(
-            Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+            Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, S1
         ),
 
-        {ok, HandleId} = oz_test_utils:create_handle(
-            Config, ?ROOT, ?HANDLE(HService, ShareId)
-        ),
+        HandleId = ozt_handles:create(HService, ShareId, MetadataPrefix, PreexistingRawMetadata),
 
         {ok, U1} = oz_test_utils:handle_add_user(Config, HandleId, U1),
         oz_test_utils:handle_set_user_privileges(Config, HandleId, U1,
@@ -467,11 +475,11 @@ update_test(Config) ->
         ),
         #{handleId => HandleId}
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{handleId := HandleId}, Data) ->
-        {ok, Handle} = oz_test_utils:get_handle(Config, HandleId),
+    VerifyEndFun = fun(ShouldSucceed, #{handleId := HandleId}, _Data) ->
+        Handle = ozt_handles:get(HandleId),
         ExpMetadata = case ShouldSucceed of
-            false -> ?DC_METADATA;
-            true -> maps:get(<<"metadata">>, Data)
+            false -> ozt_handles:expected_final_metadata(HandleId, 1);
+            true -> ozt_handles:expected_final_metadata(HandleId, 2)
         end,
         ?assertEqual(ExpMetadata, Handle#od_handle.metadata)
     end,
@@ -507,7 +515,7 @@ update_test(Config) ->
         },
         data_spec = #data_spec{
             required = [<<"metadata">>],
-            correct_values = #{<<"metadata">> => [?DC_METADATA2]},
+            correct_values = #{<<"metadata">> => [TargetRawMetadata]},
             bad_values = [
                 {<<"metadata">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
                 {<<"metadata">>, ?RAND_UNICODE_STR(100001),
@@ -533,11 +541,9 @@ delete_test(Config) ->
     AllHandlePrivs = privileges:handle_privileges(),
     EnvSetUpFun = fun() ->
         {ok, ShareId} = oz_test_utils:create_share(
-            Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+            Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, S1
         ),
-        {ok, HandleId} = oz_test_utils:create_handle(
-            Config, ?ROOT, ?HANDLE(HService, ShareId)
-        ),
+        HandleId = ozt_handles:create(HService, ShareId),
 
         {ok, U1} = oz_test_utils:handle_add_user(Config, HandleId, U1),
         oz_test_utils:handle_set_user_privileges(Config, HandleId, U1,

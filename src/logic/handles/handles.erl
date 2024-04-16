@@ -26,6 +26,8 @@
 %                that have the same timestamp.
 -type index() :: binary().
 
+% the resumption token is used to continue listing when an incomplete list (batch) is returned;
+% an 'undefined' value is returned when there are no more entries to list
 -type resumption_token() :: binary() | undefined.
 
 -type limit() :: pos_integer().
@@ -51,10 +53,14 @@
 -define(TREE_FOR_METADATA_PREFIX_AND_HSERVICE(Prefix, HServiceId),
     <<"tree-for-", Prefix/binary, "-of-service-", HServiceId/binary>>).
 
-% Uses null for separator to ensure alphabetical sorting
--define(INDEX_SEP, 0).
--define(TOKEN_SEP, <<",">>).
+
+-define(DEFAULT_LIST_LIMIT, oz_worker:get_env(default_handle_list_limit, 1000)).
 -define(MAX_LIST_LIMIT, 1000).
+
+% uses null for separator to ensure alphabetical sorting
+-define(INDEX_SEP, 0).
+-define(RESUMPTION_TOKEN_SEP, <<",">>).
+
 -define(MAX_TIMESTAMP, 99999999999).
 
 
@@ -160,7 +166,7 @@ get_earliest_timestamp() ->
         ListingOpts = #{limit => 1, metadata_prefix => MetadataPrefix},
         {List, _} = list(ListingOpts),
         List
-    end, metadata_formats:supported_formats()),
+    end, oai_metadata:supported_formats()),
     case EarliestTimestamps of
         [] -> undefined;
         _ ->
@@ -206,14 +212,14 @@ pack_resumption_token(TimeSeconds, HandleId, MetadataPrefix, Limit, From, Until)
     FormattedFrom = integer_to_binary(utils:ensure_defined(From, 0)),
     FormattedUntil = integer_to_binary(utils:ensure_defined(Until, ?MAX_TIMESTAMP)),
     str_utils:join_binary([integer_to_binary(TimeSeconds), MetadataPrefix,
-        FormattedLimit, FormattedFrom, FormattedUntil, HandleId], ?TOKEN_SEP).
+        FormattedLimit, FormattedFrom, FormattedUntil, HandleId], ?RESUMPTION_TOKEN_SEP).
 
 
 %% @private
 -spec unpack_resumption_token(resumption_token()) -> {od_handle:timestamp_seconds(), od_handle:metadata_prefix(),
     od_handle:id(), limit(), od_handle:timestamp_seconds(), od_handle:timestamp_seconds()}.
 unpack_resumption_token(Token) ->
-    [TimeSeconds, MetadataPrefix, Limit, From, Until, HandleId] = binary:split(Token, [?TOKEN_SEP], [global]),
+    [TimeSeconds, MetadataPrefix, Limit, From, Until, HandleId] = binary:split(Token, [?RESUMPTION_TOKEN_SEP], [global]),
     {binary_to_integer(TimeSeconds), MetadataPrefix, HandleId, binary_to_integer(Limit),
         binary_to_integer(From), binary_to_integer(Until)}.
 

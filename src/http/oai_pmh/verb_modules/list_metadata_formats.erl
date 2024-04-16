@@ -76,7 +76,7 @@ get_response(<<"metadataFormat">>, Args) ->
         undefined ->
             lists:map(fun(MetadataPrefix) ->
                 get_metadata_format_info(MetadataPrefix)
-            end, metadata_formats:supported_formats());
+            end, oai_metadata:supported_formats());
         OAIId ->
             try
                 Id = oai_utils:oai_identifier_decode(OAIId),
@@ -86,7 +86,7 @@ get_response(<<"metadataFormat">>, Args) ->
                     _ ->
                         lists:map(fun(MetadataPrefix) ->
                             get_metadata_format_info(MetadataPrefix)
-                        end, metadata_formats:supported_formats())
+                        end, oai_metadata:supported_formats())
                 end
             catch
                 throw:noMetadataFormats ->
@@ -111,8 +111,8 @@ get_response(<<"metadataFormat">>, Args) ->
 -spec get_metadata_format_info(binary()) -> oai_metadata_format().
 get_metadata_format_info(MetadataPrefix) ->
     try
-        SchemaURL = metadata_formats:schema_URL(MetadataPrefix),
-        {_, Namespace} = metadata_formats:main_namespace(MetadataPrefix),
+        SchemaURL = oai_metadata:schema_URL(MetadataPrefix),
+        {_, Namespace} = oai_metadata:main_namespace(MetadataPrefix),
         #oai_metadata_format{
             metadataPrefix = MetadataPrefix,
             schema = SchemaURL,

@@ -679,14 +679,11 @@ create_basic_handle_env(Config, Privs) ->
     ),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
-    HandleDetails = ?HANDLE(HService, ShareId),
     AllHandlePrivs = privileges:handle_privileges(),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
-    ),
+    HandleId = ozt_users:create_handle_for(U1, HService, ShareId),
     oz_test_utils:handle_set_user_privileges(
         Config, HandleId, U1, [], Privs
     ),
@@ -1083,14 +1080,11 @@ create_handle_eff_users_env(Config) ->
     ),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
-    HandleDetails = ?HANDLE(HService, ShareId),
     AllHandlePrivs = privileges:handle_privileges(),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
-    ),
+    HandleId = ozt_users:create_handle_for(U1, HService, ShareId),
     oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, [],
         [?HANDLE_VIEW]
     ),
@@ -1490,16 +1484,24 @@ create_eff_handles_env(Config) ->
             ),
             ShareId = ?UNIQUE_STRING,
             {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
             ),
-            HandleDetails = ?HANDLE(HService, ShareId),
+            MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
+            RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix, ?RAND_INT(1, 10)),
+            HandleData = #{
+                <<"handleServiceId">> => HService,
+                <<"resourceType">> => <<"Share">>,
+                <<"resourceId">> => ShareId,
+                <<"metadataPrefix">> => MetadataPrefix,
+                <<"metadata">> => RawMetadata
+            },
             {ok, HandleId} = oz_test_utils:create_handle(
-                Config, ?ROOT, HandleDetails
+                Config, ?ROOT, HandleData
             ),
             {ok, GroupId} = oz_test_utils:handle_add_group(
                 Config, HandleId, GroupId
             ),
-            {HandleId, HandleDetails}
+            {HandleId, HandleData}
         end, [G1, G2, G3, G4, G5]
     ),
 

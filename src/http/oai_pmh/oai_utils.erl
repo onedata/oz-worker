@@ -19,8 +19,8 @@
 
 %% API
 -export([serialize_datestamp/1, deserialize_datestamp/1, is_harvesting/1,
-    verb_to_module/1, sanitize_metadata/2, is_earlier_or_equal/2,
-    dates_have_the_same_granularity/2, to_xml/1, ensure_list/1,
+    verb_to_module/1, is_earlier_or_equal/2, dates_have_the_same_granularity/2,
+    to_xml/1, encode_xml/1, ensure_list/1,
     request_arguments_to_handle_listing_opts/1, harvest/2, oai_identifier_decode/1,
     build_oai_header/2, build_oai_record/2
 ]).
@@ -60,13 +60,12 @@ build_oai_header(HandleId, Handle) ->
     #oai_record{}.
 build_oai_record(HandleId, Handle) ->
     MetadataPrefix = Handle#od_handle.metadata_prefix,
-    Mod = metadata_formats:module(MetadataPrefix),
     #oai_record{
         header = build_oai_header(HandleId, Handle),
         metadata = #oai_metadata{
-            metadata_format = #oai_metadata_format{metadataPrefix = MetadataPrefix},
-            additional_identifiers = Mod:resolve_additional_identifiers(Handle),
-            value = Handle#od_handle.metadata
+            metadata_prefix = MetadataPrefix,
+            raw_value = Handle#od_handle.metadata,
+            handle = Handle
         }
     }.
 
@@ -113,21 +112,17 @@ deserialize_datestamp(Datestamp) ->
 request_arguments_to_handle_listing_opts(Args) ->
     case proplists:get_value(<<"resumptionToken">>, Args) of
         undefined ->
-            MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
-            From = case deserialize_datestamp(proplists:get_value(<<"from">>, Args)) of
-                undefined -> undefined;
-                FromDeserialized -> time:datetime_to_seconds(FromDeserialized)
-            end,
-            Until = case deserialize_datestamp(proplists:get_value(<<"until">>, Args)) of
-                undefined -> undefined;
-                UntilDeserialized -> time:datetime_to_seconds(UntilDeserialized)
-            end,
-            SetSpec = proplists:get_value(<<"set">>, Args),
             #{
-                from => From,
-                until => Until,
-                service_id => SetSpec,
-                metadata_prefix => MetadataPrefix
+                metadata_prefix => proplists:get_value(<<"metadataPrefix">>, Args),
+                service_id => proplists:get_value(<<"set">>, Args, undefined),
+                from => utils:convert_defined(
+                    deserialize_datestamp(proplists:get_value(<<"from">>, Args, undefined)),
+                    fun time:datetime_to_seconds/1
+                ),
+                until => utils:convert_defined(
+                    deserialize_datestamp(proplists:get_value(<<"until">>, Args, undefined)),
+                    fun time:datetime_to_seconds/1
+                )
             };
         ResumptionToken ->
             #{
@@ -152,6 +147,10 @@ harvest(ListingOpts, HarvestingFun) ->
         Handle = get_handle(Identifier),
         HarvestingFun(Identifier, Handle) end, Identifiers),
 
+    % TODO VFS-11906 consider a situation when a resumption token has been returned because
+    % there is still one entry to be listed, but in the meantime it is deleted - then, the listing
+    % may return an empty result with a token and the code below will crash
+    % this however cannot happen if we support deletions (report deleted handles) in OAI-PMH
     case HarvestedMetadata of
         [] ->
             MetadataPrefix = maps:get(metadata_prefix, ListingOpts),
@@ -166,30 +165,21 @@ harvest(ListingOpts, HarvestingFun) ->
             end,
             throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
         _ ->
-            % According to OAI-PMH spec, the token MUST be present in the response if an incomplete list is returned,
-            % and MUST be present and MUST be empty when the last batch that completes the list is returned.
-            % However, if the whole list is returned in one response, there should be no resumption token element at all.
-            ResultResumptionToken = case {NewResumptionToken, ListingOpts} of
-                {undefined, #{resumption_token := _}} ->  <<>>;
-                _ -> NewResumptionToken
-            end,
             #oai_listing_result{
                 batch = HarvestedMetadata,
-                resumption_token = ResultResumptionToken
+                % According to OAI-PMH spec, the token MUST be present in the response
+                % if an incomplete list is returned, and MUST be present and MUST be empty (<<>>)
+                % when the last batch that completes the list is returned.
+                % However, if the whole list is returned in one response,
+                % there should be no resumption token element at all (undefined).
+                resumption_token = case {NewResumptionToken, ListingOpts} of
+                    {undefined, #{resumption_token := _}} -> <<>>;
+                    {undefined, _} -> undefined;
+                    {Binary, _} when is_binary(Binary) -> Binary
+                end
             }
     end.
 
-
-%%%--------------------------------------------------------------------
-%%% @doc
-%%% Function checks whether metadata is valid.
-%%% @end
-%%%--------------------------------------------------------------------
--spec sanitize_metadata(Metadata :: od_handle:metadata(), MetadataPrefix :: od_handle:metadata_prefix()) ->
-    ok | errors:error().
-sanitize_metadata(MetadataPrefix, Metadata) ->
-    Mod = metadata_formats:module(MetadataPrefix),
-    Mod:sanitize_metadata(Metadata).
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -276,16 +266,36 @@ to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp, set_spec = Se
             ensure_list(to_xml({setSpec, SetSpec}))
         ])
     };
-to_xml(#oai_metadata{} = OaiMetadata) ->
-    #oai_metadata{
-        metadata_format = Format, value = Value,
-        additional_identifiers = AdditionalIdentifiers
-    } = OaiMetadata,
-    MetadataPrefix = Format#oai_metadata_format.metadataPrefix,
-    Mod = metadata_formats:module(MetadataPrefix),
+to_xml(#oai_metadata{metadata_prefix = MetadataPrefix, raw_value = RawValue, handle = Handle}) ->
+    ParsedMetadata = case oai_metadata:parse_xml(RawValue) of
+        {ok, Parsed} ->
+            Parsed;
+        error ->
+            % @TODO VFS-11906 Temporary workaround, rework
+            % @TODO VFS-11906 Consider adding tests for this edge case
+            EmptyMetadata = case MetadataPrefix of
+                ?OAI_DC_METADATA_PREFIX ->
+                    #xmlElement{name = metadata, content = []};
+                ?EDM_METADATA_PREFIX ->
+                    #xmlElement{name = 'rdf:RDF', content = []}
+            end,
+            {ok, RevisedMetadata} = oai_metadata:revise_for_publication(
+                MetadataPrefix,
+                EmptyMetadata,
+                Handle#od_handle.resource_id,
+                ?check(share_logic:get(?ROOT, Handle#od_handle.resource_id))
+            ),
+            oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, Handle#od_handle.public_handle)
+        % @TODO VFS-11906 This might be useful when we upgrade the models and ensure there are valid xmls in the DB
+%%            % this should theoretically never happen as the metadata is sanitized before
+%%            % being written to the DB, so let it crash in case of unforeseen errors
+%%            error({bad_metadata, RawValue})
+    end,
+
     #xmlElement{
         name = metadata,
-        content = ensure_list(to_xml(Mod:encode(Value, AdditionalIdentifiers)))};
+        content = ensure_list(to_xml(oai_metadata:adapt_for_oai_pmh(MetadataPrefix, ParsedMetadata)))
+    };
 to_xml(#oai_metadata_format{metadataPrefix = MetadataPrefix, schema = Schema,
     metadataNamespace = Namespace}) ->
     #xmlElement{
@@ -331,6 +341,15 @@ to_xml({Name, Content, Attributes}) ->
     };
 to_xml(Content) when is_binary(Content) ->
     #xmlText{value = str_utils:to_list(Content)}.
+
+
+-spec encode_xml(#xmlElement{}) -> binary().
+encode_xml(Xml) ->
+    % NOTE: xmerl scans strings in UTF8 (essentially the result of binary_to_list(<<_/utf8>>),
+    % but exports as a unicode erlang string
+    str_utils:unicode_list_to_binary(xmerl:export_simple([Xml], xmerl_xml, [
+        {prolog, ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"]}
+    ])).
 
 
 %%%-------------------------------------------------------------------

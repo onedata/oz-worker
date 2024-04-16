@@ -26,7 +26,7 @@
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
 -define(METADATA_SIZE_LIMIT, 100000).
--define(AVAILABLE_METADATA_FORMATS, metadata_formats:supported_formats()).
+-define(AVAILABLE_METADATA_FORMATS, oai_metadata:supported_formats()).
 -define(DEFAULT_METADATA_PREFIX, ?OAI_DC_METADATA_PREFIX).
 
 -define(critical_section_for_handle(HandleId, Fun),
@@ -121,33 +121,36 @@ is_subscribable(_, _) -> false.
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     HandleServiceId = maps:get(<<"handleServiceId">>, Req#el_req.data),
     ResourceType = <<"Share">> = maps:get(<<"resourceType">>, Req#el_req.data),
-    ResourceId = ShareId = maps:get(<<"resourceId">>, Req#el_req.data),
-    Metadata = maps:get(<<"metadata">>, Req#el_req.data),
+    ShareId = maps:get(<<"resourceId">>, Req#el_req.data),
+    RawMetadata = maps:get(<<"metadata">>, Req#el_req.data),
     MetadataPrefix = maps:get(<<"metadataPrefix">>, Req#el_req.data, ?DEFAULT_METADATA_PREFIX),
     CreationTime = od_handle:current_timestamp(),
 
-    oai_utils:sanitize_metadata(MetadataPrefix, Metadata),
     % ensure no race conditions when creating a handle for a share (only one may be created)
-    ?critical_section_for_handle(ResourceId, fun() ->
-        case od_share:get_handle(ResourceId) of
-            {ok, undefined} -> ok;
-            {ok, _HandleId} -> throw(?ERROR_ALREADY_EXISTS)
-        end,
+    ?critical_section_for_handle(ShareId, fun() ->
+        {ok, #document{value = ShareRecord}} = od_share:get(ShareId),
+
+        ShareRecord#od_share.handle =:= undefined orelse throw(?ERROR_ALREADY_EXISTS),
+
+        RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataPrefix, RawMetadata, ShareId, ShareRecord),
 
         {ok, PublicHandle} = handle_proxy:register_handle(
-            HandleServiceId, ResourceType, ResourceId, Metadata
+            HandleServiceId, ResourceType, ShareId, oai_utils:encode_xml(RevisedMetadata)
         ),
-        Handle = #document{value = #od_handle{
+
+        FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
+
+        {ok, #document{key = HandleId}} = od_handle:create(#document{value = #od_handle{
+            public_handle = PublicHandle,
             handle_service = HandleServiceId,
             resource_type = ResourceType,
-            resource_id = ResourceId,
-            public_handle = PublicHandle,
-            metadata = Metadata,
+            resource_id = ShareId,
             metadata_prefix = MetadataPrefix,
+            metadata = oai_utils:encode_xml(FinalMetadata),
             creator = aai:normalize_subject(Auth#auth.subject),
             creation_time = CreationTime
-        }},
-        {ok, #document{key = HandleId}} = od_handle:create(Handle),
+        }}),
+
         entity_graph:add_relation(
             od_handle, HandleId,
             od_handle_service, HandleServiceId
@@ -285,20 +288,30 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
     ?critical_section_for_handle(HandleId, fun() ->
         {ok, #document{value = #od_handle{
             handle_service = HandleService,
-            timestamp = TimeStamp,
-            metadata_prefix = MetadataPrefix
+            timestamp = PreviousTimestamp,
+            resource_id = ShareId,
+            metadata_prefix = MetadataPrefix,
+            public_handle = PublicHandle
         }}} = od_handle:get(HandleId),
-        NewMetadata = maps:get(<<"metadata">>, Data),
-        NewTimeStamp = od_handle:current_timestamp(),
+        {ok, #document{value = ShareRecord}} = od_share:get(ShareId),
+
+        % only the metadata field can be updated
+        InputRawMetadata = maps:get(<<"metadata">>, Data),
+        RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataPrefix, InputRawMetadata, ShareId, ShareRecord),
+        FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
+        FinalRawMetadata = oai_utils:encode_xml(FinalMetadata),
+
+        CurrentTimestamp = od_handle:current_timestamp(),
         {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
             {ok, Handle#od_handle{
-                metadata = NewMetadata,
-                timestamp = NewTimeStamp
+                timestamp = CurrentTimestamp,
+                metadata = FinalRawMetadata
             }}
         end),
-        %%  after handle modification we need to update handle timestamp in tree
-        handles:update_timestamp(MetadataPrefix, HandleService, HandleId, TimeStamp, NewTimeStamp),
-        handle_proxy:modify_handle(HandleId, NewMetadata)
+        % every handle modification must be reflected in the handle registry
+        % TODO VFS-11906 maybe rename handles -> handle_registry
+        handles:update_timestamp(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp),
+        handle_proxy:modify_handle(HandleId, FinalRawMetadata)
     end),
 
     ok;
@@ -650,6 +663,22 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %%% Internal functions
 %%%===================================================================
 
+%% @private
+-spec raw_metadata_to_revised_for_publication(
+    od_handle:metadata_prefix(), od_handle:raw_metadata(), od_share:id(), od_share:record()
+) ->
+    od_handle:parsed_metadata().
+raw_metadata_to_revised_for_publication(MetadataPrefix, RawMetadata, ShareId, ShareRecord) ->
+    ParsedMetadata = case oai_metadata:parse_xml(RawMetadata) of
+        {ok, Parsed} -> Parsed;
+        error -> throw(?ERROR_BAD_VALUE_XML(<<"metadata">>))
+    end,
+    case oai_metadata:revise_for_publication(MetadataPrefix, ParsedMetadata, ShareId, ShareRecord) of
+        {ok, Revised} -> Revised;
+        error -> throw(?ERROR_BAD_VALUE_XML(<<"metadata">>))
+    end.
+
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -674,7 +703,7 @@ auth_by_privilege(UserId, HandleOrId, Privilege) ->
 list_all_handles() ->
     lists:flatmap(fun(MetadataPrefix) ->
         list_all_handles(#{metadata_prefix => MetadataPrefix})
-    end, metadata_formats:supported_formats()).
+    end, oai_metadata:supported_formats()).
 
 -spec list_all_handles(handles:listing_opts()) -> [od_handle:id()].
 list_all_handles(ListingOpts) ->

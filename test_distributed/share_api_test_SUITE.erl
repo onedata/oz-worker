@@ -71,7 +71,7 @@ list_test(Config) ->
         fun(SpaceId) ->
             ShareId = ?UNIQUE_STRING,
             {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
             ),
             ShareId
         end, [S1, S1, S1, S2, S2]
@@ -124,28 +124,42 @@ create_test(Config) ->
     %   U3 gets the SPACE_MANAGE_SHARES privilege
     %   U2 gets the SPACE_MANAGE_SHARES privilege
     %   U1 gets all remaining privileges
-    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {SpaceId, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_MANAGE_SHARES
     ),
     {ok, U3} = oz_test_utils:create_user(Config),
-    {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
-    oz_test_utils:space_set_user_privileges(Config, S1, U3, [
+    {ok, U3} = oz_test_utils:space_add_user(Config, SpaceId, U3),
+    oz_test_utils:space_set_user_privileges(Config, SpaceId, U3, [
         ?SPACE_MANAGE_SHARES
     ], []),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    ProposedShareId = datastore_key:new(),
+    RootFileId = ?GEN_ROOT_FILE_ID(SpaceId, ProposedShareId),
+
     VerifyFun = fun(ShareId, Data) ->
+        ?assertEqual(ShareId, ProposedShareId),
         {ok, Share} = oz_test_utils:get_share(Config, ShareId),
         ExpectedFileType = maps:get(<<"fileType">>, Data, dir),
         ExpectedDescription = maps:get(<<"description">>, Data, <<"">>),
         ?assertMatch(#od_share{
             name = ?CORRECT_NAME, description = ExpectedDescription,
-            space = S1, root_file = ?ROOT_FILE_ID,
+            space = SpaceId, root_file = RootFileId,
             file_type = ExpectedFileType
         }, Share),
         true
     end,
 
+    EnvTearDownFun = fun(_) ->
+        ozt:rpc(share_logic, delete, [?ROOT, ProposedShareId])
+    end,
+
+    NotAGuid = datastore_key:new(),
+    ExampleFileUuid = datastore_key:new(),
+    NotAShareFileGuid = file_id:pack_guid(ExampleFileUuid, SpaceId),
+    ShareFileGuidWithBadSpaceId = file_id:pack_share_guid(ExampleFileUuid, datastore_key:new(), ProposedShareId),
+    ShareFileGuidWithUndefinedShareId = file_id:pack_share_guid(ExampleFileUuid, SpaceId, undefined),
+    ShareFileGuidWithBadFileUuid = file_id:pack_share_guid(<<"">>, SpaceId, ProposedShareId),
     BadDataValues = [
         {<<"shareId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"shareId">>)},
         {<<"shareId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"shareId">>)},
@@ -153,6 +167,12 @@ create_test(Config) ->
         {<<"description">>, ?RAND_UNICODE_STR(100001), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"description">>, 100000)},
         {<<"rootFileId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"rootFileId">>)},
         {<<"rootFileId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"rootFileId">>)},
+        {<<"rootFileId">>, NotAGuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, ExampleFileUuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, NotAShareFileGuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, ShareFileGuidWithBadSpaceId, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, ShareFileGuidWithUndefinedShareId, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, ShareFileGuidWithBadFileUuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
         {<<"fileType">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"fileType">>)},
         {<<"fileType">>, <<"">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [file, dir])},
         {<<"fileType">>, atom, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [file, dir])}
@@ -186,8 +206,8 @@ create_test(Config) ->
                 ?OK_MAP_CONTAINS(#{
                     <<"handleId">> => null,
                     <<"name">> => ?CORRECT_NAME,
-                    <<"rootFileId">> => ?ROOT_FILE_ID,
-                    <<"spaceId">> => S1,
+                    <<"rootFileId">> => RootFileId,
+                    <<"spaceId">> => SpaceId,
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = gri:deserialize(EncodedGri),
                         VerifyFun(Id, Data)
@@ -203,12 +223,12 @@ create_test(Config) ->
                 <<"description">>, <<"fileType">>
             ],
             correct_values = #{
-                <<"shareId">> => [fun() -> ?UNIQUE_STRING end],
+                <<"shareId">> => [ProposedShareId],
                 <<"name">> => [?CORRECT_NAME],
                 <<"description">> => [<<"">>, ?RAND_UNICODE_STR(769)],
-                <<"rootFileId">> => [?ROOT_FILE_ID],
+                <<"rootFileId">> => [RootFileId],
                 <<"fileType">> => [file, dir],
-                <<"spaceId">> => [S1]
+                <<"spaceId">> => [SpaceId]
             },
             bad_values = lists:append([
                 [{<<"spaceId">>, <<"">>, ?ERROR_FORBIDDEN},
@@ -217,7 +237,7 @@ create_test(Config) ->
                 ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)])
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, undefined, EnvTearDownFun, undefined)),
 
     % Root client bypasses authorization checks,
     % hence wrong values of handleServiceId or resourceId
@@ -237,7 +257,7 @@ create_test(Config) ->
                 ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)])
         }
     },
-    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec, undefined, EnvTearDownFun, undefined)).
 
 
 get_test(Config) ->
@@ -259,7 +279,7 @@ get_test(Config, ShareId, FileType) ->
         <<"spaceId">> => S1,
         <<"name">> => ?SHARE_NAME1,
         <<"description">> => str_utils:rand_hex(rand:uniform(1000) - 1),
-        <<"rootFileId">> => ?ROOT_FILE_ID,
+        <<"rootFileId">> => ?GEN_ROOT_FILE_ID(S1, ShareId),
         <<"fileType">> => FileType
     },
     {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(Owner), ShareData),
@@ -362,7 +382,7 @@ update_test(Config) ->
                 <<"shareId">> => ShareId,
                 <<"name">> => InitialName,
                 <<"description">> => InitialDescription,
-                <<"rootFileId">> => ?ROOT_FILE_ID,
+                <<"rootFileId">> => ?GEN_ROOT_FILE_ID(S1, ShareId),
                 <<"spaceId">> => S1
             }
         ),
@@ -444,7 +464,7 @@ delete_test(Config) ->
     EnvSetUpFun = fun() ->
         ShareId = ?UNIQUE_STRING,
         {ok, ShareId} = oz_test_utils:create_share(
-            Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+            Config, ?ROOT, ShareId, ?SHARE_NAME1, S1
         ),
         #{shareId => ShareId}
     end,
@@ -502,7 +522,7 @@ get_shared_file_or_directory_data_test_base(Config, SubpathWithQs) ->
         <<"spaceId">> => SpaceId,
         <<"name">> => ?SHARE_NAME1,
         <<"description">> => str_utils:rand_hex(rand:uniform(1000) - 1),
-        <<"rootFileId">> => ?ROOT_FILE_ID,
+        <<"rootFileId">> => ?GEN_ROOT_FILE_ID(SpaceId, ShareId),
         <<"fileType">> => file
     }),
     CorrectObjectId = gen_example_object_id(ShareId),
@@ -626,7 +646,7 @@ choose_provider_for_public_share_handling_test(Config) ->
 
     ShareId = str_utils:rand_hex(16),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
+        Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
     ),
 
     ChooseProvider = fun() ->

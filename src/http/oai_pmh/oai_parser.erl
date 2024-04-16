@@ -143,7 +143,7 @@ parse_harvesting_arguments(ArgsList) ->
 -spec parse_harvesting_metadata_prefix([proplists:property()]) -> ok.
 parse_harvesting_metadata_prefix(ArgsList) ->
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, ArgsList),
-    case lists:member(MetadataPrefix, metadata_formats:supported_formats()) of
+    case lists:member(MetadataPrefix, oai_metadata:supported_formats()) of
         false -> throw({cannotDisseminateFormat, MetadataPrefix});
         _ -> ok
     end.

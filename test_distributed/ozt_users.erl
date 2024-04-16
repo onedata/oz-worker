@@ -26,6 +26,7 @@
 -export([create_advertised_space_for/1, create_advertised_space_for/2]).
 -export([join_space/2, leave_space/2]).
 -export([create_handle_service_for/1]).
+-export([create_handle_for/3]).
 -export([create_harvester_for/1]).
 -export([create_atm_inventory_for/1, create_atm_inventory_for/2]).
 -export([get_eff_providers/1]).
@@ -123,6 +124,20 @@ create_handle_service_for(UserId) ->
         ?USER(UserId), UserId, ?DOI_SERVICE
     ])),
     HServiceId.
+
+
+-spec create_handle_for(od_user:id(), od_handle_service:id(), od_share:id()) -> od_handle:id().
+create_handle_for(UserId, HandleServiceId, ShareId) ->
+    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
+    RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    {ok, HandleId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create_handle, [?USER(UserId), UserId, #{
+        <<"handleServiceId">> => HandleServiceId,
+        <<"resourceType">> => <<"Share">>,
+        <<"resourceId">> => ShareId,
+        <<"metadataPrefix">> => MetadataPrefix,
+        <<"metadata">> => RawMetadata
+    }])),
+    HandleId.
 
 
 -spec create_harvester_for(od_user:id()) -> od_harvester:id().
