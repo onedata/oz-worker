@@ -173,8 +173,8 @@ harvest(ListingOpts, HarvestingFun) ->
                 % However, if the whole list is returned in one response,
                 % there should be no resumption token element at all (undefined).
                 resumption_token = case {NewResumptionToken, ListingOpts} of
-                    {undefined, #{resumption_token := _}} ->  <<>>;
-                    {undefined, _} ->  undefined;
+                    {undefined, #{resumption_token := _}} -> <<>>;
+                    {undefined, _} -> undefined;
                     {Binary, _} when is_binary(Binary) -> Binary
                 end
             }
@@ -272,13 +272,12 @@ to_xml(#oai_metadata{metadata_prefix = MetadataPrefix, raw_value = RawValue, han
             Parsed;
         error ->
             % @TODO VFS-11906 Temporary workaround, rework
+            % @TODO VFS-11906 Consider adding tests for this edge case
             EmptyMetadata = case MetadataPrefix of
                 ?OAI_DC_METADATA_PREFIX ->
                     #xmlElement{name = metadata, content = []};
                 ?EDM_METADATA_PREFIX ->
-                    #xmlElement{name = metadata, content = [
-                        #xmlElement{name = 'rdf:RDF', content = []}
-                    ]}
+                    #xmlElement{name = 'rdf:RDF', content = []}
             end,
             {ok, RevisedMetadata} = oai_metadata:revise_for_publication(
                 MetadataPrefix,
