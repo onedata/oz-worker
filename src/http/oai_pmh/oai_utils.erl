@@ -47,30 +47,30 @@ oai_identifier_decode(OAIId) ->
 
 -spec build_oai_header(od_handle:timestamp_seconds(), od_handle_service:id(),
     od_handle:id(), handles:exists_flag()) -> #oai_header{}.
-build_oai_header(TimeSeconds, HandleServiceId, HandleId, 1) ->
+build_oai_header(TimeSeconds, HandleServiceId, HandleId, true) ->
     OaiId = oai_identifier_encode(HandleId),
     #oai_header{
         identifier = OaiId,
         datestamp = serialize_datestamp(time:seconds_to_datetime(TimeSeconds)),
         set_spec = HandleServiceId
     };
-build_oai_header(TimeSeconds, HandleServiceId, HandleId, 0) ->
+build_oai_header(TimeSeconds, HandleServiceId, HandleId, false) ->
     OaiId = oai_identifier_encode(HandleId),
     #oai_header{
         identifier = OaiId,
         datestamp = serialize_datestamp(time:seconds_to_datetime(TimeSeconds)),
         set_spec = HandleServiceId,
-        status = deleted
+        deleted = true
     }.
 
 -spec build_oai_record(od_handle:timestamp_seconds(), od_handle_service:id(),
     od_handle:id(), handles:exists_flag()) -> #oai_record{}.
-build_oai_record(TimeSeconds, HandleServiceId, HandleId, 1) ->
+build_oai_record(TimeSeconds, HandleServiceId, HandleId, true) ->
     Handle = get_handle(HandleId),
-    build_oai_record(TimeSeconds, HandleServiceId, HandleId, 1, Handle);
-build_oai_record(TimeSeconds, HandleServiceId, HandleId, 0) ->
+    build_oai_record(TimeSeconds, HandleServiceId, HandleId, true, Handle);
+build_oai_record(TimeSeconds, HandleServiceId, HandleId, false) ->
     #oai_record{
-        header = build_oai_header(TimeSeconds, HandleServiceId, HandleId, 0)
+        header = build_oai_header(TimeSeconds, HandleServiceId, HandleId, false)
     }.
 
 -spec build_oai_record(od_handle:timestamp_seconds(), od_handle_service:id(),
@@ -275,7 +275,7 @@ to_xml(#oai_record{header = Header, metadata = Metadata, about = About}) ->
             ensure_list(to_xml(About))
     };
 to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp,
-    set_spec = SetSpec, status = deleted}) ->
+    set_spec = SetSpec, deleted = true}) ->
     #xmlElement{
         name = header,
         attributes =  [#xmlAttribute{name = status, value = "deleted"}],

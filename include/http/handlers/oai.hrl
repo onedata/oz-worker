@@ -22,7 +22,7 @@
     identifier :: oai_id(),
     datestamp :: binary(),
     set_spec :: oai_set_spec(),
-    status :: deleted | undefined
+    deleted :: boolean()
 }).
 
 -record(oai_metadata_format, {

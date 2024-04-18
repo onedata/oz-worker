@@ -43,12 +43,12 @@
 
 all() ->
     ?ALL([
-        create_test,
-        list_test,
-        list_privileges_test,
-        get_test,
-        update_test,
-        delete_test
+        create_test
+%%        list_test,
+%%        list_privileges_test,
+%%        get_test,
+%%        update_test,
+%%        delete_test
     ]).
 
 

@@ -38,7 +38,7 @@
 
 -type limit() :: pos_integer().
 
--type exists_flag() :: 0 | 1.
+-type exists_flag() :: boolean().
 
 %% @formatter:off
 -type listing_opts() :: #{
@@ -100,7 +100,7 @@ add(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds, ExistsFlag) ->
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> ok.
 delete(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, DeletionTimestamp) ->
     purge(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
-    add(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp, 0).
+    add(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp, false).
 
 
 %%--------------------------------------------------------------------
@@ -114,7 +114,7 @@ update_timestamp(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, NewTim
         true -> ok;
         false ->
             purge(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
-            add(MetadataPrefix, HandleServiceId, HandleId, NewTimestamp, 1)
+            add(MetadataPrefix, HandleServiceId, HandleId, NewTimestamp, true)
     end.
 
 
@@ -236,7 +236,7 @@ encode_link_key(TimeSeconds, HandleId) ->
 %% @private
 -spec encode_link_value(od_handle_service:id(), exists_flag()) -> link_value().
 encode_link_value(HandleServiceId, ExistsFlag) ->
-    str_utils:join_binary([integer_to_binary(ExistsFlag), HandleServiceId], ?VALUE_SEP).
+    str_utils:join_binary([atom_to_binary(ExistsFlag), HandleServiceId], ?VALUE_SEP).
 
 
 %% @private
@@ -250,7 +250,7 @@ decode_link_key(Key) ->
 -spec decode_link_value(link_value()) -> {od_handle_service:id(), exists_flag()}.
 decode_link_value(Value) ->
     [ExistsFlag, HandleServiceId] = binary:split(Value, [?VALUE_SEP], [global]),
-    {HandleServiceId, binary_to_integer(ExistsFlag)}.
+    {HandleServiceId, binary_to_atom(ExistsFlag)}.
 
 %% @private
 -spec pack_resumption_token(od_handle:metadata_prefix(), limit(), od_handle:timestamp_seconds(),

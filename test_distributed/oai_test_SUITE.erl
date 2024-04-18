@@ -706,7 +706,7 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
             metadata_prefix = MetadataPrefix,
             timestamp = Timestamp
         }}]),
-        ozt:rpc(handles, add, [MetadataPrefix, HSId, Identifier, Timestamp, 1]),
+        ozt:rpc(handles, add, [MetadataPrefix, HSId, Identifier, Timestamp, true]),
         Args = [
             {<<"identifier">>, oai_identifier(Config, Identifier)},
             {<<"metadataPrefix">>, MetadataPrefix}
@@ -827,7 +827,7 @@ list_deleted_test_base(Config, Method, Verb) ->
             [expected_oai_record_xml(Config, Identifier, DateTime2, deleted)]
     end,
 
-    ?assertEqual(0, ozt:rpc(handles, get_exists_flag, [Identifier])),
+    ?assertEqual(false, ozt:rpc(handles, get_exists_flag, [Identifier])),
     check_oai_request(200, Verb, Args, Method, ExpResponseContent2, binary_to_atom(Verb), Config).
 
 

@@ -178,7 +178,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             od_share, ShareId
         ),
 
-        handles:add(MetadataPrefix, HandleServiceId, HandleId, CreationTime, 1),
+        handles:add(MetadataPrefix, HandleServiceId, HandleId, CreationTime, true),
         {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
         {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}
     end);
@@ -219,7 +219,7 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, [HId || {_TimeStamp, _HService, HId, _ExistsFlag} <- list_all_handles()]};
 get(#el_req{gri = #gri{aspect = list_no_deleted}}, _) ->
-    {ok, [HId || {_TimeStamp, _HService, HId, ExistsFlag} <- list_all_handles(), ExistsFlag =:= 1]};
+    {ok, [HId || {_TimeStamp, _HService, HId, ExistsFlag} <- list_all_handles(), ExistsFlag =:= true]};
 get(#el_req{gri = #gri{aspect = privileges}}, _) ->
     {ok, #{
         <<"member">> => privileges:handle_member(),
@@ -353,10 +353,10 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
             metadata_prefix = MetadataPrefix
         }) ->
             case handles:get_exists_flag(HandleId) of
-                1 ->
+                true ->
                     handles:delete(MetadataPrefix, HandleService, HandleId,  TimeStamp,
                         od_handle:current_timestamp());
-                0 ->
+                false ->
                     ?alert("Handle ~tp has already been deleted on ~tp",
                         [HandleId, time:seconds_to_datetime(TimeStamp)]),
                     throw(?ERROR_NOT_FOUND)

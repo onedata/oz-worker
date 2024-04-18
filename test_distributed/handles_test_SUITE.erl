@@ -400,7 +400,7 @@ list_all_and_sort() ->
     List = lists:keysort(1, lists:flatmap(fun(MetadataPrefix) ->
         list_all_and_sort(#{metadata_prefix => MetadataPrefix})
     end, ozt_handles:supported_metadata_prefixes())),
-    [HandleId || {_, _, HandleId} <- List].
+    [HandleId || {_, _, HandleId, _} <- List].
 
 list_all_and_sort(ListingOpts) ->
     case ozt:rpc(handles, list, [ListingOpts]) of
@@ -416,7 +416,7 @@ list_once(ListingOpts, all) ->
     {[HandleId || {_, _, HandleId, _} <- Handles], Token};
 list_once(ListingOpts, not_deleted) ->
     {Handles, Token} =  ozt:rpc(handles, list, [ListingOpts]),
-    {[HandleId || {_, _, HandleId, ExistsFlag} <- Handles, ExistsFlag =:= 1], Token}.
+    {[HandleId || {_, _, HandleId, ExistsFlag} <- Handles, ExistsFlag =:= true], Token}.
 
 
 create_handle(HServiceId) ->
@@ -429,7 +429,7 @@ create_handle(HServiceId, MetadataPrefix, TimeSeconds) ->
     create_handle(HServiceId, MetadataPrefix, TimeSeconds, ?RAND_ID()).
 
 create_handle(HServiceId, MetadataPrefix, TimeSeconds, HandleId) ->
-    ozt:rpc(handles, add, [MetadataPrefix, HServiceId, HandleId, TimeSeconds, 1]),
+    ozt:rpc(handles, add, [MetadataPrefix, HServiceId, HandleId, TimeSeconds, true]),
     Handle = #handle_entry{
         timestamp = TimeSeconds,
         metadata_prefix = MetadataPrefix,
