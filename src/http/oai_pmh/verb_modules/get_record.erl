@@ -85,7 +85,8 @@ get_response(<<"record">>, Args) ->
                 Handle#od_handle.timestamp,
                 Handle#od_handle.handle_service,
                 oai_utils:oai_identifier_decode(OaiId),
-                handles:get_exists_flag(oai_utils:oai_identifier_decode(OaiId))
+                handles:get_exists_flag(oai_utils:oai_identifier_decode(OaiId)),
+                Handle
             );
         false ->
             throw({cannotDisseminateFormat, MetadataPrefix})

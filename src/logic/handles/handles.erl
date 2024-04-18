@@ -125,7 +125,7 @@ list(ListingOpts) ->
     {MetadataPrefix, HServiceId, Limit, From, Until, StartIndex} = case Token of
         <<>> ->
             MetadataPrefix1 = maps:get(metadata_prefix, ListingOpts),
-            HServiceId1 = maps:get(service_id, ListingOpts, <<>>),
+            HServiceId1 = maps:get(service_id, ListingOpts, undefined),
             Limit1 = maps:get(limit, ListingOpts, ?DEFAULT_LIST_LIMIT),
             From1 = maps:get(from, ListingOpts, undefined),
             Until1 = maps:get(until, ListingOpts, ?MAX_TIMESTAMP),
@@ -135,11 +135,11 @@ list(ListingOpts) ->
             {TimeSecondsToken, MetadataPrefix2, HandleID, HServiceId2, Limit2,
                 From2, Until2} = unpack_resumption_token(Token),
             StartIndex2 = encode_link_key(TimeSecondsToken, HandleID),
+
             {MetadataPrefix2, HServiceId2, Limit2, From2, Until2, StartIndex2}
     end,
 
     TreeId = case HServiceId of
-        <<>> -> ?TREE_FOR_METADATA_PREFIX(MetadataPrefix);
         undefined -> ?TREE_FOR_METADATA_PREFIX(MetadataPrefix);
         _ -> ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HServiceId)
     end,
@@ -222,8 +222,7 @@ purge(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
 %%%===================================================================
 
 %% @private
--spec encode_link_key(undefined | od_handle:timestamp_seconds(), first | od_handle:id()) ->
-    binary() | link_key().
+-spec encode_link_key(undefined | od_handle:timestamp_seconds(), first | od_handle:id()) -> link_key().
 encode_link_key(From, first) ->
     case From of
         undefined -> <<>>;
@@ -260,19 +259,21 @@ pack_resumption_token(MetadataPrefix, Limit, From, Until, HServiceId, LastListed
     FormattedLimit = integer_to_binary(utils:ensure_defined(Limit, ?DEFAULT_LIST_LIMIT)),
     FormattedFrom = integer_to_binary(utils:ensure_defined(From, 0)),
     FormattedUntil = integer_to_binary(utils:ensure_defined(Until, ?MAX_TIMESTAMP)),
+    HServiceIdBin = utils:ensure_defined(HServiceId, <<>>),
     %% If HServiceId in ListingOpts was <<>>, then in token must also be
     %% <<>> in order to list from the correct tree.
     {TimeSeconds, _HServiceId, HandleId, _ExistsFlag} = LastListedEntry,
     str_utils:join_binary([integer_to_binary(TimeSeconds), MetadataPrefix,
-        FormattedLimit, FormattedFrom, FormattedUntil, HandleId, HServiceId], ?RESUMPTION_TOKEN_SEP).
+        FormattedLimit, FormattedFrom, FormattedUntil, HandleId, HServiceIdBin], ?RESUMPTION_TOKEN_SEP).
 
 
 %% @private
 -spec unpack_resumption_token(resumption_token()) -> {od_handle:timestamp_seconds(), od_handle:metadata_prefix(),
     od_handle:id(), od_handle_service:id(), limit(), od_handle:timestamp_seconds(), od_handle:timestamp_seconds()}.
 unpack_resumption_token(Token) ->
-    [TimeSeconds, MetadataPrefix, Limit, From, Until, HandleId, HandleServiceId] = binary:split(Token,
+    [TimeSeconds, MetadataPrefix, Limit, From, Until, HandleId, HServiceIdBin] = binary:split(Token,
         [?RESUMPTION_TOKEN_SEP], [global]),
+    HandleServiceId = case HServiceIdBin of <<>> -> undefined; _ -> HServiceIdBin end,
     {binary_to_integer(TimeSeconds), MetadataPrefix, HandleId, HandleServiceId, binary_to_integer(Limit),
         binary_to_integer(From), binary_to_integer(Until)}.
 

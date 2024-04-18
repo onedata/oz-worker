@@ -22,7 +22,7 @@
     verb_to_module/1, is_earlier_or_equal/2, dates_have_the_same_granularity/2,
     to_xml/1, encode_xml/1, ensure_list/1,
     request_arguments_to_handle_listing_opts/1, harvest/2, oai_identifier_decode/1,
-    build_oai_header/4, build_oai_record/4
+    build_oai_header/4, build_oai_record/4, build_oai_record/5
 ]).
 -export([get_handle/1]).
 
@@ -67,19 +67,25 @@ build_oai_header(TimeSeconds, HandleServiceId, HandleId, 0) ->
     od_handle:id(), handles:exists_flag()) -> #oai_record{}.
 build_oai_record(TimeSeconds, HandleServiceId, HandleId, 1) ->
     Handle = get_handle(HandleId),
+    build_oai_record(TimeSeconds, HandleServiceId, HandleId, 1, Handle);
+build_oai_record(TimeSeconds, HandleServiceId, HandleId, 0) ->
+    #oai_record{
+        header = build_oai_header(TimeSeconds, HandleServiceId, HandleId, 0)
+    }.
+
+-spec build_oai_record(od_handle:timestamp_seconds(), od_handle_service:id(),
+    od_handle:id(), handles:exists_flag(), #od_handle{}) -> #oai_record{}.
+build_oai_record(TimeSeconds, HandleServiceId, HandleId, ExistsFlag, Handle) ->
     MetadataPrefix = Handle#od_handle.metadata_prefix,
     #oai_record{
-        header = build_oai_header(TimeSeconds, HandleServiceId, HandleId, 1),
+        header = build_oai_header(TimeSeconds, HandleServiceId, HandleId, ExistsFlag),
         metadata = #oai_metadata{
             metadata_prefix = MetadataPrefix,
             raw_value = Handle#od_handle.metadata,
             handle = Handle
         }
-    };
-build_oai_record(TimeSeconds, HandleServiceId, HandleId, 0) ->
-    #oai_record{
-        header = build_oai_header(TimeSeconds, HandleServiceId, HandleId, 0)
     }.
+
 
 %%%--------------------------------------------------------------------
 %%% @equiv time:datetime_to_iso8601(DateTime).
@@ -126,7 +132,7 @@ request_arguments_to_handle_listing_opts(Args) ->
         undefined ->
             #{
                 metadata_prefix => proplists:get_value(<<"metadataPrefix">>, Args),
-                service_id => proplists:get_value(<<"set">>, Args, <<>>),
+                service_id => proplists:get_value(<<"set">>, Args, undefined),
                 from => utils:convert_defined(
                     deserialize_datestamp(proplists:get_value(<<"from">>, Args, undefined)),
                     fun time:datetime_to_seconds/1
@@ -450,4 +456,3 @@ ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
 -spec oai_identifier_encode(od_handle:id()) -> oai_id().
 oai_identifier_encode(Id) ->
     <<?OAI_IDENTIFIER_PREFIX/binary, Id/binary>>.
-
