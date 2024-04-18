@@ -22,7 +22,7 @@
     verb_to_module/1, is_earlier_or_equal/2, dates_have_the_same_granularity/2,
     to_xml/1, encode_xml/1, ensure_list/1,
     request_arguments_to_handle_listing_opts/1, harvest/2, oai_identifier_decode/1,
-    build_oai_header/3, build_oai_record/3
+    build_oai_header/3, build_oai_record/3, build_oai_record/4
 ]).
 -export([get_handle/1]).
 
@@ -59,6 +59,11 @@ build_oai_header(TimeSeconds, HandleServiceId, HandleId) ->
     od_handle:id()) -> #oai_record{}.
 build_oai_record(TimeSeconds, HandleServiceId, HandleId) ->
     Handle = get_handle(HandleId),
+    build_oai_record(TimeSeconds, HandleServiceId, HandleId, Handle).
+
+-spec build_oai_record(od_handle:timestamp_seconds(), od_handle_service:id(),
+    od_handle:id(), #od_handle{}) -> #oai_record{}.
+build_oai_record(TimeSeconds, HandleServiceId, HandleId, Handle) ->
     MetadataPrefix = Handle#od_handle.metadata_prefix,
     #oai_record{
         header = build_oai_header(TimeSeconds, HandleServiceId, HandleId),
@@ -114,7 +119,7 @@ request_arguments_to_handle_listing_opts(Args) ->
         undefined ->
             #{
                 metadata_prefix => proplists:get_value(<<"metadataPrefix">>, Args),
-                service_id => proplists:get_value(<<"set">>, Args, <<>>),
+                service_id => proplists:get_value(<<"set">>, Args, undefined),
                 from => utils:convert_defined(
                     deserialize_datestamp(proplists:get_value(<<"from">>, Args, undefined)),
                     fun time:datetime_to_seconds/1
