@@ -182,7 +182,6 @@
 -export([
     create_handle/7, create_handle/3,
     list_handles/1,
-    list_no_deleted_handles/1,
     get_handle/2,
     update_handle/3, update_handle/5,
     delete_handle/2,
@@ -1950,16 +1949,18 @@ list_handles(Config) ->
     ])).
 
 
+
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns list of no deleted handles in onezone.
+%% Returns list of all handles, including deleted, in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec list_no_deleted_handles(Config :: term()) -> {ok, [od_handle:id()]}.
-list_no_deleted_handles(Config) ->
-    ?assertMatch({ok, _}, call_oz(Config, handle_logic, list_no_deleted, [
+-spec list_handles_include_deleted(Config :: term()) -> {ok, [od_handle:id()]}.
+list_handles_include_deleted(Config) ->
+    ?assertMatch({ok, _}, call_oz(Config, handle_logic, list_include_deleted, [
         ?ROOT
     ])).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -2011,7 +2012,7 @@ update_handle(Config, HandleId, NewResourceType, NewResourceId, NewMetadata) ->
 %%--------------------------------------------------------------------
 -spec delete_handle(Config :: term(), HandleId :: od_handle:id()) -> ok.
 delete_handle(Config, HandleId) ->
-    ?assertMatch(ok, call_oz(Config, handle_logic, purge, [?ROOT, HandleId])).
+    ?assertMatch(ok, call_oz(Config, handle_logic, delete, [?ROOT, HandleId])).
 
 
 %%--------------------------------------------------------------------
@@ -3106,6 +3107,7 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     {ok, Providers} = list_providers(Config),
     {ok, Shares} = list_shares(Config),
     {ok, Spaces} = list_spaces(Config),
+%%    {ok, Handles} = list_handles_include_deleted(Config),
     {ok, Handles} = list_handles(Config),
     {ok, HServices} = list_handle_services(Config),
     {ok, Groups} = list_groups(Config),

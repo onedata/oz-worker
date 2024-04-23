@@ -297,6 +297,7 @@ check_rest_call(Config, ArgsMap) ->
                 end;
             #xmlElement{} = ExpBodyXML ->
                 {RespBodyXML, _} = xmerl_scan:string(binary_to_list(RespBody)),
+
                 case compare_xml(RespBodyXML, ExpBodyXML) of
                     true ->
                         ok;
@@ -441,7 +442,7 @@ compare_xml(#xmlText{value = V}, #xmlText{value = V}) -> true;
 compare_xml(#xmlText{value = _V1}, #xmlText{value = _V2}) -> false;
 compare_xml(#xmlAttribute{name = N, value = V}, #xmlAttribute{name = N, value = V}) ->
     true;
-compare_xml(#xmlAttribute{name = _N1, value = _V1}, #xmlAttribute{name = _N2, value =_V2}) ->
+compare_xml(#xmlAttribute{name = _N1, value = _V1}, #xmlAttribute{name = _N2, value = _V2}) ->
     false;
 compare_xml(#xmlElement{name = Name, attributes = _, content = _},
     #xmlElement{name = Name, attributes = [], content = []}) -> true;

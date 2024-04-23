@@ -22,7 +22,7 @@
 -include("http/handlers/oai.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
--export([create/1, get/2, update/1, delete/1, purge/1]).
+-export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
 -define(METADATA_SIZE_LIMIT, 100000).
@@ -73,7 +73,7 @@ operation_supported(create, {user, _}, private) -> true;
 operation_supported(create, {group, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
-operation_supported(get, list_no_deleted, private) -> true;
+operation_supported(get, list_include_deleted, private) -> true;
 operation_supported(get, privileges, _) -> true;
 
 operation_supported(get, instance, private) -> true;
@@ -95,9 +95,9 @@ operation_supported(update, {user_privileges, _}, private) -> true;
 operation_supported(update, {group_privileges, _}, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
-operation_supported(purge, {user, _}, private) -> true;
-operation_supported(purge, {group, _}, private) -> true;
-operation_supported(purge, instance, private) -> true;
+operation_supported(delete, {user, _}, private) -> true;
+operation_supported(delete, {group, _}, private) -> true;
+operation_supported(purge_all, instance, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -178,7 +178,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             od_share, ShareId
         ),
 
-        handles:add(MetadataPrefix, HandleServiceId, HandleId, CreationTime, true),
+        handles:report_created(MetadataPrefix, HandleServiceId, HandleId, CreationTime),
         {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
         {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}
     end);
@@ -217,9 +217,9 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
-    {ok, [HId || {_TimeStamp, _HService, HId, _ExistsFlag} <- list_all_handles()]};
-get(#el_req{gri = #gri{aspect = list_no_deleted}}, _) ->
-    {ok, [HId || {_TimeStamp, _HService, HId, ExistsFlag} <- list_all_handles(), ExistsFlag =:= true]};
+    {ok, [HandleId || #handle_listing_entry{handle_id = HandleId} <- list_all_handles()]};
+get(#el_req{gri = #gri{aspect = list_include_deleted}}, _) ->
+    {ok, [HandleId || #handle_listing_entry{handle_id = HandleId} <-list_all_include_deleted()]};
 get(#el_req{gri = #gri{aspect = privileges}}, _) ->
     {ok, #{
         <<"member">> => privileges:handle_member(),
@@ -348,27 +348,6 @@ update(Req = #el_req{gri = #gri{id = HandleId, aspect = {group_privileges, Group
 delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
     ?critical_section_for_handle(HandleId, fun() ->
         fun(#od_handle{
-            handle_service = HandleService,
-            timestamp = TimeStamp,
-            metadata_prefix = MetadataPrefix
-        }) ->
-            case handles:get_exists_flag(HandleId) of
-                true ->
-                    handles:delete(MetadataPrefix, HandleService, HandleId,  TimeStamp,
-                        od_handle:current_timestamp());
-                false ->
-                    ?alert("Handle ~tp has already been deleted on ~tp",
-                        [HandleId, time:seconds_to_datetime(TimeStamp)]),
-                    throw(?ERROR_NOT_FOUND)
-
-            end
-        end
-    end).
-
--spec purge(entity_logic:req()) -> entity_logic:delete_result().
-purge(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
-    ?critical_section_for_handle(HandleId, fun() ->
-        fun(#od_handle{
             public_handle = PublicHandle,
             handle_service = HandleService,
             timestamp = TimeStamp,
@@ -383,22 +362,11 @@ purge(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
                     Class, Reason, Stacktrace
                 )
             end,
-            handles:purge(MetadataPrefix, HandleService, HandleId,  TimeStamp),
+            handles:delete(MetadataPrefix, HandleService, HandleId,  TimeStamp,  od_handle:current_timestamp()),
+%%            handles:purge_deleted_entry(MetadataPrefix, HandleService, HandleId,  TimeStamp),
             entity_graph:delete_with_relations(od_handle, HandleId)
         end
-    end);
-
-purge(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}}) ->
-    entity_graph:remove_relation(
-        od_user, UserId,
-        od_handle, HandleId
-    );
-
-purge(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}}) ->
-    entity_graph:remove_relation(
-        od_group, GroupId,
-        od_handle, HandleId
-    ).
+    end).
 
 
 %%--------------------------------------------------------------------
@@ -721,6 +689,13 @@ auth_by_privilege(#el_req{auth = _OtherAuth}, _HandleOrId, _Privilege) ->
 auth_by_privilege(UserId, HandleOrId, Privilege) ->
     handle_logic:has_eff_privilege(HandleOrId, UserId, Privilege).
 
+
+%% @private
+-spec list_all_include_deleted() -> [handles:listing_entry()].
+list_all_include_deleted() ->
+    lists:flatmap(fun(MetadataPrefix) ->
+        list_all_handles(#{metadata_prefix => MetadataPrefix, include_deleted => true})
+    end, oai_metadata:supported_formats()).
 
 %% @private
 -spec list_all_handles() -> [handles:listing_entry()].

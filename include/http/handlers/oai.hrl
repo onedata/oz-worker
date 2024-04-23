@@ -66,6 +66,13 @@
     resumption_token :: handles:resumption_token()
 }).
 
+-record(handle_listing_entry, {
+    timestamp :: od_handle:timestamp_seconds(),
+    service_id :: od_handle_service:id(),
+    exists_flag :: handles:exists_flag(),
+    handle_id :: od_handle:id()
+}).
+
 %% @formatter:off
 -type oai_verb_module() :: identify | get_record | list_identifiers |
                            list_medatada_formats | list_records | list_sets.
@@ -84,6 +91,7 @@
 -type oai_set_spec() :: od_handle_service:id().
 -type oai_error() :: #oai_error{}.
 -type oai_listing_result() :: #oai_listing_result{}.
+-type handle_listing_entry() :: #handle_listing_entry{}.
 -type oai_response() :: binary() | [binary()] |
                         oai_record() | [oai_record()] |
                         [oai_set()] |

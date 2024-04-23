@@ -601,8 +601,6 @@ identify_test_base(Config, Method) ->
     ] ++ [
         #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
     ],
-
-
     ?assert(check_identify(200, [], Method, ExpResponseContent, Config)).
 
 identify_change_earliest_datestamp_test_base(Config, Method) ->
@@ -635,6 +633,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     ] ++ [
         #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
     ],
+
     ?assert(check_identify(200, [], Method, ExpResponseContent, Config)),
 
     modify_handle_with_mocked_timestamp(Config, Identifier1, Metadata, Timestamp3),
@@ -706,7 +705,7 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
             metadata_prefix = MetadataPrefix,
             timestamp = Timestamp
         }}]),
-        ozt:rpc(handles, add, [MetadataPrefix, HSId, Identifier, Timestamp, true]),
+        ozt:rpc(handles, report_created, [MetadataPrefix, HSId, Identifier, Timestamp]),
         Args = [
             {<<"identifier">>, oai_identifier(Config, Identifier)},
             {<<"metadataPrefix">>, MetadataPrefix}
@@ -1126,6 +1125,9 @@ init_per_testcase(_, Config) ->
     Config.
 
 end_per_testcase(_, Config) ->
+%%    ok = rpc:call(?ROOT, handles, purge_all, []),
+%%    ok = oz_test_utils:call_oz(Config, handles, purge_all, []),
+    ozt:rpc(handles, purge_deleted_entry_all, []),
     oz_test_utils:delete_all_entities(Config),
     unmock_handle_proxy(Config),
     ok.

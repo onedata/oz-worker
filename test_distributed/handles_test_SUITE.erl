@@ -333,6 +333,7 @@ get_handle_with_earliest_timestamp_test(_Config) ->
     lists:map(fun(Number) ->
         create_handle(?RAND_SERVICE(), ?RAND_METADATA_PREFIX(), TimeStamp - Number)
     end, lists:seq(1, 4)),
+%%    ct:pal("TIMESTAMP ~p~n", [TimeStamp]),
     ExpectedEarliestTimestamp = TimeStamp - 4,
     EarliestTimestamp = ozt:rpc(handles, get_earliest_timestamp, []),
     ?assertEqual(ExpectedEarliestTimestamp, EarliestTimestamp).
@@ -365,17 +366,16 @@ delete_handle_from_service_test(_Config) ->
     lists:foreach(fun(HandleId1) ->
         delete_handle(HandleId1)
     end, lists:sublist(ListHService1, 10)),
-
-    ?assertEqual(length(ListAll) - 10, length(list_all(#{metadata_prefix => MetadataPrefix}, not_deleted))),
+    ?assertEqual(length(ListAll) - 10, length(list_all(#{metadata_prefix => MetadataPrefix}))),
 
     [HandleId2 | _RestList] = ListHService2,
     delete_handle(HandleId2),
 
     ?assertEqual(length(ListHService1) - 10,
-        length(list_all(#{service_id => ?FIRST_HSERVICE, metadata_prefix => MetadataPrefix}, not_deleted))),
+        length(list_all(#{service_id => ?FIRST_HSERVICE, metadata_prefix => MetadataPrefix}))),
     ?assertEqual(length(ListHService2) - 1,
-        length(list_all(#{service_id => ?ANOTHER_HSERVICE, metadata_prefix => MetadataPrefix}, not_deleted))),
-    ?assertEqual(length(ListAll) - 11, length(list_all(#{metadata_prefix => MetadataPrefix}, not_deleted))).
+        length(list_all(#{service_id => ?ANOTHER_HSERVICE, metadata_prefix => MetadataPrefix}))),
+    ?assertEqual(length(ListAll) - 11, length(list_all(#{metadata_prefix => MetadataPrefix}))).
 
 
 %%%===================================================================
@@ -384,23 +384,25 @@ delete_handle_from_service_test(_Config) ->
 
 list_all() ->
     lists:flatmap(fun(MetadataPrefix) ->
-        list_all(#{metadata_prefix => MetadataPrefix}, all)
+        list_all(#{metadata_prefix => MetadataPrefix})
     end, ozt_handles:supported_metadata_prefixes()).
 
 list_all(ListingOpts) ->
-    list_all(ListingOpts, all).
-
-list_all(ListingOpts, RecordFilter) ->
-    case list_once(ListingOpts, RecordFilter) of
+    case list_once(ListingOpts) of
         {List, undefined} -> List;
-        {List, ResumptionToken} -> List ++ list_all(#{resumption_token => ResumptionToken}, RecordFilter)
+        {List, ResumptionToken} -> List ++ list_all(#{resumption_token => ResumptionToken})
     end.
 
 list_all_and_sort() ->
-    List = lists:keysort(1, lists:flatmap(fun(MetadataPrefix) ->
-        list_all_and_sort(#{metadata_prefix => MetadataPrefix})
-    end, ozt_handles:supported_metadata_prefixes())),
-    [HandleId || {_, _, HandleId, _} <- List].
+    List = lists:sort(
+        fun(HandleEntry1, HandleEntry2) ->
+            HandleEntry1#handle_listing_entry.timestamp =< HandleEntry2#handle_listing_entry.timestamp
+        end,
+        lists:flatmap(
+            fun(MetadataPrefix) -> list_all_and_sort(#{metadata_prefix => MetadataPrefix}) end,
+        ozt_handles:supported_metadata_prefixes())
+    ),
+    [HandleId || #handle_listing_entry{handle_id = HandleId} <- List].
 
 list_all_and_sort(ListingOpts) ->
     case ozt:rpc(handles, list, [ListingOpts]) of
@@ -409,14 +411,8 @@ list_all_and_sort(ListingOpts) ->
     end.
 
 list_once(ListingOpts) ->
-    list_once(ListingOpts, all).
-
-list_once(ListingOpts, all) ->
     {Handles, Token} =  ozt:rpc(handles, list, [ListingOpts]),
-    {[HandleId || {_, _, HandleId, _} <- Handles], Token};
-list_once(ListingOpts, not_deleted) ->
-    {Handles, Token} =  ozt:rpc(handles, list, [ListingOpts]),
-    {[HandleId || {_, _, HandleId, ExistsFlag} <- Handles, ExistsFlag =:= true], Token}.
+    {[HandleId || #handle_listing_entry{handle_id = HandleId} <- Handles], Token}.
 
 
 create_handle(HServiceId) ->
@@ -429,7 +425,7 @@ create_handle(HServiceId, MetadataPrefix, TimeSeconds) ->
     create_handle(HServiceId, MetadataPrefix, TimeSeconds, ?RAND_ID()).
 
 create_handle(HServiceId, MetadataPrefix, TimeSeconds, HandleId) ->
-    ozt:rpc(handles, add, [MetadataPrefix, HServiceId, HandleId, TimeSeconds, true]),
+    ozt:rpc(handles, report_created, [MetadataPrefix, HServiceId, HandleId, TimeSeconds]),
     Handle = #handle_entry{
         timestamp = TimeSeconds,
         metadata_prefix = MetadataPrefix,

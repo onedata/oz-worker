@@ -82,10 +82,12 @@ get_response(<<"record">>, Args) ->
     case lists:member(MetadataPrefix, oai_metadata:supported_formats()) of
         true ->
             oai_utils:build_oai_record(
-                Handle#od_handle.timestamp,
-                Handle#od_handle.handle_service,
-                oai_utils:oai_identifier_decode(OaiId),
-                handles:get_exists_flag(oai_utils:oai_identifier_decode(OaiId)),
+                #handle_listing_entry{
+                    timestamp = Handle#od_handle.timestamp,
+                    service_id = Handle#od_handle.handle_service,
+                    exists_flag = handles:get_exists_flag(oai_utils:oai_identifier_decode(OaiId)),
+                    handle_id = oai_utils:oai_identifier_decode(OaiId)
+                },
                 Handle
             );
         false ->
