@@ -31,6 +31,8 @@
 %  2) exists flag - contains information whether a previously existing handle has been deleted.
 -type link_value() :: binary().
 
+-type exists_flag() :: boolean().
+
 % the resumption token is used to continue listing when an incomplete list (batch) is returned;
 % an 'undefined' value is returned when there are no more entries to list
 -type resumption_token() :: binary() | undefined.
