@@ -17,9 +17,10 @@
 -include("http/handlers/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([report_created/4, delete/5, update_timestamp/5]).
--export([list/1, get_earliest_timestamp/0, get_exists_flag/1]).
--export([purge_deleted_entry/4, purge_deleted_entry_all/0]).
+-export([report_created/4, report_deleted/5, update_timestamp/5]).
+-export([list/1, gather_by_all_prefixes/0,  get_earliest_timestamp/0]).
+
+-export([purge_all_deleted_entry/0]).
 
 % link_key() consists of 2 parts:
 %  1) timestamp (in seconds) - so that links would be sorted by time.
@@ -28,7 +29,7 @@
 -type link_key() :: binary().
 
 % link value() encodes 2 pieces of information:
-%  1) handle_service_id - id of the handle service in which the handle has been registered.
+%  1) handle service id - id of the handle service in which the handle has been registered.
 %  2) exists flag - contains information whether a previously existing handle has been deleted.
 -type link_value() :: binary().
 
@@ -84,11 +85,11 @@ report_created(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
     add(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds, true).
 
 
--spec delete(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
+-spec report_deleted(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> ok.
-delete(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, DeletionTimestamp) ->
-    purge_deleted_entry(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
-    report_deleted(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp).
+report_deleted(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, DeletionTimestamp) ->
+    delete_links(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
+    add_deleted_links(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp).
 
 
 %%--------------------------------------------------------------------
@@ -101,7 +102,7 @@ update_timestamp(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, NewTim
     case OldTimestamp == NewTimestamp of
         true -> ok;
         false ->
-            purge_deleted_entry(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
+            delete_links(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
             report_created(MetadataPrefix, HandleServiceId, HandleId, NewTimestamp)
     end.
 
@@ -167,6 +168,13 @@ list(ListingOpts) ->
     build_result_from_reversed_listing(ReversedEntries, Limit, MetadataPrefix, From, Until, HServiceId, IncludeDeleted).
 
 
+-spec gather_by_all_prefixes() -> [handle_listing_entry()].
+gather_by_all_prefixes() ->
+    lists:flatmap(fun(MetadataPrefix) ->
+        list_completely(#{metadata_prefix => MetadataPrefix})
+    end, oai_metadata:supported_formats()).
+
+
 -spec get_earliest_timestamp() -> undefined | od_handle:timestamp_seconds().
 get_earliest_timestamp() ->
     EntriesWithEarliestTimestamps = lists:flatmap(fun(MetadataPrefix) ->
@@ -183,55 +191,19 @@ get_earliest_timestamp() ->
     end.
 
 
-get_exists_flag(HandleId) ->
-    #od_handle{
-        handle_service = HandleService,
-        timestamp = TimeStamp,
-        metadata_prefix = MetadataPrefix
-    } = oai_utils:get_handle(HandleId),
-
-    {List, _Token} = list(#{
-        metadata_prefix => MetadataPrefix,
-        handle_service_id => HandleService,
-        from => TimeStamp,
-        until => TimeStamp,
-        include_deleted => true
-    }),
-    [ExistsFlag] = [
-        ExsFlag || #handle_listing_entry{handle_id = HId, exists_flag = ExsFlag} <- List,
-        HId =:= HandleId
-    ],
-    ExistsFlag.
-
-
-
--spec purge_deleted_entry(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
-    od_handle:timestamp_seconds()) -> ok.
-purge_deleted_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
-    Key = encode_link_key(Timestamp, HandleId),
-    lists:foreach(fun(TreeId) ->
-        case datastore_model:delete_links(?CTX, ?FOREST, TreeId, Key) of
-            ok -> ok;
-            {error, not_found} -> ok
-        end
-    end, [
-        ?TREE_FOR_METADATA_PREFIX(MetadataPrefix),
-        ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HandleServiceId)
-    ]).
-
-
--spec purge_deleted_entry_all() -> ok.
-purge_deleted_entry_all() ->
+-spec purge_all_deleted_entry() -> ok.
+purge_all_deleted_entry() ->
     lists:foreach(fun(MetadataPrefix) ->
-        All = list(#{metadata_prefix => MetadataPrefix, include_deleted => true}),
+        All = list_completely(#{metadata_prefix => MetadataPrefix,
+            include_deleted => true}),
         lists:foreach(fun(#handle_listing_entry{
             timestamp = Timestamp,
             service_id = HandleServiceId,
             handle_id = HandleId
         }) ->
-            purge_deleted_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
+            delete_links(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
         end, All)
-    end, ozt_handles:supported_metadata_prefixes()).
+    end, oai_metadata:supported_formats()).
 
 
 %%%===================================================================
@@ -272,7 +244,9 @@ decode_link_value(Value) ->
 
 %% @private
 exists_flag_to_binary(true) -> <<"1">>;
-exists_flag_to_binary(false) -> <<"0">>.
+exists_flag_to_binary(false) -> <<"0">>;
+exists_flag_to_binary(<<"true">>) -> <<"1">>;
+exists_flag_to_binary(<<"false">>) -> <<"0">>.
 
 %% @private
 binary_to_exists_flag(<<"1">>) -> true;
@@ -330,9 +304,9 @@ build_result_from_reversed_listing(ReversedEntries, Limit, MetadataPrefix, From,
 
 
 %% @private
--spec report_deleted(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
+-spec add_deleted_links(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds()) -> ok.
-report_deleted(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
+add_deleted_links(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
     add(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds, false).
 
 
@@ -346,6 +320,32 @@ add(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds, ExistsFlag) ->
         case datastore_model:add_links(?CTX, ?FOREST, TreeId, Link) of
             {ok, _} -> ok;
             {error, already_exists} -> throw(?ERROR_ALREADY_EXISTS)
+        end
+    end, [
+        ?TREE_FOR_METADATA_PREFIX(MetadataPrefix),
+        ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HandleServiceId)
+    ]),
+    ok.
+
+
+%% @private
+-spec list_completely(listing_opts()) -> [handle_listing_entry()].
+list_completely(ListingOpts) ->
+    case list(ListingOpts) of
+        {List, undefined} -> List;
+        {List, ResumptionToken} -> List ++ list_completely(#{resumption_token => ResumptionToken})
+    end.
+
+
+%% @private
+-spec delete_links(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
+    od_handle:timestamp_seconds()) -> ok.
+delete_links(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
+    Key = encode_link_key(Timestamp, HandleId),
+    lists:foreach(fun(TreeId) ->
+        case datastore_model:delete_links(?CTX, ?FOREST, TreeId, Key) of
+            ok -> ok;
+            {error, not_found} -> ok
         end
     end, [
         ?TREE_FOR_METADATA_PREFIX(MetadataPrefix),

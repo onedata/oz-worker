@@ -73,7 +73,6 @@ operation_supported(create, {user, _}, private) -> true;
 operation_supported(create, {group, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
-operation_supported(get, list_include_deleted, private) -> true;
 operation_supported(get, privileges, _) -> true;
 
 operation_supported(get, instance, private) -> true;
@@ -97,7 +96,6 @@ operation_supported(update, {group_privileges, _}, private) -> true;
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {user, _}, private) -> true;
 operation_supported(delete, {group, _}, private) -> true;
-operation_supported(purge_all, instance, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -217,9 +215,7 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
-    {ok, [HandleId || #handle_listing_entry{handle_id = HandleId} <- list_all_handles()]};
-get(#el_req{gri = #gri{aspect = list_include_deleted}}, _) ->
-    {ok, [HandleId || #handle_listing_entry{handle_id = HandleId} <-list_all_include_deleted()]};
+    {ok, [HandleId || #handle_listing_entry{handle_id = HandleId} <- handles:gather_by_all_prefixes()]};
 get(#el_req{gri = #gri{aspect = privileges}}, _) ->
     {ok, #{
         <<"member">> => privileges:handle_member(),
@@ -362,8 +358,8 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
                     Class, Reason, Stacktrace
                 )
             end,
-            handles:delete(MetadataPrefix, HandleService, HandleId,  TimeStamp,  od_handle:current_timestamp()),
-%%            handles:purge_deleted_entry(MetadataPrefix, HandleService, HandleId,  TimeStamp),
+            NewTimestamp = od_handle:current_timestamp(),
+            handles:report_deleted(MetadataPrefix, HandleService, HandleId,  TimeStamp,  NewTimestamp),
             entity_graph:delete_with_relations(od_handle, HandleId)
         end
     end).
@@ -690,23 +686,3 @@ auth_by_privilege(UserId, HandleOrId, Privilege) ->
     handle_logic:has_eff_privilege(HandleOrId, UserId, Privilege).
 
 
-%% @private
--spec list_all_include_deleted() -> [handles:listing_entry()].
-list_all_include_deleted() ->
-    lists:flatmap(fun(MetadataPrefix) ->
-        list_all_handles(#{metadata_prefix => MetadataPrefix, include_deleted => true})
-    end, oai_metadata:supported_formats()).
-
-%% @private
--spec list_all_handles() -> [handles:listing_entry()].
-list_all_handles() ->
-    lists:flatmap(fun(MetadataPrefix) ->
-        list_all_handles(#{metadata_prefix => MetadataPrefix})
-    end, oai_metadata:supported_formats()).
-
--spec list_all_handles(handles:listing_opts()) -> [handles:listing_entry()].
-list_all_handles(ListingOpts) ->
-    case handles:list(ListingOpts) of
-        {List, undefined} -> List;
-        {List, ResumptionToken} -> List ++ list_all_handles(#{resumption_token => ResumptionToken})
-    end.

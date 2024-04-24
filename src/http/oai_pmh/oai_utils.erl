@@ -147,7 +147,8 @@ request_arguments_to_handle_listing_opts(Args) ->
                 until => utils:convert_defined(
                     deserialize_datestamp(proplists:get_value(<<"until">>, Args, undefined)),
                     fun time:datetime_to_seconds/1
-                )
+                ),
+                include_deleted => proplists:get_value(<<"includeDeleted">>, Args, false)
             };
         ResumptionToken ->
             #{

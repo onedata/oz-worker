@@ -560,6 +560,7 @@ delete_test(Config) ->
     end,
     VerifyEndFun = fun(ShouldSucceed, #{handleId := HandleId} = _Env, _) ->
         {ok, Handles} = oz_test_utils:list_handles(Config),
+        ?assertEqual(oz_test_utils:call_oz(Config, handle_logic, exists, [HandleId]), not ShouldSucceed),
         ?assertEqual(lists:member(HandleId, Handles), not ShouldSucceed)
     end,
 

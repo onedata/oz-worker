@@ -1949,19 +1949,6 @@ list_handles(Config) ->
     ])).
 
 
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all handles, including deleted, in onezone.
-%% @end
-%%--------------------------------------------------------------------
--spec list_handles_include_deleted(Config :: term()) -> {ok, [od_handle:id()]}.
-list_handles_include_deleted(Config) ->
-    ?assertMatch({ok, _}, call_oz(Config, handle_logic, list_include_deleted, [
-        ?ROOT
-    ])).
-
-
 %%--------------------------------------------------------------------
 %% @doc
 %% Retrieves handle data from onezone.
@@ -3107,7 +3094,6 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     {ok, Providers} = list_providers(Config),
     {ok, Shares} = list_shares(Config),
     {ok, Spaces} = list_spaces(Config),
-%%    {ok, Handles} = list_handles_include_deleted(Config),
     {ok, Handles} = list_handles(Config),
     {ok, HServices} = list_handle_services(Config),
     {ok, Groups} = list_groups(Config),

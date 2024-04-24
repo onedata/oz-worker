@@ -78,6 +78,7 @@ get_response(<<"record">>, Args) ->
     OaiId = proplists:get_value(<<"identifier">>, Args),
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
     Handle = get_handle_safe(OaiId),
+    HandleId = oai_utils:oai_identifier_decode(OaiId),
     %% @TODO VFS-7454 check if metadataPrefix is available for given identifier
     case lists:member(MetadataPrefix, oai_metadata:supported_formats()) of
         true ->
@@ -85,8 +86,8 @@ get_response(<<"record">>, Args) ->
                 #handle_listing_entry{
                     timestamp = Handle#od_handle.timestamp,
                     service_id = Handle#od_handle.handle_service,
-                    exists_flag = handles:get_exists_flag(oai_utils:oai_identifier_decode(OaiId)),
-                    handle_id = oai_utils:oai_identifier_decode(OaiId)
+                    exists_flag = element(2, od_handle:exists(HandleId)),
+                    handle_id = HandleId
                 },
                 Handle
             );

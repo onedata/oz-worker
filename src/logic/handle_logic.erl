@@ -24,7 +24,6 @@
     get_protected_data/2,
     get_public_data/2,
     list/1,
-    list_include_deleted/1,
     list_privileges/0
 ]).
 -export([
@@ -154,22 +153,6 @@ list(Auth) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = od_handle, id = undefined, aspect = list}
-    }).
-
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Lists all handles (their ids) in database.
-%% @end
-%%--------------------------------------------------------------------
--spec list_include_deleted(Auth :: aai:auth()) ->
-    {ok, [od_handle:id()]} | errors:error().
-list_include_deleted(Auth) ->
-    entity_logic:handle(#el_req{
-        operation = get,
-        auth = Auth,
-        gri = #gri{type = od_handle, id = undefined, aspect = list_include_deleted}
     }).
 
 

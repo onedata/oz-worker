@@ -208,7 +208,10 @@ generate_required_response_elements(Module, Args) when Module == list_identifier
     #oai_listing_result{batch = Batch, resumption_token = ResumptionToken} = Module:get_response(ElementName, Args),
     case ResumptionToken of
         undefined -> [{ElementName, Element} || Element <- Batch];
-        _ -> [{ElementName, Element} || Element <- Batch] ++ [{<<"resumptionToken">>, ResumptionToken}]
+        _ -> [{ElementName, Element} || Element <- Batch] ++ [{<<"resumptionToken">>, case ResumptionToken of
+            <<>> -> [];
+            _ -> ResumptionToken
+        end }]
     end;
 generate_required_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->

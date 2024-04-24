@@ -40,6 +40,8 @@
 
     list_identifiers_get_test/1,
     list_identifiers_post_test/1,
+    list_identifiers_include_deleted_get_test/1,
+    list_identifiers_include_deleted_post_test/1,
     list_identifiers_resumption_token_get_test/1,
     list_identifiers_resumption_token_post_test/1,
     list_deleted_identifier_get_test/1,
@@ -54,6 +56,14 @@
     selective_list_identifiers3_post_test/1,
     selective_list_identifiers4_get_test/1,
     selective_list_identifiers4_post_test/1,
+    selective_list_identifiers1_include_deleted_get_test/1,
+    selective_list_identifiers1_include_deleted_post_test/1,
+    selective_list_identifiers2_include_deleted_get_test/1,
+    selective_list_identifiers2_include_deleted_post_test/1,
+    selective_list_identifiers3_include_deleted_get_test/1,
+    selective_list_identifiers3_include_deleted_post_test/1,
+    selective_list_identifiers4_include_deleted_get_test/1,
+    selective_list_identifiers4_include_deleted_post_test/1,
     list_identifiers_modify_timestamp_get_test/1,
     list_identifiers_modify_timestamp_post_test/1,
     list_identifiers_modify_timestamp1_get_test/1,
@@ -63,6 +73,8 @@
 
     list_records_get_test/1,
     list_records_post_test/1,
+    list_records_include_deleted_get_test/1,
+    list_records_include_deleted_post_test/1,
     list_records_resumption_token_get_test/1,
     list_records_resumption_token_post_test/1,
     list_deleted_record_get_test/1,
@@ -77,6 +89,14 @@
     selective_list_records3_post_test/1,
     selective_list_records4_get_test/1,
     selective_list_records4_post_test/1,
+    selective_list_records1_include_deleted_get_test/1,
+    selective_list_records1_include_deleted_post_test/1,
+    selective_list_records2_include_deleted_get_test/1,
+    selective_list_records2_include_deleted_post_test/1,
+    selective_list_records3_include_deleted_get_test/1,
+    selective_list_records3_include_deleted_post_test/1,
+    selective_list_records4_include_deleted_get_test/1,
+    selective_list_records4_include_deleted_post_test/1,
     list_records_modify_timestamp_get_test/1,
     list_records_modify_timestamp_post_test/1,
     list_records_modify_timestamp1_get_test/1,
@@ -149,6 +169,8 @@ all() -> ?ALL([
     list_metadata_formats_post_test,
     list_identifiers_get_test,
     list_identifiers_post_test,
+    list_identifiers_include_deleted_get_test,
+    list_identifiers_include_deleted_post_test,
 
     list_identifiers_resumption_token_get_test,
     list_identifiers_resumption_token_post_test,
@@ -157,6 +179,7 @@ all() -> ?ALL([
 
     list_deleted_identifier_get_test,
     list_deleted_identifier_post_test,
+
     selective_list_identifiers1_get_test,
     selective_list_identifiers1_post_test,
     selective_list_identifiers2_get_test,
@@ -165,6 +188,14 @@ all() -> ?ALL([
     selective_list_identifiers3_post_test,
     selective_list_identifiers4_get_test,
     selective_list_identifiers4_post_test,
+    selective_list_identifiers1_include_deleted_get_test,
+    selective_list_identifiers1_include_deleted_post_test,
+    selective_list_identifiers2_include_deleted_get_test,
+    selective_list_identifiers2_include_deleted_post_test,
+    selective_list_identifiers3_include_deleted_get_test,
+    selective_list_identifiers3_include_deleted_post_test,
+    selective_list_identifiers4_include_deleted_get_test,
+    selective_list_identifiers4_include_deleted_post_test,
     list_identifiers_modify_timestamp_get_test,
     list_identifiers_modify_timestamp_post_test,
     list_identifiers_modify_timestamp1_get_test,
@@ -174,11 +205,14 @@ all() -> ?ALL([
 
     list_records_get_test,
     list_records_post_test,
+    list_records_include_deleted_get_test,
+    list_records_include_deleted_post_test,
     list_records_resumption_token_get_test,
     list_records_resumption_token_post_test,
 
     list_deleted_record_get_test,
     list_deleted_record_post_test,
+
     list_all_records_no_resumption_token_get_test,
     list_all_records_no_resumption_token_post_test,
     selective_list_records1_get_test,
@@ -189,6 +223,14 @@ all() -> ?ALL([
     selective_list_records3_post_test,
     selective_list_records4_get_test,
     selective_list_records4_post_test,
+    selective_list_records1_include_deleted_get_test,
+    selective_list_records1_include_deleted_post_test,
+    selective_list_records2_include_deleted_get_test,
+    selective_list_records2_include_deleted_post_test,
+    selective_list_records3_include_deleted_get_test,
+    selective_list_records3_include_deleted_post_test,
+    selective_list_records4_include_deleted_get_test,
+    selective_list_records4_include_deleted_post_test,
     list_records_modify_timestamp_get_test,
     list_records_modify_timestamp_post_test,
     list_records_modify_timestamp1_get_test,
@@ -321,6 +363,12 @@ list_identifiers_get_test(Config) ->
 list_identifiers_post_test(Config) ->
     list_identifiers_test_base(Config, post, 10, undefined, undefined).
 
+list_identifiers_include_deleted_get_test(Config) ->
+    list_identifiers_include_deleted_test_base(Config, get, 10, undefined, undefined).
+
+list_identifiers_include_deleted_post_test(Config) ->
+    list_identifiers_include_deleted_test_base(Config, post, 10, undefined, undefined).
+
 list_identifiers_resumption_token_get_test(Config) ->
     list_resumption_token_test_base(Config, get, <<"ListIdentifiers">>, (?TESTED_HANDLE_LIST_LIMIT * 5) div 2).
 
@@ -363,6 +411,30 @@ selective_list_identifiers4_get_test(Config) ->
 selective_list_identifiers4_post_test(Config) ->
     list_identifiers_test_base(Config, post, 10, 3, undefined).
 
+selective_list_identifiers1_include_deleted_get_test(Config) ->
+    list_identifiers_include_deleted_test_base(Config, get, 10, 0, 5).
+
+selective_list_identifiers1_include_deleted_post_test(Config) ->
+    list_identifiers_include_deleted_test_base(Config, post, 10, 0, 5).
+
+selective_list_identifiers2_include_deleted_get_test(Config) ->
+    list_identifiers_include_deleted_test_base(Config, get, 10, 0, 0).
+
+selective_list_identifiers2_include_deleted_post_test(Config) ->
+    list_identifiers_include_deleted_test_base(Config, post, 10, 0, 0).
+
+selective_list_identifiers3_include_deleted_get_test(Config) ->
+    list_identifiers_include_deleted_test_base(Config, get, 10, undefined, 7).
+
+selective_list_identifiers3_include_deleted_post_test(Config) ->
+    list_identifiers_include_deleted_test_base(Config, get, 10, undefined, 7).
+
+selective_list_identifiers4_include_deleted_get_test(Config) ->
+    list_identifiers_include_deleted_test_base(Config, get, 10, 3, undefined).
+
+selective_list_identifiers4_include_deleted_post_test(Config) ->
+    list_identifiers_include_deleted_test_base(Config, post, 10, 3, undefined).
+
 list_identifiers_modify_timestamp_get_test(Config) ->
     list_identifiers_modify_timestamp_test_base(Config, get, 10, undefined, undefined, 2).
 
@@ -386,6 +458,12 @@ list_records_get_test(Config) ->
 
 list_records_post_test(Config) ->
     list_records_test_base(Config, post, 10, undefined, undefined).
+
+list_records_include_deleted_get_test(Config) ->
+    list_records_include_deleted_test_base(Config, get, 10, undefined, undefined).
+
+list_records_include_deleted_post_test(Config) ->
+    list_records_include_deleted_test_base(Config, post, 10, undefined, undefined).
 
 list_records_resumption_token_get_test(Config) ->
     list_resumption_token_test_base(Config, get, <<"ListRecords">>, (?TESTED_HANDLE_LIST_LIMIT * 5) div 2).
@@ -428,6 +506,30 @@ selective_list_records4_get_test(Config) ->
 
 selective_list_records4_post_test(Config) ->
     list_records_test_base(Config, post, 10, 9, undefined).
+
+selective_list_records1_include_deleted_get_test(Config) ->
+    list_records_include_deleted_test_base(Config, get, 10, 1, 7).
+
+selective_list_records1_include_deleted_post_test(Config) ->
+    list_records_include_deleted_test_base(Config, post, 10, 1, 7).
+
+selective_list_records2_include_deleted_get_test(Config) ->
+    list_records_include_deleted_test_base(Config, get, 10, 9, 9).
+
+selective_list_records2_include_deleted_post_test(Config) ->
+    list_records_include_deleted_test_base(Config, post, 10, 9, 9).
+
+selective_list_records3_include_deleted_get_test(Config) ->
+    list_records_include_deleted_test_base(Config, get, 10, undefined, 2).
+
+selective_list_records3_include_deleted_post_test(Config) ->
+    list_records_include_deleted_test_base(Config, get, 10, undefined, 2).
+
+selective_list_records4_include_deleted_get_test(Config) ->
+    list_records_include_deleted_test_base(Config, get, 10, 9, undefined).
+
+selective_list_records4_include_deleted_post_test(Config) ->
+    list_records_include_deleted_test_base(Config, post, 10, 9, undefined).
 
 list_records_modify_timestamp_get_test(Config) ->
     list_records_modify_timestamp_test_base(Config, get, 10, undefined, undefined, 10).
@@ -540,22 +642,22 @@ list_identifiers_granularity_mismatch_error_post_test(Config) ->
     list_identifiers_granularity_mismatch_error_test_base(Config, post).
 
 list_identifiers_wrong_date_format_error1_get_test(Config) ->
-    list_identifiers_wrong_date_format_error_test_base(Config, get, <<"1111-01">>, undefined).
+    list_identifiers_wrong_from_date_format_error_test_base(Config, get, <<"1111-01">>, undefined).
 
 list_identifiers_wrong_date_format_error1_post_test(Config) ->
-    list_identifiers_wrong_date_format_error_test_base(Config, post, <<"1111-01">>, undefined).
+    list_identifiers_wrong_from_date_format_error_test_base(Config, post, <<"1111-01">>, undefined).
 
 list_identifiers_wrong_date_format_error2_get_test(Config) ->
-    list_identifiers_wrong_date_format_error_test_base(Config, get, undefined, <<"1111-01-25T00:01:25">>).
+    list_identifiers_wrong_until_date_format_error_test_base(Config, get, undefined, <<"1111-01-25T00:01:25">>).
 
 list_identifiers_wrong_date_format_error2_post_test(Config) ->
-    list_identifiers_wrong_date_format_error_test_base(Config, post, undefined, <<"1111-01-25T00:01:25">>).
+    list_identifiers_wrong_until_date_format_error_test_base(Config, post, undefined, <<"1111-01-25T00:01:25">>).
 
 list_identifiers_wrong_date_format_error3_get_test(Config) ->
-    list_identifiers_wrong_date_format_error_test_base(Config, get, undefined, <<"1111-13-25T65:01:25">>).
+    list_identifiers_wrong_until_date_format_error_test_base(Config, get, undefined, <<"1111-13-25T65:01:25">>).
 
 list_identifiers_wrong_date_format_error3_post_test(Config) ->
-    list_identifiers_wrong_date_format_error_test_base(Config, post, undefined, <<"1111-13-25T65:01:25">>).
+    list_identifiers_wrong_until_date_format_error_test_base(Config, post, undefined, <<"1111-13-25T65:01:25">>).
 
 list_records_no_records_match_error1_get_test(Config) ->
     list_records_no_records_match_error_test_base(Config, get, 10, 11, 15).
@@ -594,12 +696,13 @@ identify_test_base(Config, Method) ->
     ExpResponseContent = [
         #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
-        #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
+        #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]}
+    ] ++ [
+        #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
+    ] ++ [
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = to_datestamp(Timestamp)}]},
         #xmlElement{name = deletedRecord, content = [#xmlText{value = "persistent"}]},
         #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
-    ] ++ [
-        #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
     ],
     ?assert(check_identify(200, [], Method, ExpResponseContent, Config)).
 
@@ -626,12 +729,13 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     ExpResponseContent = [
         #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
-        #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
+        #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]}
+    ] ++ [
+        #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
+    ] ++ [
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = to_datestamp(Timestamp1)}]},
         #xmlElement{name = deletedRecord, content = [#xmlText{value = "persistent"}]},
         #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
-    ] ++ [
-        #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
     ],
 
     ?assert(check_identify(200, [], Method, ExpResponseContent, Config)),
@@ -641,12 +745,13 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     ExpResponseContent2 = [
         #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
-        #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
+        #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]}
+    ] ++ [
+        #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
+    ] ++ [
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = to_datestamp(Timestamp2)}]},
         #xmlElement{name = deletedRecord, content = [#xmlText{value = "persistent"}]},
         #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
-    ] ++ [
-        #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
     ],
     ?assert(check_identify(200, [], Method, ExpResponseContent2, Config)).
 
@@ -663,7 +768,7 @@ get_record_test_base(Config, Method) ->
     Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
     HandleId = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
         Metadata, MetadataPrefix, Timestamp),
-    ExpectedMetadata = expected_final_metadata(MetadataPrefix, HandleId),
+    ExpectedMetadata = expected_final_metadata_element(MetadataPrefix, HandleId),
 
     Args = [
         {<<"identifier">>, oai_identifier(Config, HandleId)},
@@ -713,12 +818,10 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
 
         % Badly formatted metadata should result in only
         % dc:identifiers being present in the OAI output
-        ExpectedDCMetadata = [
-            ozt:rpc(oai_metadata, adapt_for_oai_pmh, [
+        ExpectedDCMetadata = ozt:rpc(oai_metadata, adapt_for_oai_pmh, [
                 MetadataPrefix,
                 #xmlElement{name = metadata, content = expected_dc_identifiers(Config, Identifier)}
-            ])
-        ],
+        ]),
         ExpResponseContent = [
             expected_oai_record_xml(Config, Identifier, DataTime, ExpectedDCMetadata)
         ],
@@ -763,6 +866,18 @@ list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffs
         TimeOffsets, BeginTime, FromOffset, UntilOffset, MetadataPrefix).
 
 
+list_identifiers_include_deleted_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
+    BeginTime = ?CURRENT_DATETIME(),
+    TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
+    MetadataPrefix = ?RAND_METADATA_PREFIX(),
+    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    IdentifiersExistsFlag = setup_test_for_harvesting_with_deletion(
+        Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
+    ),
+    list_with_time_offsets_include_deleted_test_base(Config, Method, <<"ListIdentifiers">>, IdentifiersExistsFlag,
+        BeginTime, FromOffset, UntilOffset, MetadataPrefix).
+
+
 list_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
@@ -778,56 +893,46 @@ list_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
             <<"ListIdentifiers">> ->
                 expected_oai_header_xml(Config, HandleId, Timestamp);
             <<"ListRecords">> ->
-                ExpectedMetadata = expected_final_metadata(MetadataPrefix, HandleId),
+                ExpectedMetadata = expected_final_metadata_element(MetadataPrefix, HandleId),
                 expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata)
         end
     end,
     ExpIdentifiersAndTimeOffsets = lists:zip(Identifiers, TimeOffsets),
-    check_list_entries_continuously_with_resumption_token(Config, Method, Verb, ExpIdentifiersAndTimeOffsets,
-        Args, BuildExpectedObject).
+    ?assert(check_list_entries_continuously_with_resumption_token(Config, Method, Verb, ExpIdentifiersAndTimeOffsets,
+        Args, BuildExpectedObject)).
 
 
 list_deleted_test_base(Config, Method, Verb) ->
-    {ok, User} = oz_test_utils:create_user(Config),
-    {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
+    User = ozt_users:create(),
+    Space1 = ozt_users:create_space_for(User, ?SPACE_NAME1),
     ShareId = datastore_key:new(),
     {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(User), ShareId, ShareId, Space1),
-    {HSId, _} = create_handle_service(Config, User),
+    HSId = ozt_users:create_handle_service_for(User),
     DateTime = ?CURRENT_DATETIME(),
     DateTime2 = increase_timestamp(DateTime, 1),
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
-    Identifier = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
-        Metadata, MetadataPrefix, DateTime),
-    Timestamp = time:datetime_to_seconds(DateTime),
-    Timestamp2 = time:datetime_to_seconds(DateTime2),
-    Args = prepare_harvesting_args(MetadataPrefix, undefined, undefined),
+    Identifier = ozt_users:create_handle_for(User, HSId, ShareId),
+    #od_handle{metadata_prefix = MetadataPrefix} = ozt_handles:get(Identifier),
+    Args = prepare_harvesting_args(MetadataPrefix, undefined, undefined, undefined, true),
 
     ExpResponseContent = case Verb of
         <<"ListIdentifiers">> ->
             [expected_oai_header_xml(Config, Identifier, DateTime)];
         <<"ListRecords">> ->
-            ExpectedMetadata = expected_final_metadata(MetadataPrefix, Identifier),
+            ExpectedMetadata = expected_final_metadata_element(MetadataPrefix, Identifier),
             [expected_oai_record_xml(Config, Identifier, DateTime, ExpectedMetadata)]
 
     end,
-    check_oai_request(200, Verb, Args, Method, ExpResponseContent, binary_to_atom(Verb), Config),
+    ?assert(check_oai_request(200, Verb, Args, Method, ExpResponseContent, binary_to_atom(Verb), Config)),
 
-    ozt:rpc(handles, delete, [MetadataPrefix, HSId, Identifier, Timestamp, Timestamp2]),
-    oz_test_utils:call_oz(Config, od_handle, update, [
-        Identifier, fun(Handle = #od_handle{}) ->
-            {ok, Handle#od_handle{timestamp = Timestamp2}}
-        end]
-    ),
-    ExpResponseContent2 = ExpResponseContent = case Verb of
+    delete_handle_with_mocked_timestamp(Config, Identifier, DateTime2),
+    ExpResponseContent2 = case Verb of
         <<"ListIdentifiers">> ->
-            [expected_oai_header_xml(Config, Identifier, DateTime2, deleted)];
+            [expected_oai_header_xml(Config, Identifier, DateTime2, HSId, deleted)];
         <<"ListRecords">> ->
-            [expected_oai_record_xml(Config, Identifier, DateTime2, deleted)]
+            [expected_oai_record_xml(Config, Identifier, DateTime2, HSId, deleted)]
     end,
 
-    ?assertEqual(false, ozt:rpc(handles, get_exists_flag, [Identifier])),
-    check_oai_request(200, Verb, Args, Method, ExpResponseContent2, binary_to_atom(Verb), Config).
+    ?assert(check_oai_request(200, Verb, Args, Method, ExpResponseContent2, binary_to_atom(Verb), Config)).
 
 
 list_no_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
@@ -847,7 +952,7 @@ list_no_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
             <<"ListIdentifiers">> ->
                 expected_oai_header_xml(Config, HandleId, Timestamp);
             <<"ListRecords">> ->
-                ExpectedMetadata = expected_final_metadata(MetadataPrefix, HandleId),
+                ExpectedMetadata = expected_final_metadata_element(MetadataPrefix, HandleId),
                 expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata)
         end
     end,
@@ -881,6 +986,7 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     list_with_time_offsets_test_base(Config, Method, <<"ListIdentifiers">>, Identifiers,
         TimeOffsets2, BeginTime, FromOffset, UntilOffset, MetadataPrefix).
 
+
 list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
     BeginTime = ?CURRENT_DATETIME(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
@@ -891,6 +997,19 @@ list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) 
     ),
     list_with_time_offsets_test_base(Config, Method, <<"ListRecords">>, Identifiers,
         TimeOffsets, BeginTime, FromOffset, UntilOffset, MetadataPrefix).
+
+
+list_records_include_deleted_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
+    BeginTime = ?CURRENT_DATETIME(),
+    TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
+    MetadataPrefix = ?RAND_METADATA_PREFIX(),
+    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    IdentifiersExistsFlag = setup_test_for_harvesting_with_deletion(
+        Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
+    ),
+    list_with_time_offsets_include_deleted_test_base(Config, Method, <<"ListRecords">>, IdentifiersExistsFlag,
+        BeginTime, FromOffset, UntilOffset, MetadataPrefix).
+
 
 list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     FromOffset, UntilOffset, IdentifiersToBeModified) ->
@@ -918,6 +1037,7 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     list_with_time_offsets_test_base(Config, Method, <<"ListRecords">>, Identifiers,
         TimeOffsets2, BeginTime, FromOffset, UntilOffset, MetadataPrefix).
 
+
 list_with_time_offsets_test_base(
     Config, Method, Verb, Identifiers, TimeOffsets, BeginTime, FromOffset, UntilOffset, MetadataPrefix
 ) ->
@@ -927,7 +1047,7 @@ list_with_time_offsets_test_base(
             <<"ListIdentifiers">> ->
                 expected_oai_header_xml(Config, HandleId, Timestamp);
             <<"ListRecords">> ->
-                ExpectedMetadata = expected_final_metadata(MetadataPrefix, HandleId),
+                ExpectedMetadata = expected_final_metadata_element(MetadataPrefix, HandleId),
                 expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata)
         end
     end,
@@ -937,7 +1057,6 @@ list_with_time_offsets_test_base(
     Args = prepare_harvesting_args(MetadataPrefix, From, Until),
 
     IdsAndTimestamps = ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset),
-
     ?assert(check_list_entries(200, Verb, Args, Method, BuildExpectedObject, IdsAndTimestamps, Config)),
 
     % check filtering by sets
@@ -958,6 +1077,65 @@ list_with_time_offsets_test_base(
 
         end
     end, HandleServices).
+
+
+list_with_time_offsets_include_deleted_test_base(
+    Config, Method, Verb, IdentifiersExistsFlag, BeginTime, FromOffset, UntilOffset, MetadataPrefix) ->
+    BuildExpectedObject = fun(HandleId, TimeOffset, HSId, ExistsFlag) ->
+        Timestamp = increase_timestamp(BeginTime, TimeOffset),
+        case Verb of
+            <<"ListIdentifiers">> ->
+                case ExistsFlag of
+                    true -> expected_oai_header_xml(Config, HandleId, Timestamp);
+                    false -> expected_oai_header_xml(Config, HandleId, Timestamp, HSId, deleted)
+                end;
+            <<"ListRecords">> ->
+                case ExistsFlag of
+                    true ->
+                        ExpectedMetadata = expected_final_metadata_element(MetadataPrefix, HandleId),
+                        expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata);
+                    false ->
+                        expected_oai_record_xml(Config, HandleId, Timestamp, HSId, deleted)
+                end
+        end
+    end,
+
+    From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
+    Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
+    Args = prepare_harvesting_args(MetadataPrefix, From, Until, undefined, true),
+
+    IdsAndTimestamps = lists:keysort(2, ids_exs_flag_and_timestamps_to_be_harvested(
+        IdentifiersExistsFlag, FromOffset, UntilOffset)
+    ),
+
+    %%  if FromOffset =:= UntilOffset =:= creation of first entry and this entry will be deleted than
+    %%  result of listing will be empty list
+    case IdsAndTimestamps of
+        [] ->
+            ?assert(check_list_entries_no_records_match_error(200, Verb, Args, Method, Config));
+        _ ->
+            ?assert(check_list_entries_including_deleted(200, Verb, Args, Method, BuildExpectedObject, IdsAndTimestamps, Config))
+    end,
+
+    % check filtering by sets
+    {ok, HandleServices} = oz_test_utils:list_handle_services(Config),
+    lists:foreach(fun(HandleServiceId) ->
+        IdsAndTimestampsInTheHService = lists:filter(fun({_HandleId, _TimeOffset, HSId, _ExistsFlag}) ->
+            HandleServiceId =:= HSId
+        end, IdsAndTimestamps),
+
+        ArgsWithSet = [{<<"set">>, HandleServiceId} | Args],
+        case IdsAndTimestampsInTheHService of
+            [] ->
+                ?assert(check_list_entries_no_records_match_error(200, Verb, ArgsWithSet, Method, Config));
+            _ ->
+                ?assert(check_list_entries_including_deleted(
+                    200, Verb, ArgsWithSet, Method, BuildExpectedObject, IdsAndTimestampsInTheHService, Config
+                ))
+
+        end
+    end, HandleServices).
+
 
 list_sets_test_base(Config, Method) ->
     {ok, User} = oz_test_utils:create_user(Config),
@@ -1087,12 +1265,17 @@ list_identifiers_granularity_mismatch_error_test_base(Config, Method) ->
         {<<"from">>, <<"1111-12-01">>},
         {<<"until">>, <<"1111-12-01T00:00:00Z">>}
     ],
-    ?assert(check_list_identifiers_bad_argument_error(200, Args, Method, [], Config)).
+    ?assert(check_list_identifiers_bad_argument_granularity_mismatch_error(200, Args, Method, [], Config)).
 
-list_identifiers_wrong_date_format_error_test_base(Config, Method, From, Until) ->
+list_identifiers_wrong_from_date_format_error_test_base(Config, Method, From, Until) ->
 
     Args = prepare_harvesting_args(?RAND_METADATA_PREFIX(), From, Until),
-    ?assert(check_list_identifiers_bad_argument_error(200, Args, Method, [], Config)).
+    ?assert(check_list_identifiers_bad_argument_invalid_from_date_format_error(200, Args, Method, [], Config)).
+
+list_identifiers_wrong_until_date_format_error_test_base(Config, Method, From, Until) ->
+
+    Args = prepare_harvesting_args(?RAND_METADATA_PREFIX(), From, Until),
+    ?assert(check_list_identifiers_bad_argument_invalid_until_date_format_error(200, Args, Method, [], Config)).
 
 list_records_no_records_match_error_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
 
@@ -1125,9 +1308,7 @@ init_per_testcase(_, Config) ->
     Config.
 
 end_per_testcase(_, Config) ->
-%%    ok = rpc:call(?ROOT, handles, purge_all, []),
-%%    ok = oz_test_utils:call_oz(Config, handles, purge_all, []),
-    ozt:rpc(handles, purge_deleted_entry_all, []),
+    ok = ozt:rpc(handles, purge_all_deleted_entry, []),
     oz_test_utils:delete_all_entities(Config),
     unmock_handle_proxy(Config),
     ok.
@@ -1154,36 +1335,38 @@ check_list_sets(Code, Method, ExpResponseContent, Config) ->
 
 check_no_verb_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, none, Args, Method, ExpResponseContent,
-        {error, badVerb}, Config).
+        {error, {badVerb, [missing_key, <<"verb">>]}}, Config).
 
 check_empty_verb_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"">>, Args, Method, ExpResponseContent,
-        {error, badVerb}, Config).
+        {error, {badVerb, [not_legal_verb, <<"">>]}}, Config).
 
 check_invalid_verb_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"invalid_verb">>, Args, Method, ExpResponseContent,
-        {error, badVerb}, Config).
+        {error, {badVerb, [not_legal_verb, <<"invalid_verb">>]}}, Config).
 
 check_illegal_arg_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"Identify">>, Args, Method, ExpResponseContent,
-        {error, badArgument}, Config).
+        {error, {badArgument, [illegal_argument, ["k"]]}}, Config).
 
 check_missing_arg_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"GetRecord">>, Args, Method, ExpResponseContent,
-        {error, badArgument}, Config).
+        {error, {badArgument, [missing_key, [<<"metadataPrefix">>]]}}, Config).
 
 check_id_not_existing_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"GetRecord">>, Args, Method, ExpResponseContent,
-        {error, idDoesNotExist}, Config).
+        {error, {idDoesNotExist, [illegalId, <<"identifier">>]}}, Config).
 
 check_cannot_disseminate_format_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"GetRecord">>, Args, Method, ExpResponseContent,
-        {error, cannotDisseminateFormat}, Config).
+        {error, [cannotDisseminateFormat, <<"metadataPrefix">>]}, Config).
 
 check_exclusive_resumption_token_required_error(Code, Args, Method, ExpResponseContent, Config) ->
-    check_oai_request(Code, <<"ListRecords">>, Args, Method, ExpResponseContent, {error, badArgument}, Config)
-        andalso
-        check_oai_request(Code, <<"ListIdentifiers">>, Args, Method, ExpResponseContent, {error, badArgument}, Config).
+    check_oai_request(Code, <<"ListRecords">>, Args, Method, ExpResponseContent,
+        {error, {badArgument, exclusive_argument}}, Config
+    ) andalso check_oai_request(Code, <<"ListIdentifiers">>, Args, Method,
+        ExpResponseContent, {error, {badArgument, exclusive_argument}}, Config
+    ).
 
 check_list_metadata_formats(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListMetadataFormats">>, Args, Method,
@@ -1191,11 +1374,22 @@ check_list_metadata_formats(Code, Args, Method, ExpResponseContent, Config) ->
 
 check_list_metadata_formats_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListMetadataFormats">>, Args, Method,
-        ExpResponseContent, {error, noMetadataFormats}, Config).
+        ExpResponseContent, {error, [noMetadataFormats, <<"identifier">>]}, Config).
 
-check_list_identifiers_bad_argument_error(Code, Args, Method, ExpResponseContent, Config) ->
-    check_oai_request(Code, <<"ListIdentifiers">>, Args, Method,
-        ExpResponseContent, {error, badArgument}, Config).
+check_list_identifiers_bad_argument_granularity_mismatch_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"ListIdentifiers">>, Args, Method, ExpResponseContent,
+        {error, {badArgument, [granularity_mismatch, <<"from">>, <<"until">>]}}, Config
+    ).
+
+check_list_identifiers_bad_argument_invalid_from_date_format_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"ListIdentifiers">>, Args, Method, ExpResponseContent,
+        {error, {badArgument, [invalid_date_format, <<"from">>]}}, Config
+    ).
+
+check_list_identifiers_bad_argument_invalid_until_date_format_error(Code, Args, Method, ExpResponseContent, Config) ->
+    check_oai_request(Code, <<"ListIdentifiers">>, Args, Method, ExpResponseContent,
+        {error, {badArgument, [invalid_date_format, <<"until">>]}}, Config
+    ).
 
 check_list_entries(Code, Verb, Args, Method, BuildExpectedObject, ExpListedEntries, Config) ->
     ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
@@ -1204,6 +1398,17 @@ check_list_entries(Code, Verb, Args, Method, BuildExpectedObject, ExpListedEntri
     ExpectedBase = lists:map(fun({HandleId, TimeOffset}) ->
         BuildExpectedObject(HandleId, TimeOffset)
     end, ExpListedEntries),
+    ExpResponseContent = ExpectedBase ++ expected_response_body_wrt_resumption_token(ExpResumptionToken, ListingOpts),
+    check_oai_request(Code, Verb, Args, Method, ExpResponseContent, binary_to_atom(Verb), Config).
+
+
+check_list_entries_including_deleted(Code, Verb, Args, Method, BuildExpectedObject, ExpListedEntries, Config) ->
+    ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
+    {_, ExpResumptionToken} = ozt:rpc(handles, list, [ListingOpts]),
+
+    ExpectedBase = lists:map(fun({HandleId, TimeOffset, HSId, ExistsFlag}) ->
+        BuildExpectedObject(HandleId, TimeOffset, HSId, ExistsFlag)
+    end, ExpListedEntries),
 
     ExpResponseContent = ExpectedBase ++ expected_response_body_wrt_resumption_token(ExpResumptionToken, ListingOpts),
 
@@ -1211,26 +1416,31 @@ check_list_entries(Code, Verb, Args, Method, BuildExpectedObject, ExpListedEntri
 
 check_list_entries_no_records_match_error(Code, <<"ListIdentifiers">>, Args, Method, Config) ->
     check_oai_request(
-        Code, <<"ListIdentifiers">>, Args, Method, [], {error, noRecordsMatch}, Config
+        Code, <<"ListIdentifiers">>, Args, Method, [],
+        {error, [noRecordsMatch, <<"from">>, <<"until">>, <<"set">>, <<"metadataPrefix">>]}, Config
     );
 check_list_entries_no_records_match_error(Code, <<"ListRecords">>, Args, Method, Config) ->
     check_oai_request(
-        Code, <<"ListRecords">>, Args, Method, [], {error, noRecordsMatch}, Config
+        Code, <<"ListRecords">>, Args, Method, [],
+        {error, [noRecordsMatch, <<"from">>, <<"until">>, <<"set">>, <<"metadataPrefix">>]}, Config
     ).
 
 check_list_entries_continuously_with_resumption_token(_Config, _Method, _Verb, _RemainingExpEntries, [], _BuildExpectedObject) ->
-    ok;
+    true;
 check_list_entries_continuously_with_resumption_token(Config, Method, Verb, RemainingExpEntries, Args, BuildExpectedObject) ->
     ExpListedEntries = lists:sublist(RemainingExpEntries, ?TESTED_HANDLE_LIST_LIMIT),
     ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
     {_, ExpResumptionToken} = ozt:rpc(handles, list, [ListingOpts]),
 
-    ?assert(check_list_entries(200, Verb, Args, Method, BuildExpectedObject, ExpListedEntries, Config)),
+    case check_list_entries(200, Verb, Args, Method, BuildExpectedObject, ExpListedEntries, Config) of
+        true ->
+            ArgsWithToken = add_to_args_if_defined(<<"resumptionToken">>, ExpResumptionToken, []),
+            check_list_entries_continuously_with_resumption_token(
+                Config, Method, Verb, lists:subtract(RemainingExpEntries, ExpListedEntries), ArgsWithToken, BuildExpectedObject
+            );
+        Other -> Other
+    end.
 
-    ArgsWithToken = add_to_args_if_defined(<<"resumptionToken">>, ExpResumptionToken, []),
-    check_list_entries_continuously_with_resumption_token(
-        Config, Method, Verb, lists:subtract(RemainingExpEntries, ExpListedEntries), ArgsWithToken, BuildExpectedObject
-    ).
 
 check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Config) ->
     URL = get_oai_pmh_URL(),
@@ -1269,7 +1479,7 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
         request => Request,
         expect => #{
             code => Code,
-            body => ExpectedBody,
+            body => oai_utils:encode_xml(ExpectedBody),
             headers => {contains, ?RESPONSE_CONTENT_TYPE_HEADER}
         }
     }),
@@ -1315,15 +1525,18 @@ expected_body(ExpectedResponse, ResponseType, Args, ResponseDate) ->
     Path = get_oai_pmh_api_path(),
     URL = get_oai_pmh_URL(),
     RequestURL = binary_to_list(<<URL/binary, Path/binary>>),
+
     ExpectedResponseElement = case ResponseType of
-        {error, Code} -> expected_response_error(Code);
+        {error, ErrorSpec} -> expected_response_error(ErrorSpec, Args);
         Verb -> expected_response_verb(Verb, ExpectedResponse)
     end,
 
     ExpectedRequestElement = case ResponseType of
         %% when error is badVerb or badArgument request element
         %% should only contain request URL
+        {error, {badVerb, _}} -> expected_request_element(RequestURL);
         {error, badVerb} -> expected_request_element(RequestURL);
+        {error, {badArgument, _}} -> expected_request_element(RequestURL);
         {error, badArgument} -> expected_request_element(RequestURL);
         _ -> expected_request_element(RequestURL, Args)
     end,
@@ -1343,11 +1556,40 @@ expected_body(ExpectedResponse, ResponseType, Args, ResponseDate) ->
             ExpectedResponseElement]
     }.
 
-expected_response_error(Code) ->
+expected_response_error(ErrorSpecElem, Args) ->
+    {Code, ErrorSpec} = expected_code_and_error_spec(ErrorSpecElem, Args),
+    #oai_error{description = Description} = oai_errors:handle(ErrorSpec),
     #xmlElement{
         name = error,
-        attributes = [#xmlAttribute{name = code, value = str_utils:to_list(Code)}]
+        attributes = [#xmlAttribute{name = code, value = str_utils:to_list(Code)}],
+        content = [#xmlText{value = binary_to_list(Description)}]
     }.
+
+expected_code_and_error_spec(ErrorSpec, _) when is_atom(ErrorSpec) ->
+    {ErrorSpec, ErrorSpec};
+expected_code_and_error_spec(ErrorSpec, Args) when is_tuple(ErrorSpec) ->
+    {Code, ErrorSpecElem} = ErrorSpec,
+    {Code, expected_error_spec_base(ErrorSpecElem, Args)};
+expected_code_and_error_spec(ErrorSpec, Args) when is_list(ErrorSpec) ->
+    FullSpec = expected_error_spec_base(ErrorSpec, Args),
+    {element(1, FullSpec), FullSpec}.
+
+expected_error_spec_base(ErrorSpec, _Args) when is_atom(ErrorSpec) ->
+    ErrorSpec;
+expected_error_spec_base(ErrorSpec, Args) when is_list(ErrorSpec) ->
+    ArgsKeys = [<<"identifier">>, <<"metadataPrefix">>, <<"from">>, <<"until">>, <<"set">>],
+    ErrorSpecArgs = lists:map(fun(Element) ->
+        case lists:member(Element, ArgsKeys) of
+            true ->
+                case lists:keyfind(Element, 1, Args) of
+                    {Element, Value} -> Value;
+                    false -> undefined
+                end;
+            false ->
+                Element
+        end
+    end, tl(ErrorSpec)),
+    list_to_tuple([hd(ErrorSpec) | ErrorSpecArgs]).
 
 expected_response_verb(Verb, {Content, Attributes}) ->
     #xmlElement{name = ensure_atom(Verb), attributes = Attributes, content = Content};
@@ -1411,6 +1653,15 @@ modify_handle_with_mocked_timestamp(Config, HId, Metadata, Timestamp) ->
     ok = modify_handle(Config, HId, Metadata),
     ok = test_utils:mock_validate_and_unload(Nodes, od_handle).
 
+delete_handle_with_mocked_timestamp(Config, HId, Timestamp) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_new(Nodes, od_handle, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, od_handle, current_timestamp, fun() ->
+        time:datetime_to_seconds(Timestamp)
+    end),
+    ozt:rpc(handle_logic, delete, [?ROOT, HId]),
+    ok = test_utils:mock_validate_and_unload(Nodes, od_handle).
+
 setup_test_for_harvesting(Config, RecordsNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix) ->
     {ok, User} = oz_test_utils:create_user(Config),
     SpaceIds = create_spaces(Config, ?SPACE_NAMES(RecordsNum), ?USER(User)),
@@ -1419,6 +1670,24 @@ setup_test_for_harvesting(Config, RecordsNum, BeginTime, TimeOffsets, Metadata, 
     create_handles_with_mocked_timestamps(
         Config, User, HandleServices, ShareIds, BeginTime, TimeOffsets, Metadata, MetadataPrefix
     ).
+
+setup_test_for_harvesting_with_deletion(Config, RecordsNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix) ->
+    Identifiers = setup_test_for_harvesting(Config, RecordsNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix),
+    EnumeratedIdentifiers = lists:enumerate(lists:zip(Identifiers, TimeOffsets)),
+    NumberToDelete = ?RAND_INT(1, RecordsNum - 1),
+    ElementsToDelete = [?RAND_INT(1, RecordsNum) || _ <- lists:seq(1, NumberToDelete)],
+    IdentifiersExistsFlag = lists:map(fun({Number, {Identifier, TimeOffset}}) ->
+        HSId = lookup_handle_service_of_handle(Config, Identifier),
+        case lists:member(Number, ElementsToDelete) of
+            true ->
+                NewTimestamp = increase_timestamp(BeginTime, TimeOffset + RecordsNum),
+                delete_handle_with_mocked_timestamp(Config, Identifier, NewTimestamp),
+                {Identifier, TimeOffset + RecordsNum, HSId, false};
+            false ->
+                {Identifier, TimeOffset, HSId, true}
+        end
+    end, EnumeratedIdentifiers),
+    IdentifiersExistsFlag.
 
 %% for each SpaceId in SpaceIds creates share,
 %% adds metadata to this share and mock timestamp,
@@ -1492,15 +1761,25 @@ prepare_harvesting_args(MetadataPrefix, From, Until) ->
     prepare_harvesting_args(MetadataPrefix, From, Until, undefined).
 
 prepare_harvesting_args(MetadataPrefix, From, Until, Set) ->
+    prepare_harvesting_args(MetadataPrefix, From, Until, Set, false).
+
+prepare_harvesting_args(MetadataPrefix, From, Until, Set, ExistsFlag) ->
     Args = add_to_args_if_defined(<<"metadataPrefix">>, MetadataPrefix, []),
     Args2 = add_to_args_if_defined(<<"from">>, From, Args),
     Args3 = add_to_args_if_defined(<<"until">>, Until, Args2),
-    add_to_args_if_defined(<<"set">>, Set, Args3).
+    Args4 = add_to_args_if_defined(<<"set">>, Set, Args3),
+    Args5 = add_to_args_if_defined(<<"includeDeleted">>, ExistsFlag, Args4),
+    Args5.
 
 ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset) ->
     lists:filter(fun({_Id, TimeOffset}) ->
         offset_in_range(FromOffset, UntilOffset, TimeOffset)
     end, lists:zip(Identifiers, TimeOffsets)).
+
+ids_exs_flag_and_timestamps_to_be_harvested(IdentifiersExistsFlag, FromOffset, UntilOffset) ->
+    lists:filter(fun({_Id, TimeOffset, _HSId, _ExistsFlag}) ->
+        offset_in_range(FromOffset, UntilOffset, TimeOffset)
+    end, IdentifiersExistsFlag).
 
 increase_timestamp(_, undefined) -> undefined;
 increase_timestamp(undefined, _) -> undefined;
@@ -1553,31 +1832,36 @@ expected_dc_identifiers(Config, HandleId) ->
     [
         #xmlElement{
             name = Name,
-            content = [#xmlText{value = binary_to_list(PublicHandle)}]
+            content = [#xmlText{value = binary_to_list(ShareUrl)}]
         },
         #xmlElement{
             name = Name,
-            content = [#xmlText{value = binary_to_list(ShareUrl)}]
+            content = [#xmlText{value = binary_to_list(PublicHandle)}]
         }
     ].
 
 expected_admin_emails(Config) ->
     oz_test_utils:get_env(Config, admin_emails).
 
-expected_oai_record_xml(Config, HandleId, Timestamp, deleted) ->
+expected_oai_record_xml(Config, HandleId, Timestamp, HSId, deleted) ->
     #xmlElement{name = record, content = [
-        expected_oai_header_xml(Config, HandleId, Timestamp, deleted)
-    ]};
+        expected_oai_header_xml(Config, HandleId, Timestamp, HSId, deleted)
+    ]}.
+
 expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata) ->
     #xmlElement{name = record, content = [
         expected_oai_header_xml(Config, HandleId, Timestamp),
         #xmlElement{
             name = metadata,
-            content = ExpectedMetadata
+            content = [ExpectedMetadata]
         }
     ]}.
 
 expected_oai_header_xml(Config, HandleId, Timestamp) ->
+    expected_oai_header_xml(Config, HandleId, Timestamp,
+        lookup_handle_service_of_handle(Config, HandleId)
+    ).
+expected_oai_header_xml(Config, HandleId, Timestamp, HSId) ->
     #xmlElement{
         name = header,
         content = [
@@ -1596,20 +1880,20 @@ expected_oai_header_xml(Config, HandleId, Timestamp) ->
             #xmlElement{
                 name = setSpec,
                 content = [#xmlText{
-                    value = binary_to_list(lookup_handle_service_of_handle(Config, HandleId))
+                    value = binary_to_list(HSId)
                 }]
             }
         ]
     }.
 
-expected_oai_header_xml(Config, HandleId, Timestamp, deleted) ->
-    XMLBase = expected_oai_header_xml(Config, HandleId, Timestamp),
+expected_oai_header_xml(Config, HandleId, Timestamp, HSId, deleted) ->
+    XMLBase = expected_oai_header_xml(Config, HandleId, Timestamp, HSId),
     XMLBase#xmlElement{
-        attributes =  [#xmlAttribute{name = status, value = "deleted"}]
+        attributes = [#xmlAttribute{name = status, value = "deleted"}]
     }.
 
 %% @private
-expected_final_metadata(MetadataPrefix, HandleId) ->
+expected_final_metadata_element(MetadataPrefix, HandleId) ->
     ExpFinalMetadata = ozt_handles:expected_final_metadata(HandleId),
     ParsedXml = ?check(oai_metadata:parse_xml(ExpFinalMetadata)),
     ozt:rpc(oai_metadata, adapt_for_oai_pmh, [MetadataPrefix, ParsedXml]).
