@@ -22,7 +22,7 @@
     verb_to_module/1, is_earlier_or_equal/2, dates_have_the_same_granularity/2,
     to_xml/1, encode_xml/1, ensure_list/1,
     request_arguments_to_handle_listing_opts/1, harvest/2, oai_identifier_decode/1,
-    build_oai_header/2, build_oai_record/2
+    build_oai_header/3, build_oai_record/3, build_oai_record/4
 ]).
 -export([get_handle/1]).
 
@@ -45,23 +45,29 @@ oai_identifier_decode(OAIId) ->
             throw({illegalId, OAIId})
     end.
 
--spec build_oai_header(od_handle:id(), od_handle:record()) -> #oai_header{}.
-build_oai_header(HandleId, Handle) ->
+-spec build_oai_header(od_handle:timestamp_seconds(), od_handle_service:id(),
+    od_handle:id()) -> #oai_header{}.
+build_oai_header(TimeSeconds, HandleServiceId, HandleId) ->
     OaiId = oai_identifier_encode(HandleId),
     #oai_header{
         identifier = OaiId,
-        datestamp = serialize_datestamp(
-            time:seconds_to_datetime(Handle#od_handle.timestamp)
-        ),
-        set_spec = Handle#od_handle.handle_service
+        datestamp = serialize_datestamp(time:seconds_to_datetime(TimeSeconds)),
+        set_spec = HandleServiceId
     }.
 
--spec build_oai_record(od_handle:id(), od_handle:record()) ->
-    #oai_record{}.
-build_oai_record(HandleId, Handle) ->
+% TODO VFS-11924 https://git.onedata.org/projects/VFS/repos/oz-worker/pull-requests/1591/overview?commentId=99463
+-spec build_oai_record(od_handle:timestamp_seconds(), od_handle_service:id(),
+    od_handle:id()) -> #oai_record{}.
+build_oai_record(TimeSeconds, HandleServiceId, HandleId) ->
+    Handle = get_handle(HandleId),
+    build_oai_record(TimeSeconds, HandleServiceId, HandleId, Handle).
+
+-spec build_oai_record(od_handle:timestamp_seconds(), od_handle_service:id(),
+    od_handle:id(), #od_handle{}) -> #oai_record{}.
+build_oai_record(TimeSeconds, HandleServiceId, HandleId, Handle) ->
     MetadataPrefix = Handle#od_handle.metadata_prefix,
     #oai_record{
-        header = build_oai_header(HandleId, Handle),
+        header = build_oai_header(TimeSeconds, HandleServiceId, HandleId),
         metadata = #oai_metadata{
             metadata_prefix = MetadataPrefix,
             raw_value = Handle#od_handle.metadata,
@@ -143,9 +149,8 @@ request_arguments_to_handle_listing_opts(Args) ->
 -spec harvest(handles:listing_opts(), function()) -> oai_response().
 harvest(ListingOpts, HarvestingFun) ->
     {Identifiers, NewResumptionToken} = handles:list(ListingOpts),
-    HarvestedMetadata = lists:map(fun(Identifier) ->
-        Handle = get_handle(Identifier),
-        HarvestingFun(Identifier, Handle) end, Identifiers),
+    HarvestedMetadata = lists:map(fun({TimeSeconds, HandleServiceId, HandleId}) ->
+        HarvestingFun(TimeSeconds, HandleServiceId, HandleId) end, Identifiers),
 
     % TODO VFS-11906 consider a situation when a resumption token has been returned because
     % there is still one entry to be listed, but in the meantime it is deleted - then, the listing

@@ -285,3 +285,4 @@ generate_request_element(Req) ->
 generate_request_element(ParsedArgs, Req) ->
     URL = iolist_to_binary(cowboy_req:uri(Req, #{qs => undefined})),
     {request, URL, ParsedArgs}.
+
