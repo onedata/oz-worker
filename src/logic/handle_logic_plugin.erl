@@ -142,11 +142,14 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
 
         {ok, #document{key = HandleId}} = od_handle:create(#document{value = #od_handle{
             public_handle = PublicHandle,
-            handle_service = HandleServiceId,
             resource_type = ResourceType,
-            resource_id = ShareId,
             metadata_prefix = MetadataPrefix,
             metadata = oai_utils:encode_xml(FinalMetadata),
+            timestamp = CreationTime,
+
+            resource_id = ShareId,
+            handle_service = HandleServiceId,
+
             creator = aai:normalize_subject(Auth#auth.subject),
             creation_time = CreationTime
         }}),
