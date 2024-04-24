@@ -26,6 +26,11 @@
 %                that have the same timestamp.
 -type link_key() :: binary().
 
+% link value() encodes 2 pieces of information:
+%  1) handle_service_id - id of the handle service in which the handle has been registered.
+%  2) exists flag - contains information whether a previously existing handle has been deleted.
+-type link_value() :: binary().
+
 % the resumption token is used to continue listing when an incomplete list (batch) is returned;
 % an 'undefined' value is returned when there are no more entries to list
 -type resumption_token() :: binary() | undefined.
@@ -61,6 +66,7 @@
 
 % uses null for separator to ensure alphabetical sorting
 -define(KEY_SEP, 0).
+-define(VALUE_SEP, <<":">>).
 -define(RESUMPTION_TOKEN_SEP, <<",">>).
 
 -define(MAX_TIMESTAMP, 99999999999).
@@ -74,7 +80,7 @@
 -spec add(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds()) -> ok.
 add(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
-    Link = {encode_link_key(TimeSeconds, HandleId), HandleServiceId},
+    Link = {encode_link_key(TimeSeconds, HandleId), encode_link_value(HandleServiceId, true)},
 
     lists:foreach(fun(TreeId) ->
         case datastore_model:add_links(?CTX, ?FOREST, TreeId, Link) of
@@ -150,11 +156,14 @@ list(ListingOpts) ->
         prev_tree_id => TreeId,
         inclusive => false
     },
-    FoldFun = fun(#link{name = Key, target = HandleServiceId}, Acc) ->
+    FoldFun = fun(#link{name = Key, target = Value}, Acc) ->
         {TimeSeconds, HandleId} = decode_link_key(Key),
         Result = case TimeSeconds > Until of
-            true -> {stop, Acc};
-            false -> {ok, [{TimeSeconds, HandleServiceId, HandleId} | Acc]}
+            true ->
+                {stop, Acc};
+            false ->
+                {HandleServiceId, _} = decode_link_value(Value),
+                {ok, [{TimeSeconds, HandleServiceId, HandleId} | Acc]}
         end,
         Result
     end,
@@ -202,6 +211,28 @@ encode_link_key(TimeSeconds, HandleId) ->
 decode_link_key(Key) ->
     <<TimeSeconds:11/binary, ?KEY_SEP, HandleId/binary>> = Key,
     {binary_to_integer(TimeSeconds), HandleId}.
+
+
+%% @private
+-spec encode_link_value(od_handle_service:id(), exists_flag()) -> link_value().
+encode_link_value(HandleServiceId, ExistsFlag) ->
+    str_utils:join_binary([exists_flag_to_binary(ExistsFlag), HandleServiceId], ?VALUE_SEP).
+
+
+%% @private
+-spec decode_link_value(link_value()) -> {od_handle_service:id(), exists_flag()}.
+decode_link_value(Value) ->
+    [ExistsFlag, HandleServiceId] = binary:split(Value, [?VALUE_SEP], [global]),
+    {HandleServiceId, binary_to_exists_flag(ExistsFlag)}.
+
+
+%% @private
+exists_flag_to_binary(true) -> <<"1">>;
+exists_flag_to_binary(false) -> <<"0">>.
+
+%% @private
+binary_to_exists_flag(<<"1">>) -> true;
+binary_to_exists_flag(<<"0">>) -> false.
 
 
 %% @private
