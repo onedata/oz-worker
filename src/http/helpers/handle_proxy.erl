@@ -98,15 +98,10 @@ unregister_handle(HandleId) ->
 %%    ],
     Body = ServiceProperties, %TODO VFS-7415 use above Body after fixing proxy
     Headers = #{?HDR_CONTENT_TYPE => <<"application/json">>, ?HDR_ACCEPT => <<"application/json">>},
-    Type = maps:get(<<"type">>, ServiceProperties),
-    {ok, 200, _, _} =
-        case Type of
-            <<"DOI">> ->
-                PublicHandleEncoded = http_utils:url_encode(PublicHandle),
-                handle_proxy_client:delete(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body));
-            _ ->
-                handle_proxy_client:delete(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode(Body))
-        end,
+    PublicHandleEncoded = http_utils:url_encode(PublicHandle),
+    {ok, 200, _, _} = handle_proxy_client:delete(
+        ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body)
+    ),
     ok.
 
 %%--------------------------------------------------------------------
@@ -132,15 +127,10 @@ modify_handle(HandleId, NewMetadata) ->
         <<"metadata">> => #{<<"onedata_dc">> => NewMetadata}
     },
     Headers = #{?HDR_CONTENT_TYPE => <<"application/json">>, ?HDR_ACCEPT => <<"application/json">>},
-    Type = maps:get(<<"type">>, ServiceProperties),
-    {ok, 204, _, _} =
-        case Type of
-            <<"DOI">> ->
-                PublicHandleEncoded = http_utils:url_encode(PublicHandle),
-                handle_proxy_client:patch(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body));
-            _ ->
-                handle_proxy_client:patch(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode(Body))
-        end,
+    PublicHandleEncoded = http_utils:url_encode(PublicHandle),
+    {ok, 204, _, _} = handle_proxy_client:patch(
+        ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body)
+    ),
     ok.
 
 %%%===================================================================
