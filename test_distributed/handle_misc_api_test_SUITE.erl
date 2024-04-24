@@ -559,8 +559,10 @@ delete_test(Config) ->
         oz_test_utils:delete_handle(Config, HandleId)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{handleId := HandleId} = _Env, _) ->
-        {ok, Handles} = oz_test_utils:list_handles(Config),
-        ?assertEqual(lists:member(HandleId, Handles), not ShouldSucceed)
+        ?assertEqual({ok, not ShouldSucceed}, ozt:rpc(od_handle, exists, [HandleId])),
+        %% @TODO VFS-11906 remove redundant checks
+        ?assertEqual(not ShouldSucceed, lists:member(HandleId, ozt_handles:list())),
+        ?assertEqual(not ShouldSucceed, lists:member(HandleId, ozt_handles:gather_by_all_prefixes()))
     end,
 
     ApiTestSpec = #api_test_spec{

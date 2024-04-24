@@ -106,7 +106,8 @@
 %% Returns list of admin privileges needed to perform given operation.
 %% @end
 %%--------------------------------------------------------------------
--callback required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
+-callback required_admin_privileges(entity_logic:req()) ->
+    [privileges:oz_privilege()] | forbidden | fun((entity_logic:record()) -> [privileges:oz_privilege()] | forbidden).
 
 
 %%--------------------------------------------------------------------
