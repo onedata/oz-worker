@@ -408,11 +408,11 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
     ShareRootFileId = ?check(file_id:guid_to_objectid(ShareRecord#od_share.root_file)),
     ExpIsShownAtResource = case IsShownAtResourceAttr of
         Value when is_binary(Value) -> Value;
-        _ -> <<"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary>>
+        _ -> <<"https://eureka3d.vm.fedcloud.eu/test/", ShareRootFileId/binary>>
     end,
     ExpIsShownAtElement = <<"<edm:isShownAt rdf:resource=\"", ExpIsShownAtResource/binary, "\"/>">>,
     ExpIsShownByElement = <<
-        "<edm:isShownBy rdf:resource=\"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary, "\"/>"
+        "<edm:isShownBy rdf:resource=\"https://eureka3d.vm.fedcloud.eu/test/", ShareRootFileId/binary, "\"/>"
     >>,
 
     <<
