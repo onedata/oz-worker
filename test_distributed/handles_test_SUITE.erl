@@ -317,7 +317,7 @@ add_handle_with_earlier_timestamp_test(_Config) ->
 
 
 get_handle_with_earliest_timestamp_test(_Config) ->
-    {FirstTimeStamp, _, _} =  hd(gather_by_all_prefixes()),
+    {FirstTimeStamp, _, _} = hd(gather_by_all_prefixes()),
     RandNumber = ?RAND_INT(1, 10000),
     TimeStamp = FirstTimeStamp - RandNumber,
 

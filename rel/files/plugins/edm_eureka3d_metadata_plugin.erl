@@ -60,8 +60,8 @@
 -define(rdf_about_attr(Value), #xmlAttribute{name = 'rdf:about', value = Value}).
 -define(rdf_resource_attr(Value), #xmlAttribute{name = 'rdf:resource', value = Value}).
 
--define(is_shown_by_value(FileId), str_utils:format("https://eureka3d.vm.fedcloud.eu/3d/~s", [FileId])).
--define(is_shown_at_value(FileId), str_utils:format("https://eureka3d.vm.fedcloud.eu/3d/~s", [FileId])).
+-define(is_shown_by_value(FileId), str_utils:format("https://eureka3d.vm.fedcloud.eu/test/~s", [FileId])).
+-define(is_shown_at_value(FileId), str_utils:format("https://eureka3d.vm.fedcloud.eu/test/~s", [FileId])).
 
 
 %%%===================================================================
