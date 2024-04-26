@@ -312,8 +312,9 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
         end),
         % every handle modification must be reflected in the handle registry
         % TODO VFS-11906 maybe rename handles -> handle_registry
-        handles:update_timestamp(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp),
-        handle_proxy:modify_handle(HandleId, FinalRawMetadata)
+        handles:update_timestamp(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp)
+        % TODO VFS-11906 currently not supported
+        % handle_proxy:modify_handle(HandleId, FinalRawMetadata)
     end),
 
     ok;
