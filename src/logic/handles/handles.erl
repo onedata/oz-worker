@@ -155,6 +155,7 @@ list(ListingOpts) ->
         %% and if a resumption token needs to be included
         size => Limit + 1,
         prev_link_name => StartIndex,
+        %% prev_tree_id option is necessary for inclusive => false to work
         prev_tree_id => TreeId,
         inclusive => false
     },

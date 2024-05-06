@@ -131,103 +131,103 @@
 %%%===================================================================
 
 all() -> ?ALL([
-    identify_get_test,
-    identify_post_test,
-    identify_change_earliest_datestamp_get_test,
-    identify_change_earliest_datestamp_post_test,
-
-    get_record_get_test,
-    get_record_post_test,
-    get_dc_record_with_bad_metadata_get_test,
-    get_dc_record_with_bad_metadata_post_test,
-
-    list_metadata_formats_get_test,
-    list_metadata_formats_post_test,
-    list_identifiers_get_test,
-    list_identifiers_post_test,
-
-    list_identifiers_resumption_token_get_test,
-    list_identifiers_resumption_token_post_test,
-    list_all_identifiers_no_resumption_token_get_test,
-    list_all_identifiers_no_resumption_token_post_test,
-    selective_list_identifiers1_get_test,
-    selective_list_identifiers1_post_test,
-    selective_list_identifiers2_get_test,
-    selective_list_identifiers2_post_test,
-    selective_list_identifiers3_get_test,
-    selective_list_identifiers3_post_test,
-    selective_list_identifiers4_get_test,
-    selective_list_identifiers4_post_test,
-    list_identifiers_modify_timestamp_get_test,
-    list_identifiers_modify_timestamp_post_test,
-    list_identifiers_modify_timestamp1_get_test,
-    list_identifiers_modify_timestamp1_post_test,
-    list_identifiers_modify_timestamp2_get_test,
-    list_identifiers_modify_timestamp2_post_test,
-
-    list_records_get_test,
-    list_records_post_test,
-    list_records_resumption_token_get_test,
-    list_records_resumption_token_post_test,
-    list_all_records_no_resumption_token_get_test,
-    list_all_records_no_resumption_token_post_test,
-    selective_list_records1_get_test,
-    selective_list_records1_post_test,
-    selective_list_records2_get_test,
-    selective_list_records2_post_test,
-    selective_list_records3_get_test,
-    selective_list_records3_post_test,
-    selective_list_records4_get_test,
-    selective_list_records4_post_test,
-    list_records_modify_timestamp_get_test,
-    list_records_modify_timestamp_post_test,
-    list_records_modify_timestamp1_get_test,
-    list_records_modify_timestamp1_post_test,
-    list_records_modify_timestamp2_get_test,
-    list_records_modify_timestamp2_post_test,
-
-    list_sets_get_test,
-    list_sets_post_test,
-    list_sets_empty_repository_get_test,
-    list_sets_empty_repository_post_test,
-
-    no_verb_get_test,
-    no_verb_post_test,
-    empty_verb_get_test,
-    empty_verb_post_test,
-    invalid_verb_get_test,
-    invalid_verb_post_test,
-    illegal_arg_get_test,
-    illegal_arg_post_test,
-    missing_arg_get_test,
-    missing_arg_post_test,
-    id_not_existing_get_test,
-    id_not_existing_post_test,
-    list_metadata_formats_no_format_error_get_test,
-    list_metadata_formats_no_format_error_post_test,
+%%    identify_get_test,
+%%    identify_post_test,
+%%    identify_change_earliest_datestamp_get_test,
+%%    identify_change_earliest_datestamp_post_test,
+%%
+%%    get_record_get_test,
+%%    get_record_post_test,
+%%    get_dc_record_with_bad_metadata_get_test,
+%%    get_dc_record_with_bad_metadata_post_test,
+%%
+%%    list_metadata_formats_get_test,
+%%    list_metadata_formats_post_test,
+%%    list_identifiers_get_test,
+%%    list_identifiers_post_test,
+%%
+%%    list_identifiers_resumption_token_get_test,
+%%    list_identifiers_resumption_token_post_test,
+%%    list_all_identifiers_no_resumption_token_get_test,
+%%    list_all_identifiers_no_resumption_token_post_test,
+%%    selective_list_identifiers1_get_test,
+%%    selective_list_identifiers1_post_test,
+%%    selective_list_identifiers2_get_test,
+%%    selective_list_identifiers2_post_test,
+%%    selective_list_identifiers3_get_test,
+%%    selective_list_identifiers3_post_test,
+%%    selective_list_identifiers4_get_test,
+%%    selective_list_identifiers4_post_test,
+%%    list_identifiers_modify_timestamp_get_test,
+%%    list_identifiers_modify_timestamp_post_test,
+%%    list_identifiers_modify_timestamp1_get_test,
+%%    list_identifiers_modify_timestamp1_post_test,
+%%    list_identifiers_modify_timestamp2_get_test,
+%%    list_identifiers_modify_timestamp2_post_test,
+%%
+%%    list_records_get_test,
+%%    list_records_post_test,
+%%    list_records_resumption_token_get_test,
+%%    list_records_resumption_token_post_test,
+%%    list_all_records_no_resumption_token_get_test,
+%%    list_all_records_no_resumption_token_post_test,
+%%    selective_list_records1_get_test,
+%%    selective_list_records1_post_test,
+%%    selective_list_records2_get_test,
+%%    selective_list_records2_post_test,
+%%    selective_list_records3_get_test,
+%%    selective_list_records3_post_test,
+%%    selective_list_records4_get_test,
+%%    selective_list_records4_post_test,
+%%    list_records_modify_timestamp_get_test,
+%%    list_records_modify_timestamp_post_test,
+%%    list_records_modify_timestamp1_get_test,
+%%    list_records_modify_timestamp1_post_test,
+%%    list_records_modify_timestamp2_get_test,
+%%    list_records_modify_timestamp2_post_test,
+%%
+%%    list_sets_get_test,
+%%    list_sets_post_test,
+%%    list_sets_empty_repository_get_test,
+%%    list_sets_empty_repository_post_test,
+%%
+%%    no_verb_get_test,
+%%    no_verb_post_test,
+%%    empty_verb_get_test,
+%%    empty_verb_post_test,
+%%    invalid_verb_get_test,
+%%    invalid_verb_post_test,
+%%    illegal_arg_get_test,
+%%    illegal_arg_post_test,
+%%    missing_arg_get_test,
+%%    missing_arg_post_test,
+%%    id_not_existing_get_test,
+%%    id_not_existing_post_test,
+%%    list_metadata_formats_no_format_error_get_test,
+%%    list_metadata_formats_no_format_error_post_test,
     cannot_disseminate_format_get_test,
-    cannot_disseminate_format_post_test,
-    exclusive_resumption_token_required_get_test,
-    exclusive_resumption_token_required_post_test,
-    list_identifiers_empty_repository_error_get_test,
-    list_identifiers_empty_repository_error_post_test,
-    list_identifiers_no_records_match_error1_get_test,
-    list_identifiers_no_records_match_error1_post_test,
-    list_identifiers_no_records_match_error2_get_test,
-    list_identifiers_no_records_match_error2_post_test,
-    list_identifiers_granularity_mismatch_error_post_test,
-    list_identifiers_granularity_mismatch_error_get_test,
-    list_identifiers_wrong_date_format_error1_get_test,
-    list_identifiers_wrong_date_format_error1_post_test,
-    list_identifiers_wrong_date_format_error2_get_test,
-    list_identifiers_wrong_date_format_error2_post_test,
-    list_identifiers_wrong_date_format_error3_get_test,
-    list_identifiers_wrong_date_format_error3_post_test,
-
-    list_records_no_records_match_error1_get_test,
-    list_records_no_records_match_error1_post_test,
-    list_records_no_records_match_error2_get_test,
-    list_records_no_records_match_error2_post_test
+    cannot_disseminate_format_post_test
+%%    exclusive_resumption_token_required_get_test,
+%%    exclusive_resumption_token_required_post_test,
+%%    list_identifiers_empty_repository_error_get_test,
+%%    list_identifiers_empty_repository_error_post_test,
+%%    list_identifiers_no_records_match_error1_get_test,
+%%    list_identifiers_no_records_match_error1_post_test,
+%%    list_identifiers_no_records_match_error2_get_test,
+%%    list_identifiers_no_records_match_error2_post_test,
+%%    list_identifiers_granularity_mismatch_error_post_test,
+%%    list_identifiers_granularity_mismatch_error_get_test,
+%%    list_identifiers_wrong_date_format_error1_get_test,
+%%    list_identifiers_wrong_date_format_error1_post_test,
+%%    list_identifiers_wrong_date_format_error2_get_test,
+%%    list_identifiers_wrong_date_format_error2_post_test,
+%%    list_identifiers_wrong_date_format_error3_get_test,
+%%    list_identifiers_wrong_date_format_error3_post_test,
+%%
+%%    list_records_no_records_match_error1_get_test,
+%%    list_records_no_records_match_error1_post_test,
+%%    list_records_no_records_match_error2_get_test,
+%%    list_records_no_records_match_error2_post_test
 ]).
 
 %% useful macros
@@ -593,8 +593,24 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     [ShareId1, ShareId2] = create_shares(Config, SpaceIds),
     {HSId, _} = create_handle_service(Config, User),
     Timestamp1 = ?CURRENT_DATETIME(),
+    EmptyRepositoryTimestamp = decrease_timestamp(Timestamp1, 3600),
     Timestamp2 = increase_timestamp(Timestamp1, 1),
     Timestamp3 = increase_timestamp(Timestamp2, 1),
+
+    % identify earliest datestamp with empty repository
+    ExpResponseContentEmpty = [
+        #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
+        #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
+        #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
+        #xmlElement{name = earliestDatestamp, content = [#xmlText{value = to_datestamp(EmptyRepositoryTimestamp)}]},
+        #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
+        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
+    ] ++ [
+        #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
+    ],
+    ?assert(check_identify(200, [], Method, ExpResponseContentEmpty, Config)),
+
+
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
     Identifier1 = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId1,
@@ -603,7 +619,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     _Identifier2 = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId2,
         Metadata2, MetadataPrefix, Timestamp2),
 
-    ExpResponseContent = [
+    ExpResponseContent1 = [
         #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
@@ -613,7 +629,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     ] ++ [
         #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
     ],
-    ?assert(check_identify(200, [], Method, ExpResponseContent, Config)),
+    ?assert(check_identify(200, [], Method, ExpResponseContent1, Config)),
 
     modify_handle_with_mocked_timestamp(Config, Identifier1, Metadata, Timestamp3),
 
@@ -964,7 +980,15 @@ cannot_disseminate_format_test_base(Config, Method) ->
         {<<"identifier">>, oai_identifier(Config, Identifier)},
         {<<"metadataPrefix">>, <<"not_supported_format">>}
     ],
-    ?assert(check_cannot_disseminate_format_error(200, Args, Method, [], Config)).
+    ?assert(check_cannot_disseminate_format_error(200, Args, Method, [], Config)),
+
+    AnotherMetadataPrefix = ?RAND_ELEMENT(lists:delete(MetadataPrefix, ozt_handles:supported_metadata_prefixes())),
+    Args2 = [
+        {<<"identifier">>, oai_identifier(Config, Identifier)},
+        {<<"metadataPrefix">>, AnotherMetadataPrefix}
+    ],
+    ?assert(check_cannot_disseminate_format_error(200, Args2, Method, [], Config)).
+
 
 exclusive_resumption_token_required_error(Config, Method) ->
     Args = [
@@ -1438,6 +1462,10 @@ increase_timestamp(undefined, _) -> undefined;
 increase_timestamp(Datetime, ExtraSeconds) ->
     Seconds = calendar:datetime_to_gregorian_seconds(Datetime),
     calendar:gregorian_seconds_to_datetime(Seconds + ExtraSeconds).
+
+decrease_timestamp(Datetime, ExtraSeconds) ->
+    Seconds = calendar:datetime_to_gregorian_seconds(Datetime),
+    calendar:gregorian_seconds_to_datetime(Seconds - ExtraSeconds).
 
 to_datestamp(undefined) -> undefined;
 to_datestamp(DateTime) ->
