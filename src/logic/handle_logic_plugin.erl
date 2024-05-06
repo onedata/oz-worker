@@ -142,11 +142,14 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
 
         {ok, #document{key = HandleId}} = od_handle:create(#document{value = #od_handle{
             public_handle = PublicHandle,
-            handle_service = HandleServiceId,
             resource_type = ResourceType,
-            resource_id = ShareId,
             metadata_prefix = MetadataPrefix,
             metadata = oai_utils:encode_xml(FinalMetadata),
+            timestamp = CreationTime,
+
+            resource_id = ShareId,
+            handle_service = HandleServiceId,
+
             creator = aai:normalize_subject(Auth#auth.subject),
             creation_time = CreationTime
         }}),
@@ -309,8 +312,9 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
         end),
         % every handle modification must be reflected in the handle registry
         % TODO VFS-11906 maybe rename handles -> handle_registry
-        handles:update_timestamp(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp),
-        handle_proxy:modify_handle(HandleId, FinalRawMetadata)
+        handles:update_timestamp(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp)
+        % TODO VFS-11906 currently not supported
+        % handle_proxy:modify_handle(HandleId, FinalRawMetadata)
     end),
 
     ok;
@@ -362,7 +366,19 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
             handles:report_deleted(MetadataPrefix, HandleService, HandleId,  TimeStamp,  NewTimestamp),
             entity_graph:delete_with_relations(od_handle, HandleId)
         end
-    end).
+    end);
+
+delete(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}}) ->
+    entity_graph:remove_relation(
+        od_user, UserId,
+        od_handle, HandleId
+    );
+
+delete(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}}) ->
+    entity_graph:remove_relation(
+        od_group, GroupId,
+        od_handle, HandleId
+    ).
 
 
 %%--------------------------------------------------------------------

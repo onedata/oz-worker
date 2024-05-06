@@ -188,8 +188,12 @@ update(#el_req{gri = #gri{id = ShareId, aspect = instance}, data = Data}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
-delete(#el_req{gri = #gri{id = ShareId, aspect = instance}}) ->
-    entity_graph:delete_with_relations(od_share, ShareId).
+delete(#el_req{auth = Auth, gri = #gri{id = ShareId, aspect = instance}}) ->
+     %% @TODO VFS-11906 critical section? maybe remove the logic from entity graph?
+    fun(#od_share{handle = HandleId}) ->
+        HandleId /= undefined andalso ?check(handle_logic:delete(Auth, HandleId)),
+        entity_graph:delete_with_relations(od_share, ShareId)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -253,7 +257,8 @@ authorize(_, _) ->
 %% Returns list of admin privileges needed to perform given operation.
 %% @end
 %%--------------------------------------------------------------------
--spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
+-spec required_admin_privileges(entity_logic:req()) ->
+    [privileges:oz_privilege()] | forbidden | fun((entity_logic:record()) -> [privileges:oz_privilege()] | forbidden).
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
     [?OZ_SHARES_CREATE];
 
@@ -267,10 +272,14 @@ required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instan
     [?OZ_SHARES_UPDATE];
 
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance}}) ->
-    [?OZ_SHARES_DELETE];
+    fun
+        (#od_share{handle = undefined}) -> [?OZ_SHARES_DELETE];
+        (#od_share{handle = _}) -> [?OZ_SHARES_DELETE, ?OZ_HANDLES_DELETE]
+    end;
 
 required_admin_privileges(_) ->
     forbidden.
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns validity verificators for given request.

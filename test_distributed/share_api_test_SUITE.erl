@@ -454,58 +454,88 @@ update_test(Config) ->
 delete_test(Config) ->
     % create space with 3 users:
     %   Owner effectively has all the privileges
-    %   U2 gets the SPACE_MANAGE_SHARES privilege
-    %   U1 gets all remaining privileges
-    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
+    %   UserWithManageSharesPriv gets the SPACE_MANAGE_SHARES privilege
+    %   UserWithoutManageSharesPriv gets all remaining privileges
+    {SpaceId, Owner, UserWithoutManageSharesPriv, UserWithManageSharesPriv} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_MANAGE_SHARES
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    HandleServiceId = ozt_users:create_handle_service_for(Owner),
 
-    EnvSetUpFun = fun() ->
-        ShareId = ?UNIQUE_STRING,
-        {ok, ShareId} = oz_test_utils:create_share(
-            Config, ?ROOT, ShareId, ?SHARE_NAME1, S1
-        ),
-        #{shareId => ShareId}
-    end,
-    DeleteEntityFun = fun(#{shareId := ShareId} = _Env) ->
-        oz_test_utils:delete_share(Config, ShareId)
-    end,
-    VerifyEndFun = fun(ShouldSucceed, #{shareId := ShareId} = _Env, _) ->
-        {ok, Shares} = oz_test_utils:list_shares(Config),
-        ?assertEqual(lists:member(ShareId, Shares), not ShouldSucceed)
-    end,
+    lists:foreach(fun(ScenarioType) ->
+        EnvSetUpFun = fun() ->
+            ShareId = datastore_key:new(),
+            {ok, ShareId} = oz_test_utils:create_share(
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
+            ),
+            HandleId = case ScenarioType of
+                with_handle -> ozt_users:create_handle_for(Owner, HandleServiceId, ShareId);
+                without_handle -> undefined
+            end,
+            #{shareId => ShareId, handleId => HandleId}
+        end,
+        DeleteEntityFun = fun(#{shareId := ShareId} = _Env) ->
+            oz_test_utils:delete_share(Config, ShareId)
+        end,
+        VerifyEndFun = fun(ShouldSucceed, #{shareId := ShareId, handleId := HandleId} = _Env, _) ->
+            ?assertEqual({ok, not ShouldSucceed}, ozt:rpc(od_share, exists, [ShareId])),
+            {ok, Shares} = oz_test_utils:list_shares(Config),
+            ?assertEqual(lists:member(ShareId, Shares), not ShouldSucceed),
+            case ScenarioType of
+                without_handle ->
+                    ok;
+                with_handle ->
+                    % when a share is deleted and it had a handle attached, the handle should be deleted too
+                    ?assertEqual({ok, not ShouldSucceed}, ozt:rpc(od_handle, exists, [HandleId])),
+                    %% @TODO VFS-11906 remove redundant checks
+                    ?assertEqual(not ShouldSucceed, lists:member(HandleId, ozt_handles:list())),
+                    ?assertEqual(not ShouldSucceed, lists:member(HandleId, ozt_handles:gather_by_all_prefixes()))
+            end
+        end,
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_SHARES_DELETE]},
-                {user, Owner},
-                {user, U2}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin}
-            ]
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = lists:flatten([
+                    root,
+                    {admin, case ScenarioType of
+                        with_handle -> [?OZ_SHARES_DELETE, ?OZ_HANDLES_DELETE];
+                        without_handle -> [?OZ_SHARES_DELETE]
+                    end},
+                    {user, Owner},
+                    % the UserWithManageSharesPriv does not have rights to remove the handle, hence
+                    % he will only be authorized to delete the share if it does not have any handle
+                    case ScenarioType of
+                        with_handle -> [];
+                        without_handle -> {user, UserWithManageSharesPriv}
+                    end
+                ]),
+                unauthorized = [nobody],
+                forbidden = lists:flatten([
+                    {user, UserWithoutManageSharesPriv},
+                    {user, NonAdmin},
+                    case ScenarioType of
+                        with_handle -> {user, UserWithManageSharesPriv};
+                        without_handle -> []
+                    end
+                ])
+            },
+            % DELETE operation is not supported in REST API (reserved for Oneprovider logic via GraphSync)
+            logic_spec = #logic_spec{
+                module = share_logic,
+                function = delete,
+                args = [auth, shareId],
+                expected_result = ?OK_RES
+            },
+            gs_spec = #gs_spec{
+                operation = delete,
+                gri = #gri{type = od_share, id = shareId, aspect = instance},
+                expected_result_op = ?OK_RES
+            }
         },
-        % DELETE operation is not supported in REST API (reserved for Oneprovider logic via GraphSync)
-        logic_spec = #logic_spec{
-            module = share_logic,
-            function = delete,
-            args = [auth, shareId],
-            expected_result = ?OK_RES
-        },
-        gs_spec = #gs_spec{
-            operation = delete,
-            gri = #gri{type = od_share, id = shareId, aspect = instance},
-            expected_result_op = ?OK_RES
-        }
-    },
-    ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
-    )).
+        ?assert(api_test_scenarios:run_scenario(delete_entity,
+            [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
+        ))
+    end, [with_handle, without_handle]).
 
 
 get_shared_file_or_directory_data_test(Config) ->
@@ -835,9 +865,11 @@ init_per_testcase(choose_provider_for_public_share_handling_test, Config) ->
     Config;
 init_per_testcase(_, Config) ->
     ozt_mocks:freeze_time(),
+    ozt_mocks:mock_handle_proxy(),
     Config.
 
 end_per_testcase(choose_provider_for_public_share_handling_test, _Config) ->
     ok;
 end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_handle_proxy(),
     ozt_mocks:unfreeze_time().
