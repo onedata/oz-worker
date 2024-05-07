@@ -459,51 +459,58 @@ list_groups_test(Config) ->
 
 
 get_group_test(Config) ->
-    % create cluster with 2 users:
-    %   U2 gets the CLUSTER_VIEW privilege
-    %   U1 gets all remaining privileges
-    {C1, U1, U2, {P1, P1Token}} = api_test_scenarios:create_basic_cluster_env(
+    % create cluster with 3 users:
+    %   PrivilegedMember gets the CLUSTER_VIEW privilege
+    %   UnprivilegedMember gets all remaining privileges
+    %   UnprivilegedMemberFromTheGroup does not get the CLUSTER_VIEW privilege, but belongs to the group
+    {ClusterId, UnprivilegedMember, PrivilegedMember, {P1, P1Token}} = api_test_scenarios:create_basic_cluster_env(
         Config, ?CLUSTER_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     GroupData = #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1},
-    {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, GroupData),
-    oz_test_utils:cluster_add_group(Config, C1, G1),
+    {ok, GroupId} = oz_test_utils:create_group(Config, ?ROOT, GroupData),
+    oz_test_utils:cluster_add_group(Config, ClusterId, GroupId),
+
+    UnprivilegedMemberFromTheGroup = ozt_users:create(),
+    ozt_clusters:add_user(ClusterId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:cluster_admin() -- [?CLUSTER_VIEW])),
+    ozt_groups:add_user(GroupId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:group_admin())),
+    ozt:reconcile_entity_graph(),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
                 {admin, [?OZ_GROUPS_VIEW]},
-                {user, U2},
+                {user, PrivilegedMember},
+                {user, UnprivilegedMemberFromTheGroup},
                 {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {user, U1}
+                {user, UnprivilegedMember}
             ]
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/clusters/">>, C1, <<"/groups/">>, G1],
+            path = [<<"/clusters/">>, ClusterId, <<"/groups/">>, GroupId],
             expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:shared_group(rest, G1, GroupData)
+            expected_body = api_test_expect:shared_group(rest, GroupId, GroupData)
         },
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = get_group,
-            args = [auth, C1, G1],
-            expected_result = api_test_expect:shared_group(logic, G1, GroupData)
+            args = [auth, ClusterId, GroupId],
+            expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
         },
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{
-                type = od_group, id = G1, aspect = instance, scope = shared
+                type = od_group, id = GroupId, aspect = instance, scope = shared
             },
-            auth_hint = ?THROUGH_CLUSTER(C1),
-            expected_result_op = api_test_expect:shared_group(gs, G1, GroupData)
+            auth_hint = ?THROUGH_CLUSTER(ClusterId),
+            expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -686,8 +693,15 @@ list_eff_groups_test(Config) ->
 
 get_eff_group_test(Config) ->
     {
-        C1, EffGroups, _EffUsers, {U1, U2, NonAdmin}, {P1, P1Token}
+        ClusterId, EffGroups, _EffUsers, {UnprivilegedMember, PrivilegedMember, NonAdmin}, {P1, P1Token}
     } = api_test_scenarios:create_cluster_eff_users_env(Config),
+
+    UnprivilegedMemberFromTheGroup = ozt_users:create(),
+    ozt_clusters:add_user(ClusterId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:cluster_admin() -- [?CLUSTER_VIEW])),
+    lists:foreach(fun({GroupId, _}) ->
+        ozt_groups:add_user(GroupId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:group_admin()))
+    end, EffGroups),
+    ozt:reconcile_entity_graph(),
 
     lists:foreach(fun({GroupId, GroupData}) ->
         ApiTestSpec = #api_test_spec{
@@ -695,19 +709,20 @@ get_eff_group_test(Config) ->
                 correct = [
                     root,
                     {admin, [?OZ_GROUPS_VIEW]},
-                    {user, U2},
+                    {user, PrivilegedMember},
+                    {user, UnprivilegedMemberFromTheGroup},
                     {provider, P1, P1Token}
                 ],
                 unauthorized = [nobody],
                 forbidden = [
-                    {user, U1},
+                    {user, UnprivilegedMember},
                     {user, NonAdmin}
                 ]
             },
             rest_spec = #rest_spec{
                 method = get,
                 path = [
-                    <<"/clusters/">>, C1, <<"/effective_groups/">>, GroupId
+                    <<"/clusters/">>, ClusterId, <<"/effective_groups/">>, GroupId
                 ],
                 expected_code = ?HTTP_200_OK,
                 expected_body = api_test_expect:shared_group(rest, GroupId, GroupData)
@@ -715,7 +730,7 @@ get_eff_group_test(Config) ->
             logic_spec = #logic_spec{
                 module = cluster_logic,
                 function = get_eff_group,
-                args = [auth, C1, GroupId],
+                args = [auth, ClusterId, GroupId],
                 expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
             },
             gs_spec = #gs_spec{
@@ -724,7 +739,7 @@ get_eff_group_test(Config) ->
                     type = od_group, id = GroupId,
                     aspect = instance, scope = shared
                 },
-                auth_hint = ?THROUGH_CLUSTER(C1),
+                auth_hint = ?THROUGH_CLUSTER(ClusterId),
                 expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
             }
         },

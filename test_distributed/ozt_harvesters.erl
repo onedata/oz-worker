@@ -18,6 +18,7 @@
 
 %% API
 -export([create/0, create/1]).
+-export([add_user/2, add_user/3]).
 -export([add_space/2]).
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([delete/1]).
@@ -35,6 +36,16 @@ create() ->
 create(Name) ->
     {ok, HarvesterId} = ?assertMatch({ok, _}, ozt:rpc(harvester_logic, create, [?ROOT, ?HARVESTER_CREATE_DATA(Name)])),
     HarvesterId.
+
+
+-spec add_user(od_harvester:id(), od_user:id()) -> ok.
+add_user(HarvesterId, UserId) ->
+    add_user(HarvesterId, UserId, privileges:harvester_member()).
+
+-spec add_user(od_harvester:id(), od_user:id(), [privileges:harvester_privilege()]) -> ok.
+add_user(HarvesterId, UserId, Privileges) ->
+    ?assertMatch({ok, _}, ozt:rpc(harvester_logic, add_user, [?ROOT, HarvesterId, UserId, Privileges])),
+    ok.
 
 
 add_space(HarvesterId, SpaceId) ->
