@@ -18,7 +18,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([report_created/4, report_deleted/5, update_timestamp/5]).
--export([list/1, gather_by_all_prefixes/0,  get_earliest_timestamp/0]).
+-export([list/1, gather_by_all_prefixes/0, list_completely/1,  get_earliest_timestamp/0]).
 
 -export([purge_all_deleted_entry/0]).
 
@@ -175,6 +175,14 @@ gather_by_all_prefixes() ->
     end, oai_metadata:supported_formats()).
 
 
+-spec list_completely(listing_opts()) -> [handle_listing_entry()].
+list_completely(ListingOpts) ->
+    case list(ListingOpts) of
+        {List, undefined} -> List;
+        {List, ResumptionToken} -> List ++ list_completely(#{resumption_token => ResumptionToken})
+    end.
+
+
 -spec get_earliest_timestamp() -> undefined | od_handle:timestamp_seconds().
 get_earliest_timestamp() ->
     EntriesWithEarliestTimestamps = lists:flatmap(fun(MetadataPrefix) ->
@@ -201,7 +209,7 @@ purge_all_deleted_entry() ->
             service_id = HandleServiceId,
             handle_id = HandleId
         }) ->
-            delete_links(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
+            ok = delete_links(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
         end, All)
     end, oai_metadata:supported_formats()).
 
@@ -326,15 +334,6 @@ add(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds, ExistsFlag) ->
         ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HandleServiceId)
     ]),
     ok.
-
-
-%% @private
--spec list_completely(listing_opts()) -> [handle_listing_entry()].
-list_completely(ListingOpts) ->
-    case list(ListingOpts) of
-        {List, undefined} -> List;
-        {List, ResumptionToken} -> List ++ list_completely(#{resumption_token => ResumptionToken})
-    end.
 
 
 %% @private

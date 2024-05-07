@@ -22,7 +22,7 @@
     identifier :: oai_id(),
     datestamp :: binary(),
     set_spec :: oai_set_spec(),
-    deleted :: boolean()
+    deleted :: boolean() | undefined
 }).
 
 -record(oai_metadata_format, {
@@ -46,7 +46,7 @@
 
 -record(oai_record, {
     header :: oai_header(),
-    metadata :: oai_metadata(),
+    metadata :: oai_metadata() | undefined,
     about :: oai_about() | undefined
 }).
 

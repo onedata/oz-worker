@@ -72,7 +72,6 @@ build_oai_header(#handle_listing_entry{
         deleted = true
     }.
 
-% TODO VFS-11924 https://git.onedata.org/projects/VFS/repos/oz-worker/pull-requests/1591/overview?commentId=99463
 -spec build_oai_record(handle_listing_entry()) -> #oai_record{}.
 build_oai_record(#handle_listing_entry{exists_flag = true, handle_id = HandleId} = ListingEntry) ->
     Handle = get_handle(HandleId),

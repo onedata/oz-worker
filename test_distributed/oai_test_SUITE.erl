@@ -1308,8 +1308,8 @@ init_per_testcase(_, Config) ->
     Config.
 
 end_per_testcase(_, Config) ->
-    ok = ozt:rpc(handles, purge_all_deleted_entry, []),
     oz_test_utils:delete_all_entities(Config),
+    ok = ozt:rpc(handles, purge_all_deleted_entry, []),
     unmock_handle_proxy(Config),
     ok.
 
@@ -1768,8 +1768,7 @@ prepare_harvesting_args(MetadataPrefix, From, Until, Set, ExistsFlag) ->
     Args2 = add_to_args_if_defined(<<"from">>, From, Args),
     Args3 = add_to_args_if_defined(<<"until">>, Until, Args2),
     Args4 = add_to_args_if_defined(<<"set">>, Set, Args3),
-    Args5 = add_to_args_if_defined(<<"includeDeleted">>, ExistsFlag, Args4),
-    Args5.
+    add_to_args_if_defined(<<"includeDeleted">>, ExistsFlag, Args4).
 
 ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset) ->
     lists:filter(fun({_Id, TimeOffset}) ->

@@ -19,7 +19,7 @@
 
 %% API
 -export([create/2, create/4, get/1, list/0]).
--export([gather_by_all_prefixes/0]).
+-export([gather_by_all_prefixes/0, list_completely/1, list_portion/1]).
 -export([supported_metadata_prefixes/0]).
 -export([example_input_metadata/1, example_input_metadata/2]).
 -export([expected_final_metadata/1, expected_final_metadata/2]).
@@ -65,9 +65,9 @@ list() ->
 %% @TODO VFS-11906 refactor, move to a common place
 %% @TODO VFS-11906 tell apart list and this (this comes from registry which can have deleted ones...)
 gather_by_all_prefixes() ->
-    element(3, lists:unzip3(lists:flatmap(fun(MetadataPrefix) ->
+    lists:sort(lists:flatmap(fun(MetadataPrefix) ->
         list_completely(#{metadata_prefix => MetadataPrefix})
-    end, ozt_handles:supported_metadata_prefixes()))).
+    end, ozt_handles:supported_metadata_prefixes())).
 
 %% @TODO VFS-11906 refactor, move to a common place
 %% @private
