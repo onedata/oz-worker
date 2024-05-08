@@ -378,41 +378,50 @@ list_groups_test(Config) ->
 
 
 get_group_test(Config) ->
-    % create atm_inventory with 2 users:
-    %   U2 gets the ATM_INVENTORY_VIEW privilege
-    %   U1 gets all remaining privileges
-    {AtmInventory, UserWithoutPrivilege, UserWithPrivilege} = api_test_scenarios:create_basic_atm_inventory_env(
+    % create atm_inventory with 3 users:
+    %   PrivilegedMember gets the ATM_INVENTORY_VIEW privilege
+    %   UnprivilegedMember gets all remaining privileges
+    %   UnprivilegedMemberFromTheGroup does not get the ATM_INVENTORY_VIEW privilege, but belongs to the group
+    {AtmInventoryId, UnprivilegedMember, PrivilegedMember} = api_test_scenarios:create_basic_atm_inventory_env(
         ?ATM_INVENTORY_VIEW
     ),
     NonAdmin = ozt_users:create(),
 
     GroupData = #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1},
     SubjectGroup = ozt_groups:create(GroupData),
-    ozt_atm_inventories:add_group(AtmInventory, SubjectGroup),
+    ozt_atm_inventories:add_group(AtmInventoryId, SubjectGroup),
+
+    UnprivilegedMemberFromTheGroup = ozt_users:create(),
+    ozt_atm_inventories:add_user(
+        AtmInventoryId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:atm_inventory_admin() -- [?ATM_INVENTORY_VIEW])
+    ),
+    ozt_groups:add_user(SubjectGroup, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:group_admin())),
+    ozt:reconcile_entity_graph(),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
                 {admin, [?OZ_GROUPS_VIEW]},
-                {user, UserWithPrivilege}
+                {user, PrivilegedMember},
+                {user, UnprivilegedMemberFromTheGroup}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {user, UserWithoutPrivilege}
+                {user, UnprivilegedMember}
             ]
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/atm_inventories/">>, AtmInventory, <<"/groups/">>, SubjectGroup],
+            path = [<<"/atm_inventories/">>, AtmInventoryId, <<"/groups/">>, SubjectGroup],
             expected_code = ?HTTP_200_OK,
             expected_body = api_test_expect:shared_group(rest, SubjectGroup, GroupData)
         },
         logic_spec = #logic_spec{
             module = atm_inventory_logic,
             function = get_group,
-            args = [auth, AtmInventory, SubjectGroup],
+            args = [auth, AtmInventoryId, SubjectGroup],
             expected_result = api_test_expect:shared_group(logic, SubjectGroup, GroupData)
         },
         gs_spec = #gs_spec{
@@ -420,7 +429,7 @@ get_group_test(Config) ->
             gri = #gri{
                 type = od_group, id = SubjectGroup, aspect = instance, scope = shared
             },
-            auth_hint = ?THROUGH_ATM_INVENTORY(AtmInventory),
+            auth_hint = ?THROUGH_ATM_INVENTORY(AtmInventoryId),
             expected_result_op = api_test_expect:shared_group(gs, SubjectGroup, GroupData)
         }
     },
@@ -595,8 +604,17 @@ list_eff_groups_test(Config) ->
 
 get_eff_group_test(Config) ->
     {
-        AtmInventory, EffGroups, _EffUsers, {UserWithoutView, UserWithView, NonAdmin}
+        AtmInventoryId, EffGroups, _EffUsers, {UnprivilegedMember, PrivilegedMember, NonAdmin}
     } = api_test_scenarios:create_atm_inventory_eff_users_env(Config),
+
+    UnprivilegedMemberFromTheGroup = ozt_users:create(),
+    ozt_atm_inventories:add_user(
+        AtmInventoryId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:atm_inventory_admin() -- [?ATM_INVENTORY_VIEW])
+    ),
+    lists:foreach(fun({GroupId, _}) ->
+        ozt_groups:add_user(GroupId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:group_admin()))
+    end, EffGroups),
+    ozt:reconcile_entity_graph(),
 
     lists:foreach(fun({GroupId, GroupData}) ->
         ApiTestSpec = #api_test_spec{
@@ -604,24 +622,25 @@ get_eff_group_test(Config) ->
                 correct = [
                     root,
                     {admin, [?OZ_GROUPS_VIEW]},
-                    {user, UserWithView}
+                    {user, PrivilegedMember},
+                    {user, UnprivilegedMemberFromTheGroup}
                 ],
                 unauthorized = [nobody],
                 forbidden = [
-                    {user, UserWithoutView},
+                    {user, UnprivilegedMember},
                     {user, NonAdmin}
                 ]
             },
             rest_spec = #rest_spec{
                 method = get,
-                path = [<<"/atm_inventories/">>, AtmInventory, <<"/effective_groups/">>, GroupId],
+                path = [<<"/atm_inventories/">>, AtmInventoryId, <<"/effective_groups/">>, GroupId],
                 expected_code = ?HTTP_200_OK,
                 expected_body = api_test_expect:shared_group(rest, GroupId, GroupData)
             },
             logic_spec = #logic_spec{
                 module = atm_inventory_logic,
                 function = get_eff_group,
-                args = [auth, AtmInventory, GroupId],
+                args = [auth, AtmInventoryId, GroupId],
                 expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
             },
             gs_spec = #gs_spec{
@@ -630,7 +649,7 @@ get_eff_group_test(Config) ->
                     type = od_group, id = GroupId,
                     aspect = instance, scope = shared
                 },
-                auth_hint = ?THROUGH_ATM_INVENTORY(AtmInventory),
+                auth_hint = ?THROUGH_ATM_INVENTORY(AtmInventoryId),
                 expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
             }
         },

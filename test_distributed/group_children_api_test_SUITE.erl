@@ -234,51 +234,57 @@ create_child_test(Config) ->
 
 
 get_child_details_test(Config) ->
-    % create group with 2 users:
-    %   U2 gets the GROUP_VIEW privilege
-    %   U1 gets all remaining privileges
-    {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
+    % create group with 3 users:
+    %   PrivilegedMember gets the GROUP_VIEW privilege
+    %   UnprivilegedMember gets all remaining privileges
+    %   UnprivilegedMemberFromTheGroup does not get the GROUP_VIEW privilege, but belongs to the child group
+    {SubjectGroupId, UnprivilegedMember, PrivilegedMember} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     GroupData = #{<<"name">> => ?GROUP_NAME2, <<"type">> => ?GROUP_TYPE2},
-    {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, GroupData),
-    oz_test_utils:group_add_group(Config, G1, G2),
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    {ok, ChildGroupId} = oz_test_utils:create_group(Config, ?ROOT, GroupData),
+    oz_test_utils:group_add_group(Config, SubjectGroupId, ChildGroupId),
+
+    UnprivilegedMemberFromTheChildGroup = ozt_users:create(),
+    ozt_groups:add_user(SubjectGroupId, UnprivilegedMemberFromTheChildGroup, ?RAND_SUBLIST(privileges:group_admin() -- [?SPACE_VIEW])),
+    ozt_groups:add_user(ChildGroupId, UnprivilegedMemberFromTheChildGroup, ?RAND_SUBLIST(privileges:group_admin())),
+    ozt:reconcile_entity_graph(),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2},
+                {user, PrivilegedMember},
+                {user, UnprivilegedMemberFromTheChildGroup},
                 {admin, [?OZ_GROUPS_VIEW]}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {user, U1}
+                {user, UnprivilegedMember}
             ]
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/groups/">>, G1, <<"/children/">>, G2],
+            path = [<<"/groups/">>, SubjectGroupId, <<"/children/">>, ChildGroupId],
             expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:shared_group(rest, G2, GroupData)
+            expected_body = api_test_expect:shared_group(rest, ChildGroupId, GroupData)
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_child,
-            args = [auth, G1, G2],
-            expected_result = api_test_expect:shared_group(logic, G2, GroupData)
+            args = [auth, SubjectGroupId, ChildGroupId],
+            expected_result = api_test_expect:shared_group(logic, ChildGroupId, GroupData)
         },
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{
-                type = od_group, id = G2, aspect = instance, scope = shared
+                type = od_group, id = ChildGroupId, aspect = instance, scope = shared
             },
-            auth_hint = ?THROUGH_GROUP(G1),
-            expected_result_op = api_test_expect:shared_group(gs, G2, GroupData)
+            auth_hint = ?THROUGH_GROUP(SubjectGroupId),
+            expected_result_op = api_test_expect:shared_group(gs, ChildGroupId, GroupData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -692,60 +698,67 @@ get_eff_children_test(Config) ->
 
 get_eff_child_details_test(Config) ->
     {
-        [{G1, _} | EffChildren], _Users
+        [{SubjectGroupId, _} | EffChildren], _Users
     } = api_test_scenarios:create_eff_child_groups_env(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config),
-    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, UnprivilegedMember} = oz_test_utils:create_user(Config),
+    {ok, PrivilegedMember} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllGroupPrivs = privileges:group_privileges(),
-    {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1,
+    {ok, UnprivilegedMember} = oz_test_utils:group_add_user(Config, SubjectGroupId, UnprivilegedMember),
+    oz_test_utils:group_set_user_privileges(Config, SubjectGroupId, UnprivilegedMember,
         AllGroupPrivs -- [?GROUP_VIEW], [?GROUP_VIEW]
     ),
-    {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2,
+    {ok, PrivilegedMember} = oz_test_utils:group_add_user(Config, SubjectGroupId, PrivilegedMember),
+    oz_test_utils:group_set_user_privileges(Config, SubjectGroupId, PrivilegedMember,
         [?GROUP_VIEW], AllGroupPrivs -- [?GROUP_VIEW]
     ),
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    lists:foreach(fun({GroupId, GroupData}) ->
+    UnprivilegedMemberFromTheChildGroup = ozt_users:create(),
+    ozt_groups:add_user(SubjectGroupId, UnprivilegedMemberFromTheChildGroup, ?RAND_SUBLIST(privileges:group_admin() -- [?SPACE_VIEW])),
+    lists:foreach(fun({GroupId, _}) ->
+        ozt_groups:add_user(GroupId, UnprivilegedMemberFromTheChildGroup, ?RAND_SUBLIST(privileges:group_admin()))
+    end, EffChildren),
+    ozt:reconcile_entity_graph(),
+
+    lists:foreach(fun({ChildGroupId, GroupData}) ->
         ApiTestSpec = #api_test_spec{
             client_spec = #client_spec{
                 correct = [
                     root,
                     {admin, [?OZ_GROUPS_VIEW]},
-                    {user, U2}
+                    {user, PrivilegedMember},
+                    {user, UnprivilegedMemberFromTheChildGroup}
                 ],
                 unauthorized = [nobody],
                 forbidden = [
-                    {user, U1},
+                    {user, UnprivilegedMember},
                     {user, NonAdmin}
                 ]
             },
             rest_spec = #rest_spec{
                 method = get,
                 path = [
-                    <<"/groups/">>, G1, <<"/effective_children/">>, GroupId
+                    <<"/groups/">>, SubjectGroupId, <<"/effective_children/">>, ChildGroupId
                 ],
                 expected_code = ?HTTP_200_OK,
-                expected_body = api_test_expect:shared_group(rest, GroupId, GroupData)
+                expected_body = api_test_expect:shared_group(rest, ChildGroupId, GroupData)
             },
             logic_spec = #logic_spec{
                 module = group_logic,
                 function = get_eff_child,
-                args = [auth, G1, GroupId],
-                expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
+                args = [auth, SubjectGroupId, ChildGroupId],
+                expected_result = api_test_expect:shared_group(logic, ChildGroupId, GroupData)
             },
             gs_spec = #gs_spec{
                 operation = get,
                 gri = #gri{
-                    type = od_group, id = GroupId,
+                    type = od_group, id = ChildGroupId,
                     aspect = instance, scope = shared
                 },
-                auth_hint = ?THROUGH_GROUP(G1),
-                expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
+                auth_hint = ?THROUGH_GROUP(SubjectGroupId),
+                expected_result_op = api_test_expect:shared_group(gs, ChildGroupId, GroupData)
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec))

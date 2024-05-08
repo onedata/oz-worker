@@ -860,8 +860,8 @@ create_eff_child_groups_env(Config) ->
 
     Users = [{U1, _}, {U2, _}, {U3, _}, {U4, _}] = lists:map(
         fun(_) ->
-            Username = ?UNIQUE_STRING,
-            FullName = ?UNIQUE_STRING,
+            Username = ?RAND_STR(),
+            FullName = ?RAND_STR(),
             UserDetails = #{
                 <<"username">> => Username,
                 <<"fullName">> => FullName
@@ -876,7 +876,7 @@ create_eff_child_groups_env(Config) ->
     Groups = [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}, {G6, _}] =
         lists:map(
             fun(_) ->
-                GroupDetails = ?GROUP_DETAILS(?UNIQUE_STRING),
+                GroupDetails = ?GROUP_DETAILS(?RAND_STR()),
                 {ok, GroupId} = oz_test_utils:create_group(
                     Config, ?ROOT, GroupDetails
                 ),

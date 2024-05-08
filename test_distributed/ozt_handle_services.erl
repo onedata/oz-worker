@@ -18,6 +18,7 @@
 
 %% API
 -export([create/0, create/1]).
+-export([add_user/2, add_user/3]).
 -export([create_handle/2]).
 
 %%%===================================================================
@@ -39,6 +40,16 @@ create(Name) ->
         ?ROOT, Data#{<<"name">> => Name}
     ])),
     HServiceId.
+
+
+-spec add_user(od_handle_service:id(), od_user:id()) -> ok.
+add_user(HServiceId, UserId) ->
+    add_user(HServiceId, UserId, privileges:handle_service_member()).
+
+-spec add_user(od_handle_service:id(), od_user:id(), [privileges:handle_service_privilege()]) -> ok.
+add_user(HServiceId, UserId, Privileges) ->
+    ?assertMatch({ok, _}, ozt:rpc(handle_service_logic, add_user, [?ROOT, HServiceId, UserId, Privileges])),
+    ok.
 
 
 create_handle(HServiceId, ShareId) ->
