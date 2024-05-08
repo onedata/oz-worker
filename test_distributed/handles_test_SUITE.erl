@@ -571,7 +571,7 @@ clear_expected_handles(MetadataPrefix, HServiceId) ->
 
 init_per_suite(Config) ->
     ozt:init_per_suite(Config, fun() ->
-        ok = ozt:rpc(handles, purge_all_deleted_entry, []),
+        ok = ozt:rpc(deleted_handles, purge_all_deleted_entry, []),
         lists:foreach(fun(MetadataPrefix) -> clear_expected_handles(MetadataPrefix) end,
             [?OAI_DC_METADATA_PREFIX, ?EDM_METADATA_PREFIX]),
         lists:foreach(fun(MetadataPrefix) ->

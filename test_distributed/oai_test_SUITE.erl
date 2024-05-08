@@ -34,6 +34,8 @@
     get_record_post_test/1,
     get_dc_record_with_bad_metadata_get_test/1,
     get_dc_record_with_bad_metadata_post_test/1,
+    get_deleted_record_get_test/1,
+    get_deleted_record_post_test/1,
 
     list_metadata_formats_get_test/1,
     list_metadata_formats_post_test/1,
@@ -164,6 +166,8 @@ all() -> ?ALL([
     get_record_post_test,
     get_dc_record_with_bad_metadata_get_test,
     get_dc_record_with_bad_metadata_post_test,
+    get_deleted_record_get_test,
+    get_deleted_record_post_test,
 
     list_metadata_formats_get_test,
     list_metadata_formats_post_test,
@@ -350,6 +354,12 @@ get_dc_record_with_bad_metadata_get_test(Config) ->
 
 get_dc_record_with_bad_metadata_post_test(Config) ->
     get_dc_record_with_bad_metadata_test_base(Config, post).
+
+get_deleted_record_get_test(Config) ->
+    get_deleted_record_test_base(Config, get).
+
+get_deleted_record_post_test(Config) ->
+    get_deleted_record_test_base(Config, post).
 
 list_metadata_formats_get_test(Config) ->
     list_metadata_formats_test_base(Config, get).
@@ -828,6 +838,30 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
 
         ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config))
     end, BadMetadataExamples).
+
+
+get_deleted_record_test_base(Config, Method) ->
+    User = ozt_users:create(),
+    Space1 = ozt_users:create_space_for(User, ?SPACE_NAME1),
+    ShareId = datastore_key:new(),
+    {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(User), ShareId, ShareId, Space1),
+    HSId = ozt_users:create_handle_service_for(User),
+    Timestamp = ?CURRENT_DATETIME(),
+    Timestamp2 =  increase_timestamp(Timestamp, 1),
+    HandleId = ozt_users:create_handle_for(User, HSId, ShareId),
+    #od_handle{metadata_prefix = MetadataPrefix} = ozt_handles:get(HandleId),
+    ExpectedMetadata = expected_final_metadata_element(MetadataPrefix, HandleId),
+
+    Args = [
+        {<<"identifier">>, oai_identifier(Config, HandleId)},
+        {<<"metadataPrefix">>, MetadataPrefix}
+    ],
+    ExpResponseContent = [expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata)],
+    ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config)),
+
+    delete_handle_with_mocked_timestamp(Config, HandleId, Timestamp2),
+    ExpResponseContent2 = [expected_oai_record_xml(Config, HandleId, Timestamp2, HSId, deleted)],
+    ?assert(check_get_record(200, Args, Method, ExpResponseContent2, Config)).
 
 
 list_metadata_formats_test_base(Config, Method) ->
@@ -1309,7 +1343,7 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(_, Config) ->
     oz_test_utils:delete_all_entities(Config),
-    ok = ozt:rpc(handles, purge_all_deleted_entry, []),
+    ok = ozt:rpc(deleted_handles, purge_all_deleted_entry, []),
     unmock_handle_proxy(Config),
     ok.
 

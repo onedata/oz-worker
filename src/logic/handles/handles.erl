@@ -18,9 +18,9 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([report_created/4, report_deleted/5, update_timestamp/5]).
--export([list/1, gather_by_all_prefixes/0, list_completely/1,  get_earliest_timestamp/0]).
+-export([list/1, gather_by_all_prefixes/0, list_completely/1,
+    get_earliest_timestamp/0, delete_links/4]).
 
--export([purge_all_deleted_entry/0]).
 
 % link_key() consists of 2 parts:
 %  1) timestamp (in seconds) - so that links would be sorted by time.
@@ -89,7 +89,8 @@ report_created(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> ok.
 report_deleted(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, DeletionTimestamp) ->
     delete_links(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
-    add_deleted_links(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp).
+    add(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp, false),
+    deleted_handles:insert(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp).
 
 
 %%--------------------------------------------------------------------
@@ -199,19 +200,19 @@ get_earliest_timestamp() ->
     end.
 
 
--spec purge_all_deleted_entry() -> ok.
-purge_all_deleted_entry() ->
-    lists:foreach(fun(MetadataPrefix) ->
-        All = list_completely(#{metadata_prefix => MetadataPrefix,
-            include_deleted => true}),
-        lists:foreach(fun(#handle_listing_entry{
-            timestamp = Timestamp,
-            service_id = HandleServiceId,
-            handle_id = HandleId
-        }) ->
-            ok = delete_links(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
-        end, All)
-    end, oai_metadata:supported_formats()).
+-spec delete_links(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
+    od_handle:timestamp_seconds()) -> ok.
+delete_links(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
+    Key = encode_link_key(Timestamp, HandleId),
+    lists:foreach(fun(TreeId) ->
+        case datastore_model:delete_links(?CTX, ?FOREST, TreeId, Key) of
+            ok -> ok;
+            {error, not_found} -> ok
+        end
+    end, [
+        ?TREE_FOR_METADATA_PREFIX(MetadataPrefix),
+        ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HandleServiceId)
+    ]).
 
 
 %%%===================================================================
@@ -312,13 +313,6 @@ build_result_from_reversed_listing(ReversedEntries, Limit, MetadataPrefix, From,
 
 
 %% @private
--spec add_deleted_links(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
-    od_handle:timestamp_seconds()) -> ok.
-add_deleted_links(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
-    add(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds, false).
-
-
-%% @private
 -spec add(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds(), exists_flag()) -> ok.
 add(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds, ExistsFlag) ->
@@ -335,18 +329,3 @@ add(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds, ExistsFlag) ->
     ]),
     ok.
 
-
-%% @private
--spec delete_links(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
-    od_handle:timestamp_seconds()) -> ok.
-delete_links(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
-    Key = encode_link_key(Timestamp, HandleId),
-    lists:foreach(fun(TreeId) ->
-        case datastore_model:delete_links(?CTX, ?FOREST, TreeId, Key) of
-            ok -> ok;
-            {error, not_found} -> ok
-        end
-    end, [
-        ?TREE_FOR_METADATA_PREFIX(MetadataPrefix),
-        ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HandleServiceId)
-    ]).
