@@ -703,7 +703,7 @@ infer_accessible_eff_groups_test(Config) ->
                 operation = create,
                 gri = #gri{type = od_space, id = SpaceId, aspect = infer_accessible_eff_groups, scope = private},
                 expected_result_gui = ?OK_MAP(#{<<"list">> => ExpGroups}),
-                expected_result_op = ?ERROR_REASON(?ERROR_FORBIDDEN)
+                expected_result_op = ?OK_MAP(#{<<"list">> => ExpGroups})
             }
         }))
     end, ExpGroupsPerUser).
