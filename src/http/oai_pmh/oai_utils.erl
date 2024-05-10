@@ -20,7 +20,7 @@
 %% API
 -export([serialize_datestamp/1, deserialize_datestamp/1, is_harvesting/1,
     verb_to_module/1, is_earlier_or_equal/2, dates_have_the_same_granularity/2,
-    to_xml/1, encode_xml/1, ensure_list/1,
+    to_xml/1, ensure_list/1,
     request_arguments_to_handle_listing_opts/1, harvest/2, oai_identifier_decode/1,
     build_oai_header/3, build_oai_record/3, build_oai_record/4
 ]).
@@ -272,7 +272,7 @@ to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp, set_spec = Se
         ])
     };
 to_xml(#oai_metadata{metadata_prefix = MetadataPrefix, raw_value = RawValue, handle = Handle}) ->
-    ParsedMetadata = case oai_metadata:parse_xml(RawValue) of
+    ParsedMetadata = case oai_xml:parse(RawValue) of
         {ok, Parsed} ->
             Parsed;
         error ->
@@ -346,15 +346,6 @@ to_xml({Name, Content, Attributes}) ->
     };
 to_xml(Content) when is_binary(Content) ->
     #xmlText{value = str_utils:to_list(Content)}.
-
-
--spec encode_xml(#xmlElement{}) -> binary().
-encode_xml(Xml) ->
-    % NOTE: xmerl scans strings in UTF8 (essentially the result of binary_to_list(<<_/utf8>>),
-    % but exports as a unicode erlang string
-    str_utils:unicode_list_to_binary(xmerl:export_simple([Xml], xmerl_xml, [
-        {prolog, ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"]}
-    ])).
 
 
 %%%-------------------------------------------------------------------

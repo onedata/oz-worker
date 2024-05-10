@@ -23,16 +23,16 @@
 
 
 encode_decode_utf8_test() ->
-    Prolog = <<"<?xml version=\"1.0\" encoding=\"utf-8\" ?>">>,
+    Prolog = <<"<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n">>,
     RawXmlWithUtf8Chars = <<
-        "<tool name=\"óœę↓©’ŋśð←æŋ\" id=\"µńćźżąśð日本を- 旅す. d'ŋ-ジ(ャ\" version=\"1.0.0\">"
-        "<description>l;'\\zxcvbnm,./əł</description>"
-        "<item action=\"/library/index\" method=\"get\" target=\"_parent\">"
-        "<param name=\"default_action\" type=\"hidden\" value=\"import_to_histories\"/>"
+        "<tool name=\"óœę↓©’ŋśð←æŋ\" id=\"µńćźżąśð日本を- 旅す. d'ŋ-ジ(ャ\" version=\"1.0.0\">\n"
+        "   <description>l;'\\zxcvbnm,./əł</description>\n"
+        "   <item action=\"/library/index\" method=\"get\" target=\"_parent\">\n"
+        "       <param name=\"default_action\" type=\"hidden\" value=\"import_to_histories\"/>\n"
 %%        TODO VFS-11906 xmerl strips comments: https://github.com/erlang/otp/issues/5697
 %%                       consider using a different lib...
 %%        "<!-- This is a comment d'ŋ-ジ(ャパル -->"
-        "</item>"
+        "   </item>"
         "</tool>"/utf8
     >>,
     ?assertEqual(
@@ -47,8 +47,8 @@ encode_decode_utf8_test() ->
 
 %% @private
 parse_and_encode(RawXml) ->
-    {ok, ParsedXml} = oai_metadata:parse_xml(RawXml),
-    oai_utils:encode_xml(ParsedXml).
+    {ok, ParsedXml} = oai_xml:parse(RawXml),
+    oai_xml:encode(ParsedXml).
 
 
 -endif.

@@ -1533,7 +1533,7 @@ expected_oai_header_xml(Config, HandleId, Timestamp) ->
 %% @private
 expected_final_metadata(MetadataPrefix, HandleId) ->
     ExpFinalMetadata = ozt_handles:expected_final_metadata(HandleId),
-    ParsedXml = ?check(oai_metadata:parse_xml(ExpFinalMetadata)),
+    ParsedXml = ?check(oai_xml:parse(ExpFinalMetadata)),
     ozt:rpc(oai_metadata, adapt_for_oai_pmh, [MetadataPrefix, ParsedXml]).
 
 

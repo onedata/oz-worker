@@ -153,7 +153,7 @@ handle_request(QueryParams, Req) ->
 -spec handle_request_unsafe(QueryParams :: [proplists:property()], Req :: cowboy_req:req()) -> tuple().
 handle_request_unsafe(QueryParams, Req) ->
     Response = try
-        {Verb, ParsedArgs} = oai_parser:process_and_validate_args(QueryParams),
+        {Verb, ParsedArgs} = oai_arg_parser:process_and_validate_args(QueryParams),
         generate_response(Verb, ParsedArgs)
     catch
         throw:Error ->
@@ -173,7 +173,7 @@ handle_request_unsafe(QueryParams, Req) ->
 
     Req2 = cowboy_req:set_resp_header(?HDR_CONTENT_TYPE, ?XML_RESPONSE_CONTENT_TYPE, Req),
     Xml = insert_to_root_xml_element([ResponseDateXML, RequestElementXML, ResponseXML]),
-    {oai_utils:encode_xml(Xml), Req2}.
+    {oai_xml:encode(Xml), Req2}.
 
 %%%--------------------------------------------------------------------
 %%% @private

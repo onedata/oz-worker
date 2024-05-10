@@ -55,8 +55,6 @@
 -export([validation_examples/0]).
 
 
--define(find_matching_element(Pattern, List), lists_utils:find(fun(Pattern) -> true; (_) -> false end, List)).
-
 -define(rdf_about_attr(Value), #xmlAttribute{name = 'rdf:about', value = Value}).
 -define(rdf_resource_attr(Value), #xmlAttribute{name = 'rdf:resource', value = Value}).
 
@@ -108,15 +106,15 @@ revise_for_publication(#xmlElement{
     MetadataElementsWithPublicHandles = lists:map(fun
         (#xmlElement{name = 'edm:ProvidedCHO', attributes = CHOAttrs} = CHOElement) ->
             CHOElement#xmlElement{
-                attributes = remove_rdf_about_attribute(CHOAttrs)
+                attributes = remove_rdf_about_attr(CHOAttrs)
             };
         (#xmlElement{name = 'ore:Aggregation', content = AggContent0, attributes = AggAttrs} = AggElement) ->
             ShareRootFileId = ?check(file_id:guid_to_objectid(ShareRecord#od_share.root_file)),
-            AggContent1 = remove_aggregated_cho_element(AggContent0),
+            AggContent1 = remove_rdf_resource_attr_from_aggregated_cho_element(AggContent0),
             AggContent2 = insert_is_shown_by_element(AggContent1, ShareRootFileId),
             AggContent3 = ensure_is_shown_at_element(AggContent2, ShareRootFileId),
             AggElement#xmlElement{
-                attributes = remove_rdf_about_attribute(AggAttrs),
+                attributes = remove_rdf_about_attr(AggAttrs),
                 content = AggContent3
             };
         (Other) ->
@@ -138,11 +136,11 @@ insert_public_handle(#xmlElement{
     MetadataElementsWithPublicHandles = lists:map(fun
         (#xmlElement{name = 'edm:ProvidedCHO', attributes = CHOAttrs} = CHOElement) ->
             CHOElement#xmlElement{
-                attributes = insert_rdf_about_attribute(CHOAttrs, PublicHandle)
+                attributes = insert_rdf_about_attr(CHOAttrs, PublicHandle)
             };
         (#xmlElement{name = 'ore:Aggregation', content = AggContent, attributes = AggAttrs} = AggElement) ->
             AggElement#xmlElement{
-                attributes = insert_rdf_about_attribute(AggAttrs, <<PublicHandle/binary, <<"_AGG">>/binary>>),
+                attributes = insert_rdf_about_attr(AggAttrs, <<PublicHandle/binary, <<"_AGG">>/binary>>),
                 content = insert_aggregated_cho_element(AggContent, PublicHandle)
             };
         (Other) ->
@@ -170,20 +168,18 @@ validation_examples() ->
 
 
 %% @private
--spec remove_rdf_about_attribute([#xmlAttribute{}]) -> [#xmlAttribute{}].
-remove_rdf_about_attribute(Attrs) ->
-    case ?find_matching_element(?rdf_about_attr(_), Attrs) of
-        {ok, Found} -> lists:delete(Found, Attrs);
-        error -> Attrs
-    end.
-
-
-%% @private
--spec remove_aggregated_cho_element([#xmlElement{}]) -> [#xmlElement{}].
-remove_aggregated_cho_element(Elements) ->
+-spec remove_rdf_resource_attr_from_aggregated_cho_element([#xmlElement{}]) -> [#xmlElement{}].
+remove_rdf_resource_attr_from_aggregated_cho_element(Elements) ->
     case ?find_matching_element(#xmlElement{name = 'edm:aggregatedCHO'}, Elements) of
-        {ok, Found} -> lists:delete(Found, Elements);
-        error -> Elements
+        {ok, FoundElement = #xmlElement{attributes = Attrs}} ->
+            lists_utils:replace(FoundElement, FoundElement#xmlElement{
+                attributes = case ?find_matching_element(?rdf_resource_attr(_), Attrs) of
+                    {ok, FoundAttr} -> lists:delete(FoundAttr, Attrs);
+                    error -> Attrs
+                end
+            }, Elements);
+        error ->
+            Elements
     end.
 
 
@@ -196,9 +192,9 @@ insert_is_shown_by_element(Elements, FileId) ->
                 ?rdf_resource_attr(?is_shown_by_value(FileId))
             ]}, Elements);
         error ->
-            Elements ++ [#xmlElement{name = 'edm:isShownBy', attributes = [
+            oai_xml:insert_element_with_indent(8, #xmlElement{name = 'edm:isShownBy', attributes = [
                 ?rdf_resource_attr(?is_shown_by_value(FileId))
-            ]}]
+            ]}, Elements)
     end.
 
 
@@ -216,31 +212,42 @@ ensure_is_shown_at_element(Elements, FileId) ->
                     ]}, Elements)
             end;
         error ->
-            Elements ++ [#xmlElement{name = 'edm:isShownAt', attributes = [
+            oai_xml:insert_element_with_indent(8, #xmlElement{name = 'edm:isShownAt', attributes = [
                 ?rdf_resource_attr(?is_shown_at_value(FileId))
-            ]}]
-    end.
-
-
-%% @private
--spec insert_rdf_about_attribute([#xmlAttribute{}], binary()) -> [#xmlAttribute{}].
-insert_rdf_about_attribute(Attrs, Identifier) ->
-    case ?find_matching_element(?rdf_about_attr(_), Attrs) of
-        {ok, Found} ->
-            lists_utils:replace(Found, ?rdf_about_attr(Identifier), Attrs);
-        error ->
-            [?rdf_about_attr(Identifier) | Attrs]
+            ]}, Elements)
     end.
 
 
 %% @private
 -spec insert_aggregated_cho_element([#xmlElement{}], binary()) -> [#xmlElement{}].
-insert_aggregated_cho_element(Elements, Identifier) ->
+insert_aggregated_cho_element(Elements, PubicHandle) ->
     case ?find_matching_element(#xmlElement{name = 'edm:aggregatedCHO'}, Elements) of
         {ok, Found} ->
-            lists_utils:replace(Found, Found#xmlElement{attributes = [?rdf_resource_attr(Identifier)]}, Elements);
+            lists_utils:replace(Found, Found#xmlElement{attributes = [
+                ?rdf_resource_attr(PubicHandle)
+            ]}, Elements);
         error ->
-            Elements ++ [#xmlElement{name = 'edm:aggregatedCHO', attributes = [?rdf_resource_attr(Identifier)]}]
+            oai_xml:insert_element_with_indent(8, #xmlElement{
+                name = 'edm:aggregatedCHO', attributes = [?rdf_resource_attr(PubicHandle)]
+            }, Elements)
+    end.
+
+
+%% @private
+-spec remove_rdf_about_attr([#xmlAttribute{}]) -> [#xmlAttribute{}].
+remove_rdf_about_attr(Attrs) ->
+    case ?find_matching_element(?rdf_about_attr(_), Attrs) of
+        {ok, Found} -> lists:delete(Found, Attrs);
+        error -> Attrs
+    end.
+
+
+%% @private
+-spec insert_rdf_about_attr([#xmlAttribute{}], binary()) -> [#xmlAttribute{}].
+insert_rdf_about_attr(Attrs, Identifier) ->
+    case ?find_matching_element(?rdf_about_attr(_), Attrs) of
+        {ok, Found} -> lists_utils:replace(Found, ?rdf_about_attr(Identifier), Attrs);
+        error -> [?rdf_about_attr(Identifier) | Attrs]
     end.
 
 
@@ -283,17 +290,17 @@ insert_aggregated_cho_element(Elements, Identifier) ->
 gen_validation_examples() -> lists:flatten([
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
-            "<?xml version=\"1.0\" encoding=\"utf-8\" ?>"
+            "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
             "<valid-xml>but not a proper EDM metadata object</valid-xml>"
         >>,
         input_qualifies_for_publication = false
     },
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
-            "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
-            "<edm:ProvidedCHO>",
-            "<dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>",
-            "<dc:type>book</dc:type>",
+            "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
+            "<edm:ProvidedCHO>\n",
+            "   <dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>\n",
+            "   <dc:type>book</dc:type>\n",
             "</edm:ProvidedCHO>"
         >>,
         input_qualifies_for_publication = false  % the top level <rdf:RDF> is required
@@ -348,37 +355,37 @@ gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
         (Value) -> <<" rdf:about=\"", Value/binary, "\"">>
     end,
 
-    BuildElementWithResource = fun
+    BuildLineWithElementAndResource = fun
         (_ElementName, element_not_provided) ->
             <<"">>;
         (ElementName, attr_not_provided) ->
             case rand:uniform(2) of
-                1 -> <<"<", ElementName/binary, "/>">>;
-                2 -> <<"<", ElementName/binary, " rdf:resource=\"\"/>">>
+                1 -> <<"        <", ElementName/binary, "/>\n">>;
+                2 -> <<"        <", ElementName/binary, " rdf:resource=\"\"/>\n">>
             end;
         (ElementName, ResourceValue) ->
-            <<"<", ElementName/binary, " rdf:resource=\"", ResourceValue/binary, "\"/>">>
+            <<"        <", ElementName/binary, " rdf:resource=\"", ResourceValue/binary, "\"/>\n">>
     end,
 
     <<
-        "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
-        OpeningRdfTag/binary,
-        "<edm:ProvidedCHO", (BuildAboutAttrStr(ProvidedChoAboutAttr))/binary, ">",
-        "<dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>",
-        "<dc:type>book</dc:type>",
-        "<dc:language>deu</dc:language>",
-        "<edm:type>TEXT</edm:type>",
-        "<dcterms:isPartOf>Europeana Foundation Example Records</dcterms:isPartOf>",
-        "<dc:identifier>some/internal/identifier/123456</dc:identifier>",
-        "</edm:ProvidedCHO>",
-        "<ore:Aggregation", (BuildAboutAttrStr(OreAggregationAboutAttr))/binary, ">",
-        (BuildElementWithResource(<<"edm:aggregatedCHO">>, AggregatedChoResourceAttr))/binary,
-        "<edm:dataProvider>Europeana Foundation</edm:dataProvider>",
-        (BuildElementWithResource(<<"edm:isShownBy">>, IsShownByResourceAttr))/binary,
-        "<edm:provider>Europeana Foundation</edm:provider>",
-        "<edm:rights rdf:resource=\"http://rightsstatements.org/vocab/NoC-OKLR/1.0/\"/>",
-        (BuildElementWithResource(<<"edm:isShownAt">>, IsShownAtResourceAttr))/binary,
-        "</ore:Aggregation>",
+        "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
+        OpeningRdfTag/binary, "\n",
+        "    <edm:ProvidedCHO", (BuildAboutAttrStr(ProvidedChoAboutAttr))/binary, ">\n",
+        "        <dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>\n",
+        "        <dc:type>book</dc:type>\n",
+        "        <dc:language>deu</dc:language>\n",
+        "        <edm:type>TEXT</edm:type>\n",
+        "        <dcterms:isPartOf>Europeana Foundation Example Records</dcterms:isPartOf>\n",
+        "        <dc:identifier>some/internal/identifier/123456</dc:identifier>\n",
+        "    </edm:ProvidedCHO>\n",
+        "    <ore:Aggregation", (BuildAboutAttrStr(OreAggregationAboutAttr))/binary, ">\n",
+        (BuildLineWithElementAndResource(<<"edm:aggregatedCHO">>, AggregatedChoResourceAttr))/binary,
+        "        <edm:dataProvider>Europeana Foundation</edm:dataProvider>\n",
+        (BuildLineWithElementAndResource(<<"edm:isShownBy">>, IsShownByResourceAttr))/binary,
+        "        <edm:provider>Europeana Foundation</edm:provider>\n",
+        "        <edm:rights rdf:resource=\"http://rightsstatements.org/vocab/NoC-OKLR/1.0/\"/>\n",
+        (BuildLineWithElementAndResource(<<"edm:isShownAt">>, IsShownAtResourceAttr))/binary,
+        "    </ore:Aggregation>\n",
         "</rdf:RDF>"
     >>.
 
@@ -394,14 +401,15 @@ gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
     binary().
 gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #validation_example_builder_ctx{
     is_shown_by_resource_attr = IsShownByResourceAttr,
-    is_shown_at_resource_attr = IsShownAtResourceAttr
+    is_shown_at_resource_attr = IsShownAtResourceAttr,
+    aggregated_cho_resource_attr = AggChoResourceAttr
 }) ->
-    {ExpProvChoRdfAboutStr, ExpOreAggRdfAboutStr, ExpAggChoElement} = case MetadataType of
+    {ExpProvChoRdfAboutStr, ExpOreAggRdfAboutStr, ExpAggChoRdfResourceStr} = case MetadataType of
         revised -> {<<"">>, <<"">>, <<"">>};
         _ -> {
             <<" rdf:about=\"", PublicHandle/binary, "\"">>,
             <<" rdf:about=\"", PublicHandle/binary, "_AGG\"">>,
-            <<"<edm:aggregatedCHO rdf:resource=\"", PublicHandle/binary, "\"/>">>
+            <<" rdf:resource=\"", PublicHandle/binary, "\"">>
         }
     end,
 
@@ -410,31 +418,33 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
         Value when is_binary(Value) -> Value;
         _ -> <<"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary>>
     end,
-    ExpIsShownAtElement = <<"<edm:isShownAt rdf:resource=\"", ExpIsShownAtResource/binary, "\"/>">>,
-    ExpIsShownByElement = <<
-        "<edm:isShownBy rdf:resource=\"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary, "\"/>"
+    ExpIsShownAtLine = <<"        <edm:isShownAt rdf:resource=\"", ExpIsShownAtResource/binary, "\"/>\n">>,
+    ExpIsShownByLine = <<
+        "        <edm:isShownBy rdf:resource=\"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary, "\"/>\n"
     >>,
+    ExpAggChoLine = <<"        <edm:aggregatedCHO", ExpAggChoRdfResourceStr/binary, "/>\n">>,
 
     <<
-        "<?xml version=\"1.0\" encoding=\"utf-8\" ?>",
-        OpeningRdfTag/binary,
-        "<edm:ProvidedCHO", ExpProvChoRdfAboutStr/binary, ">",
-        "<dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>",
-        "<dc:type>book</dc:type>",
-        "<dc:language>deu</dc:language>",
-        "<edm:type>TEXT</edm:type>",
-        "<dcterms:isPartOf>Europeana Foundation Example Records</dcterms:isPartOf>",
-        "<dc:identifier>some/internal/identifier/123456</dc:identifier>",
-        "</edm:ProvidedCHO>",
-        "<ore:Aggregation", ExpOreAggRdfAboutStr/binary, ">",
-        "<edm:dataProvider>Europeana Foundation</edm:dataProvider>",
-        (case IsShownByResourceAttr of element_not_provided -> <<"">>; _ -> ExpIsShownByElement end)/binary,
-        "<edm:provider>Europeana Foundation</edm:provider>",
-        "<edm:rights rdf:resource=\"http://rightsstatements.org/vocab/NoC-OKLR/1.0/\"/>",
-        (case IsShownAtResourceAttr of element_not_provided -> <<"">>; _ -> ExpIsShownAtElement end)/binary,
-        (case IsShownByResourceAttr of element_not_provided -> ExpIsShownByElement; _ -> <<"">> end)/binary,
-        (case IsShownAtResourceAttr of element_not_provided -> ExpIsShownAtElement; _ -> <<"">> end)/binary,
-        ExpAggChoElement/binary,
-        "</ore:Aggregation>",
+        "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
+        OpeningRdfTag/binary, "\n",
+        "    <edm:ProvidedCHO", ExpProvChoRdfAboutStr/binary, ">\n",
+        "        <dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>\n",
+        "        <dc:type>book</dc:type>\n",
+        "        <dc:language>deu</dc:language>\n",
+        "        <edm:type>TEXT</edm:type>\n",
+        "        <dcterms:isPartOf>Europeana Foundation Example Records</dcterms:isPartOf>\n",
+        "        <dc:identifier>some/internal/identifier/123456</dc:identifier>\n",
+        "    </edm:ProvidedCHO>\n",
+        "    <ore:Aggregation", ExpOreAggRdfAboutStr/binary, ">\n",
+        (case {MetadataType, AggChoResourceAttr} of {revised, _} -> <<"">>; {_, element_not_provided}-> ExpAggChoLine; _ -> <<"">> end)/binary,
+        (case IsShownAtResourceAttr of element_not_provided -> ExpIsShownAtLine; _ -> <<"">> end)/binary,
+        (case IsShownByResourceAttr of element_not_provided -> ExpIsShownByLine; _ -> <<"">> end)/binary,
+        (case {MetadataType, AggChoResourceAttr} of {_, element_not_provided} -> <<"">>; _-> ExpAggChoLine end)/binary,
+        "        <edm:dataProvider>Europeana Foundation</edm:dataProvider>\n",
+        (case IsShownByResourceAttr of element_not_provided -> <<"">>; _ -> ExpIsShownByLine end)/binary,
+        "        <edm:provider>Europeana Foundation</edm:provider>\n",
+        "        <edm:rights rdf:resource=\"http://rightsstatements.org/vocab/NoC-OKLR/1.0/\"/>\n",
+        (case IsShownAtResourceAttr of element_not_provided -> <<"">>; _ -> ExpIsShownAtLine end)/binary,
+        "    </ore:Aggregation>\n",
         "</rdf:RDF>"
     >>.
