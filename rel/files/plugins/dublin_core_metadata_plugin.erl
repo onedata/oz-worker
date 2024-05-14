@@ -36,6 +36,7 @@
 %% handle_metadata_plugin_behaviour callbacks
 -export([metadata_prefix/0, schema_URL/0, main_namespace/0]).
 -export([revise_for_publication/3, insert_public_handle/2, adapt_for_oai_pmh/1]).
+-export([encode_xml/1]).
 -export([validation_examples/0]).
 
 
@@ -121,6 +122,12 @@ adapt_for_oai_pmh(#xmlElement{name = metadata, content = Content}) ->
         ],
         content = Content
     }.
+
+
+%% @doc {@link handle_metadata_plugin_behaviour} callback encode_xml/1
+-spec encode_xml(od_handle:parsed_metadata()) -> od_handle:raw_metadata().
+encode_xml(Metadata) ->
+    oai_xml:encode(Metadata).
 
 
 %% @doc {@link handle_metadata_plugin_behaviour} callback validation_examples/0

@@ -23,6 +23,7 @@
 -export([clear_plugin_cache/0]).
 -export([schema_URL/1, main_namespace/1]).
 -export([revise_for_publication/4, insert_public_handle/3, adapt_for_oai_pmh/2]).
+-export([encode_xml/2]).
 -export([validation_examples/1]).
 
 
@@ -89,6 +90,12 @@ insert_public_handle(MetadataPrefix, Metadata, PublicHandle) ->
 adapt_for_oai_pmh(MetadataPrefix, Metadata) ->
     Module = module(MetadataPrefix),
     Module:adapt_for_oai_pmh(Metadata).
+
+
+-spec encode_xml(od_handle:metadata_prefix(), od_handle:parsed_metadata()) -> od_handle:raw_metadata().
+encode_xml(MetadataPrefix, Metadata) ->
+    Module = module(MetadataPrefix),
+    Module:encode_xml(Metadata).
 
 
 -spec validation_examples(od_handle:metadata_prefix()) -> [handle_metadata_plugin_behaviour:validation_example()].

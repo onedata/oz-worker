@@ -769,10 +769,8 @@ expected_final_handle_metadata(#{
     {ok, RevisedMetadata} = ozt:rpc(oai_metadata, revise_for_publication, [
         MetadataPrefix, ParsedMetadata, ShareId, ShareRecord
     ]),
-    FinalMetadata = ozt:rpc(oai_metadata, insert_public_handle, [
-        MetadataPrefix, RevisedMetadata, PublicHandle
-    ]),
-    oai_xml:encode(FinalMetadata).
+    FinalMetadata = ozt:rpc(oai_metadata, insert_public_handle, [MetadataPrefix, RevisedMetadata, PublicHandle]),
+    ozt:rpc(oai_metadata, encode_xml, [MetadataPrefix, FinalMetadata]).
 
 
 %% @private

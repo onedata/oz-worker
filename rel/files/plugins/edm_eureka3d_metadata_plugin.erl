@@ -52,6 +52,7 @@
 %% handle_metadata_plugin_behaviour callbacks
 -export([metadata_prefix/0, schema_URL/0, main_namespace/0]).
 -export([revise_for_publication/3, insert_public_handle/2, adapt_for_oai_pmh/1]).
+-export([encode_xml/1]).
 -export([validation_examples/0]).
 
 
@@ -154,6 +155,14 @@ insert_public_handle(#xmlElement{
 -spec adapt_for_oai_pmh(od_handle:parsed_metadata()) -> od_handle:parsed_metadata().
 adapt_for_oai_pmh(RdfXml) ->
     RdfXml.
+
+
+%% @doc {@link handle_metadata_plugin_behaviour} callback encode_xml/1
+-spec encode_xml(od_handle:parsed_metadata()) -> od_handle:raw_metadata().
+encode_xml(Metadata) ->
+    RawMetadata = oai_xml:encode(Metadata),
+    % format the namespace attributes nicely (each in a new, indented line)
+    iolist_to_binary(re:replace(RawMetadata, <<" xmlns:">>, <<"\n    xmlns:">>, [global])).
 
 
 %% @doc {@link handle_metadata_plugin_behaviour} callback validation_examples/0
@@ -322,9 +331,9 @@ gen_validation_examples() -> lists:flatten([
 -spec gen_validation_example(#validation_example_builder_ctx{}) ->
     handle_metadata_plugin_behaviour:validation_example().
 gen_validation_example(Ctx) ->
-    OpeningRdfTag = case str_utils:join_as_binaries(lists_utils:random_sublist(?ALL_NAMESPACES), <<" ">>) of
+    OpeningRdfTag = case str_utils:join_as_binaries(lists_utils:random_sublist(?ALL_NAMESPACES), <<"\n    ">>) of
         <<"">> -> <<"<rdf:RDF>">>;
-        SpaceSeparatedReferences -> <<"<rdf:RDF ", SpaceSeparatedReferences/binary, ">">>
+        NamespaceAttrs -> <<"<rdf:RDF\n    ", NamespaceAttrs/binary, ">">>
     end,
     #handle_metadata_plugin_validation_example{
         input_raw_xml = gen_input_raw_xml_example(OpeningRdfTag, Ctx),

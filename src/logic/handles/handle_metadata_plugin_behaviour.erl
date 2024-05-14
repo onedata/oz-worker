@@ -100,6 +100,16 @@
 
 %%-------------------------------------------------------------------
 %% @doc
+%% Encodes the metadata in XML format. May apply reformatting if needed
+%% (xmerl is limited and it must be done post-export, and every plugin
+%% may need different transformations).
+%% @end
+%%-------------------------------------------------------------------
+-callback encode_xml(od_handle:parsed_metadata()) -> od_handle:raw_metadata().
+
+
+%%-------------------------------------------------------------------
+%% @doc
 %% Returns validation examples that will be tested when the plugin is loaded.
 %% They serve as unit tests for the plugin.
 %% @end
@@ -158,12 +168,14 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
         {ok, RevisedMetadata} when InputQualifiesForPublication == true ->
             ExpRawRevisedMetadata = ExpRevisedMetadataGenerator(DummyShareId, DummyShareRecord),
             assert_result_equals_expectation(
+                Module,
                 InputRawXml,
                 RevisedMetadata,
                 ExpRawRevisedMetadata,
                 "Unmet expectation: obtained revised metadata different than expected"
             ),
             assert_result_equals_expectation(
+                Module,
                 InputRawXml,
                 ?check(Module:revise_for_publication(RevisedMetadata, DummyShareId, DummyShareRecord)),
                 ExpRawRevisedMetadata,
@@ -173,12 +185,14 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
             FinalMetadata = Module:insert_public_handle(RevisedMetadata, DummyPublicHandle),
             ExpRawFinalMetadata = ExpFinalMetadataGenerator(DummyShareId, DummyShareRecord, DummyPublicHandle),
             assert_result_equals_expectation(
+                Module,
                 InputRawXml,
                 FinalMetadata,
                 ExpRawFinalMetadata,
                 "Unmet expectation: obtained final metadata different than expected"
             ),
             assert_result_equals_expectation(
+                Module,
                 InputRawXml,
                 Module:insert_public_handle(FinalMetadata, DummyPublicHandle),
                 ExpRawFinalMetadata,
@@ -186,6 +200,7 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
             ),
 
             assert_result_equals_expectation(
+                Module,
                 InputRawXml,
                 Module:insert_public_handle(
                     ?check(Module:revise_for_publication(FinalMetadata, DummyShareId, DummyShareRecord)),
@@ -198,7 +213,10 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
             OaiPmhMetadata = Module:adapt_for_oai_pmh(FinalMetadata),
             ExpOaiPmhMetadata = ExpOaiPmhMetadataGenerator(DummyShareId, DummyShareRecord, DummyPublicHandle),
             assert_result_equals_expectation(
-                InputRawXml, OaiPmhMetadata, ExpOaiPmhMetadata,
+                Module,
+                InputRawXml,
+                OaiPmhMetadata,
+                ExpOaiPmhMetadata,
                 "Unmet expectation: obtained oai_pmh metadata different than expected"
             );
 
@@ -210,13 +228,14 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
 
 %% @private
 -spec assert_result_equals_expectation(
+    module(),
     od_handle:raw_metadata(),
     od_handle:parsed_metadata(),
     od_handle:raw_metadata(),
     string()
 ) -> ok | no_return().
-assert_result_equals_expectation(RawInput, ParsedResult, RawExpectation, ErrorMsg) ->
-    RawResult = oai_xml:encode(ParsedResult),
+assert_result_equals_expectation(Module, RawInput, ParsedResult, RawExpectation, ErrorMsg) ->
+    RawResult = Module:encode_xml(ParsedResult),
     case RawResult of
         RawExpectation ->
             ok;
