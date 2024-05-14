@@ -94,6 +94,8 @@ translate_value(_, #gri{type = od_space, aspect = Aspect}, {Entries, IsLast, _Ne
     };
 translate_value(_, #gri{type = od_space, aspect = membership_request}, RequestId) ->
     #{<<"requestId">> => RequestId};
+translate_value(_, #gri{type = od_space, aspect = infer_accessible_eff_groups}, GroupIds) ->
+    #{<<"list">> => GroupIds};
 translate_value(_, #gri{type = od_harvester, aspect = {query, _}}, Response) ->
     Response;
 translate_value(_, #gri{type = od_harvester, aspect = {gen_curl_query, _}}, Response) ->

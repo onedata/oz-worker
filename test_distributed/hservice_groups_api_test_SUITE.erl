@@ -260,50 +260,59 @@ list_groups_test(Config) ->
 
 
 get_group_test(Config) ->
-    % create handle service with 2 users:
-    %   U2 gets the HANDLE_SERVICE_VIEW privilege
-    %   U1 gets all remaining privileges
-    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+    % create handle service with 3 users:
+    %   UnprivilegedMember gets the HANDLE_SERVICE_VIEW privilege
+    %   PrivilegedMember gets all remaining privileges
+    %   UnprivilegedMemberFromTheGroup does not get the HANDLE_SERVICE_VIEW privilege, but belongs to the group
+    {HServiceId, UnprivilegedMember, PrivilegedMember} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     GroupData = #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1},
-    {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, GroupData),
-    oz_test_utils:handle_service_add_group(Config, HService, G1),
+    {ok, GroupId} = oz_test_utils:create_group(Config, ?ROOT, GroupData),
+    oz_test_utils:handle_service_add_group(Config, HServiceId, GroupId),
+
+    UnprivilegedMemberFromTheGroup = ozt_users:create(),
+    ozt_handle_services:add_user(
+        HServiceId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:handle_service_admin() -- [?HANDLE_SERVICE_VIEW])
+    ),
+    ozt_groups:add_user(GroupId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:group_admin())),
+    ozt:reconcile_entity_graph(),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
                 {admin, [?OZ_GROUPS_VIEW]},
-                {user, U2}
+                {user, PrivilegedMember},
+                {user, UnprivilegedMemberFromTheGroup}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {user, U1}
+                {user, UnprivilegedMember}
             ]
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/handle_services/">>, HService, <<"/groups/">>, G1],
+            path = [<<"/handle_services/">>, HServiceId, <<"/groups/">>, GroupId],
             expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:shared_group(rest, G1, GroupData)
+            expected_body = api_test_expect:shared_group(rest, GroupId, GroupData)
         },
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_group,
-            args = [auth, HService, G1],
-            expected_result = api_test_expect:shared_group(logic, G1, GroupData)
+            args = [auth, HServiceId, GroupId],
+            expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
         },
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{
-                type = od_group, id = G1, aspect = instance, scope = shared
+                type = od_group, id = GroupId, aspect = instance, scope = shared
             },
-            auth_hint = ?THROUGH_HANDLE_SERVICE(HService),
-            expected_result_op = api_test_expect:shared_group(gs, G1, GroupData)
+            auth_hint = ?THROUGH_HANDLE_SERVICE(HServiceId),
+            expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -492,8 +501,17 @@ list_eff_groups_test(Config) ->
 
 get_eff_group_test(Config) ->
     {
-        HService, EffGroups, _EffUsers, {U1, U2, NonAdmin}
+        HServiceId, EffGroups, _EffUsers, {UnprivilegedMember, PrivilegedMember, NonAdmin}
     } = api_test_scenarios:create_hservice_eff_users_env(Config),
+
+    UnprivilegedMemberFromTheGroup = ozt_users:create(),
+    ozt_handle_services:add_user(
+        HServiceId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:handle_service_admin() -- [?HANDLE_SERVICE_VIEW])
+    ),
+    lists:foreach(fun({GroupId, _}) ->
+        ozt_groups:add_user(GroupId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:group_admin()))
+    end, EffGroups),
+    ozt:reconcile_entity_graph(),
 
     lists:foreach(fun({GroupId, GroupData}) ->
         ApiTestSpec = #api_test_spec{
@@ -501,18 +519,19 @@ get_eff_group_test(Config) ->
                 correct = [
                     root,
                     {admin, [?OZ_GROUPS_VIEW]},
-                    {user, U2}
+                    {user, PrivilegedMember},
+                    {user, UnprivilegedMemberFromTheGroup}
                 ],
                 unauthorized = [nobody],
                 forbidden = [
-                    {user, U1},
+                    {user, UnprivilegedMember},
                     {user, NonAdmin}
                 ]
             },
             rest_spec = #rest_spec{
                 method = get,
                 path = [
-                    <<"/handle_services/">>, HService,
+                    <<"/handle_services/">>, HServiceId,
                     <<"/effective_groups/">>, GroupId
                 ],
                 expected_code = ?HTTP_200_OK,
@@ -521,7 +540,7 @@ get_eff_group_test(Config) ->
             logic_spec = #logic_spec{
                 module = handle_service_logic,
                 function = get_eff_group,
-                args = [auth, HService, GroupId],
+                args = [auth, HServiceId, GroupId],
                 expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
             },
             gs_spec = #gs_spec{
@@ -530,7 +549,7 @@ get_eff_group_test(Config) ->
                     type = od_group, id = GroupId,
                     aspect = instance, scope = shared
                 },
-                auth_hint = ?THROUGH_HANDLE_SERVICE(HService),
+                auth_hint = ?THROUGH_HANDLE_SERVICE(HServiceId),
                 expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
             }
         },
