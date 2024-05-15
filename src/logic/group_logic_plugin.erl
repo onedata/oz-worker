@@ -665,13 +665,13 @@ authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Group) ->
-    auth_by_privilege(Req, Group, ?GROUP_VIEW);
+    Req#el_req.auth_hint == undefined andalso auth_by_privilege(Req, Group, ?GROUP_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Group) ->
     case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this group is checked in 'exists'
-            group_logic:has_eff_privilege(Group, UserId, ?GROUP_VIEW);
+            auth_by_membership(UserId, Group);
 
         {?USER(_UserId), ?THROUGH_USER(_OtherUserId)} ->
             false;
@@ -680,17 +680,21 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             % Child group's membership in this group is checked in 'exists'
             group_logic:has_eff_user(ChildGroupId, UserId);
 
-        {?PROVIDER(ProviderId), ?THROUGH_PROVIDER(ProviderId)} ->
-            % Group's membership in provider is checked in 'exists'
-            true;
-
         {?USER(ClientUserId), ?THROUGH_PROVIDER(ProviderId)} ->
             % Group's membership in provider is checked in 'exists'
             ClusterId = ProviderId,
             cluster_logic:has_eff_privilege(ClusterId, ClientUserId, ?CLUSTER_VIEW);
 
+        {?PROVIDER(ProviderId), ?THROUGH_PROVIDER(ProviderId)} ->
+            % Group's membership in provider is checked in 'exists'
+            true;
+
         {?PROVIDER(_ProviderId), ?THROUGH_PROVIDER(_OtherProviderId)} ->
             false;
+
+        {?PROVIDER(_ProviderId), undefined} ->
+            % Group's membership in provider is checked in 'exists'
+            true;
 
         {?USER(ClientUserId), _} ->
             auth_by_membership(ClientUserId, Group);
@@ -700,12 +704,15 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             authorize(Req#el_req{gri = GRI#gri{scope = private}}, Group)
     end;
 
-authorize(Req = #el_req{auth_hint = undefined, operation = get, gri = #gri{aspect = instance, scope = shared} = GRI}, Group) ->
+authorize(Req = #el_req{operation = get, auth_hint = undefined, gri = #gri{aspect = instance, scope = shared} = GRI}, Group) ->
     % Access to protected data also allows access to shared data
     authorize(Req#el_req{gri = GRI#gri{scope = protected}}, Group);
 
-authorize(Req = #el_req{auth = ?PROVIDER(ProviderId), operation = get, gri = #gri{aspect = instance, scope = shared}}, _) ->
+authorize(Req = #el_req{operation = get, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = instance, scope = shared}}, _) ->
     case Req#el_req.auth_hint of
+        ?THROUGH_PROVIDER(ProviderId) ->
+            % Group's membership in provider is checked in 'exists'
+            true;
         ?THROUGH_SPACE(SpaceId) ->
             % group's membership in the space is checked in 'exists'
             space_logic:is_supported_by_provider(SpaceId, ProviderId);
@@ -714,7 +721,12 @@ authorize(Req = #el_req{auth = ?PROVIDER(ProviderId), operation = get, gri = #gr
             cluster_logic:is_provider_cluster(ClusterId, ProviderId)
     end;
 
-authorize(Req = #el_req{auth = ?USER(UserId), operation = get, gri = #gri{aspect = instance, scope = shared}}, Group) ->
+authorize(Req = #el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = instance, scope = shared}}, Group) ->
+    case Req#el_req.auth_hint of
+        ?THROUGH_USER(UserId) -> ok;
+        ?THROUGH_USER(_OtherUserId) -> throw(?ERROR_FORBIDDEN);
+        _ -> ok
+    end,
     % the group's membership in different entities is checked in 'exists';
     % if the user is an effective member of the group, he can see the shared
     % data regardless of his privileges in the entity concerned by the auth hint
@@ -729,6 +741,9 @@ authorize(Req = #el_req{auth = ?USER(UserId), operation = get, gri = #gri{aspect
             handle_logic:has_eff_privilege(HandleId, UserId, ?HANDLE_VIEW);
         ?THROUGH_HARVESTER(HarvesterId) ->
             harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_VIEW);
+        ?THROUGH_PROVIDER(ProviderId) ->
+            ClusterId = ProviderId,
+            cluster_logic:has_eff_privilege(ClusterId, UserId, ?CLUSTER_VIEW);
         ?THROUGH_CLUSTER(ClusterId) ->
             cluster_logic:has_eff_privilege(ClusterId, UserId, ?CLUSTER_VIEW);
         ?THROUGH_ATM_INVENTORY(AtmInventoryId) ->
