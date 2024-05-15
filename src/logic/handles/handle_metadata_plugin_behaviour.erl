@@ -71,7 +71,8 @@
 %% a handle service. This can include adding auto-generated information to the metadata.
 %% If the input metadata is not suitable for publication, should return an error.
 %%
-%% This operation MUST be idempotent.
+%% This operation MUST be idempotent - calling it on already revised metadata should
+%% return it without changes.
 %% @end
 %%-------------------------------------------------------------------
 -callback revise_for_publication(od_handle:parsed_metadata(), od_share:id(), od_share:record()) ->
@@ -82,7 +83,8 @@
 %% @doc
 %% Inserts the public handle (if applicable) into the metadata content.
 %%
-%% This operation MUST be idempotent.
+%% This operation MUST be idempotent - calling it on metadata with already inserted handles
+%% should return it without changes.
 %% @end
 %%-------------------------------------------------------------------
 -callback insert_public_handle(od_handle:parsed_metadata(), od_handle:public_handle()) ->

@@ -21,7 +21,7 @@
 
 %% API
 -export([parse/1, encode/1]).
--export([insert_element_with_indent/3]).
+-export([prepend_element_with_indent/3]).
 
 
 %%%===================================================================
@@ -46,9 +46,17 @@ encode(Xml) ->
     ])).
 
 
-%% @doc The element is always added at the beginning, otherwise it's complicated to retain
-%%      the formatting (whitespaces) of the original XML.
--spec insert_element_with_indent(non_neg_integer(), #xmlElement{}, [#xmlElement{} | #xmlText{}]) ->
+%%-------------------------------------------------------------------
+%% @doc
+%% This is the suggested way of inserting elements, because it does not
+%% impact the formatting (whitespaces) of the original XML. Insertion
+%% in the middle or the end is more complicated due to the #xmlText{}
+%% entries between elements.
+%%
+%% May not be suitable if the element order is important.
+%% @end
+%%-------------------------------------------------------------------
+-spec prepend_element_with_indent(non_neg_integer(), #xmlElement{}, [#xmlElement{} | #xmlText{}]) ->
     [#xmlElement{} | #xmlText{}].
-insert_element_with_indent(Indent, NewElement, BaseXmlContent) ->
-    [#xmlText{value = "\n" ++ lists:duplicate(Indent, $ )}, NewElement | BaseXmlContent].
+prepend_element_with_indent(IndentSize, NewElement, BaseXmlContent) ->
+    [#xmlText{value = "\n" ++ lists:duplicate(IndentSize, $ )}, NewElement | BaseXmlContent].

@@ -99,7 +99,7 @@ ensure_dc_identifier(Value, #xmlElement{content = Content} = MetadataXml) ->
             MetadataXml;
         error ->
             MetadataXml#xmlElement{
-                content = oai_xml:insert_element_with_indent(4, #xmlElement{
+                content = oai_xml:prepend_element_with_indent(4, #xmlElement{
                     name = 'dc:identifier',
                     content = [#xmlText{value = Value}]
                 }, Content)

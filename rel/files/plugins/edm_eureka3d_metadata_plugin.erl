@@ -111,8 +111,9 @@ revise_for_publication(#xmlElement{
             };
         (#xmlElement{name = 'ore:Aggregation', content = AggContent0, attributes = AggAttrs} = AggElement) ->
             ShareRootFileId = ?check(file_id:guid_to_objectid(ShareRecord#od_share.root_file)),
+            IsShownByValue = ?is_shown_by_value(ShareRootFileId),
             AggContent1 = remove_rdf_resource_attr_from_aggregated_cho_element(AggContent0),
-            AggContent2 = insert_is_shown_by_element(AggContent1, ShareRootFileId),
+            AggContent2 = insert_element(AggContent1, 'edm:isShownBy', [?rdf_resource_attr(IsShownByValue)]),
             AggContent3 = ensure_is_shown_at_element(AggContent2, ShareRootFileId),
             AggElement#xmlElement{
                 attributes = remove_rdf_about_attr(AggAttrs),
@@ -142,7 +143,7 @@ insert_public_handle(#xmlElement{
         (#xmlElement{name = 'ore:Aggregation', content = AggContent, attributes = AggAttrs} = AggElement) ->
             AggElement#xmlElement{
                 attributes = insert_rdf_about_attr(AggAttrs, <<PublicHandle/binary, <<"_AGG">>/binary>>),
-                content = insert_aggregated_cho_element(AggContent, PublicHandle)
+                content = insert_element(AggContent, 'edm:aggregatedCHO', [?rdf_resource_attr(PublicHandle)])
             };
         (Other) ->
             Other
@@ -193,17 +194,14 @@ remove_rdf_resource_attr_from_aggregated_cho_element(Elements) ->
 
 
 %% @private
--spec insert_is_shown_by_element([#xmlElement{}], file_id:objectid()) -> [#xmlElement{}].
-insert_is_shown_by_element(Elements, FileId) ->
-    case ?find_matching_element(#xmlElement{name = 'edm:isShownBy'}, Elements) of
+%% @doc existing attrs (if any) are always overwritten with the provided ones
+-spec insert_element([#xmlElement{}], atom(), [#xmlAttribute{}]) -> [#xmlElement{}].
+insert_element(Elements, Name, Attrs) ->
+    case ?find_matching_element(#xmlElement{name = Name}, Elements) of
         {ok, Found} ->
-            lists_utils:replace(Found, Found#xmlElement{attributes = [
-                ?rdf_resource_attr(?is_shown_by_value(FileId))
-            ]}, Elements);
+            lists_utils:replace(Found, Found#xmlElement{attributes = Attrs}, Elements);
         error ->
-            oai_xml:insert_element_with_indent(8, #xmlElement{name = 'edm:isShownBy', attributes = [
-                ?rdf_resource_attr(?is_shown_by_value(FileId))
-            ]}, Elements)
+            oai_xml:prepend_element_with_indent(8, #xmlElement{name = Name, attributes = Attrs}, Elements)
     end.
 
 
@@ -221,24 +219,9 @@ ensure_is_shown_at_element(Elements, FileId) ->
                     ]}, Elements)
             end;
         error ->
-            oai_xml:insert_element_with_indent(8, #xmlElement{name = 'edm:isShownAt', attributes = [
+            oai_xml:prepend_element_with_indent(8, #xmlElement{name = 'edm:isShownAt', attributes = [
                 ?rdf_resource_attr(?is_shown_at_value(FileId))
             ]}, Elements)
-    end.
-
-
-%% @private
--spec insert_aggregated_cho_element([#xmlElement{}], binary()) -> [#xmlElement{}].
-insert_aggregated_cho_element(Elements, PubicHandle) ->
-    case ?find_matching_element(#xmlElement{name = 'edm:aggregatedCHO'}, Elements) of
-        {ok, Found} ->
-            lists_utils:replace(Found, Found#xmlElement{attributes = [
-                ?rdf_resource_attr(PubicHandle)
-            ]}, Elements);
-        error ->
-            oai_xml:insert_element_with_indent(8, #xmlElement{
-                name = 'edm:aggregatedCHO', attributes = [?rdf_resource_attr(PubicHandle)]
-            }, Elements)
     end.
 
 
@@ -445,10 +428,10 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
         "        <dc:identifier>some/internal/identifier/123456</dc:identifier>\n",
         "    </edm:ProvidedCHO>\n",
         "    <ore:Aggregation", ExpOreAggRdfAboutStr/binary, ">\n",
-        (case {MetadataType, AggChoResourceAttr} of {revised, _} -> <<"">>; {_, element_not_provided}-> ExpAggChoLine; _ -> <<"">> end)/binary,
+        (case {MetadataType, AggChoResourceAttr} of {revised, _} -> <<"">>; {_, element_not_provided} -> ExpAggChoLine; _ -> <<"">> end)/binary,
         (case IsShownAtResourceAttr of element_not_provided -> ExpIsShownAtLine; _ -> <<"">> end)/binary,
         (case IsShownByResourceAttr of element_not_provided -> ExpIsShownByLine; _ -> <<"">> end)/binary,
-        (case {MetadataType, AggChoResourceAttr} of {_, element_not_provided} -> <<"">>; _-> ExpAggChoLine end)/binary,
+        (case {MetadataType, AggChoResourceAttr} of {_, element_not_provided} -> <<"">>; _ -> ExpAggChoLine end)/binary,
         "        <edm:dataProvider>Europeana Foundation</edm:dataProvider>\n",
         (case IsShownByResourceAttr of element_not_provided -> <<"">>; _ -> ExpIsShownByLine end)/binary,
         "        <edm:provider>Europeana Foundation</edm:provider>\n",
