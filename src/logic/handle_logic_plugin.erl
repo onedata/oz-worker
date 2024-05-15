@@ -218,7 +218,7 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
-    {ok, [HandleId || #handle_listing_entry{handle_id = HandleId} <- handles:gather_by_all_prefixes()]};
+    od_handle:list();
 get(#el_req{gri = #gri{aspect = privileges}}, _) ->
     {ok, #{
         <<"member">> => privileges:handle_member(),

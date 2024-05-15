@@ -86,8 +86,11 @@ get_response(<<"record">>, Args) ->
                 #handle_listing_entry{
                     timestamp = Handle#od_handle.timestamp,
                     service_id = Handle#od_handle.handle_service,
-                    exists_flag = element(2, od_handle:exists(HandleId)),
-                    handle_id = HandleId
+                    handle_id = HandleId,
+                    status = case od_handle:exists(HandleId) of
+                        {ok, true} -> present;
+                        {ok, false} -> deleted
+                    end
                 },
                 Handle
             );

@@ -49,31 +49,19 @@ oai_identifier_decode(OAIId) ->
 build_oai_header(#handle_listing_entry{
     timestamp = TimeSeconds,
     service_id = HandleServiceId,
-    exists_flag = true,
-    handle_id = HandleId
-}) ->
-    OaiId = oai_identifier_encode(HandleId),
-    #oai_header{
-        identifier = OaiId,
-        datestamp = serialize_datestamp(time:seconds_to_datetime(TimeSeconds)),
-        set_spec = HandleServiceId
-    };
-build_oai_header(#handle_listing_entry{
-    timestamp = TimeSeconds,
-    service_id = HandleServiceId,
-    exists_flag = false,
-    handle_id = HandleId
+    handle_id = HandleId,
+    status = Status
 }) ->
     OaiId = oai_identifier_encode(HandleId),
     #oai_header{
         identifier = OaiId,
         datestamp = serialize_datestamp(time:seconds_to_datetime(TimeSeconds)),
         set_spec = HandleServiceId,
-        deleted = true
+        status = Status
     }.
 
 -spec build_oai_record(handle_listing_entry()) -> #oai_record{}.
-build_oai_record(#handle_listing_entry{exists_flag = true, handle_id = HandleId} = ListingEntry) ->
+build_oai_record(#handle_listing_entry{handle_id = HandleId, status = present} = ListingEntry) ->
     Handle = get_handle(HandleId),
     build_oai_record(ListingEntry, Handle);
 build_oai_record(ListingEntry) ->
@@ -147,7 +135,7 @@ request_arguments_to_handle_listing_opts(Args) ->
                     deserialize_datestamp(proplists:get_value(<<"until">>, Args, undefined)),
                     fun time:datetime_to_seconds/1
                 ),
-                include_deleted => proplists:get_value(<<"includeDeleted">>, Args, false)
+                include_deleted => true
             };
         ResumptionToken ->
             #{
@@ -167,9 +155,8 @@ request_arguments_to_handle_listing_opts(Args) ->
 %%%--------------------------------------------------------------------
 -spec harvest(handles:listing_opts(), function()) -> oai_response().
 harvest(ListingOpts, HarvestingFun) ->
-    {Identifiers, NewResumptionToken} = handles:list(ListingOpts),
-    HarvestedMetadata = lists:map(fun(ListingEntry) ->
-        HarvestingFun(ListingEntry) end, Identifiers),
+    {Identifiers, NewResumptionToken} = handles:list_portion(ListingOpts),
+    HarvestedMetadata = lists:map(HarvestingFun, Identifiers),
 
     % TODO VFS-11906 consider a situation when a resumption token has been returned because
     % there is still one entry to be listed, but in the meantime it is deleted - then, the listing
@@ -281,20 +268,13 @@ to_xml(#oai_record{header = Header, metadata = Metadata, about = About}) ->
             ensure_list(to_xml(Metadata)) ++
             ensure_list(to_xml(About))
     };
-to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp,
-    set_spec = SetSpec, deleted = true}) ->
+to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp, set_spec = SetSpec, status = Status}) ->
     #xmlElement{
         name = header,
-        attributes =  [#xmlAttribute{name = status, value = "deleted"}],
-        content = lists:flatten([
-            ensure_list(to_xml({identifier, Identifier})),
-            ensure_list(to_xml({datestamp, Datestamp})),
-            ensure_list(to_xml({setSpec, SetSpec}))
-        ])
-    };
-to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp, set_spec = SetSpec}) ->
-    #xmlElement{
-        name = header,
+        attributes = case Status of
+            deleted -> [#xmlAttribute{name = status, value = "deleted"}];
+            present -> []
+        end,
         content = lists:flatten([
             ensure_list(to_xml({identifier, Identifier})),
             ensure_list(to_xml({datestamp, Datestamp})),

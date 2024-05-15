@@ -112,7 +112,8 @@ force_delete(HandleId) ->
 %%--------------------------------------------------------------------
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
-    datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+    {ok, [HandleId || #handle_listing_entry{handle_id = HandleId} <- handles:gather_by_all_prefixes()]}.
+
 
 %%--------------------------------------------------------------------
 %% @doc

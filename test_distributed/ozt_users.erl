@@ -25,6 +25,7 @@
 -export([create_space_for/1, create_space_for/2]).
 -export([create_advertised_space_for/1, create_advertised_space_for/2]).
 -export([join_space/2, leave_space/2]).
+-export([create_share_for/2]).
 -export([create_handle_service_for/1]).
 -export([create_handle_for/3]).
 -export([create_harvester_for/1]).
@@ -115,6 +116,15 @@ join_space(UserId, Token) ->
 -spec leave_space(od_user:id(), od_space:id()) -> ok.
 leave_space(UserId, SpaceId) ->
     ?assertMatch(ok, ozt:rpc(user_logic, leave_space, [?USER(UserId), UserId, SpaceId])).
+
+
+-spec create_share_for(od_user:id(), od_space:id()) -> od_share:id().
+create_share_for(UserId, SpaceId) ->
+    Name = datastore_key:new(),
+    {ok, HServiceId} = ?assertMatch({ok, _},  ozt:rpc(share_logic, create, [
+        ?USER(UserId), Name, Name, ?GEN_ROOT_FILE_ID(SpaceId, Name), SpaceId
+    ])),
+    HServiceId.
 
 
 -spec create_handle_service_for(od_user:id()) -> od_handle_service:id().

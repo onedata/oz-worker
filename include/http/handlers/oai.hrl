@@ -22,7 +22,7 @@
     identifier :: oai_id(),
     datestamp :: binary(),
     set_spec :: oai_set_spec(),
-    deleted :: boolean() | undefined
+    status :: handles:status() | undefined
 }).
 
 -record(oai_metadata_format, {
@@ -69,8 +69,8 @@
 -record(handle_listing_entry, {
     timestamp :: od_handle:timestamp_seconds(),
     service_id :: od_handle_service:id(),
-    exists_flag :: handles:exists_flag(),
-    handle_id :: od_handle:id()
+    handle_id :: od_handle:id(),
+    status :: handles:status()
 }).
 
 %% @formatter:off
