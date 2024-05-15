@@ -107,7 +107,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback required_admin_privileges(entity_logic:req()) ->
-    [privileges:oz_privilege()] | forbidden | fun((entity_logic:record()) -> [privileges:oz_privilege()] | forbidden).
+    [privileges:oz_privilege()] | forbidden | fun((entity_logic:entity()) -> [privileges:oz_privilege()] | forbidden).
 
 
 %%--------------------------------------------------------------------
