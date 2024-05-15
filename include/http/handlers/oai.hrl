@@ -133,4 +133,12 @@
 -define(OAI_IDENTIFIER_PREFIX, <<"oai:", (oz_worker:get_domain())/binary, ":">>).
 
 
+-define(find_matching_element(Pattern, List), lists_utils:find(fun(Element) ->
+    case Element of
+        Pattern -> true;
+        _ -> false
+    end
+end, List)).
+
+
 -endif.

@@ -7,7 +7,7 @@
 %%% Module responsible for parsing OAI-PMH requests.
 %%% @end
 %%%-------------------------------------------------------------------
--module(oai_parser).
+-module(oai_arg_parser).
 -author("Jakub Kudzia").
 
 -include("http/handlers/oai.hrl").

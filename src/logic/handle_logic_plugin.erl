@@ -135,7 +135,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataPrefix, RawMetadata, ShareId, ShareRecord),
 
         {ok, PublicHandle} = handle_proxy:register_handle(
-            HandleServiceId, ResourceType, ShareId, oai_utils:encode_xml(RevisedMetadata)
+            HandleServiceId, ResourceType, ShareId, oai_metadata:encode_xml(MetadataPrefix, RevisedMetadata)
         ),
 
         FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
@@ -144,7 +144,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             public_handle = PublicHandle,
             resource_type = ResourceType,
             metadata_prefix = MetadataPrefix,
-            metadata = oai_utils:encode_xml(FinalMetadata),
+            metadata = oai_metadata:encode_xml(MetadataPrefix, FinalMetadata),
             timestamp = CreationTime,
 
             resource_id = ShareId,
@@ -301,7 +301,7 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
         InputRawMetadata = maps:get(<<"metadata">>, Data),
         RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataPrefix, InputRawMetadata, ShareId, ShareRecord),
         FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
-        FinalRawMetadata = oai_utils:encode_xml(FinalMetadata),
+        FinalRawMetadata = oai_metadata:encode_xml(MetadataPrefix, FinalMetadata),
 
         CurrentTimestamp = od_handle:current_timestamp(),
         {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
@@ -672,7 +672,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 ) ->
     od_handle:parsed_metadata().
 raw_metadata_to_revised_for_publication(MetadataPrefix, RawMetadata, ShareId, ShareRecord) ->
-    ParsedMetadata = case oai_metadata:parse_xml(RawMetadata) of
+    ParsedMetadata = case oai_xml:parse(RawMetadata) of
         {ok, Parsed} -> Parsed;
         error -> throw(?ERROR_BAD_VALUE_XML(<<"metadata">>))
     end,
