@@ -843,8 +843,7 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
 get_deleted_record_test_base(Config, Method) ->
     User = ozt_users:create(),
     Space1 = ozt_users:create_space_for(User, ?SPACE_NAME1),
-    ShareId = datastore_key:new(),
-    {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(User), ShareId, ShareId, Space1),
+    ShareId = ozt_users:create_share_for(User, Space1),
     HSId = ozt_users:create_handle_service_for(User),
     Timestamp = ?CURRENT_DATETIME(),
     Timestamp2 =  increase_timestamp(Timestamp, 1),
@@ -1336,7 +1335,7 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(_, Config) ->
     oz_test_utils:delete_all_entities(Config),
-    ok = ozt:rpc(deleted_handles, purge_all_deleted_entries, []),
+    ok = ozt:rpc(handles, purge_all_deleted_entries, []),
     unmock_handle_proxy(Config),
     ok.
 

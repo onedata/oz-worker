@@ -416,13 +416,27 @@ delete_half_of_created_handles(_Config) ->
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     NumberToCreate = 200,
     utils:repeat(NumberToCreate, fun() -> create_handle(?EMPTY_HSERVICE, MetadataPrefix) end),
-    All = list_completely(#{service_id => ?EMPTY_HSERVICE, metadata_prefix => MetadataPrefix}),
+    ListingOpts = #{service_id => ?EMPTY_HSERVICE, metadata_prefix => MetadataPrefix},
+    All = list_completely(ListingOpts),
     ?assertEqual(NumberToCreate, length(All)),
 
     ElementsToDelete = [Handle || {Number, Handle} <- lists:enumerate(All), Number rem 2 =:= 0],
-    lists:foreach(fun(#handle_listing_entry{handle_id = HandleId}) -> delete_handle(HandleId, MetadataPrefix) end, ElementsToDelete),
-    AfterDeleting = list_completely(#{service_id => ?EMPTY_HSERVICE, metadata_prefix => MetadataPrefix, limit => 100}),
-    ?assertEqual(NumberToCreate div 2, length(AfterDeleting)).
+    DeletedTimestamp = lists:map(fun(#handle_listing_entry{handle_id = HandleId}) ->
+        {delete_handle(HandleId, MetadataPrefix), HandleId}
+    end, ElementsToDelete),
+    delete_expected_handles(MetadataPrefix, ?EMPTY_HSERVICE, DeletedTimestamp),
+    ListingOptsLimit = maps:put(limit, 100, ListingOpts),
+    AfterDeleting = list_completely(ListingOptsLimit),
+    ?assertEqual(NumberToCreate div 2, length(AfterDeleting)),
+
+    IncludeDeleted = list_completely(maps:put(include_deleted, true, ListingOptsLimit)),
+    ?assertEqual(NumberToCreate, length(IncludeDeleted)),
+
+    ?assertEqual(error, ozt:rpc(handles, lookup_deleted, [<<"IdThatNotExists">>])),
+
+    #handle_listing_entry{handle_id = HandleId} = hd(ElementsToDelete),
+    ?assertEqual({ok, lookup_expected_handle(HandleId)}, ozt:rpc(handles, lookup_deleted, [HandleId])).
+
 
 
 %%%===================================================================
@@ -600,14 +614,14 @@ init_per_suite(Config) ->
         lists:foreach(fun(MetadataPrefix) ->
             lists:foreach(fun(#handle_listing_entry{handle_id = HandleID}) ->
                 delete_handle(HandleID, MetadataPrefix)
-            end, load_expected_handles(MetadataPrefix)),
+            end, infer_expected_handle_entries(#{metadata_prefix => MetadataPrefix})),
             clear_expected_handles(MetadataPrefix)
         end, [?OAI_DC_METADATA_PREFIX, ?EDM_METADATA_PREFIX]),
         ok = ozt:rpc(handles, purge_all_deleted_entries, []),
         lists:foreach(fun(MetadataPrefix) ->
             lists:foreach(fun(HServiceId) ->
                 clear_expected_handles(MetadataPrefix, HServiceId)
-            end, [?FIRST_HSERVICE, ?ANOTHER_HSERVICE, ?SMALL_HSERVICE])
+            end, [?FIRST_HSERVICE, ?ANOTHER_HSERVICE, ?SMALL_HSERVICE, ?EMPTY_HSERVICE])
         end, [?OAI_DC_METADATA_PREFIX, ?EDM_METADATA_PREFIX]),
         utils:repeat(?HANDLE_COUNT_IN_SMALL_HSERVICE, fun() -> create_handle(?SMALL_HSERVICE) end),
         utils:repeat(?TOTAL_HANDLE_COUNT - ?HANDLE_COUNT_IN_SMALL_HSERVICE,

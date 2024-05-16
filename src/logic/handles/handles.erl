@@ -19,7 +19,7 @@
 
 -export([report_created/4, report_deleted/5, update_timestamp/5]).
 -export([gather_by_all_prefixes/0, list_completely/1, list_portion/1,
-    get_earliest_timestamp/0, delete_entry/4]).
+    get_earliest_timestamp/0, purge_all_deleted_entries/0, lookup_deleted/1]).
 
 
 % link_key() consists of 2 parts:
@@ -197,6 +197,26 @@ get_earliest_timestamp() ->
         [] -> undefined;
         _ -> lists:min([E#handle_listing_entry.timestamp || E <- EntriesWithEarliestTimestamps])
     end.
+
+
+-spec purge_all_deleted_entries() -> ok.
+purge_all_deleted_entries() ->
+    lists:foreach(fun(MetadataPrefix) ->
+        All = list_completely(#{metadata_prefix => MetadataPrefix,
+            include_deleted => true}),
+        lists:foreach(fun(#handle_listing_entry{
+            timestamp = Timestamp,
+            service_id = HandleServiceId,
+            handle_id = HandleId
+        }) ->
+            delete_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
+        end, All)
+    end, oai_metadata:supported_formats()).
+
+
+-spec lookup_deleted(od_handle:id()) -> error | {ok, handle_listing_entry()}.
+lookup_deleted(HandleId) ->
+    deleted_handles:lookup(HandleId).
 
 %%%===================================================================
 %%% Internal functions
