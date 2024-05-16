@@ -19,6 +19,7 @@
 %% API
 -export([create/0, create/1]).
 -export([add_user/2, add_user/3]).
+-export([add_group/2, add_group/3]).
 -export([add_space/2]).
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([delete/1]).
@@ -45,6 +46,16 @@ add_user(HarvesterId, UserId) ->
 -spec add_user(od_harvester:id(), od_user:id(), [privileges:harvester_privilege()]) -> ok.
 add_user(HarvesterId, UserId, Privileges) ->
     ?assertMatch({ok, _}, ozt:rpc(harvester_logic, add_user, [?ROOT, HarvesterId, UserId, Privileges])),
+    ok.
+
+
+-spec add_group(od_harvester:id(), od_group:id()) -> ok.
+add_group(HarvesterId, GroupId) ->
+    add_group(HarvesterId, GroupId, privileges:harvester_member()).
+
+-spec add_group(od_harvester:id(), od_group:id(), [privileges:harvester_privilege()]) -> ok.
+add_group(HarvesterId, GroupId, Privileges) ->
+    ?assertMatch({ok, _}, ozt:rpc(harvester_logic, add_group, [?ROOT, HarvesterId, GroupId, Privileges])),
     ok.
 
 
