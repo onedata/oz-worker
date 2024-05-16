@@ -78,37 +78,24 @@ get_response(<<"record">>, Args) ->
     OaiId = proplists:get_value(<<"identifier">>, Args),
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
     HandleId = oai_utils:oai_identifier_decode(OaiId),
-    case od_handle:exists(HandleId) of
-        {ok, false} ->
-            case deleted_handles:lookup_deleted(HandleId) of
-                {true, MetadataPrefix, HandleServiceId, Timestamp} ->
-                    oai_utils:build_oai_record(
-                        #handle_listing_entry{
-                            timestamp = Timestamp,
-                            service_id = HandleServiceId,
-                            exists_flag = false,
-                            handle_id = HandleId
-                        });
-                false ->
-                    throw({idDoesNotExist, OaiId})
-            end;
-        {ok, true} ->
-            Handle = get_handle_safe(OaiId),
-            %% @TODO VFS-7454 check if metadataPrefix is available for given identifier
-            case lists:member(MetadataPrefix, oai_metadata:supported_formats()) of
-                true ->
-                    oai_utils:build_oai_record(
-                        #handle_listing_entry{
-                            timestamp = Handle#od_handle.timestamp,
-                            service_id = Handle#od_handle.handle_service,
-                            exists_flag = true,
-                            handle_id = HandleId
-                        },
-                        Handle
-                    );
-                false ->
-                    throw({cannotDisseminateFormat, MetadataPrefix})
-            end
+    Handle = get_handle_safe(OaiId),
+    %% @TODO VFS-7454 check if metadataPrefix is available for given identifier
+    case lists:member(MetadataPrefix, oai_metadata:supported_formats()) of
+        true ->
+            oai_utils:build_oai_record(
+                #handle_listing_entry{
+                    timestamp = Handle#od_handle.timestamp,
+                    service_id = Handle#od_handle.handle_service,
+                    handle_id = HandleId,
+                    status = status = case od_handle:exists(HandleId) of
+                        {ok, true} -> present;
+                        {ok, false} -> deleted
+                    end
+                    },
+                Handle
+            );
+        false ->
+            throw({cannotDisseminateFormat, MetadataPrefix})
     end.
 
 %%%===================================================================

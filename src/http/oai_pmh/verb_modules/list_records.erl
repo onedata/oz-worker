@@ -38,7 +38,7 @@ required_arguments() -> [<<"metadataPrefix">>].
 %%% @end
 %%%-------------------------------------------------------------------
 -spec optional_arguments() -> [binary()].
-optional_arguments() -> [<<"from">>, <<"until">>, <<"set">>, <<"includeDeleted">>].
+optional_arguments() -> [<<"from">>, <<"until">>, <<"set">>].
 
 %%%-------------------------------------------------------------------
 %%% @doc

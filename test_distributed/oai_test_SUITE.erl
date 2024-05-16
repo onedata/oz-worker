@@ -652,22 +652,22 @@ list_identifiers_granularity_mismatch_error_post_test(Config) ->
     list_identifiers_granularity_mismatch_error_test_base(Config, post).
 
 list_identifiers_wrong_date_format_error1_get_test(Config) ->
-    list_identifiers_wrong_from_date_format_error_test_base(Config, get, <<"1111-01">>, undefined).
+    list_identifiers_wrong_date_format_error_test_base(Config, get, <<"1111-01">>, undefined, <<"from">>).
 
 list_identifiers_wrong_date_format_error1_post_test(Config) ->
-    list_identifiers_wrong_from_date_format_error_test_base(Config, post, <<"1111-01">>, undefined).
+    list_identifiers_wrong_date_format_error_test_base(Config, post, <<"1111-01">>, undefined, <<"from">>).
 
 list_identifiers_wrong_date_format_error2_get_test(Config) ->
-    list_identifiers_wrong_until_date_format_error_test_base(Config, get, undefined, <<"1111-01-25T00:01:25">>).
+    list_identifiers_wrong_date_format_error_test_base(Config, get, undefined, <<"1111-01-25T00:01:25">>, <<"until">>).
 
 list_identifiers_wrong_date_format_error2_post_test(Config) ->
-    list_identifiers_wrong_until_date_format_error_test_base(Config, post, undefined, <<"1111-01-25T00:01:25">>).
+    list_identifiers_wrong_date_format_error_test_base(Config, post, undefined, <<"1111-01-25T00:01:25">>, <<"until">>).
 
 list_identifiers_wrong_date_format_error3_get_test(Config) ->
-    list_identifiers_wrong_until_date_format_error_test_base(Config, get, undefined, <<"1111-13-25T65:01:25">>).
+    list_identifiers_wrong_date_format_error_test_base(Config, get, undefined, <<"1111-13-25T65:01:25">>, <<"until">>).
 
 list_identifiers_wrong_date_format_error3_post_test(Config) ->
-    list_identifiers_wrong_until_date_format_error_test_base(Config, post, undefined, <<"1111-13-25T65:01:25">>).
+    list_identifiers_wrong_date_format_error_test_base(Config, post, undefined, <<"1111-13-25T65:01:25">>, <<"until">>).
 
 list_records_no_records_match_error1_get_test(Config) ->
     list_records_no_records_match_error_test_base(Config, get, 10, 11, 15).
@@ -905,10 +905,10 @@ list_identifiers_include_deleted_test_base(Config, Method, IdentifiersNum, FromO
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
-    IdentifiersExistsFlag = setup_test_for_harvesting_with_deletion(
+    IdentifiersExistsStatus = setup_test_for_harvesting_with_deletion(
         Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
     ),
-    list_with_time_offsets_include_deleted_test_base(Config, Method, <<"ListIdentifiers">>, IdentifiersExistsFlag,
+    list_with_time_offsets_include_deleted_test_base(Config, Method, <<"ListIdentifiers">>, IdentifiersExistsStatus,
         BeginTime, FromOffset, UntilOffset, MetadataPrefix).
 
 
@@ -939,14 +939,13 @@ list_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
 list_deleted_test_base(Config, Method, Verb) ->
     User = ozt_users:create(),
     Space1 = ozt_users:create_space_for(User, ?SPACE_NAME1),
-    ShareId = datastore_key:new(),
-    {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(User), ShareId, ShareId, Space1),
+    ShareId = ozt_users:create_share_for(User, Space1),
     HSId = ozt_users:create_handle_service_for(User),
     DateTime = ?CURRENT_DATETIME(),
     DateTime2 = increase_timestamp(DateTime, 1),
     Identifier = ozt_users:create_handle_for(User, HSId, ShareId),
     #od_handle{metadata_prefix = MetadataPrefix} = ozt_handles:get(Identifier),
-    Args = prepare_harvesting_args(MetadataPrefix, undefined, undefined, undefined, true),
+    Args = prepare_harvesting_args(MetadataPrefix, undefined, undefined),
 
     ExpResponseContent = case Verb of
         <<"ListIdentifiers">> ->
@@ -1038,10 +1037,10 @@ list_records_include_deleted_test_base(Config, Method, IdentifiersNum, FromOffse
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
-    IdentifiersExistsFlag = setup_test_for_harvesting_with_deletion(
+    IdentifiersExistsStatus = setup_test_for_harvesting_with_deletion(
         Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
     ),
-    list_with_time_offsets_include_deleted_test_base(Config, Method, <<"ListRecords">>, IdentifiersExistsFlag,
+    list_with_time_offsets_include_deleted_test_base(Config, Method, <<"ListRecords">>, IdentifiersExistsStatus,
         BeginTime, FromOffset, UntilOffset, MetadataPrefix).
 
 
@@ -1114,21 +1113,21 @@ list_with_time_offsets_test_base(
 
 
 list_with_time_offsets_include_deleted_test_base(
-    Config, Method, Verb, IdentifiersExistsFlag, BeginTime, FromOffset, UntilOffset, MetadataPrefix) ->
-    BuildExpectedObject = fun(HandleId, TimeOffset, HSId, ExistsFlag) ->
+    Config, Method, Verb, IdentifiersExistsStatus, BeginTime, FromOffset, UntilOffset, MetadataPrefix) ->
+    BuildExpectedObject = fun(HandleId, TimeOffset, HSId, ExistsStatus) ->
         Timestamp = increase_timestamp(BeginTime, TimeOffset),
         case Verb of
             <<"ListIdentifiers">> ->
-                case ExistsFlag of
-                    true -> expected_oai_header_xml(Config, HandleId, Timestamp);
-                    false -> expected_oai_header_xml(Config, HandleId, Timestamp, HSId, deleted)
+                case ExistsStatus of
+                    present -> expected_oai_header_xml(Config, HandleId, Timestamp);
+                    deleted -> expected_oai_header_xml(Config, HandleId, Timestamp, HSId, deleted)
                 end;
             <<"ListRecords">> ->
-                case ExistsFlag of
-                    true ->
+                case ExistsStatus of
+                    present ->
                         ExpectedMetadata = expected_final_metadata_element(MetadataPrefix, HandleId),
                         expected_oai_record_xml(Config, HandleId, Timestamp, ExpectedMetadata);
-                    false ->
+                    deleted ->
                         expected_oai_record_xml(Config, HandleId, Timestamp, HSId, deleted)
                 end
         end
@@ -1136,10 +1135,10 @@ list_with_time_offsets_include_deleted_test_base(
 
     From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
     Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
-    Args = prepare_harvesting_args(MetadataPrefix, From, Until, undefined, true),
+    Args = prepare_harvesting_args(MetadataPrefix, From, Until),
 
     IdsAndTimestamps = lists:keysort(2, ids_exs_flag_and_timestamps_to_be_harvested(
-        IdentifiersExistsFlag, FromOffset, UntilOffset)
+        IdentifiersExistsStatus, FromOffset, UntilOffset)
     ),
 
     %%  if FromOffset =:= UntilOffset =:= creation of first entry and this entry will be deleted than
@@ -1154,7 +1153,7 @@ list_with_time_offsets_include_deleted_test_base(
     % check filtering by sets
     {ok, HandleServices} = oz_test_utils:list_handle_services(Config),
     lists:foreach(fun(HandleServiceId) ->
-        IdsAndTimestampsInTheHService = lists:filter(fun({_HandleId, _TimeOffset, HSId, _ExistsFlag}) ->
+        IdsAndTimestampsInTheHService = lists:filter(fun({_HandleId, _TimeOffset, HSId, _ExistsStatus}) ->
             HandleServiceId =:= HSId
         end, IdsAndTimestamps),
 
@@ -1301,15 +1300,9 @@ list_identifiers_granularity_mismatch_error_test_base(Config, Method) ->
     ],
     ?assert(check_list_identifiers_bad_argument_granularity_mismatch_error(200, Args, Method, [], Config)).
 
-list_identifiers_wrong_from_date_format_error_test_base(Config, Method, From, Until) ->
-
+list_identifiers_wrong_date_format_error_test_base(Config, Method, From, Until, DateFormat) ->
     Args = prepare_harvesting_args(?RAND_METADATA_PREFIX(), From, Until),
-    ?assert(check_list_identifiers_bad_argument_invalid_from_date_format_error(200, Args, Method, [], Config)).
-
-list_identifiers_wrong_until_date_format_error_test_base(Config, Method, From, Until) ->
-
-    Args = prepare_harvesting_args(?RAND_METADATA_PREFIX(), From, Until),
-    ?assert(check_list_identifiers_bad_argument_invalid_until_date_format_error(200, Args, Method, [], Config)).
+    ?assert(check_list_identifiers_bad_argument_invalid_date_format_error(200, Args, Method, [], DateFormat, Config)).
 
 list_records_no_records_match_error_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
 
@@ -1343,7 +1336,7 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(_, Config) ->
     oz_test_utils:delete_all_entities(Config),
-    ok = ozt:rpc(deleted_handles, purge_all_deleted_entry, []),
+    ok = ozt:rpc(deleted_handles, purge_all_deleted_entries, []),
     unmock_handle_proxy(Config),
     ok.
 
@@ -1415,19 +1408,14 @@ check_list_identifiers_bad_argument_granularity_mismatch_error(Code, Args, Metho
         {error, {badArgument, [granularity_mismatch, <<"from">>, <<"until">>]}}, Config
     ).
 
-check_list_identifiers_bad_argument_invalid_from_date_format_error(Code, Args, Method, ExpResponseContent, Config) ->
+check_list_identifiers_bad_argument_invalid_date_format_error(Code, Args, Method, ExpResponseContent, DateFormat, Config) ->
     check_oai_request(Code, <<"ListIdentifiers">>, Args, Method, ExpResponseContent,
-        {error, {badArgument, [invalid_date_format, <<"from">>]}}, Config
-    ).
-
-check_list_identifiers_bad_argument_invalid_until_date_format_error(Code, Args, Method, ExpResponseContent, Config) ->
-    check_oai_request(Code, <<"ListIdentifiers">>, Args, Method, ExpResponseContent,
-        {error, {badArgument, [invalid_date_format, <<"until">>]}}, Config
+        {error, {badArgument, [invalid_date_format, DateFormat]}}, Config
     ).
 
 check_list_entries(Code, Verb, Args, Method, BuildExpectedObject, ExpListedEntries, Config) ->
     ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
-    {_, ExpResumptionToken} = ozt:rpc(handles, list, [ListingOpts]),
+    {_, ExpResumptionToken} = ozt:rpc(handles, list_portion, [ListingOpts]),
 
     ExpectedBase = lists:map(fun({HandleId, TimeOffset}) ->
         BuildExpectedObject(HandleId, TimeOffset)
@@ -1438,10 +1426,10 @@ check_list_entries(Code, Verb, Args, Method, BuildExpectedObject, ExpListedEntri
 
 check_list_entries_including_deleted(Code, Verb, Args, Method, BuildExpectedObject, ExpListedEntries, Config) ->
     ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
-    {_, ExpResumptionToken} = ozt:rpc(handles, list, [ListingOpts]),
+    {_, ExpResumptionToken} = ozt:rpc(handles, list_portion, [ListingOpts]),
 
-    ExpectedBase = lists:map(fun({HandleId, TimeOffset, HSId, ExistsFlag}) ->
-        BuildExpectedObject(HandleId, TimeOffset, HSId, ExistsFlag)
+    ExpectedBase = lists:map(fun({HandleId, TimeOffset, HSId, ExistsStatus}) ->
+        BuildExpectedObject(HandleId, TimeOffset, HSId, ExistsStatus)
     end, ExpListedEntries),
 
     ExpResponseContent = ExpectedBase ++ expected_response_body_wrt_resumption_token(ExpResumptionToken, ListingOpts),
@@ -1464,7 +1452,7 @@ check_list_entries_continuously_with_resumption_token(_Config, _Method, _Verb, _
 check_list_entries_continuously_with_resumption_token(Config, Method, Verb, RemainingExpEntries, Args, BuildExpectedObject) ->
     ExpListedEntries = lists:sublist(RemainingExpEntries, ?TESTED_HANDLE_LIST_LIMIT),
     ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
-    {_, ExpResumptionToken} = ozt:rpc(handles, list, [ListingOpts]),
+    {_, ExpResumptionToken} = ozt:rpc(handles, list_portion, [ListingOpts]),
 
     case check_list_entries(200, Verb, Args, Method, BuildExpectedObject, ExpListedEntries, Config) of
         true ->
@@ -1472,7 +1460,7 @@ check_list_entries_continuously_with_resumption_token(Config, Method, Verb, Rema
             check_list_entries_continuously_with_resumption_token(
                 Config, Method, Verb, lists:subtract(RemainingExpEntries, ExpListedEntries), ArgsWithToken, BuildExpectedObject
             );
-        Other -> Other
+        false -> false
     end.
 
 
@@ -1710,18 +1698,18 @@ setup_test_for_harvesting_with_deletion(Config, RecordsNum, BeginTime, TimeOffse
     EnumeratedIdentifiers = lists:enumerate(lists:zip(Identifiers, TimeOffsets)),
     NumberToDelete = ?RAND_INT(1, RecordsNum - 1),
     ElementsToDelete = [?RAND_INT(1, RecordsNum) || _ <- lists:seq(1, NumberToDelete)],
-    IdentifiersExistsFlag = lists:map(fun({Number, {Identifier, TimeOffset}}) ->
+    IdentifiersExistsStatus = lists:map(fun({Number, {Identifier, TimeOffset}}) ->
         HSId = lookup_handle_service_of_handle(Config, Identifier),
         case lists:member(Number, ElementsToDelete) of
             true ->
                 NewTimestamp = increase_timestamp(BeginTime, TimeOffset + RecordsNum),
                 delete_handle_with_mocked_timestamp(Config, Identifier, NewTimestamp),
-                {Identifier, TimeOffset + RecordsNum, HSId, false};
+                {Identifier, TimeOffset + RecordsNum, HSId, deleted};
             false ->
-                {Identifier, TimeOffset, HSId, true}
+                {Identifier, TimeOffset, HSId, present}
         end
     end, EnumeratedIdentifiers),
-    IdentifiersExistsFlag.
+    IdentifiersExistsStatus.
 
 %% for each SpaceId in SpaceIds creates share,
 %% adds metadata to this share and mock timestamp,
@@ -1795,24 +1783,20 @@ prepare_harvesting_args(MetadataPrefix, From, Until) ->
     prepare_harvesting_args(MetadataPrefix, From, Until, undefined).
 
 prepare_harvesting_args(MetadataPrefix, From, Until, Set) ->
-    prepare_harvesting_args(MetadataPrefix, From, Until, Set, false).
-
-prepare_harvesting_args(MetadataPrefix, From, Until, Set, ExistsFlag) ->
     Args = add_to_args_if_defined(<<"metadataPrefix">>, MetadataPrefix, []),
     Args2 = add_to_args_if_defined(<<"from">>, From, Args),
     Args3 = add_to_args_if_defined(<<"until">>, Until, Args2),
-    Args4 = add_to_args_if_defined(<<"set">>, Set, Args3),
-    add_to_args_if_defined(<<"includeDeleted">>, ExistsFlag, Args4).
+    add_to_args_if_defined(<<"set">>, Set, Args3).
 
 ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset) ->
     lists:filter(fun({_Id, TimeOffset}) ->
         offset_in_range(FromOffset, UntilOffset, TimeOffset)
     end, lists:zip(Identifiers, TimeOffsets)).
 
-ids_exs_flag_and_timestamps_to_be_harvested(IdentifiersExistsFlag, FromOffset, UntilOffset) ->
-    lists:filter(fun({_Id, TimeOffset, _HSId, _ExistsFlag}) ->
+ids_exs_flag_and_timestamps_to_be_harvested(IdentifiersExistsStatus, FromOffset, UntilOffset) ->
+    lists:filter(fun({_Id, TimeOffset, _HSId, _ExistsStatus}) ->
         offset_in_range(FromOffset, UntilOffset, TimeOffset)
-    end, IdentifiersExistsFlag).
+    end, IdentifiersExistsStatus).
 
 increase_timestamp(_, undefined) -> undefined;
 increase_timestamp(undefined, _) -> undefined;
