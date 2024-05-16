@@ -721,31 +721,33 @@ authorize(Req = #el_req{operation = get, auth = ?PROVIDER(ProviderId), gri = #gr
 
 authorize(Req = #el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = instance, scope = shared}}, Group) ->
     case Req#el_req.auth_hint of
-        ?THROUGH_USER(UserId) -> ok;
-        ?THROUGH_USER(_OtherUserId) -> throw(?ERROR_FORBIDDEN);
-        _ -> ok
-    end,
-    % the group's membership in different entities is checked in 'exists';
-    % if the user is an effective member of the group, he can see the shared
-    % data regardless of his privileges in the entity concerned by the auth hint
-    auth_by_membership(UserId, Group) orelse case Req#el_req.auth_hint of
-        ?THROUGH_GROUP(ParentGroupId) ->
-            group_logic:has_eff_privilege(ParentGroupId, UserId, ?GROUP_VIEW);
-        ?THROUGH_SPACE(SpaceId) ->
-            space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_VIEW);
-        ?THROUGH_HANDLE_SERVICE(HServiceId) ->
-            handle_service_logic:has_eff_privilege(HServiceId, UserId, ?HANDLE_SERVICE_VIEW);
-        ?THROUGH_HANDLE(HandleId) ->
-            handle_logic:has_eff_privilege(HandleId, UserId, ?HANDLE_VIEW);
-        ?THROUGH_HARVESTER(HarvesterId) ->
-            harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_VIEW);
-        ?THROUGH_PROVIDER(ProviderId) ->
-            ClusterId = ProviderId,
-            cluster_logic:has_eff_privilege(ClusterId, UserId, ?CLUSTER_VIEW);
-        ?THROUGH_CLUSTER(ClusterId) ->
-            cluster_logic:has_eff_privilege(ClusterId, UserId, ?CLUSTER_VIEW);
-        ?THROUGH_ATM_INVENTORY(AtmInventoryId) ->
-            atm_inventory_logic:has_eff_privilege(AtmInventoryId, UserId, ?ATM_INVENTORY_VIEW)
+        ?THROUGH_USER(UserId) ->
+            auth_by_membership(UserId, Group);
+        ?THROUGH_USER(_OtherUserId) ->
+            false;
+        _ ->
+            % the group's membership in different entities is checked in 'exists';
+            % if the user is an effective member of the group, he can see the shared
+            % data regardless of his privileges in the entity concerned by the auth hint
+            auth_by_membership(UserId, Group) orelse case Req#el_req.auth_hint of
+                ?THROUGH_GROUP(ParentGroupId) ->
+                    group_logic:has_eff_privilege(ParentGroupId, UserId, ?GROUP_VIEW);
+                ?THROUGH_SPACE(SpaceId) ->
+                    space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_VIEW);
+                ?THROUGH_HANDLE_SERVICE(HServiceId) ->
+                    handle_service_logic:has_eff_privilege(HServiceId, UserId, ?HANDLE_SERVICE_VIEW);
+                ?THROUGH_HANDLE(HandleId) ->
+                    handle_logic:has_eff_privilege(HandleId, UserId, ?HANDLE_VIEW);
+                ?THROUGH_HARVESTER(HarvesterId) ->
+                    harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_VIEW);
+                ?THROUGH_PROVIDER(ProviderId) ->
+                    ClusterId = ProviderId,
+                    cluster_logic:has_eff_privilege(ClusterId, UserId, ?CLUSTER_VIEW);
+                ?THROUGH_CLUSTER(ClusterId) ->
+                    cluster_logic:has_eff_privilege(ClusterId, UserId, ?CLUSTER_VIEW);
+                ?THROUGH_ATM_INVENTORY(AtmInventoryId) ->
+                    atm_inventory_logic:has_eff_privilege(AtmInventoryId, UserId, ?ATM_INVENTORY_VIEW)
+            end
     end;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = children}}, Group) ->
