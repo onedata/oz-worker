@@ -442,31 +442,49 @@ get_test(Config) ->
 
     lists:foreach(fun({Scope, AuthHint, AuthorizedClients}) ->
         lists:foreach(fun(Auth) ->
-            case lists:member(Auth, AuthorizedClients) of
-                true -> ?assertMatch({ok, _}, GetWithAuthHint(Scope, Auth, AuthHint));
-                false -> ?assertMatch(?ERROR_FORBIDDEN, GetWithAuthHint(Scope, Auth, AuthHint))
+            case AuthorizedClients of
+                {none, ExpError} ->
+                    ?assertMatch(ExpError, GetWithAuthHint(Scope, Auth, AuthHint));
+                [_ | _] ->
+                    case lists:member(Auth, AuthorizedClients) of
+                        true ->
+                            ?assertMatch({ok, _}, GetWithAuthHint(Scope, Auth, AuthHint));
+                        false ->
+                            ?assertMatch(?ERROR_FORBIDDEN, GetWithAuthHint(Scope, Auth, AuthHint))
+                    end
             end
         end, AllClients)
     end, [
-        {private, ?THROUGH_USER(MemberWithView), []},
-        {private, ?THROUGH_GROUP(ChildGroupId), []},
-        {private, ?THROUGH_GROUP(ParentGroupId), []},
-        {private, ?THROUGH_SPACE(SpaceId), []},
-        {private, ?THROUGH_HANDLE_SERVICE(HandleServiceId), []},
-        {private, ?THROUGH_HANDLE(HandleId), []},
-        {private, ?THROUGH_HARVESTER(HarvesterId), []},
-        {private, ?THROUGH_PROVIDER(ProviderId), []},
-        {private, ?THROUGH_CLUSTER(ProviderId), []},
-        {private, ?THROUGH_ATM_INVENTORY(AtmInventoryId), []},
+        {private, undefined, [?USER(MemberWithView)]},
+        {private, ?THROUGH_USER(MemberWithView), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_GROUP(ChildGroupId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_GROUP(ParentGroupId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_SPACE(SpaceId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_HANDLE_SERVICE(HandleServiceId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_HANDLE(HandleId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_HARVESTER(HarvesterId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_PROVIDER(ProviderId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_CLUSTER(ProviderId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_ATM_INVENTORY(AtmInventoryId), {none, ?ERROR_FORBIDDEN}},
 
+        {protected, undefined, [?USER(MemberWithView), ?USER(MemberWithoutView), ?PROVIDER(ProviderId)]},
         {protected, ?THROUGH_USER(MemberWithView), [?USER(MemberWithView)]},
         {protected, ?THROUGH_USER(MemberWithoutView), [?USER(MemberWithoutView)]},
         {protected, ?THROUGH_GROUP(ChildGroupId), [?USER(MemberWithView), ?USER(MemberWithoutView)]},
         {protected, ?THROUGH_PROVIDER(ProviderId), [?PROVIDER(ProviderId), ?USER(MemberWithView)]},
+        {protected, ?THROUGH_GROUP(ParentGroupId), {none, ?ERROR_NOT_FOUND}},
+        {protected, ?THROUGH_SPACE(SpaceId), {none, ?ERROR_NOT_FOUND}},
+        {protected, ?THROUGH_HANDLE_SERVICE(HandleServiceId), {none, ?ERROR_NOT_FOUND}},
+        {protected, ?THROUGH_HANDLE(HandleId), {none, ?ERROR_NOT_FOUND}},
+        {protected, ?THROUGH_HARVESTER(HarvesterId), {none, ?ERROR_NOT_FOUND}},
+        {protected, ?THROUGH_CLUSTER(ProviderId), {none, ?ERROR_NOT_FOUND}},
+        {protected, ?THROUGH_ATM_INVENTORY(AtmInventoryId), {none, ?ERROR_NOT_FOUND}},
 
+        {shared, undefined, [?USER(MemberWithView), ?USER(MemberWithoutView), ?PROVIDER(ProviderId)]},
         {shared, ?THROUGH_USER(MemberWithView), [?USER(MemberWithView)]},
         {shared, ?THROUGH_USER(MemberWithoutView), [?USER(MemberWithoutView)]},
         {shared, ?THROUGH_GROUP(ParentGroupId), [?USER(MemberWithView), ?USER(MemberWithoutView)]},
+        {shared, ?THROUGH_GROUP(ChildGroupId), {none, ?ERROR_NOT_FOUND}},
         {shared, ?THROUGH_SPACE(SpaceId), [?PROVIDER(ProviderId), ?USER(MemberWithView), ?USER(MemberWithoutView)]},
         {shared, ?THROUGH_HANDLE_SERVICE(HandleServiceId), [?USER(MemberWithView), ?USER(MemberWithoutView)]},
         {shared, ?THROUGH_HANDLE(HandleId), [?USER(MemberWithView), ?USER(MemberWithoutView)]},
@@ -474,21 +492,6 @@ get_test(Config) ->
         {shared, ?THROUGH_PROVIDER(ProviderId), [?PROVIDER(ProviderId), ?USER(MemberWithView), ?USER(MemberWithoutView)]},
         {shared, ?THROUGH_CLUSTER(ProviderId), [?PROVIDER(ProviderId), ?USER(MemberWithView), ?USER(MemberWithoutView)]},
         {shared, ?THROUGH_ATM_INVENTORY(AtmInventoryId), [?USER(MemberWithView), ?USER(MemberWithoutView)]}
-    ]),
-
-    lists:foreach(fun({Scope, AuthHint}) ->
-        lists:foreach(fun(Auth) ->
-            ?assertMatch(?ERROR_NOT_FOUND, GetWithAuthHint(Scope, Auth, AuthHint))
-        end, AllClients)
-    end, [
-        {shared, ?THROUGH_GROUP(ChildGroupId)},
-        {protected, ?THROUGH_GROUP(ParentGroupId)},
-        {protected, ?THROUGH_SPACE(SpaceId)},
-        {protected, ?THROUGH_HANDLE_SERVICE(HandleServiceId)},
-        {protected, ?THROUGH_HANDLE(HandleId)},
-        {protected, ?THROUGH_HARVESTER(HarvesterId)},
-        {protected, ?THROUGH_CLUSTER(ProviderId)},
-        {protected, ?THROUGH_ATM_INVENTORY(AtmInventoryId)}
     ]).
 
 

@@ -670,7 +670,6 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Group) ->
     case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
-            % User's membership in this group is checked in 'exists'
             auth_by_membership(UserId, Group);
 
         {?USER(_UserId), ?THROUGH_USER(_OtherUserId)} ->
@@ -692,9 +691,8 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
         {?PROVIDER(_ProviderId), ?THROUGH_PROVIDER(_OtherProviderId)} ->
             false;
 
-        {?PROVIDER(_ProviderId), undefined} ->
-            % Group's membership in provider is checked in 'exists'
-            true;
+        {?PROVIDER(ProviderId), undefined} ->
+            group_logic:has_eff_provider(Group, ProviderId);
 
         {?USER(ClientUserId), _} ->
             auth_by_membership(ClientUserId, Group);
