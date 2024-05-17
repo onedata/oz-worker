@@ -22,7 +22,7 @@
     identifier :: oai_id(),
     datestamp :: binary(),
     set_spec :: oai_set_spec(),
-    status :: handles:status() | undefined
+    status :: handles:status()
 }).
 
 -record(oai_metadata_format, {
@@ -46,7 +46,9 @@
 
 -record(oai_record, {
     header :: oai_header(),
+    %% undefined when record status is deleted
     metadata :: oai_metadata() | undefined,
+    %% optional attribute
     about :: oai_about() | undefined
 }).
 
@@ -91,7 +93,6 @@
 -type oai_set_spec() :: od_handle_service:id().
 -type oai_error() :: #oai_error{}.
 -type oai_listing_result() :: #oai_listing_result{}.
--type handle_listing_entry() :: #handle_listing_entry{}.
 -type oai_response() :: binary() | [binary()] |
                         oai_record() | [oai_record()] |
                         [oai_set()] |

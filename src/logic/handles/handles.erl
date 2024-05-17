@@ -21,7 +21,6 @@
 -export([gather_by_all_prefixes/0, list_completely/1, list_portion/1,
     get_earliest_timestamp/0, purge_all_deleted_entries/0, lookup_deleted/1]).
 
-
 % link_key() consists of 2 parts:
 %  1) timestamp (in seconds) - so that links would be sorted by time.
 %  2) handle id - this part allows to distinguish links associated with handles
@@ -55,7 +54,9 @@
 }.
 %% @formatter:on
 
--export_type([listing_opts/0, resumption_token/0, status/0]).
+-type handle_listing_entry() :: #handle_listing_entry{}.
+
+-export_type([listing_opts/0, resumption_token/0, status/0, handle_listing_entry/0]).
 
 -define(CTX, (od_handle:get_ctx())).
 
@@ -76,6 +77,8 @@
 
 -define(MAX_TIMESTAMP, 99999999999).
 
+-define(critical_section_for_handle(HandleId, Fun),
+    critical_section:run({?MODULE, HandleId}, Fun)).
 
 %%%===================================================================
 %%% API
@@ -83,16 +86,18 @@
 
 -spec report_created(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds()) -> ok.
-report_created(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds) ->
-    add_entry(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds, present).
+report_created(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
+    add_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp, present).
 
 
 -spec report_deleted(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> ok.
 report_deleted(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, DeletionTimestamp) ->
-    delete_entry(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
-    add_entry(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp, deleted),
-    deleted_handles:insert(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp).
+    ?critical_section_for_handle(HandleId, fun() ->
+        delete_entry(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
+        add_entry(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp, deleted),
+        deleted_handles:insert(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp)
+    end).
 
 
 %%--------------------------------------------------------------------
@@ -105,16 +110,18 @@ update_timestamp(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, NewTim
     case OldTimestamp == NewTimestamp of
         true -> ok;
         false ->
-            delete_entry(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
-            add_entry(MetadataPrefix, HandleServiceId, HandleId, NewTimestamp, present)
+            ?critical_section_for_handle(HandleId, fun() ->
+                delete_entry(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
+                add_entry(MetadataPrefix, HandleServiceId, HandleId, NewTimestamp, present)
+            end)
     end.
 
 
 -spec gather_by_all_prefixes() -> [handle_listing_entry()].
 gather_by_all_prefixes() ->
-    lists:flatmap(fun(MetadataPrefix) ->
+    lists:umerge(lists:map(fun(MetadataPrefix) ->
         list_completely(#{metadata_prefix => MetadataPrefix})
-    end, oai_metadata:supported_formats()).
+    end, oai_metadata:supported_formats())).
 
 
 -spec list_completely(listing_opts()) -> [handle_listing_entry()].
@@ -140,9 +147,9 @@ list_portion(ListingOpts) ->
             IncludeDeleted1 = maps:get(include_deleted, ListingOpts, false),
             {MetadataPrefix1, HServiceId1, Limit1, From1, Until1, StartIndex1, IncludeDeleted1};
         _ ->
-            {TimeSecondsToken, MetadataPrefix2, HandleID, HServiceId2, Limit2,
+            {TimestampToken, MetadataPrefix2, HandleID, HServiceId2, Limit2,
                 From2, Until2, IncludeDeleted2} = unpack_resumption_token(Token),
-            StartIndex2 = encode_link_key(TimeSecondsToken, HandleID),
+            StartIndex2 = encode_link_key(TimestampToken, HandleID),
 
             {MetadataPrefix2, HServiceId2, Limit2, From2, Until2, StartIndex2, IncludeDeleted2}
     end,
@@ -159,25 +166,24 @@ list_portion(ListingOpts) ->
         inclusive => false
     },
     FoldFun = fun(#link{name = Key, target = Value}, Acc) ->
-        {TimeSeconds, HandleId} = decode_link_key(Key),
-        Result = case TimeSeconds > Until orelse length(Acc) >= (Limit + 1) of
+        {Timestamp, HandleId} = decode_link_key(Key),
+        case Timestamp > Until orelse length(Acc) =:= (Limit + 1) of
             true ->
                 {stop, Acc};
             false ->
-                {HandleServiceId, ExistsStatus} = decode_link_value(Value),
-                case {IncludeDeleted, ExistsStatus} of
+                {HandleServiceId, Status} = decode_link_value(Value),
+                case {IncludeDeleted, Status} of
                     {false, deleted} ->
                         {ok, Acc};
                     _ ->
                         {ok, [#handle_listing_entry{
-                            timestamp = TimeSeconds,
+                            timestamp = Timestamp,
                             service_id = HandleServiceId,
                             handle_id = HandleId,
-                            status = ExistsStatus
+                            status = Status
                         } | Acc]}
                 end
-        end,
-        Result
+        end
     end,
     {ok, ReversedEntries} = datastore_model:fold_links(
         ?CTX, ?FOREST, TreeId, FoldFun, [], FoldOpts
@@ -201,17 +207,18 @@ get_earliest_timestamp() ->
 
 -spec purge_all_deleted_entries() -> ok.
 purge_all_deleted_entries() ->
-    lists:foreach(fun(MetadataPrefix) ->
-        All = list_completely(#{metadata_prefix => MetadataPrefix,
-            include_deleted => true}),
-        lists:foreach(fun(#handle_listing_entry{
+        All = deleted_handles:list(),
+        lists:foreach(fun({MetadataPrefix, #handle_listing_entry{
             timestamp = Timestamp,
             service_id = HandleServiceId,
-            handle_id = HandleId
-        }) ->
-            delete_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
-        end, All)
-    end, oai_metadata:supported_formats()).
+            handle_id = HandleId,
+            status = deleted
+        }}) ->
+            ?critical_section_for_handle(HandleId, fun() ->
+                deleted_handles:remove(HandleId),
+                delete_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
+            end)
+        end, All).
 
 
 -spec lookup_deleted(od_handle:id()) -> error | {ok, handle_listing_entry()}.
@@ -229,29 +236,29 @@ encode_link_key(From, first) ->
         undefined -> <<>>;
         _ -> str_utils:format_bin("~11..0B", [From])
     end;
-encode_link_key(TimeSeconds, HandleId) ->
-    FormattedTimeSeconds = str_utils:format_bin("~11..0B", [TimeSeconds]),
-    <<(FormattedTimeSeconds)/binary, ?KEY_SEP, HandleId/binary>>.
+encode_link_key(Timestamp, HandleId) ->
+    FormattedTimestamp = str_utils:format_bin("~11..0B", [Timestamp]),
+    <<(FormattedTimestamp)/binary, ?KEY_SEP, HandleId/binary>>.
 
 
 %% @private
 -spec decode_link_key(link_key()) -> {od_handle:timestamp_seconds(), od_handle:id()}.
 decode_link_key(Key) ->
-    <<TimeSeconds:11/binary, ?KEY_SEP, HandleId/binary>> = Key,
-    {binary_to_integer(TimeSeconds), HandleId}.
+    <<Timestamp:11/binary, ?KEY_SEP, HandleId/binary>> = Key,
+    {binary_to_integer(Timestamp), HandleId}.
 
 
 %% @private
 -spec encode_link_value(od_handle_service:id(), status()) -> link_value().
-encode_link_value(HandleServiceId, ExistsStatus) ->
-    str_utils:join_binary([status_to_binary(ExistsStatus), HandleServiceId], ?VALUE_SEP).
+encode_link_value(HandleServiceId, Status) ->
+    str_utils:join_binary([status_to_binary(Status), HandleServiceId], ?VALUE_SEP).
 
 
 %% @private
 -spec decode_link_value(link_value()) -> {od_handle_service:id(), status()}.
 decode_link_value(Value) ->
-    [ExistsStatus, HandleServiceId] = binary:split(Value, [?VALUE_SEP], [global]),
-    {HandleServiceId, binary_to_status(ExistsStatus)}.
+    [Status, HandleServiceId] = binary:split(Value, [?VALUE_SEP], [global]),
+    {HandleServiceId, binary_to_status(Status)}.
 
 
 %% @private
@@ -285,11 +292,11 @@ pack_resumption_token(MetadataPrefix, Limit, From, Until, HServiceId, IncludeDel
 -spec unpack_resumption_token(resumption_token()) -> {od_handle:timestamp_seconds(), od_handle:metadata_prefix(),
     od_handle:id(), od_handle_service:id(), limit(), od_handle:timestamp_seconds(), od_handle:timestamp_seconds(), boolean()}.
 unpack_resumption_token(Token) ->
-    [TimeSeconds, MetadataPrefix, Limit, From, Until, HandleId, HServiceIdBin, IncludeDeletedBin] = binary:split(Token,
+    [Timestamp, MetadataPrefix, Limit, From, Until, HandleId, HServiceIdBin, IncludeDeletedBin] = binary:split(Token,
         [?RESUMPTION_TOKEN_SEP], [global]),
     HandleServiceId = case HServiceIdBin of <<>> -> undefined; _ -> HServiceIdBin end,
 
-    {binary_to_integer(TimeSeconds), MetadataPrefix, HandleId, HandleServiceId, binary_to_integer(Limit),
+    {binary_to_integer(Timestamp), MetadataPrefix, HandleId, HandleServiceId, binary_to_integer(Limit),
         binary_to_integer(From), binary_to_integer(Until), binary_to_atom(IncludeDeletedBin)}.
 
 
@@ -316,8 +323,8 @@ build_result_from_reversed_listing(ReversedEntries, Limit, MetadataPrefix, From,
 %% @private
 -spec add_entry(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds(), status()) -> ok.
-add_entry(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds, ExistsStatus) ->
-    Link = {encode_link_key(TimeSeconds, HandleId), encode_link_value(HandleServiceId, ExistsStatus)},
+add_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp, Status) ->
+    Link = {encode_link_key(Timestamp, HandleId), encode_link_value(HandleServiceId, Status)},
 
     lists:foreach(fun(TreeId) ->
         case datastore_model:add_links(?CTX, ?FOREST, TreeId, Link) of
@@ -327,8 +334,7 @@ add_entry(MetadataPrefix, HandleServiceId, HandleId, TimeSeconds, ExistsStatus) 
     end, [
         ?TREE_FOR_METADATA_PREFIX(MetadataPrefix),
         ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HandleServiceId)
-    ]),
-    ok.
+    ]).
 
 
 %% @private

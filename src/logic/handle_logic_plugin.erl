@@ -350,7 +350,7 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
         fun(#od_handle{
             public_handle = PublicHandle,
             handle_service = HandleService,
-            timestamp = TimeStamp,
+            timestamp = PreviousTimestamp,
             metadata_prefix = MetadataPrefix
         }) ->
             try
@@ -362,8 +362,8 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
                     Class, Reason, Stacktrace
                 )
             end,
-            NewTimestamp = od_handle:current_timestamp(),
-            handles:report_deleted(MetadataPrefix, HandleService, HandleId,  TimeStamp,  NewTimestamp),
+            DeletionTimestamp = od_handle:current_timestamp(),
+            handles:report_deleted(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
             entity_graph:delete_with_relations(od_handle, HandleId)
         end
     end);

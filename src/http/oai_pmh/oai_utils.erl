@@ -45,7 +45,7 @@ oai_identifier_decode(OAIId) ->
             throw({illegalId, OAIId})
     end.
 
--spec build_oai_header(handle_listing_entry()) -> #oai_header{}.
+-spec build_oai_header(handles:handle_listing_entry()) -> #oai_header{}.
 build_oai_header(#handle_listing_entry{
     timestamp = TimeSeconds,
     service_id = HandleServiceId,
@@ -60,16 +60,16 @@ build_oai_header(#handle_listing_entry{
         status = Status
     }.
 
--spec build_oai_record(handle_listing_entry()) -> #oai_record{}.
+-spec build_oai_record(handles:handle_listing_entry()) -> #oai_record{}.
 build_oai_record(#handle_listing_entry{handle_id = HandleId, status = present} = ListingEntry) ->
     Handle = get_handle(HandleId),
     build_oai_record(ListingEntry, Handle);
-build_oai_record(ListingEntry) ->
+build_oai_record(#handle_listing_entry{status = deleted} = ListingEntry) ->
     #oai_record{
         header = build_oai_header(ListingEntry)
     }.
 
--spec build_oai_record(handle_listing_entry(), #od_handle{}) -> #oai_record{}.
+-spec build_oai_record(handles:handle_listing_entry(), #od_handle{}) -> #oai_record{}.
 build_oai_record(ListingEntry, Handle) ->
     MetadataPrefix = Handle#od_handle.metadata_prefix,
     #oai_record{
@@ -155,8 +155,8 @@ request_arguments_to_handle_listing_opts(Args) ->
 %%%--------------------------------------------------------------------
 -spec harvest(handles:listing_opts(), function()) -> oai_response().
 harvest(ListingOpts, HarvestingFun) ->
-    {Identifiers, NewResumptionToken} = handles:list_portion(ListingOpts),
-    HarvestedMetadata = lists:map(HarvestingFun, Identifiers),
+    {HandleListingEntries, NewResumptionToken} = handles:list_portion(ListingOpts),
+    HarvestedMetadata = lists:map(HarvestingFun, HandleListingEntries),
 
     % TODO VFS-11906 consider a situation when a resumption token has been returned because
     % there is still one entry to be listed, but in the meantime it is deleted - then, the listing
