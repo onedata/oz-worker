@@ -22,6 +22,9 @@
 %%%   * ensure edm:isShownAt element with a defined rdf:resource attribute;
 %%%     do not change if exists, otherwise, add one pointing to
 %%%     a resource based on root FileId
+%%%   * if there is a WebResource element without any specified rdf:about
+%%%     attribute, insert the attribute with the same value as the
+%%%     rdf:resource in edm:isShownBy.
 %%%
 %%% Public handle insertion step:
 %%%   * add an rdf:about attr to edm:ProvidedCHO
@@ -104,20 +107,25 @@ main_namespace() ->
 revise_for_publication(#xmlElement{
     name = 'rdf:RDF', content = MetadataElements
 } = RdfXml, _ShareId, ShareRecord) ->
+    ShareRootFileId = ?check(file_id:guid_to_objectid(ShareRecord#od_share.root_file)),
+    IsShownByValue = ?is_shown_by_value(ShareRootFileId),
+
     MetadataElementsWithPublicHandles = lists:map(fun
         (#xmlElement{name = 'edm:ProvidedCHO', attributes = CHOAttrs} = CHOElement) ->
             CHOElement#xmlElement{
                 attributes = remove_rdf_about_attr(CHOAttrs)
             };
         (#xmlElement{name = 'ore:Aggregation', content = AggContent0, attributes = AggAttrs} = AggElement) ->
-            ShareRootFileId = ?check(file_id:guid_to_objectid(ShareRecord#od_share.root_file)),
-            IsShownByValue = ?is_shown_by_value(ShareRootFileId),
             AggContent1 = remove_rdf_resource_attr_from_aggregated_cho_element(AggContent0),
             AggContent2 = insert_element(AggContent1, 'edm:isShownBy', [?rdf_resource_attr(IsShownByValue)]),
             AggContent3 = ensure_is_shown_at_element(AggContent2, ShareRootFileId),
             AggElement#xmlElement{
                 attributes = remove_rdf_about_attr(AggAttrs),
                 content = AggContent3
+            };
+        (#xmlElement{name = 'edm:WebResource', attributes = WRAttrs} = WRElement) ->
+            WRElement#xmlElement{
+                attributes = insert_rdf_about_attr(WRAttrs, honour_existing, IsShownByValue)
             };
         (Other) ->
             Other
@@ -138,11 +146,11 @@ insert_public_handle(#xmlElement{
     MetadataElementsWithPublicHandles = lists:map(fun
         (#xmlElement{name = 'edm:ProvidedCHO', attributes = CHOAttrs} = CHOElement) ->
             CHOElement#xmlElement{
-                attributes = insert_rdf_about_attr(CHOAttrs, PublicHandle)
+                attributes = insert_rdf_about_attr(CHOAttrs, overwrite, PublicHandle)
             };
         (#xmlElement{name = 'ore:Aggregation', content = AggContent, attributes = AggAttrs} = AggElement) ->
             AggElement#xmlElement{
-                attributes = insert_rdf_about_attr(AggAttrs, <<PublicHandle/binary, <<"_AGG">>/binary>>),
+                attributes = insert_rdf_about_attr(AggAttrs, overwrite, <<PublicHandle/binary, <<"_AGG">>/binary>>),
                 content = insert_element(AggContent, 'edm:aggregatedCHO', [?rdf_resource_attr(PublicHandle)])
             };
         (Other) ->
@@ -235,11 +243,15 @@ remove_rdf_about_attr(Attrs) ->
 
 
 %% @private
--spec insert_rdf_about_attr([#xmlAttribute{}], binary()) -> [#xmlAttribute{}].
-insert_rdf_about_attr(Attrs, Identifier) ->
+-spec insert_rdf_about_attr([#xmlAttribute{}], overwrite | honour_existing, binary()) -> [#xmlAttribute{}].
+insert_rdf_about_attr(Attrs, Strategy, Identifier) ->
     case ?find_matching_element(?rdf_about_attr(_), Attrs) of
-        {ok, Found} -> lists_utils:replace(Found, ?rdf_about_attr(Identifier), Attrs);
-        error -> [?rdf_about_attr(Identifier) | Attrs]
+        {ok, Found} when Strategy == honour_existing ->
+            Attrs;
+        {ok, Found} when Strategy == overwrite ->
+            lists_utils:replace(Found, ?rdf_about_attr(Identifier), Attrs);
+        error ->
+            [?rdf_about_attr(Identifier) | Attrs]
     end.
 
 
@@ -378,6 +390,16 @@ gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
         "        <edm:rights rdf:resource=\"http://rightsstatements.org/vocab/NoC-OKLR/1.0/\"/>\n",
         (BuildLineWithElementAndResource(<<"edm:isShownAt">>, IsShownAtResourceAttr))/binary,
         "    </ore:Aggregation>\n",
+        "    <edm:WebResource rdf:about=\"https://example.com/image.jpg\">\n",
+        "        <dc:description>Image representing the CHO</dc:description>\n",
+        "        <dc:type>JPG</dc:type>\n",
+        "        <edm:rights rdf:resource=\"http://creativecommons.org/licenses/by-nc-sa/4.0/\"/>\n",
+        "    </edm:WebResource>\n",
+        "    <edm:WebResource>\n",
+        "        <dc:description>3D visualization of the CHO</dc:description>\n",
+        "        <dc:type>3D</dc:type>\n",
+        "        <edm:rights rdf:resource=\"http://creativecommons.org/licenses/by-nc-sa/4.0/\"/>\n",
+        "    </edm:WebResource>\n",
         "</rdf:RDF>"
     >>.
 
@@ -406,13 +428,14 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
     end,
 
     ShareRootFileId = ?check(file_id:guid_to_objectid(ShareRecord#od_share.root_file)),
-    ExpIsShownAtResource = case IsShownAtResourceAttr of
+    ExpIsShownByUrl = <<"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary>>,
+    ExpIsShownAtUrl = case IsShownAtResourceAttr of
         Value when is_binary(Value) -> Value;
-        _ -> <<"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary>>
+        _ -> ExpIsShownByUrl
     end,
-    ExpIsShownAtLine = <<"        <edm:isShownAt rdf:resource=\"", ExpIsShownAtResource/binary, "\"/>\n">>,
+    ExpIsShownAtLine = <<"        <edm:isShownAt rdf:resource=\"", ExpIsShownAtUrl/binary, "\"/>\n">>,
     ExpIsShownByLine = <<
-        "        <edm:isShownBy rdf:resource=\"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary, "\"/>\n"
+        "        <edm:isShownBy rdf:resource=\"", ExpIsShownByUrl/binary, "\"/>\n"
     >>,
     ExpAggChoLine = <<"        <edm:aggregatedCHO", ExpAggChoRdfResourceStr/binary, "/>\n">>,
 
@@ -438,5 +461,15 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
         "        <edm:rights rdf:resource=\"http://rightsstatements.org/vocab/NoC-OKLR/1.0/\"/>\n",
         (case IsShownAtResourceAttr of element_not_provided -> <<"">>; _ -> ExpIsShownAtLine end)/binary,
         "    </ore:Aggregation>\n",
+        "    <edm:WebResource rdf:about=\"https://example.com/image.jpg\">\n",
+        "        <dc:description>Image representing the CHO</dc:description>\n",
+        "        <dc:type>JPG</dc:type>\n",
+        "        <edm:rights rdf:resource=\"http://creativecommons.org/licenses/by-nc-sa/4.0/\"/>\n",
+        "    </edm:WebResource>\n",
+        "    <edm:WebResource rdf:about=\"", (ExpIsShownByUrl)/binary, "\">\n",
+        "        <dc:description>3D visualization of the CHO</dc:description>\n",
+        "        <dc:type>3D</dc:type>\n",
+        "        <edm:rights rdf:resource=\"http://creativecommons.org/licenses/by-nc-sa/4.0/\"/>\n",
+        "    </edm:WebResource>\n",
         "</rdf:RDF>"
     >>.
