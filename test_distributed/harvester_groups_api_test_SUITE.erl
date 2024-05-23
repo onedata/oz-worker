@@ -454,50 +454,57 @@ list_groups_test(Config) ->
 
 
 get_group_test(Config) ->
-    % create harvester with 2 users:
-    %   U2 gets the HARVESTER_VIEW privilege
-    %   U1 gets all remaining privileges
-    {H1, U1, U2} = api_test_scenarios:create_basic_harvester_env(
+    % create harvester with 3 users:
+    %   PrivilegedMember gets the HARVESTER_VIEW privilege
+    %   UnprivilegedMember gets all remaining privileges
+    %   UnprivilegedMemberFromTheGroup does not get the HARVESTER_VIEW privilege, but belongs to the group
+    {HarvesterId, UnprivilegedMember, PrivilegedMember} = api_test_scenarios:create_basic_harvester_env(
         Config, ?HARVESTER_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     GroupData = #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1},
-    {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, GroupData),
-    oz_test_utils:harvester_add_group(Config, H1, G1),
+    {ok, GroupId} = oz_test_utils:create_group(Config, ?ROOT, GroupData),
+    oz_test_utils:harvester_add_group(Config, HarvesterId, GroupId),
+
+    UnprivilegedMemberFromTheGroup = ozt_users:create(),
+    ozt_harvesters:add_user(HarvesterId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:harvester_admin() -- [?SPACE_VIEW])),
+    ozt_groups:add_user(GroupId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:group_admin())),
+    ozt:reconcile_entity_graph(),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
                 {admin, [?OZ_GROUPS_VIEW]},
-                {user, U2}
+                {user, PrivilegedMember},
+                {user, UnprivilegedMemberFromTheGroup}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {user, U1}
+                {user, UnprivilegedMember}
             ]
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/harvesters/">>, H1, <<"/groups/">>, G1],
+            path = [<<"/harvesters/">>, HarvesterId, <<"/groups/">>, GroupId],
             expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:shared_group(rest, G1, GroupData)
+            expected_body = api_test_expect:shared_group(rest, GroupId, GroupData)
         },
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_group,
-            args = [auth, H1, G1],
-            expected_result = api_test_expect:shared_group(logic, G1, GroupData)
+            args = [auth, HarvesterId, GroupId],
+            expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
         },
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{
-                type = od_group, id = G1, aspect = instance, scope = shared
+                type = od_group, id = GroupId, aspect = instance, scope = shared
             },
-            auth_hint = ?THROUGH_HARVESTER(H1),
-            expected_result_op = api_test_expect:shared_group(gs, G1, GroupData)
+            auth_hint = ?THROUGH_HARVESTER(HarvesterId),
+            expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -677,8 +684,15 @@ list_eff_groups_test(Config) ->
 
 get_eff_group_test(Config) ->
     {
-        H1, EffGroups, _EffUsers, {U1, U2, NonAdmin}
+        HarvesterId, EffGroups, _EffUsers, {UnprivilegedMember, PrivilegedMember, NonAdmin}
     } = api_test_scenarios:create_harvester_eff_users_env(Config),
+
+    UnprivilegedMemberFromTheGroup = ozt_users:create(),
+    ozt_harvesters:add_user(HarvesterId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:harvester_admin() -- [?SPACE_VIEW])),
+    lists:foreach(fun({GroupId, _}) ->
+        ozt_groups:add_user(GroupId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:group_admin()))
+    end, EffGroups),
+    ozt:reconcile_entity_graph(),
 
     lists:foreach(fun({GroupId, GroupData}) ->
         ApiTestSpec = #api_test_spec{
@@ -686,24 +700,25 @@ get_eff_group_test(Config) ->
                 correct = [
                     root,
                     {admin, [?OZ_GROUPS_VIEW]},
-                    {user, U2}
+                    {user, PrivilegedMember},
+                    {user, UnprivilegedMemberFromTheGroup}
                 ],
                 unauthorized = [nobody],
                 forbidden = [
-                    {user, U1},
+                    {user, UnprivilegedMember},
                     {user, NonAdmin}
                 ]
             },
             rest_spec = #rest_spec{
                 method = get,
-                path = [<<"/harvesters/">>, H1, <<"/effective_groups/">>, GroupId],
+                path = [<<"/harvesters/">>, HarvesterId, <<"/effective_groups/">>, GroupId],
                 expected_code = ?HTTP_200_OK,
                 expected_body = api_test_expect:shared_group(rest, GroupId, GroupData)
             },
             logic_spec = #logic_spec{
                 module = harvester_logic,
                 function = get_eff_group,
-                args = [auth, H1, GroupId],
+                args = [auth, HarvesterId, GroupId],
                 expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
             },
             gs_spec = #gs_spec{
@@ -712,7 +727,7 @@ get_eff_group_test(Config) ->
                     type = od_group, id = GroupId,
                     aspect = instance, scope = shared
                 },
-                auth_hint = ?THROUGH_HARVESTER(H1),
+                auth_hint = ?THROUGH_HARVESTER(HarvesterId),
                 expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
             }
         },

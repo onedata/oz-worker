@@ -19,7 +19,9 @@
 
 %% API
 -export([create/0, create/1]).
-
+-export([add_user/2, add_user/3]).
+-export([add_group/2, add_group/3]).
+-export([create_handle/2]).
 
 %%%===================================================================
 %%% API
@@ -41,3 +43,23 @@ create(Name) ->
         ?ROOT, Data#{<<"name">> => Name}
     ])),
     HServiceId.
+
+
+-spec add_user(od_handle_service:id(), od_user:id()) -> ok.
+add_user(HServiceId, UserId) ->
+    add_user(HServiceId, UserId, privileges:handle_service_member()).
+
+-spec add_user(od_handle_service:id(), od_user:id(), [privileges:handle_service_privilege()]) -> ok.
+add_user(HServiceId, UserId, Privileges) ->
+    ?assertMatch({ok, _}, ozt:rpc(handle_service_logic, add_user, [?ROOT, HServiceId, UserId, Privileges])),
+    ok.
+
+
+-spec add_group(od_handle_service:id(), od_group:id()) -> ok.
+add_group(HServiceId, GroupId) ->
+    add_group(HServiceId, GroupId, privileges:handle_service_member()).
+
+-spec add_group(od_handle_service:id(), od_group:id(), [privileges:handle_service_privilege()]) -> ok.
+add_group(HServiceId, GroupId, Privileges) ->
+    ?assertMatch({ok, _}, ozt:rpc(handle_service_logic, add_group, [?ROOT, HServiceId, GroupId, Privileges])),
+    ok.

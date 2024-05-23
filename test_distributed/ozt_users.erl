@@ -21,7 +21,7 @@
 -export([create_admin/0, create_admin/1]).
 -export([get/1]).
 -export([toggle_access_block/2]).
--export([create_group_for/1]).
+-export([create_group_for/1, create_group_for/2]).
 -export([create_space_for/1, create_space_for/2]).
 -export([create_advertised_space_for/1, create_advertised_space_for/2]).
 -export([join_space/2, leave_space/2]).
@@ -72,9 +72,11 @@ toggle_access_block(UserId, Blocked) ->
 
 -spec create_group_for(od_user:id()) -> od_group:id().
 create_group_for(UserId) ->
-    {ok, GroupId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create_group, [
-        ?USER(UserId), UserId, #{<<"name">> => <<"of-user-", UserId/binary>>}
-    ])),
+    create_group_for(UserId, #{<<"name">> => <<"of-user-", UserId/binary>>}).
+
+-spec create_group_for(od_user:id(), entity_logic:data()) -> od_group:id().
+create_group_for(UserId, GroupData) ->
+    {ok, GroupId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create_group, [?USER(UserId), UserId, GroupData])),
     GroupId.
 
 

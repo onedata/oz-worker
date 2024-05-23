@@ -43,6 +43,7 @@
     get_group_privileges_test/1,
     update_group_privileges_test/1,
 
+    infer_accessible_eff_groups_test/1,
     list_eff_groups_test/1,
     get_eff_group_test/1,
     get_eff_group_privileges_test/1,
@@ -62,6 +63,7 @@ all() ->
         get_group_privileges_test,
         update_group_privileges_test,
 
+        infer_accessible_eff_groups_test,
         list_eff_groups_test,
         get_eff_group_test,
         get_eff_group_privileges_test,
@@ -465,22 +467,27 @@ list_groups_test(Config) ->
 
 
 get_group_test(Config) ->
-    % create space with 3 users:
+    % create space with 4 users:
     %   Owner effectively has all the privileges
-    %   U2 gets the SPACE_VIEW privilege
-    %   U1 gets all remaining privileges
-    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
+    %   PrivilegedMember gets the SPACE_VIEW privilege
+    %   UnprivilegedMember gets all remaining privileges
+    %   UnprivilegedMemberFromTheGroup does not get the SPACE_VIEW privilege, but belongs to the group
+    {SpaceId, Owner, UnprivilegedMember, PrivilegedMember} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space_by_provider(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, SpaceId),
 
     GroupData = #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1},
-    {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, GroupData),
-    oz_test_utils:space_add_group(Config, S1, G1),
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    {ok, GroupId} = oz_test_utils:create_group(Config, ?ROOT, GroupData),
+    oz_test_utils:space_add_group(Config, SpaceId, GroupId),
+
+    UnprivilegedMemberFromTheGroup = ozt_users:create(),
+    ozt_spaces:add_user(SpaceId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:space_admin() -- [?SPACE_VIEW])),
+    ozt_groups:add_user(GroupId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:group_admin())),
+    ozt:reconcile_entity_graph(),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -488,34 +495,35 @@ get_group_test(Config) ->
                 root,
                 {admin, [?OZ_GROUPS_VIEW]},
                 {user, Owner},
-                {user, U2},
+                {user, PrivilegedMember},
+                {user, UnprivilegedMemberFromTheGroup},
                 {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {user, U1}
+                {user, UnprivilegedMember}
             ]
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/spaces/">>, S1, <<"/groups/">>, G1],
+            path = [<<"/spaces/">>, SpaceId, <<"/groups/">>, GroupId],
             expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:shared_group(rest, G1, GroupData)
+            expected_body = api_test_expect:shared_group(rest, GroupId, GroupData)
         },
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_group,
-            args = [auth, S1, G1],
-            expected_result = api_test_expect:shared_group(logic, G1, GroupData)
+            args = [auth, SpaceId, GroupId],
+            expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
         },
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{
-                type = od_group, id = G1, aspect = instance, scope = shared
+                type = od_group, id = GroupId, aspect = instance, scope = shared
             },
-            auth_hint = ?THROUGH_SPACE(S1),
-            expected_result_op = api_test_expect:shared_group(gs, G1, GroupData)
+            auth_hint = ?THROUGH_SPACE(SpaceId),
+            expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -652,6 +660,55 @@ update_group_privileges_test(Config) ->
     ])).
 
 
+infer_accessible_eff_groups_test(Config) ->
+    {SpaceId,
+        [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}, {G6, _}],
+        _EffUsers, {Owner, UserWithoutSpaceView, UserWithSpaceView, NonAdmin}
+    } = api_test_scenarios:create_space_eff_users_env(Config),
+
+    ozt_groups:add_user(G3, UserWithoutSpaceView, []),
+    ozt_groups:add_user(G6, UserWithoutSpaceView, privileges:group_admin()),
+
+    % revoke the view priv, otherwise the UserWithoutSpaceView would inherit them via G1
+    ozt_spaces:set_group_privileges(SpaceId, G1, privileges:space_admin() -- [?SPACE_VIEW]),
+    ozt:reconcile_entity_graph(),
+
+    ExpGroupsPerUser = #{
+        Owner => [G1, G2, G3, G4, G5, G6],
+        UserWithSpaceView => [G1, G2, G3, G4, G5, G6],
+        % adding the user to G3 and G6 will cause him to inherit access to 4 groups
+        % @see api_test_scenarios:create_space_eff_users_env/1
+        UserWithoutSpaceView => [G1, G2, G3, G6]
+    },
+
+    maps:foreach(fun(SubjectUser, ExpGroups) ->
+        ?assert(api_test_utils:run_tests(Config, #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    {user, SubjectUser}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, NonAdmin},
+                    {provider, ozt_providers:create_as_support_for_space(SpaceId)}
+                ]
+            },
+            logic_spec = #logic_spec{
+                module = space_logic,
+                function = infer_accessible_eff_groups,
+                args = [auth, SpaceId],
+                expected_result = ?OK_LIST(ExpGroups)
+            },
+            gs_spec = #gs_spec{
+                operation = create,
+                gri = #gri{type = od_space, id = SpaceId, aspect = infer_accessible_eff_groups, scope = private},
+                expected_result_gui = ?OK_MAP(#{<<"list">> => ExpGroups}),
+                expected_result_op = ?OK_MAP(#{<<"list">> => ExpGroups})
+            }
+        }))
+    end, ExpGroupsPerUser).
+
+
 list_eff_groups_test(Config) ->
     {S1,
         [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}, {G6, _}],
@@ -708,13 +765,18 @@ list_eff_groups_test(Config) ->
 
 get_eff_group_test(Config) ->
     {
-        S1, EffGroups, _EffUsers, {Owner, U1, U2, NonAdmin}
+        SpaceId, EffGroups, _EffUsers, {Owner, UnprivilegedMember, PrivilegedMember, NonAdmin}
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space_by_provider(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, SpaceId),
 
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    UnprivilegedMemberFromTheGroup = ozt_users:create(),
+    ozt_spaces:add_user(SpaceId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:space_admin() -- [?SPACE_VIEW])),
+    lists:foreach(fun({GroupId, _}) ->
+        ozt_groups:add_user(GroupId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:group_admin()))
+    end, EffGroups),
+    ozt:reconcile_entity_graph(),
 
     lists:foreach(
         fun({GroupId, GroupData}) ->
@@ -724,25 +786,26 @@ get_eff_group_test(Config) ->
                         root,
                         {admin, [?OZ_GROUPS_VIEW]},
                         {user, Owner},
-                        {user, U2},
+                        {user, PrivilegedMember},
+                        {user, UnprivilegedMemberFromTheGroup},
                         {provider, P1, P1Token}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
-                        {user, U1},
+                        {user, UnprivilegedMember},
                         {user, NonAdmin}
                     ]
                 },
                 rest_spec = #rest_spec{
                     method = get,
-                    path = [<<"/spaces/">>, S1, <<"/effective_groups/">>, GroupId],
+                    path = [<<"/spaces/">>, SpaceId, <<"/effective_groups/">>, GroupId],
                     expected_code = ?HTTP_200_OK,
                     expected_body = api_test_expect:shared_group(rest, GroupId, GroupData)
                 },
                 logic_spec = #logic_spec{
                     module = space_logic,
                     function = get_eff_group,
-                    args = [auth, S1, GroupId],
+                    args = [auth, SpaceId, GroupId],
                     expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
                 },
                 gs_spec = #gs_spec{
@@ -751,7 +814,7 @@ get_eff_group_test(Config) ->
                         type = od_group, id = GroupId,
                         aspect = instance, scope = shared
                     },
-                    auth_hint = ?THROUGH_SPACE(S1),
+                    auth_hint = ?THROUGH_SPACE(SpaceId),
                     expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
                 }
             },
