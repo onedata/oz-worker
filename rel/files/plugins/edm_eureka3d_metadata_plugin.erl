@@ -434,9 +434,7 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
         _ -> ExpIsShownByUrl
     end,
     ExpIsShownAtLine = <<"        <edm:isShownAt rdf:resource=\"", ExpIsShownAtUrl/binary, "\"/>\n">>,
-    ExpIsShownByLine = <<
-        "        <edm:isShownBy rdf:resource=\"", ExpIsShownByUrl/binary, "\"/>\n"
-    >>,
+    ExpIsShownByLine = <<"        <edm:isShownBy rdf:resource=\"", ExpIsShownByUrl/binary, "\"/>\n">>,
     ExpAggChoLine = <<"        <edm:aggregatedCHO", ExpAggChoRdfResourceStr/binary, "/>\n">>,
 
     <<
