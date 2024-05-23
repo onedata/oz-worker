@@ -19,9 +19,6 @@
 %%%     (to be added when public handle is known)
 %%%   * insert (and overwrite if exists) edm:isShownBy element,
 %%%     pointing to a resource based on root FileId
-%%%   * ensure edm:isShownAt element with a defined rdf:resource attribute;
-%%%     do not change if exists, otherwise, add one pointing to
-%%%     a resource based on root FileId
 %%%   * if there is a WebResource element without any specified rdf:about
 %%%     attribute, insert the attribute with the same value as the
 %%%     rdf:resource in edm:isShownBy.
@@ -63,7 +60,6 @@
 -define(rdf_resource_attr(Value), #xmlAttribute{name = 'rdf:resource', value = Value}).
 
 -define(is_shown_by_value(FileId), str_utils:format("https://eureka3d.vm.fedcloud.eu/3d/~s", [FileId])).
--define(is_shown_at_value(FileId), str_utils:format("https://eureka3d.vm.fedcloud.eu/3d/~s", [FileId])).
 
 
 %%%===================================================================
@@ -118,10 +114,9 @@ revise_for_publication(#xmlElement{
         (#xmlElement{name = 'ore:Aggregation', content = AggContent0, attributes = AggAttrs} = AggElement) ->
             AggContent1 = remove_rdf_resource_attr_from_aggregated_cho_element(AggContent0),
             AggContent2 = insert_element(AggContent1, 'edm:isShownBy', [?rdf_resource_attr(IsShownByValue)]),
-            AggContent3 = ensure_is_shown_at_element(AggContent2, ShareRootFileId),
             AggElement#xmlElement{
                 attributes = remove_rdf_about_attr(AggAttrs),
-                content = AggContent3
+                content = AggContent2
             };
         (#xmlElement{name = 'edm:WebResource', attributes = WRAttrs} = WRElement) ->
             WRElement#xmlElement{
@@ -214,26 +209,6 @@ insert_element(Elements, Name, Attrs) ->
 
 
 %% @private
--spec ensure_is_shown_at_element([#xmlElement{}], file_id:objectid()) -> [#xmlElement{}].
-ensure_is_shown_at_element(Elements, FileId) ->
-    case ?find_matching_element(#xmlElement{name = 'edm:isShownAt'}, Elements) of
-        {ok, #xmlElement{attributes = Attributes} = Found} ->
-            case ?find_matching_element(?rdf_resource_attr(_), Attributes) of
-                {ok, ?rdf_resource_attr(Value)} when length(Value) > 0 ->
-                    Elements;
-                _ ->
-                    lists_utils:replace(Found, Found#xmlElement{attributes = [
-                        ?rdf_resource_attr(?is_shown_at_value(FileId))
-                    ]}, Elements)
-            end;
-        error ->
-            oai_xml:prepend_element_with_indent(8, #xmlElement{name = 'edm:isShownAt', attributes = [
-                ?rdf_resource_attr(?is_shown_at_value(FileId))
-            ]}, Elements)
-    end.
-
-
-%% @private
 -spec remove_rdf_about_attr([#xmlAttribute{}]) -> [#xmlAttribute{}].
 remove_rdf_about_attr(Attrs) ->
     case ?find_matching_element(?rdf_about_attr(_), Attrs) of
@@ -266,8 +241,7 @@ insert_rdf_about_attr(Attrs, Strategy, Identifier) ->
     provided_cho_about_attr :: attr_not_provided | binary(),
     ore_aggregation_about_attr :: attr_not_provided | binary(),
     aggregated_cho_resource_attr :: element_not_provided | attr_not_provided | binary(),
-    is_shown_by_resource_attr :: element_not_provided | attr_not_provided | binary(),
-    is_shown_at_resource_attr :: element_not_provided | attr_not_provided | binary()
+    is_shown_by_resource_attr :: element_not_provided | attr_not_provided | binary()
 }).
 
 
@@ -315,8 +289,7 @@ gen_validation_examples() -> lists:flatten([
             provided_cho_about_attr = ?RAND_ELEMENT([attr_not_provided, <<"oai:325sa/ffa72790ef7">>]),
             ore_aggregation_about_attr = ?RAND_ELEMENT([attr_not_provided, <<"oai:kv8ds/kjf7ahi13f">>]),
             aggregated_cho_resource_attr = ?RAND_ELEMENT([attr_not_provided, element_not_provided, <<"oai:ks72a/bma9w8hfdalb">>]),
-            is_shown_by_resource_attr = ?RAND_ELEMENT([attr_not_provided, element_not_provided, <<"https://example.com/about/oai:83jjd:sdfnb1m9x98">>]),
-            is_shown_at_resource_attr = ?RAND_ELEMENT([attr_not_provided, element_not_provided, <<"https://example.com/show/oai:zxpp0/dfgs22bma9w">>])
+            is_shown_by_resource_attr = ?RAND_ELEMENT([attr_not_provided, element_not_provided, <<"https://example.com/about/oai:83jjd:sdfnb1m9x98">>])
         })
     end, 30)
 ]).
@@ -351,8 +324,7 @@ gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
     provided_cho_about_attr = ProvidedChoAboutAttr,
     ore_aggregation_about_attr = OreAggregationAboutAttr,
     aggregated_cho_resource_attr = AggregatedChoResourceAttr,
-    is_shown_by_resource_attr = IsShownByResourceAttr,
-    is_shown_at_resource_attr = IsShownAtResourceAttr
+    is_shown_by_resource_attr = IsShownByResourceAttr
 }) ->
     BuildAboutAttrStr = fun
         (attr_not_provided) -> <<"">>;
@@ -387,8 +359,8 @@ gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
         "        <edm:dataProvider>Europeana Foundation</edm:dataProvider>\n",
         (BuildLineWithElementAndResource(<<"edm:isShownBy">>, IsShownByResourceAttr))/binary,
         "        <edm:provider>Europeana Foundation</edm:provider>\n",
+        "        <edm:isShownAt rdf:resource=\"https://example.com/show/oai:zxpp0/dfgs22bma9w\"/>\n",
         "        <edm:rights rdf:resource=\"http://rightsstatements.org/vocab/NoC-OKLR/1.0/\"/>\n",
-        (BuildLineWithElementAndResource(<<"edm:isShownAt">>, IsShownAtResourceAttr))/binary,
         "    </ore:Aggregation>\n",
         "    <edm:WebResource rdf:about=\"https://example.com/image.jpg\">\n",
         "        <dc:description>Image representing the CHO</dc:description>\n",
@@ -415,7 +387,6 @@ gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
     binary().
 gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #validation_example_builder_ctx{
     is_shown_by_resource_attr = IsShownByResourceAttr,
-    is_shown_at_resource_attr = IsShownAtResourceAttr,
     aggregated_cho_resource_attr = AggChoResourceAttr
 }) ->
     {ExpProvChoRdfAboutStr, ExpOreAggRdfAboutStr, ExpAggChoRdfResourceStr} = case MetadataType of
@@ -429,11 +400,6 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
 
     ShareRootFileId = ?check(file_id:guid_to_objectid(ShareRecord#od_share.root_file)),
     ExpIsShownByUrl = <<"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary>>,
-    ExpIsShownAtUrl = case IsShownAtResourceAttr of
-        Value when is_binary(Value) -> Value;
-        _ -> ExpIsShownByUrl
-    end,
-    ExpIsShownAtLine = <<"        <edm:isShownAt rdf:resource=\"", ExpIsShownAtUrl/binary, "\"/>\n">>,
     ExpIsShownByLine = <<"        <edm:isShownBy rdf:resource=\"", ExpIsShownByUrl/binary, "\"/>\n">>,
     ExpAggChoLine = <<"        <edm:aggregatedCHO", ExpAggChoRdfResourceStr/binary, "/>\n">>,
 
@@ -450,14 +416,13 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
         "    </edm:ProvidedCHO>\n",
         "    <ore:Aggregation", ExpOreAggRdfAboutStr/binary, ">\n",
         (case {MetadataType, AggChoResourceAttr} of {revised, _} -> <<"">>; {_, element_not_provided} -> ExpAggChoLine; _ -> <<"">> end)/binary,
-        (case IsShownAtResourceAttr of element_not_provided -> ExpIsShownAtLine; _ -> <<"">> end)/binary,
         (case IsShownByResourceAttr of element_not_provided -> ExpIsShownByLine; _ -> <<"">> end)/binary,
         (case {MetadataType, AggChoResourceAttr} of {_, element_not_provided} -> <<"">>; _ -> ExpAggChoLine end)/binary,
         "        <edm:dataProvider>Europeana Foundation</edm:dataProvider>\n",
         (case IsShownByResourceAttr of element_not_provided -> <<"">>; _ -> ExpIsShownByLine end)/binary,
         "        <edm:provider>Europeana Foundation</edm:provider>\n",
+        "        <edm:isShownAt rdf:resource=\"https://example.com/show/oai:zxpp0/dfgs22bma9w\"/>\n",
         "        <edm:rights rdf:resource=\"http://rightsstatements.org/vocab/NoC-OKLR/1.0/\"/>\n",
-        (case IsShownAtResourceAttr of element_not_provided -> <<"">>; _ -> ExpIsShownAtLine end)/binary,
         "    </ore:Aggregation>\n",
         "    <edm:WebResource rdf:about=\"https://example.com/image.jpg\">\n",
         "        <dc:description>Image representing the CHO</dc:description>\n",

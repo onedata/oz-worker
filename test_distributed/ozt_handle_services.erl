@@ -21,7 +21,6 @@
 -export([create/0, create/1]).
 -export([add_user/2, add_user/3]).
 -export([add_group/2, add_group/3]).
--export([create_handle/2]).
 
 %%%===================================================================
 %%% API
