@@ -258,7 +258,7 @@ authorize(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec required_admin_privileges(entity_logic:req()) ->
-    [privileges:oz_privilege()] | forbidden | fun((entity_logic:record()) -> [privileges:oz_privilege()] | forbidden).
+    [privileges:oz_privilege()] | forbidden | fun((entity_logic:entity()) -> [privileges:oz_privilege()] | forbidden).
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
     [?OZ_SHARES_CREATE];
 

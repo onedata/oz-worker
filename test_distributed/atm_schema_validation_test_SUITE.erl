@@ -1000,13 +1000,14 @@ spoil_data_field(#test_spec{
 %% @private
 example_invalid_data_specs_and_predefined_values() -> [
     {#atm_boolean_data_spec{}, [true, 157]},
+    {#atm_file_data_spec{file_type = 'ANY', attributes = [?attr_guid]}, -9},
+    {#atm_group_data_spec{attributes = [name, type]}, true},
     {#atm_number_data_spec{integers_only = false, allowed_values = undefined}, [#{<<"obj1">> => <<"val">>}, #{<<"obj2">> => <<"val">>}]},
-    {#atm_string_data_spec{allowed_values = undefined}, 167.87},
     {#atm_object_data_spec{}, <<"text">>},
+    {#atm_string_data_spec{allowed_values = undefined}, 167.87},
     {#atm_time_series_measurement_data_spec{
         specs = lists_utils:random_sublist(atm_test_utils:example_time_series_measurement_specs())
     }, #{<<"key">> => <<"val">>}},
-    {#atm_file_data_spec{file_type = 'ANY', attributes = [?attr_guid]}, -9},
     {#atm_array_data_spec{
         item_data_spec = #atm_string_data_spec{allowed_values = undefined}
     }, <<"string">>},
@@ -1030,28 +1031,36 @@ example_invalid_data_specs_and_predefined_values() -> [
 example_invalid_input_parameter_data_specs(DataKeyNamePrefix) -> [
     {
         #atm_file_data_spec{attributes = undefined},
-        exp_bad_attributes_in_file_data_spec_error(<<DataKeyNamePrefix/binary, ".attributes">>)
+        exp_bad_attributes_in_data_spec_error(<<DataKeyNamePrefix/binary, ".attributes">>, <<"file">>)
     },
     {
         #atm_file_data_spec{attributes = []},
-        exp_bad_attributes_in_file_data_spec_error(<<DataKeyNamePrefix/binary, ".attributes">>)
+        exp_bad_attributes_in_data_spec_error(<<DataKeyNamePrefix/binary, ".attributes">>, <<"file">>)
+    },
+    {
+        #atm_group_data_spec{attributes = undefined},
+        exp_bad_attributes_in_data_spec_error(<<DataKeyNamePrefix/binary, ".attributes">>, <<"group">>)
+    },
+    {
+        #atm_group_data_spec{attributes = []},
+        exp_bad_attributes_in_data_spec_error(<<DataKeyNamePrefix/binary, ".attributes">>, <<"group">>)
     },
     {
         #atm_array_data_spec{
             item_data_spec = #atm_file_data_spec{attributes = []}
         },
-        exp_bad_attributes_in_file_data_spec_error(<<DataKeyNamePrefix/binary, ".itemDataSpec.attributes">>)
+        exp_bad_attributes_in_data_spec_error(<<DataKeyNamePrefix/binary, ".itemDataSpec.attributes">>, <<"file">>)
     },
     {
         #atm_array_data_spec{
             item_data_spec = #atm_array_data_spec{
                 item_data_spec = #atm_array_data_spec{
-                    item_data_spec = #atm_file_data_spec{attributes = undefined}
+                    item_data_spec = #atm_group_data_spec{attributes = undefined}
                 }
             }
         },
-        exp_bad_attributes_in_file_data_spec_error(
-            <<DataKeyNamePrefix/binary, ".itemDataSpec.itemDataSpec.itemDataSpec.attributes">>
+        exp_bad_attributes_in_data_spec_error(
+            <<DataKeyNamePrefix/binary, ".itemDataSpec.itemDataSpec.itemDataSpec.attributes">>, <<"group">>
         )
     }
 ].
@@ -1196,10 +1205,11 @@ exp_disallowed_predefined_value_error(DataKeyName, AtmDataSpec, _) ->
 
 
 %% @private
-exp_bad_attributes_in_file_data_spec_error(DataKeyName) ->
+%% DataTypeStr :: <<"file">> | <<"group">>
+exp_bad_attributes_in_data_spec_error(DataKeyName, DataTypeStr) ->
     ?ERROR_BAD_DATA(
         DataKeyName,
-        <<"This field must be provided and must be a list containing at least one file attribute">>
+        <<"This field must be provided and must be a list containing at least one ", DataTypeStr/binary, " attribute">>
     ).
 
 

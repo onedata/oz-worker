@@ -38,7 +38,7 @@
 -export([has_eff_user/2]).
 -export([get_user_privileges/2, get_group_privileges/2, get_eff_user_privileges/2, get_eff_group_privileges/2]).
 -export([get_shares/1]).
--export([set_user_privileges/3]).
+-export([set_user_privileges/3, set_group_privileges/3]).
 -export([random_support_parameters/0, expected_tweaked_support_parameters/1]).
 -export([set_support_parameters/3, get_support_parameters/2]).
 -export([delete/1]).
@@ -290,6 +290,14 @@ get_shares(SpaceId) ->
 -spec set_user_privileges(od_space:id(), od_user:id(), [privileges:space_privilege()]) -> ok.
 set_user_privileges(SpaceId, UserId, Privileges) ->
     ?assertMatch(ok, ozt:rpc(space_logic, update_user_privileges, [?ROOT, SpaceId, UserId, #{
+        <<"grant">> => Privileges,
+        <<"revoke">> => lists_utils:subtract(privileges:space_admin(), Privileges)
+    }])).
+
+
+-spec set_group_privileges(od_space:id(), od_group:id(), [privileges:space_privilege()]) -> ok.
+set_group_privileges(SpaceId, GroupId, Privileges) ->
+    ?assertMatch(ok, ozt:rpc(space_logic, update_group_privileges, [?ROOT, SpaceId, GroupId, #{
         <<"grant">> => Privileges,
         <<"revoke">> => lists_utils:subtract(privileges:space_admin(), Privileges)
     }])).

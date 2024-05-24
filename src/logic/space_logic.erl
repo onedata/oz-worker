@@ -61,6 +61,7 @@
     get_user_privileges/3, get_eff_user_privileges/3,
     get_eff_user_membership_intermediaries/3,
 
+    infer_accessible_eff_groups/2,
     get_groups/2, get_eff_groups/2,
     get_group/3, get_eff_group/3,
     get_group_privileges/3, get_eff_group_privileges/3,
@@ -676,6 +677,16 @@ get_eff_user_membership_intermediaries(Auth, SpaceId, UserId) ->
         auth = Auth,
         gri = #gri{type = od_space, id = SpaceId, aspect = {eff_user_membership, UserId}}
     }).
+
+
+-spec infer_accessible_eff_groups(aai:auth(), od_space:id()) ->
+    {ok, [od_group:id()]} | errors:error().
+infer_accessible_eff_groups(Auth, SpaceId) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = infer_accessible_eff_groups}
+    })).
 
 
 %%--------------------------------------------------------------------

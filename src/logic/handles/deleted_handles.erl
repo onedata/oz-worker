@@ -15,7 +15,7 @@
 -include("http/handlers/oai.hrl").
 
 %% API
--export([insert/4, lookup/1, list/0, remove/1]).
+-export([insert/4, lookup/1, foreach/1, remove/1]).
 
 % link value() encodes 3 pieces of information:
 %  1) metadata prefix - specification of metadata format of deleted handle.
@@ -61,8 +61,8 @@ lookup(HandleId) ->
     end.
 
 
--spec list() -> [handles:handle_listing_entry()].
-list() ->
+-spec foreach(function()) -> ok.
+foreach(ForeachFun) ->
     FoldFun = fun(#link{name = HandleId, target = Value}, Acc) ->
         {MetadataPrefix, HandleServiceId, Timestamp} = decode_link_value(Value),
         {ok, [{MetadataPrefix, #handle_listing_entry{
@@ -73,9 +73,15 @@ list() ->
         }} | Acc]}
     end,
     {ok, InternalEntries} = datastore_model:fold_links(
-        ?CTX, ?FOREST, ?TREE_FOR_DELETED_HANDLES, FoldFun, [], #{}
+        ?CTX, ?FOREST, ?TREE_FOR_DELETED_HANDLES, FoldFun, [], #{size => 1000}
     ),
-    InternalEntries.
+    case InternalEntries of
+        [] ->
+            ok;
+        _ ->
+            lists:foreach(ForeachFun, InternalEntries),
+            foreach(ForeachFun)
+    end.
 
 
 -spec remove(od_handle:id()) -> ok.

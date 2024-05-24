@@ -114,28 +114,28 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = instance} = GRI,
     },
     {ok, #document{key = AtmWorkflowSchemaId}} = od_atm_workflow_schema:create(#document{value = AtmWorkflowSchema}),
 
-    case lookup_and_sanitize_revision_data(Data) of
+    RevisionInsertionResult = ?catch_exceptions(case lookup_and_sanitize_revision_data(Data) of
         false ->
             ok;
         {true, InitialRevisionData} ->
-            case insert_revision(Auth, AtmWorkflowSchemaId, <<"auto">>, InitialRevisionData) of
-                ok ->
-                    ok;
-                {error, _} = Error ->
-                    od_atm_workflow_schema:force_delete(AtmWorkflowSchemaId),
-                    throw(Error)
-            end
-    end,
-
-    od_atm_inventory:critical_section(AtmInventoryId, fun() ->
-        entity_graph:add_relation(
-            od_atm_workflow_schema, AtmWorkflowSchemaId,
-            od_atm_inventory, AtmInventoryId
-        )
+            insert_revision(Auth, AtmWorkflowSchemaId, <<"auto">>, InitialRevisionData)
     end),
 
-    {true, {FetchedAtmWorkflowSchema, Rev}} = fetch_entity(#gri{aspect = instance, id = AtmWorkflowSchemaId}),
-    {ok, resource, {GRI#gri{id = AtmWorkflowSchemaId}, {FetchedAtmWorkflowSchema, Rev}}};
+    case RevisionInsertionResult of
+        {error, _} = Error ->
+            od_atm_workflow_schema:force_delete(AtmWorkflowSchemaId),
+            Error;
+        ok ->
+            od_atm_inventory:critical_section(AtmInventoryId, fun() ->
+                entity_graph:add_relation(
+                    od_atm_workflow_schema, AtmWorkflowSchemaId,
+                    od_atm_inventory, AtmInventoryId
+                )
+            end),
+
+            {true, {FetchedAtmWorkflowSchema, Rev}} = fetch_entity(#gri{aspect = instance, id = AtmWorkflowSchemaId}),
+            {ok, resource, {GRI#gri{id = AtmWorkflowSchemaId}, {FetchedAtmWorkflowSchema, Rev}}}
+    end;
 
 create(#el_req{gri = #gri{id = AtmWorkflowSchemaId, aspect = dump}, data = Data}) ->
     fun(AtmWorkflowSchema) ->

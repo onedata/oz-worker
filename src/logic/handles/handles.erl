@@ -207,8 +207,7 @@ get_earliest_timestamp() ->
 
 -spec purge_all_deleted_entries() -> ok.
 purge_all_deleted_entries() ->
-        All = deleted_handles:list(),
-        lists:foreach(fun({MetadataPrefix, #handle_listing_entry{
+        ForeachFun = fun({MetadataPrefix, #handle_listing_entry{
             timestamp = Timestamp,
             service_id = HandleServiceId,
             handle_id = HandleId,
@@ -218,7 +217,8 @@ purge_all_deleted_entries() ->
                 deleted_handles:remove(HandleId),
                 delete_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
             end)
-        end, All).
+        end,
+    deleted_handles:foreach(ForeachFun).
 
 
 -spec lookup_deleted(od_handle:id()) -> error | {ok, handle_listing_entry()}.

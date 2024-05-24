@@ -70,6 +70,9 @@
 %% Sanitizes and transforms (if needed) the provided metadata for publication in
 %% a handle service. This can include adding auto-generated information to the metadata.
 %% If the input metadata is not suitable for publication, should return an error.
+%%
+%% This operation MUST be idempotent - calling it on already revised metadata should
+%% return it without changes.
 %% @end
 %%-------------------------------------------------------------------
 -callback revise_for_publication(od_handle:parsed_metadata(), od_share:id(), od_share:record()) ->
@@ -79,6 +82,9 @@
 %%-------------------------------------------------------------------
 %% @doc
 %% Inserts the public handle (if applicable) into the metadata content.
+%%
+%% This operation MUST be idempotent - calling it on metadata with already inserted handles
+%% should return it without changes.
 %% @end
 %%-------------------------------------------------------------------
 -callback insert_public_handle(od_handle:parsed_metadata(), od_handle:public_handle()) ->
@@ -92,6 +98,16 @@
 %%-------------------------------------------------------------------
 -callback adapt_for_oai_pmh(od_handle:parsed_metadata()) ->
     od_handle:parsed_metadata().
+
+
+%%-------------------------------------------------------------------
+%% @doc
+%% Encodes the metadata in XML format. May apply reformatting if needed
+%% (xmerl is limited and it must be done post-export, and every plugin
+%% may need different transformations).
+%% @end
+%%-------------------------------------------------------------------
+-callback encode_xml(od_handle:parsed_metadata()) -> od_handle:raw_metadata().
 
 
 %%-------------------------------------------------------------------
@@ -145,28 +161,65 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
     },
     DummyPublicHandle = str_utils:format_bin("http://hdl.handle.net/~s/~s", [datastore_key:new(), datastore_key:new()]),
 
-    {ok, ParsedMetadata} = oai_metadata:parse_xml(InputRawXml),
+    {ok, ParsedMetadata} = oai_xml:parse(InputRawXml),
 
     case Module:revise_for_publication(ParsedMetadata, DummyShareId, DummyShareRecord) of
         error when InputQualifiesForPublication == false ->
             ok;
 
         {ok, RevisedMetadata} when InputQualifiesForPublication == true ->
-            ExpRevisedMetadata = ExpRevisedMetadataGenerator(DummyShareId, DummyShareRecord),
-            assert_expectation_equal_to_result(
-                revised, InputRawXml, oai_utils:encode_xml(RevisedMetadata), ExpRevisedMetadata
+            ExpRawRevisedMetadata = ExpRevisedMetadataGenerator(DummyShareId, DummyShareRecord),
+            assert_result_equals_expectation(
+                Module,
+                InputRawXml,
+                RevisedMetadata,
+                ExpRawRevisedMetadata,
+                "Unmet expectation: obtained revised metadata different than expected"
+            ),
+            assert_result_equals_expectation(
+                Module,
+                InputRawXml,
+                ?check(Module:revise_for_publication(RevisedMetadata, DummyShareId, DummyShareRecord)),
+                ExpRawRevisedMetadata,
+                "Unmet expectation: revise_for_publication is not idempotent"
             ),
 
             FinalMetadata = Module:insert_public_handle(RevisedMetadata, DummyPublicHandle),
-            ExpFinalMetadata = ExpFinalMetadataGenerator(DummyShareId, DummyShareRecord, DummyPublicHandle),
-            assert_expectation_equal_to_result(
-                final, InputRawXml, oai_utils:encode_xml(FinalMetadata), ExpFinalMetadata
+            ExpRawFinalMetadata = ExpFinalMetadataGenerator(DummyShareId, DummyShareRecord, DummyPublicHandle),
+            assert_result_equals_expectation(
+                Module,
+                InputRawXml,
+                FinalMetadata,
+                ExpRawFinalMetadata,
+                "Unmet expectation: obtained final metadata different than expected"
+            ),
+            assert_result_equals_expectation(
+                Module,
+                InputRawXml,
+                Module:insert_public_handle(FinalMetadata, DummyPublicHandle),
+                ExpRawFinalMetadata,
+                "Unmet expectation: insert_public_handle is not idempotent"
+            ),
+
+            assert_result_equals_expectation(
+                Module,
+                InputRawXml,
+                Module:insert_public_handle(
+                    ?check(Module:revise_for_publication(FinalMetadata, DummyShareId, DummyShareRecord)),
+                    DummyPublicHandle
+                ),
+                ExpRawFinalMetadata,
+                "Unmet expectation: revise_for_publication + insert_public_handle on final metadata is not idempotent"
             ),
 
             OaiPmhMetadata = Module:adapt_for_oai_pmh(FinalMetadata),
             ExpOaiPmhMetadata = ExpOaiPmhMetadataGenerator(DummyShareId, DummyShareRecord, DummyPublicHandle),
-            assert_expectation_equal_to_result(
-                final, InputRawXml, oai_utils:encode_xml(OaiPmhMetadata), ExpOaiPmhMetadata
+            assert_result_equals_expectation(
+                Module,
+                InputRawXml,
+                OaiPmhMetadata,
+                ExpOaiPmhMetadata,
+                "Unmet expectation: obtained oai_pmh metadata different than expected"
             );
 
         RevisionResult ->
@@ -176,12 +229,40 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
 
 
 %% @private
--spec assert_expectation_equal_to_result(revised | final, binary(), binary(), binary()) -> ok | no_return().
-assert_expectation_equal_to_result(_MetadataType, _RawInput, Identical, Identical) ->
-    ok;
-assert_expectation_equal_to_result(MetadataType, RawInput, Got, Exp) ->
-    ?error("Unmet expectation: obtained ~s metadata different than expected", [MetadataType]),
-    ?error("~n  RawInput: ~ts", [RawInput]),
-    ?error("~n  Got:      ~ts", [Got]),
-    ?error("~n  Expected: ~ts", [Exp]),
-    error(unmet_expectation).
+-spec assert_result_equals_expectation(
+    module(),
+    od_handle:raw_metadata(),
+    od_handle:parsed_metadata(),
+    od_handle:raw_metadata(),
+    string()
+) -> ok | no_return().
+assert_result_equals_expectation(Module, RawInput, ParsedResult, RawExpectation, ErrorMsg) ->
+    RawResult = Module:encode_xml(ParsedResult),
+    case RawResult of
+        RawExpectation ->
+            ok;
+        _ ->
+            ?error(ErrorMsg),
+            ?error(
+                "Raw input:~n"
+                "--------------------------------~n"
+                "~ts~n"
+                "--------------------------------",
+                [RawInput]
+            ),
+            ?error(
+                "Got:~n"
+                "--------------------------------~n"
+                "~ts~n"
+                "--------------------------------",
+                [RawResult]
+            ),
+            ?error(
+                "Expected:~n"
+                "--------------------------------~n"
+                "~ts~n"
+                "--------------------------------",
+                [RawExpectation]
+            ),
+            error(unmet_expectation)
+    end.

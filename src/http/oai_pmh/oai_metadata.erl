@@ -23,8 +23,8 @@
 -export([clear_plugin_cache/0]).
 -export([schema_URL/1, main_namespace/1]).
 -export([revise_for_publication/4, insert_public_handle/3, adapt_for_oai_pmh/2]).
+-export([encode_xml/2]).
 -export([validation_examples/1]).
--export([parse_xml/1]).
 
 
 -define(PLUGIN_CACHE_KEY, ?MODULE).
@@ -92,24 +92,16 @@ adapt_for_oai_pmh(MetadataPrefix, Metadata) ->
     Module:adapt_for_oai_pmh(Metadata).
 
 
+-spec encode_xml(od_handle:metadata_prefix(), od_handle:parsed_metadata()) -> od_handle:raw_metadata().
+encode_xml(MetadataPrefix, Metadata) ->
+    Module = module(MetadataPrefix),
+    Module:encode_xml(Metadata).
+
+
 -spec validation_examples(od_handle:metadata_prefix()) -> [handle_metadata_plugin_behaviour:validation_example()].
 validation_examples(MetadataPrefix) ->
     Module = module(MetadataPrefix),
     Module:validation_examples().
-
-
--spec parse_xml(od_handle:raw_metadata()) -> {ok, od_handle:parsed_metadata()} | error.
-parse_xml(Metadata) ->
-    try
-        % NOTE: xmerl scans strings in UTF8 (essentially the result of binary_to_list(<<_/utf8>>),
-        % but exports as a unicode erlang string - str_utils:unicode_list_to_binary/1
-        % must be called after the export
-        {RootElement, _} = xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]),
-        {ok, RootElement}   % TODO VFS-11906 consider returning errors from xmerl to the client
-    catch Class:Reason:Stacktrace ->
-        ?debug_exception("Cannot parse handle metadata", Class, Reason, Stacktrace),
-        error
-    end.
 
 %%%===================================================================
 %%% helpers
