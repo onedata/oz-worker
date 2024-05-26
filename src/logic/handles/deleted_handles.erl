@@ -46,17 +46,17 @@ insert(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
     end.
 
 
--spec lookup(od_handle:id()) -> error | {ok, handles:handle_listing_entry()}.
+-spec lookup(od_handle:id()) -> error | {ok, handles:handle_listing_entry(), od_handle:metadata_prefix()}.
 lookup(HandleId) ->
     case datastore_model:get_links(?CTX, ?FOREST, ?TREE_FOR_DELETED_HANDLES, HandleId) of
         {ok, [#link{target = LinkValue}]} ->
-            {_MetadataPrefix, HandleServiceId, Timestamp} = decode_link_value(LinkValue),
+            {MetadataPrefix, HandleServiceId, Timestamp} = decode_link_value(LinkValue),
             {ok, #handle_listing_entry{
                 timestamp = Timestamp,
                 service_id = HandleServiceId,
                 handle_id = HandleId,
                 status = deleted
-            }};
+            }, MetadataPrefix};
         {error, not_found} -> error
     end.
 

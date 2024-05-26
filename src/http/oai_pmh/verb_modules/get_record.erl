@@ -92,10 +92,10 @@ get_response(<<"record">>, Args) ->
             );
         {error, not_found} ->
             case handles:lookup_deleted(HandleId) of
-                {ok, HandleListingEntry} ->
-%%                    TODO sprawdzić metadata prefix
-%%                                Handle#od_handle.metadata_prefix =:= MetadataPrefix orelse throw({cannotDisseminateFormat, MetadataPrefix}),
+                {ok, HandleListingEntry, HandleMetadataPrefix} ->
+                    HandleMetadataPrefix =:= MetadataPrefix orelse throw({cannotDisseminateFormat, MetadataPrefix}),
                     oai_utils:build_oai_record(HandleListingEntry);
-                error -> throw({idDoesNotExist, OaiId})
+                error ->
+                    throw({idDoesNotExist, OaiId})
             end
     end.

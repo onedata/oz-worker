@@ -222,7 +222,7 @@ purge_all_deleted_entries() ->
     deleted_handles:foreach(ForeachFun).
 
 
--spec lookup_deleted(od_handle:id()) -> error | {ok, handle_listing_entry()}.
+-spec lookup_deleted(od_handle:id()) -> error | {ok, handle_listing_entry(), od_handle:metadata_prefix()}.
 lookup_deleted(HandleId) ->
     deleted_handles:lookup(HandleId).
 

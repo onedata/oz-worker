@@ -561,7 +561,7 @@ identify_test_base(Config, Method) ->
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
     create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
-        Metadata, MetadataPrefix, Timestamp, true),
+        Metadata, MetadataPrefix, Timestamp, no_deleted_handles),
     ExpResponseContent = [
         #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
@@ -584,7 +584,12 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     SpaceIds = create_spaces(Config, ?SPACE_NAMES(2), ?USER(User)),
     [ShareId1, ShareId2] = create_shares(Config, SpaceIds),
     {HSId, _} = create_handle_service(Config, User),
+
     Timestamp1 = ?NOW(),
+    % mock timestamp for expected and actual earliestDatestamp to be equal
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_new(Nodes, od_handle, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, od_handle, current_timestamp, fun() -> Timestamp1 end),
     EmptyRepositoryTimestamp = decrease_timestamp(Timestamp1, 3600),
     Timestamp2 = increase_timestamp(Timestamp1, 1),
     Timestamp3 = increase_timestamp(Timestamp2, 1),
@@ -593,23 +598,24 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     ExpResponseContentEmpty = [
         #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
-        #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
-        #xmlElement{name = earliestDatestamp, content = [#xmlText{value = to_datestamp(EmptyRepositoryTimestamp)}]},
-        #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
-        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
+        #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]}
     ] ++ [
         #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
+    ] ++ [
+        #xmlElement{name = earliestDatestamp, content = [#xmlText{value = to_datestamp(EmptyRepositoryTimestamp)}]},
+        #xmlElement{name = deletedRecord, content = [#xmlText{value = "persistent"}]},
+        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
     ],
     ?assert(check_identify(200, [], Method, ExpResponseContentEmpty, Config)),
-
+    ok = test_utils:mock_validate_and_unload(Nodes, od_handle),
 
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
-    Handle1 = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId1,
-        Metadata, MetadataPrefix, Timestamp1, true),
+    HandleEntry = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId1,
+        Metadata, MetadataPrefix, Timestamp1, no_deleted_handles),
     Metadata2 = ozt_handles:example_input_metadata(MetadataPrefix),
     create_handle_with_mocked_timestamp(Config, User, HSId, ShareId2,
-        Metadata2, MetadataPrefix, Timestamp2, true),
+        Metadata2, MetadataPrefix, Timestamp2, no_deleted_handles),
 
     ExpResponseContent1 = [
         #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
@@ -624,7 +630,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     ],
     ?assert(check_identify(200, [], Method, ExpResponseContent1, Config)),
 
-    modify_handle_with_mocked_timestamp(Config, Handle1#handle_listing_entry.handle_id, Metadata, Timestamp3),
+    modify_handle_with_mocked_timestamp(Config, HandleEntry#handle_listing_entry.handle_id, Metadata, Timestamp3),
 
     ExpResponseContent2 = [
         #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
@@ -650,15 +656,15 @@ get_record_test_base(Config, Method) ->
     Timestamp = ?NOW(),
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
-    Handle = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
+    HandleEntry = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId,
         Metadata, MetadataPrefix, Timestamp),
 
     Args = [
-        {<<"identifier">>, oai_identifier(Config, Handle#handle_listing_entry.handle_id)},
+        {<<"identifier">>, oai_identifier(Config, HandleEntry#handle_listing_entry.handle_id)},
         {<<"metadataPrefix">>, MetadataPrefix}
     ],
     ExpResponseContent = [
-        expected_oai_record_xml(Config, Handle, MetadataPrefix)
+        expected_oai_record_xml(Config, MetadataPrefix, HandleEntry)
     ],
     ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config)).
 
@@ -705,9 +711,9 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
                 #xmlElement{name = metadata, content = expected_dc_identifiers(Config, Identifier)}
         ]),
         ExpResponseContent = [
-            expected_oai_record_xml_with_defined_metadata(Config, #handle_listing_entry{
+            expected_oai_record_xml_with_defined_metadata(Config, ExpectedDCMetadata, #handle_listing_entry{
                 timestamp = Timestamp, service_id = HSId, handle_id = Identifier, status = present
-            }, ExpectedDCMetadata)
+            })
         ],
 
         ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config))
@@ -728,15 +734,15 @@ get_deleted_record_test_base(Config, Method) ->
         {<<"identifier">>, oai_identifier(Config, HandleId)},
         {<<"metadataPrefix">>, MetadataPrefix}
     ],
-    ExpResponseContent = [expected_oai_record_xml(Config, #handle_listing_entry{
+    ExpResponseContent = [expected_oai_record_xml(Config, MetadataPrefix, #handle_listing_entry{
         timestamp = Timestamp, service_id = HSId, handle_id = HandleId, status = present
-    }, MetadataPrefix)],
+    })],
     ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config)),
 
     delete_handle_with_mocked_timestamp(Config, HandleId, Timestamp2),
-    ExpResponseContent2 = [expected_oai_record_xml(Config, #handle_listing_entry{
+    ExpResponseContent2 = [expected_oai_record_xml(Config, MetadataPrefix, #handle_listing_entry{
         timestamp = Timestamp2, service_id = HSId, handle_id = HandleId, status = deleted
-    }, MetadataPrefix)],
+    })],
     ?assert(check_get_record(200, Args, Method, ExpResponseContent2, Config)).
 
 
@@ -769,10 +775,10 @@ list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffs
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
-    Handles = setup_test_for_harvesting(
+    HandleEntries = setup_test_for_harvesting(
         Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
     ),
-    list_with_time_offsets_test_base(Config, Method, <<"ListIdentifiers">>, Handles,
+    list_with_time_offsets_test_base(Config, Method, <<"ListIdentifiers">>, HandleEntries,
         BeginTime, FromOffset, UntilOffset, MetadataPrefix).
 
 
@@ -781,19 +787,19 @@ list_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
-    Handles = setup_test_for_harvesting(
+    HandleEntries = setup_test_for_harvesting(
         Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix
     ),
     Args = prepare_harvesting_args(MetadataPrefix, undefined, undefined),
-    BuildExpectedObject = fun(Handle) ->
+    BuildExpectedObject = fun(HandleEntry) ->
         case Verb of
             <<"ListIdentifiers">> ->
-                expected_oai_header_xml(Config, Handle);
+                expected_oai_header_xml(Config, HandleEntry);
             <<"ListRecords">> ->
-                expected_oai_record_xml(Config, Handle, MetadataPrefix)
+                expected_oai_record_xml(Config, MetadataPrefix, HandleEntry)
         end
     end,
-    ?assert(check_list_entries_continuously_with_resumption_token(Config, Method, Verb, Handles,
+    ?assert(check_list_entries_continuously_with_resumption_token(Config, Method, Verb, HandleEntries,
         Args, BuildExpectedObject)).
 
 list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
@@ -806,10 +812,10 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
 
-    Handles = setup_test_for_harvesting(
+    HandleEntries = setup_test_for_harvesting(
         Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix, true
     ),
-    list_with_time_offsets_test_base(Config, Method, <<"ListIdentifiers">>, Handles,
+    list_with_time_offsets_test_base(Config, Method, <<"ListIdentifiers">>, HandleEntries,
         BeginTime, FromOffset, UntilOffset, MetadataPrefix),
 
     TimeOffsets2 = lists:map(fun({T, N}) ->
@@ -818,8 +824,8 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
             _ -> T
         end
     end, lists:zip(TimeOffsets, lists:seq(1, length(TimeOffsets)))),
-    ModifiedHandles = modify_handles_with_mocked_timestamp(Config, Handles, BeginTime, TimeOffsets2, Metadata),
-    list_with_time_offsets_test_base(Config, Method, <<"ListIdentifiers">>, ModifiedHandles,
+    ModifiedHandleEntries = modify_handles_with_mocked_timestamp(Config, HandleEntries, BeginTime, TimeOffsets2, Metadata),
+    list_with_time_offsets_test_base(Config, Method, <<"ListIdentifiers">>, ModifiedHandleEntries,
         BeginTime, FromOffset, UntilOffset, MetadataPrefix).
 
 
@@ -845,10 +851,10 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
-    Handles = setup_test_for_harvesting(
+    HandleEntries = setup_test_for_harvesting(
         Config, IdentifiersNum, BeginTime, TimeOffsets, Metadata, MetadataPrefix, true
     ),
-    list_with_time_offsets_test_base(Config, Method, <<"ListRecords">>, Handles,
+    list_with_time_offsets_test_base(Config, Method, <<"ListRecords">>, HandleEntries,
         BeginTime, FromOffset, UntilOffset, MetadataPrefix),
 
     TimeOffsets2 = lists:map(fun({T, N}) ->
@@ -857,18 +863,18 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
             _ -> T
         end
     end, lists:zip(TimeOffsets, lists:seq(1, length(TimeOffsets)))),
-    ModifiedHandles = modify_handles_with_mocked_timestamp(Config, Handles, BeginTime, TimeOffsets2, Metadata),
-    list_with_time_offsets_test_base(Config, Method, <<"ListRecords">>, ModifiedHandles,
+    ModifiedHandleEntries = modify_handles_with_mocked_timestamp(Config, HandleEntries, BeginTime, TimeOffsets2, Metadata),
+    list_with_time_offsets_test_base(Config, Method, <<"ListRecords">>, ModifiedHandleEntries,
         BeginTime, FromOffset, UntilOffset, MetadataPrefix).
 
 
 list_with_time_offsets_test_base(
-    Config, Method, Verb, Handles, BeginTime, FromOffset, UntilOffset, MetadataPrefix
+    Config, Method, Verb, HandleEntries, BeginTime, FromOffset, UntilOffset, MetadataPrefix
 ) ->
-    BuildExpectedObject = fun(Handle) ->
+    BuildExpectedObject = fun(HandleEntry) ->
         case Verb of
-            <<"ListIdentifiers">> -> expected_oai_header_xml(Config, Handle);
-            <<"ListRecords">> -> expected_oai_record_xml(Config, Handle, MetadataPrefix)
+            <<"ListIdentifiers">> -> expected_oai_header_xml(Config, HandleEntry);
+            <<"ListRecords">> -> expected_oai_record_xml(Config, MetadataPrefix, HandleEntry)
         end
     end,
 
@@ -876,23 +882,23 @@ list_with_time_offsets_test_base(
     Until = increase_timestamp(BeginTime, UntilOffset),
     Args = prepare_harvesting_args(MetadataPrefix, to_datestamp(From), to_datestamp(Until)),
 
-    FilteredHandles = filter_handles_from_until(Handles, From, Until),
-    ?assert(check_list_entries(200, Verb, Args, Method, BuildExpectedObject, FilteredHandles, Config)),
+    FilteredHandleEntries = filter_handles_from_until(HandleEntries, From, Until),
+    ?assert(check_list_entries(200, Verb, Args, Method, BuildExpectedObject, FilteredHandleEntries, Config)),
 
     % check filtering by sets
     {ok, HandleServices} = oz_test_utils:list_handle_services(Config),
     lists:foreach(fun(HandleServiceId) ->
-        FilteredHandlesHService = lists:filter(fun(Handle) ->
-            HandleServiceId =:= Handle#handle_listing_entry.service_id
-        end, FilteredHandles),
+        FilteredHService = lists:filter(fun(HandleEntry) ->
+            HandleServiceId =:= HandleEntry#handle_listing_entry.service_id
+        end, FilteredHandleEntries),
 
         ArgsWithSet = [{<<"set">>, HandleServiceId} | Args],
-        case FilteredHandlesHService of
+        case FilteredHService of
             [] ->
                 ?assert(check_list_entries_no_records_match_error(200, Verb, ArgsWithSet, Method, Config));
             _ ->
                 ?assert(check_list_entries(
-                    200, Verb, ArgsWithSet, Method, BuildExpectedObject, FilteredHandlesHService, Config
+                    200, Verb, ArgsWithSet, Method, BuildExpectedObject, FilteredHService, Config
                 ))
 
         end
@@ -1119,11 +1125,11 @@ check_missing_arg_error(Code, Args, Method, ExpResponseContent, Config) ->
 
 check_id_not_existing_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"GetRecord">>, Args, Method, ExpResponseContent,
-        {error, {illegalId, get_from_args(<<"identifier">>, Args)}}, Config).
+        {error, {illegalId, proplists:get_value(<<"identifier">>, Args)}}, Config).
 
 check_cannot_disseminate_format_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"GetRecord">>, Args, Method, ExpResponseContent,
-        {error, {cannotDisseminateFormat, get_from_args(<<"metadataPrefix">>, Args)}}, Config).
+        {error, {cannotDisseminateFormat, proplists:get_value(<<"metadataPrefix">>, Args)}}, Config).
 
 check_exclusive_resumption_token_required_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListRecords">>, Args, Method, ExpResponseContent,
@@ -1138,38 +1144,38 @@ check_list_metadata_formats(Code, Args, Method, ExpResponseContent, Config) ->
 
 check_list_metadata_formats_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListMetadataFormats">>, Args, Method, ExpResponseContent,
-        {error, {noMetadataFormats, get_from_args(<<"identifier">>, Args)}}, Config).
+        {error, {noMetadataFormats, proplists:get_value(<<"identifier">>, Args)}}, Config).
 
 check_list_identifiers_bad_argument_granularity_mismatch_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListIdentifiers">>, Args, Method, ExpResponseContent, {error, {granularity_mismatch,
-        get_from_args(<<"from">>, Args), get_from_args(<<"until">>, Args)
+        proplists:get_value(<<"from">>, Args), proplists:get_value(<<"until">>, Args)
     }}, Config).
 
 check_list_identifiers_bad_argument_invalid_date_format_error(Code, Args, Method, ExpResponseContent, DateFormat, Config) ->
     check_oai_request(Code, <<"ListIdentifiers">>, Args, Method, ExpResponseContent,
-        {error, {invalid_date_format, get_from_args(DateFormat, Args)}}, Config
+        {error, {invalid_date_format, proplists:get_value(DateFormat, Args)}}, Config
     ).
 
-check_list_entries(Code, Verb, Args, Method, BuildExpectedObject, ExpectedHandles, Config) ->
+check_list_entries(Code, Verb, Args, Method, BuildExpectedObject, ExpectedHandleEntries, Config) ->
     ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
     {_, ExpResumptionToken} = ozt:rpc(handles, list_portion, [ListingOpts]),
 
-    ExpectedBase = lists:map(fun(Handle) -> BuildExpectedObject(Handle) end, ExpectedHandles),
+    ExpectedBase = lists:map(fun(HandleEntry) -> BuildExpectedObject(HandleEntry) end, ExpectedHandleEntries),
     ExpResponseContent = ExpectedBase ++ expected_response_body_wrt_resumption_token(ExpResumptionToken, ListingOpts),
     check_oai_request(Code, Verb, Args, Method, ExpResponseContent, binary_to_atom(Verb), Config).
 
 check_list_entries_no_records_match_error(Code, <<"ListIdentifiers">>, Args, Method, Config) ->
     check_oai_request(
         Code, <<"ListIdentifiers">>, Args, Method, [], {error, {noRecordsMatch,
-            get_from_args(<<"from">>, Args), get_from_args(<<"until">>, Args),
-            get_from_args(<<"set">>, Args), get_from_args(<<"metadataPrefix">>, Args)
+            proplists:get_value(<<"from">>, Args), proplists:get_value(<<"until">>, Args),
+            proplists:get_value(<<"set">>, Args), proplists:get_value(<<"metadataPrefix">>, Args)
         }}, Config
     );
 check_list_entries_no_records_match_error(Code, <<"ListRecords">>, Args, Method, Config) ->
     check_oai_request(
         Code, <<"ListRecords">>, Args, Method, [], {error, {noRecordsMatch,
-            get_from_args(<<"from">>, Args), get_from_args(<<"until">>, Args),
-            get_from_args(<<"set">>, Args), get_from_args(<<"metadataPrefix">>, Args)
+            proplists:get_value(<<"from">>, Args), proplists:get_value(<<"until">>, Args),
+            proplists:get_value(<<"set">>, Args), proplists:get_value(<<"metadataPrefix">>, Args)
         }}, Config
     ).
 
@@ -1351,13 +1357,13 @@ create_handle_services(Config, User, Count) ->
         HSId
     end, lists:seq(1, Count)).
 
-modify_handles_with_mocked_timestamp(Config, Handles, BeginTime, TimeOffsets,
+modify_handles_with_mocked_timestamp(Config, HandleEntries, BeginTime, TimeOffsets,
     Metadata) ->
-    lists:map(fun({#handle_listing_entry{handle_id = HId} = Handle, TimeOffset}) ->
+    lists:map(fun({#handle_listing_entry{handle_id = HId} = HandleEntry, TimeOffset}) ->
         MockedTimestamp = increase_timestamp(BeginTime, TimeOffset),
         ok = modify_handle_with_mocked_timestamp(Config, HId, Metadata, MockedTimestamp),
-        Handle#handle_listing_entry{timestamp = MockedTimestamp}
-    end, lists:zip(Handles, TimeOffsets)).
+        HandleEntry#handle_listing_entry{timestamp = MockedTimestamp}
+    end, lists:zip(HandleEntries, TimeOffsets)).
 
 modify_handle_with_mocked_timestamp(Config, HId, Metadata, Timestamp) ->
     Nodes = ?config(oz_worker_nodes, Config),
@@ -1389,12 +1395,12 @@ setup_test_for_harvesting(Config, RecordsNum, BeginTime, TimeOffsets, Metadata, 
 %% adds metadata to this share and mock timestamp,
 %% randomizing one of available handle services
 create_handles_with_mocked_timestamps(Config, User, HandleServices, ResourceIds,
-    BeginTime, TimeOffsets, Metadata, MetadataPrefix, DoNotDeleteAny) ->
+    BeginTime, TimeOffsets, Metadata, MetadataPrefix, DeletionStrategy) ->
     lists:map(fun({ResourceId, TimeOffset}) ->
         MockedTimestamp = increase_timestamp(BeginTime, TimeOffset),
         HandleServiceId = lists_utils:random_element(HandleServices),
         create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId, Metadata,
-            MetadataPrefix, MockedTimestamp, DoNotDeleteAny)
+            MetadataPrefix, MockedTimestamp, DeletionStrategy)
     end, lists:zip(ResourceIds, TimeOffsets)).
 
 create_handle_service(Config, User) ->
@@ -1409,10 +1415,10 @@ create_handle_service(Config, User) ->
 
 create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId, Metadata, MetadataPrefix, Timestamp) ->
     create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId,
-        Metadata, MetadataPrefix, Timestamp, false).
+        Metadata, MetadataPrefix, Timestamp, randomly_deleted_handles).
 
 create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId,
-    Metadata, MetadataPrefix, Timestamp, DoNotDeleteAny) ->
+    Metadata, MetadataPrefix, Timestamp, DeletionStrategy) ->
     Nodes = ?config(oz_worker_nodes, Config),
     ok = test_utils:mock_new(Nodes, od_handle, [passthrough]),
     ok = test_utils:mock_expect(Nodes, od_handle, current_timestamp, fun() -> Timestamp end),
@@ -1420,21 +1426,21 @@ create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId,
     ok = test_utils:mock_validate_and_unload(Nodes, od_handle),
 
     %% remove handle with 50% probability to check include_deleted listing
-    case ?RAND_BOOL() orelse DoNotDeleteAny of
-       true ->
-            #handle_listing_entry{
-                timestamp = Timestamp,
-                service_id = HandleServiceId,
-                handle_id = HId,
-                status = present
-            };
-        false ->
+    case {?RAND_BOOL(), DeletionStrategy} of
+        {false, randomly_deleted_handles} ->
             delete_handle_with_mocked_timestamp(Config, HId, Timestamp),
             #handle_listing_entry{
                 timestamp = Timestamp,
                 service_id = HandleServiceId,
                 handle_id = HId,
                 status = deleted
+            };
+        _ ->
+            #handle_listing_entry{
+                timestamp = Timestamp,
+                service_id = HandleServiceId,
+                handle_id = HId,
+                status = present
             }
     end.
 
@@ -1478,16 +1484,10 @@ prepare_harvesting_args(MetadataPrefix, From, Until, Set) ->
     Args3 = add_to_args_if_defined(<<"until">>, Until, Args2),
     add_to_args_if_defined(<<"set">>, Set, Args3).
 
-get_from_args(Key, Args) ->
-    case lists:keyfind(Key, 1, Args) of
-        false -> undefined;
-        {Key, Value} -> Value
-    end.
-
-filter_handles_from_until(Handles, From, Until) ->
+filter_handles_from_until(HandleEntries, From, Until) ->
     lists:filter(fun(#handle_listing_entry{timestamp = Timestamp}) ->
         offset_in_range(From, Until, Timestamp)
-    end, Handles).
+    end, HandleEntries).
 
 increase_timestamp(_, undefined) -> undefined;
 increase_timestamp(undefined, _) -> undefined;
@@ -1502,7 +1502,7 @@ to_datestamp({{Year, Month, Day}, {Hour, Minute, Second}}) ->
     str_utils:format(
         "~4..0B-~2..0B-~2..0BT~2..0B:~2..0B:~2..0BZ",
         [Year, Month, Day, Hour, Minute, Second]);
-to_datestamp(TimeSeconds) ->
+to_datestamp(TimeSeconds) when is_integer(TimeSeconds) ->
     to_datestamp(time:seconds_to_datetime(TimeSeconds)).
 
 offset_in_range(undefined, undefined, _) -> true;
@@ -1555,18 +1555,18 @@ expected_admin_emails(Config) ->
     oz_test_utils:get_env(Config, admin_emails).
 
 
-expected_oai_record_xml(Config, #handle_listing_entry{status = deleted} = Handle, _MetadataPrefix) ->
+expected_oai_record_xml(Config, _MetadataPrefix, #handle_listing_entry{status = deleted} = HandleEntry) ->
     #xmlElement{name = record, content = [
-        expected_oai_header_xml(Config, Handle)
+        expected_oai_header_xml(Config, HandleEntry)
     ]};
 
-expected_oai_record_xml(Config, #handle_listing_entry{status = present} = Handle, MetadataPrefix) ->
-    ExpectedMetadata = expected_final_metadata_element(MetadataPrefix, Handle),
-    expected_oai_record_xml_with_defined_metadata(Config, Handle, ExpectedMetadata).
+expected_oai_record_xml(Config, MetadataPrefix, #handle_listing_entry{status = present} = HandleEntry) ->
+    ExpectedMetadata = expected_final_metadata_element(MetadataPrefix, HandleEntry),
+    expected_oai_record_xml_with_defined_metadata(Config, ExpectedMetadata, HandleEntry).
 
-expected_oai_record_xml_with_defined_metadata(Config, Handle, ExpectedMetadata) ->
+expected_oai_record_xml_with_defined_metadata(Config, ExpectedMetadata, HandleEntry) ->
     #xmlElement{name = record, content = [
-        expected_oai_header_xml(Config, Handle),
+        expected_oai_header_xml(Config, HandleEntry),
         #xmlElement{
             name = metadata,
             content = [ExpectedMetadata]
