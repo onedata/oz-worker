@@ -162,6 +162,7 @@ list_portion(ListingOpts) ->
         %% Limit + 1 is used to determine if it's the end of the list
         %% and if a resumption token needs to be included
         prev_link_name => StartIndex,
+        %% prev_tree_id option is necessary for inclusive => false to work
         prev_tree_id => TreeId,
         inclusive => false
     },

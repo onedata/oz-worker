@@ -585,8 +585,24 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     [ShareId1, ShareId2] = create_shares(Config, SpaceIds),
     {HSId, _} = create_handle_service(Config, User),
     Timestamp1 = ?NOW(),
+    EmptyRepositoryTimestamp = decrease_timestamp(Timestamp1, 3600),
     Timestamp2 = increase_timestamp(Timestamp1, 1),
     Timestamp3 = increase_timestamp(Timestamp2, 1),
+
+    % identify earliest datestamp with empty repository
+    ExpResponseContentEmpty = [
+        #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
+        #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
+        #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
+        #xmlElement{name = earliestDatestamp, content = [#xmlText{value = to_datestamp(EmptyRepositoryTimestamp)}]},
+        #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
+        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
+    ] ++ [
+        #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
+    ],
+    ?assert(check_identify(200, [], Method, ExpResponseContentEmpty, Config)),
+
+
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
     Handle1 = create_handle_with_mocked_timestamp(Config, User, HSId, ShareId1,
@@ -595,7 +611,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     create_handle_with_mocked_timestamp(Config, User, HSId, ShareId2,
         Metadata2, MetadataPrefix, Timestamp2, true),
 
-    ExpResponseContent = [
+    ExpResponseContent1 = [
         #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]}
@@ -606,8 +622,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
         #xmlElement{name = deletedRecord, content = [#xmlText{value = "persistent"}]},
         #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
     ],
-
-    ?assert(check_identify(200, [], Method, ExpResponseContent, Config)),
+    ?assert(check_identify(200, [], Method, ExpResponseContent1, Config)),
 
     modify_handle_with_mocked_timestamp(Config, Handle1#handle_listing_entry.handle_id, Metadata, Timestamp3),
 
@@ -953,7 +968,15 @@ cannot_disseminate_format_test_base(Config, Method) ->
         {<<"identifier">>, oai_identifier(Config, Identifier)},
         {<<"metadataPrefix">>, <<"not_supported_format">>}
     ],
-    ?assert(check_cannot_disseminate_format_error(200, Args, Method, [], Config)).
+    ?assert(check_cannot_disseminate_format_error(200, Args, Method, [], Config)),
+
+    AnotherMetadataPrefix = ?RAND_ELEMENT(lists:delete(MetadataPrefix, ozt_handles:supported_metadata_prefixes())),
+    Args2 = [
+        {<<"identifier">>, oai_identifier(Config, Identifier)},
+        {<<"metadataPrefix">>, AnotherMetadataPrefix}
+    ],
+    ?assert(check_cannot_disseminate_format_error(200, Args2, Method, [], Config)).
+
 
 exclusive_resumption_token_required_error(Config, Method) ->
     Args = [
@@ -1470,7 +1493,9 @@ increase_timestamp(_, undefined) -> undefined;
 increase_timestamp(undefined, _) -> undefined;
 increase_timestamp(Seconds, ExtraSeconds) ->
     Seconds + ExtraSeconds.
-%%    calendar:gregorian_seconds_to_datetime(Seconds + ExtraSeconds).
+
+decrease_timestamp(Seconds, ExtraSeconds) ->
+    Seconds - ExtraSeconds.
 
 to_datestamp(undefined) -> undefined;
 to_datestamp({{Year, Month, Day}, {Hour, Minute, Second}}) ->

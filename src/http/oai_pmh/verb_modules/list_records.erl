@@ -78,4 +78,3 @@ get_response(<<"record">>, Args) ->
     ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
     oai_utils:harvest(ListingOpts, fun oai_utils:build_oai_record/1).
 
-%%% TODO VFS-7454 support resumptionToken
