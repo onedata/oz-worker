@@ -179,7 +179,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             od_share, ShareId
         ),
 
-        handles:add(MetadataPrefix, HandleServiceId, HandleId, CreationTime),
+        handles:report_created(MetadataPrefix, HandleServiceId, HandleId, CreationTime),
         {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
         {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}
     end);
@@ -218,7 +218,7 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
-    {ok, [HId || {_TimeStamp, _HService, HId} <- gather_by_all_prefixes()]};
+    od_handle:list();
 get(#el_req{gri = #gri{aspect = privileges}}, _) ->
     {ok, #{
         <<"member">> => privileges:handle_member(),
@@ -350,7 +350,7 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
         fun(#od_handle{
             public_handle = PublicHandle,
             handle_service = HandleService,
-            timestamp = TimeStamp,
+            timestamp = PreviousTimestamp,
             metadata_prefix = MetadataPrefix
         }) ->
             try
@@ -362,7 +362,8 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
                     Class, Reason, Stacktrace
                 )
             end,
-            handles:delete(MetadataPrefix, HandleService, HandleId,  TimeStamp),
+            DeletionTimestamp = od_handle:current_timestamp(),
+            handles:report_deleted(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
             entity_graph:delete_with_relations(od_handle, HandleId)
         end
     end);
@@ -701,16 +702,3 @@ auth_by_privilege(UserId, HandleOrId, Privilege) ->
     handle_logic:has_eff_privilege(HandleOrId, UserId, Privilege).
 
 
-%% @private
--spec gather_by_all_prefixes() -> [handles:listing_entry()].
-gather_by_all_prefixes() ->
-    lists:flatmap(fun(MetadataPrefix) ->
-        list_completely(#{metadata_prefix => MetadataPrefix})
-    end, oai_metadata:supported_formats()).
-
--spec list_completely(handles:listing_opts()) -> [handles:listing_entry()].
-list_completely(ListingOpts) ->
-    case handles:list(ListingOpts) of
-        {List, undefined} -> List;
-        {List, ResumptionToken} -> List ++ list_completely(#{resumption_token => ResumptionToken})
-    end.

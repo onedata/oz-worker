@@ -77,40 +77,25 @@ optional_response_elements() -> [].
 get_response(<<"record">>, Args) ->
     OaiId = proplists:get_value(<<"identifier">>, Args),
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
-    Handle = get_handle_safe(OaiId),
     HandleId = oai_utils:oai_identifier_decode(OaiId),
-    case lists:member(MetadataPrefix, oai_metadata:supported_formats()) andalso
-        Handle#od_handle.metadata_prefix =:= MetadataPrefix of
-        true ->
+    lists:member(MetadataPrefix, oai_metadata:supported_formats()) orelse throw({cannotDisseminateFormat, MetadataPrefix}),
+    case od_handle:get(HandleId) of
+        {ok, #document{value = Handle}} ->
+            Handle#od_handle.metadata_prefix =:= MetadataPrefix orelse throw({cannotDisseminateFormat, MetadataPrefix}),
             oai_utils:build_oai_record(
-                Handle#od_handle.timestamp,
-                Handle#od_handle.handle_service,
-                HandleId,
-                Handle
+                #handle_listing_entry{
+                    timestamp = Handle#od_handle.timestamp,
+                    service_id = Handle#od_handle.handle_service,
+                    handle_id = HandleId,
+                    status = present
+                }, Handle
             );
-        false ->
-            throw({cannotDisseminateFormat, MetadataPrefix})
-    end.
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-%%%-------------------------------------------------------------------
-%%% @private
-%%% @doc
-%%% Returns given handle metadata.
-%%% If it fails, throws idDoesNotExist
-%%% @end
-%%%-------------------------------------------------------------------
--spec get_handle_safe(oai_id()) -> #od_handle{}.
-get_handle_safe(OAIId) ->
-    try
-        Id = oai_utils:oai_identifier_decode(OAIId),
-        oai_utils:get_handle(Id)
-    catch
-        throw:{illegalId, OAIId} ->
-            throw({illegalId, OAIId});
-        _:_ ->
-            throw({idDoesNotExist, OAIId})
+        {error, not_found} ->
+            case handles:lookup_deleted(HandleId) of
+                {ok, HandleListingEntry, HandleMetadataPrefix} ->
+                    HandleMetadataPrefix =:= MetadataPrefix orelse throw({cannotDisseminateFormat, MetadataPrefix}),
+                    oai_utils:build_oai_record(HandleListingEntry);
+                error ->
+                    throw({idDoesNotExist, OaiId})
+            end
     end.

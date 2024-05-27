@@ -109,7 +109,6 @@ delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteFun) ->
         logic_spec = LogicSpec,
         gs_spec = GsSpec
     } = ApiTestSpec,
-
     assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )),
@@ -128,9 +127,11 @@ delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteFun) ->
 
     Env = EnvSetUpFun(),
     DeleteFun(Env),
+
     assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, fun() -> Env end, undefined, undefined
     )).
+
 
 
 prepare_entity_not_found_rest_spec(undefined) ->

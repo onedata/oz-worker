@@ -1948,6 +1948,7 @@ list_handles(Config) ->
         ?ROOT
     ])).
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Retrieves handle data from onezone.

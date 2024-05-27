@@ -21,7 +21,8 @@
 -record(oai_header, {
     identifier :: oai_id(),
     datestamp :: binary(),
-    set_spec :: oai_set_spec()
+    set_spec :: oai_set_spec(),
+    status :: handles:status()
 }).
 
 -record(oai_metadata_format, {
@@ -45,7 +46,9 @@
 
 -record(oai_record, {
     header :: oai_header(),
-    metadata :: oai_metadata(),
+    %% undefined when record status is deleted
+    metadata :: oai_metadata() | undefined,
+    %% optional attribute
     about :: oai_about() | undefined
 }).
 
@@ -63,6 +66,13 @@
 -record(oai_listing_result, {
     batch :: [oai_record()] | [oai_header()],
     resumption_token :: handles:resumption_token()
+}).
+
+-record(handle_listing_entry, {
+    timestamp :: od_handle:timestamp_seconds(),
+    service_id :: od_handle_service:id(),
+    handle_id :: od_handle:id(),
+    status :: handles:status()
 }).
 
 %% @formatter:off

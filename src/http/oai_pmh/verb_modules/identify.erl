@@ -97,7 +97,7 @@ get_response(<<"earliestDatestamp">>, _Args) ->
     end,
     oai_utils:serialize_datestamp(time:seconds_to_datetime(Timestamp));
 get_response(<<"deletedRecord">>, _Args) ->
-    <<"no">>;
+    <<"persistent">>;
 get_response(<<"granularity">>, _Args) ->
     <<"YYYY-MM-DDThh:mm:ssZ">>;
 get_response(<<"adminEmail">>, _Args) ->
