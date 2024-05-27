@@ -21,6 +21,7 @@
 -export([entity_logic_plugin/0]).
 -export([get_ctx/0]).
 -export([current_timestamp/0]).
+-export([migrate_legacy_handles/0, migrate_legacy_handle/2]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -52,45 +53,35 @@
     memory_copies => all
 }).
 
+% the value for metadata_prefix field of handles that have been upgraded on the DB level,
+% but not yet migrated to the new handle registry (@see migrate_legacy_handles/0)
+-define(LEGACY_METADATA_PREFIX_INDICATOR, <<"legacy">>).
+
+-compile([{no_auto_import, [get/1]}]).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates handle.
-%% @end
-%%--------------------------------------------------------------------
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns handle by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(HandleId) ->
     datastore_model:get(?CTX, HandleId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks whether handle given by ID exists.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(HandleId) ->
     datastore_model:exists(?CTX, HandleId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates handle by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(HandleId, Diff) ->
     datastore_model:update(?CTX, HandleId, Diff).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -105,45 +96,109 @@ force_delete(HandleId) ->
     datastore_model:delete(?CTX, HandleId).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all handles.
-%% @end
-%%--------------------------------------------------------------------
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
-    {ok, [HandleId || #handle_listing_entry{handle_id = HandleId} <- handles:gather_by_all_prefixes()]}.
+    datastore_model:fold_keys(?CTX, fun(Id, Acc) -> {ok, [Id | Acc]} end, []).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns readable string representing the handle with given id.
-%% @end
-%%--------------------------------------------------------------------
 -spec to_string(HandleId :: id()) -> binary().
 to_string(HandleId) ->
     <<"handle:", HandleId/binary>>.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns the entity logic plugin module that handles model logic.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     handle_logic_plugin.
+
 
 -spec get_ctx() -> datastore:ctx().
 get_ctx() ->
     ?CTX.
 
-%%--------------------------------------------------------------------
-%% @equiv global_clock:timestamp_seconds().
-%% @end
-%%--------------------------------------------------------------------
+
 -spec current_timestamp() -> timestamp_seconds().
 current_timestamp() ->
     global_clock:timestamp_seconds().
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Migrates all handles to the handle registry - previously, they were stored as a
+%% flat list per handle service in their docs. Firstly, the handle is added to the registry.
+%% Secondly, its metadata is transformed using the same procedures as are applied in the
+%% current software version.
+%% The procedure is idempotent.
+%% @end
+%%--------------------------------------------------------------------
+-spec migrate_legacy_handles() -> ok.
+migrate_legacy_handles() ->
+    lists:foreach(fun(#document{
+        key = HServiceId,
+        value = #od_handle_service{
+            name = HServiceName,
+            handles = Handles
+        }
+    }) ->
+        ?info("Migrating ~B legacy handles from '~ts' (~ts)...", [length(Handles), HServiceName, HServiceId]),
+        lists:foreach(fun(HandleId) -> migrate_legacy_handle(HServiceId, HandleId) end, Handles),
+        ok = ?extract_ok(od_handle_service:update(HServiceId, fun(HService) ->
+            {ok, HService#od_handle_service{handles = []}}
+        end)),
+        ?info("Successfully migrated legacy handles from '~ts' (~ts)", [HServiceName, HServiceId])
+    end, element(2, {ok, _} = od_handle_service:list())).
+
+
+% exported for tests
+-spec migrate_legacy_handle(od_handle_service:id(), id()) -> ok.
+migrate_legacy_handle(HServiceId, HandleId) ->
+    case get(HandleId) of
+        {error, not_found} ->
+            ?error("The handle ~ts was not found in DB, skipping its migration", [HandleId]);
+        {ok, #document{value = Handle}} ->
+            migrate_legacy_handle(HServiceId, HandleId, Handle)
+    end.
+
+%% @private
+-spec migrate_legacy_handle(od_handle_service:id(), id(), record()) -> ok.
+migrate_legacy_handle(HServiceId, HandleId, #od_handle{
+    resource_id = ShareId,
+    metadata = Metadata,
+    public_handle = PublicHandle,
+    timestamp = Timestamp
+}) ->
+    % all legacy handles were created with Dublin Core metadata
+    case ?catch_exceptions(handles:report_created(?OAI_DC_METADATA_PREFIX, HServiceId, HandleId, Timestamp)) of
+        ok ->
+            ok;
+        ?ERROR_ALREADY_EXISTS ->
+            ?info("The handle ~ts appears to already be registered (during a previous run?)", [HandleId])
+    end,
+    % legacy code allowed invalid XML DC metadata - in such a case, use empty metadata
+    MetadataXml = case oai_xml:parse(Metadata) of
+        error ->
+            #xmlElement{name = metadata, content = []};
+        {ok, #xmlElement{name = metadata} = Parsed} ->
+            Parsed;
+        {ok, _} ->
+            #xmlElement{name = metadata, content = []}
+    end,
+    {ok, RevisedMetadata} = oai_metadata:revise_for_publication(
+        ?OAI_DC_METADATA_PREFIX,
+        MetadataXml,
+        ShareId,
+        #od_share{}  % this argument can be whatever as dublin core metadata plugin ignores it
+    ),
+    FinalMetadata = oai_metadata:insert_public_handle(?OAI_DC_METADATA_PREFIX, RevisedMetadata, PublicHandle),
+    FinalRawMetadata = oai_metadata:encode_xml(?OAI_DC_METADATA_PREFIX, FinalMetadata),
+    ok = ?extract_ok(update(HandleId, fun
+        (#od_handle{metadata_prefix = ?OAI_DC_METADATA_PREFIX} = Handle) ->
+            % updated metadata prefix indicates that this handle has already been upgraded
+            % (this procedure must be idempotent; it might have crashed mid-way before)
+            ?info("The handle ~ts appears to already be migrated (during a previous run?)", [HandleId]),
+            {ok, Handle};
+        (#od_handle{metadata_prefix = ?LEGACY_METADATA_PREFIX_INDICATOR} = Handle) ->
+            {ok, Handle#od_handle{metadata_prefix = ?OAI_DC_METADATA_PREFIX, metadata = FinalRawMetadata}}
+    end)).
 
 %%%===================================================================
 %%% datastore_model callbacks
@@ -572,7 +627,7 @@ upgrade_record(7, Handle) ->
     {8, #od_handle{
         public_handle = PublicHandle,
         resource_type = ResourceType,
-        metadata_prefix = ?OAI_DC_METADATA_PREFIX,
+        metadata_prefix = ?LEGACY_METADATA_PREFIX_INDICATOR,
         metadata = Metadata,
         timestamp = Timestamp,
 

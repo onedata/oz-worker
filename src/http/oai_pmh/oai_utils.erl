@@ -48,8 +48,8 @@ oai_identifier_decode(OAIId) ->
 -spec build_oai_header(handles:handle_listing_entry()) -> #oai_header{}.
 build_oai_header(#handle_listing_entry{
     timestamp = TimeSeconds,
-    service_id = HandleServiceId,
     handle_id = HandleId,
+    service_id = HandleServiceId,
     status = Status
 }) ->
     OaiId = oai_identifier_encode(HandleId),
@@ -281,36 +281,25 @@ to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp, set_spec = Se
             ensure_list(to_xml({setSpec, SetSpec}))
         ])
     };
-to_xml(#oai_metadata{metadata_prefix = MetadataPrefix, raw_value = RawValue, handle = Handle}) ->
-    ParsedMetadata = case oai_xml:parse(RawValue) of
-        {ok, Parsed} ->
-            Parsed;
+to_xml(#oai_metadata{metadata_prefix = MetadataPrefix, raw_value = RawValue}) ->
+    case oai_xml:parse(RawValue) of
+        {ok, ParsedMetadata} ->
+            #xmlElement{
+                name = metadata,
+                content = ensure_list(to_xml(oai_metadata:adapt_for_oai_pmh(MetadataPrefix, ParsedMetadata)))
+            };
         error ->
-            % @TODO VFS-11906 Temporary workaround, rework
-            % @TODO VFS-11906 Consider adding tests for this edge case
-            EmptyMetadata = case MetadataPrefix of
-                ?OAI_DC_METADATA_PREFIX ->
-                    #xmlElement{name = metadata, content = []};
-                ?EDM_METADATA_PREFIX ->
-                    #xmlElement{name = 'rdf:RDF', content = []}
-            end,
-            {ok, RevisedMetadata} = oai_metadata:revise_for_publication(
-                MetadataPrefix,
-                EmptyMetadata,
-                Handle#od_handle.resource_id,
-                ?check(share_logic:get(?ROOT, Handle#od_handle.resource_id))
+            % this should theoretically never happen as the metadata is sanitized before
+            % being written to the DB, so let it crash in case of unforeseen errors
+            ?error(
+                "Cannot parse handle metadata:~n"
+                "-----------------------------~n"
+                "~ts~n"
+                "-----------------------------",
+                [RawValue]
             ),
-            oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, Handle#od_handle.public_handle)
-        % @TODO VFS-11906 This might be useful when we upgrade the models and ensure there are valid xmls in the DB
-%%            % this should theoretically never happen as the metadata is sanitized before
-%%            % being written to the DB, so let it crash in case of unforeseen errors
-%%            error({bad_metadata, RawValue})
-    end,
-
-    #xmlElement{
-        name = metadata,
-        content = ensure_list(to_xml(oai_metadata:adapt_for_oai_pmh(MetadataPrefix, ParsedMetadata)))
-    };
+            error(bad_handle_metadata)
+    end;
 to_xml(#oai_metadata_format{metadataPrefix = MetadataPrefix, schema = Schema,
     metadataNamespace = Namespace}) ->
     #xmlElement{

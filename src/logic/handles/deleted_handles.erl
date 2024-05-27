@@ -53,8 +53,8 @@ lookup(HandleId) ->
             {MetadataPrefix, HandleServiceId, Timestamp} = decode_link_value(LinkValue),
             {ok, #handle_listing_entry{
                 timestamp = Timestamp,
-                service_id = HandleServiceId,
                 handle_id = HandleId,
+                service_id = HandleServiceId,
                 status = deleted
             }, MetadataPrefix};
         {error, not_found} -> error
@@ -67,8 +67,8 @@ foreach(ForeachFun) ->
         {MetadataPrefix, HandleServiceId, Timestamp} = decode_link_value(Value),
         {ok, [{MetadataPrefix, #handle_listing_entry{
             timestamp = Timestamp,
-            service_id = HandleServiceId,
             handle_id = HandleId,
+            service_id = HandleServiceId,
             status = deleted
         }} | Acc]}
     end,

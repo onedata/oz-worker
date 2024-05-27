@@ -85,8 +85,8 @@ get_response(<<"record">>, Args) ->
             oai_utils:build_oai_record(
                 #handle_listing_entry{
                     timestamp = Handle#od_handle.timestamp,
-                    service_id = Handle#od_handle.handle_service,
                     handle_id = HandleId,
+                    service_id = Handle#od_handle.handle_service,
                     status = present
                 }, Handle
             );

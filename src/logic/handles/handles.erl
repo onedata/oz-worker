@@ -17,9 +17,10 @@
 -include("http/handlers/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([report_created/4, report_deleted/5, update_timestamp/5]).
--export([gather_by_all_prefixes/0, list_completely/1, list_portion/1,
-    get_earliest_timestamp/0, purge_all_deleted_entries/0, lookup_deleted/1]).
+-export([report_created/4, report_updated/5, report_deleted/5]).
+-export([lookup_deleted/1, purge_all_deleted_entries/0]).
+-export([get_earliest_timestamp/0]).
+-export([gather_by_all_prefixes/0, gather_by_all_prefixes/1, list_completely/1, list_portion/1]).
 
 % link_key() consists of 2 parts:
 %  1) timestamp (in seconds) - so that links would be sorted by time.
@@ -90,37 +91,78 @@ report_created(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
     add_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp, present).
 
 
+%%--------------------------------------------------------------------
+%% @doc NOTE: cannot be run in parallel!
+%% @end
+%%--------------------------------------------------------------------
+-spec report_updated(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
+    od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> ok.
+report_updated(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp, UpdateTimestamp) ->
+    case PreviousTimestamp == UpdateTimestamp of
+        true ->
+            ok;
+        false ->
+            ?critical_section_for_handle(HandleId, fun() ->
+                delete_entry(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp),
+                add_entry(MetadataPrefix, HandleServiceId, HandleId, UpdateTimestamp, present)
+            end)
+    end.
+
+
 -spec report_deleted(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> ok.
-report_deleted(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, DeletionTimestamp) ->
+report_deleted(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp, DeletionTimestamp) ->
     ?critical_section_for_handle(HandleId, fun() ->
-        delete_entry(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
+        delete_entry(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp),
         add_entry(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp, deleted),
         deleted_handles:insert(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp)
     end).
 
 
-%%--------------------------------------------------------------------
-%% @doc NOTE: cannot be run in parallel!
-%% @end
-%%--------------------------------------------------------------------
--spec update_timestamp(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
-    od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> ok.
-update_timestamp(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp, NewTimestamp) ->
-    case OldTimestamp == NewTimestamp of
-        true -> ok;
-        false ->
-            ?critical_section_for_handle(HandleId, fun() ->
-                delete_entry(MetadataPrefix, HandleServiceId, HandleId, OldTimestamp),
-                add_entry(MetadataPrefix, HandleServiceId, HandleId, NewTimestamp, present)
-            end)
+-spec lookup_deleted(od_handle:id()) -> error | {ok, handle_listing_entry(), od_handle:metadata_prefix()}.
+lookup_deleted(HandleId) ->
+    deleted_handles:lookup(HandleId).
+
+
+-spec purge_all_deleted_entries() -> ok.
+purge_all_deleted_entries() ->
+    ForeachFun = fun({MetadataPrefix, #handle_listing_entry{
+        timestamp = Timestamp,
+        handle_id = HandleId,
+        service_id = HandleServiceId,
+        status = deleted
+    }}) ->
+        % TODO VFS-11906 nested critical section - sort it out
+        ?critical_section_for_handle(HandleId, fun() ->
+            deleted_handles:remove(HandleId),
+            delete_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
+        end)
+    end,
+    deleted_handles:foreach(ForeachFun).
+
+
+-spec get_earliest_timestamp() -> undefined | od_handle:timestamp_seconds().
+get_earliest_timestamp() ->
+    EntriesWithEarliestTimestamps = lists:flatmap(fun(MetadataPrefix) ->
+        ListingOpts = #{limit => 1, metadata_prefix => MetadataPrefix},
+        {List, _} = list_portion(ListingOpts),
+        List
+    end, oai_metadata:supported_formats()),
+
+    case EntriesWithEarliestTimestamps of
+        [] -> undefined;
+        _ -> lists:min([E#handle_listing_entry.timestamp || E <- EntriesWithEarliestTimestamps])
     end.
 
 
 -spec gather_by_all_prefixes() -> [handle_listing_entry()].
 gather_by_all_prefixes() ->
+    gather_by_all_prefixes(#{}).
+
+-spec gather_by_all_prefixes(listing_opts()) -> [handle_listing_entry()].
+gather_by_all_prefixes(ListingOpts) ->
     lists:umerge(lists:map(fun(MetadataPrefix) ->
-        list_completely(#{metadata_prefix => MetadataPrefix})
+        list_completely(ListingOpts#{metadata_prefix => MetadataPrefix})
     end, oai_metadata:supported_formats())).
 
 
@@ -136,6 +178,7 @@ list_completely(ListingOpts) ->
 list_portion(ListingOpts) ->
     Token = maps:get(resumption_token, ListingOpts, <<>>),
 
+    % TODO VFS-11906 can this be simplified?
     {MetadataPrefix, HServiceId, Limit, From, Until, StartIndex, IncludeDeleted} = case Token of
         <<>> ->
             MetadataPrefix1 = maps:get(metadata_prefix, ListingOpts),
@@ -179,8 +222,8 @@ list_portion(ListingOpts) ->
                     _ ->
                         {ok, [#handle_listing_entry{
                             timestamp = Timestamp,
-                            service_id = HandleServiceId,
                             handle_id = HandleId,
+                            service_id = HandleServiceId,
                             status = Status
                         } | Acc]}
                 end
@@ -190,41 +233,6 @@ list_portion(ListingOpts) ->
         ?CTX, ?FOREST, TreeId, FoldFun, [], FoldOpts
     ),
     build_result_from_reversed_listing(ReversedEntries, Limit, MetadataPrefix, From, Until, HServiceId, IncludeDeleted).
-
-
--spec get_earliest_timestamp() -> undefined | od_handle:timestamp_seconds().
-get_earliest_timestamp() ->
-    EntriesWithEarliestTimestamps = lists:flatmap(fun(MetadataPrefix) ->
-        ListingOpts = #{limit => 1, metadata_prefix => MetadataPrefix},
-        {List, _} = list_portion(ListingOpts),
-        List
-    end, oai_metadata:supported_formats()),
-
-    case EntriesWithEarliestTimestamps of
-        [] -> undefined;
-        _ -> lists:min([E#handle_listing_entry.timestamp || E <- EntriesWithEarliestTimestamps])
-    end.
-
-
--spec purge_all_deleted_entries() -> ok.
-purge_all_deleted_entries() ->
-        ForeachFun = fun({MetadataPrefix, #handle_listing_entry{
-            timestamp = Timestamp,
-            service_id = HandleServiceId,
-            handle_id = HandleId,
-            status = deleted
-        }}) ->
-            ?critical_section_for_handle(HandleId, fun() ->
-                deleted_handles:remove(HandleId),
-                delete_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
-            end)
-        end,
-    deleted_handles:foreach(ForeachFun).
-
-
--spec lookup_deleted(od_handle:id()) -> error | {ok, handle_listing_entry(), od_handle:metadata_prefix()}.
-lookup_deleted(HandleId) ->
-    deleted_handles:lookup(HandleId).
 
 %%%===================================================================
 %%% Internal functions

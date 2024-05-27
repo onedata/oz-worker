@@ -33,7 +33,7 @@
 -export([create_user_invite_token/2]).
 -export([create_group_invite_token/2]).
 -export([create_support_token/2]).
--export([create_share/2]).
+-export([create_share/1, create_share/2]).
 -export([get_users/1, get_groups/1, get_eff_users/1, get_eff_groups/1]).
 -export([has_eff_user/2]).
 -export([get_user_privileges/2, get_group_privileges/2, get_eff_user_privileges/2, get_eff_group_privileges/2]).
@@ -218,6 +218,10 @@ create_group_invite_token(SpaceId, UserId) ->
 create_support_token(SpaceId, UserId) ->
     ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId)).
 
+
+-spec create_share(od_space:id()) -> od_share:id().
+create_share(SpaceId) ->
+    create_share(SpaceId, <<"of-space-", SpaceId/binary>>).
 
 -spec create_share(od_space:id(), od_share:name()) -> od_share:id().
 create_share(SpaceId, Name) ->

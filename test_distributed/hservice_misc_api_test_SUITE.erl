@@ -286,7 +286,7 @@ get_test(Config) ->
                 fun(#od_handle_service{
                     name = Name, proxy_endpoint = ProxyEndpoint,
                     service_properties = ServiceProperties,
-                    users = Users, groups = #{}, handles = [],
+                    users = Users, groups = #{},
                     eff_users = EffUsers, eff_groups = #{},
                     bottom_up_dirty = false
                 }) ->
@@ -453,26 +453,33 @@ delete_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, HService} = oz_test_utils:create_handle_service(
+        {ok, HServiceId} = oz_test_utils:create_handle_service(
             Config, ?USER(U1), ?DOI_SERVICE
         ),
-        oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
+        oz_test_utils:handle_service_set_user_privileges(Config, HServiceId, U1,
             [], [?HANDLE_SERVICE_DELETE]
         ),
         {ok, U2} = oz_test_utils:handle_service_add_user(
-            Config, HService, U2
+            Config, HServiceId, U2
         ),
-        oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
+        oz_test_utils:handle_service_set_user_privileges(Config, HServiceId, U2,
             [?HANDLE_SERVICE_DELETE], []
         ),
-        #{hserviceId => HService}
+        #{
+            hserviceId => HServiceId,
+            handles => lists_utils:generate(fun() -> ozt_handles:create(HServiceId) end, 10)
+        }
     end,
     DeleteEntityFun = fun(#{hserviceId := HService} = _Env) ->
         oz_test_utils:delete_handle_service(Config, HService)
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{hserviceId := HService} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{hserviceId := HService, handles := Handles} = _Env, _) ->
         {ok, HServices} = oz_test_utils:list_handle_services(Config),
-        ?assertEqual(lists:member(HService, HServices), not ShouldSucceed)
+        ?assertEqual(lists:member(HService, HServices), not ShouldSucceed),
+        % handles should not be deleted along with the handle service
+        lists:foreach(fun(HandleId) ->
+            ?assert(ozt_handles:exists(HandleId))
+        end, Handles)
     end,
 
     ApiTestSpec = #api_test_spec{

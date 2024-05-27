@@ -68,10 +68,11 @@
     resumption_token :: handles:resumption_token()
 }).
 
+% NOTE: the order of the field is important (timestamp -> handle_id) so that they can be naturally sorted
 -record(handle_listing_entry, {
     timestamp :: od_handle:timestamp_seconds(),
-    service_id :: od_handle_service:id(),
     handle_id :: od_handle:id(),
+    service_id :: od_handle_service:id(),
     status :: handles:status()
 }).
 

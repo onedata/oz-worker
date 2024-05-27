@@ -620,9 +620,6 @@ has_eff_group(Handle, GroupId) ->
 %% Predicate saying whether handle belongs to specified handle service.
 %% @end
 %%--------------------------------------------------------------------
--spec has_handle_service(HandleOrId :: od_space:id() | #od_space{},
-    HServiceId :: od_handle_service:id()) -> boolean().
-has_handle_service(HandleId, HServiceId) when is_binary(HandleId) ->
-    entity_graph:has_relation(direct, top_down, od_handle_service, HServiceId, od_handle, HandleId);
-has_handle_service(Handle, HServiceId) ->
-    entity_graph:has_relation(direct, top_down, od_handle_service, HServiceId, Handle).
+-spec has_handle_service(od_handle:record(), od_handle_service:id()) -> boolean().
+has_handle_service(#od_handle{handle_service = HServiceId}, HServiceIdToCheck) ->
+    HServiceId =:= HServiceIdToCheck.

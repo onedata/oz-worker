@@ -16,6 +16,7 @@
 
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include("http/handlers/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/errors.hrl").
@@ -218,8 +219,8 @@ get(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, HService) ->
 get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, HService) ->
     {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_group, GroupId, HService)};
 
-get(#el_req{gri = #gri{aspect = handles}}, HService) ->
-    {ok, entity_graph:get_relations(direct, bottom_up, od_handle, HService)}.
+get(#el_req{gri = #gri{id = HServiceId, aspect = handles}}, _HService) ->
+    {ok, [H#handle_listing_entry.handle_id || H <- handles:gather_by_all_prefixes(#{service_id => HServiceId})]}.
 
 
 %%--------------------------------------------------------------------
@@ -270,6 +271,7 @@ update(Req = #el_req{gri = #gri{id = HServiceId, aspect = {group_privileges, Gro
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = HServiceId, aspect = instance}}) ->
+    % NOTE: existing handles that were registered in this handle service are not deleted
     entity_graph:delete_with_relations(od_handle_service, HServiceId);
 
 delete(#el_req{gri = #gri{id = HServiceId, aspect = {user, UserId}}}) ->
