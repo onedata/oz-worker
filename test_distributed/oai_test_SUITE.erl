@@ -1166,7 +1166,7 @@ check_list_identifiers_bad_argument_invalid_date_format_error(Code, Args, Method
 
 check_list_entries(Code, Verb, Args, Method, BuildExpectedObject, ExpectedHandleEntries, Config) ->
     ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
-    {_, ExpResumptionToken} = ozt:rpc(handles, list_portion, [ListingOpts]),
+    {_, ExpResumptionToken} = ozt:rpc(handle_registry, list_portion, [ListingOpts]),
 
     ExpectedBase = lists:map(fun(HandleEntry) -> BuildExpectedObject(HandleEntry) end, ExpectedHandleEntries),
     ExpResponseContent = ExpectedBase ++ expected_response_body_wrt_resumption_token(ExpResumptionToken, ListingOpts),
@@ -1192,7 +1192,7 @@ check_list_entries_continuously_with_resumption_token(_Config, _Method, _Verb, _
 check_list_entries_continuously_with_resumption_token(Config, Method, Verb, RemainingExpEntries, Args, BuildExpectedObject) ->
     ExpListedEntries = lists:sublist(RemainingExpEntries, ?TESTED_HANDLE_LIST_LIMIT),
     ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
-    {_, ExpResumptionToken} = ozt:rpc(handles, list_portion, [ListingOpts]),
+    {_, ExpResumptionToken} = ozt:rpc(handle_registry, list_portion, [ListingOpts]),
 
     case check_list_entries(200, Verb, Args, Method, BuildExpectedObject, ExpListedEntries, Config) of
         true ->
@@ -1601,7 +1601,7 @@ expected_oai_header_xml(Config, #handle_listing_entry{
 %%% However, if the whole list is returned in one response, there should be no resumption token element at all.
 %%% @end
 %%%-------------------------------------------------------------------
--spec expected_response_body_wrt_resumption_token(handles:resumption_token(), handles:listing_opts()) ->
+-spec expected_response_body_wrt_resumption_token(handle_registry:resumption_token(), handle_registry:listing_opts()) ->
     [#xmlElement{}].
 expected_response_body_wrt_resumption_token(undefined, ListingOpts) when not is_map_key(resumption_token, ListingOpts) ->
     [];

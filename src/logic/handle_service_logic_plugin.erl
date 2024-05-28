@@ -220,7 +220,7 @@ get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, HService) ->
     {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_group, GroupId, HService)};
 
 get(#el_req{gri = #gri{id = HServiceId, aspect = handles}}, _HService) ->
-    {ok, [H#handle_listing_entry.handle_id || H <- handles:gather_by_all_prefixes(#{service_id => HServiceId})]}.
+    {ok, [H#handle_listing_entry.handle_id || H <- handle_registry:gather_by_all_prefixes(#{service_id => HServiceId})]}.
 
 
 %%--------------------------------------------------------------------

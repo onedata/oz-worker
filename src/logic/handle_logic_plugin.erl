@@ -175,7 +175,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             od_share, ShareId
         ),
 
-        handles:report_created(MetadataPrefix, HandleServiceId, HandleId, CreationTime),
+        handle_registry:report_created(MetadataPrefix, HandleServiceId, HandleId, CreationTime),
         {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
         {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}
     end);
@@ -218,7 +218,7 @@ get(#el_req{gri = #gri{aspect = list}}, _) ->
     % (which should be reworked at some point), but the handle registry provides
     % a lighter way to list (nevertheless, at some point we should never list whole
     % collections, but do this in batches).
-    {ok, [H#handle_listing_entry.handle_id || H <- handles:gather_by_all_prefixes()]};
+    {ok, [H#handle_listing_entry.handle_id || H <- handle_registry:gather_by_all_prefixes()]};
 
 get(#el_req{gri = #gri{aspect = privileges}}, _) ->
     {ok, #{
@@ -314,7 +314,7 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
         % every handle modification must be reflected in the handle registry
         % TODO VFS-11906 maybe rename handles -> handle_registry
         % TODO VFS-11906 nested critical section - sort it out
-        handles:report_updated(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp)
+        handle_registry:report_updated(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp)
         % TODO VFS-11906 currently not supported
         % handle_proxy:modify_handle(HandleId, FinalRawMetadata)
     end),
@@ -366,7 +366,7 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
             end,
             DeletionTimestamp = od_handle:current_timestamp(),
             % TODO VFS-11906 nested critical section - sort it out
-            handles:report_deleted(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
+            handle_registry:report_deleted(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
             entity_graph:delete_with_relations(od_handle, HandleId)
         end
     end);

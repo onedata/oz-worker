@@ -87,7 +87,7 @@ get_response(<<"baseURL">>, _Args) ->
 get_response(<<"protocolVersion">>, _Args) ->
     ?PROTOCOL_VERSION;
 get_response(<<"earliestDatestamp">>, _Args) ->
-    Timestamp = case handles:get_earliest_timestamp() of
+    Timestamp = case handle_registry:get_earliest_timestamp() of
         undefined ->
             % return the current time as the lower bound for OAI-PMH queries,
             % but subtract a bit to avoid race conditions when a handle has just been created

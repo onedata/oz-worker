@@ -78,24 +78,17 @@ get_response(<<"metadataFormat">>, Args) ->
                 get_metadata_format_info(MetadataPrefix)
             end, oai_metadata:supported_formats());
         OAIId ->
-            try
-                Id = oai_utils:oai_identifier_decode(OAIId),
-                #od_handle{metadata = Metadata} = oai_utils:get_handle(Id),
-                case Metadata of
-                    undefined -> throw(noMetadataFormats);
-                    _ ->
-                        lists:map(fun(MetadataPrefix) ->
-                            get_metadata_format_info(MetadataPrefix)
-                        end, oai_metadata:supported_formats())
-                end
-            catch
-                throw:noMetadataFormats ->
-                    throw({noMetadataFormats, OAIId});
-                throw:{illegalId, OAIId} ->
-                    throw({illegalId, OAIId});
-                _:_ ->
-                    throw({idDoesNotExist, OAIId})
-            end
+            HandleId = oai_utils:oai_identifier_decode(OAIId),
+            MetadataPrefix = case od_handle:get(HandleId) of
+                {ok, #document{value = HandleRecord}} ->
+                    HandleRecord#od_handle.metadata_prefix;
+                {error, not_found} ->
+                    case deleted_handle_registry:lookup(HandleId) of
+                        {ok, MP, _} -> MP;
+                        error -> throw({idDoesNotExist, OAIId}) % fixme test this, check error with the docs
+                    end
+            end,
+            [get_metadata_format_info(MetadataPrefix)] % fixme test this
     end.
 
 %%%===================================================================
@@ -119,5 +112,5 @@ get_metadata_format_info(MetadataPrefix) ->
             metadataNamespace = Namespace
         }
     catch
-        _:_ -> throw(noMetadataFormats)
+        _:_ -> throw(noMetadataFormats)   % fixme does this make sense?
     end.

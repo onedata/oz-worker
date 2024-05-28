@@ -91,8 +91,8 @@ get_response(<<"record">>, Args) ->
                 }, Handle
             );
         {error, not_found} ->
-            case handles:lookup_deleted(HandleId) of
-                {ok, HandleListingEntry, HandleMetadataPrefix} ->
+            case handle_registry:lookup_deleted(HandleId) of
+                {ok, HandleMetadataPrefix, HandleListingEntry} ->
                     HandleMetadataPrefix =:= MetadataPrefix orelse throw({cannotDisseminateFormat, MetadataPrefix}),
                     oai_utils:build_oai_record(HandleListingEntry);
                 error ->

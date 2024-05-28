@@ -167,7 +167,7 @@ migrate_legacy_handle(HServiceId, HandleId, #od_handle{
     timestamp = Timestamp
 }) ->
     % all legacy handles were created with Dublin Core metadata
-    case ?catch_exceptions(handles:report_created(?OAI_DC_METADATA_PREFIX, HServiceId, HandleId, Timestamp)) of
+    case ?catch_exceptions(handle_registry:report_created(?OAI_DC_METADATA_PREFIX, HServiceId, HandleId, Timestamp)) of
         ok ->
             ok;
         ?ERROR_ALREADY_EXISTS ->

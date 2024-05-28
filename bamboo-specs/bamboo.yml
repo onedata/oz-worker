@@ -95,7 +95,7 @@ stages:
         - group_users_api
         - gui_static_distribution
         - gui_tokens
-        - handles
+        - handle_registry
         - handle_groups_api
         - handle_misc_api
         - handle_users_api
@@ -564,12 +564,12 @@ gui_tokens:
     - <<: *ct_logs
       name: ct_logs_gui_tokens.tar.gz
 
-handles:
+handle_registry:
   <<: *ct-job
   key: HAN
   artifacts:
     - <<: *ct_logs
-      name: ct_logs_handles.tar.gz
+      name: ct_logs_handle_registry.tar.gz
 
 handle_groups_api:
   <<: *ct-job
@@ -937,7 +937,7 @@ Coverage report:
     - artifact: ct_logs_group_users_api.tar.gz
     - artifact: ct_logs_gui_static_distribution.tar.gz
     - artifact: ct_logs_gui_tokens.tar.gz
-    - artifact: ct_logs_handles.tar.gz
+    - artifact: ct_logs_handle_registry.tar.gz
     - artifact: ct_logs_handle_groups_api.tar.gz
     - artifact: ct_logs_handle_misc_api.tar.gz
     - artifact: ct_logs_handle_users_api.tar.gz

@@ -10,7 +10,7 @@
 %%% suitable for browsing by time periods and specific handle services.
 %%% @end
 %%%-------------------------------------------------------------------
--module(handles).
+-module(handle_registry).
 -author("Katarzyna Such").
 
 -include("datastore/oz_datastore_models.hrl").
@@ -115,13 +115,13 @@ report_deleted(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp, Del
     ?critical_section_for_handle(HandleId, fun() ->
         delete_entry(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp),
         add_entry(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp, deleted),
-        deleted_handles:insert(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp)
+        deleted_handle_registry:insert(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp)
     end).
 
 
--spec lookup_deleted(od_handle:id()) -> error | {ok, handle_listing_entry(), od_handle:metadata_prefix()}.
+-spec lookup_deleted(od_handle:id()) -> error | {ok, od_handle:metadata_prefix(), handle_listing_entry()}.
 lookup_deleted(HandleId) ->
-    deleted_handles:lookup(HandleId).
+    deleted_handle_registry:lookup(HandleId).
 
 
 -spec purge_all_deleted_entries() -> ok.
@@ -134,11 +134,11 @@ purge_all_deleted_entries() ->
     }}) ->
         % TODO VFS-11906 nested critical section - sort it out
         ?critical_section_for_handle(HandleId, fun() ->
-            deleted_handles:remove(HandleId),
+            deleted_handle_registry:remove(HandleId),
             delete_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
         end)
     end,
-    deleted_handles:foreach(ForeachFun).
+    deleted_handle_registry:foreach(ForeachFun).
 
 
 -spec get_earliest_timestamp() -> undefined | od_handle:timestamp_seconds().

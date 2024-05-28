@@ -52,7 +52,7 @@ init_per_testcase(_, Config) ->
     % if the suite fails midway, there may be some remnants in the handle registry - clean it up
     % (delete_all_entities won't do it because some of the handles may still have the "legacy" metadata prefix set)
     lists:foreach(fun(#handle_listing_entry{timestamp = Timestamp, handle_id = HandleId, service_id = HServiceId}) ->
-        ozt:rpc(handles, report_deleted, [?OAI_DC_METADATA_PREFIX, HServiceId, HandleId, Timestamp])
+        ozt:rpc(handle_registry, report_deleted, [?OAI_DC_METADATA_PREFIX, HServiceId, HandleId, Timestamp])
     end, list_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})),
     Config.
 
@@ -89,7 +89,7 @@ upgrade_from_21_02_4_handles(_Config) ->
                     ?assertMatch(ok, ozt:rpc(od_handle, migrate_legacy_handle, [HServiceId, HandleId]));
                 2 ->
                     % the handle was partially migrated
-                    ?assertMatch(ok, ozt:rpc(handles, report_created, [
+                    ?assertMatch(ok, ozt:rpc(handle_registry, report_created, [
                         ?OAI_DC_METADATA_PREFIX, HServiceId, HandleId, Timestamp
                     ]));
                 _ ->
@@ -172,12 +172,12 @@ docs_to_ids(Docs) ->
 
 %% @private
 list_completely(Opts) ->
-    ozt:rpc(handles, list_completely, [Opts]).
+    ozt:rpc(handle_registry, list_completely, [Opts]).
 
 
 %% @private
 gather_by_all_prefixes() ->
-    ozt:rpc(handles, gather_by_all_prefixes, []).
+    ozt:rpc(handle_registry, gather_by_all_prefixes, []).
 
 
 %% @private

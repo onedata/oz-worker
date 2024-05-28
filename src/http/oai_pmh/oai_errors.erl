@@ -82,7 +82,7 @@ handle({idDoesNotExist, Id}) ->
         "is unknown in this repository.", [Id]));
 handle({noMetadataFormats, Id}) ->
     ?NO_METADATA_FORMATS(str_utils:format_bin(
-        "There are no metadata formats available for item ~s", [Id]));
+        "There are no metadata formats available for item ~s", [Id]));  % fixme this can no longer happen
 handle(badVerb) -> ?BAD_VERB;
 handle(badArgument) -> ?BAD_ARGUMENT;
 handle(badResumptionToken) -> ?BAD_RESUMPTION_TOKEN;

@@ -22,7 +22,7 @@
     identifier :: oai_id(),
     datestamp :: binary(),
     set_spec :: oai_set_spec(),
-    status :: handles:status()
+    status :: handle_registry:status()
 }).
 
 -record(oai_metadata_format, {
@@ -65,7 +65,7 @@
 
 -record(oai_listing_result, {
     batch :: [oai_record()] | [oai_header()],
-    resumption_token :: handles:resumption_token()
+    resumption_token :: handle_registry:resumption_token()
 }).
 
 % NOTE: the order of the field is important (timestamp -> handle_id) so that they can be naturally sorted
@@ -73,7 +73,7 @@
     timestamp :: od_handle:timestamp_seconds(),
     handle_id :: od_handle:id(),
     service_id :: od_handle_service:id(),
-    status :: handles:status()
+    status :: handle_registry:status()
 }).
 
 %% @formatter:off

@@ -57,7 +57,7 @@
     ?OAI_ERROR(noRecordsMatch, Description)).
 
 -define(NO_METADATA_FORMATS, ?NO_METADATA_FORMATS(
-    <<"There are no metadata formats available for the specified item.">>)).
+    <<"There are no metadata formats available for the specified item.">>)).  % fixme not a sensible desc
 -define(NO_METADATA_FORMATS(Description),
     ?OAI_ERROR(noMetadataFormats, Description)).
 

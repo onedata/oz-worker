@@ -9,7 +9,7 @@
 %%% Tests of the handles module.
 %%% @end
 %%%-------------------------------------------------------------------
--module(handles_test_SUITE).
+-module(handle_registry_test_SUITE).
 -author("Katarzyna Such").
 
 -include_lib("ctool/include/test/test_utils.hrl").
@@ -250,18 +250,20 @@ list_handles_from_services_test(_Config) ->
 
     ?assertEqual(
         load_all_expected_entries(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX}),
-        lists:umerge(
+        lists:umerge([
             list_completely(MkListOpts(?OAI_DC_METADATA_PREFIX, ?FIRST_HSERVICE)),
             list_completely(MkListOpts(?OAI_DC_METADATA_PREFIX, ?ANOTHER_HSERVICE)),
             list_completely(MkListOpts(?OAI_DC_METADATA_PREFIX, ?SMALL_HSERVICE))
-        )),
+        ])
+    ),
     ?assertEqual(
         load_all_expected_entries(#{metadata_prefix => ?EDM_METADATA_PREFIX}),
-        lists:umerge(
+        lists:umerge([
             list_completely(MkListOpts(?EDM_METADATA_PREFIX, ?FIRST_HSERVICE)),
             list_completely(MkListOpts(?EDM_METADATA_PREFIX, ?ANOTHER_HSERVICE)),
             list_completely(MkListOpts(?EDM_METADATA_PREFIX, ?SMALL_HSERVICE))
-        )),
+        ])
+    ),
     ?assertEqual(
         ?INITIAL_TOTAL_HANDLE_COUNT,
         lists:flatlength([
@@ -271,7 +273,8 @@ list_handles_from_services_test(_Config) ->
             list_completely(MkListOpts(?EDM_METADATA_PREFIX, ?FIRST_HSERVICE)),
             list_completely(MkListOpts(?EDM_METADATA_PREFIX, ?ANOTHER_HSERVICE)),
             list_completely(MkListOpts(?EDM_METADATA_PREFIX, ?SMALL_HSERVICE))
-        ])).
+        ])
+    ).
 
 
 add_handle_to_service_test(_Config) ->
@@ -321,7 +324,7 @@ get_handle_with_earliest_timestamp_test(_Config) ->
         create_entry(?RAND_SERVICE(), ?RAND_METADATA_PREFIX(), Timestamp - Number)
     end, lists:seq(1, 4)),
     ExpectedEarliestTimestamp = Timestamp - 4,
-    EarliestTimestamp = ozt:rpc(handles, get_earliest_timestamp, []),
+    EarliestTimestamp = ozt:rpc(handle_registry, get_earliest_timestamp, []),
     ?assertEqual(ExpectedEarliestTimestamp, EarliestTimestamp).
 
 
@@ -366,7 +369,7 @@ update_handle_timestamp_test(_Config) ->
         service_id = ?FIRST_HSERVICE,
         status = present
     }, hd(AllAfterUpdate)),
-    ?assertEqual(NewTimestamp, ozt:rpc(handles, get_earliest_timestamp, [])),
+    ?assertEqual(NewTimestamp, ozt:rpc(handle_registry, get_earliest_timestamp, [])),
     ?assertEqual(load_all_expected_entries(ListOpts), AllAfterUpdate).
 
 
@@ -422,10 +425,10 @@ delete_every_second_handle_test(_Config) ->
     IncludeDeleted = list_completely(maps:put(include_deleted, true, ListingOptsLimit)),
     ?assertEqual(NumberToCreate, length(IncludeDeleted)),
 
-    ?assertEqual(error, ozt:rpc(handles, lookup_deleted, [<<"IdThatNotExists">>])),
+    ?assertEqual(error, ozt:rpc(handle_registry, lookup_deleted, [<<"IdThatNotExists">>])),
 
     #handle_listing_entry{handle_id = HandleId} = hd(ElementsToDelete),
-    ?assertEqual({ok, lookup_expected_entry(HandleId), MetadataPrefix}, ozt:rpc(handles, lookup_deleted, [HandleId])).
+    ?assertEqual({ok, MetadataPrefix, lookup_expected_entry(HandleId)}, ozt:rpc(handle_registry, lookup_deleted, [HandleId])).
 
 
 %%%===================================================================
@@ -442,7 +445,7 @@ create_entry(HServiceId, MetadataPrefix, Timestamp) ->
     create_entry(HServiceId, MetadataPrefix, Timestamp, ?RAND_ID()).
 
 create_entry(HServiceId, MetadataPrefix, Timestamp, HandleId) ->
-    ozt:rpc(handles, report_created, [MetadataPrefix, HServiceId, HandleId, Timestamp]),
+    ozt:rpc(handle_registry, report_created, [MetadataPrefix, HServiceId, HandleId, Timestamp]),
     HandleEntry = #handle_listing_entry{
         timestamp = Timestamp,
         handle_id = HandleId,
@@ -459,7 +462,7 @@ update_entry(MetadataPrefix, HandleId, NewTimestamp) ->
         timestamp = OldTimestamp,
         service_id = HServiceId
     } = HandleEntry = lookup_expected_entry(HandleId),
-    ozt:rpc(handles, report_updated, [MetadataPrefix, HServiceId, HandleId, OldTimestamp, NewTimestamp]),
+    ozt:rpc(handle_registry, report_updated, [MetadataPrefix, HServiceId, HandleId, OldTimestamp, NewTimestamp]),
     update_expected_entries(MetadataPrefix, HServiceId, fun(OldExpected) ->
         lists:umerge(
             [HandleEntry#handle_listing_entry{timestamp = NewTimestamp}],
@@ -471,7 +474,7 @@ delete_entry(MetadataPrefix, #handle_listing_entry{
     timestamp = Timestamp, handle_id = HandleId, service_id = HServiceId
 } = HandleEntry) ->
     DeletionTimestamp = ?RAND_TIMESTAMP(),
-    ozt:rpc(handles, report_deleted, [MetadataPrefix, HServiceId, HandleId, Timestamp, DeletionTimestamp]),
+    ozt:rpc(handle_registry, report_deleted, [MetadataPrefix, HServiceId, HandleId, Timestamp, DeletionTimestamp]),
     update_expected_entries(MetadataPrefix, HServiceId, fun(OldExpected) ->
         lists:umerge(
             [HandleEntry#handle_listing_entry{timestamp = DeletionTimestamp, status = deleted}],
@@ -532,13 +535,13 @@ clear_expected_entries(MetadataPrefix, HServiceId) ->
         <<MetadataPrefix/binary, (str_utils:to_binary(HServiceId))/binary>>]).
 
 gather_by_all_prefixes() ->
-    ozt:rpc(handles, gather_by_all_prefixes, []).
+    ozt:rpc(handle_registry, gather_by_all_prefixes, []).
 
 list_completely(ListingOpts) ->
-    ozt:rpc(handles, list_completely, [ListingOpts]).
+    ozt:rpc(handle_registry, list_completely, [ListingOpts]).
 
 list_portion(ListingOpts) ->
-    ozt:rpc(handles, list_portion, [ListingOpts]).
+    ozt:rpc(handle_registry, list_portion, [ListingOpts]).
 
 
 %%%===================================================================
@@ -555,7 +558,7 @@ init_per_suite(Config) ->
             end, load_all_expected_entries(#{metadata_prefix => MetadataPrefix})),
             clear_expected_entries(MetadataPrefix)
         end, [?OAI_DC_METADATA_PREFIX, ?EDM_METADATA_PREFIX]),
-        ok = ozt:rpc(handles, purge_all_deleted_entries, []),
+        ok = ozt:rpc(handle_registry, purge_all_deleted_entries, []),
         lists:foreach(fun(MetadataPrefix) ->
             lists:foreach(fun(HServiceId) ->
                 clear_expected_entries(MetadataPrefix, HServiceId)
