@@ -99,8 +99,8 @@
     cannot_disseminate_format_post_test/1,
     exclusive_resumption_token_required_get_test/1,
     exclusive_resumption_token_required_post_test/1,
-    list_metadata_formats_no_format_error_get_test/1,
-    list_metadata_formats_no_format_error_post_test/1,
+    list_metadata_formats_error_get_test/1,
+    list_metadata_formats_error_post_test/1,
     list_identifiers_empty_repository_error_get_test/1,
     list_identifiers_empty_repository_error_post_test/1,
     list_identifiers_no_records_match_error1_get_test/1,
@@ -205,8 +205,8 @@ all() -> ?ALL([
     cannot_disseminate_format_post_test,
     exclusive_resumption_token_required_get_test,
     exclusive_resumption_token_required_post_test,
-    list_metadata_formats_no_format_error_get_test,
-    list_metadata_formats_no_format_error_post_test,
+    list_metadata_formats_error_get_test,
+    list_metadata_formats_error_post_test,
     list_identifiers_empty_repository_error_get_test,
     list_identifiers_empty_repository_error_post_test,
     list_identifiers_no_records_match_error1_get_test,
@@ -479,11 +479,11 @@ exclusive_resumption_token_required_get_test(Config) ->
 exclusive_resumption_token_required_post_test(Config) ->
     exclusive_resumption_token_required_error(Config, post).
 
-list_metadata_formats_no_format_error_get_test(Config) ->
-    list_metadata_formats_no_format_error_test_base(Config, get).
+list_metadata_formats_error_get_test(Config) ->
+    list_metadata_formats_error_test_base(Config, get).
 
-list_metadata_formats_no_format_error_post_test(Config) ->
-    list_metadata_formats_no_format_error_test_base(Config, post).
+list_metadata_formats_error_post_test(Config) ->
+    list_metadata_formats_error_test_base(Config, post).
 
 list_identifiers_empty_repository_error_get_test(Config) ->
     list_identifiers_empty_repository_error_test_base(Config, get).
@@ -757,27 +757,43 @@ get_deleted_record_test_base(Config, Method) ->
 
 
 list_metadata_formats_test_base(Config, Method) ->
-    ExpResponseContent = lists:map(fun(MetadataPrefix) ->
-        {_, Namespace} = ozt:rpc(oai_metadata, main_namespace, [MetadataPrefix]),
-        #xmlElement{
-            name = metadataFormat,
-            content = [
-                #xmlElement{
-                    name = metadataPrefix,
-                    content = [#xmlText{value = binary_to_list(MetadataPrefix)}]
-                },
-                #xmlElement{
-                    name = schema,
-                    content = [#xmlText{value = binary_to_list(ozt:rpc(oai_metadata, schema_URL, [MetadataPrefix]))}]
-                },
-                #xmlElement{
-                    name = metadataNamespace,
-                    content = [#xmlText{value = binary_to_list(Namespace)}]
-                }
-            ]
-        }
-    end, ozt_handles:supported_metadata_prefixes()),
-    ?assert(check_list_metadata_formats(200, [], Method, ExpResponseContent, Config)).
+    BuildExpResponseContent = fun(SupportedPrefixes) ->
+        lists:map(fun(MetadataPrefix) ->
+            {_, Namespace} = ozt:rpc(oai_metadata, main_namespace, [MetadataPrefix]),
+            #xmlElement{
+                name = metadataFormat,
+                content = [
+                    #xmlElement{
+                        name = metadataPrefix,
+                        content = [#xmlText{value = binary_to_list(MetadataPrefix)}]
+                    },
+                    #xmlElement{
+                        name = schema,
+                        content = [#xmlText{value = binary_to_list(ozt:rpc(oai_metadata, schema_URL, [MetadataPrefix]))}]
+                    },
+                    #xmlElement{
+                        name = metadataNamespace,
+                        content = [#xmlText{value = binary_to_list(Namespace)}]
+                    }
+                ]
+            }
+        end, SupportedPrefixes)
+    end,
+    % when no identifier is provided, returns all formats supported by the repository
+    ?assert(check_list_metadata_formats(
+        200, [], Method, BuildExpResponseContent(ozt_handles:supported_metadata_prefixes()), Config
+    )),
+    % when a specific identifier is provided, returns the formats available for the record
+    User = ozt_users:create(),
+    Space1 = ozt_users:create_space_for(User, ?SPACE_NAME1),
+    ShareId = ozt_users:create_share_for(User, Space1),
+    HServiceId = ozt_users:create_handle_service_for(User),
+    HandleId = ozt_users:create_handle_for(User, HServiceId, ShareId),
+    #od_handle{metadata_prefix = MetadataPrefix} = ozt_handles:get(HandleId),
+    Args = [{<<"identifier">>, oai_identifier(Config, HandleId)}],
+    ?assert(check_list_metadata_formats(
+        200, Args, Method, BuildExpResponseContent([MetadataPrefix]), Config
+    )).
 
 
 list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
@@ -1000,29 +1016,21 @@ exclusive_resumption_token_required_error(Config, Method) ->
     ],
     ?assert(check_exclusive_resumption_token_required_error(200, Args, Method, [], Config)).
 
-list_metadata_formats_no_format_error_test_base(Config, Method) ->
-    {ok, User} = oz_test_utils:create_user(Config),
-    {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    ShareId = datastore_key:new(),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?USER(User), ShareId, ShareId, Space1
-    ),
-    {HSId, _} = create_handle_service(Config, User),
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
-    Identifier = create_handle(Config, User, HSId, ShareId, MetadataPrefix, Metadata),
-    % Modify handle metadata to undefined (this should not occur in normal
-    % conditions because entity logic won't accept undefined metadata,
-    % but check if returned OAI error in such case is correct).
-    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_handle, update, [
-        Identifier, fun(Handle = #od_handle{}) ->
-            {ok, Handle#od_handle{metadata = undefined}}
-        end]
+list_metadata_formats_error_test_base(Config, Method) ->
+    ?assert(check_list_metadata_formats_error(
+        200,
+        [{<<"identifier">>, <<"bad-identifier">>}],
+        Method,
+        {illegalId, <<"bad-identifier">>},
+        Config
     )),
-
-    Args = [{<<"identifier">>, oai_identifier(Config, Identifier)}],
-
-    ?assert(check_list_metadata_formats_error(200, Args, Method, [], Config)).
+    ?assert(check_list_metadata_formats_error(
+        200,
+        [{<<"identifier">>, oai_identifier(Config, <<"bad-handle-id">>)}],
+        Method,
+        {idDoesNotExist, oai_identifier(Config, <<"bad-handle-id">>)},
+        Config
+    )).
 
 list_identifiers_empty_repository_error_test_base(Config, Method) ->
     Args = [{<<"metadataPrefix">>, ?RAND_METADATA_PREFIX()}],
@@ -1150,9 +1158,8 @@ check_list_metadata_formats(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListMetadataFormats">>, Args, Method,
         ExpResponseContent, 'ListMetadataFormats', Config).
 
-check_list_metadata_formats_error(Code, Args, Method, ExpResponseContent, Config) ->
-    check_oai_request(Code, <<"ListMetadataFormats">>, Args, Method, ExpResponseContent,
-        {error, {noMetadataFormats, proplists:get_value(<<"identifier">>, Args)}}, Config).
+check_list_metadata_formats_error(Code, Args, Method, ExpErrorSpec, Config) ->
+    check_oai_request(Code, <<"ListMetadataFormats">>, Args, Method, [], {error, ExpErrorSpec}, Config).
 
 check_list_identifiers_bad_argument_granularity_mismatch_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListIdentifiers">>, Args, Method, ExpResponseContent, {error, {granularity_mismatch,
@@ -1315,7 +1322,7 @@ expected_body(ExpectedResponse, ResponseType, Args, ResponseDate) ->
     }.
 
 expected_response_error(ErrorSpec) ->
-    #oai_error{code = Code, description = Description} = oai_errors:handle(ErrorSpec),
+    #oai_error{code = Code, description = Description} = ozt:rpc(oai_errors, handle, [ErrorSpec]),
     #xmlElement{
         name = error,
         attributes = [#xmlAttribute{name = code, value = str_utils:to_list(Code)}],

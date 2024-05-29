@@ -82,7 +82,7 @@
 
 -type oai_error_code() :: badArgument | badResumptionToken | badVerb |
                           cannotDisseminateFormat |idDoesNotExist |
-                          noRecordsMatch | noMetadataFormats | noSetHierarchy.
+                          noRecordsMatch | noSetHierarchy.
 
 -type oai_id() :: binary().
 -type oai_header() :: #oai_header{}.

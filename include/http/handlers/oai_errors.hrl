@@ -56,11 +56,6 @@
 -define(NO_RECORDS_MATCH(Description),
     ?OAI_ERROR(noRecordsMatch, Description)).
 
--define(NO_METADATA_FORMATS, ?NO_METADATA_FORMATS(
-    <<"There are no metadata formats available for the specified item.">>)).  % fixme not a sensible desc
--define(NO_METADATA_FORMATS(Description),
-    ?OAI_ERROR(noMetadataFormats, Description)).
-
 -define(NO_SET_HIERARCHY, ?NO_SET_HIERARCHY(
     <<"The repository does not support sets.">>)).
 -define(NO_SET_HIERARCHY(Description),

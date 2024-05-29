@@ -85,10 +85,10 @@ get_response(<<"metadataFormat">>, Args) ->
                 {error, not_found} ->
                     case deleted_handle_registry:lookup(HandleId) of
                         {ok, MP, _} -> MP;
-                        error -> throw({idDoesNotExist, OAIId}) % fixme test this, check error with the docs
+                        error -> throw({idDoesNotExist, OAIId})
                     end
             end,
-            [get_metadata_format_info(MetadataPrefix)] % fixme test this
+            [get_metadata_format_info(MetadataPrefix)]
     end.
 
 %%%===================================================================
@@ -103,14 +103,10 @@ get_response(<<"metadataFormat">>, Args) ->
 %%%-------------------------------------------------------------------
 -spec get_metadata_format_info(binary()) -> oai_metadata_format().
 get_metadata_format_info(MetadataPrefix) ->
-    try
-        SchemaURL = oai_metadata:schema_URL(MetadataPrefix),
-        {_, Namespace} = oai_metadata:main_namespace(MetadataPrefix),
-        #oai_metadata_format{
-            metadataPrefix = MetadataPrefix,
-            schema = SchemaURL,
-            metadataNamespace = Namespace
-        }
-    catch
-        _:_ -> throw(noMetadataFormats)   % fixme does this make sense?
-    end.
+    SchemaURL = oai_metadata:schema_URL(MetadataPrefix),
+    {_, Namespace} = oai_metadata:main_namespace(MetadataPrefix),
+    #oai_metadata_format{
+        metadataPrefix = MetadataPrefix,
+        schema = SchemaURL,
+        metadataNamespace = Namespace
+    }.
