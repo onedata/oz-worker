@@ -68,7 +68,7 @@
     resumption_token :: handle_registry:resumption_token()
 }).
 
-% NOTE: the order of the field is important (timestamp -> handle_id) so that they can be naturally sorted
+% NOTE: the order of the fields is important (timestamp -> handle_id) so that they can be naturally sorted
 -record(handle_listing_entry, {
     timestamp :: od_handle:timestamp_seconds(),
     handle_id :: od_handle:id(),
