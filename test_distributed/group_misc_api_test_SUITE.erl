@@ -224,91 +224,149 @@ list_privileges_test(Config) ->
 
 
 get_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
-    {ok, U2} = oz_test_utils:create_user(Config),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config),
-
-    GroupData = #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1},
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), GroupData),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1, [], [
-        ?GROUP_VIEW
-    ]),
-    oz_test_utils:group_add_user(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, [
-        ?GROUP_VIEW
-    ], []),
-
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    MemberWithView = ozt_users:create(),
+    MemberWithoutView = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
 
     AllPrivs = privileges:group_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
+
+    GroupData = #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1},
+    GroupId = ozt_users:create_group_for(MemberWithView, GroupData),
+    ozt_groups:set_user_privileges(GroupId, MemberWithView, [?GROUP_VIEW]),
+    ozt_groups:add_user(GroupId, MemberWithoutView, AllPrivs -- [?GROUP_VIEW]),
+
+    ChildGroupId = ozt_groups:create(),
+    ozt_groups:add_child(GroupId, ChildGroupId, []),
+    ozt_groups:add_user(ChildGroupId, MemberWithView, [?GROUP_VIEW]),
+    ozt_groups:add_user(ChildGroupId, MemberWithoutView, []),
+
+    ParentGroupId = ozt_groups:create(),
+    ozt_groups:add_child(ParentGroupId, GroupId, []),
+    ozt_groups:add_user(ParentGroupId, MemberWithView, [?GROUP_VIEW]),
+    ozt_groups:add_user(ParentGroupId, MemberWithoutView, []),
+
+    SpaceId = ozt_users:create_space_for(MemberWithView),
+    ozt_spaces:add_group(SpaceId, GroupId),
+    ProviderId = ozt_providers:create_for_admin_user(MemberWithView),
+    ozt_clusters:add_user(ProviderId, MemberWithoutView, []),
+    ozt_clusters:add_group(ProviderId, GroupId, []),
+    ozt_providers:support_space(ProviderId, SpaceId),
+
+    HandleServiceId = ozt_handle_services:create(),
+    ozt_handle_services:add_group(HandleServiceId, GroupId, []),
+    ozt_handle_services:add_user(HandleServiceId, MemberWithView, [?HANDLE_SERVICE_VIEW]),
+    ozt_handle_services:add_user(HandleServiceId, MemberWithoutView, []),
+
+    HandleId = ozt_handle_services:create_handle(HandleServiceId, ozt_spaces:create_share(SpaceId, datastore_key:new())),
+    oz_test_utils:handle_add_group(Config, HandleId, GroupId),
+    oz_test_utils:handle_add_user(Config, HandleId, MemberWithView),
+    oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithView, [?HANDLE_VIEW], []),
+    oz_test_utils:handle_add_user(Config, HandleId, MemberWithoutView),
+    oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithoutView, [], [?HANDLE_VIEW]),
+
+    HarvesterId = ozt_harvesters:create(),
+    ozt_harvesters:add_group(HarvesterId, GroupId, []),
+    ozt_harvesters:add_user(HarvesterId, MemberWithView, [?HARVESTER_VIEW]),
+    ozt_harvesters:add_user(HarvesterId, MemberWithoutView, []),
+
+    AtmInventoryId = ozt_atm_inventories:create(),
+    ozt_atm_inventories:add_group(AtmInventoryId, GroupId, []),
+    ozt_atm_inventories:add_user(AtmInventoryId, MemberWithView, [?ATM_INVENTORY_VIEW]),
+    ozt_atm_inventories:add_user(AtmInventoryId, MemberWithoutView, []),
+
+    ozt:reconcile_entity_graph(),
 
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, MemberWithView}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {admin, [?OZ_GROUPS_VIEW]},
                 {user, NonAdmin},
-                {user, U1}
+                {user, MemberWithoutView},
+                {provider, ProviderId}
             ]
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = get,
-            args = [auth, G1],
+            args = [auth, GroupId],
             expected_result = ?OK_TERM(
                 fun(#od_group{
                     name = Name, type = Type,
                     oz_privileges = [], eff_oz_privileges = [],
 
-                    parents = [], eff_parents = #{},
-                    children = #{}, eff_children = #{},
-
-                    users = Users, spaces = [],
-                    handle_services = [], handles = [],
-
-                    eff_users = EffUsers,
-                    eff_spaces = #{}, eff_providers = #{},
-                    eff_handle_services = #{}, eff_handles = #{}
+                    users = Users, eff_users = EffUsers,
+                    parents = Parents, eff_parents = EffParents,
+                    children = Children, eff_children = EffChildren,
+                    spaces = Spaces, eff_spaces = EffSpaces,
+                    handle_services = HandleServices, eff_handle_services = EffHandleServices,
+                    handles = Handles, eff_handles = EffHandles,
+                    harvesters = Harvesters, eff_harvesters = EffHarvesters,
+                    clusters = Clusters, eff_clusters = EffClusters,
+                    atm_inventories = AtmInventories, eff_atm_inventories = EffAtmInventories,
+                    eff_providers = EffProviders
                 }) ->
                     ?assertEqual(?GROUP_NAME1, Name),
                     ?assertEqual(?GROUP_TYPE1, Type),
                     ?assertEqual(Users, #{
-                        U1 => AllPrivs -- [?GROUP_VIEW], U2 => [?GROUP_VIEW]}
+                        MemberWithoutView => AllPrivs -- [?GROUP_VIEW],
+                        MemberWithView => [?GROUP_VIEW]}
                     ),
                     ?assertEqual(EffUsers, #{
-                        U1 => {AllPrivs -- [?GROUP_VIEW], [{od_group, <<"self">>}]},
-                        U2 => {[?GROUP_VIEW], [{od_group, <<"self">>}]}
-                    })
+                        MemberWithoutView => {AllPrivs -- [?GROUP_VIEW], [{od_group, ChildGroupId}, {od_group, <<"self">>}]},
+                        MemberWithView => {[?GROUP_VIEW], [{od_group, ChildGroupId}, {od_group, <<"self">>}]}
+                    }),
+                    ?assertEqual(Parents, [ParentGroupId]),
+                    ?assertEqual(EffParents, #{ParentGroupId => [{od_group, <<"self">>}]}),
+                    ?assertEqual(Children, #{ChildGroupId => []}),
+                    ?assertEqual(EffChildren, #{ChildGroupId => {[], [{od_group, <<"self">>}]}}),
+                    ?assertEqual(Spaces, [SpaceId]),
+                    ?assertEqual(EffSpaces, #{SpaceId => [{od_group, <<"self">>}]}),
+                    ?assertEqual(HandleServices, [HandleServiceId]),
+                    ?assertEqual(EffHandleServices, #{HandleServiceId => [{od_group, <<"self">>}]}),
+                    ?assertEqual(Handles, [HandleId]),
+                    ?assertEqual(EffHandles, #{HandleId => [{od_group, <<"self">>}]}),
+                    ?assertEqual(Harvesters, [HarvesterId]),
+                    ?assertEqual(EffHarvesters, #{HarvesterId => [{od_group, <<"self">>}]}),
+                    ?assertEqual(Clusters, [ProviderId]),
+                    ?assertEqual(EffClusters, #{ProviderId => [{od_group, <<"self">>}]}),
+                    ?assertEqual(AtmInventories, [AtmInventoryId]),
+                    ?assertEqual(EffAtmInventories, #{AtmInventoryId => [{od_group, <<"self">>}]}),
+                    ?assertEqual(EffProviders, #{ProviderId => [{od_space, SpaceId}]})
                 end
             )
         },
         gs_spec = #gs_spec{
             operation = get,
-            gri = #gri{type = od_group, id = G1, aspect = instance},
+            gri = #gri{type = od_group, id = GroupId, aspect = instance},
             expected_result_op = ?OK_MAP_CONTAINS(#{
-                <<"children">> => #{},
-                <<"effectiveChildren">> => #{},
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1_BIN,
-                <<"parents">> => [],
-                <<"spaces">> => [],
-                <<"effectiveUsers">> => #{
-                    U1 => AllPrivsBin -- [<<"group_view">>],
-                    U2 => [<<"group_view">>]
+                <<"parents">> => [ParentGroupId],
+                <<"children">> => #{
+                    ChildGroupId => []
+                },
+                <<"effectiveChildren">> => #{
+                    ChildGroupId => []
                 },
                 <<"users">> => #{
-                    U1 => AllPrivsBin -- [<<"group_view">>],
-                    U2 => [<<"group_view">>]
+                    MemberWithoutView => AllPrivsBin -- [<<"group_view">>],
+                    MemberWithView => [<<"group_view">>]
                 },
+                <<"effectiveUsers">> => #{
+                    MemberWithoutView => AllPrivsBin -- [<<"group_view">>],
+                    MemberWithView => [<<"group_view">>]
+                },
+                <<"spaces">> => [SpaceId],
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
-                    ?assertEqual(G1, Id)
+                    ?assertEqual(GroupId, Id)
                 end
             })
         }
@@ -321,8 +379,9 @@ get_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_GROUPS_VIEW]},
-                {user, U1},
-                {user, U2}
+                {provider, ProviderId},
+                {user, MemberWithoutView},
+                {user, MemberWithView}
             ],
             unauthorized = [nobody],
             forbidden = [{user, NonAdmin}]
@@ -330,15 +389,15 @@ get_test(Config) ->
         logic_spec = LogicSpec = #logic_spec{
             module = group_logic,
             function = get_shared_data,
-            args = [auth, G1],
-            expected_result = api_test_expect:shared_group(logic, G1, GroupData)
+            args = [auth, GroupId],
+            expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
         },
         gs_spec = GsSpec = #gs_spec{
             operation = get,
             gri = #gri{
-                type = od_group, id = G1, aspect = instance, scope = shared
+                type = od_group, id = GroupId, aspect = instance, scope = shared
             },
-            expected_result_op = api_test_expect:shared_group(gs, G1, GroupData)
+            expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)),
@@ -347,22 +406,95 @@ get_test(Config) ->
     GetProtectedDataApiTestSpec = GetSharedDataApiTestSpec#api_test_spec{
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/groups/">>, G1],
+            path = [<<"/groups/">>, GroupId],
             expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:protected_group(rest, G1, GroupData, ?SUB(user, U1))
+            expected_body = api_test_expect:protected_group(rest, GroupId, GroupData, ?SUB(user, MemberWithView))
         },
         logic_spec = LogicSpec#logic_spec{
             function = get_protected_data,
-            expected_result = api_test_expect:protected_group(logic, G1, GroupData, ?SUB(user, U1))
+            expected_result = api_test_expect:protected_group(logic, GroupId, GroupData, ?SUB(user, MemberWithView))
         },
         gs_spec = GsSpec#gs_spec{
             gri = #gri{
-                type = od_group, id = G1, aspect = instance, scope = protected
+                type = od_group, id = GroupId, aspect = instance, scope = protected
             },
-            expected_result_op = api_test_expect:protected_group(gs, G1, GroupData, ?SUB(user, U1))
+            expected_result_op = api_test_expect:protected_group(gs, GroupId, GroupData, ?SUB(user, MemberWithView))
         }
     },
-    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
+
+    GetWithAuthHint = fun(Scope, Auth, AuthHint) ->
+        ozt:rpc(entity_logic, handle, [#el_req{
+            operation = get,
+            auth = Auth,
+            auth_hint = AuthHint,
+            gri = #gri{type = od_group, id = GroupId, aspect = instance, scope = Scope}
+        }])
+    end,
+
+    AllClients = [
+        ?USER(MemberWithView),
+        ?USER(MemberWithoutView),
+        ?USER(NonAdmin),
+        ?PROVIDER(ProviderId),
+        ?PROVIDER(ozt_providers:create())
+    ],
+
+    lists:foreach(fun({Scope, AuthHint, AuthorizedClients}) ->
+        lists:foreach(fun(Auth) ->
+            case AuthorizedClients of
+                {none, ExpError} ->
+                    ?assertMatch(ExpError, GetWithAuthHint(Scope, Auth, AuthHint));
+                [_ | _] ->
+                    case lists:member(Auth, AuthorizedClients) of
+                        true ->
+                            ?assertMatch({ok, _}, GetWithAuthHint(Scope, Auth, AuthHint));
+                        false ->
+                            ?assertMatch(?ERROR_FORBIDDEN, GetWithAuthHint(Scope, Auth, AuthHint))
+                    end
+            end
+        end, AllClients)
+    end, [
+        {private, undefined, [?USER(MemberWithView)]},
+        {private, ?THROUGH_USER(MemberWithView), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_USER(MemberWithoutView), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_GROUP(ChildGroupId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_GROUP(ParentGroupId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_SPACE(SpaceId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_PROVIDER(ProviderId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_CLUSTER(ProviderId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_HANDLE_SERVICE(HandleServiceId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_HANDLE(HandleId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_HARVESTER(HarvesterId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_ATM_INVENTORY(AtmInventoryId), {none, ?ERROR_FORBIDDEN}},
+
+        {protected, undefined, [?USER(MemberWithView), ?USER(MemberWithoutView), ?PROVIDER(ProviderId)]},
+        {protected, ?THROUGH_USER(MemberWithView), [?USER(MemberWithView)]},
+        {protected, ?THROUGH_USER(MemberWithoutView), [?USER(MemberWithoutView)]},
+        {protected, ?THROUGH_GROUP(ChildGroupId), [?USER(MemberWithView), ?USER(MemberWithoutView)]},
+        {protected, ?THROUGH_GROUP(ParentGroupId), {none, ?ERROR_NOT_FOUND}},
+        {protected, ?THROUGH_SPACE(SpaceId), {none, ?ERROR_NOT_FOUND}},
+        {protected, ?THROUGH_PROVIDER(ProviderId), [?PROVIDER(ProviderId), ?USER(MemberWithView)]},
+        {protected, ?THROUGH_CLUSTER(ProviderId), {none, ?ERROR_NOT_FOUND}},
+        {protected, ?THROUGH_HANDLE_SERVICE(HandleServiceId), {none, ?ERROR_NOT_FOUND}},
+        {protected, ?THROUGH_HANDLE(HandleId), {none, ?ERROR_NOT_FOUND}},
+        {protected, ?THROUGH_HARVESTER(HarvesterId), {none, ?ERROR_NOT_FOUND}},
+        {protected, ?THROUGH_ATM_INVENTORY(AtmInventoryId), {none, ?ERROR_NOT_FOUND}},
+
+        {shared, undefined, [?USER(MemberWithView), ?USER(MemberWithoutView), ?PROVIDER(ProviderId)]},
+        {shared, ?THROUGH_USER(MemberWithView), [?USER(MemberWithView)]},
+        {shared, ?THROUGH_USER(MemberWithoutView), [?USER(MemberWithoutView)]},
+        {shared, ?THROUGH_USER(NonAdmin), {none, ?ERROR_NOT_FOUND}},
+        {shared, ?THROUGH_GROUP(ParentGroupId), [?USER(MemberWithView), ?USER(MemberWithoutView)]},
+        {shared, ?THROUGH_GROUP(ChildGroupId), {none, ?ERROR_NOT_FOUND}},
+        {shared, ?THROUGH_SPACE(SpaceId), [?PROVIDER(ProviderId), ?USER(MemberWithView), ?USER(MemberWithoutView)]},
+        {shared, ?THROUGH_PROVIDER(ProviderId), [?PROVIDER(ProviderId), ?USER(MemberWithView), ?USER(MemberWithoutView)]},
+        {shared, ?THROUGH_CLUSTER(ProviderId), [?PROVIDER(ProviderId), ?USER(MemberWithView), ?USER(MemberWithoutView)]},
+        {shared, ?THROUGH_HANDLE_SERVICE(HandleServiceId), [?USER(MemberWithView), ?USER(MemberWithoutView)]},
+        {shared, ?THROUGH_HANDLE(HandleId), [?USER(MemberWithView), ?USER(MemberWithoutView)]},
+        {shared, ?THROUGH_HARVESTER(HarvesterId), [?USER(MemberWithView), ?USER(MemberWithoutView)]},
+        {shared, ?THROUGH_ATM_INVENTORY(AtmInventoryId), [?USER(MemberWithView), ?USER(MemberWithoutView)]}
+    ]).
 
 
 update_test(Config) ->
@@ -914,7 +1046,11 @@ end_per_suite(_Config) ->
 
 init_per_testcase(_, Config) ->
     ozt_mocks:freeze_time(),
+    ozt_mocks:mock_handle_proxy(),
+    ozt_mocks:mock_harvesting_backends(),
     Config.
 
 end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_harvesting_backends(),
+    ozt_mocks:unmock_handle_proxy(),
     ozt_mocks:unfreeze_time().

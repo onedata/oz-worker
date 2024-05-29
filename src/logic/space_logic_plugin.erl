@@ -99,6 +99,7 @@ operation_supported(create, {owner, _}, private) -> true;
 operation_supported(create, {user, _}, private) -> true;
 operation_supported(create, {group, _}, private) -> true;
 operation_supported(create, group, private) -> true;
+operation_supported(create, infer_accessible_eff_groups, private) -> true;
 operation_supported(create, harvest_metadata, private) -> true;
 
 operation_supported(create, list_marketplace, protected) -> space_marketplace:assert_enabled();
@@ -407,6 +408,20 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}, data = Data}
     {true, {Group, Rev}} = group_logic_plugin:fetch_entity(#gri{id = GroupId}),
     {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
     {ok, resource, {NewGRI, ?THROUGH_GROUP(SpaceId), {GroupData, Rev}}};
+
+create(Req = #el_req{auth = ?USER(UserId) = Auth, gri = #gri{aspect = infer_accessible_eff_groups}}) ->
+    fun(Space) ->
+        SpaceEffGroups = entity_graph:get_relations(effective, bottom_up, od_group, Space),
+        AccessibleEffGroups = case auth_by_privilege(Req, Space, ?SPACE_VIEW) of
+            true ->
+                SpaceEffGroups;
+            false ->
+                % users without the privilege to view space members can only see the groups they belong to
+                {ok, UserEffGroups} = user_logic:get_eff_groups(Auth, UserId),
+                lists_utils:intersect(SpaceEffGroups, UserEffGroups)
+        end,
+        {ok, value, AccessibleEffGroups}
+    end;
 
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata}, data = Data}) ->
     #{
@@ -946,6 +961,9 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Space) 
             false
     end;
 
+authorize(#el_req{auth = ?USER(ClientUserId), operation = create, gri = #gri{aspect = infer_accessible_eff_groups}}, Space) ->
+    space_logic:has_eff_user(Space, ClientUserId);
+
 authorize(Req = #el_req{operation = create, gri = #gri{id = SpaceId, aspect = harvest_metadata}, data = Data}, Space) ->
     auth_by_support(Req, Space) andalso
         lists:all(fun(#{<<"fileId">> := FileId}) ->
@@ -1363,6 +1381,10 @@ validate(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) -> #{
         <<"privileges">> => {list_of_atoms, privileges:space_privileges()}
     }
 };
+
+validate(#el_req{operation = create, gri = #gri{aspect = infer_accessible_eff_groups}}) ->
+    #{
+    };
 
 validate(#el_req{operation = create, gri = #gri{aspect = harvest_metadata}}) -> #{
     required => #{

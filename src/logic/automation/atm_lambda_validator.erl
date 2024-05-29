@@ -133,7 +133,18 @@ sanitize_input_parameter_data_spec(#atm_file_data_spec{attributes = _}, DataKeyN
         str_utils:format_bin("~ts.attributes", [DataKeyName]),
         <<"This field must be provided and must be a list containing at least one file attribute">>
     );
+
+sanitize_input_parameter_data_spec(#atm_group_data_spec{attributes = [_ | _]}, _DataKeyName) ->
+    ok;
+sanitize_input_parameter_data_spec(#atm_group_data_spec{attributes = _}, DataKeyName) ->
+    % the same considerations as for atm_file_data_spec apply here
+    atm_schema_validator:raise_validation_error(
+        str_utils:format_bin("~ts.attributes", [DataKeyName]),
+        <<"This field must be provided and must be a list containing at least one group attribute">>
+    );
+
 sanitize_input_parameter_data_spec(#atm_array_data_spec{item_data_spec = ItemDataSpec}, DataKeyName) ->
     sanitize_input_parameter_data_spec(ItemDataSpec, <<DataKeyName/binary, ".itemDataSpec">>);
+
 sanitize_input_parameter_data_spec(_, _DataKeyName) ->
     ok.

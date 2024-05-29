@@ -54,6 +54,8 @@ translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {Access
         <<"token">> => AccessToken,
         <<"ttl">> => Expires
     };
+translate_value(_, #gri{type = od_space, aspect = infer_accessible_eff_groups}, GroupIds) ->
+    #{<<"list">> => GroupIds};
 translate_value(_, #gri{type = od_space, aspect = harvest_metadata}, Result) ->
     case Result of
         {error, _} = Error ->
