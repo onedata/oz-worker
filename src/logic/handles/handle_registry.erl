@@ -20,7 +20,7 @@
 -export([report_created/4, report_updated/5, report_deleted/5]).
 -export([lookup_deleted/1, purge_all_deleted_entries/0]).
 -export([get_earliest_timestamp/0]).
--export([gather_by_all_prefixes/0, gather_by_all_prefixes/1, list_completely/1, list_portion/1]).
+-export([list_portion/1, list_completely/1, gather_by_all_prefixes/0, gather_by_all_prefixes/1]).
 
 % link_key() consists of 2 parts:
 %  1) timestamp (in seconds) - so that links would be sorted by time.
@@ -45,15 +45,24 @@
 
 %% @formatter:off
 -type listing_opts() :: #{
-    metadata_prefix => od_handle:metadata_prefix(),   % required unless resumption_token is provided
     resumption_token => resumption_token(),   % exclusive argument; if present, all other argument must not be provided
-    limit => limit(),
+    metadata_prefix => od_handle:metadata_prefix(),   % required unless resumption_token is provided
     service_id => od_handle_service:id(),
-    from => undefined | od_handle:timestamp_seconds(),
-    until => undefined | od_handle:timestamp_seconds(),
+    limit => limit(),
+    from => undefined | od_handle:timestamp_seconds(),  % inclusive
+    until => undefined | od_handle:timestamp_seconds(),  % inclusive
     include_deleted => boolean()
 }.
 %% @formatter:on
+
+-record(internal_listing_opts, {
+    tree_id :: binary(),
+    limit :: limit(),
+    start_after_key :: link_key(),  % key to start listing from, exclusively
+    until_timestamp :: od_handle:timestamp_seconds(),  % timestamp to finish listing at, inclusively
+    include_deleted :: boolean()
+}).
+-type internal_listing_opts() :: #internal_listing_opts{}.
 
 -type handle_listing_entry() :: #handle_listing_entry{}.
 
@@ -63,9 +72,9 @@
 
 -define(FOREST, <<"handle-forest">>).
 -define(TREE_FOR_METADATA_PREFIX(Prefix),
-    <<"handle-metadata", Prefix/binary, "-all-tree">>).
+    <<Prefix/binary, "-records-all">>).
 -define(TREE_FOR_METADATA_PREFIX_AND_HSERVICE(Prefix, HServiceId),
-    <<"tree-for-", Prefix/binary, "-of-service-", HServiceId/binary>>).
+    <<Prefix/binary, "-records-of-service-", HServiceId/binary>>).
 
 
 -define(DEFAULT_LIST_LIMIT, oz_worker:get_env(default_handle_list_limit, 1000)).
@@ -123,10 +132,8 @@ purge_all_deleted_entries() ->
         service_id = HandleServiceId,
         status = deleted
     }}) ->
-        od_handle:critical_section_for(HandleId, fun() ->
-            deleted_handle_registry:remove(HandleId),
-            delete_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
-        end)
+        deleted_handle_registry:remove(HandleId),
+        delete_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
     end,
     deleted_handle_registry:foreach(ForeachFun).
 
@@ -145,15 +152,9 @@ get_earliest_timestamp() ->
     end.
 
 
--spec gather_by_all_prefixes() -> [handle_listing_entry()].
-gather_by_all_prefixes() ->
-    gather_by_all_prefixes(#{}).
-
--spec gather_by_all_prefixes(listing_opts()) -> [handle_listing_entry()].
-gather_by_all_prefixes(ListingOpts) ->
-    lists:umerge(lists:map(fun(MetadataPrefix) ->
-        list_completely(ListingOpts#{metadata_prefix => MetadataPrefix})
-    end, oai_metadata:supported_formats())).
+-spec list_portion(listing_opts()) -> {[handle_listing_entry()], resumption_token()}.
+list_portion(ListingOpts) ->
+    list_portion_internal(listing_opts_to_internal(ListingOpts)).
 
 
 -spec list_completely(listing_opts()) -> [handle_listing_entry()].
@@ -164,43 +165,39 @@ list_completely(ListingOpts) ->
     end.
 
 
--spec list_portion(listing_opts()) -> {[handle_listing_entry()], resumption_token()}.
-list_portion(ListingOpts) ->
-    Token = maps:get(resumption_token, ListingOpts, <<>>),
+-spec gather_by_all_prefixes() -> [handle_listing_entry()].
+gather_by_all_prefixes() ->
+    gather_by_all_prefixes(#{}).
 
-    % TODO VFS-11906 can this be simplified?
-    {MetadataPrefix, HServiceId, Limit, From, Until, StartIndex, IncludeDeleted} = case Token of
-        <<>> ->
-            MetadataPrefix1 = maps:get(metadata_prefix, ListingOpts),
-            HServiceId1 = maps:get(service_id, ListingOpts, undefined),
-            Limit1 = maps:get(limit, ListingOpts, ?DEFAULT_LIST_LIMIT),
-            From1 = maps:get(from, ListingOpts, undefined),
-            Until1 = maps:get(until, ListingOpts, ?MAX_TIMESTAMP),
-            StartIndex1 = encode_link_key(From1, first),
-            IncludeDeleted1 = maps:get(include_deleted, ListingOpts, false),
-            {MetadataPrefix1, HServiceId1, Limit1, From1, Until1, StartIndex1, IncludeDeleted1};
-        _ ->
-            {TimestampToken, MetadataPrefix2, HandleID, HServiceId2, Limit2,
-                From2, Until2, IncludeDeleted2} = unpack_resumption_token(Token),
-            StartIndex2 = encode_link_key(TimestampToken, HandleID),
+-spec gather_by_all_prefixes(listing_opts()) -> [handle_listing_entry()].
+gather_by_all_prefixes(ListingOpts) ->
+    lists:umerge(lists:map(fun(MetadataPrefix) ->
+        list_completely(ListingOpts#{metadata_prefix => MetadataPrefix})
+    end, oai_metadata:supported_formats())).
 
-            {MetadataPrefix2, HServiceId2, Limit2, From2, Until2, StartIndex2, IncludeDeleted2}
-    end,
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
-    TreeId = case HServiceId of
-        undefined -> ?TREE_FOR_METADATA_PREFIX(MetadataPrefix);
-        _ -> ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HServiceId)
-    end,
+%% @private
+-spec list_portion_internal(internal_listing_opts()) -> {[handle_listing_entry()], resumption_token()}.
+list_portion_internal(#internal_listing_opts{
+    limit = Limit,
+    tree_id = TreeId,
+    start_after_key = StartAfterKey,
+    until_timestamp = Until,
+    include_deleted = IncludeDeleted
+} = InternalListingOpts) ->
+
     FoldOpts = #{
-        %% Limit + 1 is used to determine if it's the end of the list
-        %% and if a resumption token needs to be included
-        prev_link_name => StartIndex,
-        %% prev_tree_id option is necessary for inclusive => false to work
-        prev_tree_id => TreeId,
+        prev_link_name => StartAfterKey,
+        prev_tree_id => TreeId,  % necessary for inclusive => false to work
         inclusive => false
     },
+
     FoldFun = fun(#link{name = Key, target = Value}, Acc) ->
         {Timestamp, HandleId} = decode_link_key(Key),
+        % Limit + 1 is used to determine if we have reached the end of the list - see the logic below
         case Timestamp > Until orelse length(Acc) =:= (Limit + 1) of
             true ->
                 {stop, Acc};
@@ -219,14 +216,75 @@ list_portion(ListingOpts) ->
                 end
         end
     end,
-    {ok, ReversedEntries} = datastore_model:fold_links(
-        ?CTX, ?FOREST, TreeId, FoldFun, [], FoldOpts
-    ),
-    build_result_from_reversed_listing(ReversedEntries, Limit, MetadataPrefix, From, Until, HServiceId, IncludeDeleted).
+    {ok, ReversedEntries} = datastore_model:fold_links(?CTX, ?FOREST, TreeId, FoldFun, [], FoldOpts),
+    % the internal listing limit is always one element greater than the requested limit,
+    % which allows determining if this is the last batch of the complete list
+    case length(ReversedEntries) =:= Limit + 1 of
+        false ->
+            {lists:reverse(ReversedEntries), undefined};
+        true ->
+            LimitedReversedEntries = tl(ReversedEntries),
+            #handle_listing_entry{timestamp = LastTimestamp, handle_id = LastHandleId} = hd(LimitedReversedEntries),
+            ResumptionToken = internal_listing_opts_to_resumption_token(InternalListingOpts#internal_listing_opts{
+                start_after_key = encode_link_key(LastTimestamp, LastHandleId)
+            }),
+            {lists:reverse(LimitedReversedEntries), ResumptionToken}
+    end.
 
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
+
+%% @private
+-spec listing_opts_to_internal(listing_opts()) -> internal_listing_opts().
+listing_opts_to_internal(#{resumption_token := ResumptionToken}) ->
+    resumption_token_to_internal_listing_opts(ResumptionToken);
+listing_opts_to_internal(#{metadata_prefix := MetadataPrefix} = ListingOpts) ->
+    #internal_listing_opts{
+        tree_id = case maps:get(service_id, ListingOpts, undefined) of
+            undefined -> ?TREE_FOR_METADATA_PREFIX(MetadataPrefix);
+            HServiceId -> ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HServiceId)
+        end,
+        limit = maps:get(limit, ListingOpts, ?DEFAULT_LIST_LIMIT),
+        start_after_key = encode_link_key(maps:get(from, ListingOpts, undefined), first),
+        until_timestamp = maps:get(until, ListingOpts, ?MAX_TIMESTAMP),
+        include_deleted = maps:get(include_deleted, ListingOpts, false)
+    }.
+
+
+%% @private
+-spec resumption_token_to_internal_listing_opts(resumption_token()) -> internal_listing_opts().
+resumption_token_to_internal_listing_opts(ResumptionToken) ->
+    [
+        TreeId,
+        LimitBin,
+        StartAfterKey,
+        UntilTimestampBin,
+        IncludeDeletedBin
+    ] = binary:split(ResumptionToken, [?RESUMPTION_TOKEN_SEP], [global]),
+    #internal_listing_opts{
+        tree_id = TreeId,
+        limit = binary_to_integer(LimitBin),
+        start_after_key = StartAfterKey,
+        until_timestamp = binary_to_integer(UntilTimestampBin),
+        include_deleted = binary_to_existing_atom(IncludeDeletedBin)
+    }.
+
+
+%% @private
+-spec internal_listing_opts_to_resumption_token(internal_listing_opts()) -> resumption_token().
+internal_listing_opts_to_resumption_token(#internal_listing_opts{
+    tree_id = TreeId,
+    limit = Limit,
+    start_after_key = StartAfterKey,
+    until_timestamp = UntilTimestamp,
+    include_deleted = IncludeDeleted
+}) ->
+    str_utils:join_binary([
+        TreeId,
+        integer_to_binary(Limit),
+        StartAfterKey,
+        integer_to_binary(UntilTimestamp),
+        atom_to_binary(IncludeDeleted)
+    ], ?RESUMPTION_TOKEN_SEP).
+
 
 %% @private
 -spec encode_link_key(undefined | od_handle:timestamp_seconds(), first | od_handle:id()) -> link_key().
@@ -267,56 +325,6 @@ status_to_binary(deleted) -> <<"0">>.
 %% @private
 binary_to_status(<<"1">>) -> present;
 binary_to_status(<<"0">>) -> deleted.
-
-
-%% @private
--spec pack_resumption_token(od_handle:metadata_prefix(), limit(), od_handle:timestamp_seconds(),
-    od_handle:timestamp_seconds(), od_handle_service:id(), boolean(), handle_listing_entry()) -> resumption_token().
-pack_resumption_token(MetadataPrefix, Limit, From, Until, HServiceId, IncludeDeleted, LastListedEntry) ->
-    FormattedLimit = integer_to_binary(utils:ensure_defined(Limit, ?DEFAULT_LIST_LIMIT)),
-    FormattedFrom = integer_to_binary(utils:ensure_defined(From, 0)),
-    FormattedUntil = integer_to_binary(utils:ensure_defined(Until, ?MAX_TIMESTAMP)),
-    HServiceIdBin = utils:ensure_defined(HServiceId, <<>>),
-    %% If HServiceId in ListingOpts was <<>>, then in token must also be
-    %% <<>> in order to list from the correct tree.
-    str_utils:join_binary([
-        integer_to_binary(LastListedEntry#handle_listing_entry.timestamp),
-        MetadataPrefix, FormattedLimit, FormattedFrom, FormattedUntil,
-        LastListedEntry#handle_listing_entry.handle_id, HServiceIdBin,
-        case is_binary(IncludeDeleted) of false -> atom_to_binary(IncludeDeleted); true -> IncludeDeleted end
-    ], ?RESUMPTION_TOKEN_SEP).
-
-
-%% @private
--spec unpack_resumption_token(resumption_token()) -> {od_handle:timestamp_seconds(), od_handle:metadata_prefix(),
-    od_handle:id(), od_handle_service:id(), limit(), od_handle:timestamp_seconds(), od_handle:timestamp_seconds(), boolean()}.
-unpack_resumption_token(Token) ->
-    [Timestamp, MetadataPrefix, Limit, From, Until, HandleId, HServiceIdBin, IncludeDeletedBin] = binary:split(Token,
-        [?RESUMPTION_TOKEN_SEP], [global]),
-    HandleServiceId = case HServiceIdBin of <<>> -> undefined; _ -> HServiceIdBin end,
-
-    {binary_to_integer(Timestamp), MetadataPrefix, HandleId, HandleServiceId, binary_to_integer(Limit),
-        binary_to_integer(From), binary_to_integer(Until), binary_to_atom(IncludeDeletedBin)}.
-
-
-%% @private
--spec build_result_from_reversed_listing(datastore:fold_acc(), limit(), od_handle:metadata_prefix(),
-    od_handle:timestamp_seconds(), od_handle:timestamp_seconds(), od_handle_service:id(), boolean()) ->
-    {[handle_listing_entry()], resumption_token()}.
-build_result_from_reversed_listing(ReversedEntries, Limit, MetadataPrefix, From, Until, HServiceId, IncludeDeleted) ->
-    % the internal listing limit is always one element greater than the requested limit,
-    % which allows determining if this is the last batch of the complete list
-    {ReversedLimitedEntries, NewToken} = case length(ReversedEntries) =:= Limit + 1 of
-        false ->
-            {ReversedEntries, undefined};
-        true ->
-            ReversedEntriesTail = tl(ReversedEntries),
-            LastListedEntry = hd(ReversedEntriesTail),
-            {ReversedEntriesTail, pack_resumption_token(MetadataPrefix, Limit,
-                From, Until, HServiceId, IncludeDeleted, LastListedEntry)}
-    end,
-    LimitedEntries = lists:reverse(ReversedLimitedEntries),
-    {LimitedEntries, NewToken}.
 
 
 %% @private
