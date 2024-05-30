@@ -76,8 +76,6 @@ revise_for_publication(MetadataPrefix, Metadata, ShareId, ShareRecord) ->
     Module:revise_for_publication(Metadata, ShareId, ShareRecord).
 
 
-% TODO VFS-11906 the upgrade procedure should call revise_for_publication and insert_public_handle on
-% DC metadata added in previous system versions, and handle cases when it's not a valid XML
 -spec insert_public_handle(od_handle:metadata_prefix(), od_handle:parsed_metadata(), od_handle:public_handle()) ->
     od_handle:parsed_metadata().
 insert_public_handle(MetadataPrefix, Metadata, PublicHandle) ->

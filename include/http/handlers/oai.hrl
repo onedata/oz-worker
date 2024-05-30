@@ -33,8 +33,7 @@
 
 -record(oai_metadata, {
     metadata_prefix :: od_handle:metadata_prefix(),
-    raw_value :: od_handle:raw_metadata(),
-    handle :: od_handle:record()   % @TODO VFS-11906 Temporary workaround, rework
+    raw_value :: od_handle:raw_metadata()
 }).
 
 -record(oai_about, {

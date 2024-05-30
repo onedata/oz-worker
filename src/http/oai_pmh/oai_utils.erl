@@ -73,8 +73,7 @@ build_oai_record(ListingEntry, Handle) ->
         header = build_oai_header(ListingEntry),
         metadata = #oai_metadata{
             metadata_prefix = Handle#od_handle.metadata_prefix,
-            raw_value = Handle#od_handle.metadata,
-            handle = Handle
+            raw_value = Handle#od_handle.metadata
         }
     }.
 
@@ -155,10 +154,6 @@ harvest(ListingOpts, HarvestingFun) ->
     {HandleListingEntries, NewResumptionToken} = handle_registry:list_portion(ListingOpts),
     HarvestedMetadata = lists:map(HarvestingFun, HandleListingEntries),
 
-    % TODO VFS-11906 consider a situation when a resumption token has been returned because
-    % there is still one entry to be listed, but in the meantime it is deleted - then, the listing
-    % may return an empty result with a token and the code below will crash
-    % this however cannot happen if we support deletions (report deleted handles) in OAI-PMH
     case HarvestedMetadata of
         [] ->
             MetadataPrefix = maps:get(metadata_prefix, ListingOpts),

@@ -78,9 +78,6 @@
 
 -define(MAX_TIMESTAMP, 99999999999).
 
--define(critical_section_for_handle(HandleId, Fun),
-    critical_section:run({?MODULE, HandleId}, Fun)).
-
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -91,32 +88,26 @@ report_created(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
     add_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp, present).
 
 
-%%--------------------------------------------------------------------
-%% @doc NOTE: cannot be run in parallel!
-%% @end
-%%--------------------------------------------------------------------
+%% @doc NOTE: not thread-safe, must not be run in parallel with itself or report_deleted/5!
 -spec report_updated(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> ok.
 report_updated(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp, UpdateTimestamp) ->
-    case PreviousTimestamp == UpdateTimestamp of
+    case UpdateTimestamp == PreviousTimestamp of
         true ->
             ok;
         false ->
-            ?critical_section_for_handle(HandleId, fun() ->
-                delete_entry(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp),
-                add_entry(MetadataPrefix, HandleServiceId, HandleId, UpdateTimestamp, present)
-            end)
+            delete_entry(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp),
+            add_entry(MetadataPrefix, HandleServiceId, HandleId, UpdateTimestamp, present)
     end.
 
 
+%% @doc NOTE: not thread-safe, must not be run in parallel with itself or report_updated/5!
 -spec report_deleted(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> ok.
 report_deleted(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp, DeletionTimestamp) ->
-    ?critical_section_for_handle(HandleId, fun() ->
-        delete_entry(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp),
-        add_entry(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp, deleted),
-        deleted_handle_registry:insert(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp)
-    end).
+    delete_entry(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp),
+    add_entry(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp, deleted),
+    deleted_handle_registry:insert(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp).
 
 
 -spec lookup_deleted(od_handle:id()) -> error | {ok, od_handle:metadata_prefix(), handle_listing_entry()}.
@@ -132,8 +123,7 @@ purge_all_deleted_entries() ->
         service_id = HandleServiceId,
         status = deleted
     }}) ->
-        % TODO VFS-11906 nested critical section - sort it out
-        ?critical_section_for_handle(HandleId, fun() ->
+        od_handle:critical_section_for(HandleId, fun() ->
             deleted_handle_registry:remove(HandleId),
             delete_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
         end)
@@ -201,7 +191,7 @@ list_portion(ListingOpts) ->
         undefined -> ?TREE_FOR_METADATA_PREFIX(MetadataPrefix);
         _ -> ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HServiceId)
     end,
-    FoldOpts =  #{
+    FoldOpts = #{
         %% Limit + 1 is used to determine if it's the end of the list
         %% and if a resumption token needs to be included
         prev_link_name => StartIndex,

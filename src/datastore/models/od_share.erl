@@ -18,6 +18,7 @@
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
+-export([critical_section_for/2]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -101,6 +102,12 @@ to_string(ShareId) ->
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     share_logic_plugin.
+
+
+%% @doc Wraps the function in a critical section that locks on the specific share.
+-spec critical_section_for(id(), fun(() -> X)) -> X.
+critical_section_for(ShareId, Fun) ->
+    critical_section:run({?MODULE, ShareId}, Fun).
 
 %%%===================================================================
 %%% datastore_model callbacks

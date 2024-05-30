@@ -19,6 +19,7 @@
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
+-export([critical_section_for/2]).
 -export([get_ctx/0]).
 -export([current_timestamp/0]).
 -export([migrate_legacy_handles/0, migrate_legacy_handle/2]).
@@ -109,6 +110,12 @@ to_string(HandleId) ->
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     handle_logic_plugin.
+
+
+%% @doc Wraps the function in a critical section that locks on the specific handle.
+-spec critical_section_for(id(), fun(() -> X)) -> X.
+critical_section_for(HandleId, Fun) ->
+    critical_section:run({?MODULE, HandleId}, Fun).
 
 
 -spec get_ctx() -> datastore:ctx().

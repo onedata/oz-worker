@@ -133,7 +133,7 @@ encode_xml(Metadata) ->
 %% @doc {@link handle_metadata_plugin_behaviour} callback validation_examples/0
 -spec validation_examples() -> [handle_metadata_plugin_behaviour:validation_example()].
 validation_examples() -> [
-    % TODO VFS-11906 add better validation of the DC XML; currently, any XML with metadata tag is accepted
+    % TODO VFS-7454 add better validation of the DC XML; currently, any XML with metadata tag is accepted
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",

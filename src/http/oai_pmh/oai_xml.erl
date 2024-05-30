@@ -32,7 +32,7 @@
 parse(Metadata) ->
     try
         {RootElement, _} = xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]),
-        {ok, RootElement}   % TODO VFS-11906 consider returning errors from xmerl to the client
+        {ok, RootElement}   % TODO VFS-7454 consider returning errors from xmerl to the client
     catch Class:Reason:Stacktrace ->
         ?debug_exception("Cannot parse handle metadata", Class, Reason, Stacktrace),
         error
