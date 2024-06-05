@@ -18,7 +18,7 @@
 -include("plugins/onezone_plugins.hrl").
 
 %% API
--export([create/1, create/2, create/4, get/1, exists/1, list/0]).
+-export([create/1, create/2, create/4, get/1, update/2, exists/1, list/0]).
 -export([supported_metadata_prefixes/0]).
 -export([example_input_metadata/1, example_input_metadata/2]).
 -export([expected_final_metadata/1, expected_final_metadata/2]).
@@ -59,6 +59,11 @@ create(HandleServiceId, ShareId, MetadataPrefix, RawMetadata) ->
 get(HandleId) ->
     {ok, HandleRecord} = ?assertMatch({ok, _}, ozt:rpc(handle_logic, get, [?ROOT, HandleId])),
     HandleRecord.
+
+
+-spec update(od_handle:id(), entity_logic:data()) -> ok.
+update(HandleId, Data) ->
+    ?assertMatch(ok, ozt:rpc(handle_logic, update, [?ROOT, HandleId, Data])).
 
 
 -spec exists(od_handle:id()) -> boolean().

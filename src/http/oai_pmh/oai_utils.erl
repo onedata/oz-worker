@@ -21,10 +21,16 @@
 -export([serialize_datestamp/1, deserialize_datestamp/1, is_harvesting/1,
     verb_to_module/1, is_earlier_or_equal/2, dates_have_the_same_granularity/2,
     to_xml/1, ensure_list/1,
-    request_arguments_to_handle_listing_opts/1, harvest/2, oai_identifier_decode/1,
+    request_arguments_to_handle_listing_opts/2, harvest/2, oai_identifier_decode/1,
     build_oai_header/1, build_oai_record/1, build_oai_record/2
 ]).
 
+-define(LIST_IDENTIFIERS_BATCH_SIZE, oz_worker:get_env(oai_pmh_list_identifiers_batch_size, 1000)).
+-define(LIST_RECORDS_BATCH_SIZE, oz_worker:get_env(oai_pmh_list_records_batch_size, 100)).
+
+%%%===================================================================
+%%% API
+%%%===================================================================
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -61,7 +67,13 @@ build_oai_header(#handle_listing_entry{
 
 -spec build_oai_record(handle_registry:handle_listing_entry()) -> #oai_record{}.
 build_oai_record(#handle_listing_entry{status = present, handle_id = HandleId} = ListingEntry) ->
-    build_oai_record(ListingEntry, ?check(handle_logic:get(?ROOT, HandleId)));
+    case od_handle:get(HandleId) of
+        {ok, #document{value = HandleRecord}} ->
+            build_oai_record(ListingEntry, HandleRecord);
+        {error, not_found} ->
+            ?error("Handle ~s that is registered as present was not found in the DB, ignoring", [HandleId]),
+            build_oai_record(ListingEntry#handle_listing_entry{status = deleted})
+    end;
 build_oai_record(#handle_listing_entry{status = deleted} = ListingEntry) ->
     #oai_record{
         header = build_oai_header(ListingEntry)
@@ -116,8 +128,9 @@ deserialize_datestamp(Datestamp) ->
     end.
 
 
--spec request_arguments_to_handle_listing_opts([proplists:property()]) -> handle_registry:listing_opts().
-request_arguments_to_handle_listing_opts(Args) ->
+-spec request_arguments_to_handle_listing_opts(list_identifiers | list_records, [proplists:property()]) ->
+    handle_registry:listing_opts().
+request_arguments_to_handle_listing_opts(Verb, Args) ->
     case proplists:get_value(<<"resumptionToken">>, Args) of
         undefined ->
             #{
@@ -131,6 +144,10 @@ request_arguments_to_handle_listing_opts(Args) ->
                     deserialize_datestamp(proplists:get_value(<<"until">>, Args, undefined)),
                     fun time:datetime_to_seconds/1
                 ),
+                limit => case Verb of
+                    list_identifiers -> ?LIST_IDENTIFIERS_BATCH_SIZE;
+                    list_records -> ?LIST_RECORDS_BATCH_SIZE
+                end,
                 include_deleted => true
             };
         ResumptionToken ->
@@ -149,7 +166,10 @@ request_arguments_to_handle_listing_opts(Args) ->
 %%% Throws with noRecordsMatch if nothing is harvested.
 %%% @end
 %%%--------------------------------------------------------------------
--spec harvest(handle_registry:listing_opts(), function()) -> oai_response().
+-spec harvest(
+    handle_registry:listing_opts(),
+    fun((handle_registry:handle_listing_entry()) -> #oai_record{} | #oai_header{})
+) -> oai_response().
 harvest(ListingOpts, HarvestingFun) ->
     {HandleListingEntries, NewResumptionToken} = handle_registry:list_portion(ListingOpts),
     HarvestedMetadata = lists:map(HarvestingFun, HandleListingEntries),

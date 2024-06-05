@@ -67,6 +67,9 @@ main_namespace(MetadataPrefix) ->
     Module:main_namespace().
 
 
+% TODO VFS-7454 consider using a different XML parser, e.g. https://github.com/processone/fast_xml
+% TODO VFS-7454 validate the provided XML against corresponding schemas
+% TODO VFS-7454 consider the minimal set of fields to be provided by the client
 -spec revise_for_publication(
     od_handle:metadata_prefix(), od_handle:parsed_metadata(), od_share:id(), od_share:record()
 ) ->

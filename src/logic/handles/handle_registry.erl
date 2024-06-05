@@ -154,7 +154,7 @@ get_earliest_timestamp() ->
 
 -spec list_portion(listing_opts()) -> {[handle_listing_entry()], resumption_token()}.
 list_portion(ListingOpts) ->
-    list_portion_internal(listing_opts_to_internal(ListingOpts)).
+    list_internal(build_internal_listing_opts(ListingOpts)).
 
 
 -spec list_completely(listing_opts()) -> [handle_listing_entry()].
@@ -180,14 +180,14 @@ gather_by_all_prefixes(ListingOpts) ->
 %%%===================================================================
 
 %% @private
--spec list_portion_internal(internal_listing_opts()) -> {[handle_listing_entry()], resumption_token()}.
-list_portion_internal(#internal_listing_opts{
+-spec list_internal(internal_listing_opts()) -> {[handle_listing_entry()], resumption_token()}.
+list_internal(#internal_listing_opts{
     limit = Limit,
     tree_id = TreeId,
     start_after_key = StartAfterKey,
     until_timestamp = Until,
     include_deleted = IncludeDeleted
-} = InternalListingOpts) ->
+} = Opts) ->
 
     FoldOpts = #{
         prev_link_name => StartAfterKey,
@@ -224,53 +224,33 @@ list_portion_internal(#internal_listing_opts{
             {lists:reverse(ReversedEntries), undefined};
         true ->
             LimitedReversedEntries = tl(ReversedEntries),
-            #handle_listing_entry{timestamp = LastTimestamp, handle_id = LastHandleId} = hd(LimitedReversedEntries),
-            ResumptionToken = internal_listing_opts_to_resumption_token(InternalListingOpts#internal_listing_opts{
-                start_after_key = encode_link_key(LastTimestamp, LastHandleId)
+            ResumptionToken = pack_resumption_token(Opts#internal_listing_opts{
+                start_after_key = encode_link_key(hd(LimitedReversedEntries))
             }),
             {lists:reverse(LimitedReversedEntries), ResumptionToken}
     end.
 
 
 %% @private
--spec listing_opts_to_internal(listing_opts()) -> internal_listing_opts().
-listing_opts_to_internal(#{resumption_token := ResumptionToken}) ->
-    resumption_token_to_internal_listing_opts(ResumptionToken);
-listing_opts_to_internal(#{metadata_prefix := MetadataPrefix} = ListingOpts) ->
+-spec build_internal_listing_opts(listing_opts()) -> internal_listing_opts().
+build_internal_listing_opts(#{resumption_token := ResumptionToken}) ->
+    unpack_resumption_token(ResumptionToken);
+build_internal_listing_opts(#{metadata_prefix := MetadataPrefix} = ListingOpts) ->
     #internal_listing_opts{
         tree_id = case maps:get(service_id, ListingOpts, undefined) of
             undefined -> ?TREE_FOR_METADATA_PREFIX(MetadataPrefix);
             HServiceId -> ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HServiceId)
         end,
-        limit = maps:get(limit, ListingOpts, ?DEFAULT_LIST_LIMIT),
-        start_after_key = encode_link_key(maps:get(from, ListingOpts, undefined), first),
-        until_timestamp = maps:get(until, ListingOpts, ?MAX_TIMESTAMP),
+        limit = utils:ensure_defined(maps:get(limit, ListingOpts, undefined), ?DEFAULT_LIST_LIMIT),
+        start_after_key = encode_link_key(utils:ensure_defined(maps:get(from, ListingOpts, undefined), 0), first),
+        until_timestamp = utils:ensure_defined(maps:get(until, ListingOpts, undefined), ?MAX_TIMESTAMP),
         include_deleted = maps:get(include_deleted, ListingOpts, false)
     }.
 
 
 %% @private
--spec resumption_token_to_internal_listing_opts(resumption_token()) -> internal_listing_opts().
-resumption_token_to_internal_listing_opts(ResumptionToken) ->
-    [
-        TreeId,
-        LimitBin,
-        StartAfterKey,
-        UntilTimestampBin,
-        IncludeDeletedBin
-    ] = binary:split(ResumptionToken, [?RESUMPTION_TOKEN_SEP], [global]),
-    #internal_listing_opts{
-        tree_id = TreeId,
-        limit = binary_to_integer(LimitBin),
-        start_after_key = StartAfterKey,
-        until_timestamp = binary_to_integer(UntilTimestampBin),
-        include_deleted = binary_to_existing_atom(IncludeDeletedBin)
-    }.
-
-
-%% @private
--spec internal_listing_opts_to_resumption_token(internal_listing_opts()) -> resumption_token().
-internal_listing_opts_to_resumption_token(#internal_listing_opts{
+-spec pack_resumption_token(internal_listing_opts()) -> resumption_token().
+pack_resumption_token(#internal_listing_opts{
     tree_id = TreeId,
     limit = Limit,
     start_after_key = StartAfterKey,
@@ -287,12 +267,33 @@ internal_listing_opts_to_resumption_token(#internal_listing_opts{
 
 
 %% @private
--spec encode_link_key(undefined | od_handle:timestamp_seconds(), first | od_handle:id()) -> link_key().
-encode_link_key(From, first) ->
-    case From of
-        undefined -> <<>>;
-        _ -> str_utils:format_bin("~11..0B", [From])
-    end;
+-spec unpack_resumption_token(resumption_token()) -> internal_listing_opts().
+unpack_resumption_token(ResumptionToken) ->
+    [
+        TreeId,
+        LimitBin,
+        StartAfterKey,
+        UntilTimestampBin,
+        IncludeDeletedBin
+    ] = binary:split(ResumptionToken, ?RESUMPTION_TOKEN_SEP, [global]),
+    #internal_listing_opts{
+        tree_id = TreeId,
+        limit = binary_to_integer(LimitBin),
+        start_after_key = StartAfterKey,
+        until_timestamp = binary_to_integer(UntilTimestampBin),
+        include_deleted = binary_to_existing_atom(IncludeDeletedBin)
+    }.
+
+
+%% @private
+-spec encode_link_key(handle_listing_entry()) -> link_key().
+encode_link_key(#handle_listing_entry{timestamp = Timestamp, handle_id = HandleId}) ->
+    encode_link_key(Timestamp, HandleId).
+
+%% @private
+-spec encode_link_key(od_handle:timestamp_seconds(), first | od_handle:id()) -> link_key().
+encode_link_key(Timestamp, first) ->
+    encode_link_key(Timestamp, <<"">>);
 encode_link_key(Timestamp, HandleId) ->
     FormattedTimestamp = str_utils:format_bin("~11..0B", [Timestamp]),
     <<(FormattedTimestamp)/binary, ?KEY_SEP, HandleId/binary>>.
@@ -319,10 +320,12 @@ decode_link_value(Value) ->
 
 
 %% @private
+-spec status_to_binary(status()) -> binary().
 status_to_binary(present) -> <<"1">>;
 status_to_binary(deleted) -> <<"0">>.
 
 %% @private
+-spec binary_to_status(binary()) -> status().
 binary_to_status(<<"1">>) -> present;
 binary_to_status(<<"0">>) -> deleted.
 

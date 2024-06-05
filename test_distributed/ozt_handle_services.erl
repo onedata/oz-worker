@@ -18,7 +18,7 @@
 -include("plugins/onezone_plugins.hrl").
 
 %% API
--export([create/0, create/1, get/1]).
+-export([create/0, create/1, get/1, list/0]).
 -export([add_user/2, add_user/3]).
 -export([add_group/2, add_group/3]).
 
@@ -46,10 +46,14 @@ create(Name) ->
 
 -spec get(od_handle_service:id()) -> od_handle_service:record().
 get(HServiceId) ->
-    {ok, HServiceRecord} = ?assertMatch({ok, _}, ozt:rpc(handle_service_logic, get, [
-        ?ROOT, HServiceId
-    ])),
+    {ok, HServiceRecord} = ?assertMatch({ok, _}, ozt:rpc(handle_service_logic, get, [?ROOT, HServiceId])),
     HServiceRecord.
+
+
+-spec list() -> [od_handle_service:id()].
+list() ->
+    {ok, HServiceIds} = ?assertMatch({ok, _}, ozt:rpc(handle_service_logic, list, [?ROOT])),
+    HServiceIds.
 
 
 -spec add_user(od_handle_service:id(), od_user:id()) -> ok.

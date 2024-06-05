@@ -75,6 +75,6 @@ optional_response_elements() -> [].
 %%%-------------------------------------------------------------------
 -spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"record">>, Args) ->
-    ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
+    ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(list_records, Args),
     oai_utils:harvest(ListingOpts, fun oai_utils:build_oai_record/1).
 

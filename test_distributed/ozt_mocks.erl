@@ -17,7 +17,8 @@
 -include("ozt.hrl").
 
 %% API
--export([freeze_time/0, unfreeze_time/0, get_frozen_time_seconds/0, simulate_seconds_passing/1]).
+-export([freeze_time/0, unfreeze_time/0]).
+-export([get_frozen_time_seconds/0, set_frozen_time_seconds/1, simulate_seconds_passing/1]).
 
 -export([mock_new/1, mock_new/2]).
 -export([mock_expect/3]).
@@ -56,6 +57,11 @@ unfreeze_time() ->
 -spec get_frozen_time_seconds() -> time:seconds() | no_return().
 get_frozen_time_seconds() ->
     oz_test_utils:get_frozen_time_seconds().
+
+
+-spec set_frozen_time_seconds(time:seconds()) -> ok.
+set_frozen_time_seconds(Seconds) ->
+    clock_freezer_mock:set_current_time_millis(timer:seconds(Seconds)).
 
 
 -spec simulate_seconds_passing(time:seconds()) -> ok.
