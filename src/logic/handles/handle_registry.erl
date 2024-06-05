@@ -167,12 +167,12 @@ list_completely(ListingOpts) ->
 
 -spec gather_by_all_prefixes() -> [handle_listing_entry()].
 gather_by_all_prefixes() ->
-    gather_by_all_prefixes(#{}).
+    gather_by_all_prefixes(undefined).
 
--spec gather_by_all_prefixes(listing_opts()) -> [handle_listing_entry()].
-gather_by_all_prefixes(ListingOpts) ->
+-spec gather_by_all_prefixes(undefined | od_handle_service:id()) -> [handle_listing_entry()].
+gather_by_all_prefixes(HServiceId) ->
     lists:umerge(lists:map(fun(MetadataPrefix) ->
-        list_completely(ListingOpts#{metadata_prefix => MetadataPrefix})
+        list_completely(#{metadata_prefix => MetadataPrefix, service_id => HServiceId})
     end, oai_metadata:supported_formats())).
 
 %%%===================================================================

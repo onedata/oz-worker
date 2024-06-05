@@ -1437,8 +1437,8 @@ create_handle_with_mocked_timestamp(HServiceId, ShareId, MetadataPrefix, Metadat
     ozt_mocks:set_frozen_time_seconds(MockedTimestamp),
     #handle_listing_entry{
         timestamp = MockedTimestamp,
-        service_id = HServiceId,
         handle_id = ozt_handles:create(HServiceId, ShareId, MetadataPrefix, Metadata),
+        service_id = HServiceId,
         status = present
     }.
 

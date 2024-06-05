@@ -73,13 +73,13 @@ foreach(ForeachFun) ->
             status = deleted
         }} | Acc]}
     end,
-    {ok, Entries} = datastore_model:fold_links(
-        ?CTX, ?FOREST, ?TREE_FOR_DELETED_HANDLES, FoldFun, [], #{size => 1000}
-    ),
-    lists:foreach(ForeachFun, Entries),
-    case Entries of
-        [] -> ok;
-        _ -> foreach(ForeachFun)
+    % TODO VFS-11906 fix listing above 1000
+    case datastore_model:fold_links(?CTX, ?FOREST, ?TREE_FOR_DELETED_HANDLES, FoldFun, [], #{size => 1000}) of
+        {ok, []} ->
+            ok;
+        {ok, Entries} ->
+            lists:foreach(ForeachFun, Entries),
+            foreach(ForeachFun)
     end.
 
 

@@ -42,8 +42,10 @@ end, ?RAND_UNICODE_STR(), [$<, $>, $&, $', $"])).
 init_per_suite(Config) ->
     ozt:init_per_suite(Config).
 
+
 end_per_suite(_Config) ->
     ok.
+
 
 init_per_testcase(_, Config) ->
     ozt_mocks:freeze_time(),
@@ -55,6 +57,7 @@ init_per_testcase(_, Config) ->
         ozt:rpc(handle_registry, report_deleted, [?OAI_DC_METADATA_PREFIX, HServiceId, HandleId, Timestamp, Timestamp])
     end, list_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})),
     Config.
+
 
 end_per_testcase(_, _Config) ->
     ozt_mocks:unfreeze_time(),
