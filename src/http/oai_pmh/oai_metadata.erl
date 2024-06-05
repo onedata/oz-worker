@@ -86,7 +86,7 @@ insert_public_handle(MetadataPrefix, Metadata, PublicHandle) ->
 
 
 -spec adapt_for_oai_pmh(od_handle:metadata_prefix(), od_handle:parsed_metadata()) ->
-    {ok, od_handle:parsed_metadata()} | errors:error().
+    od_handle:parsed_metadata().
 adapt_for_oai_pmh(MetadataPrefix, Metadata) ->
     Module = module(MetadataPrefix),
     Module:adapt_for_oai_pmh(Metadata).

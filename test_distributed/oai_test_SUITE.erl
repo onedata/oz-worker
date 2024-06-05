@@ -1442,8 +1442,8 @@ create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId,
 
     HandleListingEntry = #handle_listing_entry{
         timestamp = Timestamp,
-        service_id = HandleServiceId,
         handle_id = HId,
+        service_id = HandleServiceId,
         status = present
     },
     %% remove handle with 50% probability to check harvesting of deleted records

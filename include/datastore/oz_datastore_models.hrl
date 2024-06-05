@@ -343,7 +343,8 @@ end).
     % Direct relations to other entities
     users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:handle_service_privilege()]),
     groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:handle_service_privilege()]),
-    % Deprecated field; still needed to upgrade but always empty afterwards.
+    % Deprecated field; still needed to upgrade handle services that existed before 21.02.5,
+    % but always empty afterwards. For new handle services - also always empty.
     % Currently, the handles are stored using the handle_registry module.
     handles = [] :: entity_graph:relations(od_handle:id()),
 

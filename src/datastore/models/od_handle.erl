@@ -96,6 +96,14 @@ force_delete(HandleId) ->
     datastore_model:delete(?CTX, HandleId).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% NOTE: The preferred way to list handles is to use the handle_registry module.
+%% This function is retained for consistency with other od_* modules, but
+%% the approach to listing should be reworked in the future (should be always
+%% done in portions rather than loaded completely into memory).
+%% @end
+%%--------------------------------------------------------------------
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold_keys(?CTX, fun(Id, Acc) -> {ok, [Id | Acc]} end, []).
