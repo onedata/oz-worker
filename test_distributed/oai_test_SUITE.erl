@@ -581,9 +581,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     ],
     ?assert(check_identify(200, [], Method, ExpResponseContentEmpty, Config)),
 
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = example_input_metadata(MetadataPrefix),
-    HandleEntry = create_handle_with_mocked_timestamp(MetadataPrefix, Metadata, Timestamp1),
+    HandleEntry = create_handle_with_mocked_timestamp(Timestamp1),
     create_handle_with_mocked_timestamp(Timestamp2),
 
     ExpResponseContent1 = [
@@ -761,15 +759,7 @@ list_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
     MetadataPrefix = ?RAND_METADATA_PREFIX(),
     HandleEntries = setup_test_for_harvesting(MetadataPrefix, BeginTime, TimeOffsets),
     Args = prepare_harvesting_args(MetadataPrefix, undefined, undefined),
-    BuildExpectedObject = fun(HandleEntry) ->
-        case Verb of
-            <<"ListIdentifiers">> -> expected_oai_header_xml(HandleEntry);
-            <<"ListRecords">> -> expected_oai_record_xml(HandleEntry)
-        end
-    end,
-    ?assert(check_list_entries_continuously_with_resumption_token(
-        Config, Method, Verb, HandleEntries, Args, BuildExpectedObject
-    )).
+    ?assert(check_list_entries_continuously_with_resumption_token(Config, Method, Verb, HandleEntries, Args)).
 
 
 list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
@@ -1251,18 +1241,18 @@ check_list_entries(Code, Verb, Args, Method, BuildExpectedObject, ExpectedHandle
     check_oai_request(Code, Verb, Args, Method, ExpResponseContent, binary_to_atom(Verb), Config).
 
 
-check_list_entries_continuously_with_resumption_token(_Config, _Method, _Verb, _RemainingExpEntries, [], _BuildExpectedObject) ->
+check_list_entries_continuously_with_resumption_token(_Config, _Method, _Verb, _RemainingExpEntries, []) ->
     true;
-check_list_entries_continuously_with_resumption_token(Config, Method, Verb, RemainingExpEntries, Args, BuildExpectedObject) ->
+check_list_entries_continuously_with_resumption_token(Config, Method, Verb, RemainingExpEntries, Args) ->
     ExpListedEntries = lists:sublist(RemainingExpEntries, ?TESTED_LIST_BATCH_SIZE),
     ListingOpts = request_arguments_to_handle_listing_opts(Verb, Args),
     {_, ExpResumptionToken} = ozt:rpc(handle_registry, list_portion, [ListingOpts]),
 
-    case check_list_entries(200, Verb, Args, Method, BuildExpectedObject, ExpListedEntries, Config) of
+    case check_list_entries(Verb, Args, Method, ExpListedEntries, Config) of
         true ->
             ArgsWithToken = add_to_args_if_defined(<<"resumptionToken">>, ExpResumptionToken, []),
             check_list_entries_continuously_with_resumption_token(
-                Config, Method, Verb, lists:subtract(RemainingExpEntries, ExpListedEntries), ArgsWithToken, BuildExpectedObject
+                Config, Method, Verb, lists:subtract(RemainingExpEntries, ExpListedEntries), ArgsWithToken
             );
         false -> false
     end.

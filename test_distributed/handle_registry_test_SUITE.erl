@@ -428,7 +428,10 @@ delete_every_second_handle_test(_Config) ->
     ?assertEqual(error, ozt:rpc(handle_registry, lookup_deleted, [<<"IdThatNotExists">>])),
 
     #handle_listing_entry{handle_id = HandleId} = hd(ElementsToDelete),
-    ?assertEqual({ok, MetadataPrefix, lookup_expected_entry(HandleId)}, ozt:rpc(handle_registry, lookup_deleted, [HandleId])).
+    ?assertEqual(
+        {ok, {MetadataPrefix, lookup_expected_entry(HandleId)}},
+        ozt:rpc(handle_registry, lookup_deleted, [HandleId])
+    ).
 
 
 %%%===================================================================

@@ -298,7 +298,7 @@ to_xml(#oai_metadata{metadata_prefix = MetadataPrefix, raw_value = RawValue}) ->
         {ok, ParsedMetadata} ->
             #xmlElement{
                 name = metadata,
-                content = ensure_list(to_xml(oai_metadata:adapt_for_oai_pmh(MetadataPrefix, ParsedMetadata)))
+                content = ensure_list(oai_metadata:adapt_for_oai_pmh(MetadataPrefix, ParsedMetadata))
             };
         error ->
             % this should theoretically never happen as the metadata is sanitized before

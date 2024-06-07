@@ -21,6 +21,7 @@
 -export([lookup_deleted/1, purge_all_deleted_entries/0]).
 -export([get_earliest_timestamp/0]).
 -export([list_portion/1, list_completely/1, gather_by_all_prefixes/0, gather_by_all_prefixes/1]).
+-export([service_has_any_entries/1]).
 
 % link_key() consists of 2 parts:
 %  1) timestamp (in seconds) - so that links would be sorted by time.
@@ -80,10 +81,9 @@
 -define(DEFAULT_LIST_LIMIT, oz_worker:get_env(default_handle_list_limit, 1000)).
 -define(MAX_LIST_LIMIT, 1000).
 
-% uses null for separator to ensure alphabetical sorting
--define(KEY_SEP, 0).
--define(VALUE_SEP, <<":">>).
--define(RESUMPTION_TOKEN_SEP, <<",">>).
+% separators used to merge pieces of information into a single string
+-define(LINK_DATA_SEP, ":").
+-define(RESUMPTION_TOKEN_SEP, ",").
 
 -define(MAX_TIMESTAMP, 99999999999).
 
@@ -119,7 +119,7 @@ report_deleted(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp, Del
     deleted_handle_registry:insert(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp).
 
 
--spec lookup_deleted(od_handle:id()) -> error | {ok, od_handle:metadata_prefix(), handle_listing_entry()}.
+-spec lookup_deleted(od_handle:id()) -> error | {ok, {od_handle:metadata_prefix(), handle_listing_entry()}}.
 lookup_deleted(HandleId) ->
     deleted_handle_registry:lookup(HandleId).
 
@@ -174,6 +174,14 @@ gather_by_all_prefixes(HServiceId) ->
     lists:umerge(lists:map(fun(MetadataPrefix) ->
         list_completely(#{metadata_prefix => MetadataPrefix, service_id => HServiceId})
     end, oai_metadata:supported_formats())).
+
+
+-spec service_has_any_entries(od_handle_service:id()) -> boolean().
+service_has_any_entries(HServiceId) ->
+    lists:any(fun(MetadataPrefix) ->
+        {Entries, _} = list_portion(#{metadata_prefix => MetadataPrefix, service_id => HServiceId, limit => 1}),
+        not lists_utils:is_empty(Entries)
+    end, oai_metadata:supported_formats()).
 
 %%%===================================================================
 %%% Internal functions
@@ -263,7 +271,7 @@ pack_resumption_token(#internal_listing_opts{
         StartAfterKey,
         integer_to_binary(UntilTimestamp),
         atom_to_binary(IncludeDeleted)
-    ], ?RESUMPTION_TOKEN_SEP).
+    ], <<?RESUMPTION_TOKEN_SEP>>).
 
 
 %% @private
@@ -275,7 +283,7 @@ unpack_resumption_token(ResumptionToken) ->
         StartAfterKey,
         UntilTimestampBin,
         IncludeDeletedBin
-    ] = binary:split(ResumptionToken, ?RESUMPTION_TOKEN_SEP, [global]),
+    ] = binary:split(ResumptionToken, <<?RESUMPTION_TOKEN_SEP>>, [global]),
     #internal_listing_opts{
         tree_id = TreeId,
         limit = binary_to_integer(LimitBin),
@@ -296,26 +304,26 @@ encode_link_key(Timestamp, first) ->
     encode_link_key(Timestamp, <<"">>);
 encode_link_key(Timestamp, HandleId) ->
     FormattedTimestamp = str_utils:format_bin("~11..0B", [Timestamp]),
-    <<(FormattedTimestamp)/binary, ?KEY_SEP, HandleId/binary>>.
+    <<(FormattedTimestamp)/binary, ?LINK_DATA_SEP, HandleId/binary>>.
 
 
 %% @private
 -spec decode_link_key(link_key()) -> {od_handle:timestamp_seconds(), od_handle:id()}.
 decode_link_key(Key) ->
-    <<Timestamp:11/binary, ?KEY_SEP, HandleId/binary>> = Key,
+    <<Timestamp:11/binary, ?LINK_DATA_SEP, HandleId/binary>> = Key,
     {binary_to_integer(Timestamp), HandleId}.
 
 
 %% @private
 -spec encode_link_value(od_handle_service:id(), status()) -> link_value().
 encode_link_value(HandleServiceId, Status) ->
-    str_utils:join_binary([status_to_binary(Status), HandleServiceId], ?VALUE_SEP).
+    str_utils:join_binary([status_to_binary(Status), HandleServiceId], <<?LINK_DATA_SEP>>).
 
 
 %% @private
 -spec decode_link_value(link_value()) -> {od_handle_service:id(), status()}.
 decode_link_value(Value) ->
-    [Status, HandleServiceId] = binary:split(Value, [?VALUE_SEP], [global]),
+    [Status, HandleServiceId] = binary:split(Value, [<<?LINK_DATA_SEP>>], [global]),
     {HandleServiceId, binary_to_status(Status)}.
 
 

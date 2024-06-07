@@ -84,7 +84,7 @@ get_response(<<"metadataFormat">>, Args) ->
                     HandleRecord#od_handle.metadata_prefix;
                 {error, not_found} ->
                     case deleted_handle_registry:lookup(HandleId) of
-                        {ok, MP, _} -> MP;
+                        {ok, {MP, _}} -> MP;
                         error -> throw({idDoesNotExist, OAIId})
                     end
             end,
