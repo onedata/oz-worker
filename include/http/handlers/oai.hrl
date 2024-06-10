@@ -22,7 +22,7 @@
     identifier :: oai_id(),
     datestamp :: binary(),
     set_spec :: oai_set_spec(),
-    status :: handles:status()
+    status :: handle_registry:status()
 }).
 
 -record(oai_metadata_format, {
@@ -65,14 +65,15 @@
 
 -record(oai_listing_result, {
     batch :: [oai_record()] | [oai_header()],
-    resumption_token :: handles:resumption_token()
+    resumption_token :: handle_registry:resumption_token()
 }).
 
+% NOTE: the order of the fields is important (timestamp -> handle_id) so that they can be naturally sorted
 -record(handle_listing_entry, {
     timestamp :: od_handle:timestamp_seconds(),
-    service_id :: od_handle_service:id(),
     handle_id :: od_handle:id(),
-    status :: handles:status()
+    service_id :: od_handle_service:id(),
+    status :: handle_registry:status()
 }).
 
 %% @formatter:off
@@ -81,7 +82,7 @@
 
 -type oai_error_code() :: badArgument | badResumptionToken | badVerb |
                           cannotDisseminateFormat |idDoesNotExist |
-                          noRecordsMatch | noMetadataFormats | noSetHierarchy.
+                          noRecordsMatch | noSetHierarchy.
 
 -type oai_id() :: binary().
 -type oai_header() :: #oai_header{}.

@@ -24,7 +24,6 @@
     request_arguments_to_handle_listing_opts/1, harvest/2, oai_identifier_decode/1,
     build_oai_header/1, build_oai_record/1, build_oai_record/2
 ]).
--export([get_handle/1]).
 
 
 %%%--------------------------------------------------------------------
@@ -45,11 +44,11 @@ oai_identifier_decode(OAIId) ->
             throw({illegalId, OAIId})
     end.
 
--spec build_oai_header(handles:handle_listing_entry()) -> #oai_header{}.
+-spec build_oai_header(handle_registry:handle_listing_entry()) -> #oai_header{}.
 build_oai_header(#handle_listing_entry{
     timestamp = TimeSeconds,
-    service_id = HandleServiceId,
     handle_id = HandleId,
+    service_id = HandleServiceId,
     status = Status
 }) ->
     OaiId = oai_identifier_encode(HandleId),
@@ -60,22 +59,20 @@ build_oai_header(#handle_listing_entry{
         status = Status
     }.
 
--spec build_oai_record(handles:handle_listing_entry()) -> #oai_record{}.
-build_oai_record(#handle_listing_entry{handle_id = HandleId, status = present} = ListingEntry) ->
-    Handle = get_handle(HandleId),
-    build_oai_record(ListingEntry, Handle);
+-spec build_oai_record(handle_registry:handle_listing_entry()) -> #oai_record{}.
+build_oai_record(#handle_listing_entry{status = present, handle_id = HandleId} = ListingEntry) ->
+    build_oai_record(ListingEntry, ?check(handle_logic:get(?ROOT, HandleId)));
 build_oai_record(#handle_listing_entry{status = deleted} = ListingEntry) ->
     #oai_record{
         header = build_oai_header(ListingEntry)
     }.
 
--spec build_oai_record(handles:handle_listing_entry(), #od_handle{}) -> #oai_record{}.
+-spec build_oai_record(handle_registry:handle_listing_entry(), od_handle:record()) -> #oai_record{}.
 build_oai_record(ListingEntry, Handle) ->
-    MetadataPrefix = Handle#od_handle.metadata_prefix,
     #oai_record{
         header = build_oai_header(ListingEntry),
         metadata = #oai_metadata{
-            metadata_prefix = MetadataPrefix,
+            metadata_prefix = Handle#od_handle.metadata_prefix,
             raw_value = Handle#od_handle.metadata,
             handle = Handle
         }
@@ -120,7 +117,7 @@ deserialize_datestamp(Datestamp) ->
     end.
 
 
--spec request_arguments_to_handle_listing_opts([proplists:property()]) -> handles:listing_opts().
+-spec request_arguments_to_handle_listing_opts([proplists:property()]) -> handle_registry:listing_opts().
 request_arguments_to_handle_listing_opts(Args) ->
     case proplists:get_value(<<"resumptionToken">>, Args) of
         undefined ->
@@ -153,9 +150,9 @@ request_arguments_to_handle_listing_opts(Args) ->
 %%% Throws with noRecordsMatch if nothing is harvested.
 %%% @end
 %%%--------------------------------------------------------------------
--spec harvest(handles:listing_opts(), function()) -> oai_response().
+-spec harvest(handle_registry:listing_opts(), function()) -> oai_response().
 harvest(ListingOpts, HarvestingFun) ->
-    {HandleListingEntries, NewResumptionToken} = handles:list_portion(ListingOpts),
+    {HandleListingEntries, NewResumptionToken} = handle_registry:list_portion(ListingOpts),
     HarvestedMetadata = lists:map(HarvestingFun, HandleListingEntries),
 
     % TODO VFS-11906 consider a situation when a resumption token has been returned because
@@ -281,36 +278,25 @@ to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp, set_spec = Se
             ensure_list(to_xml({setSpec, SetSpec}))
         ])
     };
-to_xml(#oai_metadata{metadata_prefix = MetadataPrefix, raw_value = RawValue, handle = Handle}) ->
-    ParsedMetadata = case oai_xml:parse(RawValue) of
-        {ok, Parsed} ->
-            Parsed;
+to_xml(#oai_metadata{metadata_prefix = MetadataPrefix, raw_value = RawValue}) ->
+    case oai_xml:parse(RawValue) of
+        {ok, ParsedMetadata} ->
+            #xmlElement{
+                name = metadata,
+                content = ensure_list(to_xml(oai_metadata:adapt_for_oai_pmh(MetadataPrefix, ParsedMetadata)))
+            };
         error ->
-            % @TODO VFS-11906 Temporary workaround, rework
-            % @TODO VFS-11906 Consider adding tests for this edge case
-            EmptyMetadata = case MetadataPrefix of
-                ?OAI_DC_METADATA_PREFIX ->
-                    #xmlElement{name = metadata, content = []};
-                ?EDM_METADATA_PREFIX ->
-                    #xmlElement{name = 'rdf:RDF', content = []}
-            end,
-            {ok, RevisedMetadata} = oai_metadata:revise_for_publication(
-                MetadataPrefix,
-                EmptyMetadata,
-                Handle#od_handle.resource_id,
-                ?check(share_logic:get(?ROOT, Handle#od_handle.resource_id))
+            % this should theoretically never happen as the metadata is sanitized before
+            % being written to the DB, so let it crash in case of unforeseen errors
+            ?error(
+                "Cannot parse handle metadata:~n"
+                "-----------------------------~n"
+                "~ts~n"
+                "-----------------------------",
+                [RawValue]
             ),
-            oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, Handle#od_handle.public_handle)
-        % @TODO VFS-11906 This might be useful when we upgrade the models and ensure there are valid xmls in the DB
-%%            % this should theoretically never happen as the metadata is sanitized before
-%%            % being written to the DB, so let it crash in case of unforeseen errors
-%%            error({bad_metadata, RawValue})
-    end,
-
-    #xmlElement{
-        name = metadata,
-        content = ensure_list(to_xml(oai_metadata:adapt_for_oai_pmh(MetadataPrefix, ParsedMetadata)))
-    };
+            error(bad_handle_metadata)
+    end;
 to_xml(#oai_metadata_format{metadataPrefix = MetadataPrefix, schema = Schema,
     metadataNamespace = Namespace}) ->
     #xmlElement{
@@ -369,20 +355,10 @@ ensure_list(Arg) when is_list(Arg) -> Arg;
 ensure_list(Arg) -> [Arg].
 
 
-%%%-------------------------------------------------------------------
-%%% @doc
-%%% Retrieves specified handle record.
-%%% @end
-%%%-------------------------------------------------------------------
--spec get_handle(HandleId :: od_handle:id()) -> #od_handle{}.
-get_handle(HandleId) ->
-    {ok, Handle} = handle_logic:get(?ROOT, HandleId),
-    Handle.
-
-
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
 
 %%%-------------------------------------------------------------------
 %%% @private

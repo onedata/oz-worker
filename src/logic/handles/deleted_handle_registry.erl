@@ -9,7 +9,7 @@
 %%% Link-tree-based persistent storage for deleted OpenData handles.
 %%% @end
 %%%-------------------------------------------------------------------
--module(deleted_handles).
+-module(deleted_handle_registry).
 -author("Katarzyna Such").
 
 -include("http/handlers/oai.hrl").
@@ -46,40 +46,39 @@ insert(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
     end.
 
 
--spec lookup(od_handle:id()) -> error | {ok, handles:handle_listing_entry(), od_handle:metadata_prefix()}.
+-spec lookup(od_handle:id()) -> error | {ok, od_handle:metadata_prefix(), handle_registry:handle_listing_entry()}.
 lookup(HandleId) ->
     case datastore_model:get_links(?CTX, ?FOREST, ?TREE_FOR_DELETED_HANDLES, HandleId) of
+        {error, not_found} ->
+            error;
         {ok, [#link{target = LinkValue}]} ->
             {MetadataPrefix, HandleServiceId, Timestamp} = decode_link_value(LinkValue),
-            {ok, #handle_listing_entry{
+            {ok, MetadataPrefix, #handle_listing_entry{
                 timestamp = Timestamp,
-                service_id = HandleServiceId,
                 handle_id = HandleId,
+                service_id = HandleServiceId,
                 status = deleted
-            }, MetadataPrefix};
-        {error, not_found} -> error
+            }}
     end.
 
 
--spec foreach(function()) -> ok.
+-spec foreach(fun(({od_handle:metadata_prefix(), handle_registry:handle_listing_entry()}) -> ok)) -> ok.
 foreach(ForeachFun) ->
     FoldFun = fun(#link{name = HandleId, target = Value}, Acc) ->
         {MetadataPrefix, HandleServiceId, Timestamp} = decode_link_value(Value),
         {ok, [{MetadataPrefix, #handle_listing_entry{
             timestamp = Timestamp,
-            service_id = HandleServiceId,
             handle_id = HandleId,
+            service_id = HandleServiceId,
             status = deleted
         }} | Acc]}
     end,
-    {ok, InternalEntries} = datastore_model:fold_links(
-        ?CTX, ?FOREST, ?TREE_FOR_DELETED_HANDLES, FoldFun, [], #{size => 1000}
-    ),
-    case InternalEntries of
-        [] ->
+    % TODO VFS-11906 fix listing above 1000
+    case datastore_model:fold_links(?CTX, ?FOREST, ?TREE_FOR_DELETED_HANDLES, FoldFun, [], #{size => 1000}) of
+        {ok, []} ->
             ok;
-        _ ->
-            lists:foreach(ForeachFun, InternalEntries),
+        {ok, Entries} ->
+            lists:foreach(ForeachFun, Entries),
             foreach(ForeachFun)
     end.
 
@@ -110,4 +109,3 @@ encode_link_value(MetadataPrefix, HandleServiceId, Timestamp) ->
 decode_link_value(Value) ->
     [MetadataPrefix, HandleServiceId, TimestampBin] = binary:split(Value, [?VALUE_SEP], [global]),
     {MetadataPrefix, HandleServiceId, binary_to_integer(TimestampBin)}.
-

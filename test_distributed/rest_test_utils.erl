@@ -420,5 +420,3 @@ sort_map(OriginalMap) ->
                     MapAcc
             end
         end, OriginalMap, maps:keys(OriginalMap)).
-
-

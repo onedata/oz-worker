@@ -487,7 +487,7 @@ delete_test(Config) ->
                 with_handle ->
                     % when a share is deleted and it had a handle attached, the handle should be deleted too
                     ?assertEqual({ok, not ShouldSucceed}, ozt:rpc(od_handle, exists, [HandleId])),
-                    ?assertEqual(not ShouldSucceed, lists:member(HandleId, ozt_handles:list())),
+                    ?assertEqual(not ShouldSucceed, lists:member(HandleId, ozt_handles:list()))
             end
         end,
 

@@ -154,10 +154,6 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             creation_time = CreationTime
         }}),
 
-        entity_graph:add_relation(
-            od_handle, HandleId,
-            od_handle_service, HandleServiceId
-        ),
         case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
                 entity_graph:add_relation(
@@ -179,7 +175,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             od_share, ShareId
         ),
 
-        handles:report_created(MetadataPrefix, HandleServiceId, HandleId, CreationTime),
+        handle_registry:report_created(MetadataPrefix, HandleServiceId, HandleId, CreationTime),
         {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
         {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}
     end);
@@ -218,7 +214,12 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
-    od_handle:list();
+    % NOTE: od_handle:list() still uses the datastore's secure fold listing
+    % (which should be reworked at some point), but the handle registry provides
+    % a lighter way to list (nevertheless, at some point we should never list whole
+    % collections, but do this in batches).
+    {ok, [H#handle_listing_entry.handle_id || H <- handle_registry:gather_by_all_prefixes()]};
+
 get(#el_req{gri = #gri{aspect = privileges}}, _) ->
     {ok, #{
         <<"member">> => privileges:handle_member(),
@@ -312,7 +313,8 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
         end),
         % every handle modification must be reflected in the handle registry
         % TODO VFS-11906 maybe rename handles -> handle_registry
-        handles:update_timestamp(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp)
+        % TODO VFS-11906 nested critical section - sort it out
+        handle_registry:report_updated(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp)
         % TODO VFS-11906 currently not supported
         % handle_proxy:modify_handle(HandleId, FinalRawMetadata)
     end),
@@ -363,7 +365,8 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
                 )
             end,
             DeletionTimestamp = od_handle:current_timestamp(),
-            handles:report_deleted(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
+            % TODO VFS-11906 nested critical section - sort it out
+            handle_registry:report_deleted(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
             entity_graph:delete_with_relations(od_handle, HandleId)
         end
     end);
@@ -700,5 +703,3 @@ auth_by_privilege(#el_req{auth = _OtherAuth}, _HandleOrId, _Privilege) ->
     false;
 auth_by_privilege(UserId, HandleOrId, Privilege) ->
     handle_logic:has_eff_privilege(HandleOrId, UserId, Privilege).
-
-

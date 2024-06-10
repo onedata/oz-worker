@@ -99,8 +99,8 @@
     cannot_disseminate_format_post_test/1,
     exclusive_resumption_token_required_get_test/1,
     exclusive_resumption_token_required_post_test/1,
-    list_metadata_formats_no_format_error_get_test/1,
-    list_metadata_formats_no_format_error_post_test/1,
+    list_metadata_formats_error_get_test/1,
+    list_metadata_formats_error_post_test/1,
     list_identifiers_empty_repository_error_get_test/1,
     list_identifiers_empty_repository_error_post_test/1,
     list_identifiers_no_records_match_error1_get_test/1,
@@ -136,9 +136,8 @@ all() -> ?ALL([
 
     get_record_get_test,
     get_record_post_test,
-%%    TODO VFS-11935 fix xml encoding for this test
-%%    get_dc_record_with_bad_metadata_get_test,
-%%    get_dc_record_with_bad_metadata_post_test
+    get_dc_record_with_bad_metadata_get_test,
+    get_dc_record_with_bad_metadata_post_test,
     get_deleted_record_get_test,
     get_deleted_record_post_test,
 
@@ -206,8 +205,8 @@ all() -> ?ALL([
     cannot_disseminate_format_post_test,
     exclusive_resumption_token_required_get_test,
     exclusive_resumption_token_required_post_test,
-    list_metadata_formats_no_format_error_get_test,
-    list_metadata_formats_no_format_error_post_test,
+    list_metadata_formats_error_get_test,
+    list_metadata_formats_error_post_test,
     list_identifiers_empty_repository_error_get_test,
     list_identifiers_empty_repository_error_post_test,
     list_identifiers_no_records_match_error1_get_test,
@@ -480,11 +479,11 @@ exclusive_resumption_token_required_get_test(Config) ->
 exclusive_resumption_token_required_post_test(Config) ->
     exclusive_resumption_token_required_error(Config, post).
 
-list_metadata_formats_no_format_error_get_test(Config) ->
-    list_metadata_formats_no_format_error_test_base(Config, get).
+list_metadata_formats_error_get_test(Config) ->
+    list_metadata_formats_error_test_base(Config, get).
 
-list_metadata_formats_no_format_error_post_test(Config) ->
-    list_metadata_formats_no_format_error_test_base(Config, post).
+list_metadata_formats_error_post_test(Config) ->
+    list_metadata_formats_error_test_base(Config, post).
 
 list_identifiers_empty_repository_error_get_test(Config) ->
     list_identifiers_empty_repository_error_test_base(Config, get).
@@ -663,59 +662,69 @@ get_record_test_base(Config, Method) ->
         {<<"identifier">>, oai_identifier(Config, HandleEntry#handle_listing_entry.handle_id)},
         {<<"metadataPrefix">>, MetadataPrefix}
     ],
-    ExpResponseContent = [
-        expected_oai_record_xml(Config, MetadataPrefix, HandleEntry)
-    ],
+    ExpResponseContent = [expected_oai_record_xml(Config, HandleEntry)],
     ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config)).
 
 
+% Simulate a DC record that preexisted since the previous version of Onezone
+% (currently, it is not possible to create handles with invalid metadata).
+% Then, simulate a Onezone upgrade and try to read such record.
 get_dc_record_with_bad_metadata_test_base(Config, Method) ->
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     {HSId, _} = create_handle_service(Config, User),
-    Timestamp = ?NOW(),
 
     BadMetadataExamples = [
         <<"">>,
         <<"null">>,
-        <<"<bad-xml></yes-very-bad>">>
+        <<"<bad-xml></yes-very-bad>">>,
+        <<"<not-a-metadata-root-element></not-a-metadata-root-element>">>
     ],
 
     lists:foreach(fun(Metadata) ->
-        % simulate a handle being added in the old system version, when metadata was not sanitized
         ShareId = datastore_key:new(),
         {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(User), ShareId, ShareId, Space1),
-        MetadataPrefix = ?OAI_DC_METADATA_PREFIX,
-        {ok, PublicHandle} = ozt:rpc(handle_proxy, register_handle,
-            [HSId, ?HANDLE_RESOURCE_TYPE, ShareId, Metadata]
-        ),
-        {ok, #document{key = Identifier}} = ozt:rpc(od_handle, create, [#document{value = #od_handle{
-            handle_service = HSId,
-            resource_type = ?HANDLE_RESOURCE_TYPE,
-            resource_id = ShareId,
-            public_handle = PublicHandle,
-            metadata = Metadata,
-            metadata_prefix = MetadataPrefix,
-            timestamp = Timestamp
-        }}]),
-        ozt:rpc(handles, report_created, [MetadataPrefix, HSId, Identifier, Timestamp]),
+        HandleDoc = ozt_handles:gen_legacy_handle_doc(HSId, ShareId, Metadata),
+        {ok, #document{
+            key = HandleId,
+            value = #od_handle{
+                public_handle = PublicHandle,
+                timestamp = Timestamp
+            }
+        }} = ozt:rpc(od_handle, create, [HandleDoc]),
+        {ok, _} = ozt:rpc(od_handle_service, update, [HSId, fun(HS = #od_handle_service{handles = Handles}) ->
+            {ok, HS#od_handle_service{handles = [HandleId | Handles]}}
+        end]),
+
+        ?assertMatch(ok, ozt:rpc(od_handle, migrate_legacy_handles, [])),
+
         Args = [
-            {<<"identifier">>, oai_identifier(Config, Identifier)},
-            {<<"metadataPrefix">>, MetadataPrefix}
+            {<<"identifier">>, oai_identifier(Config, HandleId)},
+            {<<"metadataPrefix">>, ?OAI_DC_METADATA_PREFIX}  % all legacy handles have the DC format
         ],
 
-        % Badly formatted metadata should result in only
-        % dc:identifiers being present in the OAI output
+        HandleEntry = #handle_listing_entry{
+            timestamp = Timestamp, handle_id = HandleId, service_id = HSId, status = present
+        },
+
+        % Badly formatted metadata should result in only dc:identifiers
+        % (public handle and public share url) being present in the OAI output
         ExpectedDCMetadata = ozt:rpc(oai_metadata, adapt_for_oai_pmh, [
-                MetadataPrefix,
-                #xmlElement{name = metadata, content = expected_dc_identifiers(Config, Identifier)}
+            ?OAI_DC_METADATA_PREFIX,
+            #xmlElement{name = metadata, content = [
+                #xmlText{value = "\n    "},
+                #xmlElement{
+                    name = 'dc:identifier',
+                    content = [#xmlText{value = binary_to_list(PublicHandle)}]
+                },
+                #xmlText{value = "\n    "},
+                #xmlElement{
+                    name = 'dc:identifier',
+                    content = [#xmlText{value = binary_to_list(oz_test_utils:get_share_public_url(Config, ShareId))}]
+                }
+            ]}
         ]),
-        ExpResponseContent = [
-            expected_oai_record_xml_with_defined_metadata(Config, ExpectedDCMetadata, #handle_listing_entry{
-                timestamp = Timestamp, service_id = HSId, handle_id = Identifier, status = present
-            })
-        ],
-
+        ExpResponseContent = [expected_oai_record_xml(Config, HandleEntry, ExpectedDCMetadata)],
         ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config))
     end, BadMetadataExamples).
 
@@ -724,50 +733,67 @@ get_deleted_record_test_base(Config, Method) ->
     User = ozt_users:create(),
     Space1 = ozt_users:create_space_for(User, ?SPACE_NAME1),
     ShareId = ozt_users:create_share_for(User, Space1),
-    HSId = ozt_users:create_handle_service_for(User),
+    HServiceId = ozt_users:create_handle_service_for(User),
     Timestamp = ?NOW(),
-    Timestamp2 =  increase_timestamp(Timestamp, 1),
-    HandleId = ozt_users:create_handle_for(User, HSId, ShareId),
+    Timestamp2 = increase_timestamp(Timestamp, 1),
+    HandleId = ozt_users:create_handle_for(User, HServiceId, ShareId),
     #od_handle{metadata_prefix = MetadataPrefix} = ozt_handles:get(HandleId),
+    HandleEntry = #handle_listing_entry{
+        timestamp = Timestamp, handle_id = HandleId, service_id = HServiceId, status = present
+    },
 
     Args = [
         {<<"identifier">>, oai_identifier(Config, HandleId)},
         {<<"metadataPrefix">>, MetadataPrefix}
     ],
-    ExpResponseContent = [expected_oai_record_xml(Config, MetadataPrefix, #handle_listing_entry{
-        timestamp = Timestamp, service_id = HSId, handle_id = HandleId, status = present
-    })],
+    ExpResponseContent = [expected_oai_record_xml(Config, HandleEntry)],
     ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config)),
 
     delete_handle_with_mocked_timestamp(Config, HandleId, Timestamp2),
-    ExpResponseContent2 = [expected_oai_record_xml(Config, MetadataPrefix, #handle_listing_entry{
-        timestamp = Timestamp2, service_id = HSId, handle_id = HandleId, status = deleted
+    ExpResponseContent2 = [expected_oai_record_xml(Config, HandleEntry#handle_listing_entry{
+        timestamp = Timestamp2, status = deleted
     })],
     ?assert(check_get_record(200, Args, Method, ExpResponseContent2, Config)).
 
 
 list_metadata_formats_test_base(Config, Method) ->
-    ExpResponseContent = lists:map(fun(MetadataPrefix) ->
-        {_, Namespace} = ozt:rpc(oai_metadata, main_namespace, [MetadataPrefix]),
-        #xmlElement{
-            name = metadataFormat,
-            content = [
-                #xmlElement{
-                    name = metadataPrefix,
-                    content = [#xmlText{value = binary_to_list(MetadataPrefix)}]
-                },
-                #xmlElement{
-                    name = schema,
-                    content = [#xmlText{value = binary_to_list(ozt:rpc(oai_metadata, schema_URL, [MetadataPrefix]))}]
-                },
-                #xmlElement{
-                    name = metadataNamespace,
-                    content = [#xmlText{value = binary_to_list(Namespace)}]
-                }
-            ]
-        }
-    end, ozt_handles:supported_metadata_prefixes()),
-    ?assert(check_list_metadata_formats(200, [], Method, ExpResponseContent, Config)).
+    BuildExpResponseContent = fun(SupportedPrefixes) ->
+        lists:map(fun(MetadataPrefix) ->
+            {_, Namespace} = ozt:rpc(oai_metadata, main_namespace, [MetadataPrefix]),
+            #xmlElement{
+                name = metadataFormat,
+                content = [
+                    #xmlElement{
+                        name = metadataPrefix,
+                        content = [#xmlText{value = binary_to_list(MetadataPrefix)}]
+                    },
+                    #xmlElement{
+                        name = schema,
+                        content = [#xmlText{value = binary_to_list(ozt:rpc(oai_metadata, schema_URL, [MetadataPrefix]))}]
+                    },
+                    #xmlElement{
+                        name = metadataNamespace,
+                        content = [#xmlText{value = binary_to_list(Namespace)}]
+                    }
+                ]
+            }
+        end, SupportedPrefixes)
+    end,
+    % when no identifier is provided, returns all formats supported by the repository
+    ?assert(check_list_metadata_formats(
+        200, [], Method, BuildExpResponseContent(ozt_handles:supported_metadata_prefixes()), Config
+    )),
+    % when a specific identifier is provided, returns the formats available for the record
+    User = ozt_users:create(),
+    Space1 = ozt_users:create_space_for(User, ?SPACE_NAME1),
+    ShareId = ozt_users:create_share_for(User, Space1),
+    HServiceId = ozt_users:create_handle_service_for(User),
+    HandleId = ozt_users:create_handle_for(User, HServiceId, ShareId),
+    #od_handle{metadata_prefix = MetadataPrefix} = ozt_handles:get(HandleId),
+    Args = [{<<"identifier">>, oai_identifier(Config, HandleId)}],
+    ?assert(check_list_metadata_formats(
+        200, Args, Method, BuildExpResponseContent([MetadataPrefix]), Config
+    )).
 
 
 list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
@@ -793,14 +819,13 @@ list_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
     Args = prepare_harvesting_args(MetadataPrefix, undefined, undefined),
     BuildExpectedObject = fun(HandleEntry) ->
         case Verb of
-            <<"ListIdentifiers">> ->
-                expected_oai_header_xml(Config, HandleEntry);
-            <<"ListRecords">> ->
-                expected_oai_record_xml(Config, MetadataPrefix, HandleEntry)
+            <<"ListIdentifiers">> -> expected_oai_header_xml(Config, HandleEntry);
+            <<"ListRecords">> -> expected_oai_record_xml(Config, HandleEntry)
         end
     end,
-    ?assert(check_list_entries_continuously_with_resumption_token(Config, Method, Verb, HandleEntries,
-        Args, BuildExpectedObject)).
+    ?assert(check_list_entries_continuously_with_resumption_token(
+        Config, Method, Verb, HandleEntries, Args, BuildExpectedObject
+    )).
 
 list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     FromOffset, UntilOffset, IdentifiersToBeModified) ->
@@ -874,7 +899,7 @@ list_with_time_offsets_test_base(
     BuildExpectedObject = fun(HandleEntry) ->
         case Verb of
             <<"ListIdentifiers">> -> expected_oai_header_xml(Config, HandleEntry);
-            <<"ListRecords">> -> expected_oai_record_xml(Config, MetadataPrefix, HandleEntry)
+            <<"ListRecords">> -> expected_oai_record_xml(Config, HandleEntry)
         end
     end,
 
@@ -991,29 +1016,21 @@ exclusive_resumption_token_required_error(Config, Method) ->
     ],
     ?assert(check_exclusive_resumption_token_required_error(200, Args, Method, [], Config)).
 
-list_metadata_formats_no_format_error_test_base(Config, Method) ->
-    {ok, User} = oz_test_utils:create_user(Config),
-    {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    ShareId = datastore_key:new(),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?USER(User), ShareId, ShareId, Space1
-    ),
-    {HSId, _} = create_handle_service(Config, User),
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
-    Identifier = create_handle(Config, User, HSId, ShareId, MetadataPrefix, Metadata),
-    % Modify handle metadata to undefined (this should not occur in normal
-    % conditions because entity logic won't accept undefined metadata,
-    % but check if returned OAI error in such case is correct).
-    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_handle, update, [
-        Identifier, fun(Handle = #od_handle{}) ->
-            {ok, Handle#od_handle{metadata = undefined}}
-        end]
+list_metadata_formats_error_test_base(Config, Method) ->
+    ?assert(check_list_metadata_formats_error(
+        200,
+        [{<<"identifier">>, <<"bad-identifier">>}],
+        Method,
+        {illegalId, <<"bad-identifier">>},
+        Config
     )),
-
-    Args = [{<<"identifier">>, oai_identifier(Config, Identifier)}],
-
-    ?assert(check_list_metadata_formats_error(200, Args, Method, [], Config)).
+    ?assert(check_list_metadata_formats_error(
+        200,
+        [{<<"identifier">>, oai_identifier(Config, <<"bad-handle-id">>)}],
+        Method,
+        {idDoesNotExist, oai_identifier(Config, <<"bad-handle-id">>)},
+        Config
+    )).
 
 list_identifiers_empty_repository_error_test_base(Config, Method) ->
     Args = [{<<"metadataPrefix">>, ?RAND_METADATA_PREFIX()}],
@@ -1079,7 +1096,6 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(_, Config) ->
     oz_test_utils:delete_all_entities(Config),
-    ok = ozt:rpc(handles, purge_all_deleted_entries, []),
     unmock_handle_proxy(Config),
     ok.
 
@@ -1142,9 +1158,8 @@ check_list_metadata_formats(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListMetadataFormats">>, Args, Method,
         ExpResponseContent, 'ListMetadataFormats', Config).
 
-check_list_metadata_formats_error(Code, Args, Method, ExpResponseContent, Config) ->
-    check_oai_request(Code, <<"ListMetadataFormats">>, Args, Method, ExpResponseContent,
-        {error, {noMetadataFormats, proplists:get_value(<<"identifier">>, Args)}}, Config).
+check_list_metadata_formats_error(Code, Args, Method, ExpErrorSpec, Config) ->
+    check_oai_request(Code, <<"ListMetadataFormats">>, Args, Method, [], {error, ExpErrorSpec}, Config).
 
 check_list_identifiers_bad_argument_granularity_mismatch_error(Code, Args, Method, ExpResponseContent, Config) ->
     check_oai_request(Code, <<"ListIdentifiers">>, Args, Method, ExpResponseContent, {error, {granularity_mismatch,
@@ -1158,7 +1173,7 @@ check_list_identifiers_bad_argument_invalid_date_format_error(Code, Args, Method
 
 check_list_entries(Code, Verb, Args, Method, BuildExpectedObject, ExpectedHandleEntries, Config) ->
     ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
-    {_, ExpResumptionToken} = ozt:rpc(handles, list_portion, [ListingOpts]),
+    {_, ExpResumptionToken} = ozt:rpc(handle_registry, list_portion, [ListingOpts]),
 
     ExpectedBase = lists:map(fun(HandleEntry) -> BuildExpectedObject(HandleEntry) end, ExpectedHandleEntries),
     ExpResponseContent = ExpectedBase ++ expected_response_body_wrt_resumption_token(ExpResumptionToken, ListingOpts),
@@ -1184,7 +1199,7 @@ check_list_entries_continuously_with_resumption_token(_Config, _Method, _Verb, _
 check_list_entries_continuously_with_resumption_token(Config, Method, Verb, RemainingExpEntries, Args, BuildExpectedObject) ->
     ExpListedEntries = lists:sublist(RemainingExpEntries, ?TESTED_HANDLE_LIST_LIMIT),
     ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(Args),
-    {_, ExpResumptionToken} = ozt:rpc(handles, list_portion, [ListingOpts]),
+    {_, ExpResumptionToken} = ozt:rpc(handle_registry, list_portion, [ListingOpts]),
 
     case check_list_entries(200, Verb, Args, Method, BuildExpectedObject, ExpListedEntries, Config) of
         true ->
@@ -1307,7 +1322,7 @@ expected_body(ExpectedResponse, ResponseType, Args, ResponseDate) ->
     }.
 
 expected_response_error(ErrorSpec) ->
-    #oai_error{code = Code, description = Description} = oai_errors:handle(ErrorSpec),
+    #oai_error{code = Code, description = Description} = ozt:rpc(oai_errors, handle, [ErrorSpec]),
     #xmlElement{
         name = error,
         attributes = [#xmlAttribute{name = code, value = str_utils:to_list(Code)}],
@@ -1425,23 +1440,19 @@ create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId,
     HId = create_handle(Config, User, HandleServiceId, ResourceId, MetadataPrefix, Metadata),
     ok = test_utils:mock_validate_and_unload(Nodes, od_handle),
 
-    %% remove handle with 50% probability to check include_deleted listing
+    HandleListingEntry = #handle_listing_entry{
+        timestamp = Timestamp,
+        handle_id = HId,
+        service_id = HandleServiceId,
+        status = present
+    },
+    %% remove handle with 50% probability to check harvesting of deleted records
     case {?RAND_BOOL(), DeletionStrategy} of
         {false, randomly_deleted_handles} ->
             delete_handle_with_mocked_timestamp(Config, HId, Timestamp),
-            #handle_listing_entry{
-                timestamp = Timestamp,
-                service_id = HandleServiceId,
-                handle_id = HId,
-                status = deleted
-            };
+            HandleListingEntry#handle_listing_entry{status = deleted};
         _ ->
-            #handle_listing_entry{
-                timestamp = Timestamp,
-                service_id = HandleServiceId,
-                handle_id = HId,
-                status = present
-            }
+            HandleListingEntry
     end.
 
 create_handle(Config, User, HandleServiceId, ResourceId, MetadataPrefix, Metadata) ->
@@ -1485,9 +1496,7 @@ prepare_harvesting_args(MetadataPrefix, From, Until, Set) ->
     add_to_args_if_defined(<<"set">>, Set, Args3).
 
 filter_handles_from_until(HandleEntries, From, Until) ->
-    lists:filter(fun(#handle_listing_entry{timestamp = Timestamp}) ->
-        offset_in_range(From, Until, Timestamp)
-    end, HandleEntries).
+    lists:filter(fun(H) -> offset_in_range(From, Until, H#handle_listing_entry.timestamp) end, HandleEntries).
 
 increase_timestamp(_, undefined) -> undefined;
 increase_timestamp(undefined, _) -> undefined;
@@ -1532,39 +1541,24 @@ random_out_of_range(Lower, Upper, Max) ->
         _ -> Number
     end.
 
-% Resulting metadata should include additional identifiers - public handle and public share url
-expected_dc_identifiers(Config, HandleId) ->
-    {ok, #od_handle{
-        resource_id = ShareId,
-        public_handle = PublicHandle
-    }} = oz_test_utils:get_handle(Config, HandleId),
-    Name = 'dc:identifier',
-    ShareUrl = oz_test_utils:get_share_public_url(Config, ShareId),
-    [
-        #xmlElement{
-            name = Name,
-            content = [#xmlText{value = binary_to_list(PublicHandle)}]
-        },
-        #xmlElement{
-            name = Name,
-            content = [#xmlText{value = binary_to_list(ShareUrl)}]
-        }
-    ].
 
 expected_admin_emails(Config) ->
     oz_test_utils:get_env(Config, admin_emails).
 
 
-expected_oai_record_xml(Config, _MetadataPrefix, #handle_listing_entry{status = deleted} = HandleEntry) ->
+expected_oai_record_xml(Config, #handle_listing_entry{status = deleted} = HandleEntry) ->
     #xmlElement{name = record, content = [
         expected_oai_header_xml(Config, HandleEntry)
     ]};
 
-expected_oai_record_xml(Config, MetadataPrefix, #handle_listing_entry{status = present} = HandleEntry) ->
-    ExpectedMetadata = expected_final_metadata_element(MetadataPrefix, HandleEntry),
-    expected_oai_record_xml_with_defined_metadata(Config, ExpectedMetadata, HandleEntry).
+expected_oai_record_xml(Config, #handle_listing_entry{status = present} = HandleEntry) ->
+    HandleRecord = ozt_handles:get(HandleEntry#handle_listing_entry.handle_id),
+    ExpFinalMetadata = ozt_handles:expected_final_metadata(HandleRecord),
+    ParsedXml = ?check(oai_xml:parse(ExpFinalMetadata)),
+    ExpectedMetadata = ozt:rpc(oai_metadata, adapt_for_oai_pmh, [HandleRecord#od_handle.metadata_prefix, ParsedXml]),
+    expected_oai_record_xml(Config, HandleEntry, ExpectedMetadata).
 
-expected_oai_record_xml_with_defined_metadata(Config, ExpectedMetadata, HandleEntry) ->
+expected_oai_record_xml(Config, HandleEntry, ExpectedMetadata) ->
     #xmlElement{name = record, content = [
         expected_oai_header_xml(Config, HandleEntry),
         #xmlElement{
@@ -1573,21 +1567,16 @@ expected_oai_record_xml_with_defined_metadata(Config, ExpectedMetadata, HandleEn
         }
     ]}.
 
-expected_oai_header_xml(Config, #handle_listing_entry{
-    timestamp = Timestamp, service_id = HServiceId, handle_id = HandleId, status = deleted
-}) ->
-    XMLBase = expected_oai_header_base_xml(Config, HandleId, Timestamp, HServiceId),
-    XMLBase#xmlElement{
-        attributes = [#xmlAttribute{name = status, value = "deleted"}]
-    };
-expected_oai_header_xml(Config, #handle_listing_entry{
-    timestamp = Timestamp, service_id = HServiceId, handle_id = HandleId, status = present
-}) ->
-    expected_oai_header_base_xml(Config, HandleId, Timestamp, HServiceId).
 
-expected_oai_header_base_xml(Config, HandleId, Timestamp, HSId) ->
+expected_oai_header_xml(Config, #handle_listing_entry{
+    timestamp = Timestamp, handle_id = HandleId, service_id = HServiceId, status = Status
+}) ->
     #xmlElement{
         name = header,
+        attributes = case Status of
+            present -> [];
+            deleted -> [#xmlAttribute{name = status, value = "deleted"}]
+        end,
         content = [
             #xmlElement{
                 name = identifier,
@@ -1604,18 +1593,11 @@ expected_oai_header_base_xml(Config, HandleId, Timestamp, HSId) ->
             #xmlElement{
                 name = setSpec,
                 content = [#xmlText{
-                    value = binary_to_list(HSId)
+                    value = binary_to_list(HServiceId)
                 }]
             }
         ]
     }.
-
-
-%% @private
-expected_final_metadata_element(MetadataPrefix, #handle_listing_entry{handle_id = HandleId}) ->
-    ExpFinalMetadata = ozt_handles:expected_final_metadata(HandleId),
-    ParsedXml = ?check(oai_xml:parse(ExpFinalMetadata)),
-    ozt:rpc(oai_metadata, adapt_for_oai_pmh, [MetadataPrefix, ParsedXml]).
 
 
 %%%-------------------------------------------------------------------
@@ -1626,7 +1608,7 @@ expected_final_metadata_element(MetadataPrefix, #handle_listing_entry{handle_id 
 %%% However, if the whole list is returned in one response, there should be no resumption token element at all.
 %%% @end
 %%%-------------------------------------------------------------------
--spec expected_response_body_wrt_resumption_token(handles:resumption_token(), handles:listing_opts()) ->
+-spec expected_response_body_wrt_resumption_token(handle_registry:resumption_token(), handle_registry:listing_opts()) ->
     [#xmlElement{}].
 expected_response_body_wrt_resumption_token(undefined, ListingOpts) when not is_map_key(resumption_token, ListingOpts) ->
     [];

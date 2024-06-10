@@ -18,10 +18,11 @@
 -include("plugins/onezone_plugins.hrl").
 
 %% API
--export([create/2, create/4, get/1, list/0]).
+-export([create/1, create/2, create/4, get/1, exists/1, list/0]).
 -export([supported_metadata_prefixes/0]).
 -export([example_input_metadata/1, example_input_metadata/2]).
 -export([expected_final_metadata/1, expected_final_metadata/2]).
+-export([gen_legacy_handle_doc/3]).
 
 -compile({no_auto_import, [get/1]}).
 
@@ -29,6 +30,11 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
+
+-spec create(od_handle_service:id()) -> od_handle:id().
+create(HandleServiceId) ->
+    ShareId = ozt_spaces:create_share(ozt_spaces:create()),
+    create(HandleServiceId, ShareId).
 
 -spec create(od_handle_service:id(), od_share:id()) -> od_handle:id().
 create(HandleServiceId, ShareId) ->
@@ -53,6 +59,11 @@ create(HandleServiceId, ShareId, MetadataPrefix, RawMetadata) ->
 get(HandleId) ->
     {ok, HandleRecord} = ?assertMatch({ok, _}, ozt:rpc(handle_logic, get, [?ROOT, HandleId])),
     HandleRecord.
+
+
+-spec exists(od_handle:id()) -> boolean().
+exists(HandleId) ->
+    ozt:rpc(handle_logic, exists, [HandleId]).
 
 
 -spec list() -> [od_handle:id()].
@@ -98,6 +109,25 @@ expected_final_metadata(#od_handle{
         ExpFinalMetadataGenerator(ShareId, ShareRecord, PublicHandle)
     end,
     ozt:rpc(erlang, apply, [GenExpFinalMetadata, []]).
+
+
+% NOTE: requires a mocked handle proxy
+-spec gen_legacy_handle_doc(od_handle_service:id(), od_share:id(), od_handle:raw_metadata()) ->
+    datastore_doc:doc(od_handle:record()).
+gen_legacy_handle_doc(HServiceId, ShareId, Metadata) ->
+    {ok, PublicHandle} = ozt:rpc(handle_proxy, register_handle, [HServiceId, <<"Share">>, ShareId, Metadata]),
+    #document{
+        key = datastore_key:new(),
+        value = #od_handle{
+            handle_service = HServiceId,
+            resource_type = <<"Share">>,
+            resource_id = ShareId,
+            public_handle = PublicHandle,
+            metadata_prefix = <<"legacy">>,
+            metadata = Metadata,
+            timestamp = ozt:timestamp_seconds()
+        }
+    }.
 
 
 %%%===================================================================

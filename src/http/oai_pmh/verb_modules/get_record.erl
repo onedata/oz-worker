@@ -85,14 +85,14 @@ get_response(<<"record">>, Args) ->
             oai_utils:build_oai_record(
                 #handle_listing_entry{
                     timestamp = Handle#od_handle.timestamp,
-                    service_id = Handle#od_handle.handle_service,
                     handle_id = HandleId,
+                    service_id = Handle#od_handle.handle_service,
                     status = present
                 }, Handle
             );
         {error, not_found} ->
-            case handles:lookup_deleted(HandleId) of
-                {ok, HandleListingEntry, HandleMetadataPrefix} ->
+            case handle_registry:lookup_deleted(HandleId) of
+                {ok, HandleMetadataPrefix, HandleListingEntry} ->
                     HandleMetadataPrefix =:= MetadataPrefix orelse throw({cannotDisseminateFormat, MetadataPrefix}),
                     oai_utils:build_oai_record(HandleListingEntry);
                 error ->
