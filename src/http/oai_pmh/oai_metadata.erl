@@ -67,6 +67,9 @@ main_namespace(MetadataPrefix) ->
     Module:main_namespace().
 
 
+% TODO VFS-7454 consider using a different XML parser, e.g. https://github.com/processone/fast_xml
+% TODO VFS-7454 validate the provided XML against corresponding schemas
+% TODO VFS-7454 consider the minimal set of fields to be provided by the client
 -spec revise_for_publication(
     od_handle:metadata_prefix(), od_handle:parsed_metadata(), od_share:id(), od_share:record()
 ) ->
@@ -76,8 +79,6 @@ revise_for_publication(MetadataPrefix, Metadata, ShareId, ShareRecord) ->
     Module:revise_for_publication(Metadata, ShareId, ShareRecord).
 
 
-% TODO VFS-11906 the upgrade procedure should call revise_for_publication and insert_public_handle on
-% DC metadata added in previous system versions, and handle cases when it's not a valid XML
 -spec insert_public_handle(od_handle:metadata_prefix(), od_handle:parsed_metadata(), od_handle:public_handle()) ->
     od_handle:parsed_metadata().
 insert_public_handle(MetadataPrefix, Metadata, PublicHandle) ->

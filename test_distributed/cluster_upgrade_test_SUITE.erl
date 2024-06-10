@@ -54,7 +54,7 @@ init_per_testcase(_, Config) ->
     % if the suite fails midway, there may be some remnants in the handle registry - clean it up
     % (delete_all_entities won't do it because some of the handles may still have the "legacy" metadata prefix set)
     lists:foreach(fun(#handle_listing_entry{timestamp = Timestamp, handle_id = HandleId, service_id = HServiceId}) ->
-        ozt:rpc(handle_registry, report_deleted, [?OAI_DC_METADATA_PREFIX, HServiceId, HandleId, Timestamp])
+        ozt:rpc(handle_registry, report_deleted, [?OAI_DC_METADATA_PREFIX, HServiceId, HandleId, Timestamp, Timestamp])
     end, list_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})),
     Config.
 

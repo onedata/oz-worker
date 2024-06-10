@@ -19,7 +19,7 @@
 %% API
 -export([create/0, create/1]).
 -export([create_admin/0, create_admin/1]).
--export([get/1]).
+-export([get/1, list/0]).
 -export([toggle_access_block/2]).
 -export([create_group_for/1, create_group_for/2]).
 -export([create_space_for/1, create_space_for/2]).
@@ -64,6 +64,12 @@ create_admin(OzPrivileges) ->
 get(UserId) ->
     {ok, User} = ?assertMatch({ok, _}, ozt:rpc(user_logic, get, [?ROOT, UserId])),
     User.
+
+
+-spec list() -> [od_user:id()].
+list() ->
+    {ok, UserIds} = ?assertMatch({ok, _}, ozt:rpc(user_logic, list, [?ROOT])),
+    UserIds.
 
 
 -spec toggle_access_block(od_user:id(), boolean()) -> ok.

@@ -29,9 +29,6 @@
 -define(AVAILABLE_METADATA_FORMATS, oai_metadata:supported_formats()).
 -define(DEFAULT_METADATA_PREFIX, ?OAI_DC_METADATA_PREFIX).
 
--define(critical_section_for_handle(HandleId, Fun),
-    critical_section:run({?MODULE, HandleId}, Fun)).
-
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -127,7 +124,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     CreationTime = od_handle:current_timestamp(),
 
     % ensure no race conditions when creating a handle for a share (only one may be created)
-    ?critical_section_for_handle(ShareId, fun() ->
+    od_share:critical_section_for(ShareId, fun() ->
         {ok, #document{value = ShareRecord}} = od_share:get(ShareId),
 
         ShareRecord#od_share.handle =:= undefined orelse throw(?ERROR_ALREADY_EXISTS),
@@ -288,7 +285,7 @@ get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Handle) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
-    ?critical_section_for_handle(HandleId, fun() ->
+    od_handle:critical_section_for(HandleId, fun() ->
         {ok, #document{value = #od_handle{
             handle_service = HandleService,
             timestamp = PreviousTimestamp,
@@ -312,14 +309,10 @@ update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
             }}
         end),
         % every handle modification must be reflected in the handle registry
-        % TODO VFS-11906 maybe rename handles -> handle_registry
-        % TODO VFS-11906 nested critical section - sort it out
         handle_registry:report_updated(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp)
-        % TODO VFS-11906 currently not supported
+        % TODO VFS-7454 currently not supported by the handle proxy implementation
         % handle_proxy:modify_handle(HandleId, FinalRawMetadata)
-    end),
-
-    ok;
+    end);
 
 
 update(Req = #el_req{gri = #gri{id = HandleId, aspect = {user_privileges, UserId}}}) ->
@@ -348,27 +341,25 @@ update(Req = #el_req{gri = #gri{id = HandleId, aspect = {group_privileges, Group
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
-    ?critical_section_for_handle(HandleId, fun() ->
-        fun(#od_handle{
-            public_handle = PublicHandle,
+    od_handle:critical_section_for(HandleId, fun() ->
+        {ok, #document{value = #od_handle{
             handle_service = HandleService,
             timestamp = PreviousTimestamp,
-            metadata_prefix = MetadataPrefix
-        }) ->
-            try
-                handle_proxy:unregister_handle(HandleId)
-            catch Class:Reason:Stacktrace ->
-                ?warning_exception(
-                    "Handle ~s (~s) was removed but it failed to be unregistered from handle service ~s",
-                    [HandleId, PublicHandle, HandleService],
-                    Class, Reason, Stacktrace
-                )
-            end,
-            DeletionTimestamp = od_handle:current_timestamp(),
-            % TODO VFS-11906 nested critical section - sort it out
-            handle_registry:report_deleted(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
-            entity_graph:delete_with_relations(od_handle, HandleId)
-        end
+            metadata_prefix = MetadataPrefix,
+            public_handle = PublicHandle
+        }}} = od_handle:get(HandleId),
+        try
+            handle_proxy:unregister_handle(HandleId)
+        catch Class:Reason:Stacktrace ->
+            ?warning_exception(
+                "Handle ~s (~s) was removed but it failed to be unregistered from handle service ~s",
+                [HandleId, PublicHandle, HandleService],
+                Class, Reason, Stacktrace
+            )
+        end,
+        DeletionTimestamp = od_handle:current_timestamp(),
+        handle_registry:report_deleted(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
+        entity_graph:delete_with_relations(od_handle, HandleId)
     end);
 
 delete(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}}) ->

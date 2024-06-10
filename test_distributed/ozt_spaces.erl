@@ -18,7 +18,7 @@
 
 %% API
 -export([create/0, create/1, create/2, create_advertised/0, create_advertised/1]).
--export([get/1, exists/1]).
+-export([get/1, list/0, exists/1]).
 -export([update/2]).
 -export([list_marketplace/0, list_marketplace/1]).
 -export([submit_membership_request/2, submit_membership_request/3]).
@@ -87,6 +87,12 @@ create_advertised(Data) ->
 get(SpaceId) ->
     {ok, Space} = ?assertMatch({ok, _}, ozt:rpc(space_logic, get, [?ROOT, SpaceId])),
     Space.
+
+
+-spec list() -> [od_space:id()].
+list() ->
+    {ok, SpaceIds} = ?assertMatch({ok, _}, ozt:rpc(space_logic, list, [?ROOT])),
+    SpaceIds.
 
 
 -spec exists(od_space:id()) -> od_space:record().

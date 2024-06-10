@@ -445,6 +445,10 @@ update_test(Config) ->
 
 
 delete_test(Config) ->
+    delete_test(Config, true),
+    delete_test(Config, false).
+
+delete_test(Config, HasAnyHandles) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
@@ -465,21 +469,22 @@ delete_test(Config) ->
         oz_test_utils:handle_service_set_user_privileges(Config, HServiceId, U2,
             [?HANDLE_SERVICE_DELETE], []
         ),
+        Handles = case HasAnyHandles of
+            false -> [];
+            true -> lists_utils:generate(fun() -> ozt_handles:create(HServiceId) end, 10)
+        end,
         #{
             hserviceId => HServiceId,
-            handles => lists_utils:generate(fun() -> ozt_handles:create(HServiceId) end, 10)
+            handles => Handles
         }
     end,
-    DeleteEntityFun = fun(#{hserviceId := HService} = _Env) ->
+    DeleteEntityFun = fun(#{hserviceId := HService, handles := Handles} = _Env) ->
+        [oz_test_utils:delete_handle(Config, H) || H <- Handles],
         oz_test_utils:delete_handle_service(Config, HService)
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{hserviceId := HService, handles := Handles} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{hserviceId := HService} = _Env, _) ->
         {ok, HServices} = oz_test_utils:list_handle_services(Config),
-        ?assertEqual(lists:member(HService, HServices), not ShouldSucceed),
-        % handles should not be deleted along with the handle service
-        lists:foreach(fun(HandleId) ->
-            ?assert(ozt_handles:exists(HandleId))
-        end, Handles)
+        ?assertEqual(lists:member(HService, HServices), not ShouldSucceed or HasAnyHandles)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -498,20 +503,29 @@ delete_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/handle_services/">>, hserviceId],
-            expected_code = ?HTTP_204_NO_CONTENT
+            expected_code = case HasAnyHandles of
+                false -> ?HTTP_204_NO_CONTENT;
+                true -> ?HTTP_400_BAD_REQUEST
+            end
         },
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = delete,
             args = [auth, hserviceId],
-            expected_result = ?OK_RES
+            expected_result = case HasAnyHandles of
+                false -> ?OK_RES;
+                true -> ?ERROR_REASON(?ERROR_CANNOT_DELETE_NON_EMPTY_HANDLE_SERVICE)
+            end
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{
                 type = od_handle_service, id = hserviceId, aspect = instance
             },
-            expected_result_op = ?OK_RES
+            expected_result_op = case HasAnyHandles of
+                false -> ?OK_RES;
+                true -> ?ERROR_REASON(?ERROR_CANNOT_DELETE_NON_EMPTY_HANDLE_SERVICE)
+            end
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,

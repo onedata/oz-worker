@@ -158,6 +158,7 @@ upgrade_cluster(2) ->
     % forced along with new major release version
     {ok, 3};
 upgrade_cluster(3) ->
+    onezone_plugins:init(),  % required for the handle migration
     od_handle:migrate_legacy_handles(),
     {ok, 4}.
 

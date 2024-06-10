@@ -189,10 +189,19 @@ update(#el_req{gri = #gri{id = ShareId, aspect = instance}, data = Data}) ->
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{auth = Auth, gri = #gri{id = ShareId, aspect = instance}}) ->
-     %% @TODO VFS-11906 critical section? maybe remove the logic from entity graph?
+    %% TODO VFS-12030 consider removing the logic of share-handle relation from the entity graph
     fun(#od_share{handle = HandleId}) ->
-        HandleId /= undefined andalso ?check(handle_logic:delete(Auth, HandleId)),
-        entity_graph:delete_with_relations(od_share, ShareId)
+        % ensure no race conditions when deleting a share and its handle
+        % (it could conflict with a handle being created at the same time -
+        % another critical section is used during handle creation procedure).
+        od_share:critical_section_for(ShareId, fun() ->
+            HandleId /= undefined andalso case handle_logic:delete(Auth, HandleId) of
+                ok -> ok;
+                {error, not_found} -> ok;
+                {error, _} = Error -> throw(Error)
+            end,
+            entity_graph:delete_with_relations(od_share, ShareId)
+        end)
     end.
 
 

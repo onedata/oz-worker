@@ -29,7 +29,7 @@ encode_decode_utf8_test() ->
         "   <description>l;'\\zxcvbnm,./əł</description>\n"
         "   <item action=\"/library/index\" method=\"get\" target=\"_parent\">\n"
         "       <param name=\"default_action\" type=\"hidden\" value=\"import_to_histories\"/>\n"
-%%        TODO VFS-11906 xmerl strips comments: https://github.com/erlang/otp/issues/5697
+%%        TODO VFS-7454 xmerl strips comments: https://github.com/erlang/otp/issues/5697
 %%                       consider using a different lib...
 %%        "<!-- This is a comment d'ŋ-ジ(ャパル -->"
         "   </item>"

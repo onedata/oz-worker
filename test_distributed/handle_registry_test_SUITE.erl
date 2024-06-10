@@ -77,7 +77,7 @@ groups() -> [
 -define(INITIAL_HANDLE_COUNT_IN_SMALL_HSERVICE, 600).
 -define(RAND_NAME(), ?RAND_UNICODE_STR(200)).
 -define(RAND_ID(), str_utils:rand_hex(16)).
--define(DEFAULT_LIST_LIMIT, oz_worker:get_env(default_handle_list_limit, 1000)).
+-define(HANDLE_LIST_LIMIT_FOR_TESTS, 1000).
 
 -define(RAND_METADATA_PREFIX(), case ?RAND_BOOL() of
     true -> ?OAI_DC_METADATA_PREFIX;
@@ -115,14 +115,14 @@ resumption_token_test(_Config) ->
 
     %% first listing, no resumption_token
     {List1, Token1} = list_portion(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX}),
-    ?assertEqual(?DEFAULT_LIST_LIMIT, length(List1)),
+    ?assertEqual(?HANDLE_LIST_LIMIT_FOR_TESTS, length(List1)),
 
     %% second listing, resumption token from first listing
     {List2, undefined} = list_portion(#{resumption_token => Token1}),
     ?assertEqual(load_all_expected_entries(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX}), List1 ++ List2),
     %% third listing, other prefix
     {List3, Token3} = list_portion(#{metadata_prefix => ?EDM_METADATA_PREFIX}),
-    ?assertEqual(?DEFAULT_LIST_LIMIT, length(List3)),
+    ?assertEqual(?HANDLE_LIST_LIMIT_FOR_TESTS, length(List3)),
 
     {List4, undefined} = list_portion(#{resumption_token => Token3}),
     ?assertEqual(load_all_expected_entries(#{metadata_prefix => ?EDM_METADATA_PREFIX}), List3 ++ List4),
@@ -428,7 +428,10 @@ delete_every_second_handle_test(_Config) ->
     ?assertEqual(error, ozt:rpc(handle_registry, lookup_deleted, [<<"IdThatNotExists">>])),
 
     #handle_listing_entry{handle_id = HandleId} = hd(ElementsToDelete),
-    ?assertEqual({ok, MetadataPrefix, lookup_expected_entry(HandleId)}, ozt:rpc(handle_registry, lookup_deleted, [HandleId])).
+    ?assertEqual(
+        {ok, {MetadataPrefix, lookup_expected_entry(HandleId)}},
+        ozt:rpc(handle_registry, lookup_deleted, [HandleId])
+    ).
 
 
 %%%===================================================================
@@ -551,7 +554,7 @@ list_portion(ListingOpts) ->
 
 init_per_suite(Config) ->
     ozt:init_per_suite(Config, fun() ->
-        ozt:set_env(default_handle_list_limit, ?DEFAULT_LIST_LIMIT),
+        ozt:set_env(default_handle_list_limit, ?HANDLE_LIST_LIMIT_FOR_TESTS),
         lists:foreach(fun(MetadataPrefix) ->
             lists:foreach(fun(HandleEntry) ->
                 delete_entry(MetadataPrefix, HandleEntry)
