@@ -497,10 +497,7 @@ prepare_gs_client(Config, #gs_spec{operation = Operation, gri = Gri} = GsSpec, {
     Endpoint = case GsSpec#gs_spec.expected_result_gui of
         undefined when GsSpec#gs_spec.expected_result_op /= undefined ->
             utils:throttle(GsSpec#gs_spec.gri, timer:minutes(1), fun() ->
-                ct:pal(?autoformat_with_msg(
-                    "WARN: using Oneprovider gs expectation for user client",
-                    [Operation, Gri]
-                ))
+                ct:pal("WARN: using Oneprovider gs expectation for user client ~n~tp ~n~tp", [Operation, Gri])
             end),
             oneprovider;
         _ ->
@@ -522,10 +519,7 @@ prepare_gs_client(Config, #gs_spec{operation = Operation, gri = Gri} = GsSpec, {
     Endpoint = case GsSpec#gs_spec.expected_result_op of
         undefined when GsSpec#gs_spec.expected_result_gui /= undefined ->
             utils:throttle(GsSpec#gs_spec.gri, timer:minutes(1), fun() ->
-                ct:pal(?autoformat_with_msg(
-                    "WARN: using gui gs expectation for Oneprovider client", [
-                    Operation, Gri]
-                ))
+                ct:pal("WARN: using gui gs expectation for Oneprovider client ~n~tp ~n~tp", [Operation, Gri])
             end),
             gui;
         _ ->

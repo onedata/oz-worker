@@ -830,7 +830,7 @@ get_eff_group_privileges_test(Config) ->
     %%                  Space
     %%                 /  ||  \
     %%                /   ||   \
-    %%     [~tspace_view]  ||  [space_view]
+    %%     [~space_view]  ||  [space_view]      @codetag-tracker-ignore
     %%           /        ||        \
     %%        User1      /  \      User2
     %%                  /    \

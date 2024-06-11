@@ -566,7 +566,7 @@ create_basic_group_env(Config, Privs) ->
     %%                  Group
     %%                 /     \
     %%                /       \
-    %%       [~tprivileges]  [privileges]
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
     %%              /           \
     %%           User1         User2
 
@@ -594,7 +594,7 @@ create_basic_space_env(Config, Privs) ->
     %%                  Space
     %%                 /  |  \
     %%                /   |   \
-    %%    [~tprivileges]   |   [privileges]
+    %%    [~privileges]   |   [privileges]      @codetag-tracker-ignore
     %%              /     |     \
     %%          User1   Owner   User2
 
@@ -629,7 +629,7 @@ create_basic_doi_hservice_env(Config, Privs) ->
     %%              HandleService
     %%                 /      \
     %%                /        \
-    %%       [~tprivileges]  [privileges]
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
     %%              /            \
     %%           User1         User2
 
@@ -665,7 +665,7 @@ create_basic_handle_env(Config, Privs) ->
     %%                  Handle
     %%                 /      \
     %%                /        \
-    %%       [~tprivileges]  [privileges]
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
     %%              /            \
     %%           User1         User2
 
@@ -706,7 +706,7 @@ create_basic_harvester_env(Config, Privs) ->
     %%                Harvester
     %%                 /     \
     %%                /       \
-    %%       [~tprivileges]  [privileges]
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
     %%              /           \
     %%           User1         User2
 
@@ -736,7 +736,7 @@ create_basic_cluster_env(Config, Privs) ->
     %%                  Cluster
     %%                 /     \
     %%                /       \
-    %%       [~tprivileges]  [privileges]
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
     %%              /           \
     %%           User1         User2
 
@@ -769,7 +769,7 @@ create_basic_atm_inventory_env(Privs) ->
     %%                  AtmInventory
     %%                    /     \
     %%                   /       \
-    %%          [~tprivileges]  [privileges]
+    %%          [~privileges]  [privileges]     @codetag-tracker-ignore
     %%                 /           \
     %% UserWithoutPrivileges  UserWithPrivileges
 
@@ -904,7 +904,7 @@ create_space_eff_users_env(Config) ->
     %%                  Space
     %%                 /  |  \
     %%                /   |   \
-    %%     [~tspace_view]  |  [space_view]
+    %%     [~space_view]  |  [space_view]       @codetag-tracker-ignore
     %%           /        |        \
     %%        User1     Group1    User2
     %%                 /      \
@@ -956,7 +956,7 @@ create_provider_eff_users_env(Config) ->
     %%                  Space
     %%                 /  |  \
     %%                /   |   \
-    %%     [~tspace_view]  |  [space_view]
+    %%     [~space_view]  |  [space_view]       @codetag-tracker-ignore
     %%           /        |        \
     %%        User1     Group1    User2
     %%                 /      \
@@ -1106,7 +1106,7 @@ create_harvester_eff_users_env(Config) ->
     %%                Harvester
     %%                 /  |  \
     %%                /   |   \
-    %%     [~tspace_view]  |  [space_view]
+    %%     [~space_view]  |  [space_view]       @codetag-tracker-ignore
     %%           /        |        \
     %%        User1     Group1    User2
     %%                 /      \
