@@ -109,7 +109,7 @@ end).
 %           storage                       share     |  |
 %              ^                            ^       |  |
 %              |                            |       |  |
-%            space     handle_service<----handle    |  |
+%            space     handle_service<---|handle    |  |
 %           ^ ^ ^ ^          ^     ^       ^  ^     |  |
 %          /  | |  \         |     |      /   |     |  |
 %         /   | |   \        |     |     /    |    /   |
@@ -125,6 +125,9 @@ end).
 %                    /       \                                ^           \
 %                  user      user                              \           \
 %                                                               '-- atm_lambda
+%
+% NOTE: the handle service - handle relation is unidirectional, handle service
+% not longer stores its handles (it's done using the handle registry).
 %
 % Members of groups, spaces, providers, handle_services, handles and harvesters are
 % calculated bottom-up.
@@ -340,6 +343,9 @@ end).
     % Direct relations to other entities
     users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:handle_service_privilege()]),
     groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:handle_service_privilege()]),
+    % Deprecated field; still needed to upgrade handle services that existed before 21.02.5,
+    % but always empty afterwards. For new handle services - also always empty.
+    % Currently, the handles are stored using the handle_registry module.
     handles = [] :: entity_graph:relations(od_handle:id()),
 
     % Effective relations to other entities
@@ -356,8 +362,9 @@ end).
 -record(od_handle, {
     public_handle :: od_handle:public_handle() | undefined,
     resource_type :: od_handle:resource_type() | undefined,
-    metadata :: od_handle:metadata() | undefined,
-    timestamp = od_handle:actual_timestamp() :: od_handle:timestamp(),
+    metadata_prefix :: od_handle:metadata_prefix() | undefined,
+    metadata :: od_handle:raw_metadata() | undefined,
+    timestamp = od_handle:current_timestamp() :: od_handle:timestamp_seconds(),
 
     % Direct relations to other entities
     resource_id :: od_handle:resource_id() | undefined,
@@ -369,7 +376,7 @@ end).
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_privilege()]),
 
-    creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),
+    creation_time = od_handle:current_timestamp() :: od_handle:timestamp_seconds(),
     creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.

@@ -45,7 +45,8 @@
 -define(CLUSTER_GENERATIONS, [
     {1, ?LINE_19_02},
     {2, ?LINE_20_02},
-    {3, oz_worker:get_release_version()}
+    {3, ?LINE_21_02(<<"4">>)},
+    {4, oz_worker:get_release_version()}
 ]).
 -define(OLDEST_UPGRADABLE_CLUSTER_GENERATION, 2).
 
@@ -155,7 +156,11 @@ before_cluster_upgrade() -> ok.
 upgrade_cluster(2) ->
     % no model upgrades are required, but a new version must be
     % forced along with new major release version
-    {ok, 3}.
+    {ok, 3};
+upgrade_cluster(3) ->
+    onezone_plugins:init(),  % required for the handle migration
+    od_handle:migrate_legacy_handles(),
+    {ok, 4}.
 
 %%--------------------------------------------------------------------
 %% @doc

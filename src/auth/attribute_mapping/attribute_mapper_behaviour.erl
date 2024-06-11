@@ -12,6 +12,11 @@
 %%%-------------------------------------------------------------------
 -module(attribute_mapper_behaviour).
 
+-include_lib("ctool/include/logging.hrl").
+
+
+-export([validate_example/2]).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -41,8 +46,9 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns attribute mapping validation examples to be evaluated during startup.
-%% The fourth tuple element is the expected output, on of:
+%% Returns validation examples that will be tested when the plugin is loaded.
+%% They serve as unit tests for the plugin.
+%% The fourth tuple element is the expected output, one of:
 %%  * {ok, Value}
 %%  * {error, not_found}
 %%  * {error, attribute_mapping_error} (if the code is expected to crash)
@@ -53,4 +59,44 @@
         {ok, term()} | {error, not_found} | {error, attribute_mapping_error}}].
 
 
--optional_callbacks([validation_examples/0]).
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+
+-spec validate_example(module(), {auth_config:idp(),
+    attribute_mapping:onedata_attribute(), attribute_mapping:idp_attributes(),
+    {ok, term()} | {error, not_found} | {error, attribute_mapping_error}}) -> ok | no_return().
+validate_example(Module, {IdP, Attribute, IdPAttributes, ExpectedOutput}) ->
+    ParsingResult = try
+        Module:map_attribute(IdP, Attribute, IdPAttributes)
+    catch
+        Type:Reason:Stacktrace ->
+            {error, attribute_mapping_error, Type, Reason, Stacktrace}
+    end,
+    case {ExpectedOutput, ParsingResult} of
+        {Same, Same} ->
+            ok;
+        {{error, attribute_mapping_error}, {error, attribute_mapping_error, _, _, _}} ->
+            ok;
+        {_, {error, attribute_mapping_error, EType, EReason, EStacktrace}} ->
+            ?error("Validation example crashed:~n"
+            "IdP: ~p~n"
+            "Attribute: ~p~n"
+            "IdPAttributes: ~p~n"
+            "Expected: ~p~n"
+            "Error: ~p~n"
+            "Stacktrace: ~s~n", [
+                IdP, Attribute, IdPAttributes, ExpectedOutput, {EType, EReason},
+                iolist_to_binary(lager:pr_stacktrace(EStacktrace))
+            ]),
+            throw(validation_failed);
+        {_, Got} ->
+            ?error("Validation example failed:~n"
+            "IdP: ~p~n"
+            "Attribute: ~p~n"
+            "IdPAttributes: ~p~n"
+            "Expected: ~p~n"
+            "Got: ~p", [IdP, Attribute, IdPAttributes, ExpectedOutput, Got]),
+            throw(validation_failed)
+    end.

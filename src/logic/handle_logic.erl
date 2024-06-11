@@ -17,7 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([
-    create/5, create/2
+    create/6, create/2
 ]).
 -export([
     get/2,
@@ -71,12 +71,14 @@
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), HandleId :: od_handle_service:id(),
     ResourceType :: od_handle:resource_type(), ResourceId :: od_handle:resource_id(),
-    Metadata :: od_handle:metadata()) -> {ok, od_handle:id()} | errors:error().
-create(Auth, HServiceId, ResourceType, ResourceId, Metadata) ->
+    MetadataPrefix :: od_handle:metadata_prefix(), Metadata :: od_handle:raw_metadata())
+        -> {ok, od_handle:id()} | errors:error().
+create(Auth, HServiceId, ResourceType, ResourceId, MetadataPrefix, Metadata) ->
     create(Auth, #{
         <<"handleServiceId">> => HServiceId,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
+        <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => Metadata
     }).
 
@@ -176,7 +178,7 @@ list_privileges() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Auth :: aai:auth(), HandleId :: od_handle:id(),
-    MetadataOrData :: od_handle:metadata() | #{}) -> ok | errors:error().
+    MetadataOrData :: od_handle:raw_metadata() | #{}) -> ok | errors:error().
 update(Auth, HandleId, Metadata) when is_binary(Metadata) ->
     update(Auth, HandleId, #{<<"metadata">> => Metadata});
 update(Auth, HandleId, Data) ->
@@ -618,9 +620,6 @@ has_eff_group(Handle, GroupId) ->
 %% Predicate saying whether handle belongs to specified handle service.
 %% @end
 %%--------------------------------------------------------------------
--spec has_handle_service(HandleOrId :: od_space:id() | #od_space{},
-    HServiceId :: od_handle_service:id()) -> boolean().
-has_handle_service(HandleId, HServiceId) when is_binary(HandleId) ->
-    entity_graph:has_relation(direct, top_down, od_handle_service, HServiceId, od_handle, HandleId);
-has_handle_service(Handle, HServiceId) ->
-    entity_graph:has_relation(direct, top_down, od_handle_service, HServiceId, Handle).
+-spec has_handle_service(od_handle:record(), od_handle_service:id()) -> boolean().
+has_handle_service(#od_handle{handle_service = HServiceId}, HServiceIdToCheck) ->
+    HServiceId =:= HServiceIdToCheck.

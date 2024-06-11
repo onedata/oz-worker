@@ -304,7 +304,7 @@ set_up_handle_services_and_handles(Environment = #environment{users = Users, gro
         handle_services = HandleServices,
         handles = lists:flatmap(fun({HService, SharesToAssign}) ->
             lists:map(fun(Share) ->
-                Handle = ozt_handle_services:create_handle(HService, Share),
+                Handle = ozt_handles:create(HService, Share),
                 simulate_random_delay(),
                 generate_members(od_handle, Handle, od_user, Users),
                 generate_members(od_handle, Handle, od_group, Groups),

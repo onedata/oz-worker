@@ -34,6 +34,7 @@
 -define(LE_CHALLENGE_ROOT, oz_worker:get_env(
     letsencrypt_challenge_static_root, "/tmp/oz_worker/http/.well-known/acme-challenge/"
 )).
+-define(OAI_PMH_PATH,  oz_worker:get_env(oai_pmh_api_prefix)).
 
 %% listener_behaviour callbacks
 -export([port/0, start/0, stop/0, reload_web_certs/0, healthcheck/0]).
@@ -62,11 +63,9 @@ port() ->
 start() ->
     ?info("Starting '~p' server...", [?HTTP_LISTENER]),
 
-    OAI_PMH_PATH = oz_worker:get_env(oai_pmh_api_prefix),
-
     Dispatch = cowboy_router:compile([
         {'_', [
-            {OAI_PMH_PATH ++ "/[...]", oai_handler, []},
+            {?OAI_PMH_PATH ++ "/[...]", oai_handler, []},
             {?LE_CHALLENGE_PATH ++ "/[...]", cowboy_static, {dir, ?LE_CHALLENGE_ROOT}},
             {"/[...]", redirector_handler, https_listener:port()}
         ]}

@@ -258,7 +258,7 @@ get_test(Config) ->
     ozt_handle_services:add_user(HandleServiceId, MemberWithView, [?HANDLE_SERVICE_VIEW]),
     ozt_handle_services:add_user(HandleServiceId, MemberWithoutView, []),
 
-    HandleId = ozt_handle_services:create_handle(HandleServiceId, ozt_spaces:create_share(SpaceId, datastore_key:new())),
+    HandleId = ozt_handles:create(HandleServiceId, ozt_spaces:create_share(SpaceId, datastore_key:new())),
     oz_test_utils:handle_add_group(Config, HandleId, GroupId),
     oz_test_utils:handle_add_user(Config, HandleId, MemberWithView),
     oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithView, [?HANDLE_VIEW], []),
