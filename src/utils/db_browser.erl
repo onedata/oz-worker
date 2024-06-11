@@ -471,8 +471,7 @@ format_collection({handle_service_groups, HServiceId}, SortBy, SortOrder) ->
     format_members(groups, maps:keys(EffGroups), SortBy, SortOrder, Groups, EffGroups, privileges:handle_service_privileges());
 
 format_collection({handle_service_handles, HServiceId}, SortBy, SortOrder) ->
-    {ok, #document{value = #od_handle_service{handles = Handles}}} = od_handle_service:get(HServiceId),
-    format_table(handles, Handles, SortBy, SortOrder);
+    format_table(handles, list_handles(HServiceId), SortBy, SortOrder);
 
 
 format_collection({handle_users, HandleId}, SortBy, SortOrder) ->
@@ -751,8 +750,8 @@ field_specs(handle_services) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
     {name, text, 28, fun(Doc) -> Doc#document.value#od_handle_service.name end},
     {proxy_endpoint, text, 40, fun(Doc) -> Doc#document.value#od_handle_service.proxy_endpoint end},
-    {handles, integer, 7, fun(#document{value = HService}) ->
-        length(HService#od_handle_service.handles)
+    {handles, integer, 7, fun(#document{key = HServiceId}) ->
+        length(list_handles(HServiceId))
     end},
     {users, direct_and_eff, 9, fun(#document{value = HService}) ->
         {maps:size(HService#od_handle_service.users), maps:size(HService#od_handle_service.eff_users)}
@@ -1073,6 +1072,14 @@ get_privileges(MemberId, MembersWithPrivs) ->
         {Privs, _} -> Privs;
         Privs -> Privs
     end.
+
+
+%% @private
+-spec list_handles(od_handle_service:id()) -> [od_handle:id()].
+list_handles(HServiceId) ->
+    % NOTE: we can no longer depend on the deprecated 'handles' field in the handle service document
+    {ok, Handles} = handle_service_logic:get_handles(?ROOT, HServiceId),
+    Handles.
 
 
 %% @private

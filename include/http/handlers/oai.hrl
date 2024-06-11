@@ -8,18 +8,21 @@
 %%% across modules handling OAI-PMH protocol.
 %%% @end
 %%%-------------------------------------------------------------------
--author("Jakub Kudzia").
-
 
 -ifndef(OAI_HRL).
 -define(OAI_HRL, 1).
+
+-include("plugins/onezone_plugins.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
+-include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 
 -record(oai_header, {
     identifier :: oai_id(),
     datestamp :: binary(),
-    set_spec :: oai_set_spec()
+    set_spec :: oai_set_spec(),
+    status :: handle_registry:status()
 }).
 
 -record(oai_metadata_format, {
@@ -29,9 +32,8 @@
 }).
 
 -record(oai_metadata, {
-    metadata_format :: oai_metadata_format(),
-    additional_identifiers :: [binary()],
-    value :: binary() | #{} | #xmlElement{}
+    metadata_prefix :: od_handle:metadata_prefix(),
+    raw_value :: od_handle:raw_metadata()
 }).
 
 -record(oai_about, {
@@ -43,7 +45,9 @@
 
 -record(oai_record, {
     header :: oai_header(),
-    metadata :: oai_metadata(),
+    %% undefined when record status is deleted
+    metadata :: oai_metadata() | undefined,
+    %% optional attribute
     about :: oai_about() | undefined
 }).
 
@@ -58,12 +62,26 @@
     description :: binary()
 }).
 
+-record(oai_listing_result, {
+    batch :: [oai_record()] | [oai_header()],
+    resumption_token :: handle_registry:resumption_token()
+}).
+
+% NOTE: the order of the fields is important (timestamp -> handle_id) so that they can be naturally sorted
+-record(handle_listing_entry, {
+    timestamp :: od_handle:timestamp_seconds(),
+    handle_id :: od_handle:id(),
+    service_id :: od_handle_service:id(),
+    status :: handle_registry:status()
+}).
+
+%% @formatter:off
 -type oai_verb_module() :: identify | get_record | list_identifiers |
                            list_medatada_formats | list_records | list_sets.
 
 -type oai_error_code() :: badArgument | badResumptionToken | badVerb |
                           cannotDisseminateFormat |idDoesNotExist |
-                          noRecordsMatch | noMetadataFormats | noSetHierarchy.
+                          noRecordsMatch | noSetHierarchy.
 
 -type oai_id() :: binary().
 -type oai_header() :: #oai_header{}.
@@ -74,11 +92,14 @@
 -type oai_set() :: #oai_set{}.
 -type oai_set_spec() :: od_handle_service:id().
 -type oai_error() :: #oai_error{}.
+-type oai_listing_result() :: #oai_listing_result{}.
 -type oai_response() :: binary() | [binary()] |
                         oai_record() | [oai_record()] |
                         [oai_set()] |
                         oai_header() | [oai_header()] |
-                        oai_metadata_format() | [oai_metadata_format()].
+                        oai_metadata_format() | [oai_metadata_format()] |
+                        oai_listing_result().
+%% @formatter:on
 
 -type maybe_invalid_date() :: {non_neg_integer(), non_neg_integer(), non_neg_integer()}.
 -type maybe_invalid_time() :: {non_neg_integer(), non_neg_integer(), non_neg_integer()}.
@@ -88,16 +109,20 @@
 -type oai_date_granularity() :: day_granularity | seconds_granularity.
 
 
+-define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
+-define(EDM_METADATA_PREFIX, <<"edm">>).
+
+
 -define(OAI_XML_NAMESPACE, #xmlAttribute{
-        name=xmlns,
-        value= "http://www.openarchives.org/OAI/2.0/"}).
+    name = xmlns,
+    value = "http://www.openarchives.org/OAI/2.0/"}).
 
 -define(OAI_XML_SCHEMA_NAMESPACE, #xmlAttribute{
-    name='xmlns:xsi',
-    value= "http://www.w3.org/2001/XMLSchema-instance"}).
+    name = 'xmlns:xsi',
+    value = "http://www.w3.org/2001/XMLSchema-instance"}).
 
 -define(OAI_XSI_SCHEMA_LOCATION, #xmlAttribute{
-    name='xsi:schemaLocation',
+    name = 'xsi:schemaLocation',
     value = "http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"}).
 
 
@@ -106,14 +131,24 @@
     attributes = [
         ?OAI_XML_NAMESPACE,
         ?OAI_XML_SCHEMA_NAMESPACE,
-        ?OAI_XSI_SCHEMA_LOCATION]
+        ?OAI_XSI_SCHEMA_LOCATION
+    ]
 }).
 
 
--define(RESPONSE_CONTENT_TYPE, <<"text/xml">>).
+-define(XML_RESPONSE_CONTENT_TYPE, <<"text/xml">>).
 
 -define(PROTOCOL_VERSION, <<"2.0">>).
 
 -define(OAI_IDENTIFIER_PREFIX, <<"oai:", (oz_worker:get_domain())/binary, ":">>).
+
+
+-define(find_matching_element(Pattern, List), lists_utils:find(fun(Element) ->
+    case Element of
+        Pattern -> true;
+        _ -> false
+    end
+end, List)).
+
 
 -endif.

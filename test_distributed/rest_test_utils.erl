@@ -174,7 +174,6 @@ check_rest_call(Config, ArgsMap) ->
             ReqBody,
             ?CONNECT_OPTS ++ CompleteOpts
         ),
-
         % Check response code if specified
         case ExpCode of
             undefined ->
@@ -233,7 +232,6 @@ check_rest_call(Config, ArgsMap) ->
                         }})
                 end
         end,
-
         % Check response body if specified
         case ExpBody of
             undefined ->
@@ -294,20 +292,6 @@ check_rest_call(Config, ArgsMap) ->
                         ok;
                     false ->
                         throw({body_contains, ActualBodyMap, ExpContainsMap, {
-                            RespCode, RespHeaders, RespBody
-                        }})
-                end;
-            #xmlElement{} = ExpBodyXML ->
-                {RespBodyXML, _} = xmerl_scan:string(binary_to_list(RespBody)),
-                case compare_xml(RespBodyXML, ExpBodyXML) of
-                    true ->
-                        ok;
-                    false ->
-                        Prolog = ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"],
-                        ExpBodyBin = erlang:iolist_to_binary(xmerl:export_simple(
-                            [ExpBodyXML], xmerl_xml, [{prolog, Prolog}]
-                        )),
-                        throw({body, RespBody, ExpBodyBin, {
                             RespCode, RespHeaders, RespBody
                         }})
                 end
@@ -436,27 +420,3 @@ sort_map(OriginalMap) ->
                     MapAcc
             end
         end, OriginalMap, maps:keys(OriginalMap)).
-
-% Compares two XML terms
-compare_xml(_, []) -> true;
-compare_xml(#xmlText{value = V}, #xmlText{value = V}) -> true;
-compare_xml(#xmlText{value = _V1}, #xmlText{value = _V2}) -> false;
-compare_xml(#xmlAttribute{name = N, value = V}, #xmlAttribute{name = N, value = V}) ->
-    true;
-compare_xml(#xmlAttribute{name = _N1, value = _V1}, #xmlAttribute{name = _N2, value = _V2}) ->
-    false;
-compare_xml(#xmlElement{name = Name, attributes = _, content = _},
-    #xmlElement{name = Name, attributes = [], content = []}) -> true;
-compare_xml(#xmlElement{name = Name, attributes = RespAttributes, content = RespContent},
-    #xmlElement{name = Name, attributes = ExpAttributes, content = ExpContent}) ->
-    case compare_xml(RespAttributes, ExpAttributes) of
-        false -> false;
-        true -> compare_xml(RespContent, ExpContent)
-    end;
-compare_xml(Resp, [Exp | ExpRest]) when is_list(Resp) ->
-    compare_xml(Resp, Exp) and compare_xml(Resp, ExpRest);
-compare_xml(Resp, Exp) when is_list(Resp) ->
-    lists:foldl(fun(R, Acc) ->
-        compare_xml(R, Exp) or Acc
-    end, false, Resp);
-compare_xml(_, _) -> false.

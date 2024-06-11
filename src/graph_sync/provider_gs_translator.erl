@@ -398,6 +398,7 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
         public_handle = PublicHandle,
         resource_type = ResourceType,
         resource_id = ResourceId,
+        metadata_prefix = MetadataPrefix,
         metadata = Metadata,
         timestamp = Timestamp,
         handle_service = HandleServiceId
@@ -406,6 +407,7 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
         <<"publicHandle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
+        <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => Metadata,
         <<"timestamp">> => time:seconds_to_iso8601(Timestamp),  % @TODO VFS-6309 to be removed in 21.02
         <<"handleServiceId">> => HandleServiceId,
@@ -417,11 +419,13 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
 translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public}, HandleData) ->
     #{
         <<"publicHandle">> := PublicHandle,
+        <<"metadataPrefix">> := MetadataPrefix,
         <<"metadata">> := Metadata,
         <<"timestamp">> := Timestamp
     } = HandleData,
     #{
         <<"publicHandle">> => PublicHandle,
+        <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => Metadata,
         <<"timestamp">> => time:seconds_to_iso8601(Timestamp)  % @TODO VFS-6309 to be removed in 21.02
     };

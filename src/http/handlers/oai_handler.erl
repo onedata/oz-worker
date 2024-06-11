@@ -124,6 +124,23 @@ accept_resource(Req, State) ->
 %%% Internal functions
 %%%===================================================================
 
+%% @private
+-spec handle_request(QueryParams :: [proplists:property()], Req :: cowboy_req:req()) -> tuple().
+handle_request(QueryParams, Req) ->
+    try
+        handle_request_unsafe(QueryParams, Req)
+    catch
+        Class:Reason:Stacktrace ->
+            Error = ?examine_exception(Class, Reason, Stacktrace),
+            ReqE = cowboy_req:reply(
+                errors:to_http_code(Error),
+                #{},
+                json_utils:encode(#{<<"error">> => errors:to_json(Error)}),
+                Req
+            ),
+            throw({stop, ReqE})
+    end.
+
 %%%--------------------------------------------------------------------
 %%% @private
 %%% @doc
@@ -133,20 +150,15 @@ accept_resource(Req, State) ->
 %%% returned.
 %%% @end
 %%%--------------------------------------------------------------------
--spec handle_request(QueryParams :: [proplists:property()], Req :: cowboy_req:req()) -> tuple().
-handle_request(QueryParams, Req) ->
+-spec handle_request_unsafe(QueryParams :: [proplists:property()], Req :: cowboy_req:req()) -> tuple().
+handle_request_unsafe(QueryParams, Req) ->
     Response = try
-        {Verb, ParsedArgs} = oai_parser:process_and_validate_args(QueryParams),
+        {Verb, ParsedArgs} = oai_arg_parser:process_and_validate_args(QueryParams),
         generate_response(Verb, ParsedArgs)
     catch
         throw:Error ->
-            oai_errors:handle(Error);
-        ErrorType:Error:Stacktrace ->
-            ?error_stacktrace("Unhandled exception in OAI-PMH request ~tp:~tp", [ErrorType, Error], Stacktrace),
-            ReqE = cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req),
-            throw({stop, ReqE})
+            oai_errors:handle(Error)
     end,
-
     RequestElement = case Response of
         #oai_error{code = badVerb} -> generate_request_element(Req);
         #oai_error{code = badArgument} -> generate_request_element(Req);
@@ -154,16 +166,14 @@ handle_request(QueryParams, Req) ->
     end,
 
     ResponseDate = oai_handler:generate_response_date_element(),
-
     ResponseXML = oai_utils:to_xml(Response),
+
     RequestElementXML = oai_utils:to_xml(RequestElement),
     ResponseDateXML = oai_utils:to_xml(ResponseDate),
 
-    XML = insert_to_root_xml_element([ResponseDateXML, RequestElementXML, ResponseXML]),
-    Prolog = ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>"],
-    ResponseBody = xmerl:export_simple([XML], xmerl_xml, [{prolog, Prolog}]),
-    Req2 = cowboy_req:set_resp_header(?HDR_CONTENT_TYPE, ?RESPONSE_CONTENT_TYPE, Req),
-    {ResponseBody, Req2}.
+    Req2 = cowboy_req:set_resp_header(?HDR_CONTENT_TYPE, ?XML_RESPONSE_CONTENT_TYPE, Req),
+    Xml = insert_to_root_xml_element([ResponseDateXML, RequestElementXML, ResponseXML]),
+    {oai_xml:encode(Xml), Req2}.
 
 %%%--------------------------------------------------------------------
 %%% @private
@@ -189,12 +199,27 @@ generate_response(Verb, Args) ->
 %%%--------------------------------------------------------------------
 -spec generate_required_response_elements(Module :: oai_verb_module(),
     Args :: [proplists:property()]) -> [{binary(), oai_response()}].
+generate_required_response_elements(Module, Args) when Module == list_identifiers; Module == list_records ->
+    % These two operations do not fit the current framework for handling oai requests;
+    % they return two different types or elements (header/record + resumptionToken) in one
+    % get_response call. The ElementName can be either <<"header">> or <<"record">>, although
+    % it's not entirely true (we do not want to list two elements not to cause two listings).
+    [ElementName] = Module:required_response_elements(),
+    #oai_listing_result{batch = Batch, resumption_token = ResumptionToken} = Module:get_response(ElementName, Args),
+    case ResumptionToken of
+        undefined -> [{ElementName, Element} || Element <- Batch];
+        _ -> [{ElementName, Element} || Element <- Batch] ++ [{<<"resumptionToken">>, case ResumptionToken of
+            <<>> -> [];
+            _ -> ResumptionToken
+        end }]
+    end;
 generate_required_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
         case Module:get_response(ElementName, Args) of
             Elements when is_list(Elements) ->
                 [{ElementName, Element} || Element <- Elements];
-            Element -> oai_utils:ensure_list({ElementName, Element})
+            Element ->
+                oai_utils:ensure_list({ElementName, Element})
         end
     end, Module:required_response_elements()).
 
@@ -263,3 +288,4 @@ generate_request_element(Req) ->
 generate_request_element(ParsedArgs, Req) ->
     URL = iolist_to_binary(cowboy_req:uri(Req, #{qs => undefined})),
     {request, URL, ParsedArgs}.
+

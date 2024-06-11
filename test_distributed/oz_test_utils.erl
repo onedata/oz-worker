@@ -143,7 +143,7 @@
     space_harvest_metadata/7
 ]).
 -export([
-    create_share/6,
+    create_share/5,
     create_share/3,
     list_shares/1,
     get_share/2,
@@ -180,7 +180,7 @@
     handle_service_set_group_privileges/5
 ]).
 -export([
-    create_handle/6, create_handle/3,
+    create_handle/7, create_handle/3,
     list_handles/1,
     get_handle/2,
     update_handle/3, update_handle/5,
@@ -1394,11 +1394,11 @@ space_has_effective_user(Config, SpaceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_share(Config :: term(), Client :: aai:auth(),
-    ShareId :: od_share:id(), Name :: od_share:name(), RootFileId :: binary(),
+    ShareId :: od_share:id(), Name :: od_share:name(),
     SpaceId :: od_space:id()) -> {ok, od_share:id()}.
-create_share(Config, Client, ShareId, Name, RootFileId, SpaceId) ->
+create_share(Config, Client, ShareId, Name, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(Config, share_logic, create, [
-        Client, ShareId, Name, RootFileId, SpaceId
+        Client, ShareId, Name, ?GEN_ROOT_FILE_ID(SpaceId, ShareId), SpaceId
     ])).
 
 
@@ -1899,22 +1899,25 @@ handle_service_set_group_privileges(
 %% @end
 %%--------------------------------------------------------------------
 -spec create_handle(Config :: term(), Client :: aai:auth(),
-    HandleServiceId :: od_handle_service:id(),
-    ResourceType :: od_handle:resource_type(),
-    ResourceId :: od_handle:resource_id(), Metadata :: od_handle:metadata()) ->
-    {ok, od_handle:id()}.
-create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, Metadata) ->
+    HandleServiceId :: od_handle_service:id(), ResourceType :: od_handle:resource_type(),
+    ResourceId :: od_handle:resource_id(), MetadataPrefix :: od_handle:metadata_prefix(),
+    Metadata :: od_handle:raw_metadata()) ->
+    {ok, od_handle:id()} | errors:error().
+create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, MetadataPrefix, Metadata) ->
     Result = case Client of
         ?USER(UserId) ->
             call_oz(Config, user_logic, create_handle, [
-                Client, UserId, HandleServiceId, ResourceType, ResourceId, Metadata
+                Client, UserId, HandleServiceId, ResourceType, ResourceId,
+                MetadataPrefix, Metadata
             ]);
         _ ->
             call_oz(Config, handle_logic, create, [
-                Client, HandleServiceId, ResourceType, ResourceId, Metadata
+                Client, HandleServiceId, ResourceType, ResourceId,
+                MetadataPrefix, Metadata
             ])
     end,
     ?assertMatch({ok, _}, Result).
+
 
 
 %%--------------------------------------------------------------------
@@ -1980,7 +1983,7 @@ update_handle(Config, HandleId, Data) ->
 -spec update_handle(Config :: term(), HandleId :: od_handle:id(),
     NewResourceType :: od_handle:resource_type(),
     NewResourceId :: od_handle:resource_id(),
-    NewMetadata :: od_handle:metadata()) -> ok.
+    NewMetadata :: od_handle:raw_metadata()) -> ok.
 update_handle(Config, HandleId, NewResourceType, NewResourceId, NewMetadata) ->
     ?assertMatch(ok, call_oz(Config, handle_logic, update, [?ROOT, HandleId, #{
         <<"resourceType">> => NewResourceType,
@@ -3104,6 +3107,8 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     lists_utils:pforeach(fun(HSId) -> delete_handle_service(Config, HSId) end, HServices),
     lists_utils:pforeach(fun(HId) -> delete_harvester(Config, HId) end, Harvesters),
     lists_utils:pforeach(fun(AIId) -> delete_atm_inventory(Config, AIId) end, AtmInventories),
+
+    ?assertEqual(ok, call_oz(Config, handle_registry, purge_all_deleted_entries, [])),
     % Clusters and storages are removed together with providers
     % Workflow schemas are removed together with Inventories
     % Atm Lambdas are removed when all their linked inventories are
@@ -3202,8 +3207,10 @@ mock_harvesting_backends(Config, Backends) when is_list(Backends) ->
     lists:foreach(fun(Plugin) -> mock_harvesting_backends(Config, Nodes, Plugin) end, Backends),
     test_utils:mock_new(Nodes, onezone_plugins),
 
-    test_utils:mock_expect(Nodes, onezone_plugins, get_plugins,
-        fun(Type) -> Backends ++ meck:passthrough([Type]) end),
+    test_utils:mock_expect(Nodes, onezone_plugins, get_plugins, fun
+        (harvesting_backend) -> Backends;
+        (OtherType) -> meck:passthrough([OtherType])
+    end),
     Config;
 mock_harvesting_backends(Config, Plugin) ->
     mock_harvesting_backends(Config, [Plugin]).

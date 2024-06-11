@@ -20,7 +20,7 @@
     oz_test_utils, % Load the old utils until the migration is complete
     ozt, ozt_http, ozt_gs, ozt_tokens, ozt_mocks, ozt_mailer,
     ozt_users, ozt_groups, ozt_spaces, ozt_providers,
-    ozt_handle_services, ozt_clusters, ozt_harvesters,
+    ozt_handle_services, ozt_handles, ozt_clusters, ozt_harvesters,
     ozt_atm_inventories, ozt_atm_lambdas, ozt_atm_workflow_schemas
 ]).
 

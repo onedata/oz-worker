@@ -75,19 +75,15 @@ handle({illegalId, Id}) ->
     ?ID_DOES_NOT_EXIST(str_utils:format_bin(
         "The value of the identifier argument \"~ts\" "
         "is illegal in this repository. Identifier must "
-        "be in form oai:<onezone-domain>:<id>", [Id]));
+        "be in form oai:~ts:<id>", [Id, oz_worker:get_domain()]));
 handle({idDoesNotExist, Id}) ->
     ?ID_DOES_NOT_EXIST(str_utils:format_bin(
         "The value of the identifier argument \"~ts\" "
         "is unknown in this repository.", [Id]));
-handle({noMetadataFormats, Id}) ->
-    ?NO_METADATA_FORMATS(str_utils:format_bin(
-        "There are no metadata formats available for item ~ts", [Id]));
 handle(badVerb) -> ?BAD_VERB;
 handle(badArgument) -> ?BAD_ARGUMENT;
 handle(badResumptionToken) -> ?BAD_RESUMPTION_TOKEN;
 handle(cannotDisseminateFormat) -> ?CANNOT_DISSEMINATE_FORMAT;
 handle(idDoesNotExist) -> ?ID_DOES_NOT_EXIST;
 handle(noRecordsMatch) -> ?NO_RECORDS_MATCH;
-handle(noMetadataFormats) -> ?NO_METADATA_FORMATS;
 handle(noSetHierarchy) -> ?NO_SET_HIERARCHY.

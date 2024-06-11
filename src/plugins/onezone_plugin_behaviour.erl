@@ -13,7 +13,8 @@
 -module(onezone_plugin_behaviour).
 
 
--type type() :: entitlement_parser | openid_plugin | attribute_mapper.
+-type type() :: entitlement_parser | openid_plugin | attribute_mapper
+              | harvesting_backend | handle_metadata_plugin.
 -export_type([type/0]).
 
 %%--------------------------------------------------------------------
@@ -23,6 +24,8 @@
 %%      entitlement_parser -> entitlement_parser_behaviour
 %%      openid_plugin -> openid_plugin_behaviour
 %%      attribute_mapper -> attribute_mapper_behaviour
+%%      harvesting_backend -> harvesting_backend_behaviour
+%%      handle_metadata_plugin -> handle_metadata_plugin_behaviour
 %% @end
 %%--------------------------------------------------------------------
 -callback type() -> type().
