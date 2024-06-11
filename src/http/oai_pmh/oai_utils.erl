@@ -71,7 +71,7 @@ build_oai_record(#handle_listing_entry{status = present, handle_id = HandleId} =
         {ok, #document{value = HandleRecord}} ->
             build_oai_record(ListingEntry, HandleRecord);
         {error, not_found} ->
-            ?error("Handle ~s that is registered as present was not found in the DB, ignoring", [HandleId]),
+            ?error("Handle ~ts that is registered as present was not found in the DB, ignoring", [HandleId]),
             build_oai_record(ListingEntry#handle_listing_entry{status = deleted})
     end;
 build_oai_record(#handle_listing_entry{status = deleted} = ListingEntry) ->

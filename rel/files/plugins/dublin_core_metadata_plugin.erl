@@ -111,7 +111,7 @@ ensure_dc_identifier(Value, #xmlElement{content = Content} = MetadataXml) ->
 -spec adapt_for_oai_pmh(od_handle:parsed_metadata()) -> od_handle:parsed_metadata().
 adapt_for_oai_pmh(#xmlElement{name = metadata, content = Content}) ->
     {MainNamespaceName, MainNamespaceValue} = main_namespace(),
-    SchemaLocation = str_utils:format("~s ~s", [MainNamespaceValue, schema_URL()]),
+    SchemaLocation = str_utils:format("~ts ~ts", [MainNamespaceValue, schema_URL()]),
     #xmlElement{
         name = 'oai_dc:dc',
         attributes = [

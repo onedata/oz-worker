@@ -60,22 +60,22 @@ validate_example(Module, {IdP, Input, ParserConfig, ExpectedOutput}) ->
             ok;
         {_, {error, malformed, EType, EReason, EStacktrace}} ->
             ?error("Validation example crashed:~n"
-            "IdP: ~p~n"
-            "Input: ~p~n"
-            "ParserConfig: ~p~n"
-            "Expected: ~p~n"
-            "Error: ~p~n"
-            "Stacktrace: ~s~n", [
+            "IdP: ~tp~n"
+            "Input: ~tp~n"
+            "ParserConfig: ~tp~n"
+            "Expected: ~tp~n"
+            "Error: ~tp~n"
+            "Stacktrace: ~ts~n", [
                 IdP, Input, ParserConfig, ExpectedOutput, {EType, EReason},
                 iolist_to_binary(lager:pr_stacktrace(EStacktrace))
             ]),
             throw(validation_failed);
         {_, Got} ->
             ?error("Validation example failed:~n"
-            "IdP: ~p~n"
-            "Input: ~p~n"
-            "ParserConfig: ~p~n"
-            "Expected: ~p~n"
-            "Got: ~p", [IdP, Input, ParserConfig, ExpectedOutput, Got]),
+            "IdP: ~tp~n"
+            "Input: ~tp~n"
+            "ParserConfig: ~tp~n"
+            "Expected: ~tp~n"
+            "Got: ~tp", [IdP, Input, ParserConfig, ExpectedOutput, Got]),
             throw(validation_failed)
     end.

@@ -129,7 +129,7 @@ validate_example(Module, ValidationExample) ->
     try
         validate_handle_metadata_plugin_example_unsafe(Module, ValidationExample)
     catch Class:Reason:Stacktrace ->
-        ?error_exception("Validation of an example for ~s crashed", [Module], Class, Reason, Stacktrace),
+        ?error_exception("Validation of an example for ~ts crashed", [Module], Class, Reason, Stacktrace),
         throw(validation_failed)
     end.
 
@@ -159,7 +159,7 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
         creation_time = global_clock:timestamp_seconds(),
         creator = ?SUB(user, datastore_key:new())
     },
-    DummyPublicHandle = str_utils:format_bin("http://hdl.handle.net/~s/~s", [datastore_key:new(), datastore_key:new()]),
+    DummyPublicHandle = str_utils:format_bin("http://hdl.handle.net/~ts/~ts", [datastore_key:new(), datastore_key:new()]),
 
     {ok, ParsedMetadata} = oai_xml:parse(InputRawXml),
 
@@ -223,7 +223,7 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
             );
 
         RevisionResult ->
-            ?error("Unmet expectation~ts", [?autoformat(InputQualifiesForPublication, RevisionResult)]),
+            ?error(?autoformat_with_msg("Unmet expectation", [InputQualifiesForPublication, RevisionResult])),
             error(unmet_expectation)
     end.
 
