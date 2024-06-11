@@ -72,7 +72,7 @@ assert_unique_identifiers(IdentifierType, Identifiers, DataKeyName) ->
         true ->
             ok;
         false ->
-            raise_validation_error(DataKeyName, "The provided list contains duplicate ~ts", [IdentifierType])
+            raise_validation_error(DataKeyName, "The provided list contains duplicate ~tss", [IdentifierType])
     end.
 
 
