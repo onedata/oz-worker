@@ -61,7 +61,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
                 {ok, 201, _, _} ->
                     {ok, ?DOI_DC_IDENTIFIER(DoiHandle)};
                 Other ->
-                    ?error("Error registering a ~s handle, handle proxy '~ts' (~ts) returned:~n~p", [
+                    ?error("Error registering a ~ts handle, handle proxy '~ts' (~ts) returned:~n~tp", [
                         Type, HandleServiceName, ProxyEndpoint, Other
                     ]),
                     throw(?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(HandleServiceName))
@@ -73,7 +73,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
                     PidHandle = maps:get(<<"handle">>, json_utils:decode(RespJSON)),
                     {ok, PidHandle};
                 Other ->
-                    ?error("Error registering a ~s handle, handle proxy '~ts' (~ts) returned:~n~p", [
+                    ?error("Error registering a ~ts handle, handle proxy '~ts' (~ts) returned:~n~tp", [
                         Type, HandleServiceName, ProxyEndpoint, Other
                     ]),
                     throw(?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(HandleServiceName))

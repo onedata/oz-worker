@@ -252,17 +252,17 @@ format_help() ->
     lists:flatten([
         str_utils:format("---------------------------------------------------------------------------~n", []),
         str_utils:format("~n"),
-        str_utils:format("Usage (from console): ~s:pr/format(collection, [sort_by], [sort_order])~n", [?MODULE]),
-        str_utils:format("             example: ~s:pr(help)    - print this help~n", [?MODULE]),
-        str_utils:format("             example: ~s:pr(users)~n", [?MODULE]),
-        str_utils:format("             example: ~s:pr(space_groups@da09aa798c7bd35d, type)~n", [?MODULE]),
-        str_utils:format("             example: ~s:pr(handles, created, desc)~n", [?MODULE]),
+        str_utils:format("Usage (from console): ~ts:pr/format(collection, [sort_by], [sort_order])~n", [?MODULE]),
+        str_utils:format("             example: ~ts:pr(help)    - print this help~n", [?MODULE]),
+        str_utils:format("             example: ~ts:pr(users)~n", [?MODULE]),
+        str_utils:format("             example: ~ts:pr(space_groups@da09aa798c7bd35d, type)~n", [?MODULE]),
+        str_utils:format("             example: ~ts:pr(handles, created, desc)~n", [?MODULE]),
         str_utils:format("~n"),
-        str_utils:format("Usage  (from script): ~s.sh collection [sort_by] [sort_order]~n", [?MODULE]),
-        str_utils:format("             example: ~s:sh help     - print this help~n", [?MODULE]),
-        str_utils:format("             example: ~s:sh users~n", [?MODULE]),
-        str_utils:format("             example: ~s:sh space_groups@da09aa798c7bd35d type~n", [?MODULE]),
-        str_utils:format("             example: ~s:sh handles created desc~n", [?MODULE]),
+        str_utils:format("Usage  (from script): ~ts.sh collection [sort_by] [sort_order]~n", [?MODULE]),
+        str_utils:format("             example: ~ts:sh help     - print this help~n", [?MODULE]),
+        str_utils:format("             example: ~ts:sh users~n", [?MODULE]),
+        str_utils:format("             example: ~ts:sh space_groups@da09aa798c7bd35d type~n", [?MODULE]),
+        str_utils:format("             example: ~ts:sh handles created desc~n", [?MODULE]),
         str_utils:format("~n"),
         str_utils:format("collection - collection to be printed, denoted by a single keyword or a pair~n"),
         str_utils:format("             keyword@entity_id, where entity_id should be substituted for an~n"),
@@ -275,8 +275,8 @@ format_help() ->
         str_utils:format("~n"),
         str_utils:format("Available collections:~n"),
         lists:map(fun
-            ({Collection, Id}) -> str_utils:format("    * ~s@~s~n", [Collection, Id]);
-            (Collection) -> str_utils:format("    * ~s~n", [Collection])
+            ({Collection, Id}) -> str_utils:format("    * ~ts@~ts~n", [Collection, Id]);
+            (Collection) -> str_utils:format("    * ~ts~n", [Collection])
         end, all_collections())
     ]).
 
@@ -293,7 +293,7 @@ parse_and_format_collection(Collection, SortBy, SortOrder) ->
         {ok, format_collection(ParsedCollection, SortBy, SortOrder)}
     catch Type:Reason:Stacktrace ->
         {error, str_utils:format(
-            "~ts crashed with ~w:~p~n"
+            "~ts crashed with ~w:~tp~n"
             "Stacktrace: ~ts~n"
             "~n"
             "~ts",
@@ -989,7 +989,7 @@ format_value(last_activity, now) ->
 format_value(last_activity, 0) ->
     str_utils:format("~ts", [<<"✕ unknown"/utf8>>]);
 format_value(last_activity, Timestamp) ->
-    str_utils:format("~s ~s", [format_date(Timestamp), format_time(Timestamp, hour_min)]);
+    str_utils:format("~ts ~ts", [format_date(Timestamp), format_time(Timestamp, hour_min)]);
 format_value(byte_size, Value) ->
     str_utils:format_byte_size(Value);
 format_value(direct_and_eff, {Direct, Effective}) ->

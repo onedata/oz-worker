@@ -62,7 +62,7 @@ label(Version, BasicAuthEnabled, OpenidEnabled, SamlEnabled) ->
         (true) -> "on";
         (false) -> "off"
     end,
-    str_utils:format("basicAuth: ~s, OpenID: ~s, SAML: ~s, v~B -> v~B", [
+    str_utils:format("basicAuth: ~ts, OpenID: ~ts, SAML: ~ts, v~B -> v~B", [
         ToStr(BasicAuthEnabled), ToStr(OpenidEnabled), ToStr(SamlEnabled),
         Version, ?CURRENT_CONFIG_VERSION
     ]).

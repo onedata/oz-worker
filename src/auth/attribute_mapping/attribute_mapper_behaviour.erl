@@ -81,22 +81,22 @@ validate_example(Module, {IdP, Attribute, IdPAttributes, ExpectedOutput}) ->
             ok;
         {_, {error, attribute_mapping_error, EType, EReason, EStacktrace}} ->
             ?error("Validation example crashed:~n"
-            "IdP: ~p~n"
-            "Attribute: ~p~n"
-            "IdPAttributes: ~p~n"
-            "Expected: ~p~n"
-            "Error: ~p~n"
-            "Stacktrace: ~s~n", [
+            "IdP: ~tp~n"
+            "Attribute: ~tp~n"
+            "IdPAttributes: ~tp~n"
+            "Expected: ~tp~n"
+            "Error: ~tp~n"
+            "Stacktrace: ~ts~n", [
                 IdP, Attribute, IdPAttributes, ExpectedOutput, {EType, EReason},
                 iolist_to_binary(lager:pr_stacktrace(EStacktrace))
             ]),
             throw(validation_failed);
         {_, Got} ->
             ?error("Validation example failed:~n"
-            "IdP: ~p~n"
-            "Attribute: ~p~n"
-            "IdPAttributes: ~p~n"
-            "Expected: ~p~n"
-            "Got: ~p", [IdP, Attribute, IdPAttributes, ExpectedOutput, Got]),
+            "IdP: ~tp~n"
+            "Attribute: ~tp~n"
+            "IdPAttributes: ~tp~n"
+            "Expected: ~tp~n"
+            "Got: ~tp", [IdP, Attribute, IdPAttributes, ExpectedOutput, Got]),
             throw(validation_failed)
     end.

@@ -97,7 +97,7 @@ authenticate_by_idp_access_token(AccessTokenWithPrefix) ->
                     ?ERROR_UNAUTHORIZED(?ERROR_BAD_IDP_ACCESS_TOKEN(IdP));
                 Type:Reason:Stacktrace ->
                     ?error_stacktrace(
-                        "Unexpected error during authentication by IdP access token - ~p:~p",
+                        "Unexpected error during authentication by IdP access token - ~tp:~tp",
                         [Type, Reason],
                         Stacktrace
                     ),

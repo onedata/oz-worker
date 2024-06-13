@@ -458,7 +458,7 @@ gen_invite_token_name(?GROUP_JOIN_ATM_INVENTORY, AtmInventoryId) ->
 %% @private
 -spec format_invite_token_name(binary(), binary()) -> binary().
 format_invite_token_name(Description, EntityName) ->
-    TokenName = str_utils:format_bin("~s - ~ts ~s", [Description, EntityName, str_utils:rand_hex(3)]),
+    TokenName = str_utils:format_bin("~ts - ~ts ~ts", [Description, EntityName, str_utils:rand_hex(3)]),
     TokenNameSize = size(TokenName),
     case TokenNameSize =< 50 of
         true ->

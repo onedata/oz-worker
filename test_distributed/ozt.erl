@@ -72,7 +72,7 @@ store_test_config(Config) ->
 -spec get_test_config() -> ct_test_config().
 get_test_config() ->
     case node_cache:get(ct_test_config, undefined) of
-        undefined -> error(str_utils:format("Call ~s:init_per_suite/1 at the beggining of the test.", [?MODULE]));
+        undefined -> error(str_utils:format("Call ~ts:init_per_suite/1 at the beggining of the test.", [?MODULE]));
         Config -> Config
     end.
 
@@ -97,23 +97,23 @@ rpc(Node, Module, Function, Args) ->
         {crash, Type, Reason, Stacktrace} ->
             ct:pal(
                 "RPC call to oz-worker crashed!~n"
-                "Node: ~p~n"
-                "Module: ~p~n"
-                "Function: ~p~n"
-                "Args: ~p~n"
-                "Error: ~p:~p~n"
-                "Stacktrace: ~s",
+                "Node: ~tp~n"
+                "Module: ~tp~n"
+                "Function: ~tp~n"
+                "Args: ~tp~n"
+                "Error: ~tp:~tp~n"
+                "Stacktrace: ~ts",
                 [Node, Module, Function, Args, Type, Reason, Stacktrace]
             ),
             error({badrpc, Reason});
         {badrpc, Reason} ->
             ct:pal(
                 "badrpc in call to oz-worker!~n"
-                "Node: ~p~n"
-                "Module: ~p~n"
-                "Function: ~p~n"
-                "Args: ~p~n"
-                "Reason: ~p~n",
+                "Node: ~tp~n"
+                "Module: ~tp~n"
+                "Function: ~tp~n"
+                "Args: ~tp~n"
+                "Reason: ~tp~n",
                 [Node, Module, Function, Args, Reason]
             ),
             {error, {badrpc, Reason}};

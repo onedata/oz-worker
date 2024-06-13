@@ -83,7 +83,7 @@ get_response(<<"repositoryName">>, _Args) ->
 get_response(<<"baseURL">>, _Args) ->
     Domain = oz_worker:get_domain(),
     OAIPrefix = oz_worker:get_env(oai_pmh_api_prefix),
-    str_utils:format_bin("~s~s", [Domain, OAIPrefix]);
+    str_utils:format_bin("~ts~ts", [Domain, OAIPrefix]);
 get_response(<<"protocolVersion">>, _Args) ->
     ?PROTOCOL_VERSION;
 get_response(<<"earliestDatestamp">>, _Args) ->

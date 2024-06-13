@@ -78,7 +78,7 @@ simulate_user_login(Config, OidcSpec, Url, UserAttributesByEndpoint) ->
             <<"code">> => AuthCode,
             <<"state">> => State
         }),
-        ExpPath = str_utils:format_bin("https://~s~s", [
+        ExpPath = str_utils:format_bin("https://~ts~ts", [
             oz_test_utils:oz_domain(Config), ?OIDC_CONSUME_PATH_DEPRECATED
         ]),
         Len = erlang:byte_size(ExpPath),

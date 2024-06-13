@@ -108,6 +108,6 @@ build_provider_rest_endpoint(ProviderId, ObjectId, Req) ->
         <<"">> -> <<"">>;
         Bin -> <<"?", Bin/binary>>
     end,
-    str_utils:format_bin("https://~s/api/v3/oneprovider/data/~s~s~s", [
+    str_utils:format_bin("https://~ts/api/v3/oneprovider/data/~ts~ts~ts", [
         Domain, ObjectId, Subpath, Qs
     ]).

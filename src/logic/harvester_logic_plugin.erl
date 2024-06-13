@@ -390,11 +390,11 @@ create(#el_req{gri = #gri{id = HarvesterId, aspect = {gen_curl_query, IndexId}, 
         <<"/harvesters/", HarvesterId/binary, "/indices/", IndexId/binary, "/query">>
     ),
     AuthHeaderOpt = case Scope of
-        private -> str_utils:format_bin("-H \"~s: $TOKEN\"", [?HDR_X_AUTH_TOKEN]);
+        private -> str_utils:format_bin("-H \"~ts: $TOKEN\"", [?HDR_X_AUTH_TOKEN]);
         public -> <<"">>
     end,
-    ContentTypeHeaderOpt = str_utils:format_bin("-H \"~s: application/json\"", [?HDR_CONTENT_TYPE]),
-    PrefixWithHeaders = str_utils:format_bin("curl -X POST ~s ~s ", [AuthHeaderOpt, ContentTypeHeaderOpt]),
+    ContentTypeHeaderOpt = str_utils:format_bin("-H \"~ts: application/json\"", [?HDR_CONTENT_TYPE]),
+    PrefixWithHeaders = str_utils:format_bin("curl -X POST ~ts ~ts ", [AuthHeaderOpt, ContentTypeHeaderOpt]),
     % escape all single quotation marks (') with backslashes (\)
     EncodedData = re:replace(json_utils:encode(Data), <<"'">>, <<"\\\\'">>, [{return, binary}, global]),
     {ok, value, <<PrefixWithHeaders/binary, Uri/binary, " -d '", EncodedData/binary, "'">>};
@@ -410,7 +410,7 @@ create(#el_req{auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch, 
         IndicesToUpdate = [X || X <- Indices, Y <- maps:keys(ExistingIndices), X == Y],
         case Indices -- IndicesToUpdate of
             [] -> ok;
-            Diff -> ?debug("Ignoring not known indices ~p in harvester ~p", [Diff, HarvesterId])
+            Diff -> ?debug("Ignoring not known indices ~tp in harvester ~tp", [Diff, HarvesterId])
         end,
         {ok, Res} = case Batch of
             [] -> {ok, lists:map(fun(IndexId) -> {IndexId, ok} end, IndicesToUpdate)};

@@ -321,7 +321,7 @@ broadcast_dns_config() ->
     catch
         Class:Reason:Stacktrace ->
             ?error_exception(
-                "Error sending dns zone update, scheduling retry after ~p seconds",
+                "Error sending dns zone update, scheduling retry after ~tp seconds",
                 [?DNS_UPDATE_RETRY_INTERVAL div 1000],
                 Class, Reason, Stacktrace
             ),

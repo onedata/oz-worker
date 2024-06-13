@@ -101,7 +101,7 @@ sanitize_parameter_default_values(ParameterSpecs, FieldName) ->
         default_value = DefaultValue,
         data_spec = DataSpec
     }) ->
-        DataKeyName = str_utils:format_bin("~s[~s].defaultValue", [FieldName, ParameterName]),
+        DataKeyName = str_utils:format_bin("~ts[~ts].defaultValue", [FieldName, ParameterName]),
         atm_schema_validator:sanitize_predefined_value(DefaultValue, DataSpec, DataKeyName)
     end, ParameterSpecs).
 
@@ -114,7 +114,7 @@ sanitize_input_parameter_data_specs(ParameterSpecs, FieldName) ->
         name = ParameterName,
         data_spec = DataSpec
     }) ->
-        DataKeyName = str_utils:format_bin("~s[~s].dataSpec", [FieldName, ParameterName]),
+        DataKeyName = str_utils:format_bin("~ts[~ts].dataSpec", [FieldName, ParameterName]),
         sanitize_input_parameter_data_spec(DataSpec, DataKeyName)
     end, ParameterSpecs).
 
@@ -130,7 +130,7 @@ sanitize_input_parameter_data_spec(#atm_file_data_spec{attributes = _}, DataKeyN
     % In other contexts (result spec, store config), the attributes are not relevant, because
     % only a file reference is passed.
     atm_schema_validator:raise_validation_error(
-        str_utils:format_bin("~s.attributes", [DataKeyName]),
+        str_utils:format_bin("~ts.attributes", [DataKeyName]),
         <<"This field must be provided and must be a list containing at least one file attribute">>
     );
 
@@ -139,7 +139,7 @@ sanitize_input_parameter_data_spec(#atm_group_data_spec{attributes = [_ | _]}, _
 sanitize_input_parameter_data_spec(#atm_group_data_spec{attributes = _}, DataKeyName) ->
     % the same considerations as for atm_file_data_spec apply here
     atm_schema_validator:raise_validation_error(
-        str_utils:format_bin("~s.attributes", [DataKeyName]),
+        str_utils:format_bin("~ts.attributes", [DataKeyName]),
         <<"This field must be provided and must be a list containing at least one group attribute">>
     );
 

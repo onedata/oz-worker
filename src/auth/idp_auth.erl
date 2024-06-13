@@ -76,7 +76,7 @@ get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
         Handler = get_protocol_handler(IdP),
         case Handler:get_login_endpoint(IdP, StateToken) of
             {ok, Result} ->
-                ?debug("Redirecting for login to IdP '~p' (state: ~s):~n~tp", [
+                ?debug("Redirecting for login to IdP '~tp' (state: ~ts):~n~tp", [
                     IdP, StateToken, Result
                 ]),
                 {ok, Result};
@@ -86,7 +86,7 @@ get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
     catch
         Type:Reason:Stacktrace ->
             ?error_stacktrace(
-                "Cannot resolve redirect URL for IdP '~p' - ~p:~p",
+                "Cannot resolve redirect URL for IdP '~tp' - ~tp:~tp",
                 [IdP, Type, Reason],
                 Stacktrace
             ),
@@ -211,14 +211,14 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
     TestMode andalso idp_auth_test_mode:process_enable_test_mode(),
     TestMode andalso idp_auth_test_mode:store_state_token(StateToken),
     Handler = get_protocol_handler(IdP),
-    ?auth_debug("Login attempt from IdP '~p' (state: ~s), payload:~n~tp", [
+    ?auth_debug("Login attempt from IdP '~tp' (state: ~ts), payload:~n~tp", [
         IdP, StateToken, Payload
     ]),
 
     {ok, Attributes} = Handler:validate_login(IdP, Payload),
     % Do not print sensitive information
     PrintableAttributes = maps:without([<<"access_token">>, <<"refresh_token">>], Attributes),
-    ?auth_debug("Login from IdP '~p' (state: ~s) validated, attributes:~n~ts", [
+    ?auth_debug("Login from IdP '~tp' (state: ~ts) validated, attributes:~n~ts", [
         IdP, StateToken, json_utils:encode(PrintableAttributes, [pretty])
     ]),
 
@@ -227,7 +227,7 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
         [<<"name">>, <<"login">>, <<"alias">>, <<"emailList">>, <<"groups">>], % do not include deprecated fields
         linked_accounts:to_map(LinkedAccount, all_fields)
     ),
-    ?auth_debug("Attributes from IdP '~p' (state: ~s) sucessfully mapped:~n~ts", [
+    ?auth_debug("Attributes from IdP '~tp' (state: ~ts) sucessfully mapped:~n~ts", [
         IdP, StateToken, json_utils:encode(LinkedAccountMap, [pretty])
     ]),
 
@@ -249,7 +249,7 @@ validate_login_by_linked_account(LinkedAccount) ->
         ?ERROR_USER_BLOCKED ->
             ?ERROR_USER_BLOCKED;
         {ok, #document{key = UserId, value = #od_user{full_name = FullName}}} ->
-            ?info("User '~ts' has logged in (~s)", [FullName, UserId]),
+            ?info("User '~ts' has logged in (~ts)", [FullName, UserId]),
             {ok, UserId}
     end.
 
@@ -276,7 +276,7 @@ validate_link_account_request(LinkedAccount, TargetUserId) ->
             {ok, #document{value = #od_user{
                 full_name = FullName
             }}} = linked_accounts:merge(TargetUserId, LinkedAccount),
-            ?info("User ~ts (~s) has linked his account from '~p'", [
+            ?info("User ~ts (~ts) has linked his account from '~tp'", [
                 FullName, TargetUserId, LinkedAccount#linked_account.idp
             ]),
             {ok, TargetUserId}
@@ -336,76 +336,76 @@ parse_payload(<<"GET">>, Req) ->
     state_token:state_token(), Stacktrace :: term()) -> ok.
 log_error(?ERROR_BAD_AUTH_CONFIG, _, _, Stacktrace) ->
     ?auth_debug(
-        "Login request failed due to bad auth config: ~s", [
+        "Login request failed due to bad auth config: ~ts", [
             iolist_to_binary(lager:pr_stacktrace(Stacktrace))
         ]
     );
 log_error(?ERROR_INVALID_STATE, _, StateToken, _) ->
     ?auth_debug(
-        "Cannot validate login request - invalid state ~s (not found)",
+        "Cannot validate login request - invalid state ~ts (not found)",
         [StateToken]
     );
 log_error(?ERROR_INVALID_AUTH_REQUEST, IdP, StateToken, Stacktrace) ->
     ?auth_debug(
-        "Cannot validate login request for IdP '~p' (state: ~s) - invalid auth request~n"
-        "Stacktrace: ~s", [IdP, StateToken, iolist_to_binary(lager:pr_stacktrace(Stacktrace))]
+        "Cannot validate login request for IdP '~tp' (state: ~ts) - invalid auth request~n"
+        "Stacktrace: ~ts", [IdP, StateToken, iolist_to_binary(lager:pr_stacktrace(Stacktrace))]
     );
 log_error(?ERROR_USER_BLOCKED, IdP, StateToken, _) ->
     ?auth_debug(
-        "Declining login request for IdP '~p' (state: ~s) - the user is blocked",
+        "Declining login request for IdP '~tp' (state: ~ts) - the user is blocked",
         [IdP, StateToken]
     );
 log_error(?ERROR_IDP_UNREACHABLE(Reason), IdP, StateToken, _) ->
     ?auth_warning(
-        "Cannot validate login request for IdP '~p' (state: ~s) - IdP not reachable: ~p",
+        "Cannot validate login request for IdP '~tp' (state: ~ts) - IdP not reachable: ~tp",
         [IdP, StateToken, Reason]
     );
 log_error(?ERROR_BAD_IDP_RESPONSE(Endpoint, Code, Headers, Body), IdP, StateToken, _) ->
     ?auth_warning(
-        "Cannot validate login request for IdP '~p' (state: ~s) - unexpected response from IdP:~n"
-        "Endpoint: ~s~n"
-        "Code: ~p~n"
-        "Headers: ~p~n"
-        "Body: ~s",
+        "Cannot validate login request for IdP '~tp' (state: ~ts) - unexpected response from IdP:~n"
+        "Endpoint: ~ts~n"
+        "Code: ~tp~n"
+        "Headers: ~tp~n"
+        "Body: ~ts",
         [IdP, StateToken, Endpoint, Code, Headers, Body]
     );
 log_error(?ERROR_CANNOT_RESOLVE_REQUIRED_ATTRIBUTE(Attr), IdP, StateToken, _) ->
     ?auth_debug(
-        "Cannot map attributes for IdP '~p' (state: ~s) - atrribute '~p' not found",
+        "Cannot map attributes for IdP '~tp' (state: ~ts) - atrribute '~tp' not found",
         [IdP, StateToken, Attr]
     );
 log_error(?ERROR_BAD_ATTRIBUTE_TYPE(Attribute, Type), IdP, StateToken, _) ->
     ?auth_debug(
-        "Cannot map attributes for IdP '~p' (state: ~s) - atrribute '~p' "
-        "does not have the required type '~p'",
+        "Cannot map attributes for IdP '~tp' (state: ~ts) - atrribute '~tp' "
+        "does not have the required type '~tp'",
         [IdP, StateToken, Attribute, Type]
     );
 log_error(?ERROR_ATTRIBUTE_MAPPING_ERROR(Attribute, IdPAttributes, EType, EReason, Stacktrace), IdP, StateToken, _) ->
     ?auth_debug(
-        "Cannot map attributes for IdP '~p' (state: ~s) - atrribute '~p' "
-        "could not be mapped due to an error - ~p:~p~n"
-        "IdP attributes: ~p~n"
-        "Stacktrace: ~s",
+        "Cannot map attributes for IdP '~tp' (state: ~ts) - atrribute '~tp' "
+        "could not be mapped due to an error - ~tp:~tp~n"
+        "IdP attributes: ~tp~n"
+        "Stacktrace: ~ts",
         [IdP, StateToken, Attribute, EType, EReason, IdPAttributes, iolist_to_binary(lager:pr_stacktrace(Stacktrace))]
     );
 log_error(?ERROR_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(UserId), IdP, StateToken, _) ->
     ?auth_debug(
-        "Cannot link account from IdP '~p' for user '~s' (state: ~s) - account already linked to the user",
+        "Cannot link account from IdP '~tp' for user '~ts' (state: ~ts) - account already linked to the user",
         [IdP, UserId, StateToken]
     );
 log_error(?ERROR_ACCOUNT_ALREADY_LINKED_TO_ANOTHER_USER(UserId, OtherUserId), IdP, StateToken, _) ->
     ?auth_debug(
-        "Cannot link account from IdP '~p' for user '~s' (state: ~s) - account already linked to user '~s'",
+        "Cannot link account from IdP '~tp' for user '~ts' (state: ~ts) - account already linked to user '~ts'",
         [IdP, UserId, StateToken, OtherUserId]
     );
 log_error(?ERROR_INTERNAL_SERVER_ERROR, IdP, StateToken, _) ->
     % The logging is already done when throwing this error
     ?auth_debug(
-        "Cannot validate login request for IdP '~p' (state: ~s) - internal server error",
+        "Cannot validate login request for IdP '~tp' (state: ~ts) - internal server error",
         [IdP, StateToken]
     );
 log_error(Error, IdP, StateToken, Stacktrace) ->
     ?auth_error(
-        "Cannot validate login request for IdP '~p' (state: ~s) - ~p~n"
-        "Stacktrace: ~s", [IdP, StateToken, Error, iolist_to_binary(lager:pr_stacktrace(Stacktrace))]
+        "Cannot validate login request for IdP '~tp' (state: ~ts) - ~tp~n"
+        "Stacktrace: ~ts", [IdP, StateToken, Error, iolist_to_binary(lager:pr_stacktrace(Stacktrace))]
     ).

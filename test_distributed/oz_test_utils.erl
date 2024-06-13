@@ -341,11 +341,11 @@ call_oz(Config, Module, Function, Args) ->
             % Log a bad rpc - very useful when debugging tests.
             ct:pal(
                 "RPC call in oz_test_utils crashed!~n"
-                "Module: ~p~n"
-                "Function: ~p~n"
-                "Args: ~p~n"
-                "Error: ~p:~p~n"
-                "Stacktrace: ~s",
+                "Module: ~tp~n"
+                "Function: ~tp~n"
+                "Args: ~tp~n"
+                "Error: ~tp:~tp~n"
+                "Stacktrace: ~ts",
                 [Module, Function, Args, Type, Reason, Stacktrace]
             ),
             {error, {badrpc, Reason}};
@@ -3051,7 +3051,7 @@ request_gui_token(Config, Cookie) ->
 request_gui_token(Config, Cookie, GuiType, ClusterId) ->
     GuiPrefix = onedata:gui_prefix(GuiType),
     Result = http_client:post(
-        oz_url(Config, str_utils:format_bin("/~s/~s/gui-preauthorize", [GuiPrefix, ClusterId])),
+        oz_url(Config, str_utils:format_bin("/~ts/~ts/gui-preauthorize", [GuiPrefix, ClusterId])),
         #{
             ?HDR_CONTENT_TYPE => <<"application/json">>,
             ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
@@ -3480,7 +3480,7 @@ create_dummy_gui_package() ->
 
     DummyPackage = filename:join(TempDir, "gui_static.tar.gz"),
     % Use tar to create archive as erl_tar is limited when it comes to tarring directories
-    [] = os:cmd(str_utils:format("tar -C ~s -czf ~s ~s", [TempDir, DummyPackage, "gui_static"])),
+    [] = os:cmd(str_utils:format("tar -C ~ts -czf ~ts ~ts", [TempDir, DummyPackage, "gui_static"])),
     {DummyPackage, IndexContent}.
 
 
@@ -3660,7 +3660,7 @@ oz_url(Config, Scheme, Path) ->
         443 -> <<"">>;
         Port -> <<":", Port/binary>>
     end,
-    str_utils:format_bin("~s://~s~s~s", [
+    str_utils:format_bin("~ts://~ts~ts~ts", [
         Scheme,
         oz_domain(Config),
         PortStr,

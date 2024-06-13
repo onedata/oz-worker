@@ -83,15 +83,15 @@ init() ->
     PluginsDir = ?PLUGINS_DIR,
     PluginFiles = case file:list_dir(PluginsDir) of
         {error, Error} ->
-            ?warning("Cannot read plugins directory, no plugins will be loaded: ~p", [
+            ?warning("Cannot read plugins directory, no plugins will be loaded: ~tp", [
                 {error, Error}
             ]),
             [];
         {ok, Files} ->
             ErlFiles = [F || F <- Files, filename:extension(F) == ".erl"],
             case length(ErlFiles) of
-                0 -> ?info("No plugins found in ~s", [PluginsDir]);
-                N -> ?info("Found ~B plugins in ~s", [N, PluginsDir])
+                0 -> ?info("No plugins found in ~ts", [PluginsDir]);
+                N -> ?info("Found ~B plugins in ~ts", [N, PluginsDir])
             end,
             ErlFiles
     end,
@@ -104,14 +104,14 @@ init() ->
             lists:member(Module:type(), allowed_plugin_types()) orelse error({unknown_plugin_type, Module:type()}),
             case validate_plugin(Module) of
                 ok ->
-                    ?info("  -> ~p: successfully loaded", [Module]),
+                    ?info("  -> ~tp: successfully loaded", [Module]),
                     {ok, Module};
                 error ->
-                    ?warning("  -> ~p: plugin was loaded, but failed validation", [Module]),
+                    ?warning("  -> ~tp: plugin was loaded, but failed validation", [Module]),
                     error
             end
         catch Class:Reason:Stacktrace ->
-            ?error_exception("Cannot load ~s plugin", [Plugin], Class, Reason, Stacktrace),
+            ?error_exception("Cannot load ~ts plugin", [Plugin], Class, Reason, Stacktrace),
             error
         end
     end, PluginFiles),
@@ -149,7 +149,7 @@ validate_plugin(_, harvesting_backend) ->
 validate_plugin(Module, Type) ->
     try
         Examples = Module:validation_examples(),
-        ?info("  -> ~p: found ~B validation examples for plugin, testing...", [
+        ?info("  -> ~tp: found ~B validation examples for plugin, testing...", [
             Module, length(Examples)
         ]),
         ValidationFunction = case Type of
@@ -158,9 +158,9 @@ validate_plugin(Module, Type) ->
             handle_metadata_plugin -> fun handle_metadata_plugin_behaviour:validate_example/2
         end,
         [erlang:apply(ValidationFunction, [Module, E]) || E <- Examples],
-        ?info("  -> ~p: all validation examples passed", [Module])
+        ?info("  -> ~tp: all validation examples passed", [Module])
     catch Class:Reason:Stacktrace ->
         {Class, Reason} /= {throw, validation_failed} andalso ?error_exception(Class, Reason, Stacktrace),
-        ?error("  -> ~p: failed to test validation examples (see the error above)", [Module]),
+        ?error("  -> ~tp: failed to test validation examples (see the error above)", [Module]),
         error
     end.

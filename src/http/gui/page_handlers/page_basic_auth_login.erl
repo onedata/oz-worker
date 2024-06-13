@@ -39,7 +39,7 @@ handle(<<"POST">>, Req) ->
         case basic_auth:authenticate(Req) of
             {true, ?USER(UserId)} ->
                 {ok, FullName} = user_logic:get_full_name(?ROOT, UserId),
-                ?info("User '~ts' has logged in (~s)", [FullName, UserId]),
+                ?info("User '~ts' has logged in (~ts)", [FullName, UserId]),
                 {ok, gui_session:log_in(UserId, Req)};
             false ->
                 ?ERROR_UNAUTHORIZED;
@@ -47,7 +47,7 @@ handle(<<"POST">>, Req) ->
                 AuthenticationError
         end
     catch Type:Reason:Stacktrace ->
-        ?error_stacktrace("Login by basic credentials failed - ~w:~p", [Type, Reason], Stacktrace),
+        ?error_stacktrace("Login by basic credentials failed - ~w:~tp", [Type, Reason], Stacktrace),
         ?ERROR_INTERNAL_SERVER_ERROR
     end,
     case Result of

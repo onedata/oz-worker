@@ -175,7 +175,7 @@ create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
         {error, malformed} -> ?ERROR_BAD_DATA(<<"groupId">>)
     catch
         Class:Reason:Stacktrace ->
-            ?debug_exception("Cannot map group '~s' from IdP '~p'", [GroupId, IdP], Class, Reason, Stacktrace),
+            ?debug_exception("Cannot map group '~ts' from IdP '~tp'", [GroupId, IdP], Class, Reason, Stacktrace),
             ?ERROR_MALFORMED_DATA
     end;
 
@@ -354,7 +354,7 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     entity_graph:delete_with_relations(od_provider, ProviderId),
     cluster_logic:delete_oneprovider_cluster(ClusterId),
 
-    ?info("Provider '~ts' has been deregistered (~s)", [Name, ProviderId]),
+    ?info("Provider '~ts' has been deregistered (~ts)", [Name, ProviderId]),
 
     % Force disconnect the provider (if connected), but with a delay to allow
     % some time for the provider to receive the response to deletion request.
@@ -848,10 +848,10 @@ create_provider(Auth, Data, ProviderId, GRI) ->
             end),
             cluster_logic:create_oneprovider_cluster(CreatorUserId, ProviderId),
             {true, {Provider, Rev}} = fetch_entity(#gri{aspect = instance, id = ProviderId}),
-            ?info("Provider '~ts' has registered (~s)", [Name, ProviderId]),
+            ?info("Provider '~ts' has registered (~ts)", [Name, ProviderId]),
             {ok, resource, {GRI#gri{id = ProviderId}, {{Provider, RootToken}, Rev}}}
         catch Type:Reason:Stacktrace ->
-            ?error_stacktrace("Cannot create a new provider due to ~p:~p", [Type, Reason], Stacktrace),
+            ?error_stacktrace("Cannot create a new provider due to ~tp:~tp", [Type, Reason], Stacktrace),
             dns_state:remove_delegation_config(ProviderId),
             ?ERROR_INTERNAL_SERVER_ERROR
         end

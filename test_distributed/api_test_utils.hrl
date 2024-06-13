@@ -152,7 +152,7 @@
 -define(SHARE_ID_2, <<"shareId2">>).
 -define(GEN_ROOT_FILE_ID(SpaceId, ShareId), file_id:pack_share_guid(datastore_key:new(), SpaceId, ShareId)).
 -define(SHARE_PUBLIC_URL(ZoneDomain, ShareId),
-    str_utils:format_bin("https://~s/share/~s", [ZoneDomain, ShareId])
+    str_utils:format_bin("https://~ts/share/~ts", [ZoneDomain, ShareId])
 ).
 
 %% Example test data for providers

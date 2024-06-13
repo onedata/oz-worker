@@ -105,8 +105,8 @@ run_tests(Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, VerifyFun) ->
             false;
         % Unexpected error
         Type:Message:Stacktrace ->
-            ct:pal("~p:run_tests failed with unexpected result - ~p:~p~n"
-            "Stacktrace: ~s", [
+            ct:pal("~tp:run_tests failed with unexpected result - ~tp:~tp~n"
+            "Stacktrace: ~ts", [
                 ?MODULE, Type, Message,
                 lager:pr_stacktrace(Stacktrace)
             ]),
@@ -240,19 +240,19 @@ log_rest_test_result(RestSpec, Client, Data, Description,
         {response, {Code, Headers, Body}}
     } = _Result
 ) ->
-    ct:pal("API REST test failed: ~p~n"
-    "Method: ~p~n"
-    "Path: ~s~n"
-    "Body: ~p~n"
-    "Client: ~s~n"
-    "Unmet expectation: ~p~n"
-    "Expected: ~p~n"
-    "Got:      ~p~n"
+    ct:pal("API REST test failed: ~tp~n"
+    "Method: ~tp~n"
+    "Path: ~ts~n"
+    "Body: ~tp~n"
+    "Client: ~ts~n"
+    "Unmet expectation: ~tp~n"
+    "Expected: ~tp~n"
+    "Got:      ~tp~n"
     "--------~n"
     "Full response: ~n"
-    "   Code: ~p~n"
-    "   Headers: ~p~n"
-    "   Body: ~p", [
+    "   Code: ~tp~n"
+    "   Headers: ~tp~n"
+    "   Body: ~tp", [
         Description,
         RestSpec#rest_spec.method,
         RestSpec#rest_spec.path,
@@ -361,8 +361,8 @@ check_logic_call(Config, LogicSpec) ->
     catch
         Type:Message:Stacktrace ->
             ct:pal(
-                "Logic result verification function crashed - ~p:~p~n"
-                "Stacktrace: ~s", [
+                "Logic result verification function crashed - ~tp:~tp~n"
+                "Stacktrace: ~ts", [
                     Type, Message, lager:pr_stacktrace(Stacktrace)
                 ]),
             false
@@ -408,13 +408,13 @@ log_logic_test_result(_, _, _, false = _Result) ->
 
 % Displays an error when a logic test fails
 log_logic_test_result(LogicSpec, Client, Description, {result, Result}) ->
-    ct:pal("API logic test failed: ~p~n"
-    "Module: ~p~n"
-    "Function: ~s~n"
-    "Args: ~p~n"
-    "Client: ~s~n"
-    "Expected: ~p~n"
-    "Got:      ~p", [
+    ct:pal("API logic test failed: ~tp~n"
+    "Module: ~tp~n"
+    "Function: ~ts~n"
+    "Args: ~tp~n"
+    "Client: ~ts~n"
+    "Expected: ~tp~n"
+    "Got:      ~tp", [
         Description,
         LogicSpec#logic_spec.module,
         LogicSpec#logic_spec.function,
@@ -497,9 +497,7 @@ prepare_gs_client(Config, #gs_spec{operation = Operation, gri = Gri} = GsSpec, {
     Endpoint = case GsSpec#gs_spec.expected_result_gui of
         undefined when GsSpec#gs_spec.expected_result_op /= undefined ->
             utils:throttle(GsSpec#gs_spec.gri, timer:minutes(1), fun() ->
-                ct:pal("WARN: using Oneprovider gs expectation for user client~s", [
-                    ?autoformat([Operation, Gri])
-                ])
+                ct:pal("WARN: using Oneprovider gs expectation for user client ~n~tp ~n~tp", [Operation, Gri])
             end),
             oneprovider;
         _ ->
@@ -521,9 +519,7 @@ prepare_gs_client(Config, #gs_spec{operation = Operation, gri = Gri} = GsSpec, {
     Endpoint = case GsSpec#gs_spec.expected_result_op of
         undefined when GsSpec#gs_spec.expected_result_gui /= undefined ->
             utils:throttle(GsSpec#gs_spec.gri, timer:minutes(1), fun() ->
-                ct:pal("WARN: using gui gs expectation for Oneprovider client~s", [
-                    ?autoformat([Operation, Gri])
-                ])
+                ct:pal("WARN: using gui gs expectation for Oneprovider client ~n~tp ~n~tp", [Operation, Gri])
             end),
             gui;
         _ ->
@@ -643,8 +639,8 @@ check_gs_call(GsSpec, Endpoint, GsClient, Data) ->
     catch
         Type:Message:Stacktrace ->
             ct:pal(
-                "Gs result verification function crashed - ~p:~p~n"
-                "Stacktrace: ~s", [
+                "Gs result verification function crashed - ~tp:~tp~n"
+                "Stacktrace: ~ts", [
                     Type, Message, lager:pr_stacktrace(Stacktrace)
                 ]),
             false
@@ -694,15 +690,15 @@ log_gs_test_result(_, _, _, _, _, false = _Result) ->
 
 % Displays an error when a gs test fails
 log_gs_test_result(GsSpec, Client, Endpoint, Data, Description, {result, Result}) ->
-    ct:pal("API GS test failed: ~s~n"
-    "Client: ~p~n"
-    "Operation: ~p~n"
-    "Gri: ~p~n"
-    "Data: ~p~n"
-    "Subscribe: ~p~n"
-    "Auth hint: ~p~n"
-    "Expected: ~p~n"
-    "Got:      ~p", [
+    ct:pal("API GS test failed: ~ts~n"
+    "Client: ~tp~n"
+    "Operation: ~tp~n"
+    "Gri: ~tp~n"
+    "Data: ~tp~n"
+    "Subscribe: ~tp~n"
+    "Auth hint: ~tp~n"
+    "Expected: ~tp~n"
+    "Got:      ~tp", [
         Description,
         aai:auth_to_printable(prepare_logic_auth(Client)),
         GsSpec#gs_spec.operation,
@@ -777,7 +773,7 @@ run_test_combinations(
             {ForbiddenClients, RequiredDataSets,
                 "forbidden client should fail", ?ERROR_FORBIDDEN},
             {CorrectClients, BadDataSets,
-                "bad data should fail: ~s => ~p", undefined}
+                "bad data should fail: ~ts => ~tp", undefined}
         ]
     ),
     EnvTearDownFun(Environment),

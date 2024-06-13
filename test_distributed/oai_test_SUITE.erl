@@ -1273,7 +1273,7 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
         get -> #{
             method => get,
             url => URL,
-            path => str_utils:format_bin("~s?~s", [Path, QueryString])
+            path => str_utils:format_bin("~ts?~ts", [Path, QueryString])
         };
         post -> #{
             method => post,
@@ -1299,7 +1299,7 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
 %%%===================================================================
 
 get_oai_pmh_URL() ->
-    str_utils:format_bin("http://~s", [ozt:get_domain()]).
+    str_utils:format_bin("http://~ts", [ozt:get_domain()]).
 
 
 get_oai_pmh_api_path() ->

@@ -87,10 +87,10 @@ validate_store_schemas(#validator_ctx{atm_workflow_schema_revision = #atm_workfl
     }) ->
         lists:member(Id, ?RESERVED_STORE_SCHEMA_IDS) andalso
             atm_schema_validator:raise_validation_error(
-                str_utils:format_bin("stores[~s].id", [Id]),
+                str_utils:format_bin("stores[~ts].id", [Id]),
                 "The provided store schema Id is reserved and cannot be used in store schema definitions"
             ),
-        DataKeyName = str_utils:format_bin("stores[~s].defaultInitialContent", [Id]),
+        DataKeyName = str_utils:format_bin("stores[~ts].defaultInitialContent", [Id]),
         sanitize_store_default_initial_content(Type, Config, DefaultInitialContent, DataKeyName),
         Id
     end, Stores),
@@ -172,14 +172,14 @@ validate_store_schema_references(#validator_ctx{
         store_iterator_spec = #atm_store_iterator_spec{store_schema_id = StoreSchemaId}
     }) ->
         assert_allowed_store_schema_reference(
-            str_utils:format_bin("lanes[~s].storeIteratorSpec.storeSchemaId", [LaneId]),
+            str_utils:format_bin("lanes[~ts].storeIteratorSpec.storeSchemaId", [LaneId]),
             StoreSchemaId,
             StoreSchemaIds
         ),
         #atm_store_schema{type = StoreType} = maps:get(StoreSchemaId, StoreSchemasById),
         (StoreType =:= time_series orelse StoreType =:= audit_log) andalso atm_schema_validator:raise_validation_error(
-            str_utils:format_bin("lanes[~s].storeIteratorSpec.storeSchemaId", [LaneId]),
-            "Iterating over stores of type '~s' is disallowed",
+            str_utils:format_bin("lanes[~ts].storeIteratorSpec.storeSchemaId", [LaneId]),
+            "Iterating over stores of type '~ts' is disallowed",
             [automation:store_type_to_json(StoreType)]
         )
     end, AtmWorkflowSchemaRevision),
@@ -193,7 +193,7 @@ validate_store_schema_references(#validator_ctx{
                     Type == single_value_store_content
                     ->
                     assert_allowed_store_schema_reference(
-                        str_utils:format_bin("tasks[~s].argumentMappings[~s].valueBuilder.recipe", [
+                        str_utils:format_bin("tasks[~ts].argumentMappings[~ts].valueBuilder.recipe", [
                             TaskId, ArgumentName
                         ]),
                         StoreSchemaId,
@@ -206,7 +206,7 @@ validate_store_schema_references(#validator_ctx{
 
         % predefined store schemas are allowed in result mappers, but not in argument mappers
         lists:foreach(fun(#atm_task_schema_result_mapper{store_schema_id = StoreSchemaId, result_name = ResultName}) ->
-            DataKeyName = str_utils:format_bin("tasks[~s].resultMappings[~s].storeSchemaId", [
+            DataKeyName = str_utils:format_bin("tasks[~ts].resultMappings[~ts].storeSchemaId", [
                 TaskId, ResultName
             ]),
             case StoreSchemaId of
@@ -265,7 +265,7 @@ validate_task_lambda_config(#atm_task_schema{
     ReferencedConfigParameterNames = maps:keys(LambdaConfig),
     ConfigParameterNames = [S#atm_parameter_spec.name || S <- ConfigParameterSpecs],
     atm_schema_validator:assert_known_names(
-        ReferencedConfigParameterNames, ConfigParameterNames, str_utils:format_bin("tasks[~s].lambdaConfig", [TaskId])
+        ReferencedConfigParameterNames, ConfigParameterNames, str_utils:format_bin("tasks[~ts].lambdaConfig", [TaskId])
     ),
 
     lists:foreach(fun(#atm_parameter_spec{name = Name} = ParameterSpec) ->
@@ -283,7 +283,7 @@ validate_task_lambda_config(#atm_task_schema{
             data_spec = DataSpec
         }} = lists_utils:find(fun(#atm_parameter_spec{name = N}) -> N == ParameterName end, ConfigParameterSpecs),
         atm_schema_validator:sanitize_predefined_value(
-            Value, DataSpec, str_utils:format_bin("tasks[~s].lambdaConfig[~s]", [TaskId, ParameterName])
+            Value, DataSpec, str_utils:format_bin("tasks[~ts].lambdaConfig[~ts]", [TaskId, ParameterName])
         )
     end, LambdaConfig).
 
@@ -299,12 +299,12 @@ validate_task_argument_mappers(#atm_task_schema{
     MapperArgumentNames = [S#atm_task_schema_argument_mapper.argument_name || S <- ArgumentMappings],
     % there may be no more that one mapper per argument name (hence the mapper names must be unique)
     atm_schema_validator:assert_unique_identifiers(
-        name, MapperArgumentNames, str_utils:format_bin("tasks[~s].argumentMappings", [TaskId])
+        name, MapperArgumentNames, str_utils:format_bin("tasks[~ts].argumentMappings", [TaskId])
     ),
 
     SpecArgumentNames = [S#atm_parameter_spec.name || S <- ArgumentSpecs],
     atm_schema_validator:assert_known_names(
-        MapperArgumentNames, SpecArgumentNames, str_utils:format_bin("tasks[~s].argumentMappings", [TaskId])
+        MapperArgumentNames, SpecArgumentNames, str_utils:format_bin("tasks[~ts].argumentMappings", [TaskId])
     ),
 
     lists:foreach(fun(#atm_parameter_spec{name = Name} = ArgumentSpec) ->
@@ -330,7 +330,7 @@ validate_task_result_mappers(#atm_task_schema{
     MapperResultNames = [S#atm_task_schema_result_mapper.result_name || S <- ResultMappings],
     SpecResultNames = [S#atm_lambda_result_spec.name || S <- ResultSpecs],
     atm_schema_validator:assert_known_names(
-        MapperResultNames, SpecResultNames, str_utils:format_bin("tasks[~s].resultMappings", [TaskId])
+        MapperResultNames, SpecResultNames, str_utils:format_bin("tasks[~ts].resultMappings", [TaskId])
     ).
 
 %%%===================================================================
@@ -373,7 +373,7 @@ fetch_or_reuse_lambda(AtmLambdaId, FetchedLambdas) ->
 assert_allowed_store_schema_reference(DataKeyName, StoreSchemaId, AllowedStoreSchemaIds) ->
     lists:member(StoreSchemaId, AllowedStoreSchemaIds) orelse atm_schema_validator:raise_validation_error(
         DataKeyName,
-        "The provided storeSchemaId = '~s' was not found among defined store schemas",
+        "The provided storeSchemaId = '~ts' was not found among defined store schemas",
         [StoreSchemaId]
     ),
     ok.
@@ -384,7 +384,7 @@ assert_allowed_store_schema_reference(DataKeyName, StoreSchemaId, AllowedStoreSc
 raise_missing_required_config_parameter_error(ParameterName) ->
     atm_schema_validator:raise_validation_error(
         <<"lambdaConfig">>,
-        "Missing value for required lambda config parameter '~s'",
+        "Missing value for required lambda config parameter '~ts'",
         [ParameterName]
     ).
 
@@ -394,6 +394,6 @@ raise_missing_required_config_parameter_error(ParameterName) ->
 raise_missing_required_argument_mapper_error(ArgumentName) ->
     atm_schema_validator:raise_validation_error(
         <<"argumentMappings">>,
-        "Missing argument mapper for required argument '~s'",
+        "Missing argument mapper for required argument '~ts'",
         [ArgumentName]
     ).

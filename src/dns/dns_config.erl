@@ -318,7 +318,7 @@ filter_shadowed_entries(StaticEntries) ->
         case maps:is_key(NormalizedSubdomain, ProviderSubdomains) of
             false -> true;
             _ ->
-                ?warning("Ignoring static entry for subdomain \"~s\" "
+                ?warning("Ignoring static entry for subdomain \"~ts\" "
                 "as the subdomain is already used by a provider.", [Subdomain]),
                 false
         end

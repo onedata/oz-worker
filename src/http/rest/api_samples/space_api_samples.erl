@@ -81,7 +81,7 @@ get_space_details_endpoint(SpaceId) ->
         name = <<"Get space details">>,
         description = <<"Returns the details about the space.">>,
         method = 'GET',
-        path = str_utils:format_bin("/spaces/~s", [SpaceId]),
+        path = str_utils:format_bin("/spaces/~ts", [SpaceId]),
         swagger_operation_id = <<"get_space">>
     }.
 
@@ -106,7 +106,7 @@ list_direct_space_users_endpoint(SpaceId) ->
         name = <<"List direct space users">>,
         description = <<"Returns the list of users that are direct members of the space.">>,
         method = 'GET',
-        path = str_utils:format_bin("/spaces/~s/users", [SpaceId]),
+        path = str_utils:format_bin("/spaces/~ts/users", [SpaceId]),
         swagger_operation_id = <<"list_space_users">>
     }.
 
@@ -118,7 +118,7 @@ list_effective_space_users_endpoint(SpaceId) ->
         name = <<"List effective space users">>,
         description = <<"Returns the list of users that are effective members of the space.">>,
         method = 'GET',
-        path = str_utils:format_bin("/spaces/~s/effective_users", [SpaceId]),
+        path = str_utils:format_bin("/spaces/~ts/effective_users", [SpaceId]),
         swagger_operation_id = <<"list_effective_space_users">>
     }.
 
@@ -130,7 +130,7 @@ get_effective_space_user_details_endpoint(SpaceId) ->
         name = <<"Get effective space user details">>,
         description = <<"Returns the details about a specific effective user in the space.">>,
         method = 'GET',
-        path = str_utils:format_bin("/spaces/~s/effective_users/$USER_ID", [SpaceId]),
+        path = str_utils:format_bin("/spaces/~ts/effective_users/$USER_ID", [SpaceId]),
         placeholders = #{
             <<"$USER_ID">> => <<"ID of the user.">>
         },
@@ -145,7 +145,7 @@ list_direct_user_space_privileges_endpoint(SpaceId) ->
         name = <<"List user's direct space privileges">>,
         description = <<"Returns the list of user's direct privileges in the space.">>,
         method = 'GET',
-        path = str_utils:format_bin("/spaces/~s/users/$USER_ID/privileges", [SpaceId]),
+        path = str_utils:format_bin("/spaces/~ts/users/$USER_ID/privileges", [SpaceId]),
         placeholders = #{
             <<"$USER_ID">> => <<"ID of the user.">>
         },
@@ -160,7 +160,7 @@ list_effective_user_space_privileges_endpoint(SpaceId) ->
         name = <<"List user's effective space privileges">>,
         description = <<"Returns the list of user's effective privileges in the space.">>,
         method = 'GET',
-        path = str_utils:format_bin("/spaces/~s/effective_users/$USER_ID/privileges", [SpaceId]),
+        path = str_utils:format_bin("/spaces/~ts/effective_users/$USER_ID/privileges", [SpaceId]),
         placeholders = #{
             <<"$USER_ID">> => <<"ID of the user.">>
         },
@@ -175,7 +175,7 @@ update_user_space_privileges_endpoint(SpaceId) ->
         name = <<"Update user's space privileges">>,
         description = <<"Updates user's privileges in the space.">>,
         method = 'PATCH',
-        path = str_utils:format_bin("/spaces/~s/users/$USER_ID/privileges", [SpaceId]),
+        path = str_utils:format_bin("/spaces/~ts/users/$USER_ID/privileges", [SpaceId]),
         data = <<"{\"grant\": $PRIVS_TO_GRANT_LIST, \"revoke\": $PRIVS_TO_REVOKE_LIST}">>,
         headers = #{
             <<"content-type">> => <<"application/json">>
@@ -196,7 +196,7 @@ list_direct_space_groups_endpoint(SpaceId) ->
         name = <<"List direct space groups">>,
         description = <<"Returns the list of groups that are direct members of the space.">>,
         method = 'GET',
-        path = str_utils:format_bin("/spaces/~s/groups", [SpaceId]),
+        path = str_utils:format_bin("/spaces/~ts/groups", [SpaceId]),
         swagger_operation_id = <<"list_space_groups">>
     }.
 
@@ -208,7 +208,7 @@ list_effective_space_groups_endpoint(SpaceId) ->
         name = <<"List effective space groups">>,
         description = <<"Returns the list of groups that are effective members of the space.">>,
         method = 'GET',
-        path = str_utils:format_bin("/spaces/~s/effective_groups", [SpaceId]),
+        path = str_utils:format_bin("/spaces/~ts/effective_groups", [SpaceId]),
         swagger_operation_id = <<"list_effective_space_groups">>
     }.
 
@@ -220,7 +220,7 @@ get_effective_space_group_details_endpoint(SpaceId) ->
         name = <<"Get effective space group details">>,
         description = <<"Returns the details about a specific effective group in the space.">>,
         method = 'GET',
-        path = str_utils:format_bin("/spaces/~s/effective_groups/$GROUP_ID", [SpaceId]),
+        path = str_utils:format_bin("/spaces/~ts/effective_groups/$GROUP_ID", [SpaceId]),
         placeholders = #{
             <<"$GROUP_ID">> => <<"ID of the group.">>
         },
@@ -235,7 +235,7 @@ list_direct_group_space_privileges_endpoint(SpaceId) ->
         name = <<"List group's direct space privileges">>,
         description = <<"Returns the list of group's direct privileges in the space.">>,
         method = 'GET',
-        path = str_utils:format_bin("/spaces/~s/groups/$GROUP_ID/privileges", [SpaceId]),
+        path = str_utils:format_bin("/spaces/~ts/groups/$GROUP_ID/privileges", [SpaceId]),
         placeholders = #{
             <<"$GROUP_ID">> => <<"ID of the group.">>
         },
@@ -250,7 +250,7 @@ list_effective_group_space_privileges_endpoint(SpaceId) ->
         name = <<"List group's effective space privileges">>,
         description = <<"Returns the list of group's effective privileges in the space.">>,
         method = 'GET',
-        path = str_utils:format_bin("/spaces/~s/effective_groups/$GROUP_ID/privileges", [SpaceId]),
+        path = str_utils:format_bin("/spaces/~ts/effective_groups/$GROUP_ID/privileges", [SpaceId]),
         placeholders = #{
             <<"$GROUP_ID">> => <<"ID of the group.">>
         },
@@ -265,7 +265,7 @@ update_group_space_privileges_endpoint(SpaceId) ->
         name = <<"Update group's space privileges">>,
         description = <<"Updates group's privileges in the space.">>,
         method = 'PATCH',
-        path = str_utils:format_bin("/spaces/~s/groups/$GROUP_ID/privileges", [SpaceId]),
+        path = str_utils:format_bin("/spaces/~ts/groups/$GROUP_ID/privileges", [SpaceId]),
         data = <<"{\"grant\": $PRIVS_TO_GRANT_LIST, \"revoke\": $PRIVS_TO_REVOKE_LIST}">>,
         headers = #{
             <<"content-type">> => <<"application/json">>
@@ -286,6 +286,6 @@ list_space_shares_endpoint(SpaceId) ->
         name = <<"List space shares">>,
         description = <<"Returns the list of shares from the space.">>,
         method = 'GET',
-        path = str_utils:format_bin("/spaces/~s/shares", [SpaceId]),
+        path = str_utils:format_bin("/spaces/~ts/shares", [SpaceId]),
         swagger_operation_id = <<"list_space_shares">>
     }.

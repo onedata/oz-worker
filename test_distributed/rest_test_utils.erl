@@ -152,11 +152,11 @@ check_rest_call(Config, ArgsMap) ->
 
 %%        %% Useful for debug
 %%        ct:pal("[Req]: ~n"
-%%        "   ReqMethod: ~p~n"
-%%        "   URL: ~p~n"
-%%        "   HeadersPlusAuth: ~p~n"
-%%        "   ReqBody: ~p~n"
-%%        "   Opts: ~p~n", [
+%%        "   ReqMethod: ~tp~n"
+%%        "   URL: ~tp~n"
+%%        "   HeadersPlusAuth: ~tp~n"
+%%        "   ReqBody: ~tp~n"
+%%        "   Opts: ~tp~n", [
 %%            ReqMethod, URL, HeadersPlusAuth, ReqBody, [{pool, false}, ReqOptsPlusAuth]
 %%        ]),
 
@@ -199,8 +199,8 @@ check_rest_call(Config, ArgsMap) ->
                 catch
                     Type1:Message1:Stacktrace1 ->
                         ct:pal(
-                            "Headers verification function crashed - ~p:~p~n"
-                            "Stacktrace: ~s", [
+                            "Headers verification function crashed - ~tp:~tp~n"
+                            "Stacktrace: ~ts", [
                                 Type1, Message1, lager:pr_stacktrace(Stacktrace1)
                             ]),
                         false
@@ -243,8 +243,8 @@ check_rest_call(Config, ArgsMap) ->
                 catch
                     Type2:Message2:Stacktrace2 ->
                         ct:pal(
-                            "Body verification function crashed - ~p:~p~n"
-                            "Stacktrace: ~s", [
+                            "Body verification function crashed - ~tp:~tp~n"
+                            "Stacktrace: ~ts", [
                                 Type2, Message2, lager:pr_stacktrace(Stacktrace2)
                             ]),
                         false
@@ -313,8 +313,8 @@ check_rest_call(Config, ArgsMap) ->
         % Unexpected error
         Type:Message:Stacktrace ->
             ct:pal(
-                "~p:check_rest_call failed with unexpected result - ~p:~p~n"
-                "Stacktrace: ~s", [
+                "~tp:check_rest_call failed with unexpected result - ~tp:~tp~n"
+                "Stacktrace: ~ts", [
                     ?MODULE, Type, Message, lager:pr_stacktrace(Stacktrace)
                 ]),
             false
