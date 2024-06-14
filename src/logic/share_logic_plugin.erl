@@ -102,6 +102,14 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
     RootFileId = maps:get(<<"rootFileId">>, Req#el_req.data),
     FileType = maps:get(<<"fileType">>, Req#el_req.data, dir),
+
+    try
+        {FileUuid, SpaceId, ShareId} = file_id:unpack_share_guid(RootFileId),
+        true = is_binary(FileUuid) andalso byte_size(FileUuid) > 0
+    catch _:_ ->
+        throw(?ERROR_BAD_DATA(<<"rootFileId">>))
+    end,
+
     ShareDoc = #document{key = ShareId, value = #od_share{
         name = Name,
         description = Description,
@@ -180,8 +188,21 @@ update(#el_req{gri = #gri{id = ShareId, aspect = instance}, data = Data}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
-delete(#el_req{gri = #gri{id = ShareId, aspect = instance}}) ->
-    entity_graph:delete_with_relations(od_share, ShareId).
+delete(#el_req{auth = Auth, gri = #gri{id = ShareId, aspect = instance}}) ->
+    %% TODO VFS-12030 consider removing the logic of share-handle relation from the entity graph
+    fun(#od_share{handle = HandleId}) ->
+        % ensure no race conditions when deleting a share and its handle
+        % (it could conflict with a handle being created at the same time -
+        % another critical section is used during handle creation procedure).
+        od_share:critical_section_for(ShareId, fun() ->
+            HandleId /= undefined andalso case handle_logic:delete(Auth, HandleId) of
+                ok -> ok;
+                {error, not_found} -> ok;
+                {error, _} = Error -> throw(Error)
+            end,
+            entity_graph:delete_with_relations(od_share, ShareId)
+        end)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -245,7 +266,8 @@ authorize(_, _) ->
 %% Returns list of admin privileges needed to perform given operation.
 %% @end
 %%--------------------------------------------------------------------
--spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
+-spec required_admin_privileges(entity_logic:req()) ->
+    [privileges:oz_privilege()] | forbidden | fun((entity_logic:entity()) -> [privileges:oz_privilege()] | forbidden).
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
     [?OZ_SHARES_CREATE];
 
@@ -259,10 +281,14 @@ required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instan
     [?OZ_SHARES_UPDATE];
 
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance}}) ->
-    [?OZ_SHARES_DELETE];
+    fun
+        (#od_share{handle = undefined}) -> [?OZ_SHARES_DELETE];
+        (#od_share{handle = _}) -> [?OZ_SHARES_DELETE, ?OZ_HANDLES_DELETE]
+    end;
 
 required_admin_privileges(_) ->
     forbidden.
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns validity verificators for given request.

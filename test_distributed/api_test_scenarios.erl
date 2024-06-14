@@ -85,7 +85,7 @@ run_scenario(Function, Args) ->
             false;
         Type:Message:Stacktrace ->
             ct:pal(
-                "Unexpected error in ~p:run_scenario - ~p:~p~nStacktrace: ~s",
+                "Unexpected error in ~tp:run_scenario - ~tp:~tp~nStacktrace: ~ts",
                 [
                     ?MODULE, Type, Message,
                     lager:pr_stacktrace(Stacktrace)
@@ -109,7 +109,6 @@ delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteFun) ->
         logic_spec = LogicSpec,
         gs_spec = GsSpec
     } = ApiTestSpec,
-
     assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )),
@@ -128,9 +127,11 @@ delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteFun) ->
 
     Env = EnvSetUpFun(),
     DeleteFun(Env),
+
     assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, fun() -> Env end, undefined, undefined
     )).
+
 
 
 prepare_entity_not_found_rest_spec(undefined) ->
@@ -565,7 +566,7 @@ create_basic_group_env(Config, Privs) ->
     %%                  Group
     %%                 /     \
     %%                /       \
-    %%       [~privileges]  [privileges]
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
     %%              /           \
     %%           User1         User2
 
@@ -593,7 +594,7 @@ create_basic_space_env(Config, Privs) ->
     %%                  Space
     %%                 /  |  \
     %%                /   |   \
-    %%    [~privileges]   |   [privileges]
+    %%    [~privileges]   |   [privileges]      @codetag-tracker-ignore
     %%              /     |     \
     %%          User1   Owner   User2
 
@@ -628,7 +629,7 @@ create_basic_doi_hservice_env(Config, Privs) ->
     %%              HandleService
     %%                 /      \
     %%                /        \
-    %%       [~privileges]  [privileges]
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
     %%              /            \
     %%           User1         User2
 
@@ -664,7 +665,7 @@ create_basic_handle_env(Config, Privs) ->
     %%                  Handle
     %%                 /      \
     %%                /        \
-    %%       [~privileges]  [privileges]
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
     %%              /            \
     %%           User1         User2
 
@@ -679,14 +680,11 @@ create_basic_handle_env(Config, Privs) ->
     ),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
-    HandleDetails = ?HANDLE(HService, ShareId),
     AllHandlePrivs = privileges:handle_privileges(),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
-    ),
+    HandleId = ozt_users:create_handle_for(U1, HService, ShareId),
     oz_test_utils:handle_set_user_privileges(
         Config, HandleId, U1, [], Privs
     ),
@@ -708,7 +706,7 @@ create_basic_harvester_env(Config, Privs) ->
     %%                Harvester
     %%                 /     \
     %%                /       \
-    %%       [~privileges]  [privileges]
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
     %%              /           \
     %%           User1         User2
 
@@ -738,7 +736,7 @@ create_basic_cluster_env(Config, Privs) ->
     %%                  Cluster
     %%                 /     \
     %%                /       \
-    %%       [~privileges]  [privileges]
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
     %%              /           \
     %%           User1         User2
 
@@ -771,7 +769,7 @@ create_basic_atm_inventory_env(Privs) ->
     %%                  AtmInventory
     %%                    /     \
     %%                   /       \
-    %%          [~privileges]  [privileges]
+    %%          [~privileges]  [privileges]     @codetag-tracker-ignore
     %%                 /           \
     %% UserWithoutPrivileges  UserWithPrivileges
 
@@ -860,8 +858,8 @@ create_eff_child_groups_env(Config) ->
 
     Users = [{U1, _}, {U2, _}, {U3, _}, {U4, _}] = lists:map(
         fun(_) ->
-            Username = ?UNIQUE_STRING,
-            FullName = ?UNIQUE_STRING,
+            Username = ?RAND_STR(),
+            FullName = ?RAND_STR(),
             UserDetails = #{
                 <<"username">> => Username,
                 <<"fullName">> => FullName
@@ -876,7 +874,7 @@ create_eff_child_groups_env(Config) ->
     Groups = [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}, {G6, _}] =
         lists:map(
             fun(_) ->
-                GroupDetails = ?GROUP_DETAILS(?UNIQUE_STRING),
+                GroupDetails = ?GROUP_DETAILS(?RAND_STR()),
                 {ok, GroupId} = oz_test_utils:create_group(
                     Config, ?ROOT, GroupDetails
                 ),
@@ -906,7 +904,7 @@ create_space_eff_users_env(Config) ->
     %%                  Space
     %%                 /  |  \
     %%                /   |   \
-    %%     [~space_view]  |  [space_view]
+    %%     [~space_view]  |  [space_view]       @codetag-tracker-ignore
     %%           /        |        \
     %%        User1     Group1    User2
     %%                 /      \
@@ -958,7 +956,7 @@ create_provider_eff_users_env(Config) ->
     %%                  Space
     %%                 /  |  \
     %%                /   |   \
-    %%     [~space_view]  |  [space_view]
+    %%     [~space_view]  |  [space_view]       @codetag-tracker-ignore
     %%           /        |        \
     %%        User1     Group1    User2
     %%                 /      \
@@ -1083,14 +1081,11 @@ create_handle_eff_users_env(Config) ->
     ),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
-    HandleDetails = ?HANDLE(HService, ShareId),
     AllHandlePrivs = privileges:handle_privileges(),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
-    ),
+    HandleId = ozt_users:create_handle_for(U1, HService, ShareId),
     oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, [],
         [?HANDLE_VIEW]
     ),
@@ -1111,7 +1106,7 @@ create_harvester_eff_users_env(Config) ->
     %%                Harvester
     %%                 /  |  \
     %%                /   |   \
-    %%     [~space_view]  |  [space_view]
+    %%     [~space_view]  |  [space_view]       @codetag-tracker-ignore
     %%           /        |        \
     %%        User1     Group1    User2
     %%                 /      \
@@ -1490,16 +1485,24 @@ create_eff_handles_env(Config) ->
             ),
             ShareId = ?UNIQUE_STRING,
             {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
             ),
-            HandleDetails = ?HANDLE(HService, ShareId),
+            MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
+            RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix, ?RAND_INT(1, 10)),
+            HandleData = #{
+                <<"handleServiceId">> => HService,
+                <<"resourceType">> => <<"Share">>,
+                <<"resourceId">> => ShareId,
+                <<"metadataPrefix">> => MetadataPrefix,
+                <<"metadata">> => RawMetadata
+            },
             {ok, HandleId} = oz_test_utils:create_handle(
-                Config, ?ROOT, HandleDetails
+                Config, ?ROOT, HandleData
             ),
             {ok, GroupId} = oz_test_utils:handle_add_group(
                 Config, HandleId, GroupId
             ),
-            {HandleId, HandleDetails}
+            {HandleId, HandleData}
         end, [G1, G2, G3, G4, G5]
     ),
 

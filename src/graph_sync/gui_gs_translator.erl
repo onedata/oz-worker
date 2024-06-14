@@ -94,6 +94,8 @@ translate_value(_, #gri{type = od_space, aspect = Aspect}, {Entries, IsLast, _Ne
     };
 translate_value(_, #gri{type = od_space, aspect = membership_request}, RequestId) ->
     #{<<"requestId">> => RequestId};
+translate_value(_, #gri{type = od_space, aspect = infer_accessible_eff_groups}, GroupIds) ->
+    #{<<"list">> => GroupIds};
 translate_value(_, #gri{type = od_harvester, aspect = {query, _}}, Response) ->
     Response;
 translate_value(_, #gri{type = od_harvester, aspect = {gen_curl_query, _}}, Response) ->
@@ -167,9 +169,9 @@ translate_value(_, #gri{type = od_atm_workflow_schema, aspect = {dump_revision, 
     JsonMap;
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n"
-    "ProtocolVersion: ~p~n"
-    "GRI: ~p~n"
-    "Data: ~p~n", [
+    "ProtocolVersion: ~tp~n"
+    "GRI: ~tp~n"
+    "Data: ~tp~n", [
         ProtocolVersion, GRI, Data
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
@@ -210,9 +212,9 @@ translate_resource(_, GRI = #gri{type = oz_worker}, Data) ->
 
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate GUI graph sync get result for:~n
-    ProtocolVersion: ~p~n
-    GRI: ~p~n
-    Data: ~p~n", [
+    ProtocolVersion: ~tp~n
+    GRI: ~tp~n
+    Data: ~tp~n", [
         ProtocolVersion, GRI, Data
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).

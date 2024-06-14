@@ -73,7 +73,7 @@ client_connected(?PROVIDER(ProvId), ConnectionRef) ->
     {ok, #document{value = ProvRecord, revs = [DbRev | _]}} = od_provider:get(ProvId),
     case provider_connections:add(ProvId, ConnectionRef) of
         {ok, 1} ->
-            ?info("Provider '~ts' has connected (~s)", [ProvRecord#od_provider.name, ProvId]);
+            ?info("Provider '~ts' has connected (~ts)", [ProvRecord#od_provider.name, ProvId]);
         _ ->
             ok
     end,
@@ -130,9 +130,9 @@ client_disconnected(?PROVIDER(ProvId), ConnectionRef) ->
         {ok, 0} ->
             case ProviderName of
                 undefined ->
-                    ?info("Provider '~s' went offline", [ProvId]);
+                    ?info("Provider '~ts' went offline", [ProvId]);
                 _ ->
-                    ?info("Provider '~ts' went offline (~s)", [ProviderName, ProvId])
+                    ?info("Provider '~ts' went offline (~ts)", [ProviderName, ProvId])
             end;
         _ ->
             ok

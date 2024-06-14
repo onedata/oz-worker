@@ -838,7 +838,7 @@ legacy_user_ids_are_retained(Config) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     % Create a user with legacy id to simulate a situation after system upgrade
     #linked_account{idp = IdP, subject_id = SubjectId} = LinkedAccount = ?LINKED_ACC(?DUMMY_IDP, []),
-    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~s", [IdP, SubjectId])),
+    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~ts", [IdP, SubjectId])),
     ModernUserId = datastore_key:new_from_digest([atom_to_binary(IdP, utf8), SubjectId]),
     {ok, LegacyUserId} = oz_test_utils:call_oz(Config, user_logic, create, [?ROOT, LegacyUserId, #{}]),
     oz_test_utils:call_oz(Config, linked_accounts, merge, [LegacyUserId, LinkedAccount]),
@@ -862,7 +862,7 @@ legacy_user_ids_are_retained(Config) ->
 legacy_group_ids_are_retained_for_legacy_user(Config) ->
     % Create a user with legacy id to simulate a situation after system upgrade
     #linked_account{idp = IdP, subject_id = SubjectId} = LinkedAccount = ?LINKED_ACC(?THIRD_IDP, []),
-    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~s", [IdP, SubjectId])),
+    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~ts", [IdP, SubjectId])),
     {ok, LegacyUserId} = oz_test_utils:call_oz(Config, user_logic, create, [?ROOT, LegacyUserId, #{}]),
     oz_test_utils:call_oz(Config, linked_accounts, merge, [LegacyUserId, LinkedAccount]),
     put(test_data_user, LegacyUserId),
@@ -944,7 +944,7 @@ legacy_user_and_group_relations_are_retained(Config) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     % Create a user with legacy id to simulate a situation after system upgrade
     #linked_account{idp = IdP, subject_id = SubjectId} = LinkedAccount = ?LINKED_ACC(?DUMMY_IDP, []),
-    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~s", [IdP, SubjectId])),
+    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~ts", [IdP, SubjectId])),
     {ok, LegacyUserId} = oz_test_utils:call_oz(Config, user_logic, create, [?ROOT, LegacyUserId, #{}]),
     oz_test_utils:call_oz(Config, linked_accounts, merge, [LegacyUserId, LinkedAccount]),
     put(test_data_user, LegacyUserId),

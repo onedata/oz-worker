@@ -310,7 +310,7 @@ run_test_repeat(RequestSpec, RepeatNum) ->
         RepeatNum == ?TEST_REPEATS andalso check_subject_deleted_scenarios(RequestSpec),
         true
     catch Type:Reason:Stacktrace ->
-        ct:pal("Access tokens test failed due to ~p:~p~nStacktrace: ~s", [
+        ct:pal("Access tokens test failed due to ~tp:~tp~nStacktrace: ~ts", [
             Type, Reason, lager:pr_stacktrace(Stacktrace)
         ]),
         false
@@ -554,10 +554,10 @@ check_token_caveats_handling(RequestSpec) ->
                         ok;
                     false ->
                         ct:pal("Token caveats handling test failed!"),
-                        ct:pal("RequestSpec: ~p", [RequestSpec]),
-                        ct:pal("Persistence: ~p", [Persistence]),
-                        ct:pal("EligibleSubject: ~p", [EligibleSubject]),
-                        ct:pal("EligibleSubjectData: ~p", [case EligibleSubject of
+                        ct:pal("RequestSpec: ~tp", [RequestSpec]),
+                        ct:pal("Persistence: ~tp", [Persistence]),
+                        ct:pal("EligibleSubject: ~tp", [EligibleSubject]),
+                        ct:pal("EligibleSubjectData: ~tp", [case EligibleSubject of
                             ?SUB(user, UserId) ->
                                 ozt_users:get(UserId);
                             ?SUB(?ONEPROVIDER, ProviderId) ->
@@ -565,11 +565,11 @@ check_token_caveats_handling(RequestSpec) ->
                             _ ->
                                 <<"none">>
                         end ]),
-                        ct:pal("RequestContext: ~p", [RequestContext]),
-                        ct:pal("RandCorrectCaveats: ~p", [RandCorrectCaveats]),
-                        ct:pal("RandUnverifiedCaveats: ~p", [RandUnverifiedCaveats]),
-                        ct:pal("ClientAuth: ~p", [ClientAuth]),
-                        ct:pal("Result: ~p", [Result]),
+                        ct:pal("RequestContext: ~tp", [RequestContext]),
+                        ct:pal("RandCorrectCaveats: ~tp", [RandCorrectCaveats]),
+                        ct:pal("RandUnverifiedCaveats: ~tp", [RandUnverifiedCaveats]),
+                        ct:pal("ClientAuth: ~tp", [ClientAuth]),
+                        ct:pal("Result: ~tp", [Result]),
                         error(test_failed)
                 end
             end, lists:seq(1, ?CAVEAT_RANDOMIZATION_REPEATS))

@@ -18,7 +18,7 @@
 
 %% API
 -export([create/0, create/1, create/2, create_advertised/0, create_advertised/1]).
--export([get/1, exists/1]).
+-export([get/1, list/0, exists/1]).
 -export([update/2]).
 -export([list_marketplace/0, list_marketplace/1]).
 -export([submit_membership_request/2, submit_membership_request/3]).
@@ -33,12 +33,12 @@
 -export([create_user_invite_token/2]).
 -export([create_group_invite_token/2]).
 -export([create_support_token/2]).
--export([create_share/2]).
+-export([create_share/1, create_share/2]).
 -export([get_users/1, get_groups/1, get_eff_users/1, get_eff_groups/1]).
 -export([has_eff_user/2]).
 -export([get_user_privileges/2, get_group_privileges/2, get_eff_user_privileges/2, get_eff_group_privileges/2]).
 -export([get_shares/1]).
--export([set_user_privileges/3]).
+-export([set_user_privileges/3, set_group_privileges/3]).
 -export([random_support_parameters/0, expected_tweaked_support_parameters/1]).
 -export([set_support_parameters/3, get_support_parameters/2]).
 -export([delete/1]).
@@ -87,6 +87,12 @@ create_advertised(Data) ->
 get(SpaceId) ->
     {ok, Space} = ?assertMatch({ok, _}, ozt:rpc(space_logic, get, [?ROOT, SpaceId])),
     Space.
+
+
+-spec list() -> [od_space:id()].
+list() ->
+    {ok, SpaceIds} = ?assertMatch({ok, _}, ozt:rpc(space_logic, list, [?ROOT])),
+    SpaceIds.
 
 
 -spec exists(od_space:id()) -> od_space:record().
@@ -219,10 +225,15 @@ create_support_token(SpaceId, UserId) ->
     ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId)).
 
 
+-spec create_share(od_space:id()) -> od_share:id().
+create_share(SpaceId) ->
+    create_share(SpaceId, <<"of-space-", SpaceId/binary>>).
+
 -spec create_share(od_space:id(), od_share:name()) -> od_share:id().
 create_share(SpaceId, Name) ->
+    ShareId = datastore_key:new(),
     {ok, ShareId} = ?assertMatch({ok, _}, ozt:rpc(share_logic, create, [
-        ?ROOT, str_utils:rand_hex(16), Name, ?ROOT_FILE_ID, SpaceId
+        ?ROOT, ShareId, Name, ?GEN_ROOT_FILE_ID(SpaceId, ShareId), SpaceId
     ])),
     ShareId.
 
@@ -289,6 +300,14 @@ get_shares(SpaceId) ->
 -spec set_user_privileges(od_space:id(), od_user:id(), [privileges:space_privilege()]) -> ok.
 set_user_privileges(SpaceId, UserId, Privileges) ->
     ?assertMatch(ok, ozt:rpc(space_logic, update_user_privileges, [?ROOT, SpaceId, UserId, #{
+        <<"grant">> => Privileges,
+        <<"revoke">> => lists_utils:subtract(privileges:space_admin(), Privileges)
+    }])).
+
+
+-spec set_group_privileges(od_space:id(), od_group:id(), [privileges:space_privilege()]) -> ok.
+set_group_privileges(SpaceId, GroupId, Privileges) ->
+    ?assertMatch(ok, ozt:rpc(space_logic, update_group_privileges, [?ROOT, SpaceId, GroupId, #{
         <<"grant">> => Privileges,
         <<"revoke">> => lists_utils:subtract(privileges:space_admin(), Privileges)
     }])).

@@ -103,7 +103,7 @@ gen_user_id(#linked_account{idp = IdP, subject_id = SubjectId}) ->
 %%--------------------------------------------------------------------
 -spec gen_user_id(auth_config:idp(), SubjectId :: binary()) -> od_user:id().
 gen_user_id(IdP, SubjectId) ->
-    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~s", [IdP, SubjectId])),
+    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~ts", [IdP, SubjectId])),
     case user_logic:exists(LegacyUserId) of
         true -> LegacyUserId;
         false -> datastore_key:new_from_digest([atom_to_binary(IdP, utf8), SubjectId])

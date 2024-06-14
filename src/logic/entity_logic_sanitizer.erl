@@ -257,7 +257,7 @@ transform_and_check_value(TypeRule, ValueRule, Key, Value) ->
             throw(Error);
         Type:Message:Stacktrace ->
             ?error_stacktrace(
-                "Error in entity_logic:transform_and_check_value - ~p:~p",
+                "Error in entity_logic:transform_and_check_value - ~tp:~tp",
                 [Type, Message],
                 Stacktrace
             ),
@@ -454,7 +454,7 @@ sanitize_type({persistent_record, single, RecordType}, Key, Value) ->
             throw(?ERROR_BAD_DATA(Key))
     end;
 sanitize_type(Rule, Key, _) ->
-    ?error("Unknown type rule: ~p for key: ~p", [Rule, Key]),
+    ?error("Unknown type rule: ~tp for key: ~tp", [Rule, Key]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
 
 
@@ -675,7 +675,7 @@ sanitize_value(binary, name, _Key, Value) ->
         false -> throw(?ERROR_BAD_VALUE_NAME)
     end;
 sanitize_value(TypeRule, ValueRule, Key, _) ->
-    ?error("Unknown {type, value} rule: {~p, ~p} for key: ~p", [
+    ?error("Unknown {type, value} rule: {~tp, ~tp} for key: ~tp", [
         TypeRule, ValueRule, Key
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).

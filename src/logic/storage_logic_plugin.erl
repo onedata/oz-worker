@@ -150,7 +150,7 @@ create(#el_req{auth = Auth, gri = #gri{id = StorageId, aspect = support}, data =
 % This endpoint is dedicated for providers upgrading from version 19.02.* to 20.02.*.
 create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_legacy_support, SpaceId}}}) ->
     fun(#od_storage{provider = ProviderId}) ->
-        ?info("Processing request to upgrade legacy support of space '~s' by provider '~s'...", [SpaceId, ProviderId]),
+        ?info("Processing request to upgrade legacy support of space '~ts' by provider '~ts'...", [SpaceId, ProviderId]),
         {true, {VirtualStorage, _}} = fetch_entity(#gri{id = ProviderId}),
         SupportSize = entity_graph:get_relation_attrs(direct, bottom_up, od_space, SpaceId, VirtualStorage),
         try
@@ -163,7 +163,7 @@ create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_legacy_support, Spac
         catch
             _:(?ERROR_RELATION_DOES_NOT_EXIST(_, _, _, _)) -> ok
         end,
-        ?notice("Successfully upgraded legacy support of space '~s' by provider '~s'", [SpaceId, ProviderId])
+        ?notice("Successfully upgraded legacy support of space '~ts' by provider '~ts'", [SpaceId, ProviderId])
     end.
 
 

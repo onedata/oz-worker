@@ -76,31 +76,25 @@ get_response(<<"metadataFormat">>, Args) ->
         undefined ->
             lists:map(fun(MetadataPrefix) ->
                 get_metadata_format_info(MetadataPrefix)
-            end, metadata_formats:supported_formats());
+            end, oai_metadata:supported_formats());
         OAIId ->
-            try
-                Id = oai_utils:oai_identifier_decode(OAIId),
-                #od_handle{metadata = Metadata} = oai_utils:get_handle(Id),
-                case Metadata of
-                    undefined -> throw(noMetadataFormats);
-                    _ ->
-                        lists:map(fun(MetadataPrefix) ->
-                            get_metadata_format_info(MetadataPrefix)
-                        end, metadata_formats:supported_formats())
-                end
-            catch
-                throw:noMetadataFormats ->
-                    throw({noMetadataFormats, OAIId});
-                throw:{illegalId, OAIId} ->
-                    throw({illegalId, OAIId});
-                _:_ ->
-                    throw({idDoesNotExist, OAIId})
-            end
+            HandleId = oai_utils:oai_identifier_decode(OAIId),
+            MetadataPrefix = case od_handle:get(HandleId) of
+                {ok, #document{value = HandleRecord}} ->
+                    HandleRecord#od_handle.metadata_prefix;
+                {error, not_found} ->
+                    case deleted_handle_registry:lookup(HandleId) of
+                        {ok, {MP, _}} -> MP;
+                        error -> throw({idDoesNotExist, OAIId})
+                    end
+            end,
+            [get_metadata_format_info(MetadataPrefix)]
     end.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
 %%%-------------------------------------------------------------------
 %%% @private
 %%% @doc
@@ -110,14 +104,10 @@ get_response(<<"metadataFormat">>, Args) ->
 %%%-------------------------------------------------------------------
 -spec get_metadata_format_info(binary()) -> oai_metadata_format().
 get_metadata_format_info(MetadataPrefix) ->
-    try
-        SchemaURL = metadata_formats:schema_URL(MetadataPrefix),
-        {_, Namespace} = metadata_formats:main_namespace(MetadataPrefix),
-        #oai_metadata_format{
-            metadataPrefix = MetadataPrefix,
-            schema = SchemaURL,
-            metadataNamespace = Namespace
-        }
-    catch
-        _:_ -> throw(noMetadataFormats)
-    end.
+    SchemaURL = oai_metadata:schema_URL(MetadataPrefix),
+    {_, Namespace} = oai_metadata:main_namespace(MetadataPrefix),
+    #oai_metadata_format{
+        metadataPrefix = MetadataPrefix,
+        schema = SchemaURL,
+        metadataNamespace = Namespace
+    }.

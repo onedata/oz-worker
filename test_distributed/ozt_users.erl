@@ -19,13 +19,15 @@
 %% API
 -export([create/0, create/1]).
 -export([create_admin/0, create_admin/1]).
--export([get/1]).
+-export([get/1, list/0]).
 -export([toggle_access_block/2]).
--export([create_group_for/1]).
+-export([create_group_for/1, create_group_for/2]).
 -export([create_space_for/1, create_space_for/2]).
 -export([create_advertised_space_for/1, create_advertised_space_for/2]).
 -export([join_space/2, leave_space/2]).
+-export([create_share_for/2]).
 -export([create_handle_service_for/1]).
+-export([create_handle_for/3]).
 -export([create_harvester_for/1]).
 -export([create_atm_inventory_for/1, create_atm_inventory_for/2]).
 -export([get_eff_providers/1]).
@@ -64,6 +66,12 @@ get(UserId) ->
     User.
 
 
+-spec list() -> [od_user:id()].
+list() ->
+    {ok, UserIds} = ?assertMatch({ok, _}, ozt:rpc(user_logic, list, [?ROOT])),
+    UserIds.
+
+
 -spec toggle_access_block(od_user:id(), boolean()) -> ok.
 toggle_access_block(UserId, Blocked) ->
     ?assertMatch(ok, ozt:rpc(user_logic, toggle_access_block, [?ROOT, UserId, Blocked])).
@@ -71,9 +79,11 @@ toggle_access_block(UserId, Blocked) ->
 
 -spec create_group_for(od_user:id()) -> od_group:id().
 create_group_for(UserId) ->
-    {ok, GroupId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create_group, [
-        ?USER(UserId), UserId, #{<<"name">> => <<"of-user-", UserId/binary>>}
-    ])),
+    create_group_for(UserId, #{<<"name">> => <<"of-user-", UserId/binary>>}).
+
+-spec create_group_for(od_user:id(), entity_logic:data()) -> od_group:id().
+create_group_for(UserId, GroupData) ->
+    {ok, GroupId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create_group, [?USER(UserId), UserId, GroupData])),
     GroupId.
 
 
@@ -116,6 +126,15 @@ leave_space(UserId, SpaceId) ->
     ?assertMatch(ok, ozt:rpc(user_logic, leave_space, [?USER(UserId), UserId, SpaceId])).
 
 
+-spec create_share_for(od_user:id(), od_space:id()) -> od_share:id().
+create_share_for(UserId, SpaceId) ->
+    Name = datastore_key:new(),
+    {ok, HServiceId} = ?assertMatch({ok, _},  ozt:rpc(share_logic, create, [
+        ?USER(UserId), Name, Name, ?GEN_ROOT_FILE_ID(SpaceId, Name), SpaceId
+    ])),
+    HServiceId.
+
+
 -spec create_handle_service_for(od_user:id()) -> od_handle_service:id().
 create_handle_service_for(UserId) ->
     grant_oz_privileges(UserId, [?OZ_HANDLE_SERVICES_CREATE]),
@@ -123,6 +142,20 @@ create_handle_service_for(UserId) ->
         ?USER(UserId), UserId, ?DOI_SERVICE
     ])),
     HServiceId.
+
+
+-spec create_handle_for(od_user:id(), od_handle_service:id(), od_share:id()) -> od_handle:id().
+create_handle_for(UserId, HandleServiceId, ShareId) ->
+    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
+    RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    {ok, HandleId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create_handle, [?USER(UserId), UserId, #{
+        <<"handleServiceId">> => HandleServiceId,
+        <<"resourceType">> => <<"Share">>,
+        <<"resourceId">> => ShareId,
+        <<"metadataPrefix">> => MetadataPrefix,
+        <<"metadata">> => RawMetadata
+    }])),
+    HandleId.
 
 
 -spec create_harvester_for(od_user:id()) -> od_harvester:id().

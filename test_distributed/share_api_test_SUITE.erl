@@ -71,7 +71,7 @@ list_test(Config) ->
         fun(SpaceId) ->
             ShareId = ?UNIQUE_STRING,
             {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
             ),
             ShareId
         end, [S1, S1, S1, S2, S2]
@@ -124,28 +124,42 @@ create_test(Config) ->
     %   U3 gets the SPACE_MANAGE_SHARES privilege
     %   U2 gets the SPACE_MANAGE_SHARES privilege
     %   U1 gets all remaining privileges
-    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {SpaceId, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_MANAGE_SHARES
     ),
     {ok, U3} = oz_test_utils:create_user(Config),
-    {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
-    oz_test_utils:space_set_user_privileges(Config, S1, U3, [
+    {ok, U3} = oz_test_utils:space_add_user(Config, SpaceId, U3),
+    oz_test_utils:space_set_user_privileges(Config, SpaceId, U3, [
         ?SPACE_MANAGE_SHARES
     ], []),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    ProposedShareId = datastore_key:new(),
+    RootFileId = ?GEN_ROOT_FILE_ID(SpaceId, ProposedShareId),
+
     VerifyFun = fun(ShareId, Data) ->
+        ?assertEqual(ShareId, ProposedShareId),
         {ok, Share} = oz_test_utils:get_share(Config, ShareId),
         ExpectedFileType = maps:get(<<"fileType">>, Data, dir),
         ExpectedDescription = maps:get(<<"description">>, Data, <<"">>),
         ?assertMatch(#od_share{
             name = ?CORRECT_NAME, description = ExpectedDescription,
-            space = S1, root_file = ?ROOT_FILE_ID,
+            space = SpaceId, root_file = RootFileId,
             file_type = ExpectedFileType
         }, Share),
         true
     end,
 
+    EnvTearDownFun = fun(_) ->
+        ozt:rpc(share_logic, delete, [?ROOT, ProposedShareId])
+    end,
+
+    NotAGuid = datastore_key:new(),
+    ExampleFileUuid = datastore_key:new(),
+    NotAShareFileGuid = file_id:pack_guid(ExampleFileUuid, SpaceId),
+    ShareFileGuidWithBadSpaceId = file_id:pack_share_guid(ExampleFileUuid, datastore_key:new(), ProposedShareId),
+    ShareFileGuidWithUndefinedShareId = file_id:pack_share_guid(ExampleFileUuid, SpaceId, undefined),
+    ShareFileGuidWithBadFileUuid = file_id:pack_share_guid(<<"">>, SpaceId, ProposedShareId),
     BadDataValues = [
         {<<"shareId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"shareId">>)},
         {<<"shareId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"shareId">>)},
@@ -153,6 +167,12 @@ create_test(Config) ->
         {<<"description">>, ?RAND_UNICODE_STR(100001), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"description">>, 100000)},
         {<<"rootFileId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"rootFileId">>)},
         {<<"rootFileId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"rootFileId">>)},
+        {<<"rootFileId">>, NotAGuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, ExampleFileUuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, NotAShareFileGuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, ShareFileGuidWithBadSpaceId, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, ShareFileGuidWithUndefinedShareId, ?ERROR_BAD_DATA(<<"rootFileId">>)},
+        {<<"rootFileId">>, ShareFileGuidWithBadFileUuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
         {<<"fileType">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"fileType">>)},
         {<<"fileType">>, <<"">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [file, dir])},
         {<<"fileType">>, atom, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [file, dir])}
@@ -186,8 +206,8 @@ create_test(Config) ->
                 ?OK_MAP_CONTAINS(#{
                     <<"handleId">> => null,
                     <<"name">> => ?CORRECT_NAME,
-                    <<"rootFileId">> => ?ROOT_FILE_ID,
-                    <<"spaceId">> => S1,
+                    <<"rootFileId">> => RootFileId,
+                    <<"spaceId">> => SpaceId,
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = gri:deserialize(EncodedGri),
                         VerifyFun(Id, Data)
@@ -203,12 +223,12 @@ create_test(Config) ->
                 <<"description">>, <<"fileType">>
             ],
             correct_values = #{
-                <<"shareId">> => [fun() -> ?UNIQUE_STRING end],
+                <<"shareId">> => [ProposedShareId],
                 <<"name">> => [?CORRECT_NAME],
                 <<"description">> => [<<"">>, ?RAND_UNICODE_STR(769)],
-                <<"rootFileId">> => [?ROOT_FILE_ID],
+                <<"rootFileId">> => [RootFileId],
                 <<"fileType">> => [file, dir],
-                <<"spaceId">> => [S1]
+                <<"spaceId">> => [SpaceId]
             },
             bad_values = lists:append([
                 [{<<"spaceId">>, <<"">>, ?ERROR_FORBIDDEN},
@@ -217,7 +237,7 @@ create_test(Config) ->
                 ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)])
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, undefined, EnvTearDownFun, undefined)),
 
     % Root client bypasses authorization checks,
     % hence wrong values of handleServiceId or resourceId
@@ -237,7 +257,7 @@ create_test(Config) ->
                 ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)])
         }
     },
-    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec, undefined, EnvTearDownFun, undefined)).
 
 
 get_test(Config) ->
@@ -259,7 +279,7 @@ get_test(Config, ShareId, FileType) ->
         <<"spaceId">> => S1,
         <<"name">> => ?SHARE_NAME1,
         <<"description">> => str_utils:rand_hex(rand:uniform(1000) - 1),
-        <<"rootFileId">> => ?ROOT_FILE_ID,
+        <<"rootFileId">> => ?GEN_ROOT_FILE_ID(S1, ShareId),
         <<"fileType">> => FileType
     },
     {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(Owner), ShareData),
@@ -362,7 +382,7 @@ update_test(Config) ->
                 <<"shareId">> => ShareId,
                 <<"name">> => InitialName,
                 <<"description">> => InitialDescription,
-                <<"rootFileId">> => ?ROOT_FILE_ID,
+                <<"rootFileId">> => ?GEN_ROOT_FILE_ID(S1, ShareId),
                 <<"spaceId">> => S1
             }
         ),
@@ -434,58 +454,86 @@ update_test(Config) ->
 delete_test(Config) ->
     % create space with 3 users:
     %   Owner effectively has all the privileges
-    %   U2 gets the SPACE_MANAGE_SHARES privilege
-    %   U1 gets all remaining privileges
-    {S1, Owner, U1, U2} = api_test_scenarios:create_basic_space_env(
+    %   UserWithManageSharesPriv gets the SPACE_MANAGE_SHARES privilege
+    %   UserWithoutManageSharesPriv gets all remaining privileges
+    {SpaceId, Owner, UserWithoutManageSharesPriv, UserWithManageSharesPriv} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_MANAGE_SHARES
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    HandleServiceId = ozt_users:create_handle_service_for(Owner),
 
-    EnvSetUpFun = fun() ->
-        ShareId = ?UNIQUE_STRING,
-        {ok, ShareId} = oz_test_utils:create_share(
-            Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
-        ),
-        #{shareId => ShareId}
-    end,
-    DeleteEntityFun = fun(#{shareId := ShareId} = _Env) ->
-        oz_test_utils:delete_share(Config, ShareId)
-    end,
-    VerifyEndFun = fun(ShouldSucceed, #{shareId := ShareId} = _Env, _) ->
-        {ok, Shares} = oz_test_utils:list_shares(Config),
-        ?assertEqual(lists:member(ShareId, Shares), not ShouldSucceed)
-    end,
+    lists:foreach(fun(ScenarioType) ->
+        EnvSetUpFun = fun() ->
+            ShareId = datastore_key:new(),
+            {ok, ShareId} = oz_test_utils:create_share(
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
+            ),
+            HandleId = case ScenarioType of
+                with_handle -> ozt_users:create_handle_for(Owner, HandleServiceId, ShareId);
+                without_handle -> undefined
+            end,
+            #{shareId => ShareId, handleId => HandleId}
+        end,
+        DeleteEntityFun = fun(#{shareId := ShareId} = _Env) ->
+            oz_test_utils:delete_share(Config, ShareId)
+        end,
+        VerifyEndFun = fun(ShouldSucceed, #{shareId := ShareId, handleId := HandleId} = _Env, _) ->
+            ?assertEqual({ok, not ShouldSucceed}, ozt:rpc(od_share, exists, [ShareId])),
+            {ok, Shares} = oz_test_utils:list_shares(Config),
+            ?assertEqual(lists:member(ShareId, Shares), not ShouldSucceed),
+            case ScenarioType of
+                without_handle ->
+                    ok;
+                with_handle ->
+                    % when a share is deleted and it had a handle attached, the handle should be deleted too
+                    ?assertEqual({ok, not ShouldSucceed}, ozt:rpc(od_handle, exists, [HandleId])),
+                    ?assertEqual(not ShouldSucceed, lists:member(HandleId, ozt_handles:list()))
+            end
+        end,
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_SHARES_DELETE]},
-                {user, Owner},
-                {user, U2}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin}
-            ]
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = lists:flatten([
+                    root,
+                    {admin, case ScenarioType of
+                        with_handle -> [?OZ_SHARES_DELETE, ?OZ_HANDLES_DELETE];
+                        without_handle -> [?OZ_SHARES_DELETE]
+                    end},
+                    {user, Owner},
+                    % the UserWithManageSharesPriv does not have rights to remove the handle, hence
+                    % he will only be authorized to delete the share if it does not have any handle
+                    case ScenarioType of
+                        with_handle -> [];
+                        without_handle -> {user, UserWithManageSharesPriv}
+                    end
+                ]),
+                unauthorized = [nobody],
+                forbidden = lists:flatten([
+                    {user, UserWithoutManageSharesPriv},
+                    {user, NonAdmin},
+                    case ScenarioType of
+                        with_handle -> {user, UserWithManageSharesPriv};
+                        without_handle -> []
+                    end
+                ])
+            },
+            % DELETE operation is not supported in REST API (reserved for Oneprovider logic via GraphSync)
+            logic_spec = #logic_spec{
+                module = share_logic,
+                function = delete,
+                args = [auth, shareId],
+                expected_result = ?OK_RES
+            },
+            gs_spec = #gs_spec{
+                operation = delete,
+                gri = #gri{type = od_share, id = shareId, aspect = instance},
+                expected_result_op = ?OK_RES
+            }
         },
-        % DELETE operation is not supported in REST API (reserved for Oneprovider logic via GraphSync)
-        logic_spec = #logic_spec{
-            module = share_logic,
-            function = delete,
-            args = [auth, shareId],
-            expected_result = ?OK_RES
-        },
-        gs_spec = #gs_spec{
-            operation = delete,
-            gri = #gri{type = od_share, id = shareId, aspect = instance},
-            expected_result_op = ?OK_RES
-        }
-    },
-    ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
-    )).
+        ?assert(api_test_scenarios:run_scenario(delete_entity,
+            [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
+        ))
+    end, [with_handle, without_handle]).
 
 
 get_shared_file_or_directory_data_test(Config) ->
@@ -502,7 +550,7 @@ get_shared_file_or_directory_data_test_base(Config, SubpathWithQs) ->
         <<"spaceId">> => SpaceId,
         <<"name">> => ?SHARE_NAME1,
         <<"description">> => str_utils:rand_hex(rand:uniform(1000) - 1),
-        <<"rootFileId">> => ?ROOT_FILE_ID,
+        <<"rootFileId">> => ?GEN_ROOT_FILE_ID(SpaceId, ShareId),
         <<"fileType">> => file
     }),
     CorrectObjectId = gen_example_object_id(ShareId),
@@ -626,7 +674,7 @@ choose_provider_for_public_share_handling_test(Config) ->
 
     ShareId = str_utils:rand_hex(16),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
+        Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
     ),
 
     ChooseProvider = fun() ->
@@ -746,7 +794,7 @@ check_shares_data_redirector(Config, ShareId, ProviderId, ProviderVersion, Subpa
 
     ExampleObjectId = gen_example_object_id(ShareId),
     Result = http_client:get(
-        str_utils:format_bin("https://~s/api/v3/onezone/shares/data/~s~s", [OzDomain, ExampleObjectId, SubpathWithQs]),
+        str_utils:format_bin("https://~ts/api/v3/onezone/shares/data/~ts~ts", [OzDomain, ExampleObjectId, SubpathWithQs]),
         #{}, <<"">>, [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
     ),
     ParsedResult = case Result of
@@ -788,7 +836,7 @@ expected_shared_data_redirect(Config, ProviderId, ObjectId, SubpathWithQs) ->
         <<"/?", Rest/binary>> -> <<"?", Rest/binary>>;
         Other -> Other
     end,
-    str_utils:format_bin("https://~s/api/v3/oneprovider/data/~s~s", [
+    str_utils:format_bin("https://~ts/api/v3/oneprovider/data/~ts~ts", [
         OpDomain, ObjectId, ExpectedSubpathWithQs
     ]).
 
@@ -815,9 +863,11 @@ init_per_testcase(choose_provider_for_public_share_handling_test, Config) ->
     Config;
 init_per_testcase(_, Config) ->
     ozt_mocks:freeze_time(),
+    ozt_mocks:mock_handle_proxy(),
     Config.
 
 end_per_testcase(choose_provider_for_public_share_handling_test, _Config) ->
     ok;
 end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_handle_proxy(),
     ozt_mocks:unfreeze_time().

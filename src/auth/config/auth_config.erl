@@ -305,7 +305,7 @@ get_attribute_mapping(IdP, Attribute) ->
             ok;
         {subjectId, _} ->
             ?alert(
-                "Illegal subjectId attribute mapping for IdP '~p', must be "
+                "Illegal subjectId attribute mapping for IdP '~tp', must be "
                 "'{required, _}' or  '{plugin, _}'", [IdP]
             ),
             throw(?ERROR_BAD_AUTH_CONFIG);
@@ -346,7 +346,7 @@ get_authority_delegation_config(IdP, IdPConfig) ->
                 OtherProtocol ->
                     ?warning(
                         "Authority delegation can only be enabled for the openid protocol - "
-                        "please adjust the auth.config entry for ~p (~p protocol)",
+                        "please adjust the auth.config entry for ~tp (~tp protocol)",
                         [IdP, OtherProtocol]
                     ),
                     false
@@ -424,7 +424,7 @@ has_offline_access_enabled(IdP, IdPConfig) ->
                 OtherProtocol ->
                     ?warning(
                         "Offline access can only be enabled for the openid protocol - "
-                        "please adjust the auth.config entry for ~p (~p protocol)",
+                        "please adjust the auth.config entry for ~tp (~tp protocol)",
                         [IdP, OtherProtocol]
                     ),
                     false
@@ -631,13 +631,13 @@ fetch_auth_config() ->
                 #{}
             end;
         {error, enoent} ->
-            ?alert("auth.config was not found in ~s, the login page will "
+            ?alert("auth.config was not found in ~ts, the login page will "
             "not work correctly.", [
                 ?AUTH_CONFIG_FILE
             ]),
             #{};
         {error, _} = Error ->
-            ?alert("Cannot load auth.config due to ~p. The login page will "
+            ?alert("Cannot load auth.config due to ~tp. The login page will "
             "not work correctly.", [
                 Error
             ]),
@@ -661,15 +661,15 @@ get_test_auth_config() ->
         {ok, [Cfg = #{version := ?CURRENT_CONFIG_VERSION}]} ->
             Cfg;
         {ok, _} ->
-            ?alert("Badly formatted test.auth.config in ~s, the test "
+            ?alert("Badly formatted test.auth.config in ~ts, the test "
             "login page will not work.", [TestAuthConfigFile]),
             #{};
         {error, enoent} ->
-            ?debug("test.auth.config was not found in ~s, the test "
+            ?debug("test.auth.config was not found in ~ts, the test "
             "login page will not work.", [TestAuthConfigFile]),
             #{};
         {error, _} = Error ->
-            ?alert("Cannot load test.auth.config due to ~p. The login "
+            ?alert("Cannot load test.auth.config due to ~tp. The login "
             "page will not work.", [Error]),
             #{}
     end.
@@ -712,7 +712,7 @@ upgrade_auth_config(FromVersion, ToVersion) ->
     config_v2_or_later().
 upgrade_auth_config(OldAuthCfg, FromVersion, ToVersion) ->
     ?notice(
-        "Deprecated auth.config found in ~s - attempting automatic upgrade from version ~B to ~B",
+        "Deprecated auth.config found in ~ts - attempting automatic upgrade from version ~B to ~B",
         [?AUTH_CONFIG_FILE, FromVersion, ToVersion]
     ),
     lists:foldl(fun(CurrentVersion, AccAuthCfg) ->
@@ -720,7 +720,7 @@ upgrade_auth_config(OldAuthCfg, FromVersion, ToVersion) ->
         ?notice("Upgrade from version ~B to ~B successful", [CurrentVersion, CurrentVersion + 1]),
         AuthConfigBak = ?AUTH_CONFIG_FILE ++ ?BACKUP_CFG_EXT(CurrentVersion),
         {ok, _} = file:copy(?AUTH_CONFIG_FILE, AuthConfigBak),
-        ?notice("Stored deprecated auth.config in '~s'", [AuthConfigBak]),
+        ?notice("Stored deprecated auth.config in '~ts'", [AuthConfigBak]),
         ok = file:write_file(?AUTH_CONFIG_FILE, io_lib:format("~tp.~n", [Result])),
         Result
     end, OldAuthCfg, lists:seq(FromVersion, ToVersion - 1)).
@@ -737,7 +737,7 @@ upgrade_auth_config_to_next_version(OldAuthCfg, 1) ->
     SamlCfg = case file:consult(SamlCfgPath) of
         {ok, [SCfg]} ->
             ?notice(
-                "Deprecated saml.config found in ~s - attempting automatic upgrade to version 2",
+                "Deprecated saml.config found in ~ts - attempting automatic upgrade to version 2",
                 [SamlCfgPath]
             ),
             SCfg;
@@ -753,7 +753,7 @@ upgrade_auth_config_to_next_version(OldAuthCfg, 1) ->
         _ ->
             SamlConfigBak = SamlCfgPath ++ ?BACKUP_CFG_EXT(1),
             ok = file:rename(SamlCfgPath, SamlConfigBak),
-            ?notice("Stored deprecated saml.config in '~s'", [SamlConfigBak])
+            ?notice("Stored deprecated saml.config in '~ts'", [SamlConfigBak])
     end,
 
     ?alert("Make sure to manually update admin groups (fka super groups) in the "
@@ -771,7 +771,7 @@ ensure_file_exists(Path) ->
         true ->
             Path;
         false ->
-            ?alert("File specified in auth.config does not exist: ~s", [
+            ?alert("File specified in auth.config does not exist: ~ts", [
                 Path
             ]),
             throw(?ERROR_BAD_AUTH_CONFIG)
@@ -833,12 +833,12 @@ get_param(Key, Policy, Config, Trace) ->
 param_not_found(_Key, {default, Default}, _Trace) ->
     Default;
 param_not_found(Key, required, Trace) ->
-    TraceBinaries = [str_utils:format_bin("~s", [T]) || T <- Trace ++ [Key]],
+    TraceBinaries = [str_utils:format_bin("~ts", [T]) || T <- Trace ++ [Key]],
     ConfigFile = case idp_auth_test_mode:process_is_test_mode_enabled() of
         false -> "auth.config";
         true -> "test.auth.config"
     end,
-    ?alert("Missing required parameter in ~s: ~s", [
+    ?alert("Missing required parameter in ~ts: ~ts", [
         ConfigFile, str_utils:join_binary(TraceBinaries, <<" -> ">>)
     ]),
     throw(?ERROR_BAD_AUTH_CONFIG).

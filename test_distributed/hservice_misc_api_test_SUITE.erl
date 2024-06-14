@@ -286,7 +286,7 @@ get_test(Config) ->
                 fun(#od_handle_service{
                     name = Name, proxy_endpoint = ProxyEndpoint,
                     service_properties = ServiceProperties,
-                    users = Users, groups = #{}, handles = [],
+                    users = Users, groups = #{},
                     eff_users = EffUsers, eff_groups = #{},
                     bottom_up_dirty = false
                 }) ->
@@ -445,6 +445,10 @@ update_test(Config) ->
 
 
 delete_test(Config) ->
+    delete_test(Config, true),
+    delete_test(Config, false).
+
+delete_test(Config, HasAnyHandles) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
@@ -453,26 +457,34 @@ delete_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, HService} = oz_test_utils:create_handle_service(
+        {ok, HServiceId} = oz_test_utils:create_handle_service(
             Config, ?USER(U1), ?DOI_SERVICE
         ),
-        oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
+        oz_test_utils:handle_service_set_user_privileges(Config, HServiceId, U1,
             [], [?HANDLE_SERVICE_DELETE]
         ),
         {ok, U2} = oz_test_utils:handle_service_add_user(
-            Config, HService, U2
+            Config, HServiceId, U2
         ),
-        oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
+        oz_test_utils:handle_service_set_user_privileges(Config, HServiceId, U2,
             [?HANDLE_SERVICE_DELETE], []
         ),
-        #{hserviceId => HService}
+        Handles = case HasAnyHandles of
+            false -> [];
+            true -> lists_utils:generate(fun() -> ozt_handles:create(HServiceId) end, 10)
+        end,
+        #{
+            hserviceId => HServiceId,
+            handles => Handles
+        }
     end,
-    DeleteEntityFun = fun(#{hserviceId := HService} = _Env) ->
+    DeleteEntityFun = fun(#{hserviceId := HService, handles := Handles} = _Env) ->
+        [oz_test_utils:delete_handle(Config, H) || H <- Handles],
         oz_test_utils:delete_handle_service(Config, HService)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{hserviceId := HService} = _Env, _) ->
         {ok, HServices} = oz_test_utils:list_handle_services(Config),
-        ?assertEqual(lists:member(HService, HServices), not ShouldSucceed)
+        ?assertEqual(lists:member(HService, HServices), not ShouldSucceed or HasAnyHandles)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -491,20 +503,29 @@ delete_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/handle_services/">>, hserviceId],
-            expected_code = ?HTTP_204_NO_CONTENT
+            expected_code = case HasAnyHandles of
+                false -> ?HTTP_204_NO_CONTENT;
+                true -> ?HTTP_400_BAD_REQUEST
+            end
         },
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = delete,
             args = [auth, hserviceId],
-            expected_result = ?OK_RES
+            expected_result = case HasAnyHandles of
+                false -> ?OK_RES;
+                true -> ?ERROR_REASON(?ERROR_CANNOT_DELETE_NON_EMPTY_HANDLE_SERVICE)
+            end
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{
                 type = od_handle_service, id = hserviceId, aspect = instance
             },
-            expected_result_op = ?OK_RES
+            expected_result_op = case HasAnyHandles of
+                false -> ?OK_RES;
+                true -> ?ERROR_REASON(?ERROR_CANNOT_DELETE_NON_EMPTY_HANDLE_SERVICE)
+            end
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -532,12 +553,9 @@ list_handles_test(Config) ->
         fun(SpaceId) ->
             ShareId = ?UNIQUE_STRING,
             {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
             ),
-            {ok, HandleId} = oz_test_utils:create_handle(
-                Config, ?ROOT, ?HANDLE(HService, ShareId)
-            ),
-            HandleId
+            ozt_handles:create(HService, ShareId)
         end, [S1, S1, S2]
     ),
 
@@ -582,10 +600,18 @@ get_handle_test(Config) ->
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
-    HandleData = ?HANDLE(HService, ShareId),
+    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
+    RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    HandleData = #{
+        <<"handleServiceId">> => HService,
+        <<"resourceType">> => <<"Share">>,
+        <<"resourceId">> => ShareId,
+        <<"metadataPrefix">> => MetadataPrefix,
+        <<"metadata">> => RawMetadata
+    },
     {ok, HandleId} = oz_test_utils:create_handle(Config, ?ROOT, HandleData),
 
     ApiTestSpec = #api_test_spec{

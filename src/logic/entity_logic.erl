@@ -174,7 +174,7 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
                 {#gri{type = Type, id = Id}, _} -> {Type, Id};
                 {#gri{type = Type, id = Id}, _, _} -> {Type, Id}
             end,
-            ?debug("~s has been created by client: ~s", [
+            ?debug("~ts has been created by client: ~ts", [
                 EntType:to_string(EntId),
                 aai:auth_to_printable(Auth)
             ]);
@@ -182,6 +182,7 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
             ok
     end,
     Result;
+
 
 handle_unsafe(State = #state{req = #el_req{operation = get}}) ->
     NewState = ensure_authorized(
@@ -221,7 +222,7 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = delete}}) ->
         {ok, #el_req{gri = #gri{type = Type, id = Id, aspect = instance}, auth = Auth}} ->
             % If an entity instance is deleted, log an information about it
             % (it's a significant operation and this information might be useful).
-            ?debug("~s has been deleted by client: ~s", [
+            ?debug("~ts has been deleted by client: ~ts", [
                 Type:to_string(Id),
                 aai:auth_to_printable(Auth)
             ]),
@@ -507,12 +508,10 @@ call_plugin(exists, #state{plugin = Plugin, req = ElReq, versioned_entity = {Ent
     Plugin:exists(ElReq, Entity);
 call_plugin(authorize, #state{plugin = Plugin, req = ElReq, versioned_entity = {Entity, _}}) ->
     Plugin:authorize(ElReq, Entity);
-call_plugin(required_admin_privileges, #state{plugin = Plugin, req = ElReq}) ->
-    Plugin:required_admin_privileges(ElReq);
 call_plugin(get, #state{plugin = Plugin, req = ElReq, versioned_entity = {Entity, _}}) ->
     Plugin:get(ElReq, Entity);
 call_plugin(Operation, #state{plugin = Plugin, req = ElReq, versioned_entity = {Entity, _}}) ->
-    % covers create, update, delete, validate
+    % covers create, update, delete, validate, required_admin_privileges
     case Plugin:Operation(ElReq) of
         Fun when is_function(Fun, 1) ->
             Fun(Entity);

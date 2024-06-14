@@ -18,6 +18,7 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/automation/automation.hrl").
+-include_lib("ctool/include/onedata_file.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
@@ -39,6 +40,8 @@
     atm_lambda_non_unique_result_spec_names/1,
     atm_lambda_disallowed_config_parameter_default_value/1,
     atm_lambda_disallowed_argument_default_value/1,
+    atm_lambda_invalid_config_parameter_data_spec/1,
+    atm_lambda_invalid_argument_data_spec/1,
     atm_workflow_schema_non_unique_store_ids/1,
     atm_workflow_schema_reserved_store_id/1,
     atm_workflow_schema_non_unique_lane_ids/1,
@@ -208,6 +211,48 @@ atm_lambda_disallowed_argument_default_value(_Config) ->
     end, example_invalid_data_specs_and_predefined_values()).
 
 
+atm_lambda_invalid_config_parameter_data_spec(_Config) ->
+    ConfigParameterName = ?RAND_STR(),
+    DataKeyNamePrefix = <<"configParameterSpecs[", ConfigParameterName/binary, "].dataSpec">>,
+    lists:foreach(fun({DataSpec, ExpError}) ->
+        OffendingConfigParameterSpec = maps:merge(
+            ozt_atm_lambdas:example_parameter_spec_json(DataSpec, undefined),
+            #{<<"name">> => ConfigParameterName}
+        ),
+        run_validation_tests(#test_spec{
+            schema_type = atm_lambda,
+            tested_data_field = <<"configParameterSpecs">>,
+            spoil_data_field_fun = fun(ConfigParameterSpecsJson, _AtmInventoryId) ->
+                {
+                    lists_utils:shuffle([OffendingConfigParameterSpec | ConfigParameterSpecsJson]),
+                    ExpError
+                }
+            end
+        })
+    end, example_invalid_input_parameter_data_specs(DataKeyNamePrefix)).
+
+
+atm_lambda_invalid_argument_data_spec(_Config) ->
+    ArgumentName = ?RAND_STR(),
+    DataKeyNamePrefix = <<"argumentSpecs[", ArgumentName/binary, "].dataSpec">>,
+    lists:foreach(fun({DataSpec, ExpError}) ->
+        OffendingArgumentSpec = maps:merge(
+            ozt_atm_lambdas:example_parameter_spec_json(DataSpec, undefined),
+            #{<<"name">> => ArgumentName}
+        ),
+        run_validation_tests(#test_spec{
+            schema_type = atm_lambda,
+            tested_data_field = <<"argumentSpecs">>,
+            spoil_data_field_fun = fun(ArgumentSpecsJson, _AtmInventoryId) ->
+                {
+                    lists_utils:shuffle([OffendingArgumentSpec | ArgumentSpecsJson]),
+                    ExpError
+                }
+            end
+        })
+    end, example_invalid_input_parameter_data_specs(DataKeyNamePrefix)).
+
+
 atm_workflow_schema_non_unique_store_ids(_Config) ->
     run_validation_tests(#test_spec{
         schema_type = atm_workflow_schema,
@@ -351,7 +396,7 @@ atm_workflow_schema_disallowed_store_default_initial_content(_Config) ->
                 }
             end
         })
-    end, example_invalid_stores_and_default_initial_contents(DataKeyName)).
+    end, example_invalid_stores_and_default_initial_contents_with_errors(DataKeyName)).
 
 
 atm_workflow_schema_disallowed_iterated_store_type(_Config) ->
@@ -866,7 +911,7 @@ run_validation_tests(TestSpec) ->
         try
             run_validation_test(TestSpec)
         catch Class:Reason:Stacktrace ->
-            ct:pal("Validation test crashed due to ~p:~p~nStacktrace: ~s", [
+            ct:pal("Validation test crashed due to ~tp:~tp~nStacktrace: ~ts", [
                 Class, Reason, lager:pr_stacktrace(Stacktrace)
             ]),
             error(fail)
@@ -953,44 +998,83 @@ spoil_data_field(#test_spec{
 
 
 %% @private
-example_invalid_data_specs_and_predefined_values() ->
-    [
-        {#atm_boolean_data_spec{}, [true, 157]},
-        {#atm_number_data_spec{integers_only = false, allowed_values = undefined}, [#{<<"obj1">> => <<"val">>}, #{<<"obj2">> => <<"val">>}]},
-        {#atm_string_data_spec{allowed_values = undefined}, 167.87},
-        {#atm_object_data_spec{}, <<"text">>},
-        {#atm_time_series_measurement_data_spec{
-            specs = lists_utils:random_sublist(atm_test_utils:example_time_series_measurement_specs())
-        }, #{<<"key">> => <<"val">>}},
-        {#atm_file_data_spec{file_type = 'ANY', attributes = [file_id]}, -9},
-        {#atm_array_data_spec{
+example_invalid_data_specs_and_predefined_values() -> [
+    {#atm_boolean_data_spec{}, [true, 157]},
+    {#atm_file_data_spec{file_type = 'ANY', attributes = [?attr_guid]}, -9},
+    {#atm_group_data_spec{attributes = [name, type]}, true},
+    {#atm_number_data_spec{integers_only = false, allowed_values = undefined}, [#{<<"obj1">> => <<"val">>}, #{<<"obj2">> => <<"val">>}]},
+    {#atm_object_data_spec{}, <<"text">>},
+    {#atm_string_data_spec{allowed_values = undefined}, 167.87},
+    {#atm_time_series_measurement_data_spec{
+        specs = lists_utils:random_sublist(atm_test_utils:example_time_series_measurement_specs())
+    }, #{<<"key">> => <<"val">>}},
+    {#atm_array_data_spec{
+        item_data_spec = #atm_string_data_spec{allowed_values = undefined}
+    }, <<"string">>},
+    {#atm_array_data_spec{
+        item_data_spec = #atm_string_data_spec{allowed_values = undefined}
+    }, [123456]},
+    {#atm_array_data_spec{
+        item_data_spec = #atm_array_data_spec{
             item_data_spec = #atm_string_data_spec{allowed_values = undefined}
-        }, <<"string">>},
-        {#atm_array_data_spec{
+        }
+    }, [[<<"string">>, <<"string">>], #{<<"not-a">> => <<"list">>}]},
+    {#atm_array_data_spec{
+        item_data_spec = #atm_array_data_spec{
             item_data_spec = #atm_string_data_spec{allowed_values = undefined}
-        }, [123456]},
-        {#atm_array_data_spec{
-            item_data_spec = #atm_array_data_spec{
-                item_data_spec = #atm_string_data_spec{allowed_values = undefined}
-            }
-        }, [[<<"string">>, <<"string">>], #{<<"not-a">> => <<"list">>}]},
-        {#atm_array_data_spec{
-            item_data_spec = #atm_array_data_spec{
-                item_data_spec = #atm_string_data_spec{allowed_values = undefined}
-            }
-        }, [[<<"string">>, <<"string">>], [#{<<"not-a">> => <<"string">>}]]}
-    ].
+        }
+    }, [[<<"string">>, <<"string">>], [#{<<"not-a">> => <<"string">>}]]}
+].
 
 
 %% @private
-example_invalid_stores_and_default_initial_contents(DataKeyName) ->
+example_invalid_input_parameter_data_specs(DataKeyNamePrefix) -> [
+    {
+        #atm_file_data_spec{attributes = undefined},
+        exp_bad_attributes_in_data_spec_error(<<DataKeyNamePrefix/binary, ".attributes">>, <<"file">>)
+    },
+    {
+        #atm_file_data_spec{attributes = []},
+        exp_bad_attributes_in_data_spec_error(<<DataKeyNamePrefix/binary, ".attributes">>, <<"file">>)
+    },
+    {
+        #atm_group_data_spec{attributes = undefined},
+        exp_bad_attributes_in_data_spec_error(<<DataKeyNamePrefix/binary, ".attributes">>, <<"group">>)
+    },
+    {
+        #atm_group_data_spec{attributes = []},
+        exp_bad_attributes_in_data_spec_error(<<DataKeyNamePrefix/binary, ".attributes">>, <<"group">>)
+    },
+    {
+        #atm_array_data_spec{
+            item_data_spec = #atm_file_data_spec{attributes = []}
+        },
+        exp_bad_attributes_in_data_spec_error(<<DataKeyNamePrefix/binary, ".itemDataSpec.attributes">>, <<"file">>)
+    },
+    {
+        #atm_array_data_spec{
+            item_data_spec = #atm_array_data_spec{
+                item_data_spec = #atm_array_data_spec{
+                    item_data_spec = #atm_group_data_spec{attributes = undefined}
+                }
+            }
+        },
+        exp_bad_attributes_in_data_spec_error(
+            <<DataKeyNamePrefix/binary, ".itemDataSpec.itemDataSpec.itemDataSpec.attributes">>, <<"group">>
+        )
+    }
+].
+
+
+%% @private
+example_invalid_stores_and_default_initial_contents_with_errors(DataKeyName) ->
     lists:flatmap(fun(StoreType) ->
-        example_invalid_default_initial_contents_for_store(DataKeyName, StoreType)
+        example_invalid_default_initial_contents_for_store_with_error(DataKeyName, StoreType)
     end, automation:all_store_types()).
 
 
 %% @private
-example_invalid_default_initial_contents_for_store(DataKeyName, single_value) ->
+example_invalid_default_initial_contents_for_store_with_error(DataKeyName, single_value) ->
     lists:map(fun({DataSpec, InvalidPredefinedValue}) ->
         {
             single_value,
@@ -999,7 +1083,7 @@ example_invalid_default_initial_contents_for_store(DataKeyName, single_value) ->
             exp_disallowed_predefined_value_error(DataKeyName, DataSpec, InvalidPredefinedValue)
         }
     end, example_invalid_data_specs_and_predefined_values());
-example_invalid_default_initial_contents_for_store(DataKeyName, list) ->
+example_invalid_default_initial_contents_for_store_with_error(DataKeyName, list) ->
     lists:flatmap(fun({DataSpec, InvalidPredefinedValue}) ->
         lists:flatten([
             case is_list(InvalidPredefinedValue) of
@@ -1024,7 +1108,7 @@ example_invalid_default_initial_contents_for_store(DataKeyName, list) ->
             }
         ])
     end, example_invalid_data_specs_and_predefined_values());
-example_invalid_default_initial_contents_for_store(DataKeyName, tree_forest) ->
+example_invalid_default_initial_contents_for_store_with_error(DataKeyName, tree_forest) ->
     lists:flatmap(fun({DataSpec, InvalidPredefinedValue}) ->
         case lists:member(atm_data_spec:get_data_type(DataSpec), [atm_file_type, atm_dataset_type]) of
             true ->
@@ -1062,7 +1146,7 @@ example_invalid_default_initial_contents_for_store(DataKeyName, tree_forest) ->
                 }]
         end
     end, example_invalid_data_specs_and_predefined_values());
-example_invalid_default_initial_contents_for_store(DataKeyName, range) ->
+example_invalid_default_initial_contents_for_store_with_error(DataKeyName, range) ->
     lists:map(fun({_DataSpec, InvalidPredefinedValue}) ->
         {
             range,
@@ -1076,9 +1160,9 @@ example_invalid_default_initial_contents_for_store(DataKeyName, range) ->
         }
     end, example_invalid_data_specs_and_predefined_values());
 % time_series and audit_log stores have the default initial content implicitly set to undefined
-example_invalid_default_initial_contents_for_store(_DataKeyName, time_series) ->
+example_invalid_default_initial_contents_for_store_with_error(_DataKeyName, time_series) ->
     [];
-example_invalid_default_initial_contents_for_store(_DataKeyName, audit_log) ->
+example_invalid_default_initial_contents_for_store_with_error(_DataKeyName, audit_log) ->
     [].
 
 
@@ -1120,6 +1204,16 @@ exp_disallowed_predefined_value_error(DataKeyName, AtmDataSpec, _) ->
     ).
 
 
+%% @private
+%% DataTypeStr :: <<"file">> | <<"group">>
+exp_bad_attributes_in_data_spec_error(DataKeyName, DataTypeStr) ->
+    ?ERROR_BAD_DATA(
+        DataKeyName,
+        <<"This field must be provided and must be a list containing at least one ", DataTypeStr/binary, " attribute">>
+    ).
+
+
+%% @private
 create_lambda_with_revision(AtmInventoryId, AtmLambdaRevisionJson) ->
     ozt_atm_lambdas:create(AtmInventoryId, #{
         <<"revision">> => #{

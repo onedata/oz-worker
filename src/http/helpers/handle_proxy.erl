@@ -36,7 +36,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec register_handle(od_handle_service:id(), od_handle:resource_type(),
-    od_handle:resource_id(), od_handle:metadata()) -> {ok, od_handle:public_handle()}.
+    od_handle:resource_id(), od_handle:raw_metadata()) -> {ok, od_handle:public_handle()}.
 register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
     {ok, #document{value = #od_handle_service{
         name = HandleServiceName,
@@ -61,7 +61,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
                 {ok, 201, _, _} ->
                     {ok, ?DOI_DC_IDENTIFIER(DoiHandle)};
                 Other ->
-                    ?error("Error registering a ~s handle, handle proxy '~ts' (~ts) returned:~n~p", [
+                    ?error("Error registering a ~ts handle, handle proxy '~ts' (~ts) returned:~n~tp", [
                         Type, HandleServiceName, ProxyEndpoint, Other
                     ]),
                     throw(?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(HandleServiceName))
@@ -73,7 +73,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
                     PidHandle = maps:get(<<"handle">>, json_utils:decode(RespJSON)),
                     {ok, PidHandle};
                 Other ->
-                    ?error("Error registering a ~s handle, handle proxy '~ts' (~ts) returned:~n~p", [
+                    ?error("Error registering a ~ts handle, handle proxy '~ts' (~ts) returned:~n~tp", [
                         Type, HandleServiceName, ProxyEndpoint, Other
                     ]),
                     throw(?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(HandleServiceName))
@@ -98,15 +98,10 @@ unregister_handle(HandleId) ->
 %%    ],
     Body = ServiceProperties, %TODO VFS-7415 use above Body after fixing proxy
     Headers = #{?HDR_CONTENT_TYPE => <<"application/json">>, ?HDR_ACCEPT => <<"application/json">>},
-    Type = maps:get(<<"type">>, ServiceProperties),
-    {ok, 200, _, _} =
-        case Type of
-            <<"DOI">> ->
-                PublicHandleEncoded = http_utils:url_encode(PublicHandle),
-                handle_proxy_client:delete(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body));
-            _ ->
-                handle_proxy_client:delete(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode(Body))
-        end,
+    PublicHandleEncoded = http_utils:url_encode(PublicHandle),
+    {ok, 200, _, _} = handle_proxy_client:delete(
+        ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body)
+    ),
     ok.
 
 %%--------------------------------------------------------------------
@@ -114,7 +109,7 @@ unregister_handle(HandleId) ->
 %% Modify handle in external handle service
 %% @end
 %%--------------------------------------------------------------------
--spec modify_handle(od_handle:id(), od_handle:metadata()) ->
+-spec modify_handle(od_handle:id(), od_handle:raw_metadata()) ->
     ok.
 modify_handle(HandleId, NewMetadata) ->
     {ok, #document{value = #od_handle{
@@ -132,15 +127,10 @@ modify_handle(HandleId, NewMetadata) ->
         <<"metadata">> => #{<<"onedata_dc">> => NewMetadata}
     },
     Headers = #{?HDR_CONTENT_TYPE => <<"application/json">>, ?HDR_ACCEPT => <<"application/json">>},
-    Type = maps:get(<<"type">>, ServiceProperties),
-    {ok, 204, _, _} =
-        case Type of
-            <<"DOI">> ->
-                PublicHandleEncoded = http_utils:url_encode(PublicHandle),
-                handle_proxy_client:patch(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body));
-            _ ->
-                handle_proxy_client:patch(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode(Body))
-        end,
+    PublicHandleEncoded = http_utils:url_encode(PublicHandle),
+    {ok, 204, _, _} = handle_proxy_client:patch(
+        ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body)
+    ),
     ok.
 
 %%%===================================================================
