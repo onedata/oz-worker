@@ -4,6 +4,44 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.5
+
+-   **VFS-11912** Web GUI: Added visual editor for Open Data metadata in
+    Europeana Data Model format.
+-   **VFS-11761** Web GUI: Improved user experience in publishing share
+    as Open Data.
+-   **VFS-11760** Web GUI: Fixed shares sidebar crash when user does not
+    have view privilege for some space.
+-   **VFS-11744** Web GUI: Refactored UX of changing provider settings
+    in cluster.
+-   **VFS-11710** Web GUI: added possibility to embed Onedata Web
+    application into an iframe hosted on site with domain other than
+    Onezone.
+-   **VFS-11707** Web GUI: Detecting web browser extensions potentially
+    interfering with Onedata GUI.
+-   **VFS-11595** Web GUI: Fixed missing application elements when Qwant
+    VIPrivacy add-on is installed in user's browser.
+-   **VFS-11594** Web GUI: Fixed QoS query builder "Add" button
+    out-of-the-screen placement.
+-   **VFS-11582** Web GUI: Fixed showing tokens list when one of invite
+    targets gets deleted.
+-   **VFS-11365** Improvements to Open Data publishing and the OAI-PMH
+    protocol implementation. Added support for Europeana Data Model
+    metadata type. Improved the metadata editor in UI (both the visual
+    and XML forms). Improved the conformity to OAI-PMH protocol spec and
+    added support for optional functionalities. Added an HTTPS endpoint
+    (next to previously supported HTTP).
+-   **VFS-11317** Web GUI: Major refactor of members view to show direct
+    and effective privileges with memberships on a single view.
+-   **VFS-11080** Web GUI: Fixed share disappearing from the list after
+    delete failure.
+-   **VFS-10265** Changes to user spaces (changing space name,
+    joining/leaving a space) are now reflected in Oneclient in real
+    time. Added support for spaces with the same name in Oneclient - in
+    case of an ambiguity a space name is extended with its ID.
+-   **VFS-9157** Web GUI: Added support for advanced file info in file
+    selector panel.
+
 ### 21.02.4
 
 -   **VFS-10999** Added the public "infer access token scope" endpoint,
