@@ -546,15 +546,23 @@ sanitize_value(binary, email, _Key, Value) ->
     end;
 
 sanitize_value(json, JsonValidator, Key, Map) when is_map(JsonValidator) ->
-    maps:map(fun(NestedKey, {NestedTypeRule, NestedValueRule}) ->
+    maps:fold(fun(NestedKey, NestedValueSpec, Acc) ->
         FullKey = <<Key/binary, ".", NestedKey/binary>>,
+        {FieldType, NestedTypeRule, NestedValueRule} = case NestedValueSpec of
+            {RuleType, ValueRule} -> {required, RuleType, ValueRule};
+            {_, _, _} -> NestedValueSpec
+        end,
         case maps:find(NestedKey, Map) of
-            error ->
-                throw(?ERROR_BAD_VALUE_EMPTY(FullKey));
             {ok, Value} ->
-                transform_and_check_value(NestedTypeRule, NestedValueRule, FullKey, Value)
+                Acc#{NestedKey => transform_and_check_value(
+                    NestedTypeRule, NestedValueRule, FullKey, Value
+                )};
+            error when FieldType == optional ->
+                Acc;
+            error when FieldType == required ->
+                throw(?ERROR_BAD_VALUE_EMPTY(FullKey))
         end
-    end, JsonValidator);
+    end, #{}, JsonValidator);
 
 sanitize_value(json, qos_parameters, _Key, Map) ->
     case maps:fold(fun(K, V, Acc) ->

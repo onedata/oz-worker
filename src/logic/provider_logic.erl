@@ -48,9 +48,7 @@
 -export([
     update_domain_config/3,
     get_domain_config/2,
-    set_dns_txt_record/4,
-    set_dns_txt_record/5,
-    remove_dns_txt_record/3
+    update_dns_txt_record/3
 ]).
 -export([
     get_current_time/1,
@@ -259,51 +257,22 @@ update_domain_config(Auth, ProviderId, Data) ->
         gri = #gri{type = od_provider, id = ProviderId, aspect = domain_config},
         data = Data}).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Sets txt record for provider's subdomain with default TTL.
-%% @end
-%%--------------------------------------------------------------------
--spec set_dns_txt_record(Auth :: aai:auth(),
-    ProviderId :: od_provider:id(), Name :: binary(), Content :: binary()) ->
-    ok | errors:error().
-set_dns_txt_record(Auth, ProviderId, Name, Content) ->
-    set_dns_txt_record(Auth, ProviderId, Name, Content, undefined).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Sets txt record for provider's subdomain with given TTL.
+%% Updates txt records for provider.
 %% @end
 %%--------------------------------------------------------------------
--spec set_dns_txt_record(Auth :: aai:auth(),
-    ProviderId :: od_provider:id(), Name :: binary(), Content :: binary(),
-    TTL :: dns_state:ttl()) ->
+-spec update_dns_txt_record(aai:auth(), od_provider:id(), map()) ->
     ok | errors:error().
-set_dns_txt_record(Auth, ProviderId, Name, Content, TTL) ->
+update_dns_txt_record(Auth, ProviderId, Data) ->
     entity_logic:handle(#el_req{
-        operation = create,
+        operation = update,
         auth = Auth,
-        gri = #gri{type = od_provider, id = ProviderId, aspect = {dns_txt_record, Name}},
-        data = case TTL of
-            undefined -> #{<<"content">> => Content};
-            _ -> #{<<"content">> => Content, <<"ttl">> => TTL}
-        end
+        gri = #gri{type = od_provider, id = ProviderId, aspect = dns_txt_records},
+        data = Data
     }).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Remove txt record for provider's subdomain
-%% @end
-%%--------------------------------------------------------------------
--spec remove_dns_txt_record(Auth :: aai:auth(),
-    ProviderId :: od_provider:id(), Name :: binary()) ->
-    ok | errors:error().
-remove_dns_txt_record(Auth, ProviderId, Name) ->
-    entity_logic:handle(#el_req{
-        operation = delete,
-        auth = Auth,
-        gri = #gri{type = od_provider, id = ProviderId, aspect = {dns_txt_record, Name}}
-    }).
 
 %%--------------------------------------------------------------------
 %% @doc

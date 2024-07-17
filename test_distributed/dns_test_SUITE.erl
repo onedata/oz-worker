@@ -69,6 +69,13 @@ all() -> ?ALL([
 -define(DNS_STATE_KEY, <<"dns_state_singleton">>).
 -define(DATASTORE_CTX, #{model => dns_state}).
 
+-define(TXT_RECORD_JSON(__NAME, __CONTENT), #{
+    <<"name">> => __NAME, <<"content">> => __CONTENT
+}).
+-define(TXT_RECORD_JSON(__NAME, __CONTENT, __TTL), #{
+    <<"name">> => __NAME, <<"content">> => __CONTENT, <<"ttl">> => __TTL
+}).
+
 %%%===================================================================
 %%% Example data
 %%%===================================================================
@@ -165,7 +172,7 @@ dns_state_stores_provider_data_test(Config) ->
 
     %% then
     ?assertEqual(
-        {ok, SubdomainBin, OpWorkerIPs, OneS3IPs},
+        {ok, SubdomainBin, #{op_worker => OpWorkerIPs, ones3 => OneS3IPs}},
         oz_test_utils:call_oz(Config, dns_state, get_delegation_config, [ProviderId])
     ),
 
@@ -527,29 +534,32 @@ dns_resolves_txt_record(Config) ->
     Name = ?PROVIDER_NAME1,
     Subdomain = ?PROVIDER_SUBDOMAIN1,
     SubdomainBin = <<?PROVIDER_SUBDOMAIN1>>,
-    FullDomain = Subdomain ++ "." ++ OZDomain,
 
-    RecordContent = <<"special_letsencrypt_token">>,
-    RecordContent2 = <<"changed ttl">>,
+    {RequestKey, FullDomain} = case ?RAND_ELEMENT([op_worker, ones3]) of
+        op_worker -> {<<"setOpWorkerTxtRecord">>, Subdomain ++ "." ++ OZDomain};
+        ones3 -> {<<"setOneS3TxtRecord">>, "s3." ++ Subdomain ++ "." ++ OZDomain}
+    end,
+
     RecordName = <<"acme_validation">>,
-    RecordName2 = <<"custom_ttl">>,
+    RecordContent = <<"special_letsencrypt_token">>,
     RecordFQDN = binary_to_list(RecordName) ++ "." ++ FullDomain,
+    RecordName2 = <<"custom_ttl">>,
+    RecordContent2 = <<"changed ttl">>,
+    RecordFQDN2 = binary_to_list(RecordName2) ++ "." ++ FullDomain,
 
     {ok, {P1, _}} = oz_test_utils:create_provider(Config, Name),
 
     oz_test_utils:enable_subdomain_delegation(Config, P1, SubdomainBin, []),
 
-    ?assertMatch(ok,
-        oz_test_utils:call_oz(Config,
-            provider_logic, set_dns_txt_record, [?ROOT, P1, RecordName, RecordContent])
-    ),
-    ?assertMatch(ok,
-        oz_test_utils:call_oz(Config,
-            provider_logic, set_dns_txt_record, [?ROOT, P1, RecordName2,
-                RecordContent2, 10])
-    ),
+    ?assertMatch(ok, oz_test_utils:call_oz(Config, provider_logic, update_dns_txt_record, [
+        ?ROOT, P1, #{RequestKey => ?TXT_RECORD_JSON(RecordName, RecordContent)}
+    ])),
+    ?assertMatch(ok, oz_test_utils:call_oz(Config, provider_logic, update_dns_txt_record, [
+        ?ROOT, P1, #{RequestKey => ?TXT_RECORD_JSON(RecordName2, RecordContent2, 5)}
+    ])),
 
-    assert_dns_answer(OZIPs, RecordFQDN, txt, [[binary_to_list(RecordContent)]]).
+    assert_dns_answer(OZIPs, RecordFQDN, txt, [[binary_to_list(RecordContent)]]),
+    assert_dns_answer(OZIPs, RecordFQDN2, txt, [[binary_to_list(RecordContent2)]]).
 
 
 txt_record_forbidden_without_subdomain_delegation(Config) ->
@@ -560,10 +570,13 @@ txt_record_forbidden_without_subdomain_delegation(Config) ->
 
     {ok, {P1, _}} = oz_test_utils:create_provider(Config, Name),
 
-
-    ?assertMatch(?ERROR_SUBDOMAIN_DELEGATION_DISABLED,
-        oz_test_utils:call_oz(Config,
-            provider_logic, set_dns_txt_record, [?ROOT, P1, RecordName, RecordContent])
+    ?assertMatch(
+        ?ERROR_SUBDOMAIN_DELEGATION_DISABLED,
+        oz_test_utils:call_oz(Config, provider_logic, update_dns_txt_record, [?ROOT, P1, #{
+            ?RAND_ELEMENT([<<"setOpWorkerTxtRecord">>, <<"setOneS3TxtRecord">>]) => ?TXT_RECORD_JSON(
+                RecordName, RecordContent
+            )}
+        ])
     ).
 
 
@@ -574,7 +587,13 @@ dns_does_not_resolve_removed_txt_record_test(Config) ->
     Name = ?PROVIDER_NAME1,
     Subdomain = ?PROVIDER_SUBDOMAIN1,
     SubdomainBin = <<?PROVIDER_SUBDOMAIN1>>,
-    FullDomain = Subdomain ++ "." ++ OZDomain,
+
+    {SetKey, UnsetKey, FullDomain} = case ?RAND_ELEMENT([op_worker, ones3]) of
+        op_worker ->
+            {<<"setOpWorkerTxtRecord">>, <<"unsetOpWorkerTxtRecordName">>, Subdomain ++ "." ++ OZDomain};
+        ones3 ->
+            {<<"setOneS3TxtRecord">>, <<"unsetOneS3TxtRecordName">>, "s3." ++ Subdomain ++ "." ++ OZDomain}
+    end,
 
     RecordContent = <<"special_letsencrypt_token">>,
     RecordName = <<"acme_validation">>,
@@ -584,14 +603,14 @@ dns_does_not_resolve_removed_txt_record_test(Config) ->
 
     oz_test_utils:enable_subdomain_delegation(Config, P1, SubdomainBin, []),
 
-    ?assertMatch(ok, oz_test_utils:call_oz(Config,
-            provider_logic, set_dns_txt_record, [?ROOT, P1, RecordName, RecordContent])
-    ),
+    ?assertMatch(ok, oz_test_utils:call_oz(Config, provider_logic, update_dns_txt_record, [
+        ?ROOT, P1, #{SetKey => ?TXT_RECORD_JSON(RecordName, RecordContent)}
+    ])),
 
     assert_dns_answer(OZIPs, RecordFQDN, txt, [[binary_to_list(RecordContent)]]),
 
     ?assertMatch(ok, oz_test_utils:call_oz(Config,
-            provider_logic, remove_dns_txt_record, [?ROOT, P1, RecordName])
+        provider_logic, update_dns_txt_record, [?ROOT, P1, #{UnsetKey => RecordName}])
     ),
 
     assert_dns_answer(OZIPs, RecordFQDN, txt, []).
@@ -601,9 +620,9 @@ removing_nonexistent_txt_does_nothing(Config) ->
     {ok, #document{value = DnsStateBefore}} = ?assertMatch({ok, _},
         oz_test_utils:call_oz(Config, datastore_model, get, [?DATASTORE_CTX, ?DNS_STATE_KEY])),
 
-    ?assertMatch(ok, oz_test_utils:call_oz(Config,
-        dns_state, remove_txt_record, [<<"nonexistentProvider">>, <<"sometxt">>])
-    ),
+    ?assertMatch({error, no_subdomain}, oz_test_utils:call_oz(Config, dns_state, update_txt_records, [
+        <<"nonexistentProvider">>, #{op_worker => #{unset => [<<"sometxt">>]}}
+    ])),
 
     {ok, #document{value = DnsStateAfter}} = ?assertMatch({ok, _},
         oz_test_utils:call_oz(Config, datastore_model, get, [?DATASTORE_CTX, ?DNS_STATE_KEY])),

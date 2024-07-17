@@ -18,7 +18,7 @@
 
 %% API
 -export([
-    set_delegation_config/4,
+    set_delegation_config/3,
     get_delegation_config/1,
     remove_delegation_config/1,
 
@@ -26,9 +26,8 @@
     get_provider_relative_domain_names_to_ips/0
 ]).
 -export([
-    set_txt_record/3, set_txt_record/4,
-    get_txt_records/0,
-    remove_txt_record/2
+    update_txt_records/2,
+    get_txt_records/0
 ]).
 
 -export([get_dns_state/0]).
@@ -42,11 +41,20 @@
 -type doc() :: datastore_doc:doc(record()).
 -type diff() :: datastore_doc:diff(record()).
 
+-type provider_service() :: op_worker | ones3.
+
 %% Mapping between provider service and its external ips
--type provider_ips() :: #{dns_utils:domain_label() => [inet:ip4_address()]}.
+-type provider_ips() :: #{provider_service() => [inet:ip4_address()]}.
 -type ttl() :: time:seconds() | undefined.
+-type txt_records_diff() :: #{
+    provider_service() => #{
+        set => #{binary() => {binary(), ttl()}},
+        unset => [binary()]
+    }
+}.
+
 -export_type([id/0, record/0, doc/0]).
--export_type([provider_ips/0, ttl/0]).
+-export_type([provider_service/0, provider_ips/0, ttl/0, txt_records_diff/0]).
 
 -define(CTX, #{model => ?MODULE}).
 
@@ -63,16 +71,9 @@
 %% Updates subdomain delegation config of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec set_delegation_config(
-    od_provider:id(),
-    dns_utils:domain_label(),
-    [inet:ip4_address()],
-    [inet:ip4_address()]
-) ->
+-spec set_delegation_config(od_provider:id(), dns_utils:domain_label(), provider_ips()) ->
     ok | {error, subdomain_exists}.
-set_delegation_config(ProviderId, ProviderSubdomainLabel, OpWorkerIps, OneS3Ips) ->
-    OpIps = #{<<>> => OpWorkerIps, <<"s3">> => OneS3Ips},
-
+set_delegation_config(ProviderId, ProviderSubdomainLabel, ProviderIps) ->
     Result = case is_subdomain_label_reserved(ProviderSubdomainLabel) of
         true ->
             ?info("Refusing to register provider subdomain '~ts' as it is reserved", [ProviderSubdomainLabel]),
@@ -93,12 +94,12 @@ set_delegation_config(ProviderId, ProviderSubdomainLabel, OpWorkerIps, OneS3Ips)
                 end,
                 case StateOrError of
                     {error, subdomain_exists} -> {error, subdomain_exists};
-                    NewState -> {ok, set_ips(NewState, ProviderId, OpIps)}
+                    NewState -> {ok, set_ips(NewState, ProviderId, ProviderIps)}
                 end
             end,
             Default = set_ips(
                 set_subdomain_label(#dns_state{}, ProviderId, ProviderSubdomainLabel),
-                ProviderId, OpIps
+                ProviderId, ProviderIps
             ),
             update(Diff, Default)
     end,
@@ -117,7 +118,7 @@ set_delegation_config(ProviderId, ProviderSubdomainLabel, OpWorkerIps, OneS3Ips)
 %% @end
 %%--------------------------------------------------------------------
 -spec get_delegation_config(od_provider:id()) ->
-    {ok, dns_utils:domain_label(), [inet:ip4_address()], [inet:ip4_address()]} | {error, not_found}.
+    {ok, dns_utils:domain_label(), provider_ips()} | {error, not_found}.
 get_delegation_config(ProviderId) ->
     {ok, DnsState} = get_dns_state(),
     #dns_state{
@@ -125,8 +126,7 @@ get_delegation_config(ProviderId) ->
         provider_to_ips = PtIPs} = DnsState,
     case maps:find(ProviderId, PtS) of
         {ok, Subdomain} ->
-            #{<<>> := OpWorkerIps, <<"s3">> := OneS3Ips} = maps:get(ProviderId, PtIPs, []),
-            {ok, Subdomain, OpWorkerIps, OneS3Ips};
+            {ok, Subdomain, maps:get(ProviderId, PtIPs)};
         error ->
             {error, not_found}
     end.
@@ -162,11 +162,13 @@ get_provider_relative_domain_names_to_ips() ->
     maps:fold(fun(ProviderSubdomainLabel, ProviderId, OuterAcc) ->
 
         maps:fold(fun
-            (_OpServiceSubdomainLabel, [], InnerAcc) ->
+            (_ProviderService, [], InnerAcc) ->
                 InnerAcc;
-            (OpServiceSubdomainLabel, ServiceIPs, InnerAcc) ->
-                OpServiceDomain = dns_utils:build_domain(OpServiceSubdomainLabel, ProviderSubdomainLabel),
-                InnerAcc#{OpServiceDomain => ServiceIPs}
+            (ProviderService, ServiceIPs, InnerAcc) ->
+                ProviderServiceRelDomain = build_provider_service_rel_domain(
+                    ProviderService, ProviderSubdomainLabel
+                ),
+                InnerAcc#{ProviderServiceRelDomain => ServiceIPs}
         end, OuterAcc, maps:get(ProviderId, PtIPs))
 
     end, #{}, DnsState#dns_state.subdomain_to_provider).
@@ -174,28 +176,22 @@ get_provider_relative_domain_names_to_ips() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Sets txt record under given name in provider's subdomain.
+%% Updates txt records in provider's subdomain.
 %% Given provider mus have an associated subdomain, otherwise
 %% error is returned.
 %% @end
 %%--------------------------------------------------------------------
--spec set_txt_record(od_provider:id(), Name :: binary(), Content :: binary()) ->
+-spec update_txt_records(od_provider:id(), txt_records_diff()) ->
     ok | {error, no_subdomain}.
-set_txt_record(ProviderId, Name, Content) ->
-    set_txt_record(ProviderId, Name, Content, undefined).
-
--spec set_txt_record(od_provider:id(), Name :: binary(), Content :: binary(), TTL :: ttl()) ->
-    ok | {error, no_subdomain}.
-set_txt_record(ProviderId, Name, Content, TTL) ->
-    Result = update(fun(DnsState) ->
-        #dns_state{provider_to_subdomain = PtS} = DnsState,
+update_txt_records(ProviderId, Diff) ->
+    Result = update(fun(DnsState = #dns_state{provider_to_subdomain = PtS}) ->
         case maps:find(ProviderId, PtS) of
             {ok, _} ->
-                {ok, set_txt_record(DnsState, ProviderId, Name, Content, TTL)};
+                {ok, update_txt_records(DnsState, ProviderId, Diff)};
             error ->
                 {error, not_found}
         end
-    end, set_txt_record(#dns_state{}, ProviderId, Name, Content, TTL)),
+    end, update_txt_records(#dns_state{}, ProviderId, Diff)),
 
     case Result of
         {ok, _} ->
@@ -216,35 +212,23 @@ set_txt_record(ProviderId, Name, Content, TTL) ->
     [{Subdomain :: binary(), {Content :: binary(), TTL :: ttl()}}].
 get_txt_records() ->
     {ok, DnsState} = get_dns_state(),
-    #dns_state{
-        provider_to_subdomain = PtS,
-        provider_to_txt_records = PtTR} = DnsState,
-    lists:flatmap(fun({ProviderId, Records}) ->
-        ProviderSubdomain = maps:get(ProviderId, PtS),
-        [{<<Name/binary, $., ProviderSubdomain/binary>>, {Content, TTL}}
-            || {Name, Content, TTL} <- Records]
-    end, maps:to_list(PtTR)).
+    #dns_state{provider_to_subdomain = PtS} = DnsState,
 
+    maps:fold(fun(ProviderId, ProviderTxtRecords, OuterAcc) ->
+        ProviderSubdomainLabel = maps:get(ProviderId, PtS),
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Removes TXT record identified by a provider and record name.
-%% @end
-%%--------------------------------------------------------------------
--spec remove_txt_record(ProviderId :: od_provider:id(), Name :: binary()) -> ok.
-remove_txt_record(ProviderId, Name) ->
-    {ok, _} = update(fun(DnsState) ->
-        #dns_state{provider_to_txt_records = PtTR} = DnsState,
-        case maps:find(ProviderId, PtTR) of
-            {ok, ProviderPtTR} -> {ok, DnsState#dns_state{
-                provider_to_txt_records = PtTR#{
-                    ProviderId => proplists:delete(Name, ProviderPtTR)
-                }}};
-            error -> {ok, DnsState}
-        end
-    end, #dns_state{}),
-    node_manager_plugin:reconcile_dns_config(),
-    ok.
+        maps:fold(fun(ProviderService, ProviderServiceTxtRecords, MiddleAcc) ->
+            ProviderServiceRelDomain = build_provider_service_rel_domain(
+                ProviderService, ProviderSubdomainLabel
+            ),
+
+            maps:fold(fun(Name, {Content, TTL}, InnerAcc) ->
+                Entry = {<<Name/binary, $., ProviderServiceRelDomain/binary>>, {Content, TTL}},
+                [Entry | InnerAcc]
+            end, MiddleAcc, ProviderServiceTxtRecords)
+        end, OuterAcc, ProviderTxtRecords)
+
+    end, [], DnsState#dns_state.provider_to_txt_records).
 
 
 %%%===================================================================
@@ -289,8 +273,8 @@ get_record_struct(3) ->
     {record, [
         {subdomain_to_provider, #{string => string}},
         {provider_to_subdomain, #{string => string}},
-        {provider_to_ips, #{string => #{string => [{integer, integer, integer, integer}]}}},
-        {provider_to_txt_records, #{string => [{string, string, integer}]}}
+        {provider_to_ips, #{string => #{atom => [{integer, integer, integer, integer}]}}},
+        {provider_to_txt_records, #{string => #{atom => #{string => {string, integer}}}}}
     ]}.
 
 
@@ -313,7 +297,7 @@ upgrade_record(1, {
         SubdomainToProvider,
         ProviderToSubdomain,
         ProviderToIPS,
-        maps:map(fun(_Provider, TxtRecords) ->
+        maps:map(fun(_ProviderId, TxtRecords) ->
             [{Name, Content, undefined} || {Name, Content} <- TxtRecords]
         end, ProviderToTxt)
     }};
@@ -325,18 +309,47 @@ upgrade_record(2, {
     ProviderToIPS,
     ProviderToTxt
 }) ->
+    NewProviderToIPS = maps:map(fun(_ProviderId, Ips) ->
+        #{op_worker => Ips}
+    end, ProviderToIPS),
+
+    NewProviderToTxt = maps:map(fun(_ProviderId, TxtRecords) ->
+        #{op_worker => lists:foldl(
+            fun({Name, Content, TTL}, Acc) -> Acc#{Name => {Content, TTL}} end,
+            #{},
+            TxtRecords
+        )}
+    end, ProviderToTxt),
+
     {3, {
         ?MODULE,
         SubdomainToProvider,
         ProviderToSubdomain,
-        maps:map(fun(_Provider, OpWorkerIps) -> #{<<>> => OpWorkerIps} end, ProviderToIPS),
-        ProviderToTxt
+        NewProviderToIPS,
+        NewProviderToTxt
     }}.
 
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+
+%% @private
+-spec build_provider_service_rel_domain(provider_service(), dns_utils:domain_label()) ->
+    dns_utils:domain_name().
+build_provider_service_rel_domain(ProviderService, ProviderSubdomainLabel) ->
+    dns_utils:build_domain(
+        provider_service_to_subdomain_label(ProviderService),
+        ProviderSubdomainLabel
+    ).
+
+
+%% @private
+-spec provider_service_to_subdomain_label(provider_service()) ->
+    dns_utils:domain_label().
+provider_service_to_subdomain_label(op_worker) -> <<>>;
+provider_service_to_subdomain_label(ones3) -> <<"s3">>.
 
 
 %%--------------------------------------------------------------------
@@ -406,19 +419,20 @@ unset_ips(#dns_state{provider_to_ips = PtIPs} = DnsState, ProviderId) ->
     DnsState#dns_state{provider_to_ips = maps:remove(ProviderId, PtIPs)}.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Sets TXT record content for given provider and record name.
-%% Overwrites existing content for given name if any.
-%% @end
-%%--------------------------------------------------------------------
--spec set_txt_record(record(), od_provider:id(), binary(), binary(), ttl()) ->
-    record().
-set_txt_record(#dns_state{provider_to_txt_records = PtTR} = DnsState, ProviderId, Name, Content, TTL) ->
-    TxtRecords = maps:get(ProviderId, PtTR, []),
-    TxtRecords2 = lists:keystore(Name, 1, TxtRecords, {Name, Content, TTL}),
-    DnsState#dns_state{provider_to_txt_records = PtTR#{ProviderId => TxtRecords2}}.
+-spec update_txt_records(record(), od_provider:id(), txt_records_diff()) -> record().
+update_txt_records(#dns_state{provider_to_txt_records = PtTR} = DnsState, ProviderId, Diff) ->
+    TxtRecords = maps:get(ProviderId, PtTR, #{}),
+
+    NewTxtRecords = maps:fold(fun(ProviderService, ProviderServiceTxtRecordsDiff, Acc) ->
+        CurrentRecords = maps:get(ProviderService, TxtRecords, #{}),
+        RecordsToSet = maps:get(set, ProviderServiceTxtRecordsDiff, #{}),
+        RecordsToUnset = maps:get(unset, ProviderServiceTxtRecordsDiff, []),
+
+        Acc#{ProviderService => maps:without(RecordsToUnset, maps:merge(CurrentRecords, RecordsToSet))}
+    end, TxtRecords, Diff),
+
+    DnsState#dns_state{provider_to_txt_records = PtTR#{ProviderId => NewTxtRecords}}.
 
 
 %% @private

@@ -562,8 +562,8 @@ end).
 -record(dns_state, {
     subdomain_to_provider = #{} :: #{dns_utils:domain_label() => od_provider:id()},
     provider_to_subdomain = #{} :: #{od_provider:id() => dns_utils:domain_label()},
-    provider_to_ips = #{} :: #{od_provider:id() => #{OpServiceSubdomainLabel :: dns_utils:domain_label() => [inet:ip4_address()]}},
-    provider_to_txt_records = #{} :: #{od_provider:id() => [{binary(), binary(), integer() | undefined}]}
+    provider_to_ips = #{} :: #{od_provider:id() => dns_state:provider_ips()},
+    provider_to_txt_records = #{} :: #{od_provider:id() => #{dns_state:provider_service() => #{binary() => {binary(), dns_state:ttl()}}}}
 }).
 
 

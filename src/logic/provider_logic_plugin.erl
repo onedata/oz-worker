@@ -70,7 +70,6 @@ operation_supported(create, support, private) -> true;
 operation_supported(create, map_idp_user, private) -> true;
 operation_supported(create, map_idp_group, private) -> true;
 operation_supported(create, verify_provider_identity, private) -> true;
-operation_supported(create, {dns_txt_record, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
 
@@ -94,10 +93,10 @@ operation_supported(get, current_time, private) -> true;
 operation_supported(update, instance, private) -> true;
 operation_supported(update, {space, _}, private) -> true;
 operation_supported(update, domain_config, private) -> true;
+operation_supported(update, dns_txt_records, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {space, _}, private) -> true;
-operation_supported(delete, {dns_txt_record, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -150,18 +149,6 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
     {ok, resource, {NewGRI, {SpaceData, Rev}}};
-
-create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}, data = Data}) ->
-    case fetch_entity(#gri{id = ProviderId}) of
-        {true, {#od_provider{subdomain_delegation = true}, _}} ->
-            #{<<"content">> := Content} = Data,
-            TTL = maps:get(<<"ttl">>, Data, undefined),
-            ok = dns_state:set_txt_record(ProviderId, RecordName, Content, TTL);
-        {true, {#od_provider{subdomain_delegation = false}, _}} ->
-            ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
-        Error ->
-            Error
-    end;
 
 create(#el_req{gri = #gri{aspect = map_idp_user}, data = Data}) ->
     IdP = maps:get(<<"idp">>, Data),
@@ -244,7 +231,9 @@ get(#el_req{gri = #gri{aspect = domain_config, id = ProviderId}}, Provider) ->
     },
     case SubdomainDelegation of
         true ->
-            {ok, Subdomain, OpWorkerIps, OneS3Ips} = dns_state:get_delegation_config(ProviderId),
+            {ok, Subdomain, ProviderIps} = dns_state:get_delegation_config(ProviderId),
+            OpWorkerIps = maps:get(op_worker, ProviderIps, []),
+            OneS3Ips = maps:get(ones3, ProviderIps, []),
             {ok, Response#{
                 <<"subdomain">> => Subdomain,
                 %% TODO VFS-11504 rm in 23.02.x
@@ -331,7 +320,36 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}
             true -> update_provider_subomain(ProviderId, Data);
             false -> update_provider_domain(ProviderId, Data)
         end
-    end).
+    end);
+
+update(#el_req{gri = #gri{id = ProviderId, aspect = dns_txt_records}, data = Data}) ->
+    case fetch_entity(#gri{id = ProviderId}) of
+        {true, {#od_provider{subdomain_delegation = true}, _}} ->
+            DecodeTxtRecordsFun = fun(FieldKey) ->
+                lists:foldl(fun(TxtRecordJson, Acc) ->
+                    TxtRecordName = maps:get(<<"name">>, TxtRecordJson),
+                    TxtRecordContent = maps:get(<<"content">>, TxtRecordJson),
+                    TxtRecordTTL = maps:get(<<"ttl">>, TxtRecordJson, undefined),
+
+                    Acc#{TxtRecordName => {TxtRecordContent, TxtRecordTTL}}
+                end, #{}, utils:ensure_list(maps:get(FieldKey, Data, [])))
+            end,
+            TxtRecordsDiff = #{
+                op_worker => #{
+                    set => DecodeTxtRecordsFun(<<"setOpWorkerTxtRecord">>),
+                    unset => utils:ensure_list(maps:get(<<"unsetOpWorkerTxtRecordName">>, Data, []))
+                },
+                ones3 => #{
+                    set => DecodeTxtRecordsFun(<<"setOneS3TxtRecord">>),
+                    unset => utils:ensure_list(maps:get(<<"unsetOneS3TxtRecordName">>, Data, []))
+                }
+            },
+            ok = dns_state:update_txt_records(ProviderId, TxtRecordsDiff);
+        {true, {#od_provider{subdomain_delegation = false}, _}} ->
+            ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
+        Error ->
+            Error
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -374,10 +392,7 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
 %% @TODO VFS-5856 deprecated, included for backward compatibility
 %% Used by providers that do not keep storages in onezone
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
-    storage_logic:revoke_support(?PROVIDER(ProviderId), ProviderId, SpaceId);
-
-delete(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}}) ->
-    ok = dns_state:remove_txt_record(ProviderId, RecordName).
+    storage_logic:revoke_support(?PROVIDER(ProviderId), ProviderId, SpaceId).
 
 
 %%--------------------------------------------------------------------
@@ -443,9 +458,6 @@ authorize(#el_req{operation = create, gri = #gri{id = undefined, aspect = instan
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->
     auth_by_self(Req);
-
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
-    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = {check_my_ip, _}}}, _) ->
     true;
@@ -546,11 +558,11 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = {space, _}}}, _)
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = domain_config}}, _) ->
     auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = dns_txt_records}}, _) ->
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
+
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, _) ->
     auth_by_self_or_cluster_privilege(Req, ?CLUSTER_DELETE);
-
-authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
-    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, _) ->
     auth_by_self(Req);
@@ -674,17 +686,6 @@ validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     }
 };
 
-validate(#el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}) ->
-    #{
-        required => #{
-            {aspect, <<"recordName">>} => {binary, non_empty},
-            <<"content">> => {binary, non_empty}
-        },
-        optional => #{
-            <<"ttl">> => {integer, {not_lower_than, 0}}
-        }
-    };
-
 validate(#el_req{operation = create, gri = #gri{aspect = map_idp_user}}) -> #{
     required => #{
         <<"idp">> => {atom, {exists, fun auth_config:idp_exists/1}},
@@ -761,7 +762,23 @@ validate(#el_req{operation = update, gri = #gri{aspect = domain_config}, data = 
             };
         _ ->
             #{required => AlwaysRequiredFields}
-    end.
+    end;
+
+validate(#el_req{operation = update, gri = #gri{aspect = dns_txt_records}}) ->
+    TxtRecordValidator = #{
+        <<"name">> => {binary, non_empty},
+        <<"content">> => {binary, non_empty},
+        <<"ttl">> => {optional, integer, {not_lower_than, 0}}
+    },
+
+    #{
+        at_least_one => #{
+            <<"setOpWorkerTxtRecord">> => {json, TxtRecordValidator},
+            <<"setOneS3TxtRecord">> => {json, TxtRecordValidator},
+            <<"unsetOpWorkerTxtRecordName">> => {binary, non_empty},
+            <<"unsetOneS3TxtRecordName">> => {binary, non_empty}
+        }
+    }.
 
 %%%===================================================================
 %%% Internal functions
@@ -818,18 +835,20 @@ update_provider_domain(ProviderId, Data) ->
 -spec update_provider_subomain(ProviderId :: od_provider:id(),
     Data :: entity_logic:data()) -> entity_logic:update_result().
 update_provider_subomain(ProviderId, Data) ->
-    OpSubdomainLabel = maps:get(<<"subdomain">>, Data),
-    OpDomainName = dns_utils:build_fqdn_from_subdomain(OpSubdomainLabel),
-    OpWorkerIps = get_op_worker_ips(Data),
-    OneS3Ips = maps:get(<<"oneS3IpAddresses">>, Data, []),
+    ProviderSubdomainLabel = maps:get(<<"subdomain">>, Data),
+    ProviderIps = #{
+        op_worker => get_op_worker_ips(Data),
+        ones3 => maps:get(<<"oneS3IpAddresses">>, Data, [])
+    },
 
-    Result = case dns_state:set_delegation_config(ProviderId, OpSubdomainLabel, OpWorkerIps, OneS3Ips) of
+    Result = case dns_state:set_delegation_config(ProviderId, ProviderSubdomainLabel, ProviderIps) of
         ok ->
+            ProviderDomainName = dns_utils:build_fqdn_from_subdomain(ProviderSubdomainLabel),
             od_provider:update(ProviderId, fun(Provider) ->
                 {ok, Provider#od_provider{
                     subdomain_delegation = true,
-                    domain = OpDomainName,
-                    subdomain = OpSubdomainLabel,
+                    domain = ProviderDomainName,
+                    subdomain = ProviderSubdomainLabel,
                     op_worker_port = maps:get(<<"opWorkerPort">>, Data, ?DEFAULT_OP_WORKER_PORT),
                     ones3_port = utils:null_to_undefined(maps:get(<<"oneS3Port">>, Data, null))
                 }}
@@ -864,12 +883,15 @@ create_provider(Auth, Data, ProviderId, GRI) ->
             false ->
                 {maps:get(<<"domain">>, Data), undefined};
             true ->
-                OpSubdomainLabel = maps:get(<<"subdomain">>, Data),
-                OpWorkerIps = get_op_worker_ips(Data),
-                OneS3Ips = maps:get(<<"oneS3IpAddresses">>, Data, []),
-                case dns_state:set_delegation_config(ProviderId, OpSubdomainLabel, OpWorkerIps, OneS3Ips) of
+                ProviderSubdomainLabel = maps:get(<<"subdomain">>, Data),
+                ProviderIps = #{
+                    op_worker => get_op_worker_ips(Data),
+                    ones3 => maps:get(<<"oneS3IpAddresses">>, Data, [])
+                },
+                case dns_state:set_delegation_config(ProviderId, ProviderSubdomainLabel, ProviderIps) of
                     ok ->
-                        {dns_utils:build_fqdn_from_subdomain(OpSubdomainLabel), OpSubdomainLabel};
+                        ProviderDomainName = dns_utils:build_fqdn_from_subdomain(ProviderSubdomainLabel),
+                        {ProviderDomainName, ProviderSubdomainLabel};
                     {error, subdomain_exists} ->
                         throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>))
                 end
