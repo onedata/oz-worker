@@ -152,7 +152,7 @@ Build:
           integration: custom
         buildHangingConfig.enabled: 'false'
   tasks:
-    - script:
+    - script: &run-script
         interpreter: SHELL
         scripts:
           - |-
@@ -230,7 +230,7 @@ _Codetag Tracker:
         scripts:
           - tar -xzmf oz_worker.tar.gz
         description: Unpack
-    - script:
+    - script: &run-script-working-dir
         interpreter: BINSH_OR_CMDEXE
         scripts:
           - ./make.py -r ${bamboo.agentWorkingDirectory} codetag-tracker BRANCH=${bamboo.planRepository.branchName}
@@ -656,11 +656,59 @@ model_upgrade:
       name: ct_logs_model_upgrade.tar.gz
 
 oai:
-  <<: *ct-job
   key: OAI
+  other: *common-opts
+  tasks:
+    - checkout: *fake-checkout
+    - script: *clear-env
+    - script:
+        <<: *run-script
+        scripts:
+          - sudo ${HOME}/restart_minikube.sh
+        description: Restart minikube
+    - script: *unpack
+    - script:
+        <<: *run-script-working-dir
+        scripts:
+          - one-env/onenv pull_artifacts --hostname ${bamboo.artifactRepoHostname} --port ${bamboo.artifactRepoPort} --path .. branchConfig.yaml
+        description: Download artifacts
+    - script:
+        <<: *run-script-working-dir
+        scripts:
+          - ./ct_onenv.py --suite ${bamboo.shortJobName} --path-to-sources ..
+        description: Run CT onenv tests
+  final-tasks:
+    - test-parser:
+        <<: *parse-test-results
+        test-results: oz_worker/test_distributed/logs/*/surefire.xml
+    - script:
+        <<: *run-script-working-dir
+        scripts:
+          - |-
+            tar czf surefire_${bamboo.shortJobName}.tar.gz test_distributed/logs/*/surefire.xml
+            echo ./bamboos/artifacts/push_artifact.py --hostname ${bamboo.artifactRepoHostname} --port ${bamboo.artifactRepoPort} \
+                --username ${bamboo.artifactRepoUsername} --branch ${bamboo.planRepository.branchName} --plan ${bamboo.planRepository.name} \
+                --artifact-name surefire_${bamboo.shortJobName}.tar.gz
+            ./bamboos/artifacts/push_artifact.py --hostname ${bamboo.artifactRepoHostname} --port ${bamboo.artifactRepoPort} \
+                --username ${bamboo.artifactRepoUsername} --branch ${bamboo.planRepository.branchName} --plan ${bamboo.planRepository.name} \
+                --artifact-name surefire_${bamboo.shortJobName}.tar.gz
+        description: Pack and push surefire artifact
+    - script:
+        <<: *run-script
+        interpreter: BINSH_OR_CMDEXE
+        scripts:
+          - tar -mczf ct_logs_${bamboo.shortJobName}.tar.gz oz_worker/test_distributed/logs/
+        description: Pack test logs
+    - script: *clear-env
   artifacts:
-    - <<: *ct_logs
+    - &ct_logs
       name: ct_logs_oai.tar.gz
+      pattern: ct_logs_${bamboo.shortJobName}.tar.gz
+      shared: true
+      required: false
+  requirements:
+    - minikube
+  artifact-subscriptions: *oz-worker
 
 onezone_mailer:
   <<: *ct-job
