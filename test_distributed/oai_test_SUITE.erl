@@ -15,6 +15,7 @@
 -include_lib("ctool/include/test/performance.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/http/headers.hrl").
+-include_lib("onenv_ct/include/oct_background.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include("http/handlers/oai.hrl").
@@ -1082,12 +1083,16 @@ filtering_of_broken_records_test_base(Config, Method) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    ssl:start(),
-    application:ensure_all_started(hackney),
-    ozt:init_per_suite(Config, fun() ->
-        ozt:set_env(oai_pmh_list_identifiers_batch_size, ?TESTED_LIST_BATCH_SIZE),
-        ozt:set_env(oai_pmh_list_records_batch_size, ?TESTED_LIST_BATCH_SIZE)
-    end).
+    NewConfig = ozt:init_per_suite(Config),
+    oct_background:init_per_suite(NewConfig, #onenv_test_config{
+        onenv_scenario = "1oz",
+        posthook = ?config(?ENV_UP_POSTHOOK, NewConfig),
+        envs = [{oz_worker, oz_worker, [
+            {oz_name, undefined},
+            {oai_pmh_list_identifiers_batch_size, ?TESTED_LIST_BATCH_SIZE},
+            {oai_pmh_list_records_batch_size, ?TESTED_LIST_BATCH_SIZE}
+        ]}]
+    }).
 
 init_per_testcase(_, Config) ->
     ozt_mocks:freeze_time(),
@@ -1115,8 +1120,7 @@ end_per_testcase(_, _Config) ->
     ok.
 
 end_per_suite(_Config) ->
-    application:stop(hackney),
-    ssl:stop().
+    oct_background:end_per_suite().
 
 %%%===================================================================
 %%% Functions used to validate REST calls
@@ -1266,7 +1270,7 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
         _ -> add_verb(Verb, Args)
     end,
     ResponseDate = time:seconds_to_datetime(?NOW()),
-    ExpectedBody = expected_body(ExpResponseContent, ResponseType, Args2, ResponseDate),
+    ExpectedBody = expected_body(URL, ExpResponseContent, ResponseType, Args2, ResponseDate),
     QueryString = prepare_querystring(Args2),
 
     Request = case Method of
@@ -1299,7 +1303,7 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
 %%%===================================================================
 
 get_oai_pmh_URL() ->
-    str_utils:format_bin("http://~ts", [ozt:get_domain()]).
+    str_utils:format_bin("~ts://~ts", [?RAND_ELEMENT(["http", "https"]), ozt:get_domain()]).
 
 
 get_oai_pmh_api_path() ->
@@ -1334,9 +1338,8 @@ get_domain(Hostname) ->
     string:join(Domain, ".").
 
 
-expected_body(ExpectedResponse, ResponseType, Args, ResponseDate) ->
+expected_body(URL, ExpectedResponse, ResponseType, Args, ResponseDate) ->
     Path = get_oai_pmh_api_path(),
-    URL = get_oai_pmh_URL(),
     RequestURL = binary_to_list(<<URL/binary, Path/binary>>),
 
     ExpectedResponseElement = case ResponseType of
