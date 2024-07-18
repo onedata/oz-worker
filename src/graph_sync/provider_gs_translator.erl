@@ -197,27 +197,12 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = shared}, U
 translate_resource(_, #gri{type = od_group, aspect = instance, scope = private}, Group) ->
     #od_group{
         name = Name,
-        type = Type,
-
-        children = Children,
-        parents = Parents,
-
-        users = Users,
-
-        eff_spaces = EffSpaces
+        type = Type
     } = Group,
     #{
         <<"name">> => Name,
         <<"type">> => Type,
-
-        <<"children">> => Children,
-        <<"effectiveChildren">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_group, Group),
-        <<"parents">> => Parents,
-
-        <<"users">> => Users,
-        <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Group),
-
-        <<"spaces">> => maps:keys(EffSpaces)
+        <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Group)
     };
 
 % shared and protected scopes carry the same data

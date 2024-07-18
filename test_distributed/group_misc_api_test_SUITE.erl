@@ -348,22 +348,10 @@ get_test(Config) ->
             expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1_BIN,
-                <<"parents">> => [ParentGroupId],
-                <<"children">> => #{
-                    ChildGroupId => []
-                },
-                <<"effectiveChildren">> => #{
-                    ChildGroupId => []
-                },
-                <<"users">> => #{
-                    MemberWithoutView => AllPrivsBin -- [<<"group_view">>],
-                    MemberWithView => [<<"group_view">>]
-                },
                 <<"effectiveUsers">> => #{
                     MemberWithoutView => AllPrivsBin -- [<<"group_view">>],
                     MemberWithView => [<<"group_view">>]
                 },
-                <<"spaces">> => [SpaceId],
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(GroupId, Id)

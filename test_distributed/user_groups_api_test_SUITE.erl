@@ -212,11 +212,8 @@ create_group_test(Config) ->
                 ExpName = maps:get(<<"name">>, Data),
                 ExpType = maps:get(<<"type">>, Data, ?DEFAULT_GROUP_TYPE),
                 ?OK_MAP_CONTAINS(#{
-                    <<"children">> => #{},
-                    <<"users">> => #{U1 => AllPrivsBin},
+                    <<"effectiveUsers">> => #{U1 => AllPrivsBin},
                     <<"name">> => ExpName,
-                    <<"parents">> => [],
-                    <<"spaces">> => [],
                     <<"type">> => atom_to_binary(ExpType, utf8),
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = gri:deserialize(EncodedGri),
