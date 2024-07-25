@@ -20,6 +20,7 @@
 -include("registered_names.hrl").
 -include("http/handlers/oai.hrl").
 
+-define(OZ_NAME, "dev-onezone").
 
 %% API
 -export([all/0, init_per_suite/1, init_per_testcase/2, end_per_testcase/2, end_per_suite/1]).
@@ -544,7 +545,7 @@ identify_test_base(Config, Method) ->
 
     #handle_listing_entry{timestamp = Timestamp} = create_handle(),
     ExpResponseContent = [
-        #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
+        #xmlElement{name = repositoryName, content = [#xmlText{value = ?OZ_NAME}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]}
     ] ++ [
@@ -570,7 +571,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
 
     % identify earliest datestamp with empty repository
     ExpResponseContentEmpty = [
-        #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
+        #xmlElement{name = repositoryName, content = [#xmlText{value = ?OZ_NAME}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]}
     ] ++ [
@@ -586,7 +587,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     create_handle_with_mocked_timestamp(Timestamp2),
 
     ExpResponseContent1 = [
-        #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
+        #xmlElement{name = repositoryName, content = [#xmlText{value = ?OZ_NAME}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]}
     ] ++ [
@@ -601,7 +602,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     modify_handle_with_mocked_timestamp(HandleEntry, Timestamp3),
 
     ExpResponseContent2 = [
-        #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
+        #xmlElement{name = repositoryName, content = [#xmlText{value = ?OZ_NAME}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]}
     ] ++ [
@@ -1088,7 +1089,7 @@ init_per_suite(Config) ->
         onenv_scenario = "1oz",
         posthook = ?config(?ENV_UP_POSTHOOK, NewConfig),
         envs = [{oz_worker, oz_worker, [
-            {oz_name, undefined},
+            {oz_name, ?OZ_NAME},
             {oai_pmh_list_identifiers_batch_size, ?TESTED_LIST_BATCH_SIZE},
             {oai_pmh_list_records_batch_size, ?TESTED_LIST_BATCH_SIZE}
         ]}]
