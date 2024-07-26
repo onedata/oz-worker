@@ -184,10 +184,8 @@ create_parent_test(Config) ->
                 ExpName = maps:get(<<"name">>, Data),
                 ExpType = maps:get(<<"type">>, Data, ?DEFAULT_GROUP_TYPE),
                 ?OK_MAP_CONTAINS(#{
-                    <<"children">> => #{Child => AllPrivsBin},
                     <<"name">> => ExpName,
-                    <<"parents">> => [],
-                    <<"spaces">> => [],
+                    <<"effectiveUsers">> => #{},
                     <<"type">> => atom_to_binary(ExpType, utf8),
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = gri:deserialize(EncodedGri),
