@@ -425,6 +425,7 @@ protected_handle(rest, Id, HandleData, Creator) ->
 public_handle(logic, Id, HandleData) ->
     ExpPublicHandle = expected_public_handle(Id),
     ?OK_MAP(#{
+        <<"handleServiceId">> => maps:get(<<"handleServiceId">>, HandleData),
         <<"publicHandle">> => ExpPublicHandle,
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
@@ -437,6 +438,7 @@ public_handle(rest, Id, HandleData) ->
     ExpPublicHandle = expected_public_handle(Id),
     #{
         <<"handleId">> => Id,
+        <<"handleServiceId">> => maps:get(<<"handleServiceId">>, HandleData),
         <<"publicHandle">> => ExpPublicHandle,
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
@@ -449,6 +451,7 @@ public_handle(gs, Id, HandleData) ->
     ExpPublicHandle = expected_public_handle(Id),
     ?OK_MAP(#{
         <<"gri">> => gri:serialize(?GRI(od_handle, Id, instance, public)),
+        <<"handleServiceId">> => maps:get(<<"handleServiceId">>, HandleData),
         <<"publicHandle">> => ExpPublicHandle,
         <<"metadataPrefix">> => maps:get(<<"metadataPrefix">>, HandleData),
         <<"metadata">> => expected_final_handle_metadata(HandleData, ExpPublicHandle),

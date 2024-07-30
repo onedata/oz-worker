@@ -70,6 +70,7 @@ operation_supported(get, privileges, _) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
+operation_supported(get, instance, public) -> true;
 
 operation_supported(get, users, private) -> true;
 operation_supported(get, eff_users, private) -> true;
@@ -200,6 +201,10 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, HService) ->
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
     }};
+get(#el_req{gri = #gri{aspect = instance, scope = public}}, #od_handle_service{name = Name}) ->
+    {ok, #{
+        <<"name">> => Name
+    }};
 
 get(#el_req{gri = #gri{aspect = users}}, HService) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_user, HService)};
@@ -298,7 +303,7 @@ delete(#el_req{gri = #gri{id = HServiceId, aspect = {group, GroupId}}}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
-exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, HService) ->
+exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, HService = #od_handle_service{}) ->
     case Req#el_req.auth_hint of
         ?THROUGH_USER(UserId) ->
             handle_service_logic:has_eff_user(HService, UserId);
@@ -387,6 +392,9 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             % Access to private data also allows access to protected data
             authorize(Req#el_req{gri = GRI#gri{scope = private}}, HService)
     end;
+
+authorize(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}, _HService) ->
+    true;
 
 authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
     true;

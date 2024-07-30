@@ -353,7 +353,56 @@ get_test(Config) ->
         }
         % TODO VFS-4520 Tests for GraphSync API
     },
-    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
+
+    GetPublicDataApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                nobody,
+                root,
+                {user, U2},
+                {admin, [?OZ_HANDLE_SERVICES_VIEW]},
+                {user, NonAdmin},
+                {user, U1}
+            ],
+            unauthorized = [],
+            forbidden = []
+        },
+        logic_spec = #logic_spec{
+            module = handle_service_logic,
+            function = get_public_data,
+            args = [auth, HService],
+            expected_result = ?OK_TERM(
+                fun(#{<<"name">> := Name}) ->
+                    ?assertEqual(?HANDLE_SERVICE_NAME1, Name)
+                end
+            )
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/handle_services/">>, HService, <<"/public">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = fun(#{<<"name">> := Name, <<"handleServiceId">> := HandleServiceId}) ->
+                ?assertEqual(HService, HandleServiceId),
+                ?assertEqual(?HANDLE_SERVICE_NAME1, Name),
+                true
+            end
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{
+                type = od_handle_service, id = HService, aspect = instance, scope = public
+            },
+            expected_result_op = ?OK_MAP_CONTAINS(#{
+                <<"name">> => ?HANDLE_SERVICE_NAME1,
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
+                    ?assertEqual(HService, Id)
+                end
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec)).
 
 
 update_test(Config) ->

@@ -378,6 +378,9 @@ translate_resource(_, #gri{type = od_handle_service, aspect = instance, scope = 
         <<"effectiveGroups">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_group, HService)
     };
 
+translate_resource(_, #gri{type = od_handle_service, aspect = instance, scope = public}, HServiceData) ->
+    HServiceData;
+
 translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}, Handle) ->
     #od_handle{
         public_handle = PublicHandle,
@@ -389,13 +392,13 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
         handle_service = HandleServiceId
     } = Handle,
     #{
+        <<"handleServiceId">> => HandleServiceId,
         <<"publicHandle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => Metadata,
         <<"timestamp">> => time:seconds_to_iso8601(Timestamp),  % @TODO VFS-6309 to be removed in 21.02
-        <<"handleServiceId">> => HandleServiceId,
 
         <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Handle),
         <<"effectiveGroups">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_group, Handle)
@@ -403,12 +406,14 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
 
 translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public}, HandleData) ->
     #{
+        <<"handleServiceId">> := HandleServiceId,
         <<"publicHandle">> := PublicHandle,
         <<"metadataPrefix">> := MetadataPrefix,
         <<"metadata">> := Metadata,
         <<"timestamp">> := Timestamp
     } = HandleData,
     #{
+        <<"handleServiceId">> => HandleServiceId,
         <<"publicHandle">> => PublicHandle,
         <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => Metadata,
