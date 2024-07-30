@@ -286,6 +286,14 @@ generate_request_element(Req) ->
     ParsedArgs :: [proplists:property()], Req :: cowboy_req:req()) ->
     {request, binary(), [proplists:property()]}.
 generate_request_element(ParsedArgs, Req) ->
-    URL = iolist_to_binary(cowboy_req:uri(Req, #{qs => undefined})),
-    {request, URL, ParsedArgs}.
-
+    HttpsUrl = iolist_to_binary(cowboy_req:uri(Req, #{qs => undefined})),
+    Url = case cowboy_req:header(?HDR_X_ONEDATA_FORWARDED_FOR, Req) of
+        undefined ->
+            % Request made for oz https_listener
+            HttpsUrl;
+        _ ->
+            % Request forwarded from onepanel http_listener
+            <<"https://", RestUrl/binary>> = HttpsUrl,
+            <<"http://", RestUrl/binary>>
+    end,
+    {request, Url, ParsedArgs}.
