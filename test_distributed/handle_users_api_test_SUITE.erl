@@ -258,19 +258,19 @@ get_user_test(Config) ->
     ),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(Creator), ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
-    {ok, Handle} = oz_test_utils:create_handle(Config, ?USER(Creator), ?HANDLE(HService, ShareId)),
-    {ok, _} = oz_test_utils:handle_add_user(Config, Handle, MemberWithViewPrivs),
-    {ok, _} = oz_test_utils:handle_add_user(Config, Handle, MemberWithoutViewPrivs),
-    {ok, _} = oz_test_utils:handle_add_user(Config, Handle, Member),
+    HandleId = ozt_users:create_handle_for(Creator, HService, ShareId),
+    {ok, _} = oz_test_utils:handle_add_user(Config, HandleId, MemberWithViewPrivs),
+    {ok, _} = oz_test_utils:handle_add_user(Config, HandleId, MemberWithoutViewPrivs),
+    {ok, _} = oz_test_utils:handle_add_user(Config, HandleId, Member),
 
-    oz_test_utils:handle_set_user_privileges(Config, Handle, MemberWithViewPrivs, [?HANDLE_VIEW], []),
-    oz_test_utils:handle_set_user_privileges(Config, Handle, MemberWithoutViewPrivs, [], [?HANDLE_VIEW]),
+    oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithViewPrivs, [?HANDLE_VIEW], []),
+    oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithoutViewPrivs, [], [?HANDLE_VIEW]),
 
     % Shared data about creator should be available even if he is not longer in the handle
-    oz_test_utils:handle_remove_user(Config, Handle, Creator),
+    oz_test_utils:handle_remove_user(Config, HandleId, Creator),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -297,14 +297,14 @@ get_user_test(Config) ->
             },
             rest_spec = #rest_spec{
                 method = get,
-                path = [<<"/handles/">>, Handle, <<"/users/">>, SubjectUser],
+                path = [<<"/handles/">>, HandleId, <<"/users/">>, SubjectUser],
                 expected_code = ?HTTP_200_OK,
                 expected_body = api_test_expect:shared_user(rest, SubjectUser, UserData)
             },
             logic_spec = #logic_spec{
                 module = handle_logic,
                 function = get_user,
-                args = [auth, Handle, SubjectUser],
+                args = [auth, HandleId, SubjectUser],
                 expected_result = api_test_expect:shared_user(logic, SubjectUser, UserData)
             },
             gs_spec = #gs_spec{
@@ -312,7 +312,7 @@ get_user_test(Config) ->
                 gri = #gri{
                     type = od_user, id = SubjectUser, aspect = instance, scope = shared
                 },
-                auth_hint = ?THROUGH_HANDLE(Handle),
+                auth_hint = ?THROUGH_HANDLE(HandleId),
                 expected_result_op = api_test_expect:shared_user(gs, SubjectUser, UserData)
             }
         },

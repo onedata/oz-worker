@@ -59,7 +59,7 @@ send_unsafe(RecipientAddresses, Subject, Body) ->
         sender_address = ?SENDER_ADDRESS,
         sender_name = ?SENDER_NAME,
         recipient_addresses = RecipientAddresses,
-        subject = str_utils:format_bin("[~s] ~ts", [oz_worker:get_domain(), Subject]),
+        subject = str_utils:format_bin("[~ts] ~ts", [oz_worker:get_domain(), Subject]),
         body = Body,
         options = ?OPTIONS
     },
@@ -67,10 +67,10 @@ send_unsafe(RecipientAddresses, Subject, Body) ->
         {ok, ServerReply} ->
             ?info(
                 "Email successfully sent~n"
-                "> To:        ~s~n"
-                "> Subject:   ~s~n"
+                "> To:        ~ts~n"
+                "> Subject:   ~ts~n"
                 "> Body:      ~B bytes~n"
-                "> Srv reply: ~s",
+                "> Srv reply: ~ts",
                 [
                     str_utils:join_binary(RecipientAddresses, <<", ">>),
                     Subject,
@@ -81,11 +81,11 @@ send_unsafe(RecipientAddresses, Subject, Body) ->
         {error, {Type, Details}} ->
             ?report_internal_server_error(
                 "Email send error~n"
-                "> To:       ~s~n"
-                "> Subject:  ~s~n"
+                "> To:       ~ts~n"
+                "> Subject:  ~ts~n"
                 "> Body:     ~B bytes~n"
                 "> Err type: ~w~n"
-                "> Details:  ~p",
+                "> Details:  ~tp",
                 [
                     str_utils:join_binary(RecipientAddresses, <<", ">>),
                     Subject,

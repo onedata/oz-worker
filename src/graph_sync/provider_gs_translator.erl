@@ -105,9 +105,9 @@ translate_value(_, #gri{type = od_atm_workflow_schema, aspect = {dump_revision, 
 
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n"
-    "ProtocolVersion: ~p~n"
-    "GRI: ~p~n"
-    "Data: ~p~n", [
+    "ProtocolVersion: ~tp~n"
+    "GRI: ~tp~n"
+    "Data: ~tp~n", [
         ProtocolVersion, GRI, Data
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
@@ -398,6 +398,7 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
         public_handle = PublicHandle,
         resource_type = ResourceType,
         resource_id = ResourceId,
+        metadata_prefix = MetadataPrefix,
         metadata = Metadata,
         timestamp = Timestamp,
         handle_service = HandleServiceId
@@ -406,6 +407,7 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
         <<"publicHandle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
+        <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => Metadata,
         <<"timestamp">> => time:seconds_to_iso8601(Timestamp),  % @TODO VFS-6309 to be removed in 21.02
         <<"handleServiceId">> => HandleServiceId,
@@ -417,11 +419,13 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
 translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public}, HandleData) ->
     #{
         <<"publicHandle">> := PublicHandle,
+        <<"metadataPrefix">> := MetadataPrefix,
         <<"metadata">> := Metadata,
         <<"timestamp">> := Timestamp
     } = HandleData,
     #{
         <<"publicHandle">> => PublicHandle,
+        <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => Metadata,
         <<"timestamp">> => time:seconds_to_iso8601(Timestamp)  % @TODO VFS-6309 to be removed in 21.02
     };
@@ -532,9 +536,9 @@ translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, sco
 
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate Oneprovider graph sync get result for:~n
-    ProtocolVersion: ~p~n
-    GRI: ~p~n
-    Data: ~p~n", [
+    ProtocolVersion: ~tp~n
+    GRI: ~tp~n
+    Data: ~tp~n", [
         ProtocolVersion, GRI, Data
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
@@ -544,7 +548,7 @@ translate_resource(ProtocolVersion, GRI, Data) ->
 %%%===================================================================
 
 %% @private
-%% @doc providers with version lower than 21.02.3 must not run automation jobs due to
+%% @doc providers with version lower than 21.02.5 must not run automation jobs due to
 %% incompatibilities introduced in subsequent minor versions (automation has experimental status)
 -spec is_automation_available_for_provider(od_provider:id()) -> boolean().
 is_automation_available_for_provider(ProviderId) ->
@@ -559,6 +563,8 @@ is_automation_available_for_provider(ProviderId) ->
                 <<"21.02.0", _/binary>> -> false;
                 <<"21.02.1">> -> false;
                 <<"21.02.2">> -> false;
+                <<"21.02.3">> -> false;
+                <<"21.02.4">> -> false;
                 _ -> true
             end
     end.

@@ -158,7 +158,7 @@ in the test mode. Use only for diagnostics.</i>
 dump_test_login_results_to_log(TestLoginResults) ->
     StateToken = idp_auth_test_mode:get_state_token(),
     {{Year, Month, Day}, {Hour, Minute, Second}} = time:seconds_to_datetime(global_clock:timestamp_seconds()),
-    FileName = str_utils:format_bin("~4..0B-~2..0B-~2..0B_~2..0B-~2..0B-~2..0B.~s.html", [
+    FileName = str_utils:format_bin("~4..0B-~2..0B-~2..0B_~2..0B-~2..0B-~2..0B.~ts.html", [
         Year, Month, Day, Hour, Minute, Second, StateToken
     ]),
     FilePath = filename:join(?LOGIN_DIAGNOSTICS_LOG_DIR, FileName),

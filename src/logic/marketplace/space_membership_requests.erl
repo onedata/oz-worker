@@ -284,7 +284,7 @@ qualify(SpaceId, UserId, Record) ->
                 false ->
                     throw(?ERROR_FORBIDDEN(str_utils:format_bin(
                         "A membership request to this space has been submitted recently. "
-                        "A reminder can be generated not sooner than at ~s",
+                        "A reminder can be generated not sooner than at ~ts",
                         [time:seconds_to_iso8601(NextRequestAllowedAt)]
                     )))
             end
@@ -310,7 +310,7 @@ check_if_not_recently_rejected(SpaceId, Record) ->
                 {ok, #request{last_activity = LastActivity}} ->
                     throw(?ERROR_FORBIDDEN(str_utils:format_bin(
                         "A membership request to this space has been recently rejected. "
-                        "Another request can be made not sooner than at ~s",
+                        "Another request can be made not sooner than at ~ts",
                         [time:seconds_to_iso8601(LastActivity + ?MIN_BACKOFF_AFTER_REJECTION_SECONDS)]
                     )));
                 error ->

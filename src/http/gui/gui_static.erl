@@ -185,7 +185,7 @@ put_package(on_cluster, GuiType, PackageBin, GuiHash) ->
     end, ?CLUSTER_NODES);
 
 put_package(on_node, GuiType, PackageBin, GuiHash) ->
-    ?info("Deploying GUI package: ~s", [gui_path(GuiType, GuiHash)]),
+    ?info("Deploying GUI package: ~ts", [gui_path(GuiType, GuiHash)]),
     TempDir = mochitemp:mkdtemp(),
     {ok, ExtractedPackagePath} = gui:extract_package({binary, PackageBin}, TempDir),
     PackageStaticRoot = static_root(GuiType, GuiHash),
@@ -237,9 +237,9 @@ link_gui(on_cluster, GuiType, GuiId, GuiHash) ->
 link_gui(on_node, GuiType, GuiId, GuiHash) ->
     case GuiHash of
         ?EMPTY_GUI_HASH ->
-            ?debug("Linking empty GUI for ~s", [gui_path(GuiType, GuiId)]);
+            ?debug("Linking empty GUI for ~ts", [gui_path(GuiType, GuiId)]);
         _ ->
-            ?info("Linking gui for ~s -> ~s", [gui_path(GuiType, GuiId), GuiHash])
+            ?info("Linking gui for ~ts -> ~ts", [gui_path(GuiType, GuiId), GuiHash])
     end,
     StaticRoot = static_root(GuiType, GuiId),
     link_exists(StaticRoot) andalso (ok = file:delete(StaticRoot)),
@@ -275,7 +275,7 @@ unlink_gui(on_cluster, GuiType, GuiId) ->
     end, ?CLUSTER_NODES);
 
 unlink_gui(on_node, GuiType, GuiId) ->
-    ?info("Unlinking gui for ~s", [gui_path(GuiType, GuiId)]),
+    ?info("Unlinking gui for ~ts", [gui_path(GuiType, GuiId)]),
     StaticRoot = static_root(GuiType, GuiId),
     link_exists(StaticRoot) andalso (ok = file:delete(StaticRoot)).
 
@@ -332,7 +332,7 @@ remove_unused_packages(on_node, GuiType) ->
         PackagePath = filename:join(StaticRoot, PackageHash),
         case file_utils:seconds_since_modification(PackagePath) of
             {ok, Seconds} when Seconds > ?CLEANING_AGE_THRESHOLD ->
-                ?info("Removing unused GUI package: ~s/~s", [GuiPrefix, PackageHash]),
+                ?info("Removing unused GUI package: ~ts/~ts", [GuiPrefix, PackageHash]),
                 ok = file_utils:recursive_del(PackagePath);
             _ ->
                 ok
@@ -352,7 +352,7 @@ routes() ->
         {false, true} ->
             ?alert(
                 "Detected custom static files in deprecated location, please "
-                "use the new one:~ndeprecated path: ~s~ncorrect path:    ~s", [
+                "use the new one:~ndeprecated path: ~ts~ncorrect path:    ~ts", [
                     ?LEGACY_CUSTOM_STATIC_ROOT, ?CUSTOM_STATIC_ROOT
                 ]
             ),
@@ -363,7 +363,7 @@ routes() ->
 
 
     CustomPath = binary_to_list(oz_worker_gui_path(<<?CUSTOM_STATIC_GUI_PATH>>)),
-    ?info("Serving custom static files:~nURN:       ~s~nhost path: ~s/[...]", [
+    ?info("Serving custom static files:~nURN:       ~ts~nhost path: ~ts/[...]", [
         CustomPath,
         CustomRootDir
     ]),
@@ -463,13 +463,13 @@ verify_gui_hash(GuiType, ReleaseVersion, GuiHash) ->
                     true;
                 {false, CorrectHashes} ->
                     ?debug(
-                        "Declining unverified GUI package (~p, ver. ~s): ~s. Correct hashes: ~p",
+                        "Declining unverified GUI package (~tp, ver. ~ts): ~ts. Correct hashes: ~tp",
                         [GuiType, ReleaseVersion, GuiHash, CorrectHashes]
                     ),
                     false;
                 {error, _} = Error ->
                     ?debug(
-                        "Declining unverified GUI package (~p, ver. ~s): ~s due to ~w",
+                        "Declining unverified GUI package (~tp, ver. ~ts): ~ts due to ~w",
                         [GuiType, ReleaseVersion, GuiHash, Error]
                     ),
                     false

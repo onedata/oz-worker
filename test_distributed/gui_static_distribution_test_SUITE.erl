@@ -812,7 +812,7 @@ set_mocked_seconds_since_modification(Config, Seconds) ->
 
 perform_upload(Config, Prefix, ClusterId, GuiPackagePath, Headers) ->
     Result = http_client:post(
-        oz_test_utils:oz_url(Config, [str_utils:format_bin("/~s/~s/gui-upload", [Prefix, ClusterId])]),
+        oz_test_utils:oz_url(Config, [str_utils:format_bin("/~ts/~ts/gui-upload", [Prefix, ClusterId])]),
         Headers,
         {multipart, [{file, str_utils:to_binary(GuiPackagePath)}]},
         [?SSL_OPTS(Config)]
@@ -847,7 +847,7 @@ static_directory_exists(ExpState, Retries, Config, PathTokens) ->
             Got ->
                 case Retries of
                     1 ->
-                        ct:pal("static_directory_exists(~p, Config, ~p) failed on node ~p~ngot: ~p", [
+                        ct:pal("static_directory_exists(~tp, Config, ~tp) failed on node ~tp~ngot: ~tp", [
                             ExpState, Path, Node, Got
                         ]),
                         false;
@@ -871,12 +871,12 @@ link_exists(ExpState, Config, PathTokens, LinkValue) when is_list(LinkValue) ->
             {true, {ok, LinkValue}} ->
                 true;
             {false, {ok, LinkValue} = Got} ->
-                ct:pal("link_exists(~p, Config, ~p, ~p) failed on node ~p~ngot: ~p", [
+                ct:pal("link_exists(~tp, Config, ~tp, ~tp) failed on node ~tp~ngot: ~tp", [
                     ExpState, Path, LinkValue, Node, Got
                 ]),
                 false;
             {true, Got} ->
-                ct:pal("link_exists(~p, Config, ~p, ~p) failed on node ~p~ngot: ~p", [
+                ct:pal("link_exists(~tp, Config, ~tp, ~tp) failed on node ~tp~ngot: ~tp", [
                     ExpState, Path, LinkValue, Node, Got
                 ]),
                 false;
@@ -901,7 +901,7 @@ file_is_served(ExpState, Config, ExpectedContent, ExpectedContentType, Path) ->
     ],
     check_on_all_nodes(Config, fun(Node) ->
         Ip = test_utils:get_docker_ip(Node),
-        Url = str_utils:format("https://~s~s", [Ip, Path]),
+        Url = str_utils:format("https://~ts~ts", [Ip, Path]),
         {ok, Code, Headers, Body} = http_client:get(Url, #{}, <<>>, Opts),
         Result = Code =:= 200 andalso
             maps:get(?HDR_CONTENT_TYPE, Headers) =:= ExpectedContentType andalso
@@ -910,7 +910,7 @@ file_is_served(ExpState, Config, ExpectedContent, ExpectedContentType, Path) ->
             ExpState ->
                 true;
             _ ->
-                ct:pal("file_is_served(~p, Config, <~p bytes>, ~p) failed on node ~p~ngot: ~p", [
+                ct:pal("file_is_served(~tp, Config, <~tp bytes>, ~tp) failed on node ~tp~ngot: ~tp", [
                     ExpState, byte_size(ExpectedContent), Path, Node, {Code, Headers, Body}
                 ]),
                 false
@@ -923,7 +923,7 @@ version_info_is_set(Config, ClusterId, ServiceType, {Release, Build, GuiHash}) -
         {Release, Build, GuiHash} ->
             true;
         Other ->
-            ct:pal("Version info for service ~s:~p is different than expected:~nGot: ~p~nExpected: ~p", [
+            ct:pal("Version info for service ~ts:~tp is different than expected:~nGot: ~tp~nExpected: ~tp", [
                 ClusterId, ServiceType, Other, {Release, Build, GuiHash}
             ]),
             false

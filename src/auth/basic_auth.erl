@@ -226,7 +226,7 @@ add_user_to_groups(UserId, GroupIds) ->
         case group_logic:add_user(?ROOT, GroupId, UserId) of
             {ok, UserId} ->
                 {ok, GroupName} = group_logic:get_name(?ROOT, GroupId),
-                ?info("Added user '~s' to group '~ts'", [UserId, GroupName]);
+                ?info("Added user '~ts' to group '~ts'", [UserId, GroupName]);
             ?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _) ->
                 ok
         end
@@ -247,7 +247,7 @@ maybe_make_cluster_admin(UserId, admin) ->
         ?ROOT, ?ONEZONE_CLUSTER_ID, UserId, privileges:cluster_admin()
     ) of
         {ok, _} ->
-            ?info("Added user '~s' as admin of cluster '~s'", [UserId, ?ONEZONE_CLUSTER_ID]),
+            ?info("Added user '~ts' as admin of cluster '~ts'", [UserId, ?ONEZONE_CLUSTER_ID]),
             ok;
         ?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _) ->
             ok;

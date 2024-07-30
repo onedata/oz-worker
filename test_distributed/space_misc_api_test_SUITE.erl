@@ -931,7 +931,7 @@ get_shares_test(Config) ->
         fun(_) ->
             ShareId = ?UNIQUE_STRING,
             {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, ShareId, ?ROOT_FILE_ID, S1
+                Config, ?ROOT, ShareId, ShareId, S1
             ),
             ShareId
         end, lists:seq(1, 5)
@@ -984,7 +984,7 @@ get_share_test(Config) ->
         <<"name">> => str_utils:rand_hex(12),
         <<"description">> => <<"## Share description">>,
         <<"spaceId">> => S1,
-        <<"rootFileId">> => ?ROOT_FILE_ID,
+        <<"rootFileId">> => ?GEN_ROOT_FILE_ID(S1, ShareId),
         <<"fileType">> => lists_utils:random_element([dir, file])
     },
     {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(User), ShareData),

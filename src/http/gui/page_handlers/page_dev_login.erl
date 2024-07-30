@@ -39,9 +39,9 @@ handle(<<"GET">>, Req) ->
             {ok, UserIds} = user_logic:list(?ROOT),
             Buttons = lists:map(
                 fun(UserId) ->
-                    Path = str_utils:format_bin("/validate_dev_login?user=~s",
+                    Path = str_utils:format_bin("/validate_dev_login?user=~ts",
                         [UserId]),
-                    str_utils:format_bin("<p><a href='~s'>~s</a></p>",
+                    str_utils:format_bin("<p><a href='~ts'>~ts</a></p>",
                         [Path, UserId])
                 end, lists:usort(UserIds)),
             ButtonsBin = str_utils:join_binary(Buttons, <<"">>),
@@ -51,7 +51,7 @@ handle(<<"GET">>, Req) ->
 <body>
 <div style='text-align: center;'>
     <h1>Developer mode login:</h1>
-    ~s
+    ~ts
 </div>
 </body>
 </html>

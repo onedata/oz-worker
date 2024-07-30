@@ -139,7 +139,7 @@ print_summary(SortPos) when is_integer(SortPos) ->
     io:format("Id                                Name               Users   Groups  Spaces  Provider                          Tot. support~n"),
     io:format("---------------------------------------------------------------------------------------------------------------------------~n"),
     lists:foreach(fun({Id, Name, EffUsers, EffGroups, Spaces, Provider, Support}) ->
-        io:format("~-33s ~-18ts ~-7B ~-7B ~-7B ~-33s ~s~n", [
+        io:format("~-33s ~-18ts ~-7B ~-7B ~-7B ~-33s ~ts~n", [
             Id, Name, EffUsers, EffGroups, Spaces, Provider, str_utils:format_byte_size(Support)
         ])
     end, Sorted),

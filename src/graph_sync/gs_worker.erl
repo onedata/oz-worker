@@ -61,7 +61,7 @@ handle(stream_healthcheck) ->
     catch
         _:Reason:Stacktrace ->
             ?error_stacktrace(
-                "Failed to start Graph Sync server stream due to: ~p", [Reason], Stacktrace
+                "Failed to start Graph Sync server stream due to: ~tp", [Reason], Stacktrace
             )
     end,
     erlang:send_after(?STREAM_HEALTHCHECK_INTERVAL, self(),

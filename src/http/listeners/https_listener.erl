@@ -33,6 +33,7 @@
         {cacerts, get_cert_chain_ders()}
     ]}
 ] end).
+-define(OAI_PMH_PATH, oz_worker:get_env(oai_pmh_api_prefix)).
 
 %% listener_behaviour callbacks
 -export([port/0, start/0, stop/0, reload_web_certs/0, healthcheck/0]).
@@ -119,6 +120,7 @@ gui_config() ->
     CompatRegPath = filename:absname(ctool:get_env(current_compatibility_registry_file)),
 
     CustomCowboyRoutes = lists:flatten([
+        {?OAI_PMH_PATH ++ "/[...]", oai_handler, []},
         {?NAGIOS_PATH, nagios_handler, []},
         {?PANEL_REST_PROXY_PATH ++ "[...]", http_port_forwarder, [9443, ?ONEPANEL_CONNECT_OPTS]},
         {?PROVIDER_GRAPH_SYNC_WS_PATH, gs_ws_handler, [provider_gs_translator]},

@@ -68,7 +68,7 @@ handle(<<"GET">>, Req) ->
         ApiOrigin = case {ServiceType, OnepanelProxy} of
             {?WORKER, _} -> Domain;
             {?ONEPANEL, true} -> Domain;
-            {?ONEPANEL, false} -> str_utils:format_bin("~s:9443", [Domain])
+            {?ONEPANEL, false} -> str_utils:format_bin("~ts:9443", [Domain])
         end,
 
         cowboy_req:reply(

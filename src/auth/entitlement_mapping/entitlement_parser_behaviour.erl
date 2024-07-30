@@ -12,6 +12,11 @@
 %%%-------------------------------------------------------------------
 -module(entitlement_parser_behaviour).
 
+-include_lib("ctool/include/logging.hrl").
+
+
+-export([validate_example/2]).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -24,7 +29,8 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns entitlement parsing validation examples to be evaluated during startup.
+%% Returns validation examples that will be tested when the plugin is loaded.
+%% They serve as unit tests for the plugin.
 %% @end
 %%--------------------------------------------------------------------
 -callback validation_examples() ->
@@ -32,4 +38,44 @@
     entitlement_mapping:idp_entitlement() | {error, malformed}}].
 
 
--optional_callbacks([validation_examples/0]).
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+
+-spec validate_example(module(), {auth_config:idp(),
+    entitlement_mapping:raw_entitlement(), auth_config:parser_config(),
+    entitlement_mapping:idp_entitlement() | {error, malformed}}) -> ok | no_return().
+validate_example(Module, {IdP, Input, ParserConfig, ExpectedOutput}) ->
+    ParsingResult = try
+        Module:parse(IdP, Input, ParserConfig)
+    catch
+        Type:Reason:Stacktrace ->
+            {error, malformed, Type, Reason, Stacktrace}
+    end,
+    case {ExpectedOutput, ParsingResult} of
+        {Same, Same} ->
+            ok;
+        {{error, malformed}, {error, malformed, _, _, _}} ->
+            ok;
+        {_, {error, malformed, EType, EReason, EStacktrace}} ->
+            ?error("Validation example crashed:~n"
+            "IdP: ~tp~n"
+            "Input: ~tp~n"
+            "ParserConfig: ~tp~n"
+            "Expected: ~tp~n"
+            "Error: ~tp~n"
+            "Stacktrace: ~ts~n", [
+                IdP, Input, ParserConfig, ExpectedOutput, {EType, EReason},
+                iolist_to_binary(lager:pr_stacktrace(EStacktrace))
+            ]),
+            throw(validation_failed);
+        {_, Got} ->
+            ?error("Validation example failed:~n"
+            "IdP: ~tp~n"
+            "Input: ~tp~n"
+            "ParserConfig: ~tp~n"
+            "Expected: ~tp~n"
+            "Got: ~tp", [IdP, Input, ParserConfig, ExpectedOutput, Got]),
+            throw(validation_failed)
+    end.

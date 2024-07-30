@@ -68,6 +68,7 @@ get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleDa
         <<"publicHandle">> := PublicHandle,
         <<"resourceType">> := ResourceType,
         <<"resourceId">> := ResourceId,
+        <<"metadataPrefix">> := MetadataPrefix,
         <<"metadata">> := Metadata,
         <<"timestamp">> := Timestamp,
         <<"creator">> := Creator,
@@ -79,6 +80,7 @@ get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleDa
         <<"handleServiceId">> => HandleService,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
+        <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => Metadata,
         <<"timestamp">> => time:seconds_to_iso8601(Timestamp),
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
@@ -90,6 +92,7 @@ get_response(#gri{id = HandleId, aspect = instance, scope = public}, HandleData)
         <<"publicHandle">> := PublicHandle,
         <<"resourceType">> := ResourceType,
         <<"resourceId">> := ResourceId,
+        <<"metadataPrefix">> := MetadataPrefix,
         <<"metadata">> := Metadata,
         <<"timestamp">> := Timestamp,
         <<"creationTime">> := CreationTime
@@ -99,6 +102,7 @@ get_response(#gri{id = HandleId, aspect = instance, scope = public}, HandleData)
         <<"publicHandle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
+        <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => Metadata,
         <<"timestamp">> => time:seconds_to_iso8601(Timestamp),
         <<"creationTime">> => CreationTime

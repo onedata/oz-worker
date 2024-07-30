@@ -45,7 +45,7 @@ get_login_endpoint(IdP, State) ->
     end,
     case LoginLocation of
         undefined ->
-            ?alert("Cannot resolve login location for IdP '~p'", [IdP]),
+            ?alert("Cannot resolve login location for IdP '~tp'", [IdP]),
             throw(?ERROR_INTERNAL_SERVER_ERROR);
         _ ->
             ok
@@ -92,7 +92,7 @@ validate_login(IdP, QueryParams) ->
                 {ok, #esaml_assertion{attributes = Attributes}} ->
                     {ok, normalize_attributes(Attributes)};
                 {error, Reason} ->
-                    ?auth_warning("Invalid login request via SAML. Reason:~p~nPOST params:~n~p",
+                    ?auth_warning("Invalid login request via SAML. Reason:~tp~nPOST params:~n~tp",
                         [Reason, QueryParams]),
                     throw(?ERROR_INVALID_AUTH_REQUEST)
             end

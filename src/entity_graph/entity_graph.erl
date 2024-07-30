@@ -205,7 +205,7 @@ verify_state_of_all_entities() ->
                         fun(Direction) ->
                             case is_dirty(Direction, Entity) of
                                 true ->
-                                    ?info("Scheduling ~p refresh of dirty entity: ~s", [
+                                    ?info("Scheduling ~tp refresh of dirty entity: ~ts", [
                                         Direction, EntityType:to_string(EntityId)
                                     ]),
                                     update_dirty_queue(
@@ -793,7 +793,7 @@ remove_all_relations(EntityType, EntityId, Entity) ->
         maps:map(fun(ParType, ParentIds) ->
             lists:foreach(fun(ParId) ->
                 ok = delete_with_relations(ParType, ParId),
-                ?debug("~s has been deleted because it depended on ~s "
+                ?debug("~ts has been deleted because it depended on ~ts "
                 "(which is being deleted)", [
                     ParType:to_string(ParId),
                     EntityType:to_string(EntityId)
@@ -803,7 +803,7 @@ remove_all_relations(EntityType, EntityId, Entity) ->
         maps:map(fun(ChType, ChIds) ->
             lists:foreach(fun(ChId) ->
                 ok = delete_with_relations(ChType, ChId),
-                ?debug("~s has been deleted because it depended on ~s "
+                ?debug("~ts has been deleted because it depended on ~ts "
                 "(which is being deleted)", [
                     ChType:to_string(ChId),
                     EntityType:to_string(EntityId)
@@ -816,7 +816,7 @@ remove_all_relations(EntityType, EntityId, Entity) ->
             throw(Error);
         Type:Message:Stacktrace ->
             ?error_stacktrace(
-                "Unexpected error while removing relations of ~p#~s - ~p:~p",
+                "Unexpected error while removing relations of ~tp#~ts - ~tp:~tp",
                 [EntityType, EntityId, Type, Message],
                 Stacktrace
             ),
@@ -1014,7 +1014,7 @@ refresh_if_needed() ->
                     refresh_entity_graph(entity_graph_state:get())
                 catch Type:Message:Stacktrace ->
                     ?error_stacktrace(
-                        "Cannot refresh entity graph - ~p:~p",
+                        "Cannot refresh entity graph - ~tp:~tp",
                         [Type, Message],
                         Stacktrace
                     ),
@@ -1138,7 +1138,7 @@ refresh_entity(Direction, EntityType, EntityId, Entity) ->
             Direction, Ent, AggregatedEffRelations
         ))}
     end),
-    ?debug("Entity refreshed: ~s", [EntityType:to_string(EntityId)]),
+    ?debug("Entity refreshed: ~ts", [EntityType:to_string(EntityId)]),
     ok.
 
 
@@ -1272,8 +1272,6 @@ has_child(#od_handle_service{users = Users}, od_user, UserId) ->
     maps:is_key(UserId, Users);
 has_child(#od_handle_service{groups = Groups}, od_group, GroupId) ->
     maps:is_key(GroupId, Groups);
-has_child(#od_handle_service{handles = Handles}, od_handle, HandleId) ->
-    lists:member(HandleId, Handles);
 
 has_child(#od_handle{users = Users}, od_user, UserId) ->
     maps:is_key(UserId, Users);
@@ -1344,8 +1342,6 @@ add_child(#od_handle_service{users = Users} = HS, od_user, UserId, Privs) ->
     HS#od_handle_service{users = maps:put(UserId, Privs, Users)};
 add_child(#od_handle_service{groups = Groups} = HS, od_group, GroupId, Privs) ->
     HS#od_handle_service{groups = maps:put(GroupId, Privs, Groups)};
-add_child(#od_handle_service{handles = Handles} = HS, od_handle, HandleId, _) ->
-    HS#od_handle_service{handles = [HandleId | Handles]};
 
 add_child(#od_handle{users = Users} = Handle, od_user, UserId, Privs) ->
     Handle#od_handle{users = maps:put(UserId, Privs, Users)};
@@ -1490,8 +1486,6 @@ remove_child(#od_handle_service{users = Users} = HS, od_user, UserId) ->
     HS#od_handle_service{users = maps:remove(UserId, Users)};
 remove_child(#od_handle_service{groups = Groups} = HS, od_group, GroupId) ->
     HS#od_handle_service{groups = maps:remove(GroupId, Groups)};
-remove_child(#od_handle_service{handles = Handles} = HS, od_handle, HandleId) ->
-    HS#od_handle_service{handles = lists:delete(HandleId, Handles)};
 
 remove_child(#od_handle{users = Users} = Handle, od_user, UserId) ->
     Handle#od_handle{users = maps:remove(UserId, Users)};
@@ -1569,8 +1563,6 @@ has_parent(#od_share{space = Space}, od_space, SpaceId) ->
 
 has_parent(#od_handle{resource_type = ResType, resource_id = ResId}, od_share, ShareId) ->
     ResType =:= <<"Share">> andalso ResId =:= ShareId;
-has_parent(#od_handle{handle_service = HService}, od_handle_service, HServiceId) ->
-    HService =:= HServiceId;
 
 has_parent(#od_harvester{spaces = Spaces}, od_space, SpaceId) ->
     lists:member(SpaceId, Spaces);
@@ -1633,9 +1625,6 @@ add_parent(#od_share{} = Share, od_space, SpaceId, _) ->
 
 add_parent(#od_handle{} = Handle, od_share, ShareId, _) ->
     Handle#od_handle{resource_type = <<"Share">>, resource_id = ShareId};
-
-add_parent(#od_handle{} = Handle, od_handle_service, HServiceId, _) ->
-    Handle#od_handle{handle_service = HServiceId};
 
 add_parent(#od_harvester{spaces = Spaces} = Harvester, od_space, SpaceId, _) ->
     Harvester#od_harvester{spaces = [SpaceId | Spaces]};
@@ -1712,9 +1701,6 @@ remove_parent(#od_share{} = Share, od_space, _SpaceId) ->
 
 remove_parent(#od_handle{} = Handle, od_share, _ShareId) ->
     Handle#od_handle{resource_type = undefined, resource_id = undefined};
-
-remove_parent(#od_handle{} = Handle, od_handle_service, _HServiceId) ->
-    Handle#od_handle{handle_service = undefined};
 
 remove_parent(#od_harvester{spaces = Spaces} = Harvester, od_space, SpaceId) ->
     Harvester#od_harvester{spaces = lists:delete(SpaceId, Spaces)};
@@ -1822,7 +1808,7 @@ gather_eff_from_itself(top_down, #od_group{} = Group) ->
         od_space => relations_to_eff_relations(Spaces, [{od_group, ?SELF_INTERMEDIARY}]),
         od_handle_service => relations_to_eff_relations(HServices, [{od_group, ?SELF_INTERMEDIARY}]),
         od_handle => relations_to_eff_relations(Handles, [{od_group, ?SELF_INTERMEDIARY}]),
-        od_harvester => relations_to_eff_relations(Harvesters, [{od_user, ?SELF_INTERMEDIARY}]),
+        od_harvester => relations_to_eff_relations(Harvesters, [{od_group, ?SELF_INTERMEDIARY}]),
         od_cluster => relations_to_eff_relations(Clusters, [{od_group, ?SELF_INTERMEDIARY}]),
         od_atm_inventory => relations_to_eff_relations(AtmInventories, [{od_group, ?SELF_INTERMEDIARY}]),
         oz_privileges => OzPrivileges
@@ -2076,8 +2062,7 @@ get_children(#od_share{handle = undefined}) -> #{
 get_children(#od_share{handle = Handle}) -> #{
     dependent => #{od_handle => [Handle]}
 };
-get_children(#od_handle_service{handles = Handles} = HService) -> #{
-    dependent => #{od_handle => Handles},
+get_children(#od_handle_service{} = HService) -> #{
     independent => get_successors(top_down, HService)
 };
 get_children(#od_atm_inventory{atm_lambdas = AtmLambdas, atm_workflow_schemas = AtmWorkflowSchemas} = AtmInventory) ->
@@ -2111,17 +2096,12 @@ get_children(Entity) -> #{
 get_parents(#od_share{space = Space}) -> #{
     independent => #{od_space => [Space]}
 };
-get_parents(#od_handle{} = Handle) ->
-    #od_handle{
-        resource_type = ResourceType, resource_id = ResourceId,
-        handle_service = HService
-    } = Handle,
-    Independent = case ResourceType of
-        <<"Share">> -> #{od_share => [ResourceId]};
-        _ -> #{}
-    end,
+get_parents(#od_handle{resource_type = ResourceType, resource_id = ResourceId}) ->
     #{
-        independent => Independent#{od_handle_service => [HService]}
+        independent => case ResourceType of
+            <<"Share">> -> #{od_share => [ResourceId]};
+            _ -> #{}
+        end
     };
 get_parents(#od_atm_lambda{atm_inventories = AtmInventories, atm_workflow_schemas = AtmWorkflowSchemas}) -> #{
     independent => #{
@@ -2169,8 +2149,8 @@ get_all_direct_relations(bottom_up, #od_provider{} = Provider) ->
     #od_provider{storages = Storages} = Provider,
     #{od_storage => Storages};
 get_all_direct_relations(bottom_up, #od_handle_service{} = HService) ->
-    #od_handle_service{users = Users, groups = Groups, handles = Handles} = HService,
-    #{od_user => Users, od_group => Groups, od_handle => Handles};
+    #od_handle_service{users = Users, groups = Groups} = HService,
+    #{od_user => Users, od_group => Groups};
 get_all_direct_relations(bottom_up, #od_handle{} = Handle) ->
     #od_handle{users = Users, groups = Groups} = Handle,
     #{od_user => Users, od_group => Groups};
@@ -2227,8 +2207,8 @@ get_all_direct_relations(top_down, #od_space{} = Space) ->
     #{
         od_storage => Storages
     };
-get_all_direct_relations(top_down, #od_handle{handle_service = HServiceId}) ->
-    #{od_handle_service => [HServiceId]};
+get_all_direct_relations(top_down, #od_handle{}) ->
+    #{};
 get_all_direct_relations(top_down, #od_harvester{spaces = Spaces}) ->
     #{od_space => Spaces};
 get_all_direct_relations(top_down, #od_storage{provider = Provider}) ->

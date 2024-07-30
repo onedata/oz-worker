@@ -76,6 +76,7 @@ stages:
         - basic_auth
         - cluster_groups_api
         - cluster_misc_api
+        - cluster_upgrade
         - cluster_users_api
         - connection
         - db_browser
@@ -94,6 +95,7 @@ stages:
         - group_users_api
         - gui_static_distribution
         - gui_tokens
+        - handle_registry
         - handle_groups_api
         - handle_misc_api
         - handle_users_api
@@ -429,6 +431,13 @@ cluster_misc_api:
     - <<: *ct_logs
       name: ct_logs_cluster_misc_api.tar.gz
 
+cluster_upgrade:
+  <<: *ct-job
+  key: CLUP
+  artifacts:
+    - <<: *ct_logs
+      name: ct_logs_cluster_upgrade.tar.gz
+
 cluster_users_api:
   <<: *ct-job
   key: CUA
@@ -554,6 +563,13 @@ gui_tokens:
   artifacts:
     - <<: *ct_logs
       name: ct_logs_gui_tokens.tar.gz
+
+handle_registry:
+  <<: *ct-job
+  key: HAN
+  artifacts:
+    - <<: *ct_logs
+      name: ct_logs_handle_registry.tar.gz
 
 handle_groups_api:
   <<: *ct-job
@@ -902,6 +918,7 @@ Coverage report:
     - artifact: ct_logs_basic_auth.tar.gz
     - artifact: ct_logs_cluster_groups_api.tar.gz
     - artifact: ct_logs_cluster_misc_api.tar.gz
+    - artifact: ct_logs_cluster_upgrade.tar.gz
     - artifact: ct_logs_cluster_users_api.tar.gz
     - artifact: ct_logs_connection.tar.gz
     - artifact: ct_logs_db_browser.tar.gz
@@ -920,6 +937,7 @@ Coverage report:
     - artifact: ct_logs_group_users_api.tar.gz
     - artifact: ct_logs_gui_static_distribution.tar.gz
     - artifact: ct_logs_gui_tokens.tar.gz
+    - artifact: ct_logs_handle_registry.tar.gz
     - artifact: ct_logs_handle_groups_api.tar.gz
     - artifact: ct_logs_handle_misc_api.tar.gz
     - artifact: ct_logs_handle_users_api.tar.gz

@@ -72,7 +72,7 @@ assert_unique_identifiers(IdentifierType, Identifiers, DataKeyName) ->
         true ->
             ok;
         false ->
-            raise_validation_error(DataKeyName, "The provided list contains duplicate ~ss", [IdentifierType])
+            raise_validation_error(DataKeyName, "The provided list contains duplicate ~tss", [IdentifierType])
     end.
 
 
@@ -84,7 +84,7 @@ assert_known_names(NamesToCheck, KnownNames, DataKeyName) ->
         UnknownNames ->
             raise_validation_error(
                 DataKeyName,
-                "The following names were not recognized (they reference inexistent definitions): ~s",
+                "The following names were not recognized (they reference inexistent definitions): ~ts",
                 [str_utils:join_binary(UnknownNames, <<", ">>)]
             )
     end.
@@ -105,7 +105,7 @@ sanitize_predefined_value(Array, #atm_array_data_spec{item_data_spec = ItemDataS
     case atm_data_type:is_instance(atm_array_type, Array) of
         true ->
             lists:foreach(fun({Index, Value}) ->
-                NestedDataKeyName = str_utils:format_bin("~s[~B]", [
+                NestedDataKeyName = str_utils:format_bin("~ts[~B]", [
                     DataKeyName, Index - 1  % count from 0 rather than 1 (as Erlang does)
                 ]),
                 sanitize_predefined_value(Value, ItemDataSpec, NestedDataKeyName)
@@ -113,7 +113,7 @@ sanitize_predefined_value(Array, #atm_array_data_spec{item_data_spec = ItemDataS
         false ->
             raise_validation_error(
                 DataKeyName,
-                "The provided predefined value for type '~s' must be an array of values",
+                "The provided predefined value for type '~ts' must be an array of values",
                 [atm_data_type:type_to_json(atm_array_type)]
             )
     end;
@@ -124,7 +124,7 @@ sanitize_predefined_value(Value, AtmDataSpec, DataKeyName) ->
         true ->
             ok;
         false ->
-            raise_validation_error(DataKeyName, "The provided predefined value is invalid for type '~s'", [
+            raise_validation_error(DataKeyName, "The provided predefined value is invalid for type '~ts'", [
                 atm_data_type:type_to_json(DataType)
             ])
     end.

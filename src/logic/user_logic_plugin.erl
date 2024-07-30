@@ -450,7 +450,7 @@ delete(#el_req{gri = #gri{id = UserId, aspect = instance}}) ->
         temporary_token_secret:delete_for_subject(?SUB(user, UserId)),
         token_logic:delete_all_user_named_tokens(?USER(UserId), UserId),
         entity_graph:delete_with_relations(od_user, UserId),
-        ?info("User account '~ts' ('~s') has been deleted (~s)", [
+        ?info("User account '~ts' ('~ts') has been deleted (~ts)", [
             FullName,
             utils:ensure_defined(Username, <<"no username">>),
             UserId
@@ -988,7 +988,7 @@ set_up_user(UserId) ->
             GlobalGroups = oz_worker:get_env(global_groups),
             lists:foreach(fun({GroupId, Privileges}) ->
                 {ok, UserId} = group_logic:add_user(?ROOT, GroupId, UserId, Privileges),
-                ?info("User '~s' has been added to global group '~s'", [UserId, GroupId])
+                ?info("User '~ts' has been added to global group '~ts'", [UserId, GroupId])
             end, GlobalGroups);
         _ ->
             ok

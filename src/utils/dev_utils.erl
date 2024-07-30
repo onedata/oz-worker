@@ -104,7 +104,7 @@ set_up_users(Users) ->
         end, Users)
     catch
         T:M:Stacktrace ->
-            ?error_stacktrace("Cannot set up users - ~p:~p", [T, M], Stacktrace),
+            ?error_stacktrace("Cannot set up users - ~tp:~tp", [T, M], Stacktrace),
             error
     end.
 
@@ -199,7 +199,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
         ok
     catch
         T:M:Stacktrace ->
-            ?error_stacktrace("Cannot set up test entities - ~p:~p", [T, M], Stacktrace),
+            ?error_stacktrace("Cannot set up test entities - ~tp:~tp", [T, M], Stacktrace),
             error
     end.
 

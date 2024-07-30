@@ -64,7 +64,7 @@
     create_group/3, create_group/4,
     create_space/3,
     create_handle_service/5, create_handle_service/3,
-    create_handle/6, create_handle/3,
+    create_handle/7, create_handle/3,
     create_harvester/3, create_harvester/6,
     create_atm_inventory/3,
 
@@ -692,13 +692,15 @@ create_handle_service(Auth, UserId, Data) ->
 %%--------------------------------------------------------------------
 -spec create_handle(Auth :: aai:auth(), UserId :: od_user:id(),
     HServiceId :: od_handle_service:id(), ResourceType :: od_handle:resource_type(),
-    ResourceId :: od_handle:resource_id(), Metadata :: od_handle:metadata()) ->
+    ResourceId :: od_handle:resource_id(), MetadataPrefix :: od_handle:metadata_prefix(),
+    Metadata :: od_handle:raw_metadata()) ->
     {ok, od_handle:id()} | errors:error().
-create_handle(Auth, UserId, HServiceId, ResourceType, ResourceId, Metadata) ->
+create_handle(Auth, UserId, HServiceId, ResourceType, ResourceId, MetadataPrefix, Metadata) ->
     create_handle(Auth, UserId, #{
         <<"handleServiceId">> => HServiceId,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
+        <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => Metadata
     }).
 

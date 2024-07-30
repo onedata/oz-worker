@@ -24,7 +24,7 @@
 -export([add_user/2, add_user/3]).
 -export([remove_user/2]).
 -export([add_child/2, add_child/3]).
--export([get_user_privileges/2, get_child_privileges/2]).
+-export([set_user_privileges/3, get_user_privileges/2, get_child_privileges/2]).
 -export([get_atm_inventories/1]).
 -export([grant_oz_privileges/2, revoke_oz_privileges/2]).
 -export([join_space/3]).
@@ -94,6 +94,14 @@ add_child(ParentId, ChildId) ->
 add_child(ParentId, ChildId, Privileges) ->
     ?assertMatch({ok, _}, ozt:rpc(group_logic, add_group, [?ROOT, ParentId, ChildId, Privileges])),
     ok.
+
+
+-spec set_user_privileges(od_group:id(), od_user:id(), [privileges:group_privilege()]) -> ok.
+set_user_privileges(GroupId, UserId, Privileges) ->
+    ?assertMatch(ok, ozt:rpc(group_logic, update_user_privileges, [?ROOT, GroupId, UserId, #{
+        <<"grant">> => Privileges,
+        <<"revoke">> => lists_utils:subtract(privileges:group_admin(), Privileges)
+    }])).
 
 
 -spec get_user_privileges(od_group:id(), od_user:id()) -> [privileges:group_privilege()].

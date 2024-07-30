@@ -5,7 +5,9 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This file contains tests for automatic creation of predefined groups.
+%%% @doc
+%%% Tests for automatic creation of predefined entities and some misc tests
+%%% related to Onezone setup in general.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(entities_setup_test_SUITE).
@@ -21,10 +23,14 @@
 
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
--export([predefined_groups_test/1, global_groups_test/1]).
--export([automatic_space_membership_via_global_group_test/1]).
--export([automatic_first_space_test/1]).
--export([default_onezone_plugins_pass_validation/1]).
+
+-export([
+    predefined_groups_test/1,
+    global_groups_test/1,
+    automatic_space_membership_via_global_group_test/1,
+    automatic_first_space_test/1,
+    default_onezone_plugins_pass_validation_test/1
+]).
 
 all() ->
     ?ALL([
@@ -32,7 +38,7 @@ all() ->
         global_groups_test,
         automatic_space_membership_via_global_group_test,
         automatic_first_space_test,
-        default_onezone_plugins_pass_validation
+        default_onezone_plugins_pass_validation_test
     ]).
 
 %%%===================================================================
@@ -288,7 +294,7 @@ automatic_first_space_test(Config) ->
     ?assert(maps:is_key(UserId2, Users)).
 
 
-default_onezone_plugins_pass_validation(Config) ->
+default_onezone_plugins_pass_validation_test(Config) ->
     ?assert(oz_test_utils:call_oz(Config, onezone_plugins, init, [])).
 
 %%%===================================================================

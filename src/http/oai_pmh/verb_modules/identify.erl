@@ -83,16 +83,21 @@ get_response(<<"repositoryName">>, _Args) ->
 get_response(<<"baseURL">>, _Args) ->
     Domain = oz_worker:get_domain(),
     OAIPrefix = oz_worker:get_env(oai_pmh_api_prefix),
-    str_utils:format_bin("~s~s", [Domain, OAIPrefix]);
+    str_utils:format_bin("~ts~ts", [Domain, OAIPrefix]);
 get_response(<<"protocolVersion">>, _Args) ->
     ?PROTOCOL_VERSION;
 get_response(<<"earliestDatestamp">>, _Args) ->
-    case get_earliest_datestamp() of
-        none -> <<"Repository is empty">>;
-        Datestamp -> oai_utils:serialize_datestamp(Datestamp)
-    end;
+    Timestamp = case handle_registry:get_earliest_timestamp() of
+        undefined ->
+            % return the current time as the lower bound for OAI-PMH queries,
+            % but subtract a bit to avoid race conditions when a handle has just been created
+            od_handle:current_timestamp() - 3600;
+        TimeSeconds ->
+            TimeSeconds
+    end,
+    oai_utils:serialize_datestamp(time:seconds_to_datetime(Timestamp));
 get_response(<<"deletedRecord">>, _Args) ->
-    <<"no">>;
+    <<"persistent">>;
 get_response(<<"granularity">>, _Args) ->
     <<"YYYY-MM-DDThh:mm:ssZ">>;
 get_response(<<"adminEmail">>, _Args) ->
@@ -106,27 +111,3 @@ get_response(<<"compression">>, _Args) -> <<"">>;
 %%% compressions other than 'Identity' must be enumerated in Identify request
 get_response(<<"description">>, _Args) -> [].
 %%% TODO VFS-7454  add repository description
-
-
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-%%%-------------------------------------------------------------------
-%%% @private
-%%% @doc
-%%% Returns earliest metadata datestamp.
-%%% @end
-%%%-------------------------------------------------------------------
--spec get_earliest_datestamp() -> none | calendar:datetime().
-get_earliest_datestamp() ->
-    Ids = oai_utils:list_handles(),
-    Datestamps = lists:map(fun(Id) ->
-        #od_handle{timestamp = Timestamp} = oai_utils:get_handle(Id),
-        time:seconds_to_datetime(Timestamp)
-    end, Ids),
-    case Datestamps of
-        [] -> none;
-        _ -> hd(lists:sort(fun oai_utils:is_earlier_or_equal/2, Datestamps))
-    end.

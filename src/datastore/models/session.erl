@@ -54,7 +54,7 @@
 
 
 % Delay before all session connections are terminated when all user sessions are deleted.
--define(USER_SESSIONS_CLEANUP_GRACE_PERIOD, 3000).
+-define(USER_SESSIONS_CLEANUP_GRACE_PERIOD, 5000).
 
 %%%===================================================================
 %%% API

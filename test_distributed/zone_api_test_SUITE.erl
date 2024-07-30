@@ -79,7 +79,7 @@ get_old_configuration_endpoint_test(Config) ->
     Domain = oz_test_utils:get_env(Config, http_domain),
     RestSpec = #{
         request => #{
-            url => str_utils:format_bin("https://~s", [Domain]),
+            url => str_utils:format_bin("https://~ts", [Domain]),
             path => <<"/configuration">>
         },
         expect => #{

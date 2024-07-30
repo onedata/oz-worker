@@ -14,6 +14,8 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include("http/handlers/oai.hrl").
+
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -3267,7 +3269,7 @@ get_record(od_handle, 1) -> {od_handle,
     <<"public_handle">>,
     <<"Share">>, % resource_type
     <<"resource_id">>,
-    <<"<metadata_xml_string>">>,
+    <<"<metadata_xml_string/>">>,
     {{2016, 4, 4}, {14, 56, 33}}, % timestamp
     <<"handle_service_id">>,
     [
@@ -3285,7 +3287,7 @@ get_record(od_handle, 1) -> {od_handle,
 get_record(od_handle, 2) -> {od_handle,
     <<"public_handle">>,
     <<"Share">>, % resource_type
-    <<"<metadata_xml_string>">>,
+    <<"<metadata_xml_string/>">>,
     {{2016, 4, 4}, {14, 56, 33}}, % timestamp
 
     <<"resource_id">>,
@@ -3308,7 +3310,7 @@ get_record(od_handle, 2) -> {od_handle,
 get_record(od_handle, 3) -> {od_handle,
     <<"public_handle">>,
     <<"Share">>,
-    <<"<metadata_xml_string>">>,
+    <<"<metadata_xml_string/>">>,
     {{2016, 4, 4}, {14, 56, 33}},
 
     <<"resource_id">>,
@@ -3328,118 +3330,143 @@ get_record(od_handle, 3) -> {od_handle,
 
     true
 };
-get_record(od_handle, 4) -> {
+get_record(od_handle, 4) -> {{od_handle,
     % Returns two records:
     %   ExpAfterUpgrade - expected value after upgrade from previous version
     %   NextIteration - different record that will be upgraded to the next version
-    #od_handle{
-        public_handle = <<"public_handle">>,
-        resource_type = <<"Share">>,
-        metadata = <<"<metadata_xml_string>">>,
-        timestamp = {{2016, 4, 4}, {14, 56, 33}},
+        <<"public_handle">>,
+        <<"Share">>,
+        <<"<metadata_xml_string/>">>,
+        {{2016, 4, 4}, {14, 56, 33}},
 
-        resource_id = <<"resource_id">>,
-        handle_service = <<"handle_service_id">>,
+        <<"resource_id">>,
+        <<"handle_service_id">>,
 
-        users = #{
+        #{
             <<"user1">> => [?HANDLE_VIEW, ?HANDLE_UPDATE],
             <<"user2">> => [?HANDLE_VIEW, ?HANDLE_UPDATE, ?HANDLE_DELETE]
         },
-        groups = #{
+        #{
             <<"group1">> => [?HANDLE_UPDATE],
             <<"group2">> => [?HANDLE_DELETE]
         },
 
-        eff_users = #{},
-        eff_groups = #{},
+        #{},
+        #{},
 
-        creation_time = ozt_mocks:get_frozen_time_seconds(),
-        creator = undefined,
+        ozt_mocks:get_frozen_time_seconds(),
+        undefined,
 
-        bottom_up_dirty = true
+        true
     },
-    #od_handle{
-        public_handle = <<"public_handle">>,
-        resource_type = <<"Share">>,
-        metadata = <<"<metadata_xml_string>">>,
-        timestamp = {{2016, 4, 4}, {14, 56, 33}},
+    {od_handle,
+        <<"public_handle">>,
+        <<"Share">>,
+        <<"<metadata_xml_string/>">>,
+        {{2016, 4, 4}, {14, 56, 33}},
 
-        resource_id = <<"resource_id">>,
-        handle_service = <<"handle_service_id">>,
+        <<"resource_id">>,
+        <<"handle_service_id">>,
 
-        users = #{
+        #{
             <<"user1">> => [?HANDLE_VIEW, ?HANDLE_UPDATE],
             <<"user2">> => [?HANDLE_VIEW, ?HANDLE_UPDATE, ?HANDLE_DELETE]
         },
-        groups = #{
+        #{
             <<"group1">> => [?HANDLE_UPDATE],
             <<"group2">> => [?HANDLE_DELETE]
         },
 
-        eff_users = #{},
-        eff_groups = #{},
+        #{},
+        #{},
 
-        creation_time = ozt_mocks:get_frozen_time_seconds(),
-        creator = {client, provider, <<"">>},
+        ozt_mocks:get_frozen_time_seconds(),
+        {client, provider, <<"">>},
 
-        bottom_up_dirty = true
+        true
     }
 };
-get_record(od_handle, 5) -> #od_handle{
-    public_handle = <<"public_handle">>,
-    resource_type = <<"Share">>,
-    metadata = <<"<metadata_xml_string>">>,
-    timestamp = {{2016, 4, 4}, {14, 56, 33}},
+get_record(od_handle, 5) -> {od_handle,
+    <<"public_handle">>,
+    <<"Share">>,
+    <<"<metadata_xml_string/>">>,
+    {{2016, 4, 4}, {14, 56, 33}},
 
-    resource_id = <<"resource_id">>,
-    handle_service = <<"handle_service_id">>,
+    <<"resource_id">>,
+    <<"handle_service_id">>,
 
-    users = #{
+    #{
         <<"user1">> => [?HANDLE_VIEW, ?HANDLE_UPDATE],
         <<"user2">> => [?HANDLE_VIEW, ?HANDLE_UPDATE, ?HANDLE_DELETE]
     },
-    groups = #{
+    #{
         <<"group1">> => [?HANDLE_UPDATE],
         <<"group2">> => [?HANDLE_DELETE]
     },
 
-    eff_users = #{},
-    eff_groups = #{},
+    #{},
+    #{},
 
-    creation_time = ozt_mocks:get_frozen_time_seconds(),
-    creator = {subject, nobody, undefined},
+    ozt_mocks:get_frozen_time_seconds(),
+    {subject, nobody, undefined},
 
-    bottom_up_dirty = true
+    true
 };
-get_record(od_handle, 6) -> #od_handle{
-    public_handle = <<"public_handle">>,
-    resource_type = <<"Share">>,
-    metadata = <<"<metadata_xml_string>">>,
-    timestamp = {{2016, 4, 4}, {14, 56, 33}},
+get_record(od_handle, 6) -> {od_handle,
+    <<"public_handle">>,
+    <<"Share">>,
+    <<"<metadata_xml_string/>">>,
+    {{2016, 4, 4}, {14, 56, 33}},
 
-    resource_id = <<"resource_id">>,
-    handle_service = <<"handle_service_id">>,
+    <<"resource_id">>,
+    <<"handle_service_id">>,
 
-    users = #{
+    #{
         <<"user1">> => [?HANDLE_VIEW, ?HANDLE_UPDATE],
         <<"user2">> => [?HANDLE_VIEW, ?HANDLE_UPDATE, ?HANDLE_DELETE]
     },
-    groups = #{
+    #{
         <<"group1">> => [?HANDLE_UPDATE],
         <<"group2">> => [?HANDLE_DELETE]
     },
 
-    eff_users = #{},
-    eff_groups = #{},
+    #{},
+    #{},
 
-    creation_time = ozt_mocks:get_frozen_time_seconds(),
-    creator = ?SUB(nobody),
-    bottom_up_dirty = true
+    ozt_mocks:get_frozen_time_seconds(),
+    ?SUB(nobody),
+    true
 };
-get_record(od_handle, 7) -> #od_handle{
+get_record(od_handle, 7) -> {od_handle,
+    <<"public_handle">>,
+    <<"Share">>,
+    <<"<metadata_xml_string/>">>,
+    1459781793,
+
+    <<"resource_id">>,
+    <<"handle_service_id">>,
+
+    #{
+        <<"user1">> => [?HANDLE_VIEW, ?HANDLE_UPDATE],
+        <<"user2">> => [?HANDLE_VIEW, ?HANDLE_UPDATE, ?HANDLE_DELETE]
+    },
+    #{
+        <<"group1">> => [?HANDLE_UPDATE],
+        <<"group2">> => [?HANDLE_DELETE]
+    },
+
+    #{},
+    #{},
+
+    ozt_mocks:get_frozen_time_seconds(),
+    ?SUB(nobody),
+    true
+};
+get_record(od_handle, 8) -> #od_handle{
     public_handle = <<"public_handle">>,
     resource_type = <<"Share">>,
-    metadata = <<"<metadata_xml_string>">>,
+    metadata_prefix = <<"legacy">>,
+    metadata = <<"<metadata_xml_string/>">>,
     timestamp = 1459781793,
 
     resource_id = <<"resource_id">>,

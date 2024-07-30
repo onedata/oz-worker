@@ -169,7 +169,7 @@ is_authorized(Req, State) ->
             ?ERROR_UNAUTHORIZED(Error3);
         Type:Message:Stacktrace ->
             ?error_stacktrace(
-                "Unexpected error in ~p:is_authorized - ~p:~p",
+                "Unexpected error in ~tp:is_authorized - ~tp:~tp",
                 [?MODULE, Type, Message],
                 Stacktrace
             ),
@@ -302,7 +302,7 @@ process_request(Req, State) ->
             {stop, send_error_response(Error, Req), State};
         Type:Message:Stacktrace ->
             ?error_stacktrace(
-                "Unexpected error in ~p:process_request - ~p:~p",
+                "Unexpected error in ~tp:process_request - ~tp:~tp",
                 [?MODULE, Type, Message],
                 Stacktrace
             ),
@@ -409,12 +409,12 @@ call_entity_logic_and_translate_response(ElReq) ->
             #el_req{operation = Operation, gri = GRI, auth_hint = AuthHint} = ElReq,
             ?error_stacktrace(
                 "Cannot translate REST result for:~n"
-                "Operation: ~p~n"
-                "GRI: ~p~n"
-                "AuthHint: ~p~n"
-                "Result: ~p~n"
+                "Operation: ~tp~n"
+                "GRI: ~tp~n"
+                "AuthHint: ~tp~n"
+                "Result: ~tp~n"
                 "---------~n"
-                "Error was: ~p:~p",
+                "Error was: ~tp:~tp",
                 [Operation, GRI, AuthHint, Result, Type, Message],
                 Stacktrace
             ),

@@ -408,7 +408,7 @@ coalesce_entitlements(UserId, LinkedAccounts, OldEntitlements) ->
             {ok, _} ->
                 ensure_member(GroupId, UserId, map_privileges(UserPrivileges));
             {error, _} = Error ->
-                ?auth_debug("Cannot create group structure for entitlement due to ~w, ignoring: ~p", [
+                ?auth_debug("Cannot create group structure for entitlement due to ~w, ignoring: ~tp", [
                     Error, IdPEnt
                 ])
         end
@@ -466,7 +466,7 @@ map_entitlement(IdP, RawEntitlement) ->
             _ -> ParsedEntitlementWithVo
         end,
         GroupId = gen_group_id(IdPEntitlement),
-        ?auth_debug("Successfully mapped entitlement '~ts' to Onedata group: '~s', structure:~n~ts", [
+        ?auth_debug("Successfully mapped entitlement '~ts' to Onedata group: '~ts', structure:~n~ts", [
             RawEntitlement, GroupId, io_lib_pretty:print(IdPEntitlement, fun
                 (idp_entitlement, _) -> record_info(fields, idp_entitlement);
                 (idp_group, _) -> record_info(fields, idp_group)
@@ -475,7 +475,7 @@ map_entitlement(IdP, RawEntitlement) ->
         {ok, {GroupId, IdPEntitlement}}
     catch Class:Reason:Stacktrace ->
         ?auth_debug_exception(
-            "Cannot parse entitlement \"~s\" for IdP '~p'", [RawEntitlement, IdP],
+            "Cannot parse entitlement \"~ts\" for IdP '~tp'", [RawEntitlement, IdP],
             Class, Reason, Stacktrace
         ),
         {error, malformed}
@@ -612,7 +612,7 @@ add_admin_group_as_child(GroupId, GroupId) ->
     ok;
 add_admin_group_as_child(GroupId, AdminGroupId) ->
     group_logic:add_group(?ROOT, GroupId, AdminGroupId, map_privileges(admin)),
-    ?auth_debug("Added admin group '~s' as subgroup of '~s' with admin privileges", [
+    ?auth_debug("Added admin group '~ts' as subgroup of '~ts' with admin privileges", [
         AdminGroupId, GroupId
     ]),
     ok.
@@ -665,7 +665,7 @@ resolve_admin_group(IdP) ->
 create_admin_group(IdP, RawAdminGroup) ->
     case map_entitlement(IdP, RawAdminGroup) of
         {error, malformed} ->
-            ?alert("Cannot parse admin group for IdP '~p' (malformed)", [IdP]),
+            ?alert("Cannot parse admin group for IdP '~tp' (malformed)", [IdP]),
             false;
         {ok, {AdminGroupId, #idp_entitlement{path = Path}}} ->
             try create_admin_group_unsafe(AdminGroupId, Path) of
@@ -675,7 +675,7 @@ create_admin_group(IdP, RawAdminGroup) ->
                 throw:failed ->
                     false;
                 Type:Reason ->
-                    ?alert("Cannot create admin group due to ~p:~p", [Type, Reason]),
+                    ?alert("Cannot create admin group due to ~tp:~tp", [Type, Reason]),
                     false
             end
     end.

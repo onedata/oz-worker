@@ -60,7 +60,7 @@ handle(<<"POST">>, Req) ->
         throw:{error, _} = ThrownError ->
             ThrownError;
         Type:Reason:Stacktrace ->
-            ?error_stacktrace("Error while processing GUI upload - ~p:~p", [Type, Reason], Stacktrace),
+            ?error_stacktrace("Error while processing GUI upload - ~tp:~tp", [Type, Reason], Stacktrace),
             ?ERROR_INTERNAL_SERVER_ERROR
     end,
     case Result of
@@ -207,7 +207,7 @@ ensure_authorized_regarding_api_caveats(Auth, Operation, GRI) ->
     {ok, onedata:gui_hash(), cowboy_req:req()} | {error, term()}.
 stream_and_deploy_package(Req, GuiType, GuiId, ServiceReleaseVersion) ->
     GuiPrefix = onedata:gui_prefix(GuiType),
-    ?debug("Received GUI upload for ~s:~s", [GuiPrefix, GuiId]),
+    ?debug("Received GUI upload for ~ts:~ts", [GuiPrefix, GuiId]),
     TempDir = mochitemp:mkdtemp(),
     UploadPath = filename:join([TempDir, ?UPLOADED_PACKAGE_NAME]),
 
@@ -221,7 +221,7 @@ stream_and_deploy_package(Req, GuiType, GuiId, ServiceReleaseVersion) ->
         end
     catch Type:Message:Stacktrace ->
         ?error_stacktrace(
-            "Error while streaming GUI upload for ~s:~s - ~p:~p",
+            "Error while streaming GUI upload for ~ts:~ts - ~tp:~tp",
             [GuiPrefix, GuiId, Type, Message],
             Stacktrace
         ),

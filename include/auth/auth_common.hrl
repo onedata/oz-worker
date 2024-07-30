@@ -33,7 +33,7 @@ end).
 -define(auth_debug_exception(Format, Args, Class, Reason, Stacktrace), begin
     idp_auth_test_mode:gather_log(
         debug,
-        Format ++ "~n> Caught: ~s:~p~n> Stacktrace:~s",
+        Format ++ "~n> Caught: ~ts:~tp~n> Stacktrace:~ts",
         Args ++ [Class, Reason, lager:pr_stacktrace(Stacktrace)]
     ),
     ?debug_exception(Format, Class, Reason, Args, Stacktrace)

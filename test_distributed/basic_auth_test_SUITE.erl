@@ -171,8 +171,8 @@ migrate_onepanel_user_to_onezone(Config) ->
 
     lists:foreach(fun(Role) ->
         OnepanelUserId = str_utils:rand_hex(16),
-        OnepanelUsername = str_utils:format_bin("onepanel-~s", [Role]),
-        Password = str_utils:format_bin("password-~s", [Role]),
+        OnepanelUsername = str_utils:format_bin("onepanel-~ts", [Role]),
+        Password = str_utils:format_bin("password-~ts", [Role]),
         PasswordHash = onedata_passwords:create_hash(Password),
         GroupMapping = oz_test_utils:get_env(Config, onepanel_role_to_group_mapping),
         ExpectedGroups = maps:get(atom_to_binary(Role, utf8), GroupMapping, []),

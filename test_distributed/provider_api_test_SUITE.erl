@@ -163,7 +163,7 @@ create_test(Config) ->
         ?assertEqual(?ONEPROVIDER, Cluster#od_cluster.type),
 
         % check also provider_logic:get_url function
-        ExpProviderURL = str_utils:format_bin("https://~s", [ExpDomain]),
+        ExpProviderURL = str_utils:format_bin("https://~ts", [ExpDomain]),
         {ok, ProviderURL} = oz_test_utils:call_oz(
             Config, provider_logic, get_url, [ProviderId]
         ),
@@ -1838,7 +1838,7 @@ map_user_test(Config) ->
     }),
 
     SubjectId = str_utils:rand_hex(20),
-    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~s", [?DUMMY_IDP, SubjectId])),
+    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~ts", [?DUMMY_IDP, SubjectId])),
     ModernUserId = datastore_key:new_from_digest([atom_to_binary(?DUMMY_IDP, utf8), SubjectId]),
 
     RunTest = fun(ExpUserId) ->

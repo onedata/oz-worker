@@ -50,12 +50,12 @@ check_send_membership_request(SpaceId, RequesterUserId, RequestId, RequestClassi
     DecisionUri = build_gui_decision_uri(SpaceId, RequestId),
     OpeningSentence = str_utils:format_bin(case RequestClassification of
         first ->
-            "A new membership request for space '~ts' (id: ~s) has been posted by:";
+            "A new membership request for space '~ts' (id: ~ts) has been posted by:";
         reminder ->
-            "This is a kind reminder about the membership request for space '~ts' (id: ~s) that has been posted by:"
+            "This is a kind reminder about the membership request for space '~ts' (id: ~ts) that has been posted by:"
     end, [SpaceName, SpaceId]),
     Subject = str_utils:format_bin(
-        "~s membership request for space '~ts'",
+        "~ts membership request for space '~ts'",
         [
             case RequestClassification of
                 first -> "New";
@@ -65,23 +65,23 @@ check_send_membership_request(SpaceId, RequesterUserId, RequestId, RequestClassi
         ]
     ),
     Body = str_utils:format_bin(
-        "~s~n"
+        "~ts~n"
         "~n"
         "~ts~n"
         "~n"
         "Full name: ~ts~n"
         "Username: ~ts~n"
         "E-mail address: ~ts~n"
-        "User ID: ~s~n"
+        "User ID: ~ts~n"
         "~ts"
         "~n"
         "Please decide upon acceptance or rejection of the request without undue delay. Visit the link below:~n"
-        "~s~n"
+        "~ts~n"
         "~n"
         "Membership requests can be made by any user since this space is advertised in the space marketplace. "
         "If you wish to disable the space advertisement, use the space configuration menu in Web GUI.~n"
         "~n"
-        "~s",
+        "~ts",
         [
             ?GREETING,
             OpeningSentence,
@@ -116,19 +116,19 @@ best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision) ->
             str_utils:format("Reason: \"~ts\"", [Reason]);
         grant ->
             str_utils:format(
-                "You may start using the space. View it in Web GUI by clicking the link below:~n~s",
+                "You may start using the space. View it in Web GUI by clicking the link below:~n~ts",
                 [build_gui_space_view_uri(SpaceId)]
             )
     end,
-    Subject = str_utils:format_bin("Membership request ~s - space '~ts'", [DecisionStr, SpaceName]),
+    Subject = str_utils:format_bin("Membership request ~ts - space '~ts'", [DecisionStr, SpaceName]),
     Body = str_utils:format_bin(
-        "~s~n"
+        "~ts~n"
         "~n"
-        "Your membership request for space '~ts' (id: ~s) has been ~s by the space maintainer.~n"
+        "Your membership request for space '~ts' (id: ~ts) has been ~ts by the space maintainer.~n"
         "~n"
         "~ts~n"
         "~n"
-        "~s",
+        "~ts",
         [
             ?GREETING,
             SpaceName, SpaceId, DecisionStr,
@@ -148,12 +148,12 @@ best_effort_notify_membership_already_granted(SpaceId, UserContactEmail) ->
     {SpaceName, _} = get_space_info(SpaceId),
     Subject = str_utils:format_bin("Membership already GRANTED - space '~ts'", [SpaceName]),
     Body = str_utils:format_bin(
-        "~s~n"
+        "~ts~n"
         "~n"
-        "Your membership request for space '~ts' (id: ~s) has been withdrawn "
+        "Your membership request for space '~ts' (id: ~ts) has been withdrawn "
         "since access to the space has been GRANTED to you independently of space marketplace.~n"
         "~n"
-        "~s",
+        "~ts",
         [
             ?GREETING,
             SpaceName, SpaceId,
@@ -177,12 +177,12 @@ best_effort_notify_request_cancelled(SpaceId, UserContactEmail) ->
     end,
     Subject = str_utils:format_bin("Membership request CANCELLED - space '~ts'", [SpaceName]),
     Body = str_utils:format_bin(
-        "~s~n"
+        "~ts~n"
         "~n"
-        "Your membership request for space '~ts' (id: ~s) has been CANCELLED.~n"
+        "Your membership request for space '~ts' (id: ~ts) has been CANCELLED.~n"
         "Possible reasons: the space has been deleted or is no longer advertised in the marketplace.~n"
         "~n"
-        "~s",
+        "~ts",
         [
             ?GREETING,
             SpaceName, SpaceId,
@@ -205,14 +205,14 @@ best_effort_notify_request_cancelled(SpaceId, UserContactEmail) ->
 -spec build_gui_decision_uri(od_space:id(), space_membership_requests:request_id()) -> http_client:url().
 build_gui_decision_uri(SpaceId, RequestId) ->
     oz_worker:get_uri(str_utils:format_bin(
-        "/#/onedata?action_name=confirmJoinSpaceRequest&action_spaceId=~s&action_requestId=~s",
+        "/#/onedata?action_name=confirmJoinSpaceRequest&action_spaceId=~ts&action_requestId=~ts",
         [SpaceId, RequestId]
     )).
 
 %% @private
 -spec build_gui_space_view_uri(od_space:id()) -> http_client:url().
 build_gui_space_view_uri(SpaceId) ->
-    oz_worker:get_uri(str_utils:format_bin("/#/onedata/spaces/~s", [SpaceId])).
+    oz_worker:get_uri(str_utils:format_bin("/#/onedata/spaces/~ts", [SpaceId])).
 
 
 %% @private

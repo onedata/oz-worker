@@ -93,7 +93,7 @@ run_test_cases(CaseNum) ->
                 true ->
                     ok;
                 false ->
-                    io:format(user, "~nTest case ~B failed,~nexpected: ~p~ngot: ~p~n", [
+                    io:format(user, "~nTest case ~B failed,~nexpected: ~tp~ngot: ~tp~n", [
                         CaseNum, Expected, Got
                     ]),
                     ?assert(false)

@@ -652,7 +652,7 @@ has_eff_harvester(Provider, HarvesterId) ->
 %%--------------------------------------------------------------------
 -spec get_url(od_provider:id() | od_provider:record()) -> {ok, ProviderURL :: binary()}.
 get_url(#od_provider{domain = Domain}) ->
-    {ok, str_utils:format_bin("https://~s", [Domain])};
+    {ok, str_utils:format_bin("https://~ts", [Domain])};
 get_url(ProviderId) ->
     {ok, Provider} = get(?ROOT, ProviderId),
     get_url(Provider).

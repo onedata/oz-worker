@@ -137,7 +137,7 @@ set_up_users(Environment) ->
             }),
             simulate_random_delay(),
             Emails = ?RAND_SUBLIST(lists:map(fun(Domain) ->
-                str_utils:format_bin("~s@~s", [string:replace(string:lowercase(Name), " ", ".", all), Domain])
+                str_utils:format_bin("~ts@~ts", [string:replace(string:lowercase(Name), " ", ".", all), Domain])
             end, ?EMAIL_DOMAINS)),
             LinkedAccounts = case rand:uniform(5) of
                 1 ->
@@ -228,7 +228,7 @@ set_up_providers_and_clusters(Environment = #environment{users = Users, groups =
     Providers = lists:map(fun(_) ->
         Admin = lists_utils:random_element(Users),
         {ok, AdminName} = ozt:rpc(od_user, get_full_name, [Admin]),
-        AdminEmail = str_utils:format_bin("~s@~s", [
+        AdminEmail = str_utils:format_bin("~ts@~ts", [
             string:replace(string:lowercase(AdminName), " ", ".", all),
             lists_utils:random_element(?EMAIL_DOMAINS)
         ]),
@@ -304,7 +304,7 @@ set_up_handle_services_and_handles(Environment = #environment{users = Users, gro
         handle_services = HandleServices,
         handles = lists:flatmap(fun({HService, SharesToAssign}) ->
             lists:map(fun(Share) ->
-                Handle = ozt_handle_services:create_handle(HService, Share),
+                Handle = ozt_handles:create(HService, Share),
                 simulate_random_delay(),
                 generate_members(od_handle, Handle, od_user, Users),
                 generate_members(od_handle, Handle, od_group, Groups),
@@ -459,7 +459,7 @@ print_collection(Env, Collection) ->
         C when is_atom(C) -> C
     end,
     CollectionAtom = case CollectionWithExistingId of
-        {Atom, Binary} -> list_to_atom(str_utils:format("~s@~s", [Atom, Binary]));
+        {Atom, Binary} -> list_to_atom(str_utils:format("~ts@~ts", [Atom, Binary]));
         Atom when is_atom(Atom) -> Atom
     end,
     SortBy = lists_utils:random_element([default | example_column_names()]),

@@ -19,12 +19,15 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/errors.hrl").
+-include("http/handlers/oai.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
 -define(METADATA_SIZE_LIMIT, 100000).
+-define(AVAILABLE_METADATA_FORMATS, oai_metadata:supported_formats()).
+-define(DEFAULT_METADATA_PREFIX, ?OAI_DC_METADATA_PREFIX).
 
 %%%===================================================================
 %%% API
@@ -115,33 +118,39 @@ is_subscribable(_, _) -> false.
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     HandleServiceId = maps:get(<<"handleServiceId">>, Req#el_req.data),
     ResourceType = <<"Share">> = maps:get(<<"resourceType">>, Req#el_req.data),
-    ResourceId = ShareId = maps:get(<<"resourceId">>, Req#el_req.data),
-    Metadata = maps:get(<<"metadata">>, Req#el_req.data),
+    ShareId = maps:get(<<"resourceId">>, Req#el_req.data),
+    RawMetadata = maps:get(<<"metadata">>, Req#el_req.data),
+    MetadataPrefix = maps:get(<<"metadataPrefix">>, Req#el_req.data, ?DEFAULT_METADATA_PREFIX),
+    CreationTime = od_handle:current_timestamp(),
 
     % ensure no race conditions when creating a handle for a share (only one may be created)
-    critical_section:run({create_handle, ResourceId}, fun() ->
-        case od_share:get_handle(ResourceId) of
-            {ok, undefined} -> ok;
-            {ok, _HandleId} -> throw(?ERROR_ALREADY_EXISTS)
-        end,
+    od_share:critical_section_for(ShareId, fun() ->
+        {ok, #document{value = ShareRecord}} = od_share:get(ShareId),
+
+        ShareRecord#od_share.handle =:= undefined orelse throw(?ERROR_ALREADY_EXISTS),
+
+        RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataPrefix, RawMetadata, ShareId, ShareRecord),
 
         {ok, PublicHandle} = handle_proxy:register_handle(
-            HandleServiceId, ResourceType, ResourceId, Metadata
+            HandleServiceId, ResourceType, ShareId, oai_metadata:encode_xml(MetadataPrefix, RevisedMetadata)
         ),
-        Handle = #document{value = #od_handle{
-            handle_service = HandleServiceId,
-            resource_type = ResourceType,
-            resource_id = ResourceId,
+
+        FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
+
+        {ok, #document{key = HandleId}} = od_handle:create(#document{value = #od_handle{
             public_handle = PublicHandle,
-            metadata = Metadata,
+            resource_type = ResourceType,
+            metadata_prefix = MetadataPrefix,
+            metadata = oai_metadata:encode_xml(MetadataPrefix, FinalMetadata),
+            timestamp = CreationTime,
+
+            resource_id = ShareId,
+            handle_service = HandleServiceId,
+
             creator = aai:normalize_subject(Auth#auth.subject),
-            creation_time = global_clock:timestamp_seconds()
-        }},
-        {ok, #document{key = HandleId}} = od_handle:create(Handle),
-        entity_graph:add_relation(
-            od_handle, HandleId,
-            od_handle_service, HandleServiceId
-        ),
+            creation_time = CreationTime
+        }}),
+
         case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
                 entity_graph:add_relation(
@@ -162,6 +171,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             od_handle, HandleId,
             od_share, ShareId
         ),
+
+        handle_registry:report_created(MetadataPrefix, HandleServiceId, HandleId, CreationTime),
         {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
         {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}
     end);
@@ -200,8 +211,11 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
-    {ok, HandleDocs} = od_handle:list(),
-    {ok, [HandleId || #document{key = HandleId} <- HandleDocs]};
+    % NOTE: od_handle:list() still uses the datastore's secure fold listing
+    % (which should be reworked at some point), but the handle registry provides
+    % a lighter way to list (nevertheless, at some point we should never list whole
+    % collections, but do this in batches).
+    {ok, [H#handle_listing_entry.handle_id || H <- handle_registry:gather_by_all_prefixes()]};
 
 get(#el_req{gri = #gri{aspect = privileges}}, _) ->
     {ok, #{
@@ -214,8 +228,8 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Handle) ->
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
     #od_handle{handle_service = HandleService, public_handle = PublicHandle,
         resource_type = ResourceType, resource_id = ResourceId,
-        metadata = Metadata, timestamp = Timestamp,
-        creation_time = CreationTime, creator = Creator
+        metadata = Metadata, metadata_prefix = MetadataPrefix,
+        timestamp = Timestamp, creation_time = CreationTime, creator = Creator
     } = Handle,
     {ok, #{
         <<"handleServiceId">> => HandleService,
@@ -223,6 +237,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
+        <<"metadataPrefix">> => MetadataPrefix,
         <<"timestamp">> => Timestamp,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
@@ -231,13 +246,15 @@ get(#el_req{gri = #gri{aspect = instance, scope = public}}, Handle) ->
     #od_handle{
         public_handle = PublicHandle,
         resource_type = ResourceType, resource_id = ResourceId,
-        metadata = Metadata, timestamp = Timestamp, creation_time = CreationTime
+        metadata = Metadata, metadata_prefix = MetadataPrefix,
+        timestamp = Timestamp, creation_time = CreationTime
     } = Handle,
     {ok, #{
         <<"publicHandle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
+        <<"metadataPrefix">> => MetadataPrefix,
         <<"timestamp">> => Timestamp,
         <<"creationTime">> => CreationTime
     }};
@@ -268,15 +285,35 @@ get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Handle) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
-    NewMetadata = maps:get(<<"metadata">>, Data),
-    {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
-        {ok, Handle#od_handle{
-            metadata = NewMetadata,
-            timestamp = od_handle:actual_timestamp()
-        }}
-    end),
-    handle_proxy:modify_handle(HandleId, NewMetadata),
-    ok;
+    od_handle:critical_section_for(HandleId, fun() ->
+        {ok, #document{value = #od_handle{
+            handle_service = HandleService,
+            timestamp = PreviousTimestamp,
+            resource_id = ShareId,
+            metadata_prefix = MetadataPrefix,
+            public_handle = PublicHandle
+        }}} = od_handle:get(HandleId),
+        {ok, #document{value = ShareRecord}} = od_share:get(ShareId),
+
+        % only the metadata field can be updated
+        InputRawMetadata = maps:get(<<"metadata">>, Data),
+        RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataPrefix, InputRawMetadata, ShareId, ShareRecord),
+        FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
+        FinalRawMetadata = oai_metadata:encode_xml(MetadataPrefix, FinalMetadata),
+
+        CurrentTimestamp = od_handle:current_timestamp(),
+        {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
+            {ok, Handle#od_handle{
+                timestamp = CurrentTimestamp,
+                metadata = FinalRawMetadata
+            }}
+        end),
+        % every handle modification must be reflected in the handle registry
+        handle_registry:report_updated(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp)
+        % TODO VFS-7454 currently not supported by the handle proxy implementation
+        % handle_proxy:modify_handle(HandleId, FinalRawMetadata)
+    end);
+
 
 update(Req = #el_req{gri = #gri{id = HandleId, aspect = {user_privileges, UserId}}}) ->
     PrivsToGrant = maps:get(<<"grant">>, Req#el_req.data, []),
@@ -304,20 +341,26 @@ update(Req = #el_req{gri = #gri{id = HandleId, aspect = {group_privileges, Group
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
-    try
-        handle_proxy:unregister_handle(HandleId)
-    catch Class:Reason:Stacktrace ->
+    od_handle:critical_section_for(HandleId, fun() ->
         {ok, #document{value = #od_handle{
-            public_handle = PublicHandle,
-            handle_service = HandleService
+            handle_service = HandleService,
+            timestamp = PreviousTimestamp,
+            metadata_prefix = MetadataPrefix,
+            public_handle = PublicHandle
         }}} = od_handle:get(HandleId),
-        ?warning_exception(
-            "Handle ~s (~s) was removed but it failed to be unregistered from handle service ~s",
-            [HandleId, PublicHandle, HandleService],
-            Class, Reason, Stacktrace
-        )
-    end,
-    entity_graph:delete_with_relations(od_handle, HandleId);
+        try
+            handle_proxy:unregister_handle(HandleId)
+        catch Class:Reason:Stacktrace ->
+            ?warning_exception(
+                "Handle ~ts (~ts) was removed but it failed to be unregistered from handle service ~ts",
+                [HandleId, PublicHandle, HandleService],
+                Class, Reason, Stacktrace
+            )
+        end,
+        DeletionTimestamp = od_handle:current_timestamp(),
+        handle_registry:report_deleted(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
+        entity_graph:delete_with_relations(od_handle, HandleId)
+    end);
 
 delete(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}}) ->
     entity_graph:remove_relation(
@@ -568,7 +611,9 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"resourceId">> => {any, {exists, fun(Value) ->
             share_logic:exists(Value) end
         }},
+        <<"metadataPrefix">> => {binary, ?AVAILABLE_METADATA_FORMATS},
         <<"metadata">> => {binary, {text_length_limit, ?METADATA_SIZE_LIMIT}}
+
     }
 };
 
@@ -615,6 +660,22 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%% @private
+-spec raw_metadata_to_revised_for_publication(
+    od_handle:metadata_prefix(), od_handle:raw_metadata(), od_share:id(), od_share:record()
+) ->
+    od_handle:parsed_metadata().
+raw_metadata_to_revised_for_publication(MetadataPrefix, RawMetadata, ShareId, ShareRecord) ->
+    ParsedMetadata = case oai_xml:parse(RawMetadata) of
+        {ok, Parsed} -> Parsed;
+        error -> throw(?ERROR_BAD_VALUE_XML(<<"metadata">>))
+    end,
+    case oai_metadata:revise_for_publication(MetadataPrefix, ParsedMetadata, ShareId, ShareRecord) of
+        {ok, Revised} -> Revised;
+        error -> throw(?ERROR_BAD_VALUE_XML(<<"metadata">>))
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @private

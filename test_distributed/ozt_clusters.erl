@@ -18,6 +18,7 @@
 
 %% API
 -export([add_user/2, add_user/3, ensure_member/2]).
+-export([add_group/2, add_group/3]).
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([set_user_privileges/3]).
 -export([remove_user/2]).
@@ -31,7 +32,6 @@
 add_user(ClusterId, UserId) ->
     add_user(ClusterId, UserId, privileges:cluster_member()).
 
-
 -spec add_user(od_cluster:id(), od_user:id(), [privileges:cluster_privilege()]) -> ok.
 add_user(ClusterId, UserId, Privileges) ->
     ?assertMatch({ok, _}, ozt:rpc(cluster_logic, add_user, [?ROOT, ClusterId, UserId, Privileges])),
@@ -41,6 +41,16 @@ add_user(ClusterId, UserId, Privileges) ->
 -spec ensure_member(od_cluster:id(), od_user:id()) -> ok.
 ensure_member(ClusterId, UserId) ->
     ?assertSuccessOrAlreadyExists(ozt:rpc(cluster_logic, add_user, [?ROOT, ClusterId, UserId])).
+
+
+-spec add_group(od_cluster:id(), od_group:id()) -> ok.
+add_group(ClusterId, GroupId) ->
+    add_group(ClusterId, GroupId, privileges:cluster_member()).
+
+-spec add_group(od_cluster:id(), od_group:id(), [privileges:cluster_privilege()]) -> ok.
+add_group(ClusterId, GroupId, Privileges) ->
+    ?assertMatch({ok, _}, ozt:rpc(cluster_logic, add_group, [?ROOT, ClusterId, GroupId, Privileges])),
+    ok.
 
 
 -spec get_user_privileges(od_cluster:id(), od_user:id()) -> [privileges:cluster_privilege()].

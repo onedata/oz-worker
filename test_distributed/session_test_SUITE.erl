@@ -446,8 +446,8 @@ compare_lists(ListFun, Expected, Retries) ->
             case Retries of
                 0 ->
                     ct:pal("Compared lists are different: ~n"
-                    "     got: ~p~n"
-                    "expected: ~p", [
+                    "     got: ~tp~n"
+                    "expected: ~tp", [
                         Got, Expected
                     ]),
                     false;

@@ -7,10 +7,12 @@
 %%% Module responsible for parsing OAI-PMH requests.
 %%% @end
 %%%-------------------------------------------------------------------
--module(oai_parser).
+-module(oai_arg_parser).
 -author("Jakub Kudzia").
 
 -include("http/handlers/oai.hrl").
+
+-include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([process_and_validate_args/1]).
@@ -31,7 +33,7 @@ process_and_validate_args(Args) ->
     process_and_validate_verb_specific_arguments(Module, Args2),
     case oai_utils:is_harvesting(Verb) of
         false -> ok;
-        true -> parse_harvesting_arguments(Args)
+        true -> parse_harvesting_arguments(Args2)
     end,
     {Verb, Args2}.
 
@@ -122,8 +124,14 @@ parse_required_arguments(Module, ArgsList) ->
 %%%-------------------------------------------------------------------
 -spec parse_harvesting_arguments([proplists:property()]) -> ok.
 parse_harvesting_arguments(ArgsList) ->
-    parse_harvesting_metadata_prefix(ArgsList),
-    parse_harvesting_datestamps(ArgsList).
+    case parse_harvesting_resumption_token(ArgsList) of
+        not_provided ->
+            parse_harvesting_metadata_prefix(ArgsList),
+            parse_harvesting_datestamps(ArgsList);
+        provided ->
+            %% resumption token is an exclusive argument
+            ok
+    end.
 
 %%%-------------------------------------------------------------------
 %%% @private
@@ -135,7 +143,7 @@ parse_harvesting_arguments(ArgsList) ->
 -spec parse_harvesting_metadata_prefix([proplists:property()]) -> ok.
 parse_harvesting_metadata_prefix(ArgsList) ->
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, ArgsList),
-    case lists:member(MetadataPrefix, metadata_formats:supported_formats()) of
+    case lists:member(MetadataPrefix, oai_metadata:supported_formats()) of
         false -> throw({cannotDisseminateFormat, MetadataPrefix});
         _ -> ok
     end.
@@ -167,6 +175,20 @@ parse_harvesting_datestamps(ArgsList) ->
                         false -> throw({wrong_datestamps_relation, From, Until})
                     end
             end
+    end.
+
+%%%-------------------------------------------------------------------
+%%% @private
+%%% @doc
+%%% Parse harvesting resumption token.
+%%% Throws suitable error if resumption token is not an exclusive argument.
+%%% @end
+%%%-------------------------------------------------------------------
+-spec parse_harvesting_resumption_token([proplists:property()]) -> provided | not_provided.
+parse_harvesting_resumption_token(ArgsList) ->
+    case proplists:get_value(<<"resumptionToken">>, ArgsList) of
+        undefined -> not_provided;
+        _ -> provided
     end.
 
 %%%-------------------------------------------------------------------
@@ -231,6 +253,7 @@ illegal_arguments_do_not_exist(Module, ArgsList) ->
     KnownArgumentsSet = sets:from_list(Module:required_arguments() ++
         Module:optional_arguments() ++
         Module:exclusive_arguments()),
+
     ExistingArgumentsSet = sets:from_list(proplists:get_keys(ArgsList)),
     case sets:is_subset(ExistingArgumentsSet, KnownArgumentsSet) of
         true -> ok;
