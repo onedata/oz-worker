@@ -17,3 +17,5 @@ sources:
       - oz-panel
 
 spaces: false
+
+oneproviders: false
