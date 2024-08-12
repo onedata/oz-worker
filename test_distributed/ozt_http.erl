@@ -19,7 +19,7 @@
 
 -type service_token() :: undefined | tokens:token() | tokens:serialized().
 -type consumer_token() :: undefined | tokens:token() | tokens:serialized().
--type urn_tokens() :: binary() | [binary()].
+-type urn_tokens() :: binary() | [atom() | binary()].
 
 %% API
 -export([simulate_login/1]).
@@ -52,7 +52,7 @@ rest_call(ClientAuth, Method, UrnTokens, DataJson) ->
 
 -spec rest_call(gs_protocol:client_auth(), service_token(), consumer_token(),
     http_client:method(), urn_tokens(), json_utils:json_term()) ->
-    {ok, json_utils:json_term()} | errors:error().
+    {ok, json_utils:json_term()} | {ok, binary()}  | errors:error().
 rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson) ->
     Url = build_rest_url(UrnTokens),
     Headers = maps_utils:merge([
@@ -77,8 +77,11 @@ rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson) 
         {recv_timeout, timer:seconds(60)}
     ],
     case http_client:request(Method, Url, Headers, json_utils:encode(DataJson), Opts) of
-        {ok, OkCode, _, Body} when OkCode >= 200 andalso OkCode < 300 ->
-            {ok, json_utils:decode(Body)};
+        {ok, OkCode, Header, Body} when OkCode >= 200 andalso OkCode < 300 ->
+            case maps:get(?HDR_CONTENT_TYPE, Header) of
+                <<"application/json">> -> {ok, json_utils:decode(Body)};
+                _ -> {ok, Body}
+            end;
         {ok, Code, _, <<"">>} ->
             {error, {http_code, Code}};
         {ok, _, _, ErrorBody} ->
@@ -91,6 +94,9 @@ rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson) 
 
 
 -spec build_rest_url(urn_tokens()) -> http_client:url().
+build_rest_url([oai, UrnTokens]) ->
+    OaiPrefix = list_to_binary(ozt:get_env(oai_pmh_api_prefix)),
+    build_url(lists:flatten([OaiPrefix, UrnTokens]));
 build_rest_url(UrnTokens) ->
     RestPrefix = list_to_binary(ozt:get_env(rest_api_prefix)),
     build_url(lists:flatten([RestPrefix, UrnTokens])).

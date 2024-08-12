@@ -20,7 +20,7 @@
 -include("ozt.hrl").
 
 %% API
--export([connect_and_request/3]).
+-export([connect/2, connect/3, connect_and_request/3]).
 -export([normalize_client_auth/1]).
 -export([endpoint_url/1]).
 
@@ -28,17 +28,29 @@
 %%% API
 %%%===================================================================
 
+-spec connect(endpoint(), gs_protocol:client_auth()) ->
+    {ok, gs_client:client_ref(), gs_protocol:handshake_resp()} | errors:error().
+connect(Endpoint, ClientAuth) ->
+    connect(Endpoint, ClientAuth, fun(_) -> ok end).
+
+
+-spec connect(endpoint(), gs_protocol:client_auth(), gs_client:push_callback()) ->
+    {ok, gs_client:client_ref(), gs_protocol:handshake_resp()} | errors:error().
+connect(Endpoint, ClientAuth, PushCallback) ->
+    gs_client:start_link(
+        endpoint_url(Endpoint),
+        normalize_client_auth(ClientAuth),
+        ?SUPPORTED_PROTO_VERSIONS,
+        PushCallback,
+        ozt_http:ssl_opts()
+    ).
+
+
 -spec connect_and_request(endpoint(), gs_protocol:client_auth(),
     gs_protocol:req_wrapper() | gs_protocol:rpc_req() | gs_protocol:graph_req() | gs_protocol:unsub_req()) ->
     {ok, gs_protocol:rpc_resp() | gs_protocol:graph_resp() | gs_protocol:unsub_resp()} | errors:error().
 connect_and_request(Endpoint, ClientAuth, GsReq) ->
-    ConnectResult = gs_client:start_link(
-        endpoint_url(Endpoint),
-        normalize_client_auth(ClientAuth),
-        ?SUPPORTED_PROTO_VERSIONS,
-        fun(_) -> ok end,
-        ozt_http:ssl_opts()
-    ),
+    ConnectResult = connect(Endpoint, ClientAuth),
     case ConnectResult of
         {error, _} = Error ->
             Error;

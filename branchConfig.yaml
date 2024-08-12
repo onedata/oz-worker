@@ -8,4 +8,4 @@ images:
 sources:
   # Specification of branches from which sources for components will be pulled.
   oz-worker: current_branch
-  onepanel: current_branch
+  onepanel: feature/VFS-12110-block-oz-operations-when-no-db-space-copy

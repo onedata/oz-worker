@@ -274,6 +274,7 @@ rest_routes() ->
     {stop, NewReq :: cowboy_req:req(), NewState :: #state{}}.
 process_request(Req, State) ->
     try
+        oz_worker_circuit_breaker:assert_closed(),
         #state{auth = Client, rest_req = #rest_req{
             method = Method,
             b_gri = GriWithBindings,

@@ -128,6 +128,7 @@ accept_resource(Req, State) ->
 -spec handle_request(QueryParams :: [proplists:property()], Req :: cowboy_req:req()) -> tuple().
 handle_request(QueryParams, Req) ->
     try
+        oz_worker_circuit_breaker:assert_closed(),
         handle_request_unsafe(QueryParams, Req)
     catch
         Class:Reason:Stacktrace ->
@@ -165,7 +166,7 @@ handle_request_unsafe(QueryParams, Req) ->
         _ -> generate_request_element(QueryParams, Req)
     end,
 
-    ResponseDate = oai_handler:generate_response_date_element(),
+    ResponseDate = generate_response_date_element(),
     ResponseXML = oai_utils:to_xml(Response),
 
     RequestElementXML = oai_utils:to_xml(RequestElement),
