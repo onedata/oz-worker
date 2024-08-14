@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Tests of the circuit breaker mechanism.
+%%% Tests of the oz-worker circuit breaker mechanism.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(oz_worker_circuit_breaker_test_SUITE).
@@ -14,15 +14,6 @@
 
 -include_lib("onenv_ct/include/oct_background.hrl").
 -include("api_test_utils.hrl").
-
--define(USERNAME, <<"user-username">>).
--define(PASSWORD, <<"user-passwd">>).
-
--define(PROVIDER_GRAPH_SYNC_WS_PATH, "/graph_sync/provider").
--define(GUI_GRAPH_SYNC_WS_PATH, "/graph_sync/gui").
-
--define(ERROR_STR, "{\"error\":").
-
 
 %% API
 -export([
@@ -114,11 +105,14 @@ init_per_suite(Config) ->
         posthook = ?config(?ENV_UP_POSTHOOK, NewConfig)
     }).
 
+
 end_per_suite(_Config) ->
     oct_background:end_per_suite().
 
+
 init_per_testcase(_, Config) ->
     Config.
+
 
 end_per_testcase(_, Config) ->
     Config.
@@ -127,7 +121,6 @@ end_per_testcase(_, Config) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
 
 %% @private
 get_oai_response() ->
