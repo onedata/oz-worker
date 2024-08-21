@@ -19,11 +19,12 @@
 
 -type service_token() :: undefined | tokens:token() | tokens:serialized().
 -type consumer_token() :: undefined | tokens:token() | tokens:serialized().
--type urn_tokens() :: binary() | [atom() | binary()].
+-type urn_tokens() :: binary() | [binary()].
 
 %% API
 -export([simulate_login/1]).
 -export([rest_call/3, rest_call/4, rest_call/6]).
+-export([request/2, request/6]).
 -export([build_url/1, build_url/2]).
 -export([ssl_opts/0, get_ca_certs/0]).
 
@@ -52,9 +53,21 @@ rest_call(ClientAuth, Method, UrnTokens, DataJson) ->
 
 -spec rest_call(gs_protocol:client_auth(), service_token(), consumer_token(),
     http_client:method(), urn_tokens(), json_utils:json_term()) ->
-    {ok, json_utils:json_term()} | {ok, binary()}  | errors:error().
+    {ok, json_utils:json_term()} | errors:error().
 rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson) ->
     Url = build_rest_url(UrnTokens),
+    request(ClientAuth, ServiceToken, ConsumerToken, Method, DataJson, Url).
+
+
+-spec request(http_client:method(), http_client:url()) ->
+    {ok, json_utils:json_term()} | errors:error().
+request(Method, Url) ->
+    request(undefined, undefined, undefined, Method, #{}, Url).
+
+-spec request(gs_protocol:client_auth(), service_token(), consumer_token(),
+    http_client:method(), json_utils:json_term(), http_client:url()) ->
+    {ok, json_utils:json_term()} | errors:error().
+request(ClientAuth, ServiceToken, ConsumerToken, Method, DataJson, Url) ->
     Headers = maps_utils:merge([
         #{?HDR_CONTENT_TYPE => <<"application/json">>},
         case ClientAuth of
@@ -88,15 +101,12 @@ rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson) 
             #{<<"error">> := ErrorJson} = json_utils:decode(ErrorBody),
             errors:from_json(ErrorJson);
         Other ->
-            ct:pal("REST call to oz-worker failed unexpectedly with: ~tp", [Other]),
-            error(rest_call_failed)
+            ct:pal("Request to oz-worker failed unexpectedly with: ~tp", [Other]),
+            error(request_failed)
     end.
 
 
 -spec build_rest_url(urn_tokens()) -> http_client:url().
-build_rest_url([oai, UrnTokens]) ->
-    OaiPrefix = list_to_binary(ozt:get_env(oai_pmh_api_prefix)),
-    build_url(lists:flatten([OaiPrefix, UrnTokens]));
 build_rest_url(UrnTokens) ->
     RestPrefix = list_to_binary(ozt:get_env(rest_api_prefix)),
     build_url(lists:flatten([RestPrefix, UrnTokens])).

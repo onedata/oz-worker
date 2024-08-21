@@ -30,7 +30,7 @@ assert_closed() ->
     case oz_worker:get_env(service_circuit_breaker_state, closed) of
         open ->
             ?THROTTLE_LOG(?critical(
-                "Service required for this operation is offline. More details can be found in the Onepanel logs."
+                "All services have been temporarily disabled, consult Onepanel logs for details."
             )),
             throw(?ERROR_SERVICE_UNAVAILABLE);
         closed ->

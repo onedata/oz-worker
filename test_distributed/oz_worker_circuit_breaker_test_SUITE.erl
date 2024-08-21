@@ -41,25 +41,25 @@ all() -> ?ALL([
 
 
 oai_handler_circuit_breaker_test(_Config) ->
-    ok = close_service_circuit_breaker(),
+    set_circuit_breaker_state(closed),
     ?assertMatch(ok, get_oai_response()),
 
-    ok = open_service_circuit_breaker(),
+    set_circuit_breaker_state(open),
     ?assertMatch(?ERROR_SERVICE_UNAVAILABLE, get_oai_response()),
 
-    ok = close_service_circuit_breaker(),
+    set_circuit_breaker_state(closed),
     ?assertMatch(ok, get_oai_response()).
 
 
 rest_handler_circuit_breaker_test(_Config) ->
-    ok = close_service_circuit_breaker(),
-    ?assertMatch(ok, get_basic_rest_response()),
+    set_circuit_breaker_state(closed),
+    ?assertMatch(ok, get_rest_response()),
 
-    ok = open_service_circuit_breaker(),
-    ?assertMatch(?ERROR_SERVICE_UNAVAILABLE, get_basic_rest_response()),
+    set_circuit_breaker_state(open),
+    ?assertMatch(?ERROR_SERVICE_UNAVAILABLE, get_rest_response()),
 
-    ok = close_service_circuit_breaker(),
-    ?assertMatch(ok, get_basic_rest_response()).
+    set_circuit_breaker_state(closed),
+    ?assertMatch(ok, get_rest_response()).
 
 
 gs_circuit_breaker_test(_Config) ->
@@ -68,29 +68,21 @@ gs_circuit_breaker_test(_Config) ->
 
 
 gs_circuit_breaker_test_base(Endpoint, Auth = #auth{subject = Subject}) ->
-    RequestSpec = get_gs_request(Endpoint, Auth),
+    RequestSpec = example_gs_request(Endpoint, Auth),
     ClientAuth = {token, ozt_tokens:create(named, Subject, ?ACCESS_TOKEN, [])},
     Self = self(),
     PushCallback = fun(Push) -> Self ! Push end,
 
-    ok = close_service_circuit_breaker(),
+    set_circuit_breaker_state(closed),
     {ok, GsClient, _} = ?assertMatch({ok, _, _}, ozt_gs:connect(Endpoint, ClientAuth, PushCallback)),
     ?assertMatch({ok, _}, gs_client:sync_request(GsClient, RequestSpec)),
 
-    ok = open_service_circuit_breaker(),
+    set_circuit_breaker_state(open),
+    ?assertMatch(?ERROR_SERVICE_UNAVAILABLE, gs_client:sync_request(GsClient, RequestSpec)),
+    ?assertMatch(?ERROR_SERVICE_UNAVAILABLE, ozt_gs:connect(Endpoint, ClientAuth, PushCallback)),
 
-    gs_client:async_request(GsClient, RequestSpec),
-    ?assertReceivedEqual(#gs_push_error{error = ?ERROR_SERVICE_UNAVAILABLE}, timer:seconds(60)),
-
-
-    {ok, Pid} = websocket_client:start_link(binary_to_list(ozt_gs:endpoint_url(Endpoint)), [], gs_client, [], ozt_http:ssl_opts()),
-    Pid ! {init, Self, ?SUPPORTED_PROTO_VERSIONS,  ozt_gs:normalize_client_auth(ClientAuth), PushCallback},
-
-    ?assertReceivedEqual(#gs_push_error{error = ?ERROR_SERVICE_UNAVAILABLE}, timer:seconds(60)),
-
-    ok = close_service_circuit_breaker(),
+    set_circuit_breaker_state(closed),
     ?assertMatch({ok, _}, gs_client:sync_request(GsClient, RequestSpec)),
-
     ?assertMatch({ok, _, _}, ozt_gs:connect(Endpoint, ClientAuth)).
 
 
@@ -124,25 +116,20 @@ end_per_testcase(_, Config) ->
 
 %% @private
 get_oai_response() ->
-    UrnTokens = [oai, str_utils:format_bin("?~ts", ["verb=Identify"])],
-    handle_response(ozt_http:rest_call(undefined, get, UrnTokens)).
+    Url = ozt_http:build_url([
+        list_to_binary(ozt:get_env(oai_pmh_api_prefix)),
+        <<"/oai?verb=Identify">>
+    ]),
+    ?extract_ok(ozt_http:request(get, Url)).
 
 
 %% @private
-get_basic_rest_response() ->
-    handle_response(ozt_http:rest_call(undefined, get, <<"/configuration">>)).
+get_rest_response() ->
+    ?extract_ok(ozt_http:rest_call(undefined, get, <<"/configuration">>)).
 
 
 %% @private
-handle_response(Response) ->
-    case Response of
-        {ok, _Body} -> ok;
-        ?ERROR_SERVICE_UNAVAILABLE -> ?ERROR_SERVICE_UNAVAILABLE
-    end.
-
-
-%% @private
-get_gs_request(Endpoint, ClientAuth) ->
+example_gs_request(Endpoint, ClientAuth) ->
     #gs_req{
         subtype = graph,
         request = #gs_req_graph{
@@ -157,10 +144,5 @@ get_gs_request(Endpoint, ClientAuth) ->
 
 
 %% @private
-open_service_circuit_breaker() ->
-    ozw_test_rpc:set_env(service_circuit_breaker_state, open).
-
-
-%% @private
-close_service_circuit_breaker() ->
-    ozw_test_rpc:set_env(service_circuit_breaker_state, closed).
+set_circuit_breaker_state(State) ->
+    ok = ozw_test_rpc:set_env(service_circuit_breaker_state, State).

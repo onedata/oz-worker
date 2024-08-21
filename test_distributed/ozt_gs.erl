@@ -50,8 +50,7 @@ connect(Endpoint, ClientAuth, PushCallback) ->
     gs_protocol:req_wrapper() | gs_protocol:rpc_req() | gs_protocol:graph_req() | gs_protocol:unsub_req()) ->
     {ok, gs_protocol:rpc_resp() | gs_protocol:graph_resp() | gs_protocol:unsub_resp()} | errors:error().
 connect_and_request(Endpoint, ClientAuth, GsReq) ->
-    ConnectResult = connect(Endpoint, ClientAuth),
-    case ConnectResult of
+    case connect(Endpoint, ClientAuth) of
         {error, _} = Error ->
             Error;
         {ok, GsClient, _} ->
