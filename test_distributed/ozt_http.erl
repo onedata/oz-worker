@@ -24,7 +24,7 @@
 %% API
 -export([simulate_login/1]).
 -export([rest_call/3, rest_call/4, rest_call/6]).
--export([request/2, request/6]).
+-export([request/3, request/4]).
 -export([build_url/1, build_url/2]).
 -export([ssl_opts/0, get_ca_certs/0]).
 
@@ -56,18 +56,6 @@ rest_call(ClientAuth, Method, UrnTokens, DataJson) ->
     {ok, json_utils:json_term()} | errors:error().
 rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson) ->
     Url = build_rest_url(UrnTokens),
-    request(ClientAuth, ServiceToken, ConsumerToken, Method, DataJson, Url).
-
-
--spec request(http_client:method(), http_client:url()) ->
-    {ok, json_utils:json_term()} | errors:error().
-request(Method, Url) ->
-    request(undefined, undefined, undefined, Method, #{}, Url).
-
--spec request(gs_protocol:client_auth(), service_token(), consumer_token(),
-    http_client:method(), json_utils:json_term(), http_client:url()) ->
-    {ok, json_utils:json_term()} | errors:error().
-request(ClientAuth, ServiceToken, ConsumerToken, Method, DataJson, Url) ->
     Headers = maps_utils:merge([
         #{?HDR_CONTENT_TYPE => <<"application/json">>},
         case ClientAuth of
@@ -84,25 +72,38 @@ request(ClientAuth, ServiceToken, ConsumerToken, Method, DataJson, Url) ->
             _ -> tokens:consumer_token_header(ozt_tokens:ensure_serialized(ConsumerToken))
         end
     ]),
+    case request(Headers, Method, DataJson, Url) of
+        {ok, Body} ->
+            {ok, json_utils:decode(Body)};
+        {error, _} = Error ->
+            Error
+    end.
+
+
+-spec request(http_client:headers(), http_client:method(), http_client:url()) ->
+    {ok, json_utils:json_term()} | errors:error().
+request(Headers, Method, Url) ->
+    request(Headers, Method, #{}, Url).
+
+-spec request(http_client:headers(), http_client:method(), json_utils:json_term(), http_client:url()) ->
+    {ok, json_utils:json_term()} | errors:error().
+request(Headers, Method, DataJson, Url) ->
     Opts = [
         {ssl_options, ssl_opts()},
         {connect_timeout, timer:seconds(60)},
         {recv_timeout, timer:seconds(60)}
     ],
     case http_client:request(Method, Url, Headers, json_utils:encode(DataJson), Opts) of
-        {ok, OkCode, Header, Body} when OkCode >= 200 andalso OkCode < 300 ->
-            case maps:get(?HDR_CONTENT_TYPE, Header) of
-                <<"application/json">> -> {ok, json_utils:decode(Body)};
-                _ -> {ok, Body}
-            end;
+        {ok, OkCode, _, Body} when OkCode >= 200 andalso OkCode < 300 ->
+            {ok, Body};
         {ok, Code, _, <<"">>} ->
             {error, {http_code, Code}};
         {ok, _, _, ErrorBody} ->
             #{<<"error">> := ErrorJson} = json_utils:decode(ErrorBody),
             errors:from_json(ErrorJson);
         Other ->
-            ct:pal("Request to oz-worker failed unexpectedly with: ~tp", [Other]),
-            error(request_failed)
+            ct:pal("HTTP request to oz-worker failed unexpectedly with: ~tp", [Other]),
+            error(http_request_failed)
     end.
 
 

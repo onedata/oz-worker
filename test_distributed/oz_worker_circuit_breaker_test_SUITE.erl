@@ -12,6 +12,7 @@
 -module(oz_worker_circuit_breaker_test_SUITE).
 -author("Katarzyna Such").
 
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("onenv_ct/include/oct_background.hrl").
 -include("api_test_utils.hrl").
 
@@ -120,7 +121,7 @@ get_oai_response() ->
         list_to_binary(ozt:get_env(oai_pmh_api_prefix)),
         <<"/oai?verb=Identify">>
     ]),
-    ?extract_ok(ozt_http:request(get, Url)).
+    ?extract_ok(ozt_http:request(#{}, get, Url)).
 
 
 %% @private
