@@ -1644,14 +1644,14 @@ unsupport_space(Config, StorageId, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec enable_subdomain_delegation(Config :: term(),
-    ProviderId :: od_provider:id(), Subdomain :: binary(),
+    ProviderId :: od_provider:id(), Subdomain :: string() | binary(),
     OpWorkerIPs :: [inet:ip4_address()]
 ) ->
     ok.
 enable_subdomain_delegation(Config, ProviderId, Subdomain, OpWorkerIps) ->
     Data = #{
         <<"subdomainDelegation">> => true,
-        <<"subdomain">> => Subdomain,
+        <<"subdomain">> => str_utils:to_binary(Subdomain),
         <<"ipList">> => OpWorkerIps
     },
     ?assertMatch(ok, call_oz(Config, provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
@@ -1665,7 +1665,7 @@ enable_subdomain_delegation(Config, ProviderId, Subdomain, OpWorkerIps) ->
 -spec enable_subdomain_delegation(
     Config :: term(),
     od_provider:id(),
-    dns_utils:domain_label(),
+    string() | dns_utils:domain_label(),
     [inet:ip4_address()] | {[inet:ip4_address()], inet:port_number()},
     {[inet:ip4_address()], inet:port_number()}
 ) ->
@@ -1673,7 +1673,7 @@ enable_subdomain_delegation(Config, ProviderId, Subdomain, OpWorkerIps) ->
 enable_subdomain_delegation(Config, ProviderId, Subdomain, OpWorkerAddress, {OneS3Ips, OneS3Port}) ->
     Data0 = #{
         <<"subdomainDelegation">> => true,
-        <<"subdomain">> => Subdomain,
+        <<"subdomain">> => str_utils:to_binary(Subdomain),
         <<"oneS3IpAddresses">> => OneS3Ips,
         <<"oneS3Port">> => OneS3Port
     },
