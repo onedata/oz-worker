@@ -119,9 +119,9 @@ end_per_testcase(_, Config) ->
 get_oai_response() ->
     Url = ozt_http:build_url([
         list_to_binary(ozt:get_env(oai_pmh_api_prefix)),
-        <<"/oai?verb=Identify">>
+        <<"?verb=Identify">>
     ]),
-    ?extract_ok(ozt_http:request(#{}, get, Url)).
+    ?extract_ok(ozt_http:request(get, Url, #{})).
 
 
 %% @private

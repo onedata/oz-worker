@@ -72,7 +72,7 @@ rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson) 
             _ -> tokens:consumer_token_header(ozt_tokens:ensure_serialized(ConsumerToken))
         end
     ]),
-    case request(Headers, Method, DataJson, Url) of
+    case request(Method, Url, Headers, DataJson) of
         {ok, Body} ->
             {ok, json_utils:decode(Body)};
         {error, _} = Error ->
@@ -80,14 +80,14 @@ rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson) 
     end.
 
 
--spec request(http_client:headers(), http_client:method(), http_client:url()) ->
+-spec request(http_client:method(), http_client:url(), http_client:headers()) ->
     {ok, json_utils:json_term()} | errors:error().
-request(Headers, Method, Url) ->
-    request(Headers, Method, #{}, Url).
+request(Method, Url, Headers) ->
+    request(Method, Url, Headers, #{}).
 
--spec request(http_client:headers(), http_client:method(), json_utils:json_term(), http_client:url()) ->
+-spec request(http_client:method(), http_client:url(), http_client:headers(), json_utils:json_term()) ->
     {ok, json_utils:json_term()} | errors:error().
-request(Headers, Method, DataJson, Url) ->
+request(Method, Url, Headers, DataJson) ->
     Opts = [
         {ssl_options, ssl_opts()},
         {connect_timeout, timer:seconds(60)},
