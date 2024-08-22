@@ -111,6 +111,7 @@ stages:
         - oai
         - onezone_mailer
         - openid
+        - oz_worker_circuit_breaker
         - provider_api
         - rest_auth
         - session
@@ -655,7 +656,7 @@ model_upgrade:
     - <<: *ct_logs
       name: ct_logs_model_upgrade.tar.gz
 
-oai:
+oai: &ct-onenv-job
   key: OAI
   other: *common-opts
   tasks:
@@ -723,6 +724,13 @@ openid:
   artifacts:
     - <<: *ct_logs
       name: ct_logs_openid.tar.gz
+
+oz_worker_circuit_breaker:
+  <<: *ct-onenv-job
+  key: OWCB
+  artifacts:
+    - <<: *ct_logs
+      name: ct_logs_oz_worker_circuit_breaker.tar.gz
 
 provider_api:
   <<: *ct-job
@@ -1001,6 +1009,7 @@ Coverage report:
     - artifact: ct_logs_oai.tar.gz
     - artifact: ct_logs_onezone_mailer.tar.gz
     - artifact: ct_logs_openid.tar.gz
+    - artifact: ct_logs_oz_worker_circuit_breaker.tar.gz
     - artifact: ct_logs_provider_api.tar.gz
     - artifact: ct_logs_rest_auth.tar.gz
     - artifact: ct_logs_session.tar.gz

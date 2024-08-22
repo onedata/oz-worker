@@ -31,6 +31,7 @@
 -export([handle_graph_request/6]).
 -export([is_subscribable/1]).
 -export([is_type_supported/1]).
+-export([assert_service_available/0]).
 
 %%%===================================================================
 %%% API
@@ -333,3 +334,13 @@ is_type_supported(#gri{type = od_atm_lambda}) -> true;
 is_type_supported(#gri{type = od_atm_workflow_schema}) -> true;
 is_type_supported(#gri{type = oz_worker}) -> true;
 is_type_supported(#gri{type = _}) -> false.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link gs_logic_plugin_behaviour} callback assert_service_available/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec assert_service_available() -> ok | no_return().
+assert_service_available() ->
+    oz_worker_circuit_breaker:assert_closed().

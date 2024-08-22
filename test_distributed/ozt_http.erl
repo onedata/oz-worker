@@ -24,6 +24,7 @@
 %% API
 -export([simulate_login/1]).
 -export([rest_call/3, rest_call/4, rest_call/6]).
+-export([request/3, request/4]).
 -export([build_url/1, build_url/2]).
 -export([ssl_opts/0, get_ca_certs/0]).
 
@@ -71,6 +72,22 @@ rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson) 
             _ -> tokens:consumer_token_header(ozt_tokens:ensure_serialized(ConsumerToken))
         end
     ]),
+    case request(Method, Url, Headers, DataJson) of
+        {ok, Body} ->
+            {ok, json_utils:decode(Body)};
+        {error, _} = Error ->
+            Error
+    end.
+
+
+-spec request(http_client:method(), http_client:url(), http_client:headers()) ->
+    {ok, json_utils:json_term()} | errors:error().
+request(Method, Url, Headers) ->
+    request(Method, Url, Headers, #{}).
+
+-spec request(http_client:method(), http_client:url(), http_client:headers(), json_utils:json_term()) ->
+    {ok, json_utils:json_term()} | errors:error().
+request(Method, Url, Headers, DataJson) ->
     Opts = [
         {ssl_options, ssl_opts()},
         {connect_timeout, timer:seconds(60)},
@@ -78,15 +95,15 @@ rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson) 
     ],
     case http_client:request(Method, Url, Headers, json_utils:encode(DataJson), Opts) of
         {ok, OkCode, _, Body} when OkCode >= 200 andalso OkCode < 300 ->
-            {ok, json_utils:decode(Body)};
+            {ok, Body};
         {ok, Code, _, <<"">>} ->
             {error, {http_code, Code}};
         {ok, _, _, ErrorBody} ->
             #{<<"error">> := ErrorJson} = json_utils:decode(ErrorBody),
             errors:from_json(ErrorJson);
         Other ->
-            ct:pal("REST call to oz-worker failed unexpectedly with: ~tp", [Other]),
-            error(rest_call_failed)
+            ct:pal("HTTP request to oz-worker failed unexpectedly with: ~tp", [Other]),
+            error(http_request_failed)
     end.
 
 
