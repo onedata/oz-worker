@@ -79,6 +79,14 @@ get_response(#gri{id = HServiceId, aspect = instance, scope = protected}, HServi
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
         <<"creationTime">> => CreationTime
     });
+get_response(#gri{id = HServiceId, aspect = instance, scope = public}, HServiceData) ->
+    #{
+        <<"name">> := Name
+    } = HServiceData,
+    rest_translator:ok_body_reply(#{
+        <<"handleServiceId">> => HServiceId,
+        <<"name">> => Name
+    });
 
 get_response(#gri{aspect = users}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});

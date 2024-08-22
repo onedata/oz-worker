@@ -244,12 +244,13 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = public}}, Handle) ->
     #od_handle{
-        public_handle = PublicHandle,
+        handle_service = HandleServiceId, public_handle = PublicHandle,
         resource_type = ResourceType, resource_id = ResourceId,
         metadata = Metadata, metadata_prefix = MetadataPrefix,
         timestamp = Timestamp, creation_time = CreationTime
     } = Handle,
     {ok, #{
+        <<"handleServiceId">> => HandleServiceId,
         <<"publicHandle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
@@ -382,7 +383,7 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
-exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
+exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Handle = #od_handle{}) ->
     case Req#el_req.auth_hint of
         ?THROUGH_USER(UserId) ->
             handle_logic:has_eff_user(Handle, UserId);
