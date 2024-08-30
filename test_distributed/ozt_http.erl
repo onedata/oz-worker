@@ -87,13 +87,17 @@ request(Method, Url, Headers) ->
 
 -spec request(http_client:method(), http_client:url(), http_client:headers(), json_utils:json_term()) ->
     {ok, json_utils:json_term()} | errors:error().
-request(Method, Url, Headers, DataJson) ->
+request(Method, Url, Headers, Data) ->
     Opts = [
         {ssl_options, ssl_opts()},
         {connect_timeout, timer:seconds(60)},
         {recv_timeout, timer:seconds(60)}
     ],
-    case http_client:request(Method, Url, Headers, json_utils:encode(DataJson), Opts) of
+    DataEncoded = case Data of
+        {multipart, _} -> Data;
+        DataJson -> json_utils:encode(DataJson)
+    end,
+    case http_client:request(Method, Url, Headers, DataEncoded, Opts) of
         {ok, OkCode, _, Body} when OkCode >= 200 andalso OkCode < 300 ->
             {ok, Body};
         {ok, Code, _, <<"">>} ->

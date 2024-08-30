@@ -26,13 +26,15 @@
 -export([
     oai_handler_circuit_breaker_test/1,
     rest_handler_circuit_breaker_test/1,
-    gs_circuit_breaker_test/1
+    gs_circuit_breaker_test/1,
+    page_upload_circuit_breaker_test/1
 ]).
 
 all() -> ?ALL([
     oai_handler_circuit_breaker_test,
     rest_handler_circuit_breaker_test,
-    gs_circuit_breaker_test
+    gs_circuit_breaker_test,
+    page_upload_circuit_breaker_test
 ]).
 
 
@@ -87,6 +89,20 @@ gs_circuit_breaker_test_base(Endpoint, Auth = #auth{subject = Subject}) ->
     ?assertMatch({ok, _, _}, ozt_gs:connect(Endpoint, ClientAuth)).
 
 
+page_upload_circuit_breaker_test(_Config) ->
+    {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
+    {ProviderId, ProviderToken} = ozt_providers:create_for_admin_user_with_token(),
+
+    set_circuit_breaker_state(closed),
+    ?assertMatch(ok, get_page_upload_response(ProviderId, ProviderToken, GuiPackage)),
+
+    set_circuit_breaker_state(open),
+    ?assertMatch(?ERROR_SERVICE_UNAVAILABLE, get_page_upload_response(ProviderId, ProviderToken, GuiPackage)),
+
+    set_circuit_breaker_state(closed),
+    ?assertMatch(ok, get_page_upload_response(ProviderId, ProviderToken, GuiPackage)).
+
+
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
@@ -127,6 +143,15 @@ get_oai_response() ->
 %% @private
 get_rest_response() ->
     ?extract_ok(ozt_http:rest_call(undefined, get, <<"/configuration">>)).
+
+
+%% @private
+get_page_upload_response(ProviderId, ProviderToken, GuiPackage) ->
+    Url = ozt_http:build_url([<<"/opw/">>, ProviderId, <<"/gui-upload">>]),
+    ?extract_ok(ozt_http:request(
+        post, Url, #{?HDR_X_AUTH_TOKEN => ProviderToken},
+        {multipart, [{file, str_utils:to_binary(GuiPackage)}]}
+    )).
 
 
 %% @private

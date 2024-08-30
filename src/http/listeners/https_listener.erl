@@ -120,19 +120,20 @@ gui_config() ->
     CompatRegPath = filename:absname(ctool:get_env(current_compatibility_registry_file)),
 
     CustomCowboyRoutes = lists:flatten([
-        {?OAI_PMH_PATH ++ "/[...]", oai_handler, []},
+        {?OAI_PMH_PATH ++ "/[...]", oai_handler, []}, % blocked when no DB space
         {?NAGIOS_PATH, nagios_handler, []},
         {?PANEL_REST_PROXY_PATH ++ "[...]", http_port_forwarder, [9443, ?ONEPANEL_CONNECT_OPTS]},
-        {?PROVIDER_GRAPH_SYNC_WS_PATH, gs_ws_handler, [provider_gs_translator]},
-        {?GUI_GRAPH_SYNC_WS_PATH, gs_ws_handler, [gui_gs_translator]},
+        {?PROVIDER_GRAPH_SYNC_WS_PATH, gs_ws_handler, [provider_gs_translator]}, % blocked when no DB space
+        {?GUI_GRAPH_SYNC_WS_PATH, gs_ws_handler, [gui_gs_translator]}, % blocked when no DB space
         {?COMPATIBILITY_REG_PATH, cowboy_static, {file, CompatRegPath, [{mimetypes, {<<"application">>, <<"json">>, []}}]}},
-        rest_handler:rest_routes(),
+        rest_handler:rest_routes(), % blocked when no DB space
         gui_static:routes()
     ]),
 
     DynamicPageRoutes = [
         {"/", [<<"GET">>], page_redirect_to_oz_worker},
-        {?GUI_UPLOAD_PATH, [<<"POST">>], page_gui_upload},
+        %% TODO VFS-10787 attempt GUI upload in oneprovider:set_up_service_in_onezone() every hour
+        {?GUI_UPLOAD_PATH, [<<"POST">>], page_gui_upload}, % blocked when no DB space
         {?GUI_CONTEXT_PATH, [<<"GET">>], page_gui_context},
         {?GUI_PREAUTHORIZE_PATH, [<<"POST">>], page_gui_preauthorize},
         {?CONFIGURATION_PATH, [<<"GET">>], page_configuration},

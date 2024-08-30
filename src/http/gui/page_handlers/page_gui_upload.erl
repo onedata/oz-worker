@@ -55,13 +55,10 @@
 -spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"POST">>, Req) ->
     Result = try
+        oz_worker_circuit_breaker:assert_closed(),
         handle_gui_upload(Req)
-    catch
-        throw:{error, _} = ThrownError ->
-            ThrownError;
-        Type:Reason:Stacktrace ->
-            ?error_stacktrace("Error while processing GUI upload - ~tp:~tp", [Type, Reason], Stacktrace),
-            ?ERROR_INTERNAL_SERVER_ERROR
+    catch Type:Reason:Stacktrace ->
+            ?examine_exception(Type, Reason, Stacktrace)
     end,
     case Result of
         {ok, NewReq} ->
