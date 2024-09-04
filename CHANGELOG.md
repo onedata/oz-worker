@@ -4,6 +4,16 @@ Release notes for project oz-worker
 CHANGELOG
 ---------
 
+### 21.02.6
+
+-   **VFS-12197** Web GUI: Improved share list views.
+-   **VFS-12195** The name of the handle service where an Open Data
+    handle has been registered is now publicly visible and always
+    displayed on the Share view.
+-   **VFS-12110** Added a circuit breaker mechanism that disables all
+    Onezone services when the database is close to running out of disk
+    space.
+
 ### 21.02.5
 
 -   **VFS-11912** Web GUI: Added visual editor for Open Data metadata in
