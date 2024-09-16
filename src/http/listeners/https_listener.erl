@@ -33,7 +33,7 @@
         {cacerts, get_cert_chain_ders()}
     ]}
 ] end).
--define(OAI_PMH_PATH, oz_worker:get_env(oai_pmh_api_prefix)).
+-define(OAI_PMH_PATH, oz_worker:get_env(oai_pmh_api_prefix, "/oai_pmh")).
 
 %% listener_behaviour callbacks
 -export([port/0, start/0, stop/0, reload_web_certs/0, healthcheck/0]).
