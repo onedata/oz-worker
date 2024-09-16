@@ -18,7 +18,8 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([report_created/4, report_updated/5, report_deleted/5]).
--export([lookup_deleted/1, purge_all_deleted_entries/0]).
+-export([lookup_deleted/1]).
+-export([purge_deleted_entry/1, purge_deleted_entry/4, purge_deleted_entries_for_service/1]).
 -export([get_earliest_timestamp/0]).
 -export([list_portion/1, list_completely/1, gather_by_all_prefixes/0, gather_by_all_prefixes/1]).
 -export([service_has_any_entries/1]).
@@ -124,18 +125,46 @@ lookup_deleted(HandleId) ->
     deleted_handle_registry:lookup(HandleId).
 
 
--spec purge_all_deleted_entries() -> ok.
-purge_all_deleted_entries() ->
-    ForeachFun = fun({MetadataPrefix, #handle_listing_entry{
+-spec purge_deleted_entry(od_handle:id()) -> ok | ?ERROR_NOT_FOUND.
+purge_deleted_entry(HandleId) ->
+    case deleted_handle_registry:lookup(HandleId) of
+        error ->
+            ?ERROR_NOT_FOUND;
+        {ok, {MetadataPrefix, #handle_listing_entry{
+            timestamp = Timestamp,
+            handle_id = HandleId,
+            service_id = HServiceId,
+            status = deleted
+        }}} ->
+            purge_deleted_entry(MetadataPrefix, HServiceId, HandleId, Timestamp)
+    end.
+
+-spec purge_deleted_entry(
+    od_handle:metadata_prefix(),
+    od_handle_service:id(),
+    od_handle:id(),
+    od_handle:timestamp_seconds()
+) -> ok.
+purge_deleted_entry(MetadataPrefix, HServiceId, HandleId, Timestamp) ->
+    deleted_handle_registry:remove(HandleId),
+    delete_entry(MetadataPrefix, HServiceId, HandleId, Timestamp).
+
+
+-spec purge_deleted_entries_for_service(od_handle_service:id()) -> ok.
+purge_deleted_entries_for_service(SubjectHServiceId) ->
+    deleted_handle_registry:foreach(fun({MetadataPrefix, #handle_listing_entry{
         timestamp = Timestamp,
         handle_id = HandleId,
-        service_id = HandleServiceId,
+        service_id = HServiceId,
         status = deleted
     }}) ->
-        deleted_handle_registry:remove(HandleId),
-        delete_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp)
-    end,
-    deleted_handle_registry:foreach(ForeachFun).
+        case SubjectHServiceId of
+            HServiceId ->
+                purge_deleted_entry(MetadataPrefix, HServiceId, HandleId, Timestamp);
+            _ ->
+                ok
+        end
+    end).
 
 
 -spec get_earliest_timestamp() -> undefined | od_handle:timestamp_seconds().
