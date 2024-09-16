@@ -133,10 +133,7 @@ add_group_test(Config) ->
         data_spec = #data_spec{
             required = [<<"privileges">>],
             correct_values = #{
-                <<"privileges">> => [
-                    [handle_service_delete, handle_service_list_handles],
-                    [handle_service_register_handle, handle_service_update]
-                ]
+                <<"privileges">> => ?RAND_SUBLIST(privileges:handle_service_admin())
             },
             bad_values = [
                 {<<"privileges">>, <<"">>,
@@ -336,7 +333,7 @@ get_group_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
 
     AllPrivs = privileges:handle_service_privileges(),
-    InitialPrivs = [?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
+    InitialPrivs = privileges:handle_service_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:handle_service_set_group_privileges(
@@ -609,7 +606,7 @@ get_eff_group_privileges_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = privileges:handle_service_privileges(),
-    InitialPrivs = [?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
+    InitialPrivs = privileges:handle_service_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->

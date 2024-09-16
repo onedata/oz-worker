@@ -402,6 +402,9 @@ authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {us
 authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
     true;
 
+authorize(Req = #el_req{operation = get, auth = ?USER, gri = #gri{aspect = handles}}, HService) ->
+    auth_by_privilege(Req, HService, ?HANDLE_SERVICE_LIST_HANDLES);
+
 authorize(Req = #el_req{operation = get, auth = ?USER}, HService) ->
     % All other resources can be accessed with view privileges
     auth_by_privilege(Req, HService, ?HANDLE_SERVICE_VIEW);
