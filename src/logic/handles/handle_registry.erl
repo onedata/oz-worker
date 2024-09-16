@@ -144,7 +144,8 @@ purge_deleted_entry(HandleId) ->
     od_handle_service:id(),
     od_handle:id(),
     od_handle:timestamp_seconds()
-) -> ok.
+) ->
+    ok.
 purge_deleted_entry(MetadataPrefix, HServiceId, HandleId, Timestamp) ->
     deleted_handle_registry:remove(HandleId),
     delete_entry(MetadataPrefix, HServiceId, HandleId, Timestamp).
