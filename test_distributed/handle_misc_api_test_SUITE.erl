@@ -445,18 +445,19 @@ update_test(Config) ->
     end, ozt_handles:supported_metadata_prefixes()).
 
 update_test(Config, MetadataPrefix) ->
-    MemberWithoutPrivs = ozt_users:create(),
-    MemberWithPrivs = ozt_users:create(),
+    MemberWithAllButThePriv = ozt_users:create(),
+    MemberWithOnlyThePriv = ozt_users:create(),
     NonAdmin = ozt_users:create(),
 
-    HServiceAdminWithManageHandles = ozt_users:create(),
-    HServiceMemberWithoutPrivs = ozt_users:create(),
-    HService = ozt_users:create_handle_service_for(HServiceAdminWithManageHandles),
+    HServiceMemberWithOnlyThePriv = ozt_users:create(),
+    HServiceMemberWithAllButThePriv = ozt_users:create(),
+    HService = ozt_users:create_handle_service_for(HServiceMemberWithOnlyThePriv),
+    ozt_handle_services:set_user_privileges(HService, HServiceMemberWithOnlyThePriv, [?HANDLE_SERVICE_MANAGE_HANDLES]),
     ozt_handle_services:add_user(
-        HService, HServiceMemberWithoutPrivs, privileges:handle_service_admin() -- [?HANDLE_SERVICE_MANAGE_HANDLES]
+        HService, HServiceMemberWithAllButThePriv, privileges:handle_service_admin() -- [?HANDLE_SERVICE_MANAGE_HANDLES]
     ),
 
-    Space = ozt_users:create_space_for(MemberWithoutPrivs),
+    Space = ozt_users:create_space_for(MemberWithAllButThePriv),
 
     PreexistingRawMetadata = ozt_handles:example_input_metadata(MetadataPrefix, 1),
     TargetRawMetadata = ozt_handles:example_input_metadata(MetadataPrefix, 2),
@@ -469,12 +470,12 @@ update_test(Config, MetadataPrefix) ->
 
         HandleId = ozt_handles:create(HService, ShareId, MetadataPrefix, PreexistingRawMetadata),
 
-        {ok, MemberWithoutPrivs} = oz_test_utils:handle_add_user(Config, HandleId, MemberWithoutPrivs),
-        oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithoutPrivs,
+        {ok, MemberWithAllButThePriv} = oz_test_utils:handle_add_user(Config, HandleId, MemberWithAllButThePriv),
+        oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithAllButThePriv,
             AllPrivs -- [?HANDLE_UPDATE], [?HANDLE_UPDATE]
         ),
-        {ok, MemberWithPrivs} = oz_test_utils:handle_add_user(Config, HandleId, MemberWithPrivs),
-        oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithPrivs,
+        {ok, MemberWithOnlyThePriv} = oz_test_utils:handle_add_user(Config, HandleId, MemberWithOnlyThePriv),
+        oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithOnlyThePriv,
             [?HANDLE_UPDATE], AllPrivs -- [?HANDLE_UPDATE]
         ),
         #{handleId => HandleId}
@@ -493,13 +494,13 @@ update_test(Config, MetadataPrefix) ->
             correct = [
                 root,
                 {admin, [?OZ_HANDLES_UPDATE]},
-                {user, MemberWithPrivs},
-                {user, HServiceAdminWithManageHandles}
+                {user, MemberWithOnlyThePriv},
+                {user, HServiceMemberWithOnlyThePriv}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, MemberWithoutPrivs},
-                {user, HServiceMemberWithoutPrivs},
+                {user, MemberWithAllButThePriv},
+                {user, HServiceMemberWithAllButThePriv},
                 {user, NonAdmin}
             ]
         },
@@ -535,18 +536,19 @@ update_test(Config, MetadataPrefix) ->
 
 
 delete_test(Config) ->
-    MemberWithoutPrivs = ozt_users:create(),
-    MemberWithPrivs = ozt_users:create(),
+    MemberWithAllButThePriv = ozt_users:create(),
+    MemberWithOnlyThePriv = ozt_users:create(),
     NonAdmin = ozt_users:create(),
 
-    HServiceAdminWithManageHandles = ozt_users:create(),
-    HServiceMemberWithoutPrivs = ozt_users:create(),
-    HService = ozt_users:create_handle_service_for(HServiceAdminWithManageHandles),
+    HServiceMemberWithOnlyThePriv = ozt_users:create(),
+    HServiceMemberWithAllButThePriv = ozt_users:create(),
+    HService = ozt_users:create_handle_service_for(HServiceMemberWithOnlyThePriv),
+    ozt_handle_services:set_user_privileges(HService, HServiceMemberWithOnlyThePriv, [?HANDLE_SERVICE_MANAGE_HANDLES]),
     ozt_handle_services:add_user(
-        HService, HServiceMemberWithoutPrivs, privileges:handle_service_admin() -- [?HANDLE_SERVICE_MANAGE_HANDLES]
+        HService, HServiceMemberWithAllButThePriv, privileges:handle_service_admin() -- [?HANDLE_SERVICE_MANAGE_HANDLES]
     ),
 
-    Space = ozt_users:create_space_for(MemberWithoutPrivs),
+    Space = ozt_users:create_space_for(MemberWithAllButThePriv),
 
     AllHandlePrivs = privileges:handle_privileges(),
     EnvSetUpFun = fun() ->
@@ -555,12 +557,12 @@ delete_test(Config) ->
         ),
         HandleId = ozt_handles:create(HService, ShareId),
 
-        {ok, MemberWithoutPrivs} = oz_test_utils:handle_add_user(Config, HandleId, MemberWithoutPrivs),
-        oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithoutPrivs,
+        {ok, MemberWithAllButThePriv} = oz_test_utils:handle_add_user(Config, HandleId, MemberWithAllButThePriv),
+        oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithAllButThePriv,
             AllHandlePrivs -- [?HANDLE_DELETE], [?HANDLE_DELETE]
         ),
-        {ok, MemberWithPrivs} = oz_test_utils:handle_add_user(Config, HandleId, MemberWithPrivs),
-        oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithPrivs,
+        {ok, MemberWithOnlyThePriv} = oz_test_utils:handle_add_user(Config, HandleId, MemberWithOnlyThePriv),
+        oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithOnlyThePriv,
             [?HANDLE_DELETE], AllHandlePrivs -- [?HANDLE_DELETE]
         ),
         #{handleId => HandleId}
@@ -578,13 +580,13 @@ delete_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_HANDLES_DELETE]},
-                {user, MemberWithPrivs},
-                {user, HServiceAdminWithManageHandles}
+                {user, MemberWithOnlyThePriv},
+                {user, HServiceMemberWithOnlyThePriv}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, MemberWithoutPrivs},
-                {user, HServiceMemberWithoutPrivs},
+                {user, MemberWithAllButThePriv},
+                {user, HServiceMemberWithAllButThePriv},
                 {user, NonAdmin}
             ]
         },

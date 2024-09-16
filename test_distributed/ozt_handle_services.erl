@@ -21,6 +21,7 @@
 -export([create/0, create/1, get/1, list/0]).
 -export([add_user/2, add_user/3]).
 -export([add_group/2, add_group/3]).
+-export([set_user_privileges/3]).
 
 %%%===================================================================
 %%% API
@@ -74,3 +75,11 @@ add_group(HServiceId, GroupId) ->
 add_group(HServiceId, GroupId, Privileges) ->
     ?assertMatch({ok, _}, ozt:rpc(handle_service_logic, add_group, [?ROOT, HServiceId, GroupId, Privileges])),
     ok.
+
+
+-spec set_user_privileges(od_handle_service:id(), od_user:id(), [privileges:handle_service_privilege()]) -> ok.
+set_user_privileges(HServiceId, UserId, Privileges) ->
+    ?assertMatch(ok, ozt:rpc(handle_service_logic, update_user_privileges, [?ROOT, HServiceId, UserId, #{
+        <<"grant">> => Privileges,
+        <<"revoke">> => lists_utils:subtract(privileges:handle_service_admin(), Privileges)
+    }])).

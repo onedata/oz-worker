@@ -133,7 +133,7 @@ add_group_test(Config) ->
         data_spec = #data_spec{
             required = [<<"privileges">>],
             correct_values = #{
-                <<"privileges">> => ?RAND_SUBLIST(privileges:handle_service_admin())
+                <<"privileges">> => [?RAND_SUBLIST(privileges:handle_service_admin())]
             },
             bad_values = [
                 {<<"privileges">>, <<"">>,
