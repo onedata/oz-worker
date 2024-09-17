@@ -340,7 +340,7 @@ get_user_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:handle_service_add_user(Config, HService, U3),
 
     AllPrivs = privileges:handle_service_privileges(),
-    InitialPrivs = [?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
+    InitialPrivs = privileges:handle_service_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:handle_service_set_user_privileges(
@@ -596,7 +596,7 @@ get_eff_user_privileges_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = privileges:handle_service_privileges(),
-    InitialPrivs = [?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
+    InitialPrivs = privileges:handle_service_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->

@@ -39,7 +39,7 @@
   2},
  {<<"ctool">>,
   {git,"ssh://git@git.onedata.org:7999/vfs/ctool.git",
-       {ref,"29eb47bc0f1f531e218a62ad514c9b2f9732f6d1"}},
+       {ref,"b0f0aa86d8e483e3fceba6542333d68a2811c65e"}},
   0},
  {<<"dns">>,
   {git,"git://github.com/aetrion/dns_erlang.git",

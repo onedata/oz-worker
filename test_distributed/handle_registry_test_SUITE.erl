@@ -561,12 +561,12 @@ init_per_suite(Config) ->
             end, load_all_expected_entries(#{metadata_prefix => MetadataPrefix})),
             clear_expected_entries(MetadataPrefix)
         end, [?OAI_DC_METADATA_PREFIX, ?EDM_METADATA_PREFIX]),
-        ok = ozt:rpc(handle_registry, purge_all_deleted_entries, []),
-        lists:foreach(fun(MetadataPrefix) ->
-            lists:foreach(fun(HServiceId) ->
+        lists:foreach(fun(HServiceId) ->
+            ok = ozt:rpc(handle_registry, purge_deleted_entries_for_service, [HServiceId]),
+            lists:foreach(fun(MetadataPrefix) ->
                 clear_expected_entries(MetadataPrefix, HServiceId)
-            end, [?FIRST_HSERVICE, ?ANOTHER_HSERVICE, ?SMALL_HSERVICE])
-        end, [?OAI_DC_METADATA_PREFIX, ?EDM_METADATA_PREFIX]),
+            end, [?OAI_DC_METADATA_PREFIX, ?EDM_METADATA_PREFIX])
+        end, [?FIRST_HSERVICE, ?ANOTHER_HSERVICE, ?SMALL_HSERVICE]),
         utils:repeat(?INITIAL_HANDLE_COUNT_IN_SMALL_HSERVICE, fun() -> create_entry(?SMALL_HSERVICE) end),
         utils:repeat(?INITIAL_TOTAL_HANDLE_COUNT - ?INITIAL_HANDLE_COUNT_IN_SMALL_HSERVICE,
             fun() -> create_entry(?RAND_SERVICE()) end)

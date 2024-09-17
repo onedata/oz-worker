@@ -584,16 +584,16 @@ delete_test(Config, HasAnyHandles) ->
 
 list_handles_test(Config) ->
     % create handle service with 2 users:
-    %   U2 gets the HANDLE_SERVICE_VIEW privilege
-    %   U1 gets all remaining privileges
-    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+    %   MemberWithPrivs gets the HANDLE_SERVICE_LIST_HANDLES privilege
+    %   MemberWithoutPrivs gets all remaining privileges
+    {HService, MemberWithoutPrivs, MemberWithPrivs} = api_test_scenarios:create_basic_doi_hservice_env(
 %%        TODO VFS-7381
-        Config, ?HANDLE_SERVICE_VIEW
+        Config, ?HANDLE_SERVICE_LIST_HANDLES
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, S2} = oz_test_utils:create_space(Config, ?USER(U2), ?SPACE_NAME2),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(MemberWithoutPrivs), ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(MemberWithPrivs), ?SPACE_NAME2),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -613,12 +613,12 @@ list_handles_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_HANDLE_SERVICES_LIST_RELATIONSHIPS]},
-                {user, U2}
+                {user, MemberWithPrivs}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {user, U1}
+                {user, MemberWithoutPrivs}
             ]
         },
         rest_spec = #rest_spec{

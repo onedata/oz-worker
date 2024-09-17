@@ -3108,7 +3108,10 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     lists_utils:pforeach(fun(HId) -> delete_harvester(Config, HId) end, Harvesters),
     lists_utils:pforeach(fun(AIId) -> delete_atm_inventory(Config, AIId) end, AtmInventories),
 
-    ?assertEqual(ok, call_oz(Config, handle_registry, purge_all_deleted_entries, [])),
+    lists:foreach(fun(HServiceId) ->
+        ?assertEqual(ok, call_oz(Config, handle_registry, purge_deleted_entries_for_service, [HServiceId]))
+    end, HServices),
+
     % Clusters and storages are removed together with providers
     % Workflow schemas are removed together with Inventories
     % Atm Lambdas are removed when all their linked inventories are
