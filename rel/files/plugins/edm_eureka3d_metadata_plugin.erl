@@ -452,8 +452,7 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
         (build_other_is_part_of_element(3, ValidationExampleBuilderCtx))/binary,
         "    </edm:ProvidedCHO>\n",
         "    <ore:Aggregation", ExpOreAggRdfAboutStr/binary, ">\n",
-        (case {MetadataType, AggChoResourceAttr} of {revised, _} -> <<"">>; {_, element_not_provided} ->
-            ExpAggChoLine; _ -> <<"">> end)/binary,
+        (case MetadataType /= revised and AggChoResourceAttr == element_not_provided of true -> ExpAggChoLine; _ -> <<"">> end)/binary,
         (case IsShownByResourceAttr of element_not_provided -> ExpIsShownByLine; _ -> <<"">> end)/binary,
         (case {MetadataType, AggChoResourceAttr} of {_, element_not_provided} -> <<"">>; _ -> ExpAggChoLine end)/binary,
         "        <edm:dataProvider>Europeana Foundation</edm:dataProvider>\n",
