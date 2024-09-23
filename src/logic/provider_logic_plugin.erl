@@ -624,52 +624,16 @@ required_admin_privileges(_) ->
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}) ->
-    AlwaysRequiredFields = #{
+    RequiredFields = #{
         <<"token">> => {invite_token, ?REGISTER_ONEPROVIDER},
         <<"name">> => {binary, name},
-        <<"subdomainDelegation">> => {boolean, any},
         <<"adminEmail">> => {binary, email}
     },
     OptionalFields = #{
-        <<"opWorkerPort">> => {integer, {between, 0, 65535}},
         <<"latitude">> => {float, {between, -90, 90}},
         <<"longitude">> => {float, {between, -180, 180}}
     },
-
-    SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
-
-    case maps:get(<<"subdomainDelegation">>, Data, undefined) of
-        false ->
-            #{
-                required => AlwaysRequiredFields#{<<"domain">> => {binary, domain}},
-                optional => OptionalFields#{<<"oneS3Port">> => {integer, {between, 0, 65535}}}
-            };
-        true when SubdomainDelegationSupported ->
-            #{
-                required => case is_map_key(<<"oneS3Port">>, Data) orelse is_map_key(<<"oneS3IpAddresses">>, Data) of
-                    true ->
-                        AlwaysRequiredFields#{
-                            <<"subdomain">> => {binary, subdomain},
-                            <<"oneS3IpAddresses">> => {list_of_ipv4_addresses, any},
-                            <<"oneS3Port">> => {integer, {between, 0, 65535}}
-                        };
-                    false ->
-                        AlwaysRequiredFields#{<<"subdomain">> => {binary, subdomain}}
-                end,
-                at_least_one => #{
-                    <<"opWorkerIpAddresses">> => {list_of_ipv4_addresses, any},
-                    %% TODO VFS-11504 rm in 23.02.x
-                    <<"ipList">> => {list_of_ipv4_addresses, any}
-                },
-                optional => OptionalFields
-            };
-        true ->
-            throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED);
-        _ ->
-            % valid subdomainDelegation field was not sent, which will cause
-            % BAD_DATA error. No need to generate domain related fields.
-            #{required => AlwaysRequiredFields, optional => OptionalFields}
-    end;
+    build_domain_config_sanitizer_spec(RequiredFields, OptionalFields, Data);
 
 validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = instance_dev}}) ->
     ValidationRules = #{required := Required} = validate(Req#el_req{gri = GRI#gri{aspect = instance}}),
@@ -729,13 +693,43 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = domain_config}, data = Data}) ->
-    AlwaysRequiredFields = #{<<"subdomainDelegation">> => {boolean, any}},
-    OptionalFields = #{<<"opWorkerPort">> => {integer, {between, 0, 65535}}},
+    build_domain_config_sanitizer_spec(#{}, #{}, Data);
+
+validate(#el_req{operation = update, gri = #gri{aspect = dns_txt_records}}) ->
+    TxtRecordValidator = #{
+        <<"name">> => {binary, non_empty},
+        <<"content">> => {binary, non_empty},
+        <<"ttl">> => {optional, integer, {not_lower_than, 0}}
+    },
+
+    #{
+        at_least_one => #{
+            <<"setOpWorkerTxtRecord">> => {json, TxtRecordValidator},
+            <<"setOneS3TxtRecord">> => {json, TxtRecordValidator},
+            <<"unsetOpWorkerTxtRecordName">> => {binary, non_empty},
+            <<"unsetOneS3TxtRecordName">> => {binary, non_empty}
+        }
+    }.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+
+%% @private
+-spec build_domain_config_sanitizer_spec(
+    entity_logic_sanitizer:parameter_specs(),
+    entity_logic_sanitizer:parameter_specs(),
+    entity_logic:data()
+) ->
+    entity_logic_sanitizer:sanitizer_spec().
+build_domain_config_sanitizer_spec(OtherRequiredFields, OtherOptionalFields, Data) ->
+    AlwaysRequiredFields = OtherRequiredFields#{<<"subdomainDelegation">> => {boolean, any}},
+    OptionalFields = OtherOptionalFields#{<<"opWorkerPort">> => {integer, {between, 0, 65535}}},
 
     case maps:get(<<"subdomainDelegation">>, Data, undefined) of
         true ->
-            true == oz_worker:get_env(subdomain_delegation_supported, true) orelse
-                throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED),
+            assert_subdomain_delegation_supported(),
 
             #{
                 required => case is_map_key(<<"oneS3Port">>, Data) orelse is_map_key(<<"oneS3IpAddresses">>, Data) of
@@ -761,28 +755,20 @@ validate(#el_req{operation = update, gri = #gri{aspect = domain_config}, data = 
                 optional => OptionalFields#{<<"oneS3Port">> => {integer, {between, 0, 65535}}}
             };
         _ ->
-            #{required => AlwaysRequiredFields}
-    end;
+            % valid subdomainDelegation field was not sent, which will cause
+            % BAD_DATA error. No need to generate domain related fields.
+            #{required => AlwaysRequiredFields, optional => OptionalFields}
+    end.
 
-validate(#el_req{operation = update, gri = #gri{aspect = dns_txt_records}}) ->
-    TxtRecordValidator = #{
-        <<"name">> => {binary, non_empty},
-        <<"content">> => {binary, non_empty},
-        <<"ttl">> => {optional, integer, {not_lower_than, 0}}
-    },
 
-    #{
-        at_least_one => #{
-            <<"setOpWorkerTxtRecord">> => {json, TxtRecordValidator},
-            <<"setOneS3TxtRecord">> => {json, TxtRecordValidator},
-            <<"unsetOpWorkerTxtRecordName">> => {binary, non_empty},
-            <<"unsetOneS3TxtRecordName">> => {binary, non_empty}
-        }
-    }.
+%% @private
+-spec assert_subdomain_delegation_supported() -> ok | no_return().
+assert_subdomain_delegation_supported() ->
+    case oz_worker:get_env(subdomain_delegation_supported, true) of
+        true -> ok;
+        false -> throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED)
+    end.
 
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
 
 -spec auth_by_self(entity_logic:req()) -> boolean().
 auth_by_self(#el_req{auth = ?PROVIDER(ProvId), gri = #gri{id = ProvId}}) ->
