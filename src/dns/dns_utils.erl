@@ -35,28 +35,29 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Joins subdomain with domain to build fully qualified domain.
+%% Build fully qualified domain by joining 2 domain parts.
 %% Makes the string lowercase to provide some normalization to
 %% names given in custom (app.config) entries.
 %% Note that the Onezone domain is expected to be already in lowercase
 %% and is not always passed through this function.
 %% @end
 %%--------------------------------------------------------------------
--spec build_domain(Subdomain :: domain_name(), Domain :: domain_name()) -> domain_name().
+-spec build_domain(DomainPartPrefix :: domain_name(), DomainPartSuffix :: domain_name()) ->
+    domain_name().
 build_domain(<<>>, Domain) ->
     string:lowercase(Domain);
-build_domain(Subdomain, Domain) ->
-    string:lowercase(<<Subdomain/binary, ".", Domain/binary>>).
+build_domain(DomainPartPrefix, DomainPartSuffix) ->
+    string:lowercase(<<DomainPartPrefix/binary, ".", DomainPartSuffix/binary>>).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Joins provided subdomain with onezone domain.
+%% Joins provided domain part with onezone domain.
 %% @end
 %%--------------------------------------------------------------------
--spec build_fqdn_from_subdomain(Subdomain :: domain_name()) -> domain_name().
-build_fqdn_from_subdomain(Subdomain) ->
-    build_domain(Subdomain, oz_worker:get_domain()).
+-spec build_fqdn_from_subdomain(DomainPart :: domain_name()) -> domain_name().
+build_fqdn_from_subdomain(DomainPart) ->
+    build_domain(DomainPart, oz_worker:get_domain()).
 
 
 -spec is_equal_or_subdomain(domain_label(), domain_label()) -> boolean().
