@@ -154,6 +154,13 @@ get_provider_subdomain_labels() ->
     maps:values(PtS).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns mapping of ips per provider relative domain name, that is provider
+%% subdomain part without the zone domain suffix part (e.g. `s3.krakow`
+%% instead of entire `krakow.demo.onedata.org`).
+%% @end
+%%--------------------------------------------------------------------
 -spec get_provider_relative_domain_names_to_ips() ->
     #{dns_utils:domain_name() => [inet:ip4_address()]}.
 get_provider_relative_domain_names_to_ips() ->
@@ -177,7 +184,7 @@ get_provider_relative_domain_names_to_ips() ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates txt records in provider's subdomain.
-%% Given provider mus have an associated subdomain, otherwise
+%% Given provider must have an associated subdomain, otherwise
 %% error is returned.
 %% @end
 %%--------------------------------------------------------------------
@@ -270,10 +277,16 @@ get_record_struct(2) ->
     ]};
 
 get_record_struct(3) ->
+    % The structure changes to account for new Oneprovider service - OneS3.
+    % Changed fields:
+    % - provider_to_ips
+    % - provider_to_txt_records
     {record, [
         {subdomain_to_provider, #{string => string}},
         {provider_to_subdomain, #{string => string}},
+        % Ips are now stored per provider_service()
         {provider_to_ips, #{string => #{atom => [{integer, integer, integer, integer}]}}},
+        % Txt records are now stored as mappings (key => {value, ttl) and per provider_service()
         {provider_to_txt_records, #{string => #{atom => #{string => {string, integer}}}}}
     ]}.
 
