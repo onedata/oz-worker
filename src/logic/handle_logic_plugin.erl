@@ -352,11 +352,10 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
         try
             handle_proxy:unregister_handle(HandleId)
         catch Class:Reason:Stacktrace ->
-            ?warning_exception(
-                "Handle ~ts (~ts) was removed but it failed to be unregistered from handle service ~ts",
-                [HandleId, PublicHandle, HandleService],
-                Class, Reason, Stacktrace
-            )
+            ?warning_exception(?autoformat_with_msg(
+                "Handle was removed but it failed to be unregistered from its handle service",
+                [HandleId, PublicHandle, HandleService]
+            ), Class, Reason, Stacktrace)
         end,
         DeletionTimestamp = od_handle:current_timestamp(),
         handle_registry:report_deleted(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
