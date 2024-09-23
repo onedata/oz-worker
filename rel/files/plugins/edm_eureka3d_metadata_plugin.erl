@@ -64,6 +64,7 @@
 -define(is_shown_by_value(FileId), str_utils:format("https://eureka3d.vm.fedcloud.eu/3d/~ts", [FileId])).
 -define(IS_PART_OF_VALUE, "EUreka3D").
 
+-define(INDENT_SIZE, 4).  % per nesting level of an XML, for pretty-formatting
 
 %%%===================================================================
 %%% onezone_plugin_behaviour callbacks
@@ -113,11 +114,11 @@ revise_for_publication(#xmlElement{
         (#xmlElement{name = 'edm:ProvidedCHO', content = PCHOContent0, attributes = CHOAttrs} = CHOElement) ->
             CHOElement#xmlElement{
                 attributes = remove_rdf_about_attr(CHOAttrs),
-                content = ensure_text_element(PCHOContent0, 'dcterms:isPartOf', ?IS_PART_OF_VALUE)
+                content = ensure_text_element(PCHOContent0, 2, 'dcterms:isPartOf', ?IS_PART_OF_VALUE)
             };
         (#xmlElement{name = 'ore:Aggregation', content = AggContent0, attributes = AggAttrs} = AggElement) ->
             AggContent1 = remove_rdf_resource_attr_from_aggregated_cho_element(AggContent0),
-            AggContent2 = insert_empty_element(AggContent1, 'edm:isShownBy', [?rdf_resource_attr(IsShownByValue)]),
+            AggContent2 = insert_empty_element(AggContent1, 2, 'edm:isShownBy', [?rdf_resource_attr(IsShownByValue)]),
             AggElement#xmlElement{
                 attributes = remove_rdf_about_attr(AggAttrs),
                 content = AggContent2
@@ -150,7 +151,7 @@ insert_public_handle(#xmlElement{
         (#xmlElement{name = 'ore:Aggregation', content = AggContent, attributes = AggAttrs} = AggElement) ->
             AggElement#xmlElement{
                 attributes = insert_rdf_about_attr(AggAttrs, overwrite, <<PublicHandle/binary, <<"_AGG">>/binary>>),
-                content = insert_empty_element(AggContent, 'edm:aggregatedCHO', [?rdf_resource_attr(PublicHandle)])
+                content = insert_empty_element(AggContent, 2, 'edm:aggregatedCHO', [?rdf_resource_attr(PublicHandle)])
             };
         (Other) ->
             Other
@@ -201,27 +202,33 @@ remove_rdf_resource_attr_from_aggregated_cho_element(Elements) ->
 
 
 %% @private
--spec ensure_text_element([#xmlElement{}], atom(), string()) -> [#xmlElement{}].
-ensure_text_element(Elements, Name, Text) ->
+-spec ensure_text_element([#xmlElement{}], non_neg_integer(), atom(), string()) -> [#xmlElement{}].
+ensure_text_element(Elements, XmlDepth, Name, Text) ->
     case ?find_matching_element(#xmlElement{name = Name, content = [#xmlText{value = Text}]}, Elements) of
         {ok, _} ->
             Elements;
         error ->
             oai_xml:prepend_element_with_indent(
-                8, #xmlElement{name = Name, content = [#xmlText{value = Text}]}, Elements
+                XmlDepth * ?INDENT_SIZE,
+                #xmlElement{name = Name, content = [#xmlText{value = Text}]},
+                Elements
             )
     end.
 
 
 %% @private
 %% @doc existing attrs (if any) are always overwritten with the provided ones, the content is always empty
--spec insert_empty_element([#xmlElement{}], atom(), [#xmlAttribute{}]) -> [#xmlElement{}].
-insert_empty_element(Elements, Name, Attrs) ->
+-spec insert_empty_element([#xmlElement{}], non_neg_integer(), atom(), [#xmlAttribute{}]) -> [#xmlElement{}].
+insert_empty_element(Elements, XmlDepth, Name, Attrs) ->
     case ?find_matching_element(#xmlElement{name = Name}, Elements) of
         {ok, Found} ->
             lists_utils:replace(Found, Found#xmlElement{attributes = Attrs}, Elements);
         error ->
-            oai_xml:prepend_element_with_indent(8, #xmlElement{name = Name, attributes = Attrs}, Elements)
+            oai_xml:prepend_element_with_indent(
+                XmlDepth * ?INDENT_SIZE,
+                #xmlElement{name = Name, attributes = Attrs},
+                Elements
+            )
     end.
 
 
@@ -452,7 +459,7 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
         (build_other_is_part_of_element(3, ValidationExampleBuilderCtx))/binary,
         "    </edm:ProvidedCHO>\n",
         "    <ore:Aggregation", ExpOreAggRdfAboutStr/binary, ">\n",
-        (case MetadataType /= revised and AggChoResourceAttr == element_not_provided of true -> ExpAggChoLine; _ -> <<"">> end)/binary,
+        (case MetadataType /= revised andalso AggChoResourceAttr == element_not_provided of true -> ExpAggChoLine; _ -> <<"">> end)/binary,
         (case IsShownByResourceAttr of element_not_provided -> ExpIsShownByLine; _ -> <<"">> end)/binary,
         (case {MetadataType, AggChoResourceAttr} of {_, element_not_provided} -> <<"">>; _ -> ExpAggChoLine end)/binary,
         "        <edm:dataProvider>Europeana Foundation</edm:dataProvider>\n",
