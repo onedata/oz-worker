@@ -370,7 +370,7 @@ translate_resource(_, #gri{type = od_provider, aspect = domain_config}, Data = #
     <<"ipList">> := OpWorkerIPs,
     <<"oneS3IpAddresses">> := OneS3Ips
 }) ->
-    T = fun(IPList) -> [list_to_binary(inet:ntoa(IP)) || IP <- IPList] end,
+    T = fun(IPList) -> [?check(ip_utils:to_binary(IP)) || IP <- IPList] end,
     TranslatedOpWorkerIps = T(OpWorkerIPs),
 
     Data#{

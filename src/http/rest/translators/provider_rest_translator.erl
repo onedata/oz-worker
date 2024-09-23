@@ -92,7 +92,7 @@ get_response(#gri{aspect = domain_config}, DomainConfig = #{
     <<"ipList">> := OpWorkerIPs,
     <<"oneS3IpAddresses">> := OneS3Ips
 }) ->
-    T = fun(IPList) -> [list_to_binary(inet:ntoa(IP)) || IP <- IPList] end,
+    T = fun(IPList) -> [?check(ip_utils:to_binary(IP)) || IP <- IPList] end,
     TranslatedOpWorkerIps = T(OpWorkerIPs),
 
     rest_translator:ok_body_reply(DomainConfig#{

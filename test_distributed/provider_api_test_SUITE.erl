@@ -183,11 +183,8 @@ create_test(Config) ->
 
     CorrectValues = #{
         <<"token">> => [fun() ->
-            {ok, RegistrationToken} = oz_test_utils:create_provider_registration_token(
-                Config, ?USER(CreatorUserId), CreatorUserId
-            ),
-            {ok, Serialized} = tokens:serialize(RegistrationToken),
-            Serialized
+            RegistrationToken = ozt_providers:create_registration_token(CreatorUserId),
+            ozt_tokens:ensure_serialized(RegistrationToken)
         end],
         <<"name">> => [ExpName],
         <<"domain">> => [<<"multilevel.provider-domain.org">>],
