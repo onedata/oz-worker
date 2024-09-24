@@ -542,9 +542,10 @@ dns_resolves_txt_record(Config) ->
     OpName = ?PROVIDER_NAME1,
     OpSubdomainLabel = ?PROVIDER_SUBDOMAIN1,
 
-    {RequestKey, FullDomain} = case ?RAND_ELEMENT([op_worker, ones3]) of
-        op_worker -> {<<"setOpWorkerTxtRecord">>, OpSubdomainLabel ++ "." ++ OzDomain};
-        ones3 -> {<<"setOneS3TxtRecord">>, "s3." ++ OpSubdomainLabel ++ "." ++ OzDomain}
+    Service = ?RAND_ELEMENT([op_worker, ones3]),
+    FullDomain = case Service of
+        op_worker -> OpSubdomainLabel ++ "." ++ OzDomain;
+        ones3 -> "s3." ++ OpSubdomainLabel ++ "." ++ OzDomain
     end,
 
     RecordName = <<"acme_validation">>,
@@ -558,12 +559,8 @@ dns_resolves_txt_record(Config) ->
 
     oz_test_utils:enable_subdomain_delegation(Config, P1, OpSubdomainLabel, []),
 
-    ?assertMatch(ok, oz_test_utils:call_oz(Config, provider_logic, update_dns_txt_record, [
-        ?ROOT, P1, #{RequestKey => ?TXT_RECORD_JSON(RecordName, RecordContent)}
-    ])),
-    ?assertMatch(ok, oz_test_utils:call_oz(Config, provider_logic, update_dns_txt_record, [
-        ?ROOT, P1, #{RequestKey => ?TXT_RECORD_JSON(RecordName2, RecordContent2, 5)}
-    ])),
+    ?assertMatch(ok, set_dns_txt_record(Config, Service, P1, RecordName, RecordContent, 5)),
+    ?assertMatch(ok, set_dns_txt_record(Config, Service, P1, RecordName2, RecordContent2, 5)),
 
     assert_dns_answer(OzIps, RecordFQDN, txt, [[binary_to_list(RecordContent)]]),
     assert_dns_answer(OzIps, RecordFQDN2, txt, [[binary_to_list(RecordContent2)]]).
@@ -579,11 +576,7 @@ txt_record_forbidden_without_subdomain_delegation(Config) ->
 
     ?assertMatch(
         ?ERROR_SUBDOMAIN_DELEGATION_DISABLED,
-        oz_test_utils:call_oz(Config, provider_logic, update_dns_txt_record, [?ROOT, P1, #{
-            ?RAND_ELEMENT([<<"setOpWorkerTxtRecord">>, <<"setOneS3TxtRecord">>]) => ?TXT_RECORD_JSON(
-                RecordName, RecordContent
-            )}
-        ])
+        set_dns_txt_record(Config, ?RAND_ELEMENT([op_worker, ones3]), P1, RecordName, RecordContent, 5)
     ).
 
 
@@ -594,11 +587,10 @@ dns_does_not_resolve_removed_txt_record_test(Config) ->
     OpName = ?PROVIDER_NAME1,
     OpSubdomainLabel = ?PROVIDER_SUBDOMAIN1,
 
-    {SetKey, UnsetKey, FullDomain} = case ?RAND_ELEMENT([op_worker, ones3]) of
-        op_worker ->
-            {<<"setOpWorkerTxtRecord">>, <<"unsetOpWorkerTxtRecordName">>, OpSubdomainLabel ++ "." ++ OzDomain};
-        ones3 ->
-            {<<"setOneS3TxtRecord">>, <<"unsetOneS3TxtRecordName">>, "s3." ++ OpSubdomainLabel ++ "." ++ OzDomain}
+    Service = ?RAND_ELEMENT([op_worker, ones3]),
+    FullDomain = case Service of
+        op_worker -> OpSubdomainLabel ++ "." ++ OzDomain;
+        ones3 -> "s3." ++ OpSubdomainLabel ++ "." ++ OzDomain
     end,
 
     RecordContent = <<"special_letsencrypt_token">>,
@@ -609,15 +601,11 @@ dns_does_not_resolve_removed_txt_record_test(Config) ->
 
     oz_test_utils:enable_subdomain_delegation(Config, P1, OpSubdomainLabel, []),
 
-    ?assertMatch(ok, oz_test_utils:call_oz(Config, provider_logic, update_dns_txt_record, [
-        ?ROOT, P1, #{SetKey => ?TXT_RECORD_JSON(RecordName, RecordContent)}
-    ])),
+    ?assertMatch(ok, set_dns_txt_record(Config, Service, P1, RecordName, RecordContent, 5)),
 
     assert_dns_answer(OzIps, RecordFQDN, txt, [[binary_to_list(RecordContent)]]),
 
-    ?assertMatch(ok, oz_test_utils:call_oz(Config,
-        provider_logic, update_dns_txt_record, [?ROOT, P1, #{UnsetKey => RecordName}])
-    ),
+    ?assertMatch(ok, unset_dns_txt_record(Config, Service, P1, RecordName)),
 
     assert_dns_answer(OzIps, RecordFQDN, txt, []).
 
@@ -793,3 +781,39 @@ get_node_ip(Node) ->
             size(Addr) == 4, Addr =/= {127, 0, 0, 1}
         ])
     end).
+
+
+%% @private
+set_dns_txt_record(Config, ones3, ProviderId, Name, Content, TTL) ->
+    oz_test_utils:call_oz(Config, provider_logic, update_dns_txt_record, [
+        ?ROOT, ProviderId, #{<<"setOneS3TxtRecord">> => ?TXT_RECORD_JSON(Name, Content, TTL)}
+    ]);
+set_dns_txt_record(Config, op_worker, ProviderId, Name, Content, TTL) ->
+    case ?RAND_BOOL() of
+        true ->
+            oz_test_utils:call_oz(Config, provider_logic, update_dns_txt_record, [
+                ?ROOT, ProviderId, #{<<"setOpWorkerTxtRecord">> => ?TXT_RECORD_JSON(Name, Content, TTL)}
+            ]);
+        false ->
+            oz_test_utils:call_oz(Config, provider_logic, set_dns_txt_record, [
+                ?ROOT, ProviderId, Name, Content, TTL
+            ])
+    end.
+
+
+%% @private
+unset_dns_txt_record(Config, ones3, ProviderId, Name) ->
+    oz_test_utils:call_oz(Config, provider_logic, update_dns_txt_record, [
+        ?ROOT, ProviderId, #{<<"unsetOneS3TxtRecordName">> => Name}
+    ]);
+unset_dns_txt_record(Config, op_worker, ProviderId, Name) ->
+    case ?RAND_BOOL() of
+        true ->
+            oz_test_utils:call_oz(Config, provider_logic, update_dns_txt_record, [
+                ?ROOT, ProviderId, #{<<"unsetOpWorkerTxtRecordName">> => Name}
+            ]);
+        false ->
+            oz_test_utils:call_oz(Config, provider_logic, remove_dns_txt_record, [
+                ?ROOT, ProviderId, Name
+            ])
+    end.

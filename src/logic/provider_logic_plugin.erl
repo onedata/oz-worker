@@ -70,6 +70,8 @@ operation_supported(create, support, private) -> true;
 operation_supported(create, map_idp_user, private) -> true;
 operation_supported(create, map_idp_group, private) -> true;
 operation_supported(create, verify_provider_identity, private) -> true;
+% deprecated operation replaced with update dns_txt_records
+operation_supported(create, {dns_txt_record, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
 
@@ -97,6 +99,8 @@ operation_supported(update, dns_txt_records, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {space, _}, private) -> true;
+% deprecated operation replaced with update dns_txt_records
+operation_supported(delete, {dns_txt_record, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -180,6 +184,21 @@ create(#el_req{auth = Auth, gri = #gri{aspect = verify_provider_identity}, data 
         {ok, {?SUB(?ONEPROVIDER, ProviderId), _}} -> ok;
         {ok, _} -> ?ERROR_TOKEN_INVALID;
         Error -> Error
+    end;
+
+create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}, data = Data}) ->
+    case fetch_entity(#gri{id = ProviderId}) of
+        {true, {#od_provider{subdomain_delegation = true}, _}} ->
+            #{<<"content">> := Content} = Data,
+            TTL = maps:get(<<"ttl">>, Data, undefined),
+            TxtRecordsDiff = #{op_worker => #{
+                set => #{RecordName => {Content, TTL}}
+            }},
+            ok = dns_state:update_txt_records(ProviderId, TxtRecordsDiff);
+        {true, {#od_provider{subdomain_delegation = false}, _}} ->
+            ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
+        Error ->
+            Error
     end.
 
 
@@ -392,7 +411,11 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
 %% @TODO VFS-5856 deprecated, included for backward compatibility
 %% Used by providers that do not keep storages in onezone
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
-    storage_logic:revoke_support(?PROVIDER(ProviderId), ProviderId, SpaceId).
+    storage_logic:revoke_support(?PROVIDER(ProviderId), ProviderId, SpaceId);
+
+delete(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}}) ->
+    TxtRecordsDiff = #{op_worker => #{unset => [RecordName]}},
+    ok = dns_state:update_txt_records(ProviderId, TxtRecordsDiff).
 
 
 %%--------------------------------------------------------------------
@@ -455,6 +478,9 @@ authorize(#el_req{operation = create, gri = #gri{id = undefined, aspect = instan
 
 authorize(#el_req{operation = create, gri = #gri{id = undefined, aspect = instance_dev}}, _) ->
     true =:= oz_worker:get_env(dev_mode, true);
+
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->
     auth_by_self(Req);
@@ -567,6 +593,9 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, _) -
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, _) ->
     auth_by_self(Req);
 
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
+
 authorize(_, _) ->
     false.
 
@@ -674,6 +703,17 @@ validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identit
         required => #{
             <<"providerId">> => {any, {exists, fun provider_logic:exists/1}},
             TokenKey => {token, any}
+        }
+    };
+
+validate(#el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}) ->
+    #{
+        required => #{
+            {aspect, <<"recordName">>} => {binary, non_empty},
+            <<"content">> => {binary, non_empty}
+        },
+        optional => #{
+            <<"ttl">> => {integer, {not_lower_than, 0}}
         }
     };
 
