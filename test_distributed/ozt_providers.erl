@@ -29,7 +29,6 @@
 %% API
 -export([create/0]).
 -export([create_for_admin_user/1, create_for_admin_user/2]).
--export([create_for_admin_user_with_token/0]).
 -export([create_as_support_for_user/1]).
 -export([create_as_support_for_space/1]).
 -export([simulate_version/2]).
@@ -65,18 +64,6 @@ create_for_admin_user(UserId, Name) ->
         ?NOBODY, ?PROVIDER_DATA(Name, RegToken)
     ])),
     ProviderId.
-
-
--spec create_for_admin_user_with_token() -> {od_provider:id(), tokens:serialized()}.
-create_for_admin_user_with_token() ->
-    UserId = ozt_users:create_admin([?OZ_PROVIDERS_INVITE]),
-    Name = <<"of-user-", UserId/binary>>,
-    RegToken = ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, UserId)),
-    {ok, {ProviderId, RootToken}} = ?assertMatch({ok, _}, ozt:rpc(provider_logic, create, [
-        ?NOBODY, ?PROVIDER_DATA(Name, RegToken)
-    ])),
-    {ok, SerializedRootToken} = tokens:serialize(RootToken),
-    {ProviderId, SerializedRootToken}.
 
 
 -spec create_as_support_for_user(od_user:id()) -> od_provider:id().

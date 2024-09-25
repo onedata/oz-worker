@@ -27,14 +27,14 @@
     oai_handler_circuit_breaker_test/1,
     rest_handler_circuit_breaker_test/1,
     gs_circuit_breaker_test/1,
-    page_upload_circuit_breaker_test/1
+    gui_upload_circuit_breaker_test/1
 ]).
 
 all() -> ?ALL([
     oai_handler_circuit_breaker_test,
     rest_handler_circuit_breaker_test,
     gs_circuit_breaker_test,
-    page_upload_circuit_breaker_test
+    gui_upload_circuit_breaker_test
 ]).
 
 
@@ -89,9 +89,10 @@ gs_circuit_breaker_test_base(Endpoint, Auth = #auth{subject = Subject}) ->
     ?assertMatch({ok, _, _}, ozt_gs:connect(Endpoint, ClientAuth)).
 
 
-page_upload_circuit_breaker_test(_Config) ->
-    {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
-    {ProviderId, ProviderToken} = ozt_providers:create_for_admin_user_with_token(),
+gui_upload_circuit_breaker_test(_Config) ->
+    {GuiPackage, _} = ozt_http:create_dummy_gui_package(),
+    ProviderId = ozt_providers:create(),
+    {ok, ProviderToken} = tokens:serialize(ozt_providers:get_root_token(ProviderId)),
 
     set_circuit_breaker_state(closed),
     ?assertMatch(ok, get_page_upload_response(ProviderId, ProviderToken, GuiPackage)),

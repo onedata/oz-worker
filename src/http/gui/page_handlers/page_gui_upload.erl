@@ -54,12 +54,10 @@
 %%--------------------------------------------------------------------
 -spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"POST">>, Req) ->
-    Result = try
+    Result = ?catch_exceptions(begin
         oz_worker_circuit_breaker:assert_closed(),
         handle_gui_upload(Req)
-    catch Type:Reason:Stacktrace ->
-            ?examine_exception(Type, Reason, Stacktrace)
-    end,
+    end),
     case Result of
         {ok, NewReq} ->
             NewReq;
