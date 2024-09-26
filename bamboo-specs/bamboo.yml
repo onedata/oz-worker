@@ -221,6 +221,12 @@ Build:
 
 _Codetag Tracker:
   key: CT
+  other: &common-opts
+    clean-working-dir: true
+    all-other-apps:
+      custom:
+        auto: { }
+        buildHangingConfig.enabled: 'false'
   tasks:
     - checkout: &fake-checkout
         conditions:
@@ -250,12 +256,7 @@ _Codetag Tracker:
 
 _Dialyze:
   key: DIAL
-  other: &common-opts
-    clean-working-dir: true
-    all-other-apps:
-      custom:
-        auto: { }
-        buildHangingConfig.enabled: 'false'
+  other: *common-opts
   tasks:
     - checkout: *fake-checkout
     - script: *unpack

@@ -20,8 +20,8 @@
 
 -type public_url() :: binary().
 
--define(RANDOM_ID(), base64url:encode(crypto:strong_rand_bytes(5))).
--define(DOI_DC_IDENTIFIER(Hndl), <<"doi:", Hndl/binary>>).
+-define(RANDOM_ID(), base62:from_base64(base64url:encode(crypto:strong_rand_bytes(6)))).
+-define(DOI_DC_IDENTIFIER(Handle), <<"doi:", Handle/binary>>).
 
 %% API
 -export([register_handle/4, unregister_handle/1, modify_handle/2]).
@@ -54,28 +54,27 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
     case Type of
         <<"DOI">> ->
             Prefix = maps:get(<<"prefix">>, ServiceProperties),
-            DoiId = ?RANDOM_ID(),
-            DoiHandle = <<Prefix/binary, "/", DoiId/binary>>,
+            DoiHandle = <<Prefix/binary, "/", (?RANDOM_ID())/binary>>,
             DoiHandleEncoded = http_utils:url_encode(DoiHandle),
             case handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", DoiHandleEncoded/binary>>, Headers, Body) of
                 {ok, 201, _, _} ->
                     {ok, ?DOI_DC_IDENTIFIER(DoiHandle)};
-                Other ->
-                    ?error("Error registering a ~ts handle, handle proxy '~ts' (~ts) returned:~n~tp", [
-                        Type, HandleServiceName, ProxyEndpoint, Other
-                    ]),
+                HttpCallResult ->
+                    ?error(?autoformat_with_msg("Error registering a handle", [
+                        Type, HandleServiceName, ProxyEndpoint, HttpCallResult
+                    ])),
                     throw(?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(HandleServiceName))
             end;
         _ -> % <<"PID">> and other types
-            DoiId = ?RANDOM_ID(),
-            case handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", DoiId/binary>>, Headers, Body) of
+            PidHandle = ?RANDOM_ID(),
+            case handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", PidHandle/binary>>, Headers, Body) of
                 {ok, 201, _, RespJSON} ->
-                    PidHandle = maps:get(<<"handle">>, json_utils:decode(RespJSON)),
-                    {ok, PidHandle};
-                Other ->
-                    ?error("Error registering a ~ts handle, handle proxy '~ts' (~ts) returned:~n~tp", [
-                        Type, HandleServiceName, ProxyEndpoint, Other
-                    ]),
+                    PublicHandle = maps:get(<<"handle">>, json_utils:decode(RespJSON)),
+                    {ok, PublicHandle};
+                HttpCallResult ->
+                    ?error(?autoformat_with_msg("Error registering a handle", [
+                        Type, HandleServiceName, ProxyEndpoint, HttpCallResult
+                    ])),
                     throw(?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(HandleServiceName))
             end
     end.
@@ -87,22 +86,47 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
 %%--------------------------------------------------------------------
 -spec unregister_handle(od_handle:id()) -> ok.
 unregister_handle(HandleId) ->
-    {ok, #document{value = #od_handle{handle_service = HandleServiceId, public_handle = PublicHandle}}} =
-        od_handle:get(HandleId),
+    {ok, #document{value = #od_handle{
+        handle_service = HandleServiceId,
+        public_handle = PublicHandle
+    }}} = od_handle:get(HandleId),
     {ok, #document{value = #od_handle_service{
+        name = HandleServiceName,
         proxy_endpoint = ProxyEndpoint,
-        service_properties = ServiceProperties}}
-    } = od_handle_service:get(HandleServiceId),
-%%    Body = [
-%%        {<<"serviceProperties">>, ServiceProperties}
-%%    ],
-    Body = ServiceProperties, %TODO VFS-7415 use above Body after fixing proxy
+        service_properties = ServiceProperties
+    }}} = od_handle_service:get(HandleServiceId),
+    % NOTE: unlike during creation, the service properties are passed on the
+    % root level of the body object (rather than nested under the "serviceProperties" key)
+    Body = ServiceProperties,
     Headers = #{?HDR_CONTENT_TYPE => <<"application/json">>, ?HDR_ACCEPT => <<"application/json">>},
-    PublicHandleEncoded = http_utils:url_encode(PublicHandle),
-    {ok, 200, _, _} = handle_proxy_client:delete(
-        ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body)
-    ),
-    ok.
+    Type = maps:get(<<"type">>, ServiceProperties),
+    % NOTE: the public handle is built differently for different types of identifiers;
+    % @see register_handle/4
+    Handle = case Type of
+        <<"DOI">> ->
+            % the public handle looks like this: "oai:21.T15999/abcd"
+            % the handle for the above is: "21.T15999/abcd"   (includes prefix!)
+            ?DOI_DC_IDENTIFIER(DoiHandle) = PublicHandle,
+            DoiHandle;
+        _ -> % <<"PID">> and other types
+            % the public handle looks like this: "http://hdl.handle.net/21.T15999/abcd"
+            % the handle for the above is: "abcd"   (doesn't include prefix!)
+            Prefix = maps:get(<<"prefix">>, ServiceProperties),
+            [_ServiceUrl, PidHandle] = binary:split(PublicHandle, <<Prefix/binary, "/">>),
+            PidHandle
+    end,
+    HandleEncoded = http_utils:url_encode(Handle),
+    case handle_proxy_client:delete(
+        ProxyEndpoint, <<"/handle?hndl=", HandleEncoded/binary>>, Headers, json_utils:encode(Body)
+    ) of
+        {ok, 200, _, _} ->
+            ok;
+        HttpCallResult ->
+            ?error(?autoformat_with_msg("Error unregistering a handle", [
+                Type, HandleServiceName, ProxyEndpoint, HttpCallResult
+            ])),
+            throw(?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(HandleServiceName))
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
