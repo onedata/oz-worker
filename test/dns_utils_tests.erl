@@ -48,6 +48,7 @@ is_equal_or_subdomain_test_() ->
     [
         ?_assertEqual(true, F(<<"example.org">>, <<"example.org">>)),
         ?_assertEqual(true, F(<<"s3.example.org">>, <<"example.org">>)),
+        ?_assertEqual(false, F(<<"s3example.org">>, <<"example.org">>)),
         ?_assertEqual(false, F(<<"org">>, <<"example.org">>)),
         ?_assertEqual(false, F(<<"example.com">>, <<"example.org">>)),
         ?_assertEqual(false, F(<<"elpmaxe">>, <<"example">>))
