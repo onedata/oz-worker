@@ -132,7 +132,6 @@ gui_config() ->
 
     DynamicPageRoutes = [
         {"/", [<<"GET">>], page_redirect_to_oz_worker},
-        %% TODO VFS-10787 attempt GUI upload in oneprovider:set_up_service_in_onezone() every hour
         {?GUI_UPLOAD_PATH, [<<"POST">>], page_gui_upload}, % blocked when no DB space
         {?GUI_CONTEXT_PATH, [<<"GET">>], page_gui_context},
         {?GUI_PREAUTHORIZE_PATH, [<<"POST">>], page_gui_preauthorize},
