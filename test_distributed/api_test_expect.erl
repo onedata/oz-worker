@@ -14,7 +14,7 @@
 -module(api_test_expect).
 -author("Lukasz Opiola").
 
--include("api_test_utils.hrl").
+-include("utils/api_test_utils.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/graph_sync/gri.hrl").
 -include_lib("ctool/include/test/assertions.hrl").

@@ -23,8 +23,8 @@
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 
--include("api_test_utils.hrl").
--include("ozt.hrl").
+-include("utils/api_test_utils.hrl").
+-include("utils/ozt.hrl").
 
 
 -export([

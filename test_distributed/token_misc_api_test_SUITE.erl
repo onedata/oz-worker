@@ -13,7 +13,7 @@
 -module(token_misc_api_test_SUITE).
 -author("Lukasz Opiola").
 
--include("ozt.hrl").
+-include("utils/ozt.hrl").
 
 %% API
 -export([

@@ -539,6 +539,7 @@ filtering_of_broken_records_post_test(Config) ->
 %%%===================================================================
 
 identify_test_base(Config, Method) ->
+
     [Node | _] = ?config(oz_worker_nodes, Config),
     Path = get_oai_pmh_api_path(),
     ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
@@ -1084,10 +1085,14 @@ filtering_of_broken_records_test_base(Config, Method) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    NewConfig = ozt:init_per_suite(Config),
-    oct_background:init_per_suite(NewConfig, #onenv_test_config{
+    ModulesToLoad = [?MODULE, ozt, oz_test_utils, rest_test_utils],
+    oct_background:init_per_suite([{?LOAD_MODULES, ModulesToLoad} | Config], #onenv_test_config{
         onenv_scenario = "1oz",
-        posthook = ?config(?ENV_UP_POSTHOOK, NewConfig),
+        posthook = fun(Config) ->
+            NewConfig = ozt:init_per_suite(Config),
+            Posthook = ?config(?ENV_UP_POSTHOOK, NewConfig),
+            Posthook(NewConfig)
+        end,
         envs = [{oz_worker, oz_worker, [
             {oz_name, ?OZ_NAME},
             {oai_pmh_list_identifiers_batch_size, ?TESTED_LIST_BATCH_SIZE},

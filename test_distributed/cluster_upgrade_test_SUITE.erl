@@ -12,7 +12,7 @@
 -module(cluster_upgrade_test_SUITE).
 -author("Lukasz Opiola").
 
--include("ozt.hrl").
+-include("utils/ozt.hrl").
 
 %% API
 -export([

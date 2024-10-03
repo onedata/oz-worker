@@ -12,7 +12,7 @@
 -module(onezone_mailer_test_SUITE).
 -author("Lukasz Opiola").
 
--include("ozt.hrl").
+-include("utils/ozt.hrl").
 -include("utils/smtp_client.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").

@@ -14,7 +14,7 @@
 -author("Lukasz Opiola").
 
 -include("http/gui_paths.hrl").
--include("api_test_utils.hrl").
+-include("utils/api_test_utils.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/http/headers.hrl").

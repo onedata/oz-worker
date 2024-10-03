@@ -13,9 +13,9 @@
 -module(invite_tokens_test_SUITE).
 -author("Lukasz Opiola").
 
--include("ozt.hrl").
+-include("utils/ozt.hrl").
 -include("registered_names.hrl").
--include("api_test_utils.hrl").
+-include("utils/api_test_utils.hrl").
 -include("entity_logic.hrl").
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/aai/aai.hrl").

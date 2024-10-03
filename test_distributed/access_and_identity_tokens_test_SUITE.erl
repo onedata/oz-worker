@@ -17,8 +17,8 @@
 -module(access_and_identity_tokens_test_SUITE).
 -author("Lukasz Opiola").
 
--include("ozt.hrl").
--include("api_test_utils.hrl").
+-include("utils/ozt.hrl").
+-include("utils/api_test_utils.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/errors.hrl").

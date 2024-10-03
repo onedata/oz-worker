@@ -13,7 +13,7 @@
 -author("Lukasz Opiola").
 
 -include("entity_logic.hrl").
--include("api_test_utils.hrl").
+-include("utils/api_test_utils.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
