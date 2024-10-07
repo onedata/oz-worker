@@ -15,7 +15,7 @@
 -module(space_owners_test_SUITE).
 -author("Lukasz Opiola").
 
--include("utils/ozt.hrl").
+-include("ozt.hrl").
 
 %% API
 -export([

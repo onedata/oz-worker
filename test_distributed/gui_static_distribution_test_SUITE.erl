@@ -24,7 +24,7 @@
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 
--include("utils/api_test_utils.hrl").
+-include("api_test_utils.hrl").
 
 %% API
 -export([

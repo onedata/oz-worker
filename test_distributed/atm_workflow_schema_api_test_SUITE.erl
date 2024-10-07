@@ -24,8 +24,8 @@
 -include_lib("ctool/include/test/performance.hrl").
 -include_lib("ctool/include/errors.hrl").
 
--include("utils/ozt.hrl").
--include("utils/api_test_utils.hrl").
+-include("ozt.hrl").
+-include("api_test_utils.hrl").
 
 -export([
     all/0,

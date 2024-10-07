@@ -26,7 +26,7 @@
 -include_lib("ctool/include/test/performance.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
 
--include("utils/api_test_utils.hrl").
+-include("api_test_utils.hrl").
 
 -define(DUMMY_IDP, dummyIdP).
 

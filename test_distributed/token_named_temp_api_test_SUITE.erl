@@ -12,7 +12,7 @@
 -module(token_named_temp_api_test_SUITE).
 -author("Lukasz Opiola").
 
--include("utils/ozt.hrl").
+-include("ozt.hrl").
 
 %% API
 -export([

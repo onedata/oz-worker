@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
--include("utils/api_test_utils.hrl").
+-include("api_test_utils.hrl").
 
 -export([
     all/0,

@@ -539,7 +539,6 @@ filtering_of_broken_records_post_test(Config) ->
 %%%===================================================================
 
 identify_test_base(Config, Method) ->
-
     [Node | _] = ?config(oz_worker_nodes, Config),
     Path = get_oai_pmh_api_path(),
     ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
@@ -1085,14 +1084,8 @@ filtering_of_broken_records_test_base(Config, Method) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    ModulesToLoad = [?MODULE, ozt, oz_test_utils, rest_test_utils],
-    oct_background:init_per_suite([{?LOAD_MODULES, ModulesToLoad} | Config], #onenv_test_config{
+    ozt:onenv_init_per_suite(Config, #onenv_test_config{
         onenv_scenario = "1oz",
-        posthook = fun(Config) ->
-            NewConfig = ozt:init_per_suite(Config),
-            Posthook = ?config(?ENV_UP_POSTHOOK, NewConfig),
-            Posthook(NewConfig)
-        end,
         envs = [{oz_worker, oz_worker, [
             {oz_name, ?OZ_NAME},
             {oai_pmh_list_identifiers_batch_size, ?TESTED_LIST_BATCH_SIZE},
@@ -1126,7 +1119,7 @@ end_per_testcase(_, _Config) ->
     ok.
 
 end_per_suite(_Config) ->
-    oct_background:end_per_suite().
+    ozt:onenv_end_per_suite().
 
 %%%===================================================================
 %%% Functions used to validate REST calls

@@ -24,7 +24,7 @@
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/onedata.hrl").
 
--include("utils/api_test_utils.hrl").
+-include("api_test_utils.hrl").
 
 
 -export([
