@@ -1,8 +1,11 @@
-Release notes for project oz-worker
-===================================
+# Release notes for project oz-worker
 
-CHANGELOG
----------
+## CHANGELOG
+
+### 21.02.7
+
+-   **VFS-12080** Web GUI: Added support for creating custom login view
+    pages.
 
 ### 21.02.6
 
