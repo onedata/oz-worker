@@ -103,14 +103,6 @@ translate_value(_, #gri{type = od_atm_workflow_schema, aspect = dump}, JsonMap) 
 translate_value(_, #gri{type = od_atm_workflow_schema, aspect = {dump_revision, _}}, JsonMap) ->
     JsonMap;
 
-translate_value(_, #gri{type = od_cluster, aspect = instance, scope = private}, Cluster) ->
-    #od_cluster{worker_version = {WorkerReleaseVersion, WorkerBuildVersion, WorkerGuiHashVersion}} = Cluster,
-    #{
-        <<"workerReleaseVersion">> => WorkerReleaseVersion,
-        <<"workerBuildVersion">> => WorkerBuildVersion,
-        <<"workerGuiHash">> => WorkerGuiHashVersion
-    };
-
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n"
     "ProtocolVersion: ~tp~n"
