@@ -120,7 +120,7 @@ gui_config() ->
     CompatRegPath = filename:absname(ctool:get_env(current_compatibility_registry_file)),
 
     CustomCowboyRoutes = lists:flatten([
-        {?OAI_PMH_PATH ++ "/[...]", oai_handler, []}, % blocked when no DB space
+        {?OAI_PMH_PATH ++ "/[...]", oai_handler, []},
         {?NAGIOS_PATH, nagios_handler, []},
         {?PANEL_REST_PROXY_PATH ++ "[...]", http_port_forwarder, [9443, ?ONEPANEL_CONNECT_OPTS]},
         {?PROVIDER_GRAPH_SYNC_WS_PATH, gs_ws_handler, [provider_gs_translator]}, % blocked when no DB space
