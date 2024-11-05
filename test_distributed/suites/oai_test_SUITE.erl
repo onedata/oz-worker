@@ -1084,10 +1084,8 @@ filtering_of_broken_records_test_base(Config, Method) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    NewConfig = ozt:init_per_suite(Config),
-    oct_background:init_per_suite(NewConfig, #onenv_test_config{
+    ozt:onenv_init_per_suite(Config, #onenv_test_config{
         onenv_scenario = "1oz",
-        posthook = ?config(?ENV_UP_POSTHOOK, NewConfig),
         envs = [{oz_worker, oz_worker, [
             {oz_name, ?OZ_NAME},
             {oai_pmh_list_identifiers_batch_size, ?TESTED_LIST_BATCH_SIZE},
@@ -1121,7 +1119,7 @@ end_per_testcase(_, _Config) ->
     ok.
 
 end_per_suite(_Config) ->
-    oct_background:end_per_suite().
+    ozt:onenv_end_per_suite().
 
 %%%===================================================================
 %%% Functions used to validate REST calls

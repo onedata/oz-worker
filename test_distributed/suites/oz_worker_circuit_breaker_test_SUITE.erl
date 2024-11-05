@@ -92,15 +92,13 @@ gs_circuit_breaker_test_base(Endpoint, Auth = #auth{subject = Subject}) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    NewConfig = ozt:init_per_suite(Config),
-    oct_background:init_per_suite(NewConfig, #onenv_test_config{
-        onenv_scenario = "1oz",
-        posthook = ?config(?ENV_UP_POSTHOOK, NewConfig)
+    ozt:onenv_init_per_suite(Config, #onenv_test_config{
+        onenv_scenario = "1oz"
     }).
 
 
 end_per_suite(_Config) ->
-    oct_background:end_per_suite().
+    ozt:onenv_end_per_suite().
 
 
 init_per_testcase(_, Config) ->
