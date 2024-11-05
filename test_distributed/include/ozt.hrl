@@ -26,6 +26,7 @@
 -include_lib("ctool/include/test/performance.hrl").
 -include_lib("gui/include/gui_session.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
+-include_lib("onenv_ct/include/oct_background.hrl").
 
 % Time caveat is required in temporary tokens, a default one is added if there isn't any
 -define(DEFAULT_TEMP_CAVEAT_TTL, 36000).
