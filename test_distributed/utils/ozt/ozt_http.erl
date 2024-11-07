@@ -27,6 +27,7 @@
 -export([request/3, request/4]).
 -export([build_url/1, build_url/2]).
 -export([ssl_opts/0, get_ca_certs/0]).
+-export([create_dummy_gui_package/0]).
 
 %%%===================================================================
 %%% API
@@ -85,15 +86,19 @@ rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson) 
 request(Method, Url, Headers) ->
     request(Method, Url, Headers, #{}).
 
--spec request(http_client:method(), http_client:url(), http_client:headers(), json_utils:json_term()) ->
-    {ok, json_utils:json_term()} | errors:error().
-request(Method, Url, Headers, DataJson) ->
+-spec request(http_client:method(), http_client:url(), http_client:headers(),
+    json_utils:json_term() | {multipart, proplists:proplist()}) -> {ok, json_utils:json_term()} | errors:error().
+request(Method, Url, Headers, Data) ->
     Opts = [
         {ssl_options, ssl_opts()},
         {connect_timeout, timer:seconds(60)},
         {recv_timeout, timer:seconds(60)}
     ],
-    case http_client:request(Method, Url, Headers, json_utils:encode(DataJson), Opts) of
+    EncodedData = case Data of
+        {multipart, _} -> Data;
+        DataJson -> json_utils:encode(DataJson)
+    end,
+    case http_client:request(Method, Url, Headers, EncodedData, Opts) of
         {ok, OkCode, _, Body} when OkCode >= 200 andalso OkCode < 300 ->
             {ok, Body};
         {ok, Code, _, <<"">>} ->
@@ -141,3 +146,8 @@ ssl_opts() ->
 -spec get_ca_certs() -> [public_key:der_encoded()].
 get_ca_certs() ->
     ozt:rpc(https_listener, get_cert_chain_ders, []).
+
+
+-spec create_dummy_gui_package() -> string().
+create_dummy_gui_package() ->
+    oz_test_utils:create_dummy_gui_package().

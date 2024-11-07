@@ -524,6 +524,14 @@ translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, sco
         <<"atmInventoryId">> => AtmInventoryId
     };
 
+translate_resource(_, #gri{type = od_cluster, aspect = instance, scope = private}, Cluster) ->
+    #od_cluster{worker_version = {WorkerReleaseVersion, WorkerBuildVersion, WorkerGuiHashVersion}} = Cluster,
+    #{
+        <<"workerReleaseVersion">> => WorkerReleaseVersion,
+        <<"workerBuildVersion">> => WorkerBuildVersion,
+        <<"workerGuiHash">> => WorkerGuiHashVersion
+    };
+
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate Oneprovider graph sync get result for:~n
     ProtocolVersion: ~tp~n
