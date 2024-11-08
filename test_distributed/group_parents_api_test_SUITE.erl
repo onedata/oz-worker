@@ -181,14 +181,7 @@ create_parent_test(Config) ->
             gri = #gri{type = od_group, aspect = instance},
             auth_hint = ?AS_GROUP(Child),
             expected_result_op = ?OK_ENV(fun(_, Data) ->
-                ExpName = maps:get(<<"name">>, Data),
-                ExpType = maps:get(<<"type">>, Data, ?DEFAULT_GROUP_TYPE),
                 ?OK_MAP_CONTAINS(#{
-                    <<"children">> => #{Child => AllPrivsBin},
-                    <<"name">> => ExpName,
-                    <<"parents">> => [],
-                    <<"spaces">> => [],
-                    <<"type">> => atom_to_binary(ExpType, utf8),
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = gri:deserialize(EncodedGri),
                         VerifyFun(Id, Data)

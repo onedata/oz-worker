@@ -1,8 +1,21 @@
-Release notes for project oz-worker
-===================================
+# Release notes for project oz-worker
 
-CHANGELOG
----------
+## CHANGELOG
+
+### 21.02.7
+
+-   **VFS-12080** Web GUI: Added support for creating custom login view
+    pages.
+
+### 21.02.6
+
+-   **VFS-12197** Web GUI: Improved share list views.
+-   **VFS-12195** The name of the handle service where an Open Data
+    handle has been registered is now publicly visible and always
+    displayed on the Share view.
+-   **VFS-12110** Added a circuit breaker mechanism that disables all
+    Onezone services when the database is close to running out of disk
+    space.
 
 ### 21.02.5
 

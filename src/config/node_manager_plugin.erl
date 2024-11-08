@@ -213,7 +213,6 @@ before_listeners_start() ->
 %%--------------------------------------------------------------------
 -spec listeners() -> Listeners :: [atom()].
 listeners() -> [
-    http_listener,
     https_listener
 ].
 

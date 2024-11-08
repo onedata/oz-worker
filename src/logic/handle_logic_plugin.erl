@@ -244,12 +244,13 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = public}}, Handle) ->
     #od_handle{
-        public_handle = PublicHandle,
+        handle_service = HandleServiceId, public_handle = PublicHandle,
         resource_type = ResourceType, resource_id = ResourceId,
         metadata = Metadata, metadata_prefix = MetadataPrefix,
         timestamp = Timestamp, creation_time = CreationTime
     } = Handle,
     {ok, #{
+        <<"handleServiceId">> => HandleServiceId,
         <<"publicHandle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
@@ -351,11 +352,10 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
         try
             handle_proxy:unregister_handle(HandleId)
         catch Class:Reason:Stacktrace ->
-            ?warning_exception(
-                "Handle ~ts (~ts) was removed but it failed to be unregistered from handle service ~ts",
-                [HandleId, PublicHandle, HandleService],
-                Class, Reason, Stacktrace
-            )
+            ?warning_exception(?autoformat_with_msg(
+                "Handle was removed but it failed to be unregistered from its handle service",
+                [HandleId, PublicHandle, HandleService]
+            ), Class, Reason, Stacktrace)
         end,
         DeletionTimestamp = od_handle:current_timestamp(),
         handle_registry:report_deleted(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
@@ -382,7 +382,7 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
-exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
+exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Handle = #od_handle{}) ->
     case Req#el_req.auth_hint of
         ?THROUGH_USER(UserId) ->
             handle_logic:has_eff_user(Handle, UserId);
@@ -511,7 +511,8 @@ authorize(Req = #el_req{operation = get, auth = ?USER}, Handle) ->
     auth_by_privilege(Req, Handle, ?HANDLE_VIEW);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, Handle) ->
-    auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
+    auth_by_privilege(Req, Handle, ?HANDLE_UPDATE) orelse
+        auth_by_hservice_privilege(Req, Handle, ?HANDLE_SERVICE_MANAGE_HANDLES);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}, Handle) ->
     auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
@@ -520,7 +521,8 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = {group_privilege
     auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Handle) ->
-    auth_by_privilege(Req, Handle, ?HANDLE_DELETE);
+    auth_by_privilege(Req, Handle, ?HANDLE_DELETE) orelse
+        auth_by_hservice_privilege(Req, Handle, ?HANDLE_SERVICE_MANAGE_HANDLES);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, _}}}, Handle) ->
     auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
@@ -677,16 +679,11 @@ raw_metadata_to_revised_for_publication(MetadataPrefix, RawMetadata, ShareId, Sh
     end.
 
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns if given user has specific effective privilege in the handle.
-%% UserId is either given explicitly or derived from entity logic request.
-%% Auths of type other than user are discarded.
-%% @end
-%%--------------------------------------------------------------------
--spec auth_by_privilege(entity_logic:req() | od_user:id(),
-    od_handle:id() | od_handle:record(), privileges:handle_privilege()) ->
+-spec auth_by_privilege(
+    entity_logic:req() | od_user:id(),
+    od_handle:id() | od_handle:record(),
+    privileges:handle_privilege()
+) ->
     boolean().
 auth_by_privilege(#el_req{auth = ?USER(UserId)}, HandleOrId, Privilege) ->
     auth_by_privilege(UserId, HandleOrId, Privilege);
@@ -694,3 +691,17 @@ auth_by_privilege(#el_req{auth = _OtherAuth}, _HandleOrId, _Privilege) ->
     false;
 auth_by_privilege(UserId, HandleOrId, Privilege) ->
     handle_logic:has_eff_privilege(HandleOrId, UserId, Privilege).
+
+
+-spec auth_by_hservice_privilege(
+    entity_logic:req() | od_user:id(),
+    od_handle:record(),
+    privileges:handle_service_privilege()
+) ->
+    boolean().
+auth_by_hservice_privilege(#el_req{auth = ?USER(UserId)}, Handle, Privilege) ->
+    auth_by_hservice_privilege(UserId, Handle, Privilege);
+auth_by_hservice_privilege(#el_req{auth = _OtherAuth}, _Handle, _Privilege) ->
+    false;
+auth_by_hservice_privilege(UserId, #od_handle{handle_service = HServiceId}, Privilege) ->
+    handle_service_logic:has_eff_privilege(HServiceId, UserId, Privilege).

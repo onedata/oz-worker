@@ -197,27 +197,12 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = shared}, U
 translate_resource(_, #gri{type = od_group, aspect = instance, scope = private}, Group) ->
     #od_group{
         name = Name,
-        type = Type,
-
-        children = Children,
-        parents = Parents,
-
-        users = Users,
-
-        eff_spaces = EffSpaces
+        type = Type
     } = Group,
     #{
         <<"name">> => Name,
         <<"type">> => Type,
-
-        <<"children">> => Children,
-        <<"effectiveChildren">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_group, Group),
-        <<"parents">> => Parents,
-
-        <<"users">> => Users,
-        <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Group),
-
-        <<"spaces">> => maps:keys(EffSpaces)
+        <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Group)
     };
 
 % shared and protected scopes carry the same data
@@ -393,6 +378,9 @@ translate_resource(_, #gri{type = od_handle_service, aspect = instance, scope = 
         <<"effectiveGroups">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_group, HService)
     };
 
+translate_resource(_, #gri{type = od_handle_service, aspect = instance, scope = public}, HServiceData) ->
+    HServiceData;
+
 translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}, Handle) ->
     #od_handle{
         public_handle = PublicHandle,
@@ -404,13 +392,13 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
         handle_service = HandleServiceId
     } = Handle,
     #{
+        <<"handleServiceId">> => HandleServiceId,
         <<"publicHandle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => Metadata,
         <<"timestamp">> => time:seconds_to_iso8601(Timestamp),  % @TODO VFS-6309 to be removed in 21.02
-        <<"handleServiceId">> => HandleServiceId,
 
         <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Handle),
         <<"effectiveGroups">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_group, Handle)
@@ -418,12 +406,14 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
 
 translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public}, HandleData) ->
     #{
+        <<"handleServiceId">> := HandleServiceId,
         <<"publicHandle">> := PublicHandle,
         <<"metadataPrefix">> := MetadataPrefix,
         <<"metadata">> := Metadata,
         <<"timestamp">> := Timestamp
     } = HandleData,
     #{
+        <<"handleServiceId">> => HandleServiceId,
         <<"publicHandle">> => PublicHandle,
         <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => Metadata,
@@ -532,6 +522,14 @@ translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, sco
         <<"revisionRegistry">> => jsonable_record:to_json(RevisionRegistry, atm_workflow_schema_revision_registry),
 
         <<"atmInventoryId">> => AtmInventoryId
+    };
+
+translate_resource(_, #gri{type = od_cluster, aspect = instance, scope = private}, Cluster) ->
+    #od_cluster{worker_version = {WorkerReleaseVersion, WorkerBuildVersion, WorkerGuiHashVersion}} = Cluster,
+    #{
+        <<"workerReleaseVersion">> => WorkerReleaseVersion,
+        <<"workerBuildVersion">> => WorkerBuildVersion,
+        <<"workerGuiHash">> => WorkerGuiHashVersion
     };
 
 translate_resource(ProtocolVersion, GRI, Data) ->

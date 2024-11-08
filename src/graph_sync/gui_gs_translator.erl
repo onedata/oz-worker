@@ -233,7 +233,8 @@ translate_user(GRI = #gri{type = od_user, id = UserId, aspect = instance, scope 
         password_hash = PasswordHash,
         full_name = FullName,
         username = Username,
-        emails = Emails
+        emails = Emails,
+        eff_oz_privileges = EffOzPrivileges
     } = User,
     CanInviteProviders = open =:= oz_worker:get_env(provider_registration_policy, open) orelse
         user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_INVITE),
@@ -245,6 +246,7 @@ translate_user(GRI = #gri{type = od_user, id = UserId, aspect = instance, scope 
         <<"username">> => utils:undefined_to_null(Username),
         <<"emails">> => Emails,
         <<"canInviteProviders">> => CanInviteProviders,
+        <<"effOzPrivileges">> => EffOzPrivileges,
         <<"tokenList">> => gri:serialize(#gri{type = od_token, id = undefined, aspect = {user_named_tokens, UserId}}),
         <<"linkedAccountList">> => gri:serialize(GRI#gri{aspect = linked_accounts, scope = private}),
         <<"groupList">> => gri:serialize(GRI#gri{aspect = eff_groups, scope = private}),
@@ -587,12 +589,17 @@ translate_space(#gri{aspect = harvesters}, Harvesters) ->
 %% @private
 -spec translate_share(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
-translate_share(#gri{aspect = instance, scope = private}, Share) ->
-    #od_share{name = Name, file_type = FileType, space = SpaceId} = Share,
+translate_share(#gri{aspect = instance, scope = private}, #od_share{
+    name = Name,
+    file_type = FileType,
+    space = SpaceId,
+    handle = Handle
+}) ->
     #{
         <<"name">> => Name,
         <<"space">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto}),
-        <<"fileType">> => FileType
+        <<"fileType">> => FileType,
+        <<"hasHandle">> => Handle /= undefined
     };
 translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name">> := Name}) ->
     {ok, {ChosenProviderId, ChosenProviderVersion}} = share_logic:choose_provider_for_public_share_handling(ShareId),
