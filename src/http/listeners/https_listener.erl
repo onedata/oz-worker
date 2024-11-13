@@ -122,6 +122,7 @@ gui_config() ->
     CustomCowboyRoutes = lists:flatten([
         {?OAI_PMH_PATH ++ "/[...]", oai_handler, []},
         {?NAGIOS_PATH, nagios_handler, []},
+        % @TODO VFS-12476 configurable onepanel port
         {?PANEL_REST_PROXY_PATH ++ "[...]", http_port_forwarder, [9443, ?ONEPANEL_CONNECT_OPTS]},
         {?PROVIDER_GRAPH_SYNC_WS_PATH, gs_ws_handler, [provider_gs_translator]}, % blocked when no DB space
         {?GUI_GRAPH_SYNC_WS_PATH, gs_ws_handler, [gui_gs_translator]}, % blocked when no DB space
