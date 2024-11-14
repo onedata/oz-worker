@@ -304,7 +304,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"shareId">> => {binary, {not_exists, fun(Value) ->
             not share_logic:exists(Value)
         end}},
-        <<"name">> => {binary, name},
+        <<"name">> => {binary, fun validate_name/1},
         <<"rootFileId">> => {binary, non_empty},
         <<"spaceId">> => {any, {exists, fun(Value) ->
             space_logic:exists(Value)
@@ -318,11 +318,10 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
-        <<"name">> => {binary, name},
+        <<"name">> => {binary, fun validate_name/1},
         <<"description">> => {binary, {text_length_limit, ?SHARE_DESCRIPTION_SIZE_LIMIT}}
     }
 }.
-
 
 %%%===================================================================
 %%% Internal functions
@@ -336,9 +335,9 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 %% request or share record. Auths of type other than user are discarded.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_space_privilege(entity_logic:req() | od_user:id(),
-    od_share:record() | od_space:id(), privileges:space_privilege()) ->
-    boolean().
+        - spec auth_by_space_privilege(entity_logic:req() | od_user:id(),
+od_share:record() | od_space:id(), privileges:space_privilege()) ->
+boolean().
 auth_by_space_privilege(#el_req{auth = ?USER(UserId)}, Share, Privilege) ->
     auth_by_space_privilege(UserId, Share, Privilege);
 auth_by_space_privilege(#el_req{auth = _OtherAuth}, _Share, _Privilege) ->
@@ -361,3 +360,14 @@ auth_by_space_privilege(UserId, SpaceId, Privilege) ->
 auth_by_space_support(ProviderId, Share) ->
     space_logic:is_supported_by_provider(Share#od_share.space, ProviderId).
 
+
+%% @private
+-spec validate_name(od_share:name()) -> true | no_return().
+validate_name(ShareName) ->
+    case onedata_file:is_valid_filename(ShareName) of
+        true when byte_size(ShareName) =< ?NAME_MAXIMUM_LENGTH ->
+            true;
+        _ ->
+            % TODO VFS-12486 Rework all ERROR_BAD_DATA errors with hint into individual ones (waiting for od_error)
+            throw(?ERROR_BAD_DATA(<<"name">>, <<"Bad value: ", (?SHARE_NAME_REQUIREMENTS_DESCRIPTION)/binary>>))
+    end.
