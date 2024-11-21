@@ -38,6 +38,7 @@
 -export([json_dump_of_atm_lambda/4, json_dump_of_atm_lambda_revision/3]).
 -export([private_atm_workflow_schema/4]).
 -export([json_dump_of_atm_workflow_schema/4, json_dump_of_atm_workflow_schema_revision/3]).
+-export([expected_public_share_url/1]).
 
 %%%===================================================================
 %%% API
@@ -176,8 +177,7 @@ protected_space(logic, _Id, SpaceData, Creator) ->
         <<"supportParametersRegistry">> => maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"areEffPrivilegesRecalculated">> => true,
-        <<"creator">> => Creator,
-        <<"sharesCount">> => 0
+        <<"creator">> => Creator
     });
 protected_space(rest, Id, SpaceData, Creator) ->
     #{
@@ -218,7 +218,7 @@ private_share(logic, _Id, ShareData, Creator) ->
             space = maps:get(<<"spaceId">>, ShareData),
             handle = maps:get(<<"handleId">>, ShareData, undefined),
 
-            root_file = maps:get(<<"rootFileId">>, ShareData),
+            root_file_uuid = element(1, file_id:unpack_share_guid(maps:get(<<"rootFileId">>, ShareData))),
             file_type = maps:get(<<"fileType">>, ShareData),
 
             creation_time = ozt_mocks:get_frozen_time_seconds(),
@@ -231,7 +231,7 @@ private_share(rest, Id, ShareData, Creator) ->
         <<"name">> => maps:get(<<"name">>, ShareData),
         <<"description">> => maps:get(<<"description">>, ShareData),
         <<"spaceId">> => maps:get(<<"spaceId">>, ShareData),
-        <<"rootFileId">> => element(2, {ok, _} = file_id:guid_to_objectid(maps:get(<<"rootFileId">>, ShareData))),
+        <<"rootFileId">> => ?check(file_id:guid_to_objectid(maps:get(<<"rootFileId">>, ShareData))),
         <<"fileType">> => atom_to_binary(maps:get(<<"fileType">>, ShareData), utf8),
         <<"handleId">> => utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
@@ -246,7 +246,11 @@ private_share(gs, Id, ShareData, _Creator) ->
         <<"description">> => maps:get(<<"description">>, ShareData),
         <<"spaceId">> => maps:get(<<"spaceId">>, ShareData),
         <<"rootFileId">> => maps:get(<<"rootFileId">>, ShareData),
-        <<"fileType">> => atom_to_binary(maps:get(<<"fileType">>, ShareData), utf8),
+        % TODO VFS-VFS-12490 [file, dir] deprecated, left for BC, can be removed in 23.02.*
+        <<"fileType">> => case maps:get(<<"fileType">>, ShareData) of
+            ?DIRECTORY_TYPE -> <<"dir">>;
+            ?REGULAR_FILE_TYPE -> <<"file">>
+        end,
         <<"handleId">> => utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
         <<"publicRestUrl">> => expected_public_share_rest_url(Id)
@@ -259,7 +263,7 @@ public_share(logic, _Id, ShareData) ->
         <<"spaceId">> => maps:get(<<"spaceId">>, ShareData),
         <<"name">> => maps:get(<<"name">>, ShareData),
         <<"description">> => maps:get(<<"description">>, ShareData),
-        <<"rootFileId">> => maps:get(<<"rootFileId">>, ShareData),
+        <<"rootFileObjectId">> => ?check(file_id:guid_to_objectid(maps:get(<<"rootFileId">>, ShareData))),
         <<"fileType">> => maps:get(<<"fileType">>, ShareData),
         <<"handleId">> => maps:get(<<"handleId">>, ShareData, undefined),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
@@ -269,7 +273,7 @@ public_share(rest, Id, ShareData) ->
         <<"shareId">> => Id,
         <<"name">> => maps:get(<<"name">>, ShareData),
         <<"description">> => maps:get(<<"description">>, ShareData),
-        <<"rootFileId">> => element(2, {ok, _} = file_id:guid_to_objectid(maps:get(<<"rootFileId">>, ShareData))),
+        <<"rootFileId">> => ?check(file_id:guid_to_objectid(maps:get(<<"rootFileId">>, ShareData))),
         <<"fileType">> => atom_to_binary(maps:get(<<"fileType">>, ShareData), utf8),
         <<"handleId">> => utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
@@ -283,7 +287,11 @@ public_share(gs, Id, ShareData) ->
         <<"name">> => maps:get(<<"name">>, ShareData),
         <<"description">> => maps:get(<<"description">>, ShareData),
         <<"rootFileId">> => maps:get(<<"rootFileId">>, ShareData),
-        <<"fileType">> => atom_to_binary(maps:get(<<"fileType">>, ShareData), utf8),
+        % TODO VFS-VFS-12490 [file, dir] deprecated, left for BC, can be removed in 23.02.*
+        <<"fileType">> => case maps:get(<<"fileType">>, ShareData) of
+            ?DIRECTORY_TYPE -> <<"dir">>;
+            ?REGULAR_FILE_TYPE -> <<"file">>
+        end,
         <<"handleId">> => utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
         <<"publicRestUrl">> => expected_public_share_rest_url(Id)
@@ -693,14 +701,14 @@ json_dump_of_atm_workflow_schema_revision(rest, AtmWorkflowSchemaRevisionData, R
 json_dump_of_atm_workflow_schema_revision(gs, RevisionData, RevisionNumber) ->
     ?OK_MAP(json_dump_of_atm_workflow_schema_revision(rest, RevisionData, RevisionNumber)).
 
-%%%===================================================================
-%%% helpers
-%%%===================================================================
 
-%% @private
+-spec expected_public_share_url(od_share:id()) -> binary().
 expected_public_share_url(ShareId) ->
     str_utils:format_bin("https://~ts/share/~ts", [ozt:get_domain(), ShareId]).
 
+%%%===================================================================
+%%% helpers
+%%%===================================================================
 
 %% @private
 expected_public_share_rest_url(ShareId) ->

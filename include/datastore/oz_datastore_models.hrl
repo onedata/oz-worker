@@ -14,6 +14,7 @@
 
 -include("entity_logic.hrl").
 -include_lib("ctool/include/onedata.hrl").
+-include_lib("ctool/include/onedata_file.hrl").
 -include_lib("ctool/include/space_support/support_parameters.hrl").
 -include_lib("ctool/include/automation/automation.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_models.hrl").
@@ -261,7 +262,10 @@ end).
     users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
     groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
     storages = #{} :: entity_graph:relations_with_attrs(od_storage:id(), Size :: pos_integer()),
-    % All shares that belong to this space.
+
+    % this field is deprecated, shares are now stored in share_registry
+    % it should never be used, but is needed to perform the cluster upgrade
+    % (then, the field is always empty)
     shares = [] :: entity_graph:relations(od_share:id()),
     harvesters = [] :: entity_graph:relations(od_harvester:id()),
 
@@ -296,8 +300,8 @@ end).
     space = undefined :: undefined | od_space:id(),
     handle = undefined :: undefined | od_handle:id(),
 
-    root_file = undefined :: undefined | binary(),
-    file_type = dir :: file | dir,
+    root_file_uuid = undefined :: undefined | file_id:file_uuid(),
+    file_type = ?DIRECTORY_TYPE :: od_share:file_type(),
 
     creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject()

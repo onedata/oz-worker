@@ -218,7 +218,7 @@ set_up_spaces_and_shares(Environment = #environment{users = Users, groups = Grou
         shares = lists:flatmap(fun(Space) ->
             lists:map(fun(_) ->
                 simulate_random_delay(),
-                ozt_spaces:create_share(Space, ?GEN_NAME())
+                ozt_shares:create(Space, ?GEN_NAME())
             end, lists:seq(1, ?MEMBERS_COUNT))
         end, Spaces)
     }.

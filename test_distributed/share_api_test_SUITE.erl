@@ -16,6 +16,7 @@
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/onedata_file.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
@@ -147,17 +148,23 @@ create_test(Config) ->
     ], []),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    RootFileUuid = datastore_key:new(),
     ProposedShareId = datastore_key:new(),
-    RootFileId = ?GEN_ROOT_FILE_ID(SpaceId, ProposedShareId),
+    RootFileShareGuid = ?GEN_ROOT_FILE_GUID(RootFileUuid, SpaceId, ProposedShareId),
 
     VerifyFun = fun(ShareId, Data) ->
         ?assertEqual(ShareId, ProposedShareId),
         {ok, Share} = oz_test_utils:get_share(Config, ShareId),
-        ExpectedFileType = maps:get(<<"fileType">>, Data, dir),
+        % TODO VFS-VFS-12490 [file, dir] deprecated, left for BC, can be removed in 23.02.*
+        ExpectedFileType = case maps:get(<<"fileType">>, Data, ?DIRECTORY_TYPE) of
+            <<"file">> -> ?REGULAR_FILE_TYPE;
+            <<"dir">> -> ?DIRECTORY_TYPE;
+            ModernType -> ModernType
+        end,
         ExpectedDescription = maps:get(<<"description">>, Data, <<"">>),
         ?assertMatch(#od_share{
             name = ?CORRECT_NAME, description = ExpectedDescription,
-            space = SpaceId, root_file = RootFileId,
+            space = SpaceId, root_file_uuid = RootFileUuid,
             file_type = ExpectedFileType
         }, Share),
         true
@@ -187,8 +194,8 @@ create_test(Config) ->
         {<<"rootFileId">>, ShareFileGuidWithUndefinedShareId, ?ERROR_BAD_DATA(<<"rootFileId">>)},
         {<<"rootFileId">>, ShareFileGuidWithBadFileUuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
         {<<"fileType">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"fileType">>)},
-        {<<"fileType">>, <<"">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [file, dir])},
-        {<<"fileType">>, atom, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [file, dir])}
+        {<<"fileType">>, <<"">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [?REGULAR_FILE_TYPE, ?DIRECTORY_TYPE])},
+        {<<"fileType">>, atom, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [?REGULAR_FILE_TYPE, ?DIRECTORY_TYPE])}
     ],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -219,7 +226,7 @@ create_test(Config) ->
                 ?OK_MAP_CONTAINS(#{
                     <<"handleId">> => null,
                     <<"name">> => ?CORRECT_NAME,
-                    <<"rootFileId">> => RootFileId,
+                    <<"rootFileId">> => RootFileShareGuid,
                     <<"spaceId">> => SpaceId,
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = gri:deserialize(EncodedGri),
@@ -239,8 +246,9 @@ create_test(Config) ->
                 <<"shareId">> => [ProposedShareId],
                 <<"name">> => [?CORRECT_NAME],
                 <<"description">> => [<<"">>, ?RAND_UNICODE_STR(769)],
-                <<"rootFileId">> => [RootFileId],
-                <<"fileType">> => [file, dir],
+                <<"rootFileId">> => [RootFileShareGuid],
+                % TODO VFS-VFS-12490 [file, dir] deprecated, left for BC, can be removed in 23.02.*
+                <<"fileType">> => [?REGULAR_FILE_TYPE, ?DIRECTORY_TYPE, <<"file">>, <<"dir">>],
                 <<"spaceId">> => [SpaceId]
             },
             bad_values = lists:flatten([
@@ -274,10 +282,10 @@ create_test(Config) ->
 
 
 get_test(Config) ->
-    get_test(Config, ?SHARE_ID_2, dir),
-    get_test(Config, ?SHARE_ID_1, file).
+    get_test(Config, ?DIRECTORY_TYPE),
+    get_test(Config, ?REGULAR_FILE_TYPE).
 
-get_test(Config, ShareId, FileType) ->
+get_test(Config, FileType) ->
     % create space with 3 users:
     %   Owner effectively has all the privileges
     %   U2 gets the SPACE_MANAGE_SHARES privilege
@@ -287,15 +295,27 @@ get_test(Config, ShareId, FileType) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    ShareId = datastore_key:new(),
     ShareData = #{
         <<"shareId">> => ShareId,
         <<"spaceId">> => S1,
         <<"name">> => ?SHARE_NAME1,
         <<"description">> => str_utils:rand_hex(rand:uniform(1000) - 1),
-        <<"rootFileId">> => ?GEN_ROOT_FILE_ID(S1, ShareId),
+        <<"rootFileId">> => ?GEN_ROOT_FILE_GUID(S1, ShareId),
         <<"fileType">> => FileType
     },
-    {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(Owner), ShareData),
+    {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(Owner), ShareData#{
+        % TODO VFS-VFS-12490 [file, dir] deprecated, left for BC, can be removed in 23.02.*
+        <<"fileType">> => case ?RAND_BOOL() of
+            true ->
+                FileType;
+            false ->
+                case FileType of
+                    ?DIRECTORY_TYPE -> <<"dir">>;
+                    ?REGULAR_FILE_TYPE -> <<"file">>
+                end
+        end
+    }),
 
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
@@ -369,7 +389,7 @@ get_test(Config, ShareId, FileType) ->
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{
             method => get,
-            url => oz_test_utils:call_oz(Config, share_logic, build_public_rest_url, [ShareId]),
+            url => oz_test_utils:call_oz(Config, od_share, build_public_rest_url, [ShareId]),
             path => <<"">>
         },
         expect => api_test_expect:public_share(rest, ShareId, ShareData)
@@ -395,7 +415,7 @@ update_test(Config) ->
                 <<"shareId">> => ShareId,
                 <<"name">> => InitialName,
                 <<"description">> => InitialDescription,
-                <<"rootFileId">> => ?GEN_ROOT_FILE_ID(S1, ShareId),
+                <<"rootFileId">> => ?GEN_ROOT_FILE_GUID(S1, ShareId),
                 <<"spaceId">> => S1
             }
         ),
@@ -454,9 +474,9 @@ update_test(Config) ->
                 <<"name">> => [?CORRECT_NAME],
                 <<"description">> => [<<"">>, ?RAND_UNICODE_STR(1397)]
             },
-            bad_values = ?GEN_NAME_BAD_VALUES() % fixme ++ [
-              %  {<<"description">>, ?RAND_UNICODE_STR(100001), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"description">>, 100000)}
-           % ]
+            bad_values = ?GEN_NAME_BAD_VALUES() ++ [
+                {<<"description">>, ?RAND_UNICODE_STR(100001), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"description">>, 100000)}
+            ]
         }
     },
     ?assert(api_test_utils:run_tests(
@@ -563,8 +583,8 @@ get_shared_file_or_directory_data_test_base(Config, SubpathWithQs) ->
         <<"spaceId">> => SpaceId,
         <<"name">> => ?SHARE_NAME1,
         <<"description">> => str_utils:rand_hex(rand:uniform(1000) - 1),
-        <<"rootFileId">> => ?GEN_ROOT_FILE_ID(SpaceId, ShareId),
-        <<"fileType">> => file
+        <<"rootFileId">> => ?GEN_ROOT_FILE_GUID(SpaceId, ShareId),
+        <<"fileType">> => ?REGULAR_FILE_TYPE
     }),
     CorrectObjectId = gen_example_object_id(ShareId),
 

@@ -16,6 +16,7 @@
 -behaviour(gs_translator_behaviour).
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/onedata_file.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/errors.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
@@ -212,7 +213,7 @@ translate_resource(_, #gri{type = od_group, aspect = instance, scope = protected
     #{<<"name">> := Name, <<"type">> := Type} = GroupData,
     #{<<"name">> => Name, <<"type">> => Type};
 
-translate_resource(_, #gri{type = od_space, aspect = instance, scope = private}, Space) ->
+translate_resource(_, #gri{type = od_space, id = SpaceId, aspect = instance, scope = private}, Space) ->
     #od_space{
         name = Name,
 
@@ -223,7 +224,6 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
         groups = Groups,
 
         storages = Storages,
-        shares = Shares,
         harvesters = Harvesters,
 
         support_parameters_registry = SupportParametersRegistry
@@ -241,7 +241,9 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
 
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"storages">> => Storages,
-        <<"shares">> => Shares,
+
+        % TODO VFS-VFS-12490 left for BC, can be removed in 23.02.* sinc providers in 22.02 do not use this field
+        <<"shares">> => share_registry:list_ids(SpaceId, #{limit => infinity}),
         <<"harvesters">> => Harvesters,
 
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry)
@@ -258,23 +260,27 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry)
     };
 
-translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = private}, Share) ->
+translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = private}, ShareRecord) ->
     #od_share{
         space = SpaceId,
         name = Name,
         description = Description,
         handle = HandleId,
-        root_file = RootFileId,
         file_type = FileType
-    } = Share,
+    } = ShareRecord,
     #{
         <<"spaceId">> => SpaceId,
         <<"name">> => Name,
         <<"description">> => Description,
-        <<"publicUrl">> => share_logic:build_public_url(ShareId),
-        <<"publicRestUrl">> => share_logic:build_public_rest_url(ShareId),
-        <<"rootFileId">> => RootFileId,
-        <<"fileType">> => FileType,
+        <<"publicUrl">> => od_share:build_public_url(ShareId),
+        <<"publicRestUrl">> => od_share:build_public_rest_url(ShareId),
+        <<"rootFileId">> => od_share:build_root_file(guid, ShareId, ShareRecord),
+        % TODO VFS-VFS-12490 [file, dir] deprecated, left for BC, conversion can be removed in 23.02.*
+        % (providers in 22.02 understand both formats)
+        <<"fileType">> => case FileType of
+            ?REGULAR_FILE_TYPE -> file;
+            ?DIRECTORY_TYPE -> dir
+        end,
         <<"handleId">> => utils:undefined_to_null(HandleId)
     };
 
@@ -283,7 +289,7 @@ translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, sco
         <<"spaceId">> := SpaceId,
         <<"name">> := Name,
         <<"description">> := Description,
-        <<"rootFileId">> := RootFileId,
+        <<"rootFileObjectId">> := RootFileObjectId,
         <<"fileType">> := FileType,
         <<"handleId">> := HandleId
     } = ShareData,
@@ -291,10 +297,15 @@ translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, sco
         <<"spaceId">> => SpaceId,
         <<"name">> => Name,
         <<"description">> => Description,
-        <<"publicUrl">> => share_logic:build_public_url(ShareId),
-        <<"publicRestUrl">> => share_logic:build_public_rest_url(ShareId),
-        <<"rootFileId">> => RootFileId,
-        <<"fileType">> => FileType,
+        <<"publicUrl">> => od_share:build_public_url(ShareId),
+        <<"publicRestUrl">> => od_share:build_public_rest_url(ShareId),
+        <<"rootFileId">> => ?check(file_id:objectid_to_guid(RootFileObjectId)),
+        % TODO VFS-VFS-12490 [file, dir] deprecated, left for BC, conversion can be removed in 23.02.*
+        % (providers in 22.02 understand both formats)
+        <<"fileType">> => case FileType of
+            ?REGULAR_FILE_TYPE -> file;
+            ?DIRECTORY_TYPE -> dir
+        end,
         <<"handleId">> => utils:undefined_to_null(HandleId)
     };
 

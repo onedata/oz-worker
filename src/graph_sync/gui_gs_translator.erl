@@ -92,6 +92,14 @@ translate_value(_, #gri{type = od_space, aspect = Aspect}, {Entries, IsLast, _Ne
         <<"list">> => Entries,
         <<"isLast">> => IsLast
     };
+translate_value(_, #gri{type = od_space, aspect = Aspect}, {Entries, IsLast}) when
+    Aspect =:= list_shares;
+    Aspect =:= list_shares_with_data
+->
+    #{
+        <<"list">> => Entries,
+        <<"isLast">> => IsLast
+    };
 translate_value(_, #gri{type = od_space, aspect = membership_request}, RequestId) ->
     #{<<"requestId">> => RequestId};
 translate_value(_, #gri{type = od_space, aspect = infer_accessible_eff_groups}, GroupIds) ->
@@ -460,7 +468,6 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
         organization_name = OrganizationName,
         tags = Tags,
         marketplace_contact_email = MarketplaceContactEmail,
-        shares = Shares,
         support_parameters_registry = SupportParametersRegistry
     } = Space,
 
@@ -480,15 +487,13 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
         <<"effUserList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_users}),
         <<"groupList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = groups}),
         <<"effGroupList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_groups}),
-        <<"shareList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = shares}),
         <<"supportSizes">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_providers}),
         <<"harvesterList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = harvesters}),
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry),
         <<"areEffPrivilegesRecalculated">> => not Space#od_space.bottom_up_dirty,
         <<"info">> => maps:merge(translate_creator(Space#od_space.creator), #{
-            <<"creationTime">> => Space#od_space.creation_time,
-            <<"sharesCount">> => length(Shares)
+            <<"creationTime">> => Space#od_space.creation_time
         })
     } end;
 
@@ -500,7 +505,6 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"tags">> := Tags,
         <<"advertisedInMarketplace">> := AdvertisedInMarketplace,
         <<"providers">> := SupportSizes,
-        <<"sharesCount">> := SharesCount,
         <<"supportParametersRegistry">> := SupportParametersRegistry,
         <<"areEffPrivilegesRecalculated">> := AreEffPrivilegesRecalculated,
         <<"creationTime">> := CreationTime,
@@ -523,8 +527,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry),
         <<"areEffPrivilegesRecalculated">> => AreEffPrivilegesRecalculated,
         <<"info">> => maps:merge(translate_creator(Creator), #{
-            <<"creationTime">> => CreationTime,
-            <<"sharesCount">> => SharesCount
+            <<"creationTime">> => CreationTime
         })
     } end;
 
@@ -570,11 +573,6 @@ translate_space(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
         <<"privileges">> => Privileges
     };
 
-translate_space(#gri{aspect = shares}, Shares) ->
-    #{
-        <<"list">> => ids_to_serialized_gris(#gri{type = od_share, aspect = instance, scope = auto}, Shares)
-    };
-
 translate_space(#gri{aspect = eff_providers, scope = private}, Providers) ->
     #{
         <<"list">> => ids_to_serialized_gris(#gri{type = od_provider, aspect = instance, scope = auto}, Providers)
@@ -589,18 +587,6 @@ translate_space(#gri{aspect = harvesters}, Harvesters) ->
 %% @private
 -spec translate_share(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
-translate_share(#gri{aspect = instance, scope = private}, #od_share{
-    name = Name,
-    file_type = FileType,
-    space = SpaceId,
-    handle = Handle
-}) ->
-    #{
-        <<"name">> => Name,
-        <<"space">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto}),
-        <<"fileType">> => FileType,
-        <<"hasHandle">> => Handle /= undefined
-    };
 translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name">> := Name}) ->
     {ok, {ChosenProviderId, ChosenProviderVersion}} = share_logic:choose_provider_for_public_share_handling(ShareId),
     #{

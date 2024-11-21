@@ -21,7 +21,7 @@
 %%%     pointing to a resource based on root FileId
 %%%   * if there is a WebResource element without any specified rdf:about
 %%%     attribute, insert the attribute with the same value as the
-%%%     rdf:resource in edm:isShownBy
+%%%     rdf:resource in edm:isShownBy; empty attribute is treated as no attribute
 %%%   * make sure there is a dcterms:isPartOf element with value exactly "EUreka3D"
 %%%     (insert if not), allow other dcterms:isPartOf elements to coexist
 %%%
@@ -106,8 +106,8 @@ main_namespace() ->
     {ok, od_handle:parsed_metadata()} | error.
 revise_for_publication(#xmlElement{
     name = 'rdf:RDF', content = MetadataElements
-} = RdfXml, _ShareId, ShareRecord) ->
-    ShareRootFileId = ?check(file_id:guid_to_objectid(ShareRecord#od_share.root_file)),
+} = RdfXml, ShareId, ShareRecord) ->
+    ShareRootFileId = od_share:build_root_file(objectid, ShareId, ShareRecord),
     IsShownByValue = ?is_shown_by_value(ShareRootFileId),
 
     MetadataElementsWithPublicHandles = lists:map(fun
@@ -245,6 +245,9 @@ remove_rdf_about_attr(Attrs) ->
 -spec insert_rdf_about_attr([#xmlAttribute{}], overwrite | honour_existing, binary()) -> [#xmlAttribute{}].
 insert_rdf_about_attr(Attrs, Strategy, Identifier) ->
     case ?find_matching_element(?rdf_about_attr(_), Attrs) of
+        {ok, #xmlAttribute{value = ""} = Found} ->
+            % empty attribute value is treated the same as no attribute
+            lists_utils:replace(Found, ?rdf_about_attr(Identifier), Attrs);
         {ok, Found} when Strategy == honour_existing ->
             Attrs;
         {ok, Found} when Strategy == overwrite ->
@@ -334,14 +337,14 @@ gen_validation_example(Ctx) ->
     #handle_metadata_plugin_validation_example{
         input_raw_xml = gen_input_raw_xml_example(OpeningRdfTag, Ctx),
         input_qualifies_for_publication = true,
-        exp_revised_metadata_generator = fun(_ShareId, ShareRecord) ->
-            gen_exp_metadata(revised, OpeningRdfTag, ShareRecord, undefined, Ctx)
+        exp_revised_metadata_generator = fun(ShareId, ShareRecord) ->
+            gen_exp_metadata(revised, OpeningRdfTag, ShareId, ShareRecord, undefined, Ctx)
         end,
-        exp_final_metadata_generator = fun(_ShareId, ShareRecord, PublicHandle) ->
-            gen_exp_metadata(final, OpeningRdfTag, ShareRecord, PublicHandle, Ctx)
+        exp_final_metadata_generator = fun(ShareId, ShareRecord, PublicHandle) ->
+            gen_exp_metadata(final, OpeningRdfTag, ShareId, ShareRecord, PublicHandle, Ctx)
         end,
-        exp_oai_pmh_metadata_generator = fun(_ShareId, ShareRecord, PublicHandle) ->
-            gen_exp_metadata(oai_pmh, OpeningRdfTag, ShareRecord, PublicHandle, Ctx)
+        exp_oai_pmh_metadata_generator = fun(ShareId, ShareRecord, PublicHandle) ->
+            gen_exp_metadata(oai_pmh, OpeningRdfTag, ShareId, ShareRecord, PublicHandle, Ctx)
         end
     }.
 
@@ -392,6 +395,12 @@ gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
         "        <dc:identifier>some/internal/identifier/123456</dc:identifier>\n",
         (build_other_is_part_of_element(3, ValidationExampleBuilderCtx))/binary,
         "    </edm:ProvidedCHO>\n",
+        % empty rdf:about attribute should be treated like no attribute at all
+        "    <edm:WebResource rdf:about=\"\">\n",
+        "        <dc:description>CHO representation</dc:description>\n",
+        "        <dc:type>PMG</dc:type>\n",
+        "        <edm:rights rdf:resource=\"http://creativecommons.org/licenses/by-nc-nd/4.0/\"/>\n",
+        "    </edm:WebResource>\n",
         "    <ore:Aggregation", (BuildAboutAttrStr(OreAggregationAboutAttr))/binary, ">\n",
         (BuildLineWithElementAndResource(<<"edm:aggregatedCHO">>, AggregatedChoResourceAttr))/binary,
         "        <edm:dataProvider>Europeana Foundation</edm:dataProvider>\n",
@@ -418,12 +427,13 @@ gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
 -spec gen_exp_metadata(
     revised | final | oai_pmh,
     binary(),
+    od_share:id(),
     od_share:record(),
     od_handle:public_handle(),
     #validation_example_builder_ctx{}
 ) ->
     binary().
-gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #validation_example_builder_ctx{
+gen_exp_metadata(MetadataType, OpeningRdfTag, ShareId, ShareRecord, PublicHandle, #validation_example_builder_ctx{
     is_shown_by_resource_attr = IsShownByResourceAttr,
     aggregated_cho_resource_attr = AggChoResourceAttr,
     ispartof_eureka_3d_element_provided = IsPartOfEureka3DElementProvided
@@ -437,7 +447,7 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
         }
     end,
 
-    ShareRootFileId = ?check(file_id:guid_to_objectid(ShareRecord#od_share.root_file)),
+    ShareRootFileId = od_share:build_root_file(objectid, ShareId, ShareRecord),
     ExpIsShownByUrl = <<"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary>>,
     ExpIsShownByLine = <<"        <edm:isShownBy rdf:resource=\"", ExpIsShownByUrl/binary, "\"/>\n">>,
     ExpAggChoLine = <<"        <edm:aggregatedCHO", ExpAggChoRdfResourceStr/binary, "/>\n">>,
@@ -458,6 +468,11 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
         "        <dc:identifier>some/internal/identifier/123456</dc:identifier>\n",
         (build_other_is_part_of_element(3, ValidationExampleBuilderCtx))/binary,
         "    </edm:ProvidedCHO>\n",
+        "    <edm:WebResource rdf:about=\"", (ExpIsShownByUrl)/binary, "\">\n",
+        "        <dc:description>CHO representation</dc:description>\n",
+        "        <dc:type>PMG</dc:type>\n",
+        "        <edm:rights rdf:resource=\"http://creativecommons.org/licenses/by-nc-nd/4.0/\"/>\n",
+        "    </edm:WebResource>\n",
         "    <ore:Aggregation", ExpOreAggRdfAboutStr/binary, ">\n",
         (case MetadataType /= revised andalso AggChoResourceAttr == element_not_provided of true -> ExpAggChoLine; _ -> <<"">> end)/binary,
         (case IsShownByResourceAttr of element_not_provided -> ExpIsShownByLine; _ -> <<"">> end)/binary,

@@ -399,7 +399,7 @@ format_collection({space_groups, SpaceId}, SortBy, SortOrder) ->
     format_members(groups, maps:keys(EffGroups), SortBy, SortOrder, Groups, EffGroups, privileges:space_privileges());
 
 format_collection({space_shares, SpaceId}, SortBy, SortOrder) ->
-    {ok, #document{value = #od_space{shares = Shares}}} = od_space:get(SpaceId),
+    Shares = share_registry:list_ids(SpaceId, #{limit => infinity}),
     format_table(shares, Shares, SortBy, SortOrder);
 
 format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
@@ -693,8 +693,8 @@ field_specs(spaces) -> [
     {groups, direct_and_eff, 9, fun(#document{value = Space}) ->
         {maps:size(Space#od_space.groups), maps:size(Space#od_space.eff_groups)}
     end},
-    {shares, integer, 6, fun(#document{value = Space}) ->
-        length(Space#od_space.shares)
+    {shares, integer, 6, fun(#document{key = SpaceId}) ->
+        length(share_registry:list_ids(SpaceId, #{limit => infinity}))
     end},
     {providers, integer, 11, fun(#document{value = Space}) ->
         maps:size(Space#od_space.eff_providers)
@@ -919,7 +919,7 @@ latest_workflow_schema_revision(#document{value = #od_atm_workflow_schema{revisi
 bottom_note(shares) ->
     str_utils:format(
         "Public share URL is equal to: ~ts",
-        [share_logic:build_public_url(<<"${ID}">>)]
+        [od_share:build_public_url(<<"${ID}">>)]
     );
 bottom_note(_) ->
     undefined.

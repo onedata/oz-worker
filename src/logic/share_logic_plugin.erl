@@ -16,6 +16,7 @@
 
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/onedata_file.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/errors.hrl").
@@ -101,11 +102,17 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     Description = maps:get(<<"description">>, Req#el_req.data, <<"">>),
     SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
     RootFileId = maps:get(<<"rootFileId">>, Req#el_req.data),
-    FileType = maps:get(<<"fileType">>, Req#el_req.data, dir),
+    % TODO VFS-VFS-12490 [file, dir] deprecated, left for BC, can be removed in 23.02.*
+    FileType = case maps:get(<<"fileType">>, Req#el_req.data, ?DIRECTORY_TYPE) of
+        file -> ?REGULAR_FILE_TYPE;
+        dir -> ?DIRECTORY_TYPE;
+        ModernType -> ModernType
+    end,
 
-    try
+    RootFileUuid = try
         {FileUuid, SpaceId, ShareId} = file_id:unpack_share_guid(RootFileId),
-        true = is_binary(FileUuid) andalso byte_size(FileUuid) > 0
+        true = is_binary(FileUuid) andalso byte_size(FileUuid) > 0,
+        FileUuid
     catch _:_ ->
         throw(?ERROR_BAD_DATA(<<"rootFileId">>))
     end,
@@ -113,19 +120,17 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     ShareDoc = #document{key = ShareId, value = #od_share{
         name = Name,
         description = Description,
-        root_file = RootFileId,
+        root_file_uuid = RootFileUuid,
         file_type = FileType,
+        space = SpaceId,
         creator = aai:normalize_subject(Auth#auth.subject),
         creation_time = global_clock:timestamp_seconds()
     }},
     case od_share:create(ShareDoc) of
-        {ok, _} ->
-            entity_graph:add_relation(
-                od_share, ShareId,
-                od_space, SpaceId
-            ),
-            {true, {Share, Rev}} = fetch_entity(#gri{aspect = instance, id = ShareId}),
-            {ok, resource, {GRI#gri{id = ShareId}, {Share, Rev}}};
+        {ok, #document{value = ShareRecord, revs = [DbRev | _]}} ->
+            share_registry:report_created(ShareId, ShareRecord),
+            {Rev, _Hash} = datastore_rev:parse(DbRev),
+            {ok, resource, {GRI#gri{id = ShareId}, {ShareRecord, Rev}}};
         {error, already_exists} ->
             % This can potentially happen if a share with given share id
             % has been created between data verification and create
@@ -145,20 +150,22 @@ get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, ShareDocs} = od_share:list(),
     {ok, [ShareId || #document{key = ShareId} <- ShareDocs]};
 
-get(#el_req{gri = #gri{aspect = instance, scope = private}}, Share) ->
-    {ok, Share};
-get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
+get(#el_req{gri = #gri{aspect = instance, scope = private}}, ShareRecord) ->
+    {ok, ShareRecord};
+get(#el_req{gri = #gri{id = ShareId, aspect = instance, scope = public}}, ShareRecord) ->
     #od_share{
         space = SpaceId,
-        name = Name, description = Description,
+        name = Name,
+        description = Description,
         handle = HandleId,
-        root_file = RootFileId, file_type = FileType,
+        file_type = FileType,
         creation_time = CreationTime
-    } = Share,
+    } = ShareRecord,
     {ok, #{
         <<"spaceId">> => SpaceId,
-        <<"name">> => Name, <<"description">> => Description,
-        <<"rootFileId">> => RootFileId,
+        <<"name">> => Name,
+        <<"description">> => Description,
+        <<"rootFileObjectId">> => od_share:build_root_file(objectid, ShareId, ShareRecord),
         <<"fileType">> => FileType,
         <<"handleId">> => HandleId,
         <<"creationTime">> => CreationTime
@@ -172,14 +179,20 @@ get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = ShareId, aspect = instance}, data = Data}) ->
-    {ok, _} = od_share:update(ShareId, fun(Share) ->
-        #od_share{name = OldName, description = OldDescription} = Share,
-        {ok, Share#od_share{
-            name = maps:get(<<"name">>, Data, OldName),
-            description = maps:get(<<"description">>, Data, OldDescription)
-        }}
-    end),
-    ok.
+    od_share:critical_section_for(ShareId, fun() ->
+        #document{value = #od_share{name = OldName} = PreviousShareRecord} = ?check(od_share:get(ShareId)),
+        NewName = maps:get(<<"name">>, Data, OldName),
+
+        {ok, _} = od_share:update(ShareId, fun(Share) ->
+            {ok, Share#od_share{
+                name = NewName,
+                description = maps:get(<<"description">>, Data, Share#od_share.description)
+            }}
+        end),
+
+        NewName /= OldName andalso share_registry:report_name_updated(ShareId, PreviousShareRecord, NewName),
+        ok
+    end).
 
 
 %%--------------------------------------------------------------------
@@ -189,20 +202,7 @@ update(#el_req{gri = #gri{id = ShareId, aspect = instance}, data = Data}) ->
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{auth = Auth, gri = #gri{id = ShareId, aspect = instance}}) ->
-    %% TODO VFS-12030 consider removing the logic of share-handle relation from the entity graph
-    fun(#od_share{handle = HandleId}) ->
-        % ensure no race conditions when deleting a share and its handle
-        % (it could conflict with a handle being created at the same time -
-        % another critical section is used during handle creation procedure).
-        od_share:critical_section_for(ShareId, fun() ->
-            HandleId /= undefined andalso case handle_logic:delete(Auth, HandleId) of
-                ok -> ok;
-                {error, not_found} -> ok;
-                {error, _} = Error -> throw(Error)
-            end,
-            entity_graph:delete_with_relations(od_share, ShareId)
-        end)
-    end.
+    delete_internal(Auth, ShareId).
 
 
 %%--------------------------------------------------------------------
@@ -299,22 +299,29 @@ required_admin_privileges(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
-validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
-    required => #{
-        <<"shareId">> => {binary, {not_exists, fun(Value) ->
-            not share_logic:exists(Value)
-        end}},
-        <<"name">> => {binary, fun validate_name/1},
-        <<"rootFileId">> => {binary, non_empty},
-        <<"spaceId">> => {any, {exists, fun(Value) ->
-            space_logic:exists(Value)
-        end}}
-    },
-    optional => #{
-        <<"fileType">> => {atom, [file, dir]},
-        <<"description">> => {binary, {text_length_limit, ?SHARE_DESCRIPTION_SIZE_LIMIT}}
-    }
-};
+validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}) ->
+    % TODO VFS-VFS-12490 [file, dir] deprecated, left for BC, can be removed in 23.02.*
+    DeprecatedFileTypeValues = case Data of
+        #{<<"fileType">> := <<"file">>} -> [file];
+        #{<<"fileType">> := <<"dir">>} -> [dir];
+        _ -> []
+    end,
+    #{
+        required => #{
+            <<"shareId">> => {binary, {not_exists, fun(Value) ->
+                not share_logic:exists(Value)
+            end}},
+            <<"name">> => {binary, fun validate_name/1},
+            <<"rootFileId">> => {binary, non_empty},  % file_id:share_root_file_guid()
+            <<"spaceId">> => {any, {exists, fun(Value) ->
+                space_logic:exists(Value)
+            end}}
+        },
+        optional => #{
+            <<"fileType">> => {atom, [?REGULAR_FILE_TYPE, ?DIRECTORY_TYPE] ++ DeprecatedFileTypeValues},
+            <<"description">> => {binary, {text_length_limit, ?SHARE_DESCRIPTION_SIZE_LIMIT}}
+        }
+    };
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
@@ -327,6 +334,48 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 %%% Internal functions
 %%%===================================================================
 
+%% @private
+-spec delete_internal(aai:auth(), od_share:id()) -> ok.
+delete_internal(Auth, ShareId) ->
+    % ensure no race conditions with share update or with handle creation/deletion
+    % (@see handle_logic_plugin)
+    Result = od_share:critical_section_for(ShareId, fun() ->
+        delete_share_unsafe(ShareId)
+    end),
+    % If the handle needs to be deleted first, it must be done outside of the
+    % critical section to avoid a deadlock. Then, deletion is retried. Theoretically,
+    % in case of parallel requests to add/remove a handle from the share, this
+    % function may run a lot of times - but it will finally succeed.
+    case Result of
+        done ->
+            ok;
+        {handle_must_be_deleted_first, HandleId} ->
+            case handle_logic:delete(Auth, HandleId) of
+                ok -> ok;
+                {error, not_found} -> ok;
+                {error, _} = Error -> throw(Error)
+            end,
+            delete_internal(Auth, ShareId)
+    end.
+
+
+%% @private
+-spec delete_share_unsafe(od_share:id()) -> done | {handle_must_be_deleted_first, od_handle:id()}.
+delete_share_unsafe(ShareId) ->
+    % race condition: in case of the share being already deleted, this will throw ?ERROR_NOT_FOUND
+    #document{value = #od_share{handle = HandleId} = PreviousShareRecord} = ?check(od_share:get(ShareId)),
+    % in case of DB inconsistencies (share points to a handle that does not exist) we
+    % must not try to delete the handle first, otherwise we get infinite recursion
+    case od_handle:exists(utils:ensure_defined(HandleId, <<"undefinedId">>)) of
+        {ok, true} ->
+            {handle_must_be_deleted_first, HandleId};
+        {ok, false} ->
+            share_registry:report_deleted(ShareId, PreviousShareRecord#od_share{handle = undefined}),
+            od_share:force_delete(ShareId),
+            done
+    end.
+
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -335,9 +384,9 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 %% request or share record. Auths of type other than user are discarded.
 %% @end
 %%--------------------------------------------------------------------
-        - spec auth_by_space_privilege(entity_logic:req() | od_user:id(),
-od_share:record() | od_space:id(), privileges:space_privilege()) ->
-boolean().
+-spec auth_by_space_privilege(entity_logic:req() | od_user:id(),
+    od_share:record() | od_space:id(), privileges:space_privilege()) ->
+    boolean().
 auth_by_space_privilege(#el_req{auth = ?USER(UserId)}, Share, Privilege) ->
     auth_by_space_privilege(UserId, Share, Privilege);
 auth_by_space_privilege(#el_req{auth = _OtherAuth}, _Share, _Privilege) ->
