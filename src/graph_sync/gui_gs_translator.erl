@@ -87,7 +87,7 @@ translate_value(_, #gri{aspect = {user_temporary_token, _}}, Token) ->
 translate_value(_, #gri{type = od_space, aspect = Aspect}, {Entries, IsLast, _NextPageToken}) when
     Aspect =:= list_marketplace;
     Aspect =:= list_marketplace_with_data
-->
+    ->
     #{
         <<"list">> => Entries,
         <<"isLast">> => IsLast
@@ -95,7 +95,7 @@ translate_value(_, #gri{type = od_space, aspect = Aspect}, {Entries, IsLast, _Ne
 translate_value(_, #gri{type = od_space, aspect = Aspect}, {Entries, IsLast}) when
     Aspect =:= list_shares;
     Aspect =:= list_shares_with_data
-->
+    ->
     #{
         <<"list">> => Entries,
         <<"isLast">> => IsLast
@@ -587,6 +587,11 @@ translate_space(#gri{aspect = harvesters}, Harvesters) ->
 %% @private
 -spec translate_share(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_share(#gri{id = ShareId, aspect = instance, scope = private}, #od_share{space = SpaceId} = ShareRecord) ->
+    #{
+        <<"index">> => share_registry:index_of(ShareId, ShareRecord),
+        <<"space">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
+    };
 translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name">> := Name}) ->
     {ok, {ChosenProviderId, ChosenProviderVersion}} = share_logic:choose_provider_for_public_share_handling(ShareId),
     #{

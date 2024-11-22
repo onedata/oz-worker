@@ -94,11 +94,13 @@ gen_shares_for_space(_SpaceId, 0, SortedIndices, EntryByIndex) ->
 
 gen_shares_for_space(SpaceId, OperationsLeft, SortedIndices, EntryByIndex) ->
     RandomOperationIndex = ?RAND_INT(1, 6),
+
     {NewSortedIndices, NewEntryByIndex} = if
+
+        % with 33.3% change, modify an existing share (if there is any)
         RandomOperationIndex < 3 andalso SortedIndices /= [] ->
             RandomIndex = ?RAND_ELEMENT(SortedIndices),
             PreviousEntry = maps:get(RandomIndex, EntryByIndex),
-            FixmeShareId = maps:get(<<"shareId">>, PreviousEntry),
             NewEntry = #{<<"index">> := NewIndex} = case ?RAND_BOOL() of
                 true ->
                     gen_shares_update_name(PreviousEntry);
@@ -110,16 +112,17 @@ gen_shares_for_space(SpaceId, OperationsLeft, SortedIndices, EntryByIndex) ->
                 maps:put(NewIndex, NewEntry, maps:remove(RandomIndex, EntryByIndex))
             };
 
+        % with 16.6% change, delete an existing share (if there is any)
         RandomOperationIndex == 5 andalso SortedIndices /= [] ->
             RandomIndex = ?RAND_ELEMENT(SortedIndices),
             delete(maps:get(<<"shareId">>, maps:get(RandomIndex, EntryByIndex))),
-            FixmeShareId = maps:get(<<"shareId">>, maps:get(RandomIndex, EntryByIndex)),
             {ordsets:del_element(RandomIndex, SortedIndices), maps:remove(RandomIndex, EntryByIndex)};
 
+        % with ~50% change, create a new share
         true ->
             #{<<"index">> := Index} = ShareEntry = gen_shares_create_new(SpaceId),
-            FixmeShareId = maps:get(<<"shareId">>, ShareEntry),
             {ordsets:add_element(Index, SortedIndices), EntryByIndex#{Index => ShareEntry}}
+
     end,
 
     gen_shares_for_space(SpaceId, OperationsLeft - 1, NewSortedIndices, NewEntryByIndex).

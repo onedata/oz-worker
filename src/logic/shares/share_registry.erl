@@ -22,6 +22,7 @@
 
 -export([report_created/2, report_name_updated/3, report_deleted/2]).
 -export([report_handle_created_for/4, report_handle_deleted_for/2]).
+-export([index_of/2]).
 -export([list_ids/2]).
 -export([list_entries/2]).
 -export([foreach/2]).
@@ -120,17 +121,22 @@ report_handle_deleted_for(ShareId, PreviousShareRecord) when PreviousShareRecord
     add_entry(ShareId, PreviousShareRecord#od_share{handle = undefined}, undefined).
 
 
+-spec index_of(od_share:id(), od_share:record()) -> link_key().
+index_of(ShareId, ShareRecord) ->
+    pack_link_key(ShareId, ShareRecord).
+
+
 -spec list_ids(od_space:id(), listing_opts()) -> [od_share:id()].
 list_ids(SpaceId, ListingOpts) ->
     list_internal(SpaceId, ListingOpts, fun(#link{name = LinkKey}) ->
-        unpack_link_key(LinkKey)
+        link_key_to_share_id(LinkKey)
     end).
 
 
 -spec list_entries(od_space:id(), listing_opts()) -> [share_entry()].
 list_entries(SpaceId, ListingOpts) ->
     list_internal(SpaceId, ListingOpts, fun(#link{name = LinkKey, target = LinkValue}) ->
-        ShareId = unpack_link_key(LinkKey),
+        ShareId = link_key_to_share_id(LinkKey),
         {ShareName, RootFileType, RootFileUuid, HandleId, PublicHandle} = unpack_link_value(LinkValue),
         #{
             <<"index">> => LinkKey,
@@ -156,6 +162,7 @@ foreach(SpaceId, ForeachFun) ->
 %%%===================================================================
 
 
+%% @private
 -spec foreach_internal(od_space:id(), fun((od_share:id()) -> ok), listing_opts()) -> ok.
 foreach_internal(SpaceId, ForeachFun, ListingOpts) ->
     ShareEntries = list_entries(SpaceId, ListingOpts),
@@ -166,7 +173,7 @@ foreach_internal(SpaceId, ForeachFun, ListingOpts) ->
         false ->
             foreach_internal(SpaceId, ForeachFun, ListingOpts#{
                 start_index => maps:get(<<"index">>, lists:last(ShareEntries)),
-                offset => 1 % for inclusive listing
+                offset => 1 % for exclusive listing
             })
     end.
 
@@ -234,8 +241,8 @@ pack_link_key(ShareId, SortingKey, HandleId) ->
 
 
 %% @private
--spec unpack_link_key(link_key()) -> od_share:id().
-unpack_link_key(LinkKey) ->
+-spec link_key_to_share_id(link_key()) -> od_share:id().
+link_key_to_share_id(LinkKey) ->
     [_HandlePart, _SortingKey, ShareId] = binary:split(LinkKey, <<?SEP>>, [global]),
     ShareId.
 

@@ -91,7 +91,6 @@ get_shares_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
-
 get_share_test(Config) ->
     Owner = ozt_users:create(),
     PrivilegedMember = ozt_users:create(),

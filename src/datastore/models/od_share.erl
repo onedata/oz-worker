@@ -173,7 +173,7 @@ migrate_legacy_shares_21_02_8() ->
                 {ok, SpaceRecord#od_space{shares = []}}
             end)),
             ?info("Successfully migrated legacy handles from '~ts' (~ts)", [SpaceName, SpaceId])
-    end, element(2, {ok, _} = od_space:list())).
+    end, ?check(od_space:list())).
 
 
 % exported for tests

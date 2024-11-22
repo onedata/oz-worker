@@ -263,7 +263,7 @@ end).
     groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
     storages = #{} :: entity_graph:relations_with_attrs(od_storage:id(), Size :: pos_integer()),
 
-    % this field is deprecated, shares are now stored in share_registry
+    % This field is deprecated, shares are now stored in share_registry
     % it should never be used, but is needed to perform the cluster upgrade
     % (then, the field is always empty)
     shares = [] :: entity_graph:relations(od_share:id()),

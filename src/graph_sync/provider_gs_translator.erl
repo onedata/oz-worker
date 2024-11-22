@@ -242,7 +242,6 @@ translate_resource(_, #gri{type = od_space, id = SpaceId, aspect = instance, sco
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"storages">> => Storages,
 
-        % TODO VFS-VFS-12490 left for BC, can be removed in 23.02.* sinc providers in 22.02 do not use this field
         <<"shares">> => share_registry:list_ids(SpaceId, #{limit => infinity}),
         <<"harvesters">> => Harvesters,
 
