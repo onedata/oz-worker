@@ -64,7 +64,6 @@
 -define(FOREST, <<"share-forest">>).
 -define(TREE_FOR_SPACE(SpaceId), <<"shares-of-", SpaceId/binary>>).
 
--define(INFINITE_LIMIT, 9999999999999).
 
 % Uses NULL char for separator to ensure alphabetical sorting
 -define(SEP, 0).
@@ -321,6 +320,6 @@ decode_nullable(Binary) -> Binary.
 
 
 %% @private
--spec limit_to_fold_size(limit()) -> non_neg_integer().
-limit_to_fold_size(infinity) -> ?INFINITE_LIMIT;
+-spec limit_to_fold_size(limit()) -> undefined | non_neg_integer().
+limit_to_fold_size(infinity) -> undefined;
 limit_to_fold_size(Int) when is_integer(Int) andalso Int > 0 -> Int.

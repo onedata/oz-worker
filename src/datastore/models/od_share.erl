@@ -189,6 +189,11 @@ migrate_legacy_share_21_02_8(ShareId) ->
 %% @private
 -spec migrate_legacy_share_21_02_8(id(), record()) -> ok.
 migrate_legacy_share_21_02_8(ShareId, ShareRecord = #od_share{handle = HandleId}) ->
+    % The share registry assumes that each handle goes through a lifecycle
+    % (created -> name/handle updated -> deleted) and it's not possible
+    % to add an entry with a handle in one go; it must be split into
+    % two share_registry calls. The first one requires the handle to be
+    % not yet defined.
     ShareRecordWithoutHandle = ShareRecord#od_share{handle = undefined},
     try
         % ensure idempotency in case of multiple re-runs

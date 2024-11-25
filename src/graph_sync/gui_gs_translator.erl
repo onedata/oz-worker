@@ -84,10 +84,11 @@ translate_value(_, #gri{aspect = TokenType}, Token) when
     serialize_token(Token);
 translate_value(_, #gri{aspect = {user_temporary_token, _}}, Token) ->
     serialize_token(Token);
+%% @formatter:off
 translate_value(_, #gri{type = od_space, aspect = Aspect}, {Entries, IsLast, _NextPageToken}) when
     Aspect =:= list_marketplace;
     Aspect =:= list_marketplace_with_data
-    ->
+->
     #{
         <<"list">> => Entries,
         <<"isLast">> => IsLast
@@ -95,11 +96,12 @@ translate_value(_, #gri{type = od_space, aspect = Aspect}, {Entries, IsLast, _Ne
 translate_value(_, #gri{type = od_space, aspect = Aspect}, {Entries, IsLast}) when
     Aspect =:= list_shares;
     Aspect =:= list_shares_with_data
-    ->
+->
     #{
         <<"list">> => Entries,
         <<"isLast">> => IsLast
     };
+%% @formatter:on
 translate_value(_, #gri{type = od_space, aspect = membership_request}, RequestId) ->
     #{<<"requestId">> => RequestId};
 translate_value(_, #gri{type = od_space, aspect = infer_accessible_eff_groups}, GroupIds) ->
