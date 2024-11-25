@@ -58,38 +58,12 @@
     update_workflow_schema/3,
     get_workflow_schema/2,
 
-    create_share/2,
     list_handle_services/1,
-    add_user_to_handle_service/3,
-    remove_user_to_handle_service/3
+    add_user_to_handle_service/4,
+    remove_user_from_handle_service/3
 ]).
 
 -define(DEFAULT_TEMP_CAVEAT_TTL, 360000).
--define(GEN_ROOT_FILE_ID(SpaceId, ShareId), file_id:pack_share_guid(datastore_key:new(), SpaceId, ShareId)).
--define(HANDLE_SERVICE_NAME1, <<"LifeWatch DataCite">>).
--define(HANDLE_SERVICE_NAME2, <<"iMarine EPIC">>).
--define(PROXY_ENDPOINT, <<"172.17.0.9:8080/api/v1">>).
--define(DOI_SERVICE_PROPERTIES,
-    #{
-        <<"type">> => <<"DOI">>,
-        <<"host">> => <<"https://mds.test.datacite.org">>,
-        <<"doiEndpoint">> => <<"/doi">>,
-        <<"metadataEndpoint">> => <<"/metadata">>,
-        <<"mediaEndpoint">> => <<"/media">>,
-        <<"prefix">> => <<"10.5072">>,
-        <<"username">> => <<"alice">>,
-        <<"password">> => <<"*******">>,
-        <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
-        <<"allowTemplateOverride">> => false
-    }
-).
--define(DOI_SERVICE,
-    #{
-        <<"name">> => ?HANDLE_SERVICE_NAME1,
-        <<"proxyEndpoint">> => ?PROXY_ENDPOINT,
-        <<"serviceProperties">> => ?DOI_SERVICE_PROPERTIES
-    }
-).
 
 
 %%%===================================================================
@@ -290,24 +264,20 @@ get_workflow_schema(Auth, AtmWorkflowSchemaId) ->
     atm_workflow_schema_logic:get(Auth, AtmWorkflowSchemaId).
 
 
--spec create_share(aai:auth(), od_space:id()) -> od_share:id().
-create_share(Auth, SpaceId) ->
-    Name = datastore_key:new(),
-    share_logic:create(Auth, Name, Name, ?GEN_ROOT_FILE_ID(SpaceId, Name), SpaceId).
-
-
--spec list_handle_services(aai:auth()) -> [od_handle_service:id()].
+-spec list_handle_services(aai:auth()) ->  {ok, [od_handle_service:id()]}.
 list_handle_services(Auth) ->
     handle_service_logic:list(Auth).
 
 
--spec add_user_to_handle_service(aai:auth(), od_handle_service:id(), od_user:id()) -> {ok, od_user:id()}.
-add_user_to_handle_service(Auth, HServiceId, UserId) ->
-    handle_service_logic:add_user(Auth, HServiceId, UserId).
+-spec add_user_to_handle_service(
+    aai:auth(), od_handle_service:id(), od_user:id(), [privileges:handle_service_privilege()]
+) -> {ok, od_user:id()}.
+add_user_to_handle_service(Auth, HServiceId, UserId, Privileges) ->
+    handle_service_logic:add_user(Auth, HServiceId, UserId, Privileges).
 
 
--spec remove_user_to_handle_service(aai:auth(), od_handle_service:id(), od_user:id()) -> {ok, od_user:id()}.
-remove_user_to_handle_service(Auth, HServiceId, UserId) ->
+-spec remove_user_from_handle_service(aai:auth(), od_handle_service:id(), od_user:id()) -> ok.
+remove_user_from_handle_service(Auth, HServiceId, UserId) ->
     handle_service_logic:remove_user(Auth, HServiceId, UserId).
 
 
