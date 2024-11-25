@@ -2091,4 +2091,3 @@ end_per_group(_Group, Config) ->
 end_per_testcase(_, Config) ->
     ozt:set_env(space_marketplace_enabled, true),
     Config.
-
