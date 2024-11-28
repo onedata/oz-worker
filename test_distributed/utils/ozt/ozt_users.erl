@@ -130,7 +130,7 @@ leave_space(UserId, SpaceId) ->
 create_share_for(UserId, SpaceId) ->
     Name = datastore_key:new(),
     {ok, HServiceId} = ?assertMatch({ok, _},  ozt:rpc(share_logic, create, [
-        ?USER(UserId), Name, Name, ?GEN_ROOT_FILE_ID(SpaceId, Name), SpaceId
+        ?USER(UserId), Name, Name, ?GEN_ROOT_FILE_GUID(SpaceId, Name), SpaceId
     ])),
     HServiceId.
 

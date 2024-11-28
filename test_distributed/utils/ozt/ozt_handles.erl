@@ -18,7 +18,7 @@
 -include("plugins/onezone_plugins.hrl").
 
 %% API
--export([create/1, create/2, create/4, get/1, update/2, exists/1, list/0]).
+-export([create/1, create/2, create/4, get/1, update/2, exists/1, delete/1, list/0]).
 -export([supported_metadata_prefixes/0]).
 -export([example_input_metadata/1, example_input_metadata/2]).
 -export([expected_final_metadata/1, expected_final_metadata/2]).
@@ -33,8 +33,7 @@
 
 -spec create(od_handle_service:id()) -> od_handle:id().
 create(HandleServiceId) ->
-    ShareId = ozt_spaces:create_share(ozt_spaces:create()),
-    create(HandleServiceId, ShareId).
+    create(HandleServiceId, ozt_shares:create(ozt_spaces:create())).
 
 -spec create(od_handle_service:id(), od_share:id()) -> od_handle:id().
 create(HandleServiceId, ShareId) ->
@@ -69,6 +68,11 @@ update(HandleId, Data) ->
 -spec exists(od_handle:id()) -> boolean().
 exists(HandleId) ->
     ozt:rpc(handle_logic, exists, [HandleId]).
+
+
+-spec delete(od_handle:id()) -> ok.
+delete(HandleId) ->
+    ?assertMatch(ok, ozt:rpc(handle_logic, delete, [?ROOT, HandleId])).
 
 
 -spec list() -> [od_handle:id()].

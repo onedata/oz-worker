@@ -121,6 +121,7 @@ stages:
         - space_lifecycle
         - space_marketplace
         - space_misc_api
+        - space_shares_api
         - space_owners
         - space_users_api
         - storage_misc_api
@@ -796,6 +797,13 @@ space_misc_api:
     - <<: *ct_logs
       name: ct_logs_space_misc_api.tar.gz
 
+space_shares_api:
+  <<: *ct-job
+  key: SSHA
+  artifacts:
+    - <<: *ct_logs
+      name: ct_logs_space_shares_api.tar.gz
+
 space_owners:
   <<: *ct-job
   key: SPOW
@@ -1020,6 +1028,7 @@ Coverage report:
     - artifact: ct_logs_space_lifecycle.tar.gz
     - artifact: ct_logs_space_marketplace.tar.gz
     - artifact: ct_logs_space_misc_api.tar.gz
+    - artifact: ct_logs_space_shares_api.tar.gz
     - artifact: ct_logs_space_owners.tar.gz
     - artifact: ct_logs_space_users_api.tar.gz
     - artifact: ct_logs_storage_misc_api.tar.gz

@@ -78,7 +78,7 @@ main_namespace() ->
 -spec revise_for_publication(od_handle:parsed_metadata(), od_share:id(), od_share:record()) ->
     {ok, od_handle:parsed_metadata()} | error.
 revise_for_publication(#xmlElement{name = metadata} = MetadataXml, ShareId, _ShareRecord) ->
-    {ok, ensure_dc_identifier(binary_to_list(share_logic:build_public_url(ShareId)), MetadataXml)};
+    {ok, ensure_dc_identifier(binary_to_list(od_share:build_public_url(ShareId)), MetadataXml)};
 
 revise_for_publication(_InvalidXml, _ShareId, _ShareRecord) ->
     error.
@@ -172,7 +172,7 @@ validation_examples() -> [
         exp_revised_metadata_generator = fun(ShareId, _ShareRecord) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
             "<metadata xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
-            "    <dc:identifier>", (share_logic:build_public_url(ShareId))/binary, "</dc:identifier>\n",
+            "    <dc:identifier>", (od_share:build_public_url(ShareId))/binary, "</dc:identifier>\n",
             "    <dc:title>Test dataset</dc:title>\n",
             "    <dc:creator>John Johnson</dc:creator>\n",
             "    <dc:creator>Jane Doe</dc:creator>\n",
@@ -191,7 +191,7 @@ validation_examples() -> [
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
             "<metadata xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
             "    <dc:identifier>", PublicHandle/binary, "</dc:identifier>\n",
-            "    <dc:identifier>", (share_logic:build_public_url(ShareId))/binary, "</dc:identifier>\n",
+            "    <dc:identifier>", (od_share:build_public_url(ShareId))/binary, "</dc:identifier>\n",
             "    <dc:title>Test dataset</dc:title>\n",
             "    <dc:creator>John Johnson</dc:creator>\n",
             "    <dc:creator>Jane Doe</dc:creator>\n",
@@ -215,7 +215,7 @@ validation_examples() -> [
             " xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd\"",
             ">\n"
             "    <dc:identifier>", PublicHandle/binary, "</dc:identifier>\n",
-            "    <dc:identifier>", (share_logic:build_public_url(ShareId))/binary, "</dc:identifier>\n",
+            "    <dc:identifier>", (od_share:build_public_url(ShareId))/binary, "</dc:identifier>\n",
             "    <dc:title>Test dataset</dc:title>\n",
             "    <dc:creator>John Johnson</dc:creator>\n",
             "    <dc:creator>Jane Doe</dc:creator>\n",
@@ -243,7 +243,7 @@ validation_examples() -> [
         exp_revised_metadata_generator = fun(ShareId, _ShareRecord) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
             "<metadata>\n",
-            "    <dc:identifier>", (share_logic:build_public_url(ShareId))/binary, "</dc:identifier>\n",
+            "    <dc:identifier>", (od_share:build_public_url(ShareId))/binary, "</dc:identifier>\n",
             "    <dc:contributor>John Doe</dc:contributor>\n",
             "</metadata>"
         >> end,
@@ -251,7 +251,7 @@ validation_examples() -> [
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
             "<metadata>\n",
             "    <dc:identifier>", PublicHandle/binary, "</dc:identifier>\n",
-            "    <dc:identifier>", (share_logic:build_public_url(ShareId))/binary, "</dc:identifier>\n",
+            "    <dc:identifier>", (od_share:build_public_url(ShareId))/binary, "</dc:identifier>\n",
             "    <dc:contributor>John Doe</dc:contributor>\n",
             "</metadata>"
         >> end,
@@ -264,7 +264,7 @@ validation_examples() -> [
             " xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd\"",
             ">\n",
             "    <dc:identifier>", PublicHandle/binary, "</dc:identifier>\n",
-            "    <dc:identifier>", (share_logic:build_public_url(ShareId))/binary, "</dc:identifier>\n",
+            "    <dc:identifier>", (od_share:build_public_url(ShareId))/binary, "</dc:identifier>\n",
             "    <dc:contributor>John Doe</dc:contributor>\n",
             "</oai_dc:dc>"
         >> end

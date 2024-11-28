@@ -246,8 +246,8 @@ log_rest_test_result(RestSpec, Client, Data, Description,
     "Body: ~tp~n"
     "Client: ~ts~n"
     "Unmet expectation: ~tp~n"
-    "Expected: ~tp~n"
-    "Got:      ~tp~n"
+    "Exp: ~tp~n"
+    "Got: ~tp~n"
     "--------~n"
     "Full response: ~n"
     "   Code: ~tp~n"
@@ -413,8 +413,8 @@ log_logic_test_result(LogicSpec, Client, Description, {result, Result}) ->
     "Function: ~ts~n"
     "Args: ~tp~n"
     "Client: ~ts~n"
-    "Expected: ~tp~n"
-    "Got:      ~tp", [
+    "Exp: ~tp~n"
+    "Got: ~tp", [
         Description,
         LogicSpec#logic_spec.module,
         LogicSpec#logic_spec.function,
@@ -697,8 +697,8 @@ log_gs_test_result(GsSpec, Client, Endpoint, Data, Description, {result, Result}
     "Data: ~tp~n"
     "Subscribe: ~tp~n"
     "Auth hint: ~tp~n"
-    "Expected: ~tp~n"
-    "Got:      ~tp", [
+    "Exp: ~tp~n"
+    "Got: ~tp", [
         Description,
         aai:auth_to_printable(prepare_logic_auth(Client)),
         GsSpec#gs_spec.operation,

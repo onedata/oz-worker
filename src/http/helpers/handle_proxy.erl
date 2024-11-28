@@ -164,4 +164,4 @@ modify_handle(HandleId, NewMetadata) ->
 %% @private
 -spec get_redirect_url(od_handle:resource_type(), od_handle:resource_id()) -> public_url().
 get_redirect_url(<<"Share">>, ShareId) ->
-    share_logic:build_public_url(ShareId).
+    od_share:build_public_url(ShareId).

@@ -115,66 +115,11 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
-    HandleServiceId = maps:get(<<"handleServiceId">>, Req#el_req.data),
-    ResourceType = <<"Share">> = maps:get(<<"resourceType">>, Req#el_req.data),
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance}}) ->
     ShareId = maps:get(<<"resourceId">>, Req#el_req.data),
-    RawMetadata = maps:get(<<"metadata">>, Req#el_req.data),
-    MetadataPrefix = maps:get(<<"metadataPrefix">>, Req#el_req.data, ?DEFAULT_METADATA_PREFIX),
-    CreationTime = od_handle:current_timestamp(),
-
-    % ensure no race conditions when creating a handle for a share (only one may be created)
     od_share:critical_section_for(ShareId, fun() ->
-        {ok, #document{value = ShareRecord}} = od_share:get(ShareId),
-
-        ShareRecord#od_share.handle =:= undefined orelse throw(?ERROR_ALREADY_EXISTS),
-
-        RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataPrefix, RawMetadata, ShareId, ShareRecord),
-
-        {ok, PublicHandle} = handle_proxy:register_handle(
-            HandleServiceId, ResourceType, ShareId, oai_metadata:encode_xml(MetadataPrefix, RevisedMetadata)
-        ),
-
-        FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
-
-        {ok, #document{key = HandleId}} = od_handle:create(#document{value = #od_handle{
-            public_handle = PublicHandle,
-            resource_type = ResourceType,
-            metadata_prefix = MetadataPrefix,
-            metadata = oai_metadata:encode_xml(MetadataPrefix, FinalMetadata),
-            timestamp = CreationTime,
-
-            resource_id = ShareId,
-            handle_service = HandleServiceId,
-
-            creator = aai:normalize_subject(Auth#auth.subject),
-            creation_time = CreationTime
-        }}),
-
-        case Req#el_req.auth_hint of
-            ?AS_USER(UserId) ->
-                entity_graph:add_relation(
-                    od_user, UserId,
-                    od_handle, HandleId,
-                    privileges:handle_admin()
-                );
-            ?AS_GROUP(GroupId) ->
-                entity_graph:add_relation(
-                    od_group, GroupId,
-                    od_handle, HandleId,
-                    privileges:handle_admin()
-                );
-            _ ->
-                ok
-        end,
-        entity_graph:add_relation(
-            od_handle, HandleId,
-            od_share, ShareId
-        ),
-
-        handle_registry:report_created(MetadataPrefix, HandleServiceId, HandleId, CreationTime),
-        {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
-        {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}
+        % ensure no race conditions when creating a handle for a share (only one may be created)
+        create_handle_unsafe(ShareId, Req)
     end);
 
 create(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}, data = Data}) ->
@@ -286,34 +231,13 @@ get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Handle) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
-    od_handle:critical_section_for(HandleId, fun() ->
-        {ok, #document{value = #od_handle{
-            handle_service = HandleService,
-            timestamp = PreviousTimestamp,
-            resource_id = ShareId,
-            metadata_prefix = MetadataPrefix,
-            public_handle = PublicHandle
-        }}} = od_handle:get(HandleId),
-        {ok, #document{value = ShareRecord}} = od_share:get(ShareId),
-
-        % only the metadata field can be updated
-        InputRawMetadata = maps:get(<<"metadata">>, Data),
-        RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataPrefix, InputRawMetadata, ShareId, ShareRecord),
-        FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
-        FinalRawMetadata = oai_metadata:encode_xml(MetadataPrefix, FinalMetadata),
-
-        CurrentTimestamp = od_handle:current_timestamp(),
-        {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
-            {ok, Handle#od_handle{
-                timestamp = CurrentTimestamp,
-                metadata = FinalRawMetadata
-            }}
-        end),
-        % every handle modification must be reflected in the handle registry
-        handle_registry:report_updated(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp)
-        % TODO VFS-7454 currently not supported by the handle proxy implementation
-        % handle_proxy:modify_handle(HandleId, FinalRawMetadata)
-    end);
+    fun(#od_handle{resource_id = ShareId}) ->
+        od_share:critical_section_for(ShareId, fun() ->
+            od_handle:critical_section_for(HandleId, fun() ->
+                update_handle_unsafe(HandleId, ShareId, Data)
+            end)
+        end)
+    end;
 
 
 update(Req = #el_req{gri = #gri{id = HandleId, aspect = {user_privileges, UserId}}}) ->
@@ -342,25 +266,13 @@ update(Req = #el_req{gri = #gri{id = HandleId, aspect = {group_privileges, Group
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
-    od_handle:critical_section_for(HandleId, fun() ->
-        {ok, #document{value = #od_handle{
-            handle_service = HandleService,
-            timestamp = PreviousTimestamp,
-            metadata_prefix = MetadataPrefix,
-            public_handle = PublicHandle
-        }}} = od_handle:get(HandleId),
-        try
-            handle_proxy:unregister_handle(HandleId)
-        catch Class:Reason:Stacktrace ->
-            ?warning_exception(?autoformat_with_msg(
-                "Handle was removed but it failed to be unregistered from its handle service",
-                [HandleId, PublicHandle, HandleService]
-            ), Class, Reason, Stacktrace)
-        end,
-        DeletionTimestamp = od_handle:current_timestamp(),
-        handle_registry:report_deleted(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
-        entity_graph:delete_with_relations(od_handle, HandleId)
-    end);
+    fun(#od_handle{resource_id = ShareId}) ->
+        od_share:critical_section_for(ShareId, fun() ->
+            od_handle:critical_section_for(HandleId, fun() ->
+                delete_handle_unsafe(HandleId, ShareId)
+            end)
+        end)
+    end;
 
 delete(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}}) ->
     entity_graph:remove_relation(
@@ -662,6 +574,146 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%% @private
+%% @doc must be run in a critical section for ShareId
+-spec create_handle_unsafe(od_share:id(), entity_logic:req()) -> entity_logic:create_result().
+create_handle_unsafe(ShareId, Req = #el_req{gri = GRI, auth = Auth, data = Data}) ->
+    HandleServiceId = maps:get(<<"handleServiceId">>, Data),
+    ResourceType = <<"Share">> = maps:get(<<"resourceType">>, Data),
+    ShareId = maps:get(<<"resourceId">>, Data),
+    RawMetadata = maps:get(<<"metadata">>, Data),
+    MetadataPrefix = maps:get(<<"metadataPrefix">>, Data, ?DEFAULT_METADATA_PREFIX),
+    CreationTime = od_handle:current_timestamp(),
+
+    {ok, #document{value = InitialShareRecord}} = od_share:get(ShareId),
+
+    InitialShareRecord#od_share.handle =:= undefined orelse throw(?ERROR_ALREADY_EXISTS),
+
+    RevisedMetadata = raw_metadata_to_revised_for_publication(
+        MetadataPrefix, RawMetadata, ShareId, InitialShareRecord
+    ),
+
+    {ok, PublicHandle} = handle_proxy:register_handle(
+        HandleServiceId, ResourceType, ShareId, oai_metadata:encode_xml(MetadataPrefix, RevisedMetadata)
+    ),
+
+    FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
+
+    {ok, #document{key = HandleId}} = od_handle:create(#document{value = #od_handle{
+        public_handle = PublicHandle,
+        resource_type = ResourceType,
+        metadata_prefix = MetadataPrefix,
+        metadata = oai_metadata:encode_xml(MetadataPrefix, FinalMetadata),
+        timestamp = CreationTime,
+
+        resource_id = ShareId,
+        handle_service = HandleServiceId,
+
+        creator = aai:normalize_subject(Auth#auth.subject),
+        creation_time = CreationTime
+    }}),
+
+    case Req#el_req.auth_hint of
+        ?AS_USER(UserId) ->
+            entity_graph:add_relation(
+                od_user, UserId,
+                od_handle, HandleId,
+                privileges:handle_admin()
+            );
+        ?AS_GROUP(GroupId) ->
+            entity_graph:add_relation(
+                od_group, GroupId,
+                od_handle, HandleId,
+                privileges:handle_admin()
+            );
+        _ ->
+            ok
+    end,
+
+    {ok, _} = od_share:update(ShareId, fun(ShRec) ->
+        {ok, ShRec#od_share{handle = HandleId}}
+    end),
+
+    share_registry:report_handle_created_for(ShareId, InitialShareRecord, HandleId, PublicHandle),
+    handle_registry:report_created(MetadataPrefix, HandleServiceId, HandleId, CreationTime),
+    {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
+    {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}.
+
+
+%% @private
+%% @doc must be run in a critical section for ShareId x HandleId
+-spec update_handle_unsafe(od_handle:id(), od_share:id(), entity_logic:data()) -> ok | no_return().
+update_handle_unsafe(HandleId, ShareId, Data) ->
+    % race condition: in case of the share being already deleted, this will throw ?ERROR_NOT_FOUND
+    #document{value = ShareRecord} = ?check(od_share:get(ShareId)),
+    % race condition: in case of the handle being already deleted, this will throw ?ERROR_NOT_FOUND
+    #document{value = #od_handle{
+        handle_service = HandleService,
+        timestamp = PreviousTimestamp,
+        resource_id = ShareId,
+        metadata_prefix = MetadataPrefix,
+        public_handle = PublicHandle
+    }} = ?check(od_handle:get(HandleId)),
+
+    % only the metadata field can be updated
+    InputRawMetadata = maps:get(<<"metadata">>, Data),
+    RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataPrefix, InputRawMetadata, ShareId, ShareRecord),
+    FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
+    FinalRawMetadata = oai_metadata:encode_xml(MetadataPrefix, FinalMetadata),
+
+    CurrentTimestamp = od_handle:current_timestamp(),
+    {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
+        {ok, Handle#od_handle{
+            timestamp = CurrentTimestamp,
+            metadata = FinalRawMetadata
+        }}
+    end),
+    % every handle modification must be reflected in the handle registry
+    handle_registry:report_updated(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp),
+    % TODO VFS-7454 currently not supported by the handle proxy implementation
+    % handle_proxy:modify_handle(HandleId, FinalRawMetadata).
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Must be run in a critical section for ShareId x HandleId.
+%% There are two ways handles are deleted:
+%%   1) The handle is deleted, but it's corresponding share is not.
+%%   2) The corresponding share is deleted, and in the process, the
+%%      handle is deleted first (@see share_logic_plugin:delete/1).
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_handle_unsafe(od_handle:id(), od_share:id()) -> ok | no_return().
+delete_handle_unsafe(HandleId, ShareId) ->
+    % race condition: in case of the handle being already deleted, this will throw ?ERROR_NOT_FOUND
+    #document{value = #od_handle{
+        handle_service = HandleService,
+        resource_id = ShareId,
+        timestamp = PreviousTimestamp,
+        metadata_prefix = MetadataPrefix,
+        public_handle = PublicHandle
+    }} = ?check(od_handle:get(HandleId)),
+    try
+        handle_proxy:unregister_handle(HandleId)
+    catch Class:Reason:Stacktrace ->
+        ?warning_exception(?autoformat_with_msg(
+            "Handle was removed but it failed to be unregistered from its handle service",
+            [HandleId, PublicHandle, HandleService]
+        ), Class, Reason, Stacktrace)
+    end,
+    DeletionTimestamp = od_handle:current_timestamp(),
+    handle_registry:report_deleted(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
+    entity_graph:delete_with_relations(od_handle, HandleId),
+
+    {ok, #document{value = UpdatedShareRecord}} = od_share:update(ShareId, fun(S) ->
+        {ok, S#od_share{handle = undefined}}
+    end),
+    PreviousShareRecord = UpdatedShareRecord#od_share{handle = HandleId},
+    share_registry:report_handle_deleted_for(ShareId, PreviousShareRecord).
+
 
 %% @private
 -spec raw_metadata_to_revised_for_publication(
