@@ -13,7 +13,6 @@
 -module(share_logic).
 -author("Lukasz Opiola").
 
--include("http/gui_paths.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/errors.hrl").
@@ -37,8 +36,6 @@
     exists/1
 ]).
 -export([
-    build_public_url/1,
-    build_public_rest_url/1,
     choose_provider_for_public_share_handling/1
 ]).
 
@@ -187,30 +184,6 @@ delete(Auth, ShareId) ->
 exists(ShareId) ->
     {ok, Exists} = od_share:exists(ShareId),
     Exists.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns public access URL for given share that points to Onezone. Onezone
-%% will then redirect clients to one of providers that support the
-%% parent space of the share.
-%% @end
-%%--------------------------------------------------------------------
--spec build_public_url(od_share:id()) -> binary().
-build_public_url(ShareId) ->
-    oz_worker:get_uri(?PUBLIC_SHARE_URN(ShareId)).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns public access URL for given share that points to Onezone. Onezone
-%% will then redirect clients to one of providers that support the
-%% parent space of the share.
-%% @end
-%%--------------------------------------------------------------------
--spec build_public_rest_url(od_share:id()) -> binary().
-build_public_rest_url(ShareId) ->
-    oz_worker:get_rest_uri(?PUBLIC_SHARE_REST_PATH(ShareId)).
 
 
 %%--------------------------------------------------------------------

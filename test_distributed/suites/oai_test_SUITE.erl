@@ -656,8 +656,15 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
         {ok, _} = ozt:rpc(od_handle_service, update, [HServiceId, fun(HS = #od_handle_service{handles = Handles}) ->
             {ok, HS#od_handle_service{handles = [HandleId | Handles]}}
         end]),
+        {ok, _} = ozt:rpc(od_space, update, [SpaceId, fun(Sp = #od_space{shares = Shares}) ->
+            {ok, Sp#od_space{shares = [ShareId | Shares]}}
+        end]),
+        {ok, _} = ozt:rpc(od_share, update, [ShareId, fun(Sh) ->
+            {ok, Sh#od_share{handle = HandleId}}
+        end]),
 
-        ?assertMatch(ok, ozt:rpc(od_handle, migrate_legacy_handles, [])),
+        ?assertMatch(ok, ozt:rpc(od_handle, migrate_legacy_handles_21_02_5, [])),
+        ?assertMatch(ok, ozt:rpc(od_share, migrate_legacy_shares_21_02_8, [])),
 
         Args = [
             {<<"identifier">>, oai_identifier(HandleId)},
@@ -681,7 +688,7 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
                 #xmlText{value = "\n    "},
                 #xmlElement{
                     name = 'dc:identifier',
-                    content = [#xmlText{value = binary_to_list(ozt:rpc(share_logic, build_public_url, [ShareId]))}]
+                    content = [#xmlText{value = binary_to_list(ozt:rpc(od_share, build_public_url, [ShareId]))}]
                 }
             ]}
         ]),
@@ -1096,23 +1103,29 @@ init_per_suite(Config) ->
 init_per_testcase(_, Config) ->
     ozt_mocks:freeze_time(),
     ozt_mocks:mock_handle_proxy(),
+
+    % due to simulated DB inconsistencies or the suite failing midway, there
+    % may be some inconsistencies in the share/handle registry, so we need a specialized cleanup
+    AllHandles = [D#document.key || D <- element(2, ozt:rpc(od_handle, list, []))],
+    lists_utils:pforeach(fun(HandleId) ->
+        try
+            ok = ozt:rpc(handle_logic, delete, [?ROOT, HandleId])
+        catch _:_ ->
+            ozt:rpc(od_handle, force_delete, [HandleId])
+        end
+    end, AllHandles),
+
+    lists:foreach(fun(MetadataPrefix) ->
+        lists:foreach(fun(#handle_listing_entry{timestamp = Timestamp, handle_id = HandleId, service_id = HServiceId}) ->
+            ozt:rpc(handle_registry, report_deleted, [MetadataPrefix, HServiceId, HandleId, Timestamp, Timestamp]),
+            ozt:rpc(handle_registry, purge_deleted_entry, [HandleId])
+        end, ozt:rpc(handle_registry, list_completely, [#{metadata_prefix => MetadataPrefix}]))
+    end, ozt_handles:supported_metadata_prefixes()),
+
     ozt:delete_all_entities(),
     Config.
 
-end_per_testcase(filtering_of_broken_records_get_test, _Config) ->
-    end_per_testcase(filtering_of_broken_records_post_test, _Config);
-end_per_testcase(filtering_of_broken_records_post_test, _Config) ->
-    % this test simulates some DB inconsistencies so a specialized cleanup is needed
-    try
-        ozt:delete_all_entities()
-    catch _:_ ->
-        lists:foreach(fun(MetadataPrefix) ->
-            lists:foreach(fun(#handle_listing_entry{timestamp = Timestamp, handle_id = HandleId, service_id = HServiceId}) ->
-                ozt:rpc(handle_registry, report_deleted, [MetadataPrefix, HServiceId, HandleId, Timestamp, Timestamp])
-            end, ozt:rpc(handle_registry, list_completely, [#{metadata_prefix => MetadataPrefix}]))
-        end, ozt_handles:supported_metadata_prefixes())
-    end,
-    end_per_testcase(default, _Config);
+
 end_per_testcase(_, _Config) ->
     ozt_mocks:unmock_handle_proxy(),
     ozt_mocks:unfreeze_time(),
@@ -1422,7 +1435,7 @@ create_handle_with_mocked_timestamp(MetadataPrefix, Metadata, MockedTimestamp) -
     ozt_spaces:list() == [] andalso lists_utils:generate(fun ozt_spaces:create/0, 10),
     HServiceId = ?RAND_ELEMENT(ozt_handle_services:list()),
     SpaceId = ?RAND_ELEMENT(ozt_spaces:list()),
-    ShareId = ozt_spaces:create_share(SpaceId),
+    ShareId = ozt_shares:create(SpaceId),
     create_handle_with_mocked_timestamp(HServiceId, ShareId, MetadataPrefix, Metadata, MockedTimestamp).
 
 create_handle_with_mocked_timestamp(HServiceId, ShareId, MetadataPrefix, Metadata, MockedTimestamp) ->

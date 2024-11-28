@@ -22,7 +22,7 @@
 -export([critical_section_for/2]).
 -export([get_ctx/0]).
 -export([current_timestamp/0]).
--export([migrate_legacy_handles/0, migrate_legacy_handle/2]).
+-export([migrate_legacy_handles_21_02_5/0, migrate_legacy_handle_21_02_5/2]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -143,10 +143,11 @@ current_timestamp() ->
 %% Secondly, its metadata is transformed using the same procedures as are applied in the
 %% current software version.
 %% The procedure is idempotent.
+%% Introduced in version 21.02.5.
 %% @end
 %%--------------------------------------------------------------------
--spec migrate_legacy_handles() -> ok.
-migrate_legacy_handles() ->
+-spec migrate_legacy_handles_21_02_5() -> ok.
+migrate_legacy_handles_21_02_5() ->
     lists:foreach(fun(#document{
         key = HServiceId,
         value = #od_handle_service{
@@ -155,7 +156,7 @@ migrate_legacy_handles() ->
         }
     }) ->
         ?info("Migrating ~B legacy handles from '~ts' (~ts)...", [length(Handles), HServiceName, HServiceId]),
-        lists:foreach(fun(HandleId) -> migrate_legacy_handle(HServiceId, HandleId) end, Handles),
+        lists:foreach(fun(HandleId) -> migrate_legacy_handle_21_02_5(HServiceId, HandleId) end, Handles),
         ok = ?extract_ok(od_handle_service:update(HServiceId, fun(HService) ->
             {ok, HService#od_handle_service{handles = []}}
         end)),
@@ -164,18 +165,18 @@ migrate_legacy_handles() ->
 
 
 % exported for tests
--spec migrate_legacy_handle(od_handle_service:id(), id()) -> ok.
-migrate_legacy_handle(HServiceId, HandleId) ->
+-spec migrate_legacy_handle_21_02_5(od_handle_service:id(), id()) -> ok.
+migrate_legacy_handle_21_02_5(HServiceId, HandleId) ->
     case get(HandleId) of
         {error, not_found} ->
-            ?error("The handle ~ts was not found in DB, skipping its migration", [HandleId]);
+            ?error("The handle ~ts was not found in DB - skipping its migration", [HandleId]);
         {ok, #document{value = Handle}} ->
-            migrate_legacy_handle(HServiceId, HandleId, Handle)
+            migrate_legacy_handle_21_02_5(HServiceId, HandleId, Handle)
     end.
 
 %% @private
--spec migrate_legacy_handle(od_handle_service:id(), id(), record()) -> ok.
-migrate_legacy_handle(HServiceId, HandleId, #od_handle{
+-spec migrate_legacy_handle_21_02_5(od_handle_service:id(), id(), record()) -> ok.
+migrate_legacy_handle_21_02_5(HServiceId, HandleId, #od_handle{
     resource_id = ShareId,
     metadata = Metadata,
     public_handle = PublicHandle,

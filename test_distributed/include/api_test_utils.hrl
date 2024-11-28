@@ -150,7 +150,11 @@
 -define(SHARE_NAME2, <<"share2">>).
 -define(SHARE_ID_1, <<"shareId1">>).
 -define(SHARE_ID_2, <<"shareId2">>).
--define(GEN_ROOT_FILE_ID(SpaceId, ShareId), file_id:pack_share_guid(datastore_key:new(), SpaceId, ShareId)).
+-define(GEN_ROOT_FILE_GUID(SpaceId, ShareId), ?GEN_ROOT_FILE_GUID(datastore_key:new(), SpaceId, ShareId)).
+-define(GEN_ROOT_FILE_GUID(Uuid, SpaceId, ShareId), file_id:pack_share_guid(Uuid, SpaceId, ShareId)).
+-define(RAND_SHARE_NAME(),
+    binary:replace(?RAND_UNICODE_STR(?RAND_INT(3, 40)), [<<"/">>, <<"..">>, <<".">>], <<"-">>, [global])
+).
 -define(SHARE_PUBLIC_URL(ZoneDomain, ShareId),
     str_utils:format_bin("https://~ts/share/~ts", [ZoneDomain, ShareId])
 ).

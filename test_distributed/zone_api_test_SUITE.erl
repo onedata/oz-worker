@@ -404,8 +404,12 @@ expected_configuration(Config) ->
         }
     }),
 
-    OpenDataXrootdServerDomain = lists_utils:random_element([undefined, ?XROOTD_SERVER_DOMAIN]),
-    oz_test_utils:set_env(Config, open_data_xrootd_server_domain, OpenDataXrootdServerDomain),
+    PublicDataXrootdServerDomain = lists_utils:random_element([undefined, ?XROOTD_SERVER_DOMAIN]),
+    oz_test_utils:set_env(Config, public_data_xrootd_server_domain, PublicDataXrootdServerDomain),
+    ExpPublicDataXrootdServerDomain = case PublicDataXrootdServerDomain of
+        undefined -> null;
+        Url -> list_to_binary(Url)
+    end,
 
     ExpectedBagitUploaderWorkflowSchemaId = case rand:uniform(2) of
         1 ->
@@ -433,10 +437,8 @@ expected_configuration(Config) ->
         <<"supportedIdPs">> => MockedSupportedIdPs,
         <<"compatibilityRegistryRevision">> => MockedCompatRevision,
         <<"compatibleOneproviderVersions">> => MockedCompatOpVersions,
-        <<"openDataXrootdServerDomain">> => case OpenDataXrootdServerDomain of
-            undefined -> null;
-            Url -> list_to_binary(Url)
-        end,
+        <<"openDataXrootdServerDomain">> => ExpPublicDataXrootdServerDomain,
+        <<"publicDataXrootdServerDomain">> => ExpPublicDataXrootdServerDomain,
         <<"bagitUploaderWorkflowSchemaId">> => ExpectedBagitUploaderWorkflowSchemaId,
         <<"availableSpaceTags">> => ozt:get_env(available_space_tags)
     }.
