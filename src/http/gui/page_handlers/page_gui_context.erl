@@ -61,7 +61,7 @@ handle(<<"GET">>, Req) ->
         % (i.e. the same address that the client visited in his web browser)
         {Domain, Port} = case {ClusterId, ServiceType} of
             {?ONEZONE_CLUSTER_ID, _} ->
-                % use the original web client's port for both for worker and panel,
+                % use the original web client's port for both worker and panel,
                 % relying on the onepanel proxy
                 {cowboy_req:host(Req), cowboy_req:port(Req)};
             _ ->
