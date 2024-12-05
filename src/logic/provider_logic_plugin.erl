@@ -794,14 +794,14 @@ build_domain_config_sanitizer_spec(OtherRequiredFields, OtherOptionalFields, Dat
             IsSubdomainDelegationSupported = is_subdomain_delegation_supported(),
 
             #{
-                required => AlwaysRequiredFields#{<<"domain">> => {binary, fun(OpDomain) ->
+                required => AlwaysRequiredFields#{DomainKey => {binary, fun(OpDomain) ->
                     OpDomain =:= <<>> andalso throw(?ERROR_BAD_VALUE_EMPTY(DomainKey)),
 
                     case IsSubdomainDelegationSupported of
                         true ->
                             OneZoneDomain = oz_worker:get_domain(),
                             dns_utils:is_equal_or_subdomain(OpDomain, OneZoneDomain) andalso throw(
-                                ?ERROR_BAD_DATA(DomainKey, <<"Onezone subdomain cannot be provided">>)
+                                ?ERROR_BAD_DATA(DomainKey, <<"Cannot use Onezone's subdomain as the provider domain (use the subdomainDelegation=true option)">>)
                             );
                         false ->
                             ok

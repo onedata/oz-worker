@@ -286,7 +286,7 @@ create_test(Config) ->
             correct_values = CorrectValues#{<<"subdomainDelegation">> => [false]},
             bad_values = [
                 {<<"domain">>, <<"mugging.", OZDomain/binary>>,
-                    ?ERROR_BAD_DATA(<<"domain">>, <<"Onezone subdomain cannot be provided">>)}
+                    ?ERROR_BAD_DATA(<<"domain">>, <<"Cannot use Onezone's subdomain as the provider domain (use the subdomainDelegation=true option)">>)}
             ]
         }
     },
@@ -2173,7 +2173,7 @@ update_domain_test(Config) ->
 
             % Disable subdomain delegation in onezone to test
             % ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED
-            % or enable to test ?ERROR_BAD_DATA(<<"domain">>, <<"Onezone subdomain cannot be provided">>)
+            % or enable to test ?ERROR_BAD_DATA(<<"domain">>, <<"Cannot use Onezone's subdomain as the provider domain (use the subdomainDelegation=true option)">>)
             oz_test_utils:set_env(Config, subdomain_delegation_supported, SubdomainDelegationSupported),
 
             #{
@@ -2248,7 +2248,7 @@ update_domain_test(Config) ->
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         data_spec = DataSpec#data_spec{bad_values = [
             {<<"domain">>, <<"mugging.", OZDomain/binary>>,
-                ?ERROR_BAD_DATA(<<"domain">>, <<"Onezone subdomain cannot be provided">>)}
+                ?ERROR_BAD_DATA(<<"domain">>, <<"Cannot use Onezone's subdomain as the provider domain (use the subdomainDelegation=true option)">>)}
         ]}
     },
     ?assert(api_test_utils:run_tests(
