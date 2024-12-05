@@ -295,7 +295,8 @@ routes() -> [
         method = 'PUT',
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {space_alias, ?BINDING(sid)}}
     }},
-    %% TODO VFS-10687 swaggers for space marketplace
+    %% Get summary of space membership requests
+    %% This operation does not require any specific privileges.
     {<<"/user/space_membership_requests">>, #rest_req{
         method = 'GET',
         produces = [<<"application/json">>],
@@ -338,7 +339,7 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = {user_spaces, ?CLIENT_ID}, scope = private}
     }},
-    %% Create a new handle service for the current user
+    %% Create handle service for the current user (admin)
     %% This operation requires one of the following privileges:
     %% - oz_handle_service_create
     {<<"/user/handle_services">>, #rest_req{

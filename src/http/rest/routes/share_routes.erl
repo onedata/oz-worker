@@ -27,7 +27,7 @@
 %%--------------------------------------------------------------------
 -spec routes() -> [{binary(), #rest_req{}}].
 routes() -> [
-    %% List all shares
+    %% List all shares (admin)
     %% This operation requires one of the following privileges:
     %% - oz_shares_list
     {<<"/shares">>, #rest_req{
