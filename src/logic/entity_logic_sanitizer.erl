@@ -17,6 +17,7 @@
 -include_lib("ctool/include/errors.hrl").
 
 -export([validate_name/1, validate_name/5, normalize_name/2, normalize_name/9]).
+-export([validate_domain/1]).
 -export([ensure_valid/3]).
 
 % key and value in the data object
@@ -146,6 +147,19 @@ normalize_name(Name, FirstRgx, FirstReplace, MiddleRgx, MiddleReplace, LastRgx, 
     case validate_name(TrimmedRight, FirstRgx, MiddleRgx, LastRgx, MaxLength) of
         false -> DefaultName;
         true -> TrimmedRight
+    end.
+
+
+-spec validate_domain(binary()) -> binary() | no_return().
+validate_domain(Domain) ->
+    case size(Domain) =< ?MAX_DOMAIN_LENGTH of
+        true ->
+            case re:run(Domain, ?DOMAIN_VALIDATION_REGEXP, [{capture, none}]) of
+                match -> Domain;
+                _ -> throw(?ERROR_BAD_VALUE_DOMAIN)
+            end;
+        _ ->
+            throw(?ERROR_BAD_VALUE_DOMAIN)
     end.
 
 
@@ -514,14 +528,7 @@ sanitize_value(_, {between, Low, High}, Key, Value) ->
 sanitize_value(binary, domain, Key, <<"">>) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 sanitize_value(binary, domain, _Key, Value) ->
-    case size(Value) =< ?MAX_DOMAIN_LENGTH of
-        true ->
-            case re:run(Value, ?DOMAIN_VALIDATION_REGEXP, [{capture, none}]) of
-                match -> Value;
-                _ -> throw(?ERROR_BAD_VALUE_DOMAIN)
-            end;
-        _ -> throw(?ERROR_BAD_VALUE_DOMAIN)
-    end;
+    validate_domain(Value);
 
 sanitize_value(binary, subdomain, Key, <<"">>) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));

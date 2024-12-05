@@ -790,8 +790,26 @@ build_domain_config_sanitizer_spec(OtherRequiredFields, OtherOptionalFields, Dat
                 optional => OptionalFields
             };
         false ->
+            DomainKey = <<"domain">>,
+            IsSubdomainDelegationSupported = is_subdomain_delegation_supported(),
+
             #{
-                required => AlwaysRequiredFields#{<<"domain">> => {binary, domain}},
+                required => AlwaysRequiredFields#{<<"domain">> => {binary, fun(OpDomain) ->
+                    OpDomain =:= <<>> andalso throw(?ERROR_BAD_VALUE_EMPTY(DomainKey)),
+
+                    case IsSubdomainDelegationSupported of
+                        true ->
+                            OneZoneDomain = oz_worker:get_domain(),
+                            dns_utils:is_equal_or_subdomain(OpDomain, OneZoneDomain) andalso throw(
+                                ?ERROR_BAD_DATA(DomainKey, <<"Onezone subdomain cannot be provided">>)
+                            );
+                        false ->
+                            ok
+                    end,
+
+                    entity_logic_sanitizer:validate_domain(OpDomain),
+                    true
+                end}},
                 optional => OptionalFields#{<<"oneS3Port">> => {integer, {between, 0, 65535}}}
             };
         _ ->
@@ -804,10 +822,16 @@ build_domain_config_sanitizer_spec(OtherRequiredFields, OtherOptionalFields, Dat
 %% @private
 -spec assert_subdomain_delegation_supported() -> ok | no_return().
 assert_subdomain_delegation_supported() ->
-    case oz_worker:get_env(subdomain_delegation_supported, true) of
+    case is_subdomain_delegation_supported() of
         true -> ok;
         false -> throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED)
     end.
+
+
+%% @private
+-spec is_subdomain_delegation_supported() -> boolean().
+is_subdomain_delegation_supported() ->
+    oz_worker:get_env(subdomain_delegation_supported, true).
 
 
 -spec auth_by_self(entity_logic:req()) -> boolean().

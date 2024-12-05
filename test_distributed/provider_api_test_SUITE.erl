@@ -274,9 +274,27 @@ create_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-    %% Create provider with subdomain delegation turned on and no ones3
+    %% Create provider with subdomain delegation turned on and try to register subdomain as domain
     oz_test_utils:set_env(Config, subdomain_delegation_supported, true),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        data_spec = #data_spec{
+            required = [
+                <<"token">>, <<"name">>, <<"domain">>,
+                <<"adminEmail">>, <<"subdomainDelegation">>
+            ],
+            optional = [<<"latitude">>, <<"longitude">>, <<"opWorkerPort">>, <<"oneS3Port">>],
+            correct_values = CorrectValues#{<<"subdomainDelegation">> => [false]},
+            bad_values = [
+                {<<"domain">>, <<"mugging.", OZDomain/binary>>,
+                    ?ERROR_BAD_DATA(<<"domain">>, <<"Onezone subdomain cannot be provided">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    %% Create provider with subdomain delegation turned on and no ones3
+    oz_test_utils:set_env(Config, subdomain_delegation_supported, true),
+    ApiTestSpec3 = ApiTestSpec#api_test_spec{
         data_spec = #data_spec{
             required = [
                 <<"token">>, <<"name">>, <<"subdomain">>,
@@ -303,10 +321,10 @@ create_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
 
     %% Create provider with subdomain delegation turned on and ones3
-    ApiTestSpec3 = ApiTestSpec#api_test_spec{
+    ApiTestSpec4 = ApiTestSpec#api_test_spec{
         data_spec = #data_spec{
             required = [
                 <<"token">>, <<"name">>, <<"subdomain">>,
@@ -323,7 +341,7 @@ create_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)).
 
 
 get_test(Config) ->
@@ -2145,21 +2163,24 @@ update_domain_test(Config) ->
         Config, ?PROVIDER_NAME2
     ),
 
-    EnvSetUpFun = fun() ->
-        {ok, Cluster1Member} = oz_test_utils:create_user(Config),
-        {ok, {P1, P1Token}} = oz_test_utils:create_provider(
-            Config, Cluster1Member, ProviderDetails
-        ),
-        Cluster1MemberNoUpdatePriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
+    BuildEnvSetUpFun = fun(SubdomainDelegationSupported) ->
+        fun() ->
+            {ok, Cluster1Member} = oz_test_utils:create_user(Config),
+            {ok, {P1, P1Token}} = oz_test_utils:create_provider(
+                Config, Cluster1Member, ProviderDetails
+            ),
+            Cluster1MemberNoUpdatePriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
 
-        % Disable subdomain delegation in onezone to test
-        % ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED
-        oz_test_utils:set_env(Config, subdomain_delegation_supported, false),
+            % Disable subdomain delegation in onezone to test
+            % ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED
+            % or enable to test ?ERROR_BAD_DATA(<<"domain">>, <<"Onezone subdomain cannot be provided">>)
+            oz_test_utils:set_env(Config, subdomain_delegation_supported, SubdomainDelegationSupported),
 
-        #{
-            providerId => P1, providerClient => {provider, P1, P1Token},
-            clusterMember => {user, Cluster1Member}, clusterMemberNoUpdatePriv => {user, Cluster1MemberNoUpdatePriv}
-        }
+            #{
+                providerId => P1, providerClient => {provider, P1, P1Token},
+                clusterMember => {user, Cluster1Member}, clusterMemberNoUpdatePriv => {user, Cluster1MemberNoUpdatePriv}
+            }
+        end
     end,
     EnvTearDownFun = fun(#{providerId := ProviderId} = _Env) ->
         oz_test_utils:set_env(Config, subdomain_delegation_supported, true),
@@ -2178,6 +2199,20 @@ update_domain_test(Config) ->
         true
     end,
 
+    DataSpec = #data_spec{
+        required = [<<"subdomainDelegation">>, <<"domain">>],
+        correct_values = #{
+            <<"subdomainDelegation">> => [false],
+            <<"domain">> => [<<"changed.pl">>, <<"172.17.0.5">>]
+        },
+        bad_values = [
+            {<<"subdomainDelegation">>, bad_bool,
+                ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+            {<<"subdomainDelegation">>, true,
+                ?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED},
+            {<<"domain">>, <<"https://hasprotocol">>, ?ERROR_BAD_VALUE_DOMAIN}
+        ]
+    },
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -2204,23 +2239,20 @@ update_domain_test(Config) ->
             },
             expected_result_op = ?OK_RES
         },
-        data_spec = #data_spec{
-            required = [<<"subdomainDelegation">>, <<"domain">>],
-            correct_values = #{
-                <<"subdomainDelegation">> => [false],
-                <<"domain">> => [<<"changed.pl">>, <<"172.17.0.5">>]
-            },
-            bad_values = [
-                {<<"subdomainDelegation">>, bad_bool,
-                    ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
-                {<<"subdomainDelegation">>, true,
-                    ?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED},
-                {<<"domain">>, <<"https://hasprotocol">>, ?ERROR_BAD_VALUE_DOMAIN}
-            ]
-        }
+        data_spec = DataSpec
     },
     ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, VerifyEndFun
+        Config, ApiTestSpec, BuildEnvSetUpFun(false), EnvTearDownFun, VerifyEndFun
+    )),
+
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        data_spec = DataSpec#data_spec{bad_values = [
+            {<<"domain">>, <<"mugging.", OZDomain/binary>>,
+                ?ERROR_BAD_DATA(<<"domain">>, <<"Onezone subdomain cannot be provided">>)}
+        ]}
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec2, BuildEnvSetUpFun(true), EnvTearDownFun, VerifyEndFun
     )).
 
 
