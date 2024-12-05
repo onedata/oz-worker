@@ -33,7 +33,7 @@
 -export([create_user_invite_token/2]).
 -export([create_group_invite_token/2]).
 -export([create_support_token/2]).
--export([create_share/1, create_share/2]).
+-export([create_share/1, create_share/2, create_share/3]).
 -export([get_users/1, get_groups/1, get_eff_users/1, get_eff_groups/1]).
 -export([has_eff_user/2]).
 -export([get_user_privileges/2, get_group_privileges/2, get_eff_user_privileges/2, get_eff_group_privileges/2]).
@@ -229,12 +229,27 @@ create_support_token(SpaceId, UserId) ->
 create_share(SpaceId) ->
     create_share(SpaceId, <<"of-space-", SpaceId/binary>>).
 
--spec create_share(od_space:id(), od_share:name()) -> od_share:id().
-create_share(SpaceId, Name) ->
-    ShareId = datastore_key:new(),
-    {ok, ShareId} = ?assertMatch({ok, _}, ozt:rpc(share_logic, create, [
-        ?ROOT, ShareId, Name, ?GEN_ROOT_FILE_ID(SpaceId, ShareId), SpaceId
-    ])),
+-spec create_share(od_space:id(), od_share:name() | entity_logic:data()) -> od_share:id().
+create_share(SpaceId, Name) when is_binary(Name) ->
+    create_share(SpaceId, #{
+        <<"name">> => Name
+    });
+create_share(SpaceId, Data) when not is_map_key(<<"shareId">>, Data) ->
+    create_share(SpaceId, Data#{
+        <<"shareId">> => datastore_key:new()
+    });
+create_share(SpaceId, Data) when not is_map_key(<<"rootFileId">>, Data) ->
+    create_share(SpaceId, Data#{
+        <<"rootFileId">> => ?GEN_ROOT_FILE_GUID(SpaceId, maps:get(<<"shareId">>, Data))
+    });
+create_share(SpaceId, Data) ->
+    create_share(?ROOT, SpaceId, Data).
+
+-spec create_share(aai:auth(), od_space:id(), entity_logic:data()) -> od_share:id().
+create_share(Auth, SpaceId, Data) ->
+    {ok, ShareId} = ?assertMatch({ok, _}, ozt:rpc(share_logic, create, [Auth, Data#{
+        <<"spaceId">> => SpaceId
+    }])),
     ShareId.
 
 

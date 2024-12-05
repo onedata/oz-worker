@@ -1398,7 +1398,7 @@ space_has_effective_user(Config, SpaceId, UserId) ->
     SpaceId :: od_space:id()) -> {ok, od_share:id()}.
 create_share(Config, Client, ShareId, Name, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(Config, share_logic, create, [
-        Client, ShareId, Name, ?GEN_ROOT_FILE_ID(SpaceId, ShareId), SpaceId
+        Client, ShareId, Name, ?GEN_ROOT_FILE_GUID(SpaceId, ShareId), SpaceId
     ])).
 
 
@@ -1455,7 +1455,7 @@ delete_share(Config, ShareId) ->
 -spec get_share_public_url(Config :: term(), ShareId :: od_share:id()) -> binary().
 get_share_public_url(Config, ShareId) ->
     ?assertMatch(<<_/binary>>, call_oz(
-        Config, share_logic, build_public_url, [ShareId])
+        Config, od_share, build_public_url, [ShareId])
     ).
 
 
@@ -1973,9 +1973,10 @@ create_handle(Config, Client, Data) ->
 %%--------------------------------------------------------------------
 -spec list_handles(Config :: term()) -> {ok, [od_handle:id()]}.
 list_handles(Config) ->
-    ?assertMatch({ok, _}, call_oz(Config, handle_logic, list, [
-        ?ROOT
-    ])).
+    % do not rely on handle_logic listing because it uses the handle_registry,
+    % which may be inconsistent (some tests simulate that situation)
+    {ok, Docs} = ?assertMatch({ok, _}, call_oz(Config, od_handle, list, [])),
+    {ok, [D#document.key || D <- Docs]}.
 
 
 %%--------------------------------------------------------------------

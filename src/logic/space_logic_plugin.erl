@@ -105,6 +105,9 @@ operation_supported(create, harvest_metadata, private) -> true;
 operation_supported(create, list_marketplace, protected) -> space_marketplace:assert_enabled();
 operation_supported(create, list_marketplace_with_data, protected) -> space_marketplace:assert_enabled();
 
+operation_supported(create, list_shares, private) -> true;
+operation_supported(create, list_shares_with_data, private) -> true;
+
 operation_supported(get, list, private) -> true;
 operation_supported(get, privileges, _) -> true;
 operation_supported(get, api_samples, private) -> true;
@@ -502,7 +505,29 @@ create(Req = #el_req{data = Data, gri = GRI = #gri{aspect = Aspect}}) when
             end, BasicEntries)
     end,
 
-    {ok, value, {MappedEntries, IsLast, NextPageToken}}.
+    {ok, value, {MappedEntries, IsLast, NextPageToken}};
+
+%% @formatter:off
+create(#el_req{data = Data, gri = #gri{id = SpaceId, aspect = Aspect}}) when
+    Aspect =:= list_shares;
+    Aspect =:= list_shares_with_data
+->
+%% @formatter:on
+    Offset = maps:get(<<"offset">>, Data, 0),
+    Limit = maps:get(<<"limit">>, Data, ?DEFAULT_LIST_LIMIT),
+    Index = maps:get(<<"index">>, Data, undefined),
+    ListingOpts = maps_utils:put_if_defined(#{
+        offset => Offset,
+        limit => Limit
+    }, start_index, Index),
+
+    Entries = case Aspect of
+        list_shares -> share_registry:list_ids(SpaceId, ListingOpts);
+        list_shares_with_data -> share_registry:list_entries(SpaceId, ListingOpts)
+    end,
+    IsLast = length(Entries) < Limit,
+
+    {ok, value, {Entries, IsLast}}.
 
 
 %%--------------------------------------------------------------------
@@ -542,7 +567,6 @@ get(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
         organization_name = OrganizationName,
         tags = Tags,
         advertised_in_marketplace = AdvertisedInMarketplace,
-        shares = Shares,
         support_parameters_registry = SupportParametersRegistry,
         creation_time = CreationTime,
         creator = Creator,
@@ -561,7 +585,6 @@ get(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
         <<"marketplaceContactEmail">> => MarketplaceContactEmail,
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"supportParametersRegistry">> => SupportParametersRegistry,
-        <<"sharesCount">> => length(Shares),
         <<"areEffPrivilegesRecalculated">> => not BottomUpDirty,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
@@ -632,8 +655,9 @@ get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Space) ->
 get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Space) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_group, GroupId, Space)};
 
-get(#el_req{gri = #gri{aspect = shares}}, Space) ->
-    {ok, Space#od_space.shares};
+get(#el_req{gri = #gri{id = SpaceId, aspect = shares}}, _Space) ->
+    % NOTE: currently, we do not support a paging API for that; to be reworked in the future
+    {ok, share_registry:list_ids(SpaceId, #{limit => infinity})};
 
 get(#el_req{gri = #gri{aspect = eff_providers}}, Space) ->
     {ok, entity_graph:get_relations(effective, top_down, od_provider, Space)};
@@ -753,6 +777,10 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
                 fun(Space) -> {ok, Space#od_space{owners = []}} end
             ),
             space_marketplace:delete(SpaceName, SpaceId, Tags),
+            share_registry:foreach(SpaceId, fun(ShareId) ->
+                % this will internally remove the share from the share registry
+                share_logic:delete(?ROOT, ShareId)
+            end),
             entity_graph:delete_with_relations(od_space, SpaceId)
         end),
         ?info("Space '~ts' has been deleted (~ts)", [Name, SpaceId])
@@ -989,11 +1017,16 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_toke
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_GROUP);
 %% @formatter:off
-authorize(#el_req{operation = create, gri = #gri{aspect = Aspect}, auth = ?USER}, _) when
+authorize(#el_req{operation = create, gri = #gri{aspect = Aspect, scope = protected}, auth = ?USER}, _) when
     Aspect =:= list_marketplace;
     Aspect =:= list_marketplace_with_data
 ->
     true;
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = Aspect, scope = private}}, Space) when
+    Aspect =:= list_shares;
+    Aspect =:= list_shares_with_data
+->
+    auth_by_privilege(Req, Space, ?SPACE_VIEW);
 %% @formatter:on
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = space_support_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_SUPPORT);
@@ -1205,6 +1238,11 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = Aspect
     Aspect =:= list_marketplace_with_data
 ->
     [?OZ_SPACES_LIST];
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = Aspect}}) when
+    Aspect =:= list_shares;
+    Aspect =:= list_shares_with_data
+->
+    [?OZ_SPACES_LIST_RELATIONSHIPS];
 %% @formatter:on
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
     [?OZ_SPACES_LIST];
@@ -1416,6 +1454,17 @@ validate(#el_req{operation = create, gri = #gri{aspect = Aspect}}) when
             <<"offset">> => {integer, any},
             <<"limit">> => {integer, {between, 1, ?MAX_LIST_LIMIT}},
             <<"tags">> => {list_of_binaries, ?AVAILABLE_SPACE_TAGS}
+        }
+    };
+validate(#el_req{operation = create, gri = #gri{aspect = Aspect}}) when
+    Aspect =:= list_shares;
+    Aspect =:= list_shares_with_data
+->
+    #{
+        optional => #{
+            <<"index">> => {binary, any},
+            <<"offset">> => {integer, any},
+            <<"limit">> => {integer, {between, 1, ?MAX_LIST_LIMIT}}
         }
     };
 %% @formatter:on
