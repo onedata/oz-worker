@@ -3066,7 +3066,37 @@ get_record(od_provider, 6) -> {od_provider,
 
     true
 };
-get_record(od_provider, 7) -> #od_provider{
+get_record(od_provider, 7) -> {od_provider,
+    <<"name">>,
+    undefined,
+    undefined,
+
+    false,
+    <<"redirection_point">>,
+    undefined,
+
+    -93.2341,
+    17,
+
+    #{
+        <<"space1">> => 0,
+        <<"space2">> => 0,
+        <<"space3">> => 0,
+        <<"space4">> => 0
+    },
+    [],
+
+    #{},
+    #{},
+    #{},
+    #{},
+
+    ozt_mocks:get_frozen_time_seconds(),
+    0,
+
+    true
+};
+get_record(od_provider, 8) -> #od_provider{
     name = <<"name">>,
     admin_email = undefined,
     root_token = undefined,
@@ -3074,6 +3104,8 @@ get_record(od_provider, 7) -> #od_provider{
     subdomain_delegation = false,
     domain = <<"redirection_point">>,
     subdomain = undefined,
+    op_worker_port = 443,
+    ones3_port = undefined,
 
     latitude = -93.2341,
     longitude = 17,
@@ -3938,6 +3970,17 @@ get_record(dns_state, 2) -> {dns_state,
         {<<"_acme-challenge">>, <<"token">>, undefined},
         {<<"second">>, <<"value">>, undefined}
     ]}
+};
+get_record(dns_state, 3) -> {dns_state,
+    #{<<"sub">> => <<"p1">>},
+    #{<<"p1">> => <<"sub">>},
+    #{<<"p1">> => #{op_worker => [{1, 2, 3, 4}, {192, 168, 192, 1}]}},
+    #{<<"p1">> => #{
+        op_worker => #{
+            <<"_acme-challenge">> => {<<"token">>, undefined},
+            <<"second">> => {<<"value">>, undefined}
+        }
+    }}
 };
 
 

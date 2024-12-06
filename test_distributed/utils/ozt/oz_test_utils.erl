@@ -159,7 +159,7 @@
     support_space/4, support_space/5, support_space_using_token/5,
     support_space_by_legacy_storage/3,
     unsupport_space/3,
-    enable_subdomain_delegation/4,
+    enable_subdomain_delegation/4, enable_subdomain_delegation/5,
     set_provider_domain/3
 ]).
 -export([
@@ -1638,20 +1638,49 @@ unsupport_space(Config, StorageId, SpaceId) ->
     ])).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Sets provider subdomain.
-%% @end
-%%--------------------------------------------------------------------
 -spec enable_subdomain_delegation(Config :: term(),
-    ProviderId :: od_provider:id(), Subdomain :: binary(),
-    IPs :: [inet:ip4_address()]) -> ok.
-enable_subdomain_delegation(Config, ProviderId, Subdomain, IPs) ->
-    Data = #{
+    ProviderId :: od_provider:id(), Subdomain :: string() | binary(),
+    OpWorkerIPs :: [inet:ip4_address()]
+) ->
+    ok.
+enable_subdomain_delegation(Config, ProviderId, Subdomain, OpWorkerIps) ->
+    enable_subdomain_delegation(Config, ProviderId, Subdomain, OpWorkerIps, undefined).
+
+
+-spec enable_subdomain_delegation(
+    Config :: term(),
+    od_provider:id(),
+    string() | dns_utils:domain_label(),
+    [inet:ip4_address()] | {[inet:ip4_address()], inet:port_number()},
+    undefined | {[inet:ip4_address()], inet:port_number()}
+) ->
+    ok.
+enable_subdomain_delegation(Config, ProviderId, Subdomain, OpWorkerAddress, OneS3Address) ->
+    Data0 = #{
         <<"subdomainDelegation">> => true,
-        <<"subdomain">> => Subdomain,
-        <<"ipList">> => IPs},
-    ?assertMatch(ok, call_oz(Config, provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
+        <<"subdomain">> => str_utils:to_binary(Subdomain)
+    },
+    {UseApi, Data1} = case OneS3Address of
+        undefined ->
+            {?RAND_ELEMENT([legacy, current]), Data0};
+        {OneS3Ips, OneS3Port} ->
+            {current, Data0#{
+                <<"oneS3IpAddresses">> => OneS3Ips,
+                <<"oneS3Port">> => OneS3Port
+            }}
+    end,
+    Data2 = case {UseApi, OpWorkerAddress} of
+        {current, {OpWorkerIps, OpWorkerPort}} ->
+            Data1#{
+                <<"opWorkerIpAddresses">> => OpWorkerIps,
+                <<"opWorkerPort">> => OpWorkerPort
+            };
+        {current, OpWorkerIps} ->
+            Data1#{<<"opWorkerIpAddresses">> => OpWorkerIps};
+        {legacy, OpWorkerIps} ->
+            Data1#{<<"ipList">> => OpWorkerIps}
+    end,
+    ?assertMatch(ok, call_oz(Config, provider_logic, update_domain_config, [?ROOT, ProviderId, Data2])).
 
 
 %%--------------------------------------------------------------------

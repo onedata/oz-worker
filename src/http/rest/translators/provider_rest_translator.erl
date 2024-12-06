@@ -88,9 +88,18 @@ get_response(#gri{id = ProviderId, aspect = instance, scope = protected}, Provid
         <<"creationTime">> => CreationTime
     });
 
-get_response(#gri{aspect = domain_config}, #{<<"ipList">> := IPList} = DomainConfig) ->
-    IPBinaries = [list_to_binary(inet:ntoa(IP)) || IP <- IPList],
-    rest_translator:ok_body_reply(DomainConfig#{<<"ipList">> := IPBinaries});
+get_response(#gri{aspect = domain_config}, DomainConfig = #{
+    <<"ipList">> := OpWorkerIPs,
+    <<"oneS3IpAddresses">> := OneS3Ips
+}) ->
+    T = fun(IPList) -> [?check(ip_utils:to_binary(IP)) || IP <- IPList] end,
+    TranslatedOpWorkerIps = T(OpWorkerIPs),
+
+    rest_translator:ok_body_reply(DomainConfig#{
+        <<"ipList">> := TranslatedOpWorkerIps,
+        <<"opWorkerIpAddresses">> := TranslatedOpWorkerIps,
+        <<"oneS3IpAddresses">> := T(OneS3Ips)
+    });
 
 get_response(#gri{aspect = {user_spaces, _}}, SpaceIds) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => SpaceIds});

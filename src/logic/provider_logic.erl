@@ -48,6 +48,9 @@
 -export([
     update_domain_config/3,
     get_domain_config/2,
+    update_dns_txt_record/3,
+
+    % deprecated api - replaced by update_dns_txt_record/3
     set_dns_txt_record/4,
     set_dns_txt_record/5,
     remove_dns_txt_record/3
@@ -259,6 +262,23 @@ update_domain_config(Auth, ProviderId, Data) ->
         gri = #gri{type = od_provider, id = ProviderId, aspect = domain_config},
         data = Data}).
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates txt records for provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_dns_txt_record(aai:auth(), od_provider:id(), map()) ->
+    ok | errors:error().
+update_dns_txt_record(Auth, ProviderId, Data) ->
+    entity_logic:handle(#el_req{
+        operation = update,
+        auth = Auth,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = dns_txt_records},
+        data = Data
+    }).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Sets txt record for provider's subdomain with default TTL.
@@ -269,6 +289,7 @@ update_domain_config(Auth, ProviderId, Data) ->
     ok | errors:error().
 set_dns_txt_record(Auth, ProviderId, Name, Content) ->
     set_dns_txt_record(Auth, ProviderId, Name, Content, undefined).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -290,6 +311,7 @@ set_dns_txt_record(Auth, ProviderId, Name, Content, TTL) ->
         end
     }).
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Remove txt record for provider's subdomain
@@ -304,6 +326,7 @@ remove_dns_txt_record(Auth, ProviderId, Name) ->
         auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = {dns_txt_record, Name}}
     }).
+
 
 %%--------------------------------------------------------------------
 %% @doc
