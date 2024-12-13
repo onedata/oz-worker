@@ -20,6 +20,7 @@
 
 %% API
 -export([assert_closed/0]).
+-export([assert_closed/0, toggle/1]).
 
 %%%===================================================================
 %%% API
@@ -36,3 +37,12 @@ assert_closed() ->
         closed ->
             ok
     end.
+
+
+-spec toggle(open | closed) -> ok.
+toggle(open) ->
+    oz_worker:set_env(service_circuit_breaker_state, open),
+    ?emergency("The circuit breaker has been set to 'open' - consult Onepanel logs for details");
+toggle(closed) ->
+    oz_worker:set_env(service_circuit_breaker_state, closed),
+    ?notice("The circuit breaker has been set to 'closed'").
