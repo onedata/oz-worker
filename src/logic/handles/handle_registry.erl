@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Link-tree-based persistent storage for OpenData handles,
+%%% Link-tree-based persistent storage for Public Data handles,
 %%% suitable for browsing by time periods and specific handle services.
 %%% @end
 %%%-------------------------------------------------------------------

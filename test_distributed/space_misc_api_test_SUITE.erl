@@ -43,9 +43,6 @@
     update_space_in_marketplace_test/1,
     delete_test/1,
 
-    get_shares_test/1,
-    get_share_test/1,
-
     list_storages_test/1,
     create_space_support_token/1,
     remove_storage_test/1,
@@ -78,9 +75,6 @@ groups() -> [
         update_space_not_in_marketplace_test,
         update_space_in_marketplace_test,
         delete_test,
-
-        get_shares_test,
-        get_share_test,
 
         list_storages_test,
         create_space_support_token,
@@ -862,26 +856,35 @@ delete_test(Config) ->
             true -> ?CORRECT_DATA_FOR_ADVERTISED_SPACE(#{<<"name">> => ?SPACE_NAME1});
             false -> ?SPACE_NAME1
         end,
-        {ok, S1} = oz_test_utils:create_space(Config, ?USER(Owner), SpaceData),
-        ozt_spaces:add_user(S1, U1, []),
-        ozt_spaces:add_user(S1, U2, [?SPACE_DELETE]),
+        {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(Owner), SpaceData),
+        ozt_spaces:add_user(SpaceId, U1, []),
+        ozt_spaces:add_user(SpaceId, U2, [?SPACE_DELETE]),
         % add multiple users to test if deletion works although the owner is (most likely) not
         % removed from the space as the last user (they are removed in random order)
-        lists_utils:pforeach(fun(_) -> ozt_spaces:add_user(S1, ozt_users:create()) end, lists:seq(1, 50)),
+        lists_utils:pforeach(fun(_) -> ozt_spaces:add_user(SpaceId, ozt_users:create()) end, lists:seq(1, 50)),
         ozt:reconcile_entity_graph(),
-        #{spaceId => S1, in_marketplace => AdvertisedInMarketplace}
+        #{
+            space_id => SpaceId,
+            in_marketplace => AdvertisedInMarketplace,
+            share_entries => ozt_shares:gen_shares_for_space(SpaceId, ?RAND_INT(0, 1024))
+        }
     end,
-    DeleteEntityFun = fun(#{spaceId := SpaceId} = _Env) ->
+    DeleteEntityFun = fun(#{space_id := SpaceId} = _Env) ->
         ozt_spaces:delete(SpaceId)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{
-        spaceId := SpaceId,
-        in_marketplace := InMarketplace
+        space_id := SpaceId,
+        in_marketplace := AdvertisedInMarketplace,
+        share_entries := ShareEntries
     } = _Env, _) ->
         {ok, Spaces} = oz_test_utils:list_spaces(Config),
         ?assertEqual(lists:member(SpaceId, Spaces), not ShouldSucceed),
-
-        ?assertEqual(in_marketplace(SpaceId), InMarketplace andalso not ShouldSucceed)
+        ?assertEqual(in_marketplace(SpaceId), AdvertisedInMarketplace andalso not ShouldSucceed),
+        ExpShareEntries = case ShouldSucceed of
+            false -> ShareEntries;
+            true -> []
+        end,
+        ?assertEqual(ExpShareEntries, ozt:rpc(share_registry, list_entries, [SpaceId, #{limit => infinity}]))
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -900,131 +903,24 @@ delete_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = delete,
-            path = [<<"/spaces/">>, spaceId],
+            path = [<<"/spaces/">>, space_id],
             expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = space_logic,
             function = delete,
-            args = [auth, spaceId],
+            args = [auth, space_id],
             expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
-            gri = #gri{type = od_space, id = spaceId, aspect = instance},
+            gri = #gri{type = od_space, id = space_id, aspect = instance},
             expected_result_op = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
-
-
-get_shares_test(Config) ->
-    User = ozt_users:create(),
-    NonAdmin = ozt_users:create(),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, User, [?SPACE_VIEW], []),
-
-    ExpShares = lists:map(
-        fun(_) ->
-            ShareId = ?UNIQUE_STRING,
-            {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, ShareId, S1
-            ),
-            ShareId
-        end, lists:seq(1, 5)
-    ),
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
-                {user, User}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/spaces/">>, S1, <<"/shares">>],
-            expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"shares">> => ExpShares}
-        },
-        logic_spec = #logic_spec{
-            module = space_logic,
-            function = get_shares,
-            args = [auth, S1],
-            expected_result = ?OK_LIST(ExpShares)
-        }
-        % TODO VFS-4520 Tests for GraphSync API
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-
-get_share_test(Config) ->
-    User = ozt_users:create(),
-    NonAdmin = ozt_users:create(),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, User, [?SPACE_VIEW], []),
-
-    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config),
-    oz_test_utils:support_space_by_provider(Config, P1, S1),
-
-    ozt:reconcile_entity_graph(),
-
-    ShareId = ?UNIQUE_STRING,
-    ShareData = #{
-        <<"shareId">> => ShareId,
-        <<"name">> => str_utils:rand_hex(12),
-        <<"description">> => <<"## Share description">>,
-        <<"spaceId">> => S1,
-        <<"rootFileId">> => ?GEN_ROOT_FILE_ID(S1, ShareId),
-        <<"fileType">> => lists_utils:random_element([dir, file])
-    },
-    {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(User), ShareData),
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_SHARES_VIEW]},
-                {user, User},
-                {provider, P1, P1Token}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/spaces/">>, S1, <<"/shares/">>, ShareId],
-            expected_code = ?HTTP_200_OK,
-            expected_body = api_test_expect:private_share(rest, ShareId, ShareData, ?SUB(user, User))
-        },
-        logic_spec = #logic_spec{
-            module = space_logic,
-            function = get_share,
-            args = [auth, S1, ShareId],
-            expected_result = api_test_expect:private_share(logic, ShareId, ShareData, ?SUB(user, User))
-        },
-        gs_spec = #gs_spec{
-            operation = get,
-            gri = #gri{
-                type = od_share, id = ShareId,
-                aspect = instance, scope = private
-            },
-            auth_hint = ?THROUGH_SPACE(S1),
-            expected_result_op = api_test_expect:private_share(gs, ShareId, ShareData, ?SUB(user, User))
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 list_storages_test(Config) ->
@@ -2163,7 +2059,7 @@ create_advertised_spaces(Number, Creator) ->
             <<"organizationName">> => OrganizationName,
             <<"tags">> => SpaceTags
         }
-     end, Number).
+    end, Number).
 
 
 %%%===================================================================
@@ -2182,14 +2078,16 @@ end_per_suite(_Config) ->
 init_per_group(_Group, Config) ->
     ozt_mailer:mock(),
     ozt_mocks:freeze_time(),
+    ozt_mocks:mock_handle_proxy(),
     Config.
 
 end_per_group(_Group, Config) ->
     ozt_mailer:unmock(),
     ozt_mocks:unfreeze_time(),
+    ozt_mocks:unmock_handle_proxy(),
     Config.
+
 
 end_per_testcase(_, Config) ->
     ozt:set_env(space_marketplace_enabled, true),
     Config.
-

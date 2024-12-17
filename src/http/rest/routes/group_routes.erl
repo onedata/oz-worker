@@ -27,14 +27,14 @@
 %%--------------------------------------------------------------------
 -spec routes() -> [{binary(), #rest_req{}}].
 routes() -> [
-    %% Create new group
+    %% Create a new group (admin)
     %% This operation requires one of the following privileges:
     %% - oz_groups_create
     {<<"/groups">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_group, id = undefined, aspect = instance}
     }},
-    %% List all groups
+    %% List all groups (admin)
     %% This operation requires one of the following privileges:
     %% - oz_groups_list
     {<<"/groups">>, #rest_req{
@@ -476,7 +476,7 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = {group_spaces, ?BINDING(id)}, scope = private}
     }},
-    %% Create a new handle service for given group.
+    %% Create handle service for given group (admin)
     %% This operation requires one of the following privileges:
     %% - group_create_handle_service
     %% - oz_handle_services_create

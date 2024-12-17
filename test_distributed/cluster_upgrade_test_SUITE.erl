@@ -21,17 +21,19 @@
     init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
-    upgrade_from_21_02_4_handles/1
+    upgrade_from_21_02_4_handles/1,
+    upgrade_from_21_02_7_shares/1
 ]).
 
 all() -> ?ALL([
-    upgrade_from_21_02_4_handles
+    upgrade_from_21_02_4_handles,
+    upgrade_from_21_02_7_shares
 ]).
 
 
 -define(RAND_SHARE_ID(), datastore_key:new()).
 -define(RAND_XML_SAFE_UNICODE_STR(), lists:foldl(fun(Char, Acc) ->
-    binary:replace(Acc, <<Char>>, <<"">>)
+    binary:replace(Acc, <<Char>>, <<"">>, [global])
 end, ?RAND_UNICODE_STR(), [$<, $>, $&, $', $"])).
 
 
@@ -50,12 +52,22 @@ end_per_suite(_Config) ->
 init_per_testcase(_, Config) ->
     ozt_mocks:freeze_time(),
     ozt_mocks:mock_handle_proxy(),
+
+    AllHandles = [D#document.key || D <- element(2, ozt:rpc(od_handle, list, []))],
+    lists_utils:pforeach(fun(HandleId) ->
+        try
+            ok = ozt:rpc(handle_logic, delete, [?ROOT, HandleId])
+        catch _:_ ->
+            ozt:rpc(od_handle, force_delete, [HandleId])
+        end
+    end, AllHandles),
+
     oz_test_utils:delete_all_entities(Config),
     % if the suite fails midway, there may be some remnants in the handle registry - clean it up
     % (delete_all_entities won't do it because some of the handles may still have the "legacy" metadata prefix set)
     lists:foreach(fun(#handle_listing_entry{timestamp = Timestamp, handle_id = HandleId, service_id = HServiceId}) ->
         ozt:rpc(handle_registry, report_deleted, [?OAI_DC_METADATA_PREFIX, HServiceId, HandleId, Timestamp, Timestamp])
-    end, list_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})),
+    end, list_handles_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})),
     Config.
 
 
@@ -73,8 +85,10 @@ upgrade_from_21_02_4_handles(_Config) ->
     HServiceBeta = ozt_handle_services:create(),
     HServiceGamma = ozt_handle_services:create(),
 
-    ?assertEqual([], list_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})),
-    ?assertEqual([], gather_by_all_prefixes()),
+    Spaces = lists_utils:generate(fun ozt_spaces:create/0, 50),
+
+    ?assertEqual([], list_handles_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})),
+    ?assertEqual([], gather_handles_by_all_prefixes()),
 
     PreexistingHandleDocs = lists:sort(lists:flatmap(fun(HServiceId) ->
         HandleDocsForHService = lists_utils:generate(fun() ->
@@ -83,13 +97,13 @@ upgrade_from_21_02_4_handles(_Config) ->
                 value = #od_handle{
                     timestamp = Timestamp
                 }
-            } = Doc = create_legacy_handle(HServiceId),
+            } = Doc = create_legacy_handle(?RAND_ELEMENT(Spaces), HServiceId),
             % simulate a case when some handles have already been upgraded
             % (during a previous upgrade run that could have crashed or been interrupted)
             case ?RAND_INT(1, 5) of
                 1 ->
                     % the handle was fully migrated
-                    ?assertMatch(ok, ozt:rpc(od_handle, migrate_legacy_handle, [HServiceId, HandleId]));
+                    ?assertMatch(ok, ozt:rpc(od_handle, migrate_legacy_handle_21_02_5, [HServiceId, HandleId]));
                 2 ->
                     % the handle was partially migrated
                     ?assertMatch(ok, ozt:rpc(handle_registry, report_created, [
@@ -120,11 +134,11 @@ upgrade_from_21_02_4_handles(_Config) ->
 
     ?assertEqual(
         handle_docs_to_exp_listing_entries(PreexistingHandleDocs),
-        list_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})
+        list_handles_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})
     ),
     ?assertEqual(
         handle_docs_to_exp_listing_entries(PreexistingHandleDocs),
-        gather_by_all_prefixes()
+        gather_handles_by_all_prefixes()
     ),
 
     lists:foreach(fun(#document{key = HandleId, value = PreexistingHandleRecord}) ->
@@ -142,18 +156,194 @@ upgrade_from_21_02_4_handles(_Config) ->
         ?assertEqual(MigratedHandleRecord#od_handle.eff_groups, PreexistingHandleRecord#od_handle.eff_groups),
         ?assertEqual(MigratedHandleRecord#od_handle.creation_time, PreexistingHandleRecord#od_handle.creation_time),
         ?assertEqual(MigratedHandleRecord#od_handle.creator, PreexistingHandleRecord#od_handle.creator)
-    end, PreexistingHandleDocs).
+    end, PreexistingHandleDocs),
+
+    % make sure that a consecutive upgrade to the next version works as expected
+    lists:foreach(fun(SpaceId) ->
+        ?assertEqual([], list_shares_completely(SpaceId))
+    end, Spaces),
+
+    ?assertEqual({ok, 5}, ozt:rpc(node_manager_plugin, upgrade_cluster, [4])),
+
+    {ok, PreexistingShareDocs} = ozt:rpc(od_share, list, []),
+    lists:foreach(fun(SpaceId) ->
+        ?assertMatch(#od_space{shares = []}, ozt_spaces:get(SpaceId)),
+        ?assertEqual(
+            share_docs_to_exp_listing_entries(
+                [D || D <- PreexistingShareDocs, D#document.value#od_share.space == SpaceId]
+            ),
+            list_shares_completely(SpaceId)
+        )
+    end, Spaces).
+
+
+upgrade_from_21_02_7_shares(_Config) ->
+    SpaceAlpha = ozt_spaces:create(),
+    SpaceBeta = ozt_spaces:create(),
+    SpaceGamma = ozt_spaces:create(),
+    AllSpaces = [SpaceAlpha, SpaceBeta, SpaceGamma],
+
+    HServices = lists_utils:generate(fun ozt_handle_services:create/0, 50),
+
+    lists:foreach(fun(SpaceId) ->
+        ?assertEqual([], list_shares_completely(SpaceId))
+    end, AllSpaces),
+
+    PreexistingShareDocs = lists:sort(lists:flatmap(fun(SpaceId) ->
+        ShareDocsForSpace = lists_utils:generate(fun() ->
+            ShareDoc = #document{
+                key = ShareId,
+                value = ShareRecord = #od_share{handle = HandleId}
+            } = create_legacy_share(SpaceId, ?RAND_CHOICE(without_handle, {with_handle, ?RAND_ELEMENT(HServices)})),
+            % simulate edge cases e.g. when some shares have already been upgraded
+            % (during a previous upgrade run that could have crashed or been interrupted)
+            case ?RAND_INT(1, 5) of
+                1 ->
+                    % the share was fully migrated
+                    ?assertMatch(ok, ozt:rpc(od_share, migrate_legacy_share_21_02_8, [ShareId, ShareRecord]));
+                2 ->
+                    % the share was partially migrated
+                    ShareRecordWithoutHandle = ShareRecord#od_share{handle = undefined},
+                    ?assertMatch(ok, ozt:rpc(share_registry, report_created, [ShareId, ShareRecordWithoutHandle]));
+                3 when HandleId /= undefined ->
+                    % the handle doc is missing
+                    ozt:rpc(od_handle, force_delete, [ShareRecord#od_share.handle]);
+                _ ->
+                    % the share has not been migrated at all
+                    ok
+            end,
+            ShareDoc
+        end, ?RAND_INT(100, 1000)),
+        % invalid share ids (for which documents cannot be found in the DB)
+        % should be ignored by the upgrade procedure and not cause it to crash
+        InvalidShareIds = lists_utils:generate(fun datastore_key:new/0, ?RAND_INT(0, 10)),
+        ozt:rpc(od_space, update, [SpaceId, fun(Space) ->
+            {ok, Space#od_space{
+                shares = ?SHUFFLED(docs_to_ids(ShareDocsForSpace) ++ InvalidShareIds)
+            }}
+        end]),
+        ShareDocsForSpace
+    end, AllSpaces)),
+
+    ?assertEqual({ok, 5}, ozt:rpc(node_manager_plugin, upgrade_cluster, [4])),
+
+    lists:foreach(fun(SpaceId) ->
+        ?assertMatch(#od_space{shares = []}, ozt_spaces:get(SpaceId)),
+        ?assertEqual(
+            share_docs_to_exp_listing_entries(
+                [D || D <- PreexistingShareDocs, D#document.value#od_share.space == SpaceId]
+            ),
+            list_shares_completely(SpaceId)
+        )
+    end, AllSpaces),
+
+    lists:foreach(fun(#document{key = ShareId, value = #od_share{handle = HandleId} = PreexistingShareRecord}) ->
+        MigratedShareRecord = ozt_shares:get(ShareId),
+        ExpShareRecord = case ozt_handles:exists(utils:ensure_defined(HandleId, <<"undef">>)) of
+            true -> PreexistingShareRecord;
+            % share records pointing to a non-existing handle should have the field nulled
+            false -> PreexistingShareRecord#od_share{handle = undefined}
+        end,
+        ?assertEqual(MigratedShareRecord, ExpShareRecord)
+    end, PreexistingShareDocs).
 
 
 %%%===================================================================
 %%% Helper functions
 %%%===================================================================
 
+
 %% @private
-create_legacy_handle(HServiceId) ->
+create_legacy_share(SpaceId, without_handle) ->
+    ozt_mocks:simulate_seconds_passing(?RAND_INT(3600)),
+    ShareId = datastore_key:new(),
+    {ok, ShareDoc} = ozt:rpc(od_share, create, [
+        #document{
+            key = ShareId,
+            value = #od_share{
+                name = ?RAND_SHARE_NAME(),
+                description = ?RAND_UNICODE_STR(?RAND_INT(2, 1000)),
+                root_file_uuid = datastore_key:new(),
+                file_type = ?RAND_CHOICE(?REGULAR_FILE_TYPE, ?DIRECTORY_TYPE),
+                space = SpaceId,
+                creation_time = ozt_mocks:get_frozen_time_seconds()
+            }
+        }
+    ]),
+    {ok, _} = ozt:rpc(od_space, update, [SpaceId, fun(SpaceRecord = #od_space{shares = Shares}) ->
+        {ok, SpaceRecord#od_space{shares = [ShareId | Shares]}}
+    end]),
+    ShareDoc;
+
+%% @private
+create_legacy_share(SpaceId, {with_handle, HServiceId}) ->
+    #document{key = ShareId} = create_legacy_share(SpaceId, without_handle),
+    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
+    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    {ok, PublicHandle} = ozt:rpc(handle_proxy, register_handle, [HServiceId, <<"Share">>, ShareId, Metadata]),
+    HandleId = datastore_key:new(),
+    {ok, _} = ozt:rpc(od_handle, create, [#document{
+        key = HandleId,
+        value = #od_handle{
+            handle_service = HServiceId,
+            resource_type = <<"Share">>,
+            resource_id = ShareId,
+            public_handle = PublicHandle,
+            metadata_prefix = <<"legacy">>,
+            metadata = Metadata,
+            timestamp = ozt:timestamp_seconds()
+        }
+    }]),
+    {ok, UpdatedShareDoc} = ozt:rpc(od_share, update, [ShareId, fun(ShareRecord) ->
+        {ok, ShareRecord#od_share{handle = HandleId}}
+    end]),
+    UpdatedShareDoc.
+
+
+%% @private
+share_docs_to_exp_listing_entries(Docs) ->
+    UnsortedEntries = lists:map(fun(#document{key = ShareId, value = #od_share{
+        name = Name,
+        space = SpaceId,
+        file_type = RootFileType,
+        root_file_uuid = RootFileUuid,
+        handle = HandleIdFromTheDoc
+    }}) ->
+        % the handle may be undefined or point to a non-existing doc
+        {HandleId, PublicHandle} = case ozt_handles:exists(utils:ensure_defined(HandleIdFromTheDoc, <<"undef">>)) of
+            true ->
+                {HandleIdFromTheDoc, (ozt_handles:get(HandleIdFromTheDoc))#od_handle.public_handle};
+            false ->
+                {null, null}
+        end,
+        #{
+            <<"index">> => ozt_shares:expected_share_entry_index(ShareId, Name, HandleId),
+            <<"shareId">> => ShareId,
+            <<"name">> => Name,
+            <<"rootFileType">> => atom_to_binary(RootFileType),
+            <<"rootFilePrivateId">> => file_id:pack_guid(RootFileUuid, SpaceId),
+            <<"rootFilePublicId">> => file_id:pack_share_guid(RootFileUuid, SpaceId, ShareId),
+            <<"sharePublicUrl">> => api_test_expect:expected_public_share_url(ShareId),
+            <<"handleId">> => HandleId,
+            <<"handlePublicUrl">> => PublicHandle
+        }
+    end, Docs),
+    lists:sort(fun(#{<<"index">> := IndexA}, #{<<"index">> := IndexB}) ->
+        IndexA =< IndexB
+    end, UnsortedEntries).
+
+
+%% @private
+list_shares_completely(SpaceId) ->
+    ozt:rpc(share_registry, list_entries, [SpaceId, #{limit => infinity}]).
+
+
+%% @private
+create_legacy_handle(SpaceId, HServiceId) ->
+    #document{key = ShareId} = create_legacy_share(SpaceId, without_handle),
     ozt_mocks:simulate_seconds_passing(?RAND_INT(3600)),
     {ok, Doc} = ozt:rpc(od_handle, create, [
-        ozt_handles:gen_legacy_handle_doc(HServiceId, ?RAND_SHARE_ID(), gen_legacy_metadata())
+        ozt_handles:gen_legacy_handle_doc(HServiceId, ShareId, gen_legacy_metadata())
     ]),
     Doc.
 
@@ -174,12 +364,12 @@ docs_to_ids(Docs) ->
 
 
 %% @private
-list_completely(Opts) ->
+list_handles_completely(Opts) ->
     ozt:rpc(handle_registry, list_completely, [Opts]).
 
 
 %% @private
-gather_by_all_prefixes() ->
+gather_handles_by_all_prefixes() ->
     ozt:rpc(handle_registry, gather_by_all_prefixes, []).
 
 

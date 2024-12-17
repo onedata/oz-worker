@@ -27,7 +27,7 @@
 %%--------------------------------------------------------------------
 -spec routes() -> [{binary(), #rest_req{}}].
 routes() -> [
-    %% List all clusters
+    %% List all clusters (admin)
     %% This operation requires one of the following privileges:
     %% - oz_clusters_list
     {<<"/clusters">>, #rest_req{

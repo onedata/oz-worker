@@ -81,7 +81,7 @@ stop() ->
 %%--------------------------------------------------------------------
 -spec reload_web_certs() -> ok | {error, term()}.
 reload_web_certs() ->
-    gui:reload_web_certs(gui_config()).
+    gui:reload_web_certs(get_chain_file()).
 
 
 %%--------------------------------------------------------------------
@@ -115,13 +115,14 @@ gui_config() ->
     % Get certs
     KeyFile = oz_worker:get_env(web_key_file),
     CertFile = oz_worker:get_env(web_cert_file),
-    ChainFile = oz_worker:get_env(web_cert_chain_file, undefined),
+    ChainFile = get_chain_file(),
 
     CompatRegPath = filename:absname(ctool:get_env(current_compatibility_registry_file)),
 
     CustomCowboyRoutes = lists:flatten([
         {?OAI_PMH_PATH ++ "/[...]", oai_handler, []},
         {?NAGIOS_PATH, nagios_handler, []},
+        % @TODO VFS-12476 configurable onepanel port
         {?PANEL_REST_PROXY_PATH ++ "[...]", http_port_forwarder, [9443, ?ONEPANEL_CONNECT_OPTS]},
         {?PROVIDER_GRAPH_SYNC_WS_PATH, gs_ws_handler, [provider_gs_translator]}, % blocked when no DB space
         {?GUI_GRAPH_SYNC_WS_PATH, gs_ws_handler, [gui_gs_translator]}, % blocked when no DB space
@@ -160,3 +161,9 @@ gui_config() ->
         custom_cowboy_routes = CustomCowboyRoutes,
         custom_response_headers = fun gui_static:maybe_add_cache_control_headers/1
     }.
+
+
+%% @private
+-spec get_chain_file() -> undefined | file:filename().
+get_chain_file() ->
+    oz_worker:get_env(web_cert_chain_file, undefined).

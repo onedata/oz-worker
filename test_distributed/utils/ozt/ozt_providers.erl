@@ -31,6 +31,7 @@
 -export([create_for_admin_user/1, create_for_admin_user/2]).
 -export([create_as_support_for_user/1]).
 -export([create_as_support_for_space/1]).
+-export([create_registration_token/1]).
 -export([simulate_version/2]).
 -export([get/1]).
 -export([get_name/1]).
@@ -59,7 +60,7 @@ create_for_admin_user(UserId) ->
 
 -spec create_for_admin_user(od_user:id(), od_provider:name()) -> od_provider:id().
 create_for_admin_user(UserId, Name) ->
-    RegToken = ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, UserId)),
+    RegToken = create_registration_token(UserId),
     {ok, {ProviderId, _}} = ?assertMatch({ok, _}, ozt:rpc(provider_logic, create, [
         ?NOBODY, ?PROVIDER_DATA(Name, RegToken)
     ])),
@@ -81,6 +82,11 @@ create_as_support_for_space(SpaceId) ->
     support_space(ProviderId, SpaceId),
     ozt:reconcile_entity_graph(),
     ProviderId.
+
+
+-spec create_registration_token(od_user:id()) -> tokens:token().
+create_registration_token(UserId) ->
+    ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, UserId)).
 
 
 -spec simulate_version(od_provider:id(), onedata:release_version()) -> ok.

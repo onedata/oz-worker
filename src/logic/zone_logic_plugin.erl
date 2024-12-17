@@ -100,7 +100,7 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
     SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
     CompatibilityRegistryRevision = query_compatibility_registry(peek_current_registry_revision, [Resolver]),
     CompatibleOpVersions = query_compatibility_registry(get_compatible_versions, [Resolver, ?ONEZONE, Version, ?ONEPROVIDER]),
-    OpenDataXrootdServerDomain = case oz_worker:get_env(open_data_xrootd_server_domain, undefined) of
+    PublicDataXrootdServerDomain = case oz_worker:get_env(public_data_xrootd_server_domain, undefined) of
         undefined -> null;
         Domain -> str_utils:to_binary(Domain)
     end,
@@ -124,7 +124,8 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
         <<"supportedIdPs">> => auth_config:get_supported_idps_in_configuration_format(),
         <<"compatibilityRegistryRevision">> => CompatibilityRegistryRevision,
         <<"compatibleOneproviderVersions">> => CompatibleOpVersions,
-        <<"openDataXrootdServerDomain">> => OpenDataXrootdServerDomain,
+        <<"openDataXrootdServerDomain">> => PublicDataXrootdServerDomain,  % deprecated in 21.02.8, left for backward compatibility
+        <<"publicDataXrootdServerDomain">> => PublicDataXrootdServerDomain,
         <<"bagitUploaderWorkflowSchemaId">> => BagitUploaderWorkflowSchemaId,
         <<"availableSpaceTags">> => oz_worker:get_env(available_space_tags)
     }};

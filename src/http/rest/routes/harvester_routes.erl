@@ -27,14 +27,14 @@
 %%--------------------------------------------------------------------
 -spec routes() -> [{binary(), #rest_req{}}].
 routes() -> [
-    %% Create new harvester
+    %% Create new harvester (admin)
     %% This operation requires one of the following privileges:
     %% - oz_harvesters_create
     {<<"/harvesters">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_harvester, id = undefined, aspect = instance}
     }},
-    %% List all harvesters
+    %% List all harvesters (admin)
     %% This operation requires one of the following privileges:
     %% - oz_harvesters_list
     {<<"/harvesters">>, #rest_req{

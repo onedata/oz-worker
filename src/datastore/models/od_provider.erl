@@ -116,7 +116,7 @@ get_ctx() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    7.
+    8.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -246,6 +246,34 @@ get_record_struct(7) ->
         {eff_users, #{string => [{atom, string}]}},
         {eff_groups, #{string => [{atom, string}]}},
         {eff_spaces, #{string => {integer, [{atom, string}]}}}, % New field
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {last_activity, integer},
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(8) ->
+    {record, [
+        {name, string},
+        {admin_email, string},
+        {root_token, string},
+
+        {subdomain_delegation, boolean},
+        {domain, string},
+        {subdomain, string},
+        {op_worker_port, integer},  % new field
+        {ones3_port, integer},  % new field
+
+        {latitude, float},
+        {longitude, float},
+
+        {legacy_spaces, #{string => integer}},
+        {storages, [string]},
+
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => {integer, [{atom, string}]}}},
         {eff_harvesters, #{string => [{atom, string}]}},
 
         {creation_time, integer},
@@ -477,27 +505,82 @@ upgrade_record(6, Provider) ->
         _BottomUpDirty
     } = Provider,
     %% Eff relations are recalculated during cluster upgrade procedure
-    {7, #od_provider{
+    {7, {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+        [],
+
+        #{},
+        #{},
+        #{},
+        #{},
+
+        CreationTime,
+        LastActivity,
+
+        true
+    }};
+upgrade_record(7, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        LegacySpaces,
+        Storages,
+
+        EffUsers,
+        EffGroups,
+        EffSpaces,
+        EffHarvesters,
+
+        CreationTime,
+        LastActivity,
+
+        BottomUpDirty
+    } = Provider,
+    %% Eff relations are recalculated during cluster upgrade procedure
+    {8, #od_provider{
         name = Name,
         admin_email = AdminEmail,
         root_token = RootMacaroon,
+
         subdomain_delegation = SubdomainDelegation,
         domain = Domain,
         subdomain = Subdomain,
+        op_worker_port = 443,
+        ones3_port = undefined,
 
         latitude = Latitude,
         longitude = Longitude,
 
-        legacy_spaces = Spaces,
-        storages = [],
+        legacy_spaces = LegacySpaces,
+        storages = Storages,
 
-        eff_users = #{},
-        eff_groups = #{},
-        eff_harvesters = #{},
-        eff_spaces = #{},
+        eff_users = EffUsers,
+        eff_groups = EffGroups,
+        eff_spaces = EffSpaces,
+        eff_harvesters = EffHarvesters,
 
         creation_time = CreationTime,
         last_activity = LastActivity,
 
-        bottom_up_dirty = true
+        bottom_up_dirty = BottomUpDirty
     }}.

@@ -27,7 +27,9 @@
     list/1,
     list_privileges/0,
     list_marketplace/2,
-    list_marketplace_with_data/2
+    list_marketplace_with_data/2,
+    list_shares/3,
+    list_shares_with_data/3
 ]).
 -export([
     update/3
@@ -247,6 +249,30 @@ list_marketplace_with_data(Auth, Data) ->
             aspect = list_marketplace_with_data,
             scope = protected
         },
+        data = Data
+    })).
+
+
+-spec list_shares(aai:auth(), od_space:id(), entity_logic:data()) ->
+    {ok, {[od_share:id()], IsLast :: boolean(), NextPageToken :: undefined | binary()}} |
+    errors:error().
+list_shares(Auth, SpaceId, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = list_shares, scope = private},
+        data = Data
+    })).
+
+
+-spec list_shares_with_data(aai:auth(), od_space:id(), entity_logic:data()) ->
+    {ok, {[share_registry:share_entry()], IsLast :: boolean(), NextPageToken :: undefined | binary()}} |
+    errors:error().
+list_shares_with_data(Auth, SpaceId, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = list_shares_with_data, scope = private},
         data = Data
     })).
 

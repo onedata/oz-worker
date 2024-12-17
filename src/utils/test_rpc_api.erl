@@ -17,6 +17,8 @@
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/privileges.hrl").
+
 
 -export([
     simulate_downtime/1,
@@ -54,7 +56,11 @@
     create_lambda/2,
     create_workflow_schema/2,
     update_workflow_schema/3,
-    get_workflow_schema/2
+    get_workflow_schema/2,
+
+    list_handle_services/1,
+    add_user_to_handle_service/4,
+    remove_user_from_handle_service/3
 ]).
 
 -define(DEFAULT_TEMP_CAVEAT_TTL, 360000).
@@ -256,3 +262,22 @@ update_workflow_schema(Auth, AtmWorkflowSchemaId, Data) ->
     {ok, od_atm_workflow_schema:record()} | errors:error().
 get_workflow_schema(Auth, AtmWorkflowSchemaId) ->
     atm_workflow_schema_logic:get(Auth, AtmWorkflowSchemaId).
+
+
+-spec list_handle_services(aai:auth()) ->  {ok, [od_handle_service:id()]}.
+list_handle_services(Auth) ->
+    handle_service_logic:list(Auth).
+
+
+-spec add_user_to_handle_service(
+    aai:auth(), od_handle_service:id(), od_user:id(), [privileges:handle_service_privilege()]
+) -> {ok, od_user:id()}.
+add_user_to_handle_service(Auth, HServiceId, UserId, Privileges) ->
+    handle_service_logic:add_user(Auth, HServiceId, UserId, Privileges).
+
+
+-spec remove_user_from_handle_service(aai:auth(), od_handle_service:id(), od_user:id()) -> ok.
+remove_user_from_handle_service(Auth, HServiceId, UserId) ->
+    handle_service_logic:remove_user(Auth, HServiceId, UserId).
+
+
