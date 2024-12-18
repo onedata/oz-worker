@@ -19,7 +19,6 @@
 -define(THROTTLE_LOG(Log), utils:throttle({?MODULE, ?FUNCTION_NAME}, timer:minutes(5), fun() -> Log end)).
 
 %% API
--export([assert_closed/0]).
 -export([assert_closed/0, toggle/1]).
 
 %%%===================================================================

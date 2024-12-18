@@ -269,6 +269,6 @@ update_gui_message(Auth, MessageId, Data) ->
     zone_logic:update_gui_message(Auth, MessageId, Data).
 
 
--spec circuit_breaker_toggle(atom()) -> ok.
+-spec circuit_breaker_toggle(open | closed) -> ok.
 circuit_breaker_toggle(State) ->
     oz_worker_circuit_breaker:toggle(State).
