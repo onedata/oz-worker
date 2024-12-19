@@ -43,7 +43,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERROR_NOT_FOUND
+%%      if there was an error, such as ?ERR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -58,7 +58,7 @@ fetch_entity(#gri{id = TokenId}) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {NamedToken, Revision}};
         _ ->
-            ?ERROR_NOT_FOUND
+            ?ERR_NOT_FOUND(?err_ctx())
     end.
 
 
@@ -226,7 +226,7 @@ create(#el_req{auth = ?PROVIDER(PrId) = Auth, gri = #gri{id = undefined, aspect 
                 )
             });
         {ok, #auth{}} ->
-            ?ERROR_TOKEN_SUBJECT_INVALID;
+            ?ERR_TOKEN_SUBJECT_INVALID(?err_ctx());
         {error, _} = Error ->
             Error
     end.
@@ -262,13 +262,13 @@ get(#el_req{gri = #gri{aspect = instance, scope = shared}}, NamedToken) ->
 get(#el_req{gri = #gri{aspect = {user_named_token, UserId}, id = TokenName}}, _) ->
     case token_names:lookup(?SUB(user, UserId), TokenName) of
         {ok, TokenId} -> {ok, to_token_data(TokenId)};
-        {error, _} -> ?ERROR_NOT_FOUND
+        {error, _} -> ?ERR_NOT_FOUND(?err_ctx())
     end;
 
 get(#el_req{gri = #gri{aspect = {provider_named_token, ProviderId}, id = TokenName}}, _) ->
     case token_names:lookup(?SUB(?ONEPROVIDER, ProviderId), TokenName) of
         {ok, TokenId} -> {ok, to_token_data(TokenId)};
-        {error, _} -> ?ERROR_NOT_FOUND
+        {error, _} -> ?ERR_NOT_FOUND(?err_ctx())
     end.
 
 %%--------------------------------------------------------------------
@@ -285,7 +285,7 @@ update(#el_req{gri = #gri{id = TokenId, aspect = instance}, data = Data}) ->
             {ok, #document{value = #od_token{name = OldName, subject = Subject}}} = od_token:get(TokenId),
             case token_names:update(Subject, OldName, TokenId, NewName) of
                 ok -> ok;
-                ?ERROR_ALREADY_EXISTS -> throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"name">>))
+                ?ERR_ALREADY_EXISTS -> throw(?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(?err_ctx(), <<"name">>))
             end;
         error ->
             ok
@@ -562,7 +562,7 @@ optional_invite_token_parameter_specs(#{<<"type">> := TokenTypeJSON} = Data) whe
         {true, SanitizedType} ->
             optional_invite_token_parameter_specs(Data#{<<"type">> := SanitizedType});
         false ->
-            throw(?ERROR_BAD_VALUE_TOKEN_TYPE(<<"type">>))
+            throw(?ERR_BAD_VALUE_TOKEN_TYPE(?err_ctx(), <<"type">>))
     end;
 optional_invite_token_parameter_specs(#{<<"type">> := ?INVITE_TOKEN(InviteType, _)}) ->
     token_metadata:optional_invite_token_parameter_specs(InviteType);
@@ -642,7 +642,7 @@ create_named_token(Subject, Data) ->
     validate_subject_and_service(Type, Subject, Caveats),
     case token_names:register(Subject, TokenName, TokenId) of
         ok -> ok;
-        ?ERROR_ALREADY_EXISTS -> throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"name">>))
+        ?ERR_ALREADY_EXISTS -> throw(?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(?err_ctx(), <<"name">>))
     end,
 
     CustomMetadata = maps:get(<<"customMetadata">>, Data, #{}),
@@ -676,7 +676,7 @@ create_temporary_token(Subject, Data) ->
         undefined -> false;
         TTL -> TTL =< MaxTTL
     end,
-    IsTtlAllowed orelse throw(?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTTL)),
+    IsTtlAllowed orelse throw(?ERR_TOKEN_TIME_CAVEAT_REQUIRED(?err_ctx(), MaxTTL)),
 
     {ok, {Secret, Generation}} = temporary_token_secret:get_for_subject(Subject),
     Prototype = #token{

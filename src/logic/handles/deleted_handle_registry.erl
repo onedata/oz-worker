@@ -44,7 +44,7 @@ insert(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
     Link = {HandleId, encode_link_value(MetadataPrefix, HandleServiceId, Timestamp)},
     case datastore_model:add_links(?CTX, ?FOREST, ?TREE_FOR_DELETED_HANDLES, Link) of
         {ok, _} -> ok;
-        {error, already_exists} -> throw(?ERROR_ALREADY_EXISTS)
+        {error, already_exists} -> throw(?ERR_ALREADY_EXISTS(?err_ctx()))
     end.
 
 

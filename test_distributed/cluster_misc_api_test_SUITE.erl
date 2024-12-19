@@ -397,8 +397,8 @@ update_onepanel_proxy_test(Config) ->
             required = [<<"onepanelProxy">>],
             correct_values = #{<<"onepanelProxy">> => [true, false]},
             bad_values = [
-                {<<"onepanelProxy">>, 1234, ?ERROR_BAD_VALUE_BOOLEAN(<<"onepanelProxy">>)},
-                {<<"onepanelProxy">>, <<"abc">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"onepanelProxy">>)}
+                {<<"onepanelProxy">>, 1234, ?ERR_BAD_VALUE_BOOLEAN(<<"onepanelProxy">>)},
+                {<<"onepanelProxy">>, <<"abc">>, ?ERR_BAD_VALUE_BOOLEAN(<<"onepanelProxy">>)}
             ]
         }
     },
@@ -535,9 +535,9 @@ update_version_info_test_base(Config, ClusterType, ServiceType) ->
             required = [DataKey],
             correct_values = #{DataKey => [DataWithCorrectHash]},
             bad_values = [
-                {DataKey, 1234, ?ERROR_BAD_VALUE_JSON(DataKey)},
-                {DataKey, <<"abc">>, ?ERROR_BAD_VALUE_JSON(DataKey)},
-                {DataKey, DataWithBadHash, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<DataKey/binary, ".gui">>)}
+                {DataKey, 1234, ?ERR_BAD_VALUE_JSON(DataKey)},
+                {DataKey, <<"abc">>, ?ERR_BAD_VALUE_JSON(DataKey)},
+                {DataKey, DataWithBadHash, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<DataKey/binary, ".gui">>)}
             ]
         }
     },

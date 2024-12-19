@@ -141,9 +141,9 @@ join_harvester_test(Config) ->
                 end]
             },
             bad_values = [
-                {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                {<<"token">>, <<"123qwe">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)}
+                {<<"token">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"token">>, 1234, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)},
+                {<<"token">>, <<"123qwe">>, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)}
             ]
         }
     },
@@ -177,7 +177,7 @@ join_harvester_test(Config) ->
             module = space_logic,
             function = join_harvester,
             args = [auth, S1, data],
-            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_harvester, Harvester, od_space, S1))
+            expected_result = ?ERROR_REASON(?ERR_RELATION_ALREADY_EXISTS(od_harvester, Harvester, od_space, S1))
         },
         % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
@@ -395,12 +395,12 @@ harvest_metadata_test(Config) ->
             module = space_logic,
             function = harvest_metadata,
             args = [auth, S1, data],
-            expected_result = ?OK_MAP(ExpectedResult(?ERROR_NOT_FOUND))
+            expected_result = ?OK_MAP(ExpectedResult(?ERR_NOT_FOUND))
         },
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_space, id = S1, aspect = harvest_metadata},
-            expected_result_op = ?OK_MAP(ExpectedResult(errors:to_json(?ERROR_NOT_FOUND)))
+            expected_result_op = ?OK_MAP(ExpectedResult(errors:to_json(?ERR_NOT_FOUND)))
         },
         data_spec = #data_spec{
             required = [<<"destination">>, <<"maxSeq">>, <<"maxStreamSeq">>, <<"batch">>],

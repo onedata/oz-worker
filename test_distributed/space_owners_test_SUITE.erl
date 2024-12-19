@@ -179,7 +179,7 @@ non_space_member_cannot_be_granted_ownership(_Config) ->
     Space = ozt_users:create_space_for(OriginalOwner),
     AnotherUser = ozt_users:create(),
     ?assertEqual(
-        ?ERROR_RELATION_DOES_NOT_EXIST(od_space, Space, od_user, AnotherUser),
+        ?ERR_RELATION_DOES_NOT_EXIST(od_space, Space, od_user, AnotherUser),
         ozt:rpc(space_logic, add_owner, [?ROOT, Space, AnotherUser])
     ).
 
@@ -203,14 +203,14 @@ space_member_cannot_be_granted_ownership_twice(_Config) ->
     AnotherUser = ozt_users:create(),
     ozt_spaces:add_user(Space, AnotherUser),
     ?assertEqual(ok, ozt:rpc(space_logic, add_owner, [?ROOT, Space, AnotherUser])),
-    ?assertEqual(?ERROR_ALREADY_EXISTS, ozt:rpc(space_logic, add_owner, [?ROOT, Space, AnotherUser])).
+    ?assertEqual(?ERR_ALREADY_EXISTS, ozt:rpc(space_logic, add_owner, [?ROOT, Space, AnotherUser])).
 
 
 the_only_space_owner_cannot_be_revoked_of_ownership(_Config) ->
     Owner = ozt_users:create(),
     Space = ozt_users:create_space_for(Owner),
     ?assertEqual(
-        ?ERROR_CANNOT_REMOVE_LAST_OWNER(od_space, Space),
+        ?ERR_CANNOT_REMOVE_LAST_OWNER(od_space, Space),
         ozt:rpc(space_logic, remove_owner, [?ROOT, Space, Owner])
     ).
 
@@ -230,8 +230,8 @@ non_owner_cannot_remove_a_user_that_is_an_owner_from_space_or_revoke_him_of_owne
     ozt_spaces:add_user(Space, AnotherOwner),
     ozt_spaces:add_owner(Space, AnotherOwner),
     ozt_spaces:add_user(Space, NonOwnerButAdmin, privileges:space_admin()),
-    ?assertEqual(?ERROR_FORBIDDEN, ozt:rpc(space_logic, remove_owner, [?USER(NonOwnerButAdmin), Space, AnotherOwner])),
-    ?assertEqual(?ERROR_FORBIDDEN, ozt:rpc(space_logic, remove_user, [?USER(NonOwnerButAdmin), Space, AnotherOwner])).
+    ?assertEqual(?ERR_FORBIDDEN, ozt:rpc(space_logic, remove_owner, [?USER(NonOwnerButAdmin), Space, AnotherOwner])),
+    ?assertEqual(?ERR_FORBIDDEN, ozt:rpc(space_logic, remove_user, [?USER(NonOwnerButAdmin), Space, AnotherOwner])).
 
 one_of_space_owners_cannot_be_revoked_of_ownership_twice(_Config) ->
     OriginalOwner = ozt_users:create(),
@@ -240,7 +240,7 @@ one_of_space_owners_cannot_be_revoked_of_ownership_twice(_Config) ->
     ozt_spaces:add_user(Space, AnotherUser),
     ozt_spaces:add_owner(Space, AnotherUser),
     ?assertEqual(ok, ozt:rpc(space_logic, remove_owner, [?ROOT, Space, AnotherUser])),
-    ?assertEqual(?ERROR_NOT_FOUND, ozt:rpc(space_logic, remove_owner, [?ROOT, Space, AnotherUser])).
+    ?assertEqual(?ERR_NOT_FOUND, ozt:rpc(space_logic, remove_owner, [?ROOT, Space, AnotherUser])).
 
 
 removed_member_that_was_an_owner_loses_ownership(_Config) ->
@@ -309,11 +309,11 @@ the_only_space_owner_cannot_be_removed_from_a_space_with_other_direct_users(_Con
     ozt_spaces:add_user(Space, ozt_users:create()),
     ozt:reconcile_entity_graph(),
     ?assertEqual(
-        ?ERROR_CANNOT_REMOVE_LAST_OWNER(od_space, Space),
+        ?ERR_CANNOT_REMOVE_LAST_OWNER(od_space, Space),
         ozt:rpc(space_logic, remove_user, [?ROOT, Space, OriginalOwner])
     ),
     ?assertEqual(
-        ?ERROR_CANNOT_REMOVE_LAST_OWNER(od_space, Space),
+        ?ERR_CANNOT_REMOVE_LAST_OWNER(od_space, Space),
         ozt:rpc(user_logic, leave_space, [?ROOT, OriginalOwner, Space])
     ).
 
@@ -324,11 +324,11 @@ the_only_space_owner_cannot_be_removed_from_a_space_with_other_effective_users(_
     ozt_spaces:add_group(Space, ozt_users:create_group_for(EffectiveUser)),
     ozt:reconcile_entity_graph(),
     ?assertEqual(
-        ?ERROR_CANNOT_REMOVE_LAST_OWNER(od_space, Space),
+        ?ERR_CANNOT_REMOVE_LAST_OWNER(od_space, Space),
         ozt:rpc(space_logic, remove_user, [?ROOT, Space, OriginalOwner])
     ),
     ?assertEqual(
-        ?ERROR_CANNOT_REMOVE_LAST_OWNER(od_space, Space),
+        ?ERR_CANNOT_REMOVE_LAST_OWNER(od_space, Space),
         ozt:rpc(user_logic, leave_space, [?ROOT, OriginalOwner, Space])
     ).
 
@@ -470,7 +470,7 @@ user_cannot_be_deleted_if_he_is_the_last_owner_in_any_space_with_more_members(_C
     ozt_spaces:add_user(Space, AnotherUser),
     ozt:reconcile_entity_graph(),
     ?assertEqual(
-        ?ERROR_CANNOT_REMOVE_LAST_OWNER(od_space, Space),
+        ?ERR_CANNOT_REMOVE_LAST_OWNER(od_space, Space),
         ozt:rpc(user_logic, delete, [?ROOT, OriginalOwner])
     ),
     ?assert(is_owner(Space, OriginalOwner)),
@@ -587,7 +587,7 @@ removing_owners_in_parallel_is_safe_from_race_conditions(_Config) ->
     OwnersFailedToBeRemoved = lists:filtermap(fun({User, Result}) ->
         case Result of
             ok -> false;
-            ?ERROR_CANNOT_REMOVE_LAST_OWNER(od_space, Space) -> {true, User}
+            ?ERR_CANNOT_REMOVE_LAST_OWNER(od_space, Space) -> {true, User}
         end
     end, Results),
     % only one of the owners should fail to be removed
@@ -662,7 +662,7 @@ adding_owner_while_removing_corresponding_member_is_safe_from_race_conditions(_C
     lists:foreach(fun({User, Result}) ->
         case Result of
             ok -> ok;
-            ?ERROR_RELATION_DOES_NOT_EXIST(od_space, Space, od_user, User) -> ok;
+            ?ERR_RELATION_DOES_NOT_EXIST(od_space, Space, od_user, User) -> ok;
             Other -> ?assertMatch(unexpected_result, Other)
         end
     end, Results),
@@ -709,7 +709,7 @@ removing_last_member_being_owner_while_adding_a_new_member_is_safe_from_race_con
                 % scenario 1)
                 ?assert(has_owners(Space, [NewUser])),
                 ?assert(has_direct_members(Space, [NewUser]));
-            ?ERROR_CANNOT_REMOVE_LAST_OWNER(od_space, Space) ->
+            ?ERR_CANNOT_REMOVE_LAST_OWNER(od_space, Space) ->
                 % scenario 2)
                 ?assert(has_owners(Space, [OriginalOwner])),
                 ?assert(has_direct_members(Space, [OriginalOwner, NewUser]));
@@ -762,7 +762,7 @@ adding_an_indirect_user_as_owner_while_removing_him_indirectly_from_space_is_saf
             ok ->
                 % scenario 1)
                 {true, User};
-            ?ERROR_RELATION_DOES_NOT_EXIST(od_space, Space, od_user, User) ->
+            ?ERR_RELATION_DOES_NOT_EXIST(od_space, Space, od_user, User) ->
                 % scenario 2)
                 false
         end
@@ -821,10 +821,10 @@ adding_an_indirect_user_as_owner_while_removing_him_directly_from_space_is_safe_
             {ok, ok} ->
                 % scenario 1)
                 false;
-            {?ERROR_RELATION_DOES_NOT_EXIST(od_space, Space, od_user, User), ok} ->
+            {?ERR_RELATION_DOES_NOT_EXIST(od_space, Space, od_user, User), ok} ->
                 % scenario 2)
                 false;
-            {ok, ?ERROR_NOT_FOUND} ->
+            {ok, ?ERR_NOT_FOUND} ->
                 % scenario 3)
                 {true, User};
             Other ->

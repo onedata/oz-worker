@@ -210,7 +210,7 @@ add_entry(ShareId, #od_share{space = SpaceId} = ShareRecord, PublicHandle) ->
     },
     case datastore_model:add_links(?CTX, ?FOREST, ?TREE_FOR_SPACE(SpaceId), Link) of
         {ok, _} -> ok;
-        {error, already_exists} -> throw(?ERROR_ALREADY_EXISTS)
+        {error, already_exists} -> throw(?ERR_ALREADY_EXISTS(?err_ctx()))
     end.
 
 

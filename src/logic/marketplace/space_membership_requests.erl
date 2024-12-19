@@ -98,13 +98,13 @@ submit(SpaceId, UserId, ContactEmail, Message, InitialRecord) ->
 lookup_pending_request_id(SpaceId, #space_membership_requests{pending = Pending}) ->
     case maps:find(SpaceId, Pending) of
         {ok, #request{id = RequestId}} -> RequestId;
-        _ -> throw(?ERROR_NOT_FOUND)
+        _ -> throw(?ERR_NOT_FOUND(?err_ctx()))
     end.
 
 
 -spec lookup_email_for_pending(od_space:id(), request_id(), record()) -> od_user:email() | no_return().
 lookup_email_for_pending(SpaceId, RequestId, Record) ->
-    od_space:is_advertised_in_marketplace(SpaceId) orelse throw(?ERROR_NOT_FOUND),
+    od_space:is_advertised_in_marketplace(SpaceId) orelse throw(?ERR_NOT_FOUND(?err_ctx())),
     Request = lookup_pending(SpaceId, RequestId, Record),  % throws in case of nonexistent pending request
     assert_not_a_member(infer_requester_id(RequestId), SpaceId),
     Request#request.contact_email.
@@ -140,7 +140,7 @@ infer_requester_id(RequestId) ->
         [UserId, _] = binary:split(RequestId, <<?REQUEST_ID_SEPARATOR>>, [global]),
         UserId
     catch _:_ ->
-        throw(?ERROR_BAD_VALUE_IDENTIFIER(<<"requestId">>))
+        throw(?ERR_BAD_VALUE_IDENTIFIER(?err_ctx(), <<"requestId">>))
     end.
 
 
@@ -211,7 +211,7 @@ db_decode(RecordJson, _NestedRecordDecoder) ->
 lookup_pending(SpaceId, RequestId, #space_membership_requests{pending = Pending}) ->
     case maps:find(SpaceId, Pending) of
         {ok, #request{id = RequestId} = Request} -> Request;
-        _ -> throw(?ERROR_NOT_FOUND)
+        _ -> throw(?ERR_NOT_FOUND(?err_ctx()))
     end.
 
 
@@ -269,7 +269,7 @@ resolve_sanitized(SpaceId, RequesterUserId, Decision, Record = #space_membership
 -spec qualify(od_space:id(), od_user:id(), record()) ->
     {create_new | {reuse, request()}, record()} | no_return().
 qualify(_SpaceId, _UserId, Record) when map_size(Record#space_membership_requests.pending) >= ?PENDING_REQUEST_LIMIT ->
-    throw(?ERROR_LIMIT_REACHED(?PENDING_REQUEST_LIMIT, <<"pending space membership requests">>));
+    throw(?ERR_LIMIT_REACHED(?err_ctx(), ?PENDING_REQUEST_LIMIT, <<"pending space membership requests">>));
 qualify(SpaceId, UserId, Record) ->
     assert_not_a_member(UserId, SpaceId),
     NewRecord = check_if_not_recently_rejected(SpaceId, Record),
@@ -282,7 +282,7 @@ qualify(SpaceId, UserId, Record) ->
                 true ->
                     {{reuse, Request}, NewRecord};
                 false ->
-                    throw(?ERROR_FORBIDDEN(str_utils:format_bin(
+                    throw(?ERR_FORBIDDEN_TODO(?err_ctx(), str_utils:format_bin(
                         "A membership request to this space has been submitted recently. "
                         "A reminder can be generated not sooner than at ~ts",
                         [time:seconds_to_iso8601(NextRequestAllowedAt)]
@@ -296,7 +296,7 @@ qualify(SpaceId, UserId, Record) ->
 assert_not_a_member(UserId, SpaceId) ->
     case user_logic:has_eff_space(UserId, SpaceId) of
         false -> ok;
-        true -> throw(?ERROR_RELATION_ALREADY_EXISTS(od_user, UserId, od_space, SpaceId))
+        true -> throw(?ERR_RELATION_ALREADY_EXISTS(?err_ctx(), od_user, UserId, od_space, SpaceId))
     end.
 
 
@@ -308,7 +308,7 @@ check_if_not_recently_rejected(SpaceId, Record) ->
             NewRecord = forget_outdated_rejected_history(Record),
             case maps:find(SpaceId, NewRecord#space_membership_requests.rejected) of
                 {ok, #request{last_activity = LastActivity}} ->
-                    throw(?ERROR_FORBIDDEN(str_utils:format_bin(
+                    throw(?ERR_FORBIDDEN_TODO(?err_ctx(), str_utils:format_bin(
                         "A membership request to this space has been recently rejected. "
                         "Another request can be made not sooner than at ~ts",
                         [time:seconds_to_iso8601(LastActivity + ?MIN_BACKOFF_AFTER_REJECTION_SECONDS)]

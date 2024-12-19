@@ -1905,14 +1905,14 @@ ensure_entitlement_group(GroupId, Name, Type) ->
         false ->
             case entity_logic_sanitizer:normalize_name(Name, undefined) of
                 undefined ->
-                    ?ERROR_BAD_VALUE_NAME;
+                    ?ERR_BAD_VALUE_NAME(?err_ctx(), undefined);
                 NormalizedName ->
                     Data = #{<<"name">> => NormalizedName, <<"type">> => Type},
                     case create_with_predefined_id(?ROOT, GroupId, Data) of
                         {ok, GroupId} -> ok = set_protected(GroupId);
                         % The group might have been created
                         % by another process in the meantime
-                        ?ERROR_ALREADY_EXISTS -> ok;
+                        ?ERR_ALREADY_EXISTS -> ok;
                         {error, _} = Error -> Error
                     end
             end

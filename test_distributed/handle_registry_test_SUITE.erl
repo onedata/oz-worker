@@ -227,7 +227,7 @@ add_element_that_already_exist_test(_Config) ->
         create_entry(?FIRST_HSERVICE, MetadataPrefix, FirstTimestamp, FirstHandleId)
     catch
         error:ErrorReason:_Stacktrace ->
-            ?assertEqual(ErrorReason, {badrpc, ?ERROR_ALREADY_EXISTS})
+            ?assertEqual(ErrorReason, {badrpc, ?ERR_ALREADY_EXISTS})
     end,
     ?assertEqual(InitialList, list_completely(
         #{service_id => ?FIRST_HSERVICE, metadata_prefix => MetadataPrefix})

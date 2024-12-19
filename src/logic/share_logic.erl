@@ -200,11 +200,11 @@ exists(ShareId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec choose_provider_for_public_share_handling(od_share:id()) ->
-    {ok, {od_provider:id() | undefined, onedata:release_version() | undefined}} | ?ERROR_NOT_FOUND.
+    {ok, {od_provider:id() | undefined, onedata:release_version() | undefined}} | od_error_not_found:t().
 choose_provider_for_public_share_handling(ShareId) ->
     case get_space(?ROOT, ShareId) of
-        ?ERROR_NOT_FOUND ->
-            ?ERROR_NOT_FOUND;
+        ?ERR_NOT_FOUND = NotFoundError ->
+            NotFoundError;
         {ok, SpaceId} ->
             {ok, Result} = node_cache:acquire({chosen_provider_for_share_handling, SpaceId}, fun() ->
                 {ok, choose_provider_for_public_share_handling_in_space(SpaceId), ?CHOSEN_PROVIDER_CACHE_TTL}

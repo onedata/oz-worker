@@ -41,7 +41,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERROR_NOT_FOUND
+%%      if there was an error, such as ?ERR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -52,7 +52,7 @@ fetch_entity(#gri{id = ShareId}) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Share, Revision}};
         _ ->
-            ?ERROR_NOT_FOUND
+            ?ERR_NOT_FOUND(?err_ctx())
     end.
 
 
@@ -114,7 +114,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         true = is_binary(FileUuid) andalso byte_size(FileUuid) > 0,
         FileUuid
     catch _:_ ->
-        throw(?ERROR_BAD_DATA(<<"rootFileId">>))
+        throw(?ERR_BAD_DATA(?err_ctx(), <<"rootFileId">>, undefined))
     end,
 
     ShareDoc = #document{key = ShareId, value = #od_share{
@@ -134,7 +134,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         {error, already_exists} ->
             % This can potentially happen if a share with given share id
             % has been created between data verification and create
-            ?ERROR_ALREADY_EXISTS
+            ?ERR_ALREADY_EXISTS(?err_ctx())
     end.
 
 
@@ -352,7 +352,7 @@ delete_internal(Auth, ShareId) ->
         {handle_must_be_deleted_first, HandleId} ->
             case handle_logic:delete(Auth, HandleId) of
                 ok -> ok;
-                {error, not_found} -> ok;
+                ?ERR_NOT_FOUND -> ok;
                 {error, _} = Error -> throw(Error)
             end,
             delete_internal(Auth, ShareId)
@@ -362,7 +362,7 @@ delete_internal(Auth, ShareId) ->
 %% @private
 -spec delete_share_unsafe(od_share:id()) -> done | {handle_must_be_deleted_first, od_handle:id()}.
 delete_share_unsafe(ShareId) ->
-    % race condition: in case of the share being already deleted, this will throw ?ERROR_NOT_FOUND
+    % race condition: in case of the share being already deleted, this will throw ?ERR_NOT_FOUND
     #document{value = #od_share{handle = HandleId} = PreviousShareRecord} = ?check(od_share:get(ShareId)),
     % in case of DB inconsistencies (share points to a handle that does not exist) we
     % must not try to delete the handle first, otherwise we get infinite recursion
@@ -418,5 +418,5 @@ validate_name(ShareName) ->
             true;
         _ ->
             % TODO VFS-12486 Rework all ERROR_BAD_DATA errors with hint into individual ones (waiting for od_error)
-            throw(?ERROR_BAD_DATA(<<"name">>, <<"Bad value: ", (?SHARE_NAME_REQUIREMENTS_DESCRIPTION)/binary>>))
+            throw(?ERR_BAD_DATA(?err_ctx(), <<"name">>, <<"Bad value: ", (?SHARE_NAME_REQUIREMENTS_DESCRIPTION)/binary>>))
     end.

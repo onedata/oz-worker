@@ -146,11 +146,11 @@ create_test(Config) ->
             },
             bad_values = [
                 {<<"harvestingBackendType">>, <<"not_existing_backend">>,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"harvestingBackendType">>, ?ALL_HARVESTING_BACKENDS(Config))},
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"harvestingBackendType">>, ?ALL_HARVESTING_BACKENDS(Config))},
                 {<<"harvestingBackendEndpoint">>, <<"bad_endpoint">>,
-                    ?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(<<"Elasticsearch">>)},
-                {<<"harvestingBackendEndpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"harvestingBackendEndpoint">>)}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                    ?ERR_EXTERNAL_SERVICE_OPERATION_FAILED(<<"Elasticsearch">>)},
+                {<<"harvestingBackendEndpoint">>, null, ?ERR_BAD_VALUE_EMPTY(<<"harvestingBackendEndpoint">>)}
+                | ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
             ]
         }
     },
@@ -545,12 +545,12 @@ update_test(Config) ->
             },
             bad_values = [
                 {<<"harvestingBackendType">>, <<"not_existing_backend">>,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"harvestingBackendType">>, ?ALL_HARVESTING_BACKENDS(Config))},
-                {<<"public">>, not_boolean, ?ERROR_BAD_VALUE_BOOLEAN(<<"public">>)},
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"harvestingBackendType">>, ?ALL_HARVESTING_BACKENDS(Config))},
+                {<<"public">>, not_boolean, ?ERR_BAD_VALUE_BOOLEAN(<<"public">>)},
                 {<<"harvestingBackendEndpoint">>, <<"bad_endpoint">>,
-                    ?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(<<"Elasticsearch">>)},
-                {<<"harvestingBackendEndpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"harvestingBackendEndpoint">>)}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                    ?ERR_EXTERNAL_SERVICE_OPERATION_FAILED(<<"Elasticsearch">>)},
+                {<<"harvestingBackendEndpoint">>, null, ?ERR_BAD_VALUE_EMPTY(<<"harvestingBackendEndpoint">>)}
+                | ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
             ]
         }
     },
@@ -627,7 +627,7 @@ update_gui_plugin_config_test(Config) ->
             correct_values = #{
                 <<"guiPluginConfig">> => [Conf]
             },
-            bad_values = [{<<"guiPluginConfig">>, <<"bad_config">>, ?ERROR_BAD_VALUE_JSON(<<"guiPluginConfig">>)}]
+            bad_values = [{<<"guiPluginConfig">>, <<"bad_config">>, ?ERR_BAD_VALUE_JSON(<<"guiPluginConfig">>)}]
         }
     },
     ?assert(api_test_utils:run_tests(
@@ -838,19 +838,19 @@ create_index_test(Config) ->
                 <<"includeRejectionReason">> => [true, false]
             },
             bad_values = [
-                {<<"schema">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"schema">>)},
-                {<<"schema">>, 12321, ?ERROR_BAD_VALUE_BINARY(<<"schema">>)},
-                {<<"guiPluginName">>, 12321, ?ERROR_BAD_VALUE_BINARY(<<"guiPluginName">>)},
-                {<<"includeMetadata">>, json, ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"includeMetadata">>)},
-                {<<"includeMetadata">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"includeMetadata">>)},
-                {<<"includeMetadata">>, [asd], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeMetadata">>,
+                {<<"schema">>, <<>>, ?ERR_BAD_VALUE_EMPTY(<<"schema">>)},
+                {<<"schema">>, 12321, ?ERR_BAD_VALUE_STRING(<<"schema">>)},
+                {<<"guiPluginName">>, 12321, ?ERR_BAD_VALUE_STRING(<<"guiPluginName">>)},
+                {<<"includeMetadata">>, json, ?ERR_BAD_VALUE_LIST_OF_STRINGS(<<"includeMetadata">>)},
+                {<<"includeMetadata">>, [], ?ERR_BAD_VALUE_EMPTY(<<"includeMetadata">>)},
+                {<<"includeMetadata">>, [asd], ?ERR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeMetadata">>,
                     od_harvester:all_metadata_types())},
-                {<<"includeFileDetails">>, fileName, ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"includeFileDetails">>)},
-                {<<"includeFileDetails">>, [asd], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeFileDetails">>,
+                {<<"includeFileDetails">>, fileName, ?ERR_BAD_VALUE_LIST_OF_STRINGS(<<"includeFileDetails">>)},
+                {<<"includeFileDetails">>, [asd], ?ERR_BAD_VALUE_LIST_NOT_ALLOWED(<<"includeFileDetails">>,
                     od_harvester:all_file_details())},
-                {<<"retryOnRejection">>, 12321, ?ERROR_BAD_VALUE_BOOLEAN(<<"retryOnRejection">>)},
-                {<<"includeRejectionReason">>, 12321, ?ERROR_BAD_VALUE_BOOLEAN(<<"includeRejectionReason">>)}
-            ] ++ ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                {<<"retryOnRejection">>, 12321, ?ERR_BAD_VALUE_BOOLEAN(<<"retryOnRejection">>)},
+                {<<"includeRejectionReason">>, 12321, ?ERR_BAD_VALUE_BOOLEAN(<<"includeRejectionReason">>)}
+            ] ++ ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -1095,7 +1095,7 @@ update_index_test(Config) ->
                 <<"name">> => [?CORRECT_NAME],
                 <<"guiPluginName">> => [?CORRECT_NAME, null]
             },
-            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+            bad_values = ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
         }
     },
     ?assert(api_test_utils:run_tests(
@@ -1269,9 +1269,9 @@ query_index_test(Config) ->
                 <<"body">> => [?TEST_DATA]
             },
             bad_values = [
-                {<<"method">>, <<"bad_method">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"method">>, [post, get])},
-                {<<"path">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"path">>)},
-                {<<"body">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"body">>)}
+                {<<"method">>, <<"bad_method">>, ?ERR_BAD_VALUE_NOT_ALLOWED(<<"method">>, [post, get])},
+                {<<"path">>, <<>>, ?ERR_BAD_VALUE_EMPTY(<<"path">>)},
+                {<<"body">>, <<>>, ?ERR_BAD_VALUE_EMPTY(<<"body">>)}
             ]
         }
     },

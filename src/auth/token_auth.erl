@@ -35,20 +35,20 @@
 %% @doc
 %% Tries to authenticate a client by an access token.
 %%   {true, #auth{}} - the client was authenticated
-%%   errors:unauthorized_error() - provided access token was invalid
+%%   od_error:auth_error() - provided access token was invalid
 %% @end
 %%--------------------------------------------------------------------
 -spec authenticate(tokens:serialized() | tokens:token(), aai:auth_ctx()) ->
-    {true, aai:auth()} | errors:unauthorized_error().
+    {true, aai:auth()} | od_error:auth_error().
 authenticate(Serialized, AuthCtx) when is_binary(Serialized) ->
     case tokens:deserialize(Serialized) of
         {ok, Token} -> authenticate(Token, AuthCtx);
-        {error, _} = Error -> ?ERROR_UNAUTHORIZED(Error)
+        {error, _} = Error -> ?ERR_UNAUTHORIZED(?err_ctx(), Error)
     end;
 authenticate(Token, AuthCtx) ->
     case verify_access_token(Token, AuthCtx) of
         {ok, Auth} -> {true, Auth};
-        {error, _} = Error -> ?ERROR_UNAUTHORIZED(Error)
+        {error, _} = Error -> ?ERR_UNAUTHORIZED(?err_ctx(), Error)
     end.
 
 
@@ -59,11 +59,11 @@ authenticate(Token, AuthCtx) ->
 %% Supports third party access tokens originating from Identity Providers.
 %%   {true, #auth{}} - the client was authenticated
 %%   false - access token was not found
-%%   errors:unauthorized_error() - provided access token was invalid
+%%   od_error:auth_error() - provided access token was invalid
 %% @end
 %%--------------------------------------------------------------------
 -spec authenticate_for_rest_interface(cowboy_req:req()) ->
-    {true, aai:auth()} | false | errors:unauthorized_error().
+    {true, aai:auth()} | false | od_error:auth_error().
 authenticate_for_rest_interface(Req) when is_map(Req) ->
     case tokens:parse_access_token_header(Req) of
         undefined ->
@@ -72,7 +72,7 @@ authenticate_for_rest_interface(Req) when is_map(Req) ->
             case tokens:deserialize(Serialized) of
                 {ok, Token} ->
                     authenticate_for_rest_interface(Req, Token);
-                ?ERROR_BAD_TOKEN ->
+                ?ERR_BAD_TOKEN ->
                     authenticate_by_idp_access_token(Serialized)
             end
     end.
@@ -80,13 +80,13 @@ authenticate_for_rest_interface(Req) when is_map(Req) ->
 
 %% @private
 -spec authenticate_for_rest_interface(cowboy_req:req(), tokens:token()) ->
-    {true, aai:auth()} | errors:unauthorized_error().
+    {true, aai:auth()} | od_error:auth_error().
 authenticate_for_rest_interface(Req, Token) ->
     case {resolve_service_for_rest_interface(Req), resolve_consumer_for_rest_interface(Req)} of
         {{error, _} = Error, _} ->
-            ?ERROR_UNAUTHORIZED(Error);
+            ?ERR_UNAUTHORIZED(?err_ctx(), Error);
         {_, {error, _} = Error} ->
-            ?ERROR_UNAUTHORIZED(Error);
+            ?ERR_UNAUTHORIZED(?err_ctx(), Error);
         {{ok, Service}, {ok, Consumer}} ->
             {PeerIp, _} = cowboy_req:peer(Req),
             authenticate(Token, #auth_ctx{
@@ -124,7 +124,7 @@ authenticate_for_rest_interface(Req, Token) ->
 verify_access_token(#token{type = ?ACCESS_TOKEN} = Token, AuthCtx) ->
     verify_token(Token, AuthCtx);
 verify_access_token(#token{type = ReceivedTokenType}, _AuthCtx) ->
-    ?ERROR_NOT_AN_ACCESS_TOKEN(ReceivedTokenType).
+    ?ERR_NOT_AN_ACCESS_TOKEN(?err_ctx(), ReceivedTokenType).
 
 
 %%--------------------------------------------------------------------
@@ -143,7 +143,7 @@ verify_identity_token(#token{type = ?ACCESS_TOKEN(undefined) = Type} = Token, Au
             {ok, {Subject, Caveats}};
         {ok, _} ->
             % user access tokens are never accepted as identity tokens
-            ?ERROR_NOT_AN_IDENTITY_TOKEN(Type);
+            ?ERR_NOT_AN_IDENTITY_TOKEN(?err_ctx(), Type);
         {error, _} = Error ->
             Error
     end;
@@ -155,7 +155,7 @@ verify_identity_token(#token{type = ?IDENTITY_TOKEN} = Token, AuthCtx) ->
             Error
     end;
 verify_identity_token(#token{type = ReceivedTokenType}, _AuthCtx) ->
-    ?ERROR_NOT_AN_IDENTITY_TOKEN(ReceivedTokenType).
+    ?ERR_NOT_AN_IDENTITY_TOKEN(?err_ctx(), ReceivedTokenType).
 
 
 %%--------------------------------------------------------------------
@@ -172,7 +172,7 @@ verify_invite_token(Token = #token{type = ReceivedType}, ExpectedType, AuthCtx) 
         true ->
             verify_token(Token, AuthCtx);
         false ->
-            ?ERROR_NOT_AN_INVITE_TOKEN(ExpectedType, ReceivedType)
+            ?ERR_NOT_AN_INVITE_TOKEN(?err_ctx(), ExpectedType, ReceivedType)
     end.
 
 
@@ -202,7 +202,7 @@ verify_service_token(SerializedServiceToken, AuthCtx) when is_binary(SerializedS
                     OtherResult
             end;
         {error, _} = Error ->
-            ?ERROR_BAD_SERVICE_TOKEN(Error)
+            ?ERR_BAD_SERVICE_TOKEN(?err_ctx(), Error)
     end;
 verify_service_token(ServiceToken, AuthCtx) ->
     case verify_identity_token(ServiceToken, AuthCtx) of
@@ -212,9 +212,9 @@ verify_service_token(ServiceToken, AuthCtx) ->
                 _ -> {ok, ?SERVICE(OpServiceType, ProviderId)}
             end;
         {ok, _} ->
-            ?ERROR_BAD_SERVICE_TOKEN(?ERROR_TOKEN_INVALID);
+            ?ERR_BAD_SERVICE_TOKEN(?err_ctx(), ?ERR_TOKEN_INVALID(?err_ctx()));
         {error, _} = Err2 ->
-            ?ERROR_BAD_SERVICE_TOKEN(Err2)
+            ?ERR_BAD_SERVICE_TOKEN(?err_ctx(), Err2)
     end.
 
 
@@ -234,14 +234,14 @@ verify_consumer_token(SerializedConsumerToken, AuthCtx) when is_binary(Serialize
         {ok, ConsumerToken} ->
             verify_consumer_token(ConsumerToken, AuthCtx);
         {error, _} = Error ->
-            ?ERROR_BAD_CONSUMER_TOKEN(Error)
+            ?ERR_BAD_CONSUMER_TOKEN(?err_ctx(), Error)
     end;
 verify_consumer_token(ConsumerToken, AuthCtx) ->
     case verify_identity_token(ConsumerToken, AuthCtx) of
         {ok, {Subject, _}} ->
             {ok, Subject};
         {error, _} = Err2 ->
-            ?ERROR_BAD_CONSUMER_TOKEN(Err2)
+            ?ERR_BAD_CONSUMER_TOKEN(?err_ctx(), Err2)
     end.
 
 
@@ -287,7 +287,7 @@ validate_subject_and_service(TokenType, Subject, Service) ->
 
 %% @private
 -spec authenticate_by_idp_access_token(tokens:serialized()) ->
-    {true, aai:auth()} | errors:unauthorized_error().
+    {true, aai:auth()} | od_error:auth_error().
 authenticate_by_idp_access_token(Serialized) ->
     case openid_protocol:authenticate_by_idp_access_token(Serialized) of
         {true, {IdP, Attributes}} ->
@@ -295,13 +295,14 @@ authenticate_by_idp_access_token(Serialized) ->
             case linked_accounts:acquire_user(LinkedAccount) of
                 {ok, #document{key = UserId}} ->
                     {true, ?USER(UserId)};
-                ?ERROR_USER_BLOCKED ->
-                    ?ERROR_UNAUTHORIZED(?ERROR_USER_BLOCKED)
+                ?ERR_USER_BLOCKED = UserBlockerError ->
+                    ?ERR_UNAUTHORIZED(?err_ctx(), UserBlockerError)
             end;
-        ?ERROR_UNAUTHORIZED(_) = AuthenticationError ->
+        ?ERR_UNAUTHORIZED(_) = AuthenticationError ->
             AuthenticationError;
         false ->
-            ?ERROR_UNAUTHORIZED(?ERROR_BAD_TOKEN)
+            ErrorCtx = ?err_ctx(),
+            ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_BAD_TOKEN(ErrorCtx))
     end.
 
 
@@ -360,18 +361,18 @@ verify_token(Token = #token{persistence = {temporary, TokenGen}, subject = Subje
         {ok, {_, NewerGen}} when NewerGen > TokenGen ->
             % Most probably, the token has been revoked (or forged, in
             % such case the error might be confusing for the forger).
-            ?ERROR_TOKEN_REVOKED;
+            ?ERR_TOKEN_REVOKED(?err_ctx());
         {ok, {_, OlderGen}} when OlderGen < TokenGen ->
             % The token must have been forged (its generation is newer than actual).
-            ?ERROR_TOKEN_INVALID;
-        ?ERROR_NOT_FOUND ->
+            ?ERR_TOKEN_INVALID(?err_ctx());
+        ?ERR_NOT_FOUND ->
             % The subject may have been deleted in the meantime.
-            ?ERROR_TOKEN_SUBJECT_INVALID
+            ?ERR_TOKEN_SUBJECT_INVALID(?err_ctx())
     end;
 verify_token(Token = #token{persistence = named}, AuthCtx) ->
     case od_token:get(Token#token.id) of
         {ok, #document{value = #od_token{revoked = true}}} ->
-            ?ERROR_TOKEN_REVOKED;
+            ?ERR_TOKEN_REVOKED(?err_ctx());
         {ok, #document{value = #od_token{secret = Secret, subject = ?SUB(SubType, _, SubId) = Subject}}} ->
             case Token of
                 #token{version = 1} ->
@@ -384,10 +385,10 @@ verify_token(Token = #token{persistence = named}, AuthCtx) ->
                     verify_token(Token, AuthCtx, Secret);
                 _ ->
                     % The subjects are different - the token is invalid
-                    ?ERROR_TOKEN_SUBJECT_INVALID
+                    ?ERR_TOKEN_SUBJECT_INVALID(?err_ctx())
             end;
         {error, not_found} ->
-            ?ERROR_TOKEN_INVALID
+            ?ERR_TOKEN_INVALID(?err_ctx())
     end.
 
 %% @private
@@ -419,13 +420,13 @@ verify_token(Token = #token{type = TokenType, subject = Subject}, AuthCtx, Secre
 validate_subject(?SUB(?ONEPROVIDER, ProviderId)) ->
     case provider_logic:exists(ProviderId) of
         true -> ok;
-        false -> ?ERROR_TOKEN_SUBJECT_INVALID
+        false -> ?ERR_TOKEN_SUBJECT_INVALID(?err_ctx())
     end;
 validate_subject(?SUB(user, UserId)) ->
     case od_user:get(UserId) of
-        {ok, #document{value = #od_user{blocked = true}}} -> ?ERROR_USER_BLOCKED;
+        {ok, #document{value = #od_user{blocked = true}}} -> ?ERR_USER_BLOCKED(?err_ctx());
         {ok, #document{}} -> ok;
-        {error, not_found} -> ?ERROR_TOKEN_SUBJECT_INVALID
+        {error, not_found} -> ?ERR_TOKEN_SUBJECT_INVALID(?err_ctx())
     end.
 
 
@@ -436,10 +437,10 @@ validate_session(?ACCESS_TOKEN(undefined), _) ->
 validate_session(?ACCESS_TOKEN(SessId), ?SUB(user, UserId)) ->
     case session:belongs_to_user(SessId, UserId) of
         true -> ok;
-        false -> ?ERROR_TOKEN_SESSION_INVALID
+        false -> ?ERR_TOKEN_SESSION_INVALID(?err_ctx())
     end;
 validate_session(?ACCESS_TOKEN(_), _) ->
-    ?ERROR_TOKEN_SESSION_INVALID;
+    ?ERR_TOKEN_SESSION_INVALID(?err_ctx());
 validate_session(_, _) ->
     ok.
 
@@ -449,7 +450,7 @@ validate_session(_, _) ->
 validate_service(?ACCESS_TOKEN, Subject, Service) ->
     case is_service_allowed(Subject, Service) of
         true -> ok;
-        false -> ?ERROR_TOKEN_SERVICE_FORBIDDEN(Service)
+        false -> ?ERR_TOKEN_SERVICE_FORBIDDEN(?err_ctx(), Service)
     end;
 validate_service(_, _, _) ->
     % Identity and invite tokens do not support the service caveat.

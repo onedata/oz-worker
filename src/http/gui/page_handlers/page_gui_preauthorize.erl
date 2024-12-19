@@ -45,9 +45,9 @@
 handle(<<"POST">>, Req) ->
     case gui_session:validate(Req) of
         {error, no_session_cookie} ->
-            ?ERROR_REPLY(?ERROR_UNAUTHORIZED, Req);
+            ?ERROR_REPLY(?ERR_UNAUTHORIZED(?err_ctx(), undefined), Req);
         {error, invalid} ->
-            ?ERROR_REPLY(?ERROR_UNAUTHORIZED, Req);
+            ?ERROR_REPLY(?ERR_UNAUTHORIZED(?err_ctx(), undefined), Req);
         {ok, _, SessionId, Req2} ->
             try
                 GuiPrefix = cowboy_req:binding(gui_prefix, Req2),
@@ -56,13 +56,13 @@ handle(<<"POST">>, Req) ->
                 Service = try
                     onedata:service_by_gui(onedata:gui_by_prefix(GuiPrefix), ClusterId)
                 catch error:badarg ->
-                    throw(?ERROR_NOT_FOUND)
+                    throw(?ERR_NOT_FOUND(?err_ctx()))
                 end,
 
                 ClusterType = onedata:service_to_cluster_type(Service),
                 case cluster_logic:get(?ROOT, ClusterId) of
                     {ok, #od_cluster{type = ClusterType}} -> ok;
-                    _ -> throw(?ERROR_NOT_FOUND)
+                    _ -> throw(?ERR_NOT_FOUND(?err_ctx()))
                 end,
 
                 cowboy_req:reply(
@@ -76,7 +76,7 @@ handle(<<"POST">>, Req) ->
                     ?ERROR_REPLY(Error, Req2);
                 Class:Reason:Stacktrace ->
                     ?debug_exception(Class, Reason, Stacktrace),
-                    ?ERROR_REPLY(?ERROR_MALFORMED_DATA, Req2)
+                    ?ERROR_REPLY(?ERR_MALFORMED_DATA(?err_ctx()), Req2)
             end
     end.
 

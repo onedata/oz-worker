@@ -43,24 +43,24 @@
 handle(ObjectId, Req) ->
     Result = try
         case resolve_share_id(ObjectId) of
-            {error, _} = Err1 ->
+            ?ERR = Err1 ->
                 Err1;
             {ok, ShareId} ->
                 case share_logic:choose_provider_for_public_share_handling(ShareId) of
-                    ?ERROR_NOT_FOUND -> ?ERROR_NOT_FOUND;
+                    ?ERR_NOT_FOUND = NotFoundError -> NotFoundError;
                     % there is no suitable, online provider
-                    {ok, {undefined, _}} -> ?ERROR_SERVICE_UNAVAILABLE;
+                    {ok, {undefined, _}} -> ?ERR_SERVICE_UNAVAILABLE(?err_ctx());
                     % only a legacy provider is available, but providers before 20.02 do
                     % not support public REST access to shared file/directory contents
-                    {ok, {_, <<"18.02", _/binary>>}} -> ?ERROR_NOT_IMPLEMENTED;
-                    {ok, {_, <<"19.02", _/binary>>}} -> ?ERROR_NOT_IMPLEMENTED;
+                    {ok, {_, <<"18.02", _/binary>>}} -> ?ERR_NOT_IMPLEMENTED(?err_ctx());
+                    {ok, {_, <<"19.02", _/binary>>}} -> ?ERR_NOT_IMPLEMENTED(?err_ctx());
                     {ok, {ChosenProviderId, _}} -> {ok, ChosenProviderId}
                 end
         end
     catch
         Class:Reason:Stacktrace ->
             ?debug_exception("Error while redirecting to public share", Class, Reason, Stacktrace),
-            ?ERROR_INTERNAL_SERVER_ERROR
+            ?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined)
     end,
 
     case Result of
@@ -82,17 +82,17 @@ resolve_share_id(ObjectId) ->
     try
         case file_id:objectid_to_guid(ObjectId) of
             {error, badarg} ->
-                ?ERROR_BAD_DATA(<<"FileId">>);
+                ?ERR_BAD_DATA(?err_ctx(), <<"FileId">>, undefined);
             {ok, FileGuid} ->
                 case file_id:unpack_share_guid(FileGuid) of
                     {_, _, undefined} ->
-                        ?ERROR_BAD_DATA(<<"FileId">>);
+                        ?ERR_BAD_DATA(?err_ctx(), <<"FileId">>, undefined);
                     {_, _, ShareId} ->
                         {ok, ShareId}
                 end
         end
     catch _:_ ->
-        ?ERROR_BAD_DATA(<<"FileId">>)
+        ?ERR_BAD_DATA(?err_ctx(), <<"FileId">>, undefined)
     end.
 
 

@@ -37,7 +37,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERROR_NOT_FOUND
+%%      if there was an error, such as ?ERR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -48,7 +48,7 @@ fetch_entity(#gri{id = GroupId}) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Group, Revision}};
         _ ->
-            ?ERROR_NOT_FOUND
+            ?ERR_NOT_FOUND(?err_ctx())
     end.
 
 
@@ -178,7 +178,7 @@ create(Req = #el_req{gri = #gri{id = ProposedGroupId, aspect = instance} = GRI, 
     }},
     case od_group:create(GroupDoc) of
         {error, already_exists} ->
-            throw(?ERROR_ALREADY_EXISTS);
+            throw(?ERR_ALREADY_EXISTS(?err_ctx()));
         {ok, #document{key = GroupId}} ->
             case Req#el_req.auth_hint of
                 ?AS_USER(UserId) ->
@@ -441,7 +441,7 @@ delete(#el_req{gri = #gri{id = GroupId, aspect = instance}}) ->
     {true, {Group, _}} = fetch_entity(#gri{aspect = instance, id = GroupId}),
     case Group#od_group.protected of
         true ->
-            throw(?ERROR_PROTECTED_GROUP);
+            throw(?ERR_PROTECTED_GROUP(?err_ctx()));
         false ->
             entity_graph:delete_with_relations(od_group, GroupId, Group)
     end;

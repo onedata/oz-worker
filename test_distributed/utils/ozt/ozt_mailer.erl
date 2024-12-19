@@ -82,11 +82,11 @@ match_received_emails(Address, Timestamp, SubjectKeywords, BodyKeywords) ->
 
 %% @private
     -spec oz_node_mailer_send_mock([smtp_client:email_address()], binary(), binary()) ->
-    ok | ?ERROR_INTERNAL_SERVER_ERROR(_).
+    ok | od_error_internal_server_error:t().
 oz_node_mailer_send_mock(RecipientAddresses, Subject, Body) ->
     case lists:any(fun(Addr) -> oz_node_get_saved(?SIMULATE_ERRORS_KEY(Addr), false) end, RecipientAddresses) of
         true ->
-            ?ERROR_INTERNAL_SERVER_ERROR(str_utils:rand_hex(6));
+            ?ERR_INTERNAL_SERVER_ERROR(str_utils:rand_hex(6));
         false ->
             lists:foreach(fun(RecipientAddress) ->
                 oz_node_collect_email(RecipientAddress, Subject, Body)

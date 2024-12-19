@@ -63,7 +63,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERROR_NOT_FOUND
+%%      if there was an error, such as ?ERR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -74,7 +74,7 @@ fetch_entity(#gri{id = SpaceId}) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Space, Revision}};
         _ ->
-            ?ERROR_NOT_FOUND
+            ?ERR_NOT_FOUND(?err_ctx())
     end.
 
 
@@ -220,7 +220,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             {ok, #document{key = Key}} ->
                 Key;
             {error, already_exists} ->
-                throw(?ERROR_ALREADY_EXISTS)
+                throw(?ERR_ALREADY_EXISTS(?err_ctx()))
         end
     end),
 
@@ -340,7 +340,7 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
         case space_logic:has_eff_user(PreviousSpace, UserId) of
             false ->
                 % only effective members can be assigned as owners
-                ?ERROR_RELATION_DOES_NOT_EXIST(od_space, SpaceId, od_user, UserId);
+                ?ERR_RELATION_DOES_NOT_EXIST(?err_ctx(), od_space, SpaceId, od_user, UserId);
             true ->
                 % add the user as direct member if he wasn't one
                 UserWasDirectMember = space_logic:has_direct_user(PreviousSpace, UserId),
@@ -356,7 +356,7 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
                             % as the adding of direct member and this update are not in one transaction,
                             % it is possible that the direct membership has been removed in the
                             % meantime - in such case deny the operation
-                            ?ERROR_RELATION_DOES_NOT_EXIST(od_space, SpaceId, od_user, UserId);
+                            ?ERR_RELATION_DOES_NOT_EXIST(?err_ctx(), od_space, SpaceId, od_user, UserId);
                         true ->
                             case lists:member(UserId, Owners) of
                                 true when not UserWasDirectMember ->
@@ -365,7 +365,7 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
                                     % as the first direct member of the space
                                     {ok, CurrentSpace};
                                 true ->
-                                    ?ERROR_ALREADY_EXISTS;
+                                    ?ERR_ALREADY_EXISTS(?err_ctx());
                                 false ->
                                     {ok, CurrentSpace#od_space{owners = [UserId | Owners]}}
                             end
@@ -445,7 +445,7 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
     catch error:{parallel_call_failed, {failed_processes, Errors}} ->
         ?error("Harvesting metadata in space ~tp failed due to: ~tp",
             [SpaceId, Errors]),
-        throw(?ERROR_TEMPORARY_FAILURE)
+        throw(?ERR_TEMPORARY_FAILURE(?err_ctx()))
     end,
 
     {ok, value, lists:foldl(
@@ -749,7 +749,7 @@ update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {group_privileges, GroupI
 
 update(#el_req{gri = #gri{id = SpaceId, aspect = {support_parameters, ProviderId}}, data = Data}) ->
     {ok, ProviderVersion} = cluster_logic:get_worker_release_version(?ROOT, ProviderId),
-    onedata:compare_release_line(ProviderVersion, ?LINE_21_02) =:= lower andalso throw(?ERROR_NOT_SUPPORTED),
+    onedata:compare_release_line(ProviderVersion, ?LINE_21_02) =:= lower andalso throw(?ERR_NOT_SUPPORTED(?err_ctx())),
 
     SupportParametersOverlay = jsonable_record:from_json(Data, support_parameters),
     ?extract_ok(od_space:update_support_parameters(SpaceId, ProviderId, SupportParametersOverlay)).
@@ -790,10 +790,10 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
     ?extract_ok(od_space:update(SpaceId, fun(Space = #od_space{owners = Owners}) ->
         case lists:member(UserId, Owners) of
             false ->
-                ?ERROR_NOT_FOUND;
+                ?ERR_NOT_FOUND(?err_ctx());
             true ->
                 case Owners of
-                    [UserId] -> ?ERROR_CANNOT_REMOVE_LAST_OWNER(od_space, SpaceId);
+                    [UserId] -> ?ERR_CANNOT_REMOVE_LAST_OWNER(?err_ctx(), od_space, SpaceId);
                     _ -> {ok, Space#od_space{owners = lists:delete(UserId, Owners)}}
                 end
         end

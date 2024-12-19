@@ -42,13 +42,13 @@ handle(<<"POST">>, Req) ->
                 ?info("User '~ts' has logged in (~ts)", [FullName, UserId]),
                 {ok, gui_session:log_in(UserId, Req)};
             false ->
-                ?ERROR_UNAUTHORIZED;
+                ?ERR_UNAUTHORIZED(?err_ctx(), undefined);
             {error, _} = AuthenticationError ->
                 AuthenticationError
         end
     catch Type:Reason:Stacktrace ->
         ?error_stacktrace("Login by basic credentials failed - ~w:~tp", [Type, Reason], Stacktrace),
-        ?ERROR_INTERNAL_SERVER_ERROR
+        ?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined)
     end,
     case Result of
         {ok, NewReq} ->

@@ -90,7 +90,7 @@ get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
                 [IdP, Type, Reason],
                 Stacktrace
             ),
-            ?ERROR_INTERNAL_SERVER_ERROR
+            ?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined)
     end.
 
 
@@ -122,7 +122,7 @@ validate_login(Method, Req) ->
                     {auth_error, Error, StateToken, RedirectAfterLogin};
                 Type:Reason:Stacktrace ->
                     log_error({Type, Reason}, IdP, StateToken, Stacktrace),
-                    {auth_error, ?ERROR_INTERNAL_SERVER_ERROR, StateToken, RedirectAfterLogin}
+                    {auth_error, ?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined), StateToken, RedirectAfterLogin}
             end
     end.
 
@@ -130,17 +130,17 @@ validate_login(Method, Req) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Acquires an access token for given user, issued by given IdP.
-%% Returns ?ERROR_NOT_FOUND when:
+%% Returns ?ERR_NOT_FOUND when:
 %%  * the user does not have an account in such IdP
 %%  * there is no access token stored
 %%  * the stored access token has expired and there is no viable refresh token
-%% Can return ?ERROR_INTERNAL_SERVER_ERROR in case token refresh goes wrong.
+%% Can return ?ERR_INTERNAL_SERVER_ERROR in case token refresh goes wrong.
 %% @end
 %%--------------------------------------------------------------------
 -spec acquire_idp_access_token(od_user:record(), auth_config:idp()) ->
     {ok, {access_token(), access_token_ttl()}} | {error, term()}.
 acquire_idp_access_token(#od_user{blocked = true}, _) ->
-    ?ERROR_USER_BLOCKED;
+    ?ERR_USER_BLOCKED(?err_ctx());
 acquire_idp_access_token(#od_user{linked_accounts = LinkedAccounts}, IdP) ->
     lists:foldl(fun
         (_LinkedAccount, {ok, Result}) ->
@@ -149,19 +149,19 @@ acquire_idp_access_token(#od_user{linked_accounts = LinkedAccounts}, IdP) ->
             acquire_idp_access_token(LinkedAcc);
         (_, Acc) ->
             Acc
-    end, ?ERROR_NOT_FOUND, LinkedAccounts).
+    end, ?ERR_NOT_FOUND(?err_ctx()), LinkedAccounts).
 
 %% @private
 -spec acquire_idp_access_token(od_user:linked_account()) ->
     {ok, {access_token(), access_token_ttl()}} | {error, term()}.
 acquire_idp_access_token(#linked_account{access_token = {undefined, 0}, refresh_token = _}) ->
-    ?ERROR_NOT_FOUND;
+    ?ERR_NOT_FOUND(?err_ctx());
 acquire_idp_access_token(#linked_account{access_token = {AccessToken, Expires}, refresh_token = undefined}) ->
     % No refresh token - no point in trying to refresh the access token
     Now = ?NOW_SECONDS(),
     case Expires > Now of
         true -> {ok, {AccessToken, Expires - Now}};
-        false -> ?ERROR_NOT_FOUND
+        false -> ?ERR_NOT_FOUND(?err_ctx())
     end;
 acquire_idp_access_token(#linked_account{idp = IdP, access_token = {AccessToken, Expires}, refresh_token = RefreshToken}) ->
     Now = ?NOW_SECONDS(),
@@ -183,9 +183,9 @@ refresh_idp_access_token(IdP, RefreshToken) ->
         {ok, Attributes} = openid_protocol:refresh_idp_access_token(IdP, RefreshToken),
         LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
         case linked_accounts:acquire_user(LinkedAccount) of
-            ?ERROR_USER_BLOCKED ->
-                log_error(?ERROR_USER_BLOCKED, IdP, <<"refresh_token_flow">>, []),
-                ?ERROR_USER_BLOCKED;
+            ?ERR_USER_BLOCKED = UserBlockedError ->
+                log_error(UserBlockedError, IdP, <<"refresh_token_flow">>, []),
+                UserBlockedError;
             {ok, _} ->
                 #linked_account{access_token = {AccessToken, Expires}} = LinkedAccount,
                 {ok, {AccessToken, Expires - ?NOW_SECONDS()}}
@@ -193,10 +193,10 @@ refresh_idp_access_token(IdP, RefreshToken) ->
     catch
         throw:Error:Stacktrace ->
             log_error(Error, IdP, <<"refresh_token_flow">>, Stacktrace),
-            ?ERROR_INTERNAL_SERVER_ERROR;
+            ?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined);
         Type:Reason:Stacktrace ->
             log_error({Type, Reason}, IdP, <<"refresh_token_flow">>, Stacktrace),
-            ?ERROR_INTERNAL_SERVER_ERROR
+            ?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined)
     end.
 
 
@@ -246,8 +246,8 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
     {ok, od_user:id()}.
 validate_login_by_linked_account(LinkedAccount) ->
     case linked_accounts:acquire_user(LinkedAccount) of
-        ?ERROR_USER_BLOCKED ->
-            ?ERROR_USER_BLOCKED;
+        ?ERR_USER_BLOCKED = Error ->
+            Error;
         {ok, #document{key = UserId, value = #od_user{full_name = FullName}}} ->
             ?info("User '~ts' has logged in (~ts)", [FullName, UserId]),
             {ok, UserId}
@@ -350,7 +350,7 @@ log_error(?ERROR_INVALID_AUTH_REQUEST, IdP, StateToken, Stacktrace) ->
         "Cannot validate login request for IdP '~tp' (state: ~ts) - invalid auth request~n"
         "Stacktrace: ~ts", [IdP, StateToken, iolist_to_binary(lager:pr_stacktrace(Stacktrace))]
     );
-log_error(?ERROR_USER_BLOCKED, IdP, StateToken, _) ->
+log_error(?ERR_USER_BLOCKED, IdP, StateToken, _) ->
     ?auth_debug(
         "Declining login request for IdP '~tp' (state: ~ts) - the user is blocked",
         [IdP, StateToken]
@@ -398,7 +398,7 @@ log_error(?ERROR_ACCOUNT_ALREADY_LINKED_TO_ANOTHER_USER(UserId, OtherUserId), Id
         "Cannot link account from IdP '~tp' for user '~ts' (state: ~ts) - account already linked to user '~ts'",
         [IdP, UserId, StateToken, OtherUserId]
     );
-log_error(?ERROR_INTERNAL_SERVER_ERROR, IdP, StateToken, _) ->
+log_error(?ERR_INTERNAL_SERVER_ERROR(_), IdP, StateToken, _) ->
     % The logging is already done when throwing this error
     ?auth_debug(
         "Cannot validate login request for IdP '~tp' (state: ~ts) - internal server error",

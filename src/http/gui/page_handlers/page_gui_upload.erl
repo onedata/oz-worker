@@ -87,7 +87,7 @@ handle_gui_upload(Req) ->
     GuiType = try
         onedata:gui_by_prefix(GuiPrefix)
     catch error:badarg ->
-        throw(?ERROR_NOT_FOUND)
+        throw(?ERR_NOT_FOUND(?err_ctx()))
     end,
 
     ServiceReleaseVersion = validate_and_authorize(GuiType, GuiId, Req),
@@ -112,7 +112,7 @@ handle_gui_upload(Req) ->
 -spec validate_and_authorize(onedata:gui(), gui_static:gui_id(), cowboy_req:req()) ->
     onedata:release_version() | no_return().
 validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
-    harvester_logic:exists(HarvesterId) orelse throw(?ERROR_NOT_FOUND),
+    harvester_logic:exists(HarvesterId) orelse throw(?ERR_NOT_FOUND(?err_ctx())),
     case token_auth:authenticate_for_rest_interface(Req) of
         {true, ?USER(UserId) = Auth} ->
             ensure_authorized_to_upload_gui(Auth, ?HARVESTER_GUI, HarvesterId),
@@ -122,24 +122,24 @@ validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
                     % Harvester packages are versioned along with Onezone
                     oz_worker:get_release_version();
                 _ ->
-                    throw(?ERROR_FORBIDDEN)
+                    throw(?ERR_FORBIDDEN(?err_ctx()))
             end;
         {true, _} ->
-            throw(?ERROR_FORBIDDEN);
+            throw(?ERR_FORBIDDEN(?err_ctx()));
         false ->
-            throw(?ERROR_UNAUTHORIZED);
+            throw(?ERR_UNAUTHORIZED(?err_ctx(), undefined));
         {error, _} = Error ->
             throw(Error)
     end;
 % Covers all service GUIs
 validate_and_authorize(GuiType, ClusterId, Req) ->
     Service = onedata:service_by_gui(GuiType, ClusterId),
-    lists:member(Service, [?OP_WORKER, ?OP_PANEL]) orelse throw(?ERROR_NOT_FOUND),
+    lists:member(Service, [?OP_WORKER, ?OP_PANEL]) orelse throw(?ERR_NOT_FOUND(?err_ctx())),
     Cluster = try cluster_logic:get(?ROOT, ClusterId) of
         {ok, #od_cluster{type = ?ONEPROVIDER} = Cl} -> Cl;
-        _ -> throw(?ERROR_NOT_FOUND)
+        _ -> throw(?ERR_NOT_FOUND(?err_ctx()))
     catch _:_ ->
-        throw(?ERROR_NOT_FOUND)
+        throw(?ERR_NOT_FOUND(?err_ctx()))
     end,
 
     {ReleaseVersion, _, _} = case Service of
@@ -152,9 +152,9 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
             ensure_authorized_to_upload_gui(Auth, GuiType, ClusterId),
             ReleaseVersion;
         {true, _} ->
-            throw(?ERROR_FORBIDDEN);
+            throw(?ERR_FORBIDDEN(?err_ctx()));
         false ->
-            throw(?ERROR_UNAUTHORIZED);
+            throw(?ERR_UNAUTHORIZED(?err_ctx(), undefined));
         {error, _} = Error ->
             throw(Error)
     end.
@@ -220,7 +220,7 @@ stream_and_deploy_package(Req, GuiType, GuiId, ServiceReleaseVersion) ->
             [GuiPrefix, GuiId, Type, Message],
             Stacktrace
         ),
-        ?ERROR_INTERNAL_SERVER_ERROR
+        ?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined)
     after
         mochitemp:rmtempdir(TempDir)
     end.

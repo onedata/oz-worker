@@ -243,9 +243,9 @@ add_user_with_privileges_test(Config) ->
                 },
                 bad_values = [
                     {<<"privileges">>, <<"">>,
-                        ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
+                        ?ERR_BAD_VALUE_LIST_OF_STRINGS(<<"privileges">>)},
                     {<<"privileges">>, [?SPACE_VIEW, ?GROUP_VIEW],
-                        ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
+                        ?ERR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
                 ]
             }
         },
@@ -606,7 +606,7 @@ add_owner_test(Config) ->
         },
         logic_spec = LogicSpec#logic_spec{
             args = [auth, Space, userId],
-            expected_result = ?ERROR_REASON(?ERROR_ALREADY_EXISTS)
+            expected_result = ?ERROR_REASON(?ERR_ALREADY_EXISTS)
         }
     },
     ?assert(api_test_utils:run_tests(

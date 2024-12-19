@@ -139,9 +139,9 @@ create_test(Config) ->
             },
             bad_values = [
                 {<<"type">>, kingdom,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
-                {<<"type">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"type">>)}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
+                {<<"type">>, 1234, ?ERR_BAD_VALUE_STRING(<<"type">>)}
+                | ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
             ]
         }
     },
@@ -432,49 +432,49 @@ get_test(Config) ->
         lists:foreach(fun(Auth) ->
             case AuthorizedClients of
                 {none, ExpError} ->
-                    ?assertMatch(ExpError, GetWithAuthHint(Scope, Auth, AuthHint));
+                    ?assertEqual(ExpError, GetWithAuthHint(Scope, Auth, AuthHint));
                 [_ | _] ->
                     case lists:member(Auth, AuthorizedClients) of
                         true ->
                             ?assertMatch({ok, _}, GetWithAuthHint(Scope, Auth, AuthHint));
                         false ->
-                            ?assertMatch(?ERROR_FORBIDDEN, GetWithAuthHint(Scope, Auth, AuthHint))
+                            ?assertMatch(?ERR_FORBIDDEN, GetWithAuthHint(Scope, Auth, AuthHint))
                     end
             end
         end, AllClients)
     end, [
         {private, undefined, [?USER(MemberWithView)]},
-        {private, ?THROUGH_USER(MemberWithView), {none, ?ERROR_FORBIDDEN}},
-        {private, ?THROUGH_USER(MemberWithoutView), {none, ?ERROR_FORBIDDEN}},
-        {private, ?THROUGH_GROUP(ChildGroupId), {none, ?ERROR_FORBIDDEN}},
-        {private, ?THROUGH_GROUP(ParentGroupId), {none, ?ERROR_FORBIDDEN}},
-        {private, ?THROUGH_SPACE(SpaceId), {none, ?ERROR_FORBIDDEN}},
-        {private, ?THROUGH_PROVIDER(ProviderId), {none, ?ERROR_FORBIDDEN}},
-        {private, ?THROUGH_CLUSTER(ProviderId), {none, ?ERROR_FORBIDDEN}},
-        {private, ?THROUGH_HANDLE_SERVICE(HandleServiceId), {none, ?ERROR_FORBIDDEN}},
-        {private, ?THROUGH_HANDLE(HandleId), {none, ?ERROR_FORBIDDEN}},
-        {private, ?THROUGH_HARVESTER(HarvesterId), {none, ?ERROR_FORBIDDEN}},
-        {private, ?THROUGH_ATM_INVENTORY(AtmInventoryId), {none, ?ERROR_FORBIDDEN}},
+        {private, ?THROUGH_USER(MemberWithView), {none, ?ERR_FORBIDDEN}},
+        {private, ?THROUGH_USER(MemberWithoutView), {none, ?ERR_FORBIDDEN}},
+        {private, ?THROUGH_GROUP(ChildGroupId), {none, ?ERR_FORBIDDEN}},
+        {private, ?THROUGH_GROUP(ParentGroupId), {none, ?ERR_FORBIDDEN}},
+        {private, ?THROUGH_SPACE(SpaceId), {none, ?ERR_FORBIDDEN}},
+        {private, ?THROUGH_PROVIDER(ProviderId), {none, ?ERR_FORBIDDEN}},
+        {private, ?THROUGH_CLUSTER(ProviderId), {none, ?ERR_FORBIDDEN}},
+        {private, ?THROUGH_HANDLE_SERVICE(HandleServiceId), {none, ?ERR_FORBIDDEN}},
+        {private, ?THROUGH_HANDLE(HandleId), {none, ?ERR_FORBIDDEN}},
+        {private, ?THROUGH_HARVESTER(HarvesterId), {none, ?ERR_FORBIDDEN}},
+        {private, ?THROUGH_ATM_INVENTORY(AtmInventoryId), {none, ?ERR_FORBIDDEN}},
 
         {protected, undefined, [?USER(MemberWithView), ?USER(MemberWithoutView), ?PROVIDER(ProviderId)]},
         {protected, ?THROUGH_USER(MemberWithView), [?USER(MemberWithView)]},
         {protected, ?THROUGH_USER(MemberWithoutView), [?USER(MemberWithoutView)]},
         {protected, ?THROUGH_GROUP(ChildGroupId), [?USER(MemberWithView), ?USER(MemberWithoutView)]},
-        {protected, ?THROUGH_GROUP(ParentGroupId), {none, ?ERROR_NOT_FOUND}},
-        {protected, ?THROUGH_SPACE(SpaceId), {none, ?ERROR_NOT_FOUND}},
+        {protected, ?THROUGH_GROUP(ParentGroupId), {none, ?ERR_NOT_FOUND}},
+        {protected, ?THROUGH_SPACE(SpaceId), {none, ?ERR_NOT_FOUND}},
         {protected, ?THROUGH_PROVIDER(ProviderId), [?PROVIDER(ProviderId), ?USER(MemberWithView)]},
-        {protected, ?THROUGH_CLUSTER(ProviderId), {none, ?ERROR_NOT_FOUND}},
-        {protected, ?THROUGH_HANDLE_SERVICE(HandleServiceId), {none, ?ERROR_NOT_FOUND}},
-        {protected, ?THROUGH_HANDLE(HandleId), {none, ?ERROR_NOT_FOUND}},
-        {protected, ?THROUGH_HARVESTER(HarvesterId), {none, ?ERROR_NOT_FOUND}},
-        {protected, ?THROUGH_ATM_INVENTORY(AtmInventoryId), {none, ?ERROR_NOT_FOUND}},
+        {protected, ?THROUGH_CLUSTER(ProviderId), {none, ?ERR_NOT_FOUND}},
+        {protected, ?THROUGH_HANDLE_SERVICE(HandleServiceId), {none, ?ERR_NOT_FOUND}},
+        {protected, ?THROUGH_HANDLE(HandleId), {none, ?ERR_NOT_FOUND}},
+        {protected, ?THROUGH_HARVESTER(HarvesterId), {none, ?ERR_NOT_FOUND}},
+        {protected, ?THROUGH_ATM_INVENTORY(AtmInventoryId), {none, ?ERR_NOT_FOUND}},
 
         {shared, undefined, [?USER(MemberWithView), ?USER(MemberWithoutView), ?PROVIDER(ProviderId)]},
         {shared, ?THROUGH_USER(MemberWithView), [?USER(MemberWithView)]},
         {shared, ?THROUGH_USER(MemberWithoutView), [?USER(MemberWithoutView)]},
-        {shared, ?THROUGH_USER(NonAdmin), {none, ?ERROR_NOT_FOUND}},
+        {shared, ?THROUGH_USER(NonAdmin), {none, ?ERR_NOT_FOUND}},
         {shared, ?THROUGH_GROUP(ParentGroupId), [?USER(MemberWithView), ?USER(MemberWithoutView)]},
-        {shared, ?THROUGH_GROUP(ChildGroupId), {none, ?ERROR_NOT_FOUND}},
+        {shared, ?THROUGH_GROUP(ChildGroupId), {none, ?ERR_NOT_FOUND}},
         {shared, ?THROUGH_SPACE(SpaceId), [?PROVIDER(ProviderId), ?USER(MemberWithView), ?USER(MemberWithoutView)]},
         {shared, ?THROUGH_PROVIDER(ProviderId), [?PROVIDER(ProviderId), ?USER(MemberWithView), ?USER(MemberWithoutView)]},
         {shared, ?THROUGH_CLUSTER(ProviderId), [?PROVIDER(ProviderId), ?USER(MemberWithView), ?USER(MemberWithoutView)]},
@@ -549,9 +549,9 @@ update_test(Config) ->
             },
             bad_values = [
                 {<<"type">>, kingdom,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
-                {<<"type">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"type">>)}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
+                {<<"type">>, 1234, ?ERR_BAD_VALUE_STRING(<<"type">>)}
+                | ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
             ]
         }
     },
@@ -642,12 +642,12 @@ protected_group_test(Config) ->
             module = group_logic,
             function = delete,
             args = [auth, GroupId],
-            expected_result = ?ERROR_REASON(?ERROR_PROTECTED_GROUP)
+            expected_result = ?ERROR_REASON(?ERR_PROTECTED_GROUP)
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_group, id = GroupId, aspect = instance},
-            expected_result_op = ?ERROR_REASON(?ERROR_PROTECTED_GROUP)
+            expected_result_op = ?ERROR_REASON(?ERR_PROTECTED_GROUP)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),

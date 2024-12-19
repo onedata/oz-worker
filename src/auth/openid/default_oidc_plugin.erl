@@ -148,7 +148,7 @@ validate_login(IdP, #{<<"code">> := Code}, RedirectUri) ->
 refresh_access_token(IdP, RefreshToken) ->
     case auth_config:has_offline_access_enabled(IdP) of
         false ->
-            ?ERROR_NOT_SUPPORTED;
+            ?ERR_NOT_SUPPORTED(?err_ctx());
         true ->
             {NewAccessToken, Expires, NewRefreshToken} = acquire_access_token(IdP, #{
                 <<"grant_type">> => <<"refresh_token">>,

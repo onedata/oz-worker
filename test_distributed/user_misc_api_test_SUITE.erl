@@ -115,14 +115,14 @@ create_with_predefined_id_test(Config) ->
     ?assertEqual(ExpUsername, User#od_user.username),
 
     % Second try should fail (such id exists)
-    ?assertMatch(?ERROR_ALREADY_EXISTS,
+    ?assertMatch(?ERR_ALREADY_EXISTS,
         oz_test_utils:call_oz(
             Config, user_logic, create, [?ROOT, PredefinedUserId, #{<<"fullName">> => ?UNIQUE_STRING}]
         )
     ),
 
     % Reusing the already occupied username should fail
-    ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>),
+    ?assertMatch(?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>),
         oz_test_utils:call_oz(
             Config, user_logic, create, [?ROOT, #{<<"username">> => ExpUsername}]
         )
@@ -394,19 +394,19 @@ update_test(Config) ->
                 <<"username">> => [CurrentUsername, fun() -> ?UNIQUE_STRING end]
             },
             bad_values = [
-                {<<"username">>, <<"">>, ?ERROR_BAD_VALUE_USERNAME},
-                {<<"username">>, <<"_asd">>, ?ERROR_BAD_VALUE_USERNAME},
-                {<<"username">>, <<"-asd">>, ?ERROR_BAD_VALUE_USERNAME},
-                {<<"username">>, <<"asd_">>, ?ERROR_BAD_VALUE_USERNAME},
-                {<<"username">>, null, ?ERROR_BAD_VALUE_USERNAME},
-                {<<"username">>, <<"verylongusernamewithatleast20chars">>, ?ERROR_BAD_VALUE_USERNAME},
-                {<<"username">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"username">>)},
+                {<<"username">>, <<"">>, ?ERR_BAD_VALUE_USERNAME},
+                {<<"username">>, <<"_asd">>, ?ERR_BAD_VALUE_USERNAME},
+                {<<"username">>, <<"-asd">>, ?ERR_BAD_VALUE_USERNAME},
+                {<<"username">>, <<"asd_">>, ?ERR_BAD_VALUE_USERNAME},
+                {<<"username">>, null, ?ERR_BAD_VALUE_USERNAME},
+                {<<"username">>, <<"verylongusernamewithatleast20chars">>, ?ERR_BAD_VALUE_USERNAME},
+                {<<"username">>, 1234, ?ERR_BAD_VALUE_STRING(<<"username">>)},
                 {<<"username">>, OccupiedUsername,
-                    ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>)},
-                {<<"fullName">>, <<"a_d">>, ?ERROR_BAD_VALUE_FULL_NAME},
-                {<<"fullName">>, <<"_ad">>, ?ERROR_BAD_VALUE_FULL_NAME},
-                {<<"fullName">>, <<"ad_">>, ?ERROR_BAD_VALUE_FULL_NAME}
-                | ?BAD_VALUES_FULL_NAME(?ERROR_BAD_VALUE_FULL_NAME)
+                    ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>)},
+                {<<"fullName">>, <<"a_d">>, ?ERR_BAD_VALUE_FULL_NAME},
+                {<<"fullName">>, <<"_ad">>, ?ERR_BAD_VALUE_FULL_NAME},
+                {<<"fullName">>, <<"ad_">>, ?ERR_BAD_VALUE_FULL_NAME}
+                | ?BAD_VALUES_FULL_NAME(?ERR_BAD_VALUE_FULL_NAME)
             ]
         }
     },
@@ -447,7 +447,7 @@ update_test(Config) ->
 change_password_test(Config) ->
     TestCases = [
         % {WasBasicAuthEnabled, OldPassword, ExpHttpCode, ExpResult}
-        {false, undefined, ?HTTP_401_UNAUTHORIZED, ?ERROR_REASON(?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED))},
+        {false, undefined, ?HTTP_401_UNAUTHORIZED, ?ERROR_REASON(?ERR_UNAUTHORIZED(?ERR_BASIC_AUTH_DISABLED))},
         {true, undefined, ?HTTP_204_NO_CONTENT, ?OK_RES},
         {true, ?UNIQUE_STRING, ?HTTP_204_NO_CONTENT, ?OK_RES}
     ],
@@ -487,17 +487,17 @@ change_password_test(Config) ->
                     <<"newPassword">> => [?UNIQUE_STRING]
                 },
                 bad_values = [
-                    {<<"oldPassword">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"oldPassword">>)},
-                    {<<"oldPassword">>, 34.5, ?ERROR_BAD_VALUE_BINARY(<<"oldPassword">>)},
-                    {<<"oldPassword">>, <<"bad-old-password">>, ?ERROR_UNAUTHORIZED(case WasBasicAuthEnabled of
-                        false -> ?ERROR_BASIC_AUTH_DISABLED;
-                        true -> ?ERROR_BAD_BASIC_CREDENTIALS
+                    {<<"oldPassword">>, 1234, ?ERR_BAD_VALUE_STRING(<<"oldPassword">>)},
+                    {<<"oldPassword">>, 34.5, ?ERR_BAD_VALUE_STRING(<<"oldPassword">>)},
+                    {<<"oldPassword">>, <<"bad-old-password">>, ?ERR_UNAUTHORIZED(case WasBasicAuthEnabled of
+                        false -> ?ERR_BASIC_AUTH_DISABLED;
+                        true -> ?ERR_BAD_BASIC_CREDENTIALS
                     end)},
-                    {<<"newPassword">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"newPassword">>)},
-                    {<<"newPassword">>, 34.5, ?ERROR_BAD_VALUE_BINARY(<<"newPassword">>)},
-                    {<<"newPassword">>, null, ?ERROR_BAD_VALUE_PASSWORD},
-                    {<<"newPassword">>, <<"">>, ?ERROR_BAD_VALUE_PASSWORD},
-                    {<<"newPassword">>, <<"short">>, ?ERROR_BAD_VALUE_PASSWORD}
+                    {<<"newPassword">>, 1234, ?ERR_BAD_VALUE_STRING(<<"newPassword">>)},
+                    {<<"newPassword">>, 34.5, ?ERR_BAD_VALUE_STRING(<<"newPassword">>)},
+                    {<<"newPassword">>, null, ?ERR_BAD_VALUE_PASSWORD},
+                    {<<"newPassword">>, <<"">>, ?ERR_BAD_VALUE_PASSWORD},
+                    {<<"newPassword">>, <<"short">>, ?ERR_BAD_VALUE_PASSWORD}
                 ]
             }
         },
@@ -530,11 +530,11 @@ update_basic_auth_config_test(Config) ->
         % {WasBasicAuthEnabled, OldPassword, Data, ExpHttpCode, ExpResult}
         {
             false, undefined, #{<<"newPassword">> => ?UNIQUE_STRING},
-            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)
+            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERR_BASIC_AUTH_DISABLED)
         },
         {
             false, ?UNIQUE_STRING, #{<<"newPassword">> => ?UNIQUE_STRING},
-            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)
+            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERR_BASIC_AUTH_DISABLED)
         },
         {
             true, undefined, #{<<"newPassword">> => ?UNIQUE_STRING},
@@ -547,19 +547,19 @@ update_basic_auth_config_test(Config) ->
 
         {
             false, undefined, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => false},
-            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)
+            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERR_BASIC_AUTH_DISABLED)
         },
         {
             false, ?UNIQUE_STRING, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => false},
-            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)
+            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERR_BASIC_AUTH_DISABLED)
         },
         {
             true, undefined, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => false},
-            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)
+            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERR_BASIC_AUTH_DISABLED)
         },
         {
             true, ?UNIQUE_STRING, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => false},
-            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)
+            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERR_BASIC_AUTH_DISABLED)
         },
 
         {
@@ -686,11 +686,11 @@ update_basic_auth_config_test(Config) ->
                     [Val]
                 end, Data),
                 bad_values = [
-                    {<<"newPassword">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"newPassword">>)},
-                    {<<"newPassword">>, 34.5, ?ERROR_BAD_VALUE_BINARY(<<"newPassword">>)},
-                    {<<"newPassword">>, null, ?ERROR_BAD_VALUE_PASSWORD},
-                    {<<"newPassword">>, <<"">>, ?ERROR_BAD_VALUE_PASSWORD},
-                    {<<"newPassword">>, <<"short">>, ?ERROR_BAD_VALUE_PASSWORD}
+                    {<<"newPassword">>, 1234, ?ERR_BAD_VALUE_STRING(<<"newPassword">>)},
+                    {<<"newPassword">>, 34.5, ?ERR_BAD_VALUE_STRING(<<"newPassword">>)},
+                    {<<"newPassword">>, null, ?ERR_BAD_VALUE_PASSWORD},
+                    {<<"newPassword">>, <<"">>, ?ERR_BAD_VALUE_PASSWORD},
+                    {<<"newPassword">>, <<"short">>, ?ERR_BAD_VALUE_PASSWORD}
                 ]
             }
         },
@@ -915,7 +915,7 @@ acquire_idp_access_token_test(Config) ->
             module = user_logic,
             function = acquire_idp_access_token,
             args = [auth, U1, dummyIdP],
-            expected_result = ?ERROR_REASON(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, []))
+            expected_result = ?ERROR_REASON(?ERR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, []))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -943,7 +943,7 @@ acquire_idp_access_token_test(Config) ->
         },
         logic_spec = LogicSpec#logic_spec{
             args = [auth, U1, inexistentIdP],
-            expected_result = ?ERROR_REASON(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, [dummyIdP]))
+            expected_result = ?ERROR_REASON(?ERR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, [dummyIdP]))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
@@ -957,7 +957,7 @@ acquire_idp_access_token_test(Config) ->
         },
         logic_spec = LogicSpec#logic_spec{
             args = [auth, U1, dummyIdP],
-            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+            expected_result = ?ERROR_REASON(?ERR_NOT_FOUND)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
@@ -1183,7 +1183,7 @@ create_test(Config) ->
                     case Username of default_value -> #{}; Val -> #{<<"username">> => [Val]} end,
                     case Password of default_value -> #{}; Val -> #{<<"password">> => [Val]} end
                 ]),
-                bad_values = ?BAD_VALUES_FULL_NAME(?ERROR_BAD_VALUE_FULL_NAME)
+                bad_values = ?BAD_VALUES_FULL_NAME(?ERR_BAD_VALUE_FULL_NAME)
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUp, EnvTearDown, undefined))
@@ -1292,11 +1292,11 @@ toggle_access_block_test(Config) ->
             required = [<<"blocked">>],
             correct_values = #{<<"blocked">> => [true, false]},
             bad_values = [
-                {<<"blocked">>, 1234, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
-                {<<"blocked">>, 34.5, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
-                {<<"blocked">>, null, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
-                {<<"blocked">>, <<"">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
-                {<<"blocked">>, <<"short">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"blocked">>)}
+                {<<"blocked">>, 1234, ?ERR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
+                {<<"blocked">>, 34.5, ?ERR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
+                {<<"blocked">>, null, ?ERR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
+                {<<"blocked">>, <<"">>, ?ERR_BAD_VALUE_BOOLEAN(<<"blocked">>)},
+                {<<"blocked">>, <<"short">>, ?ERR_BAD_VALUE_BOOLEAN(<<"blocked">>)}
             ]
         }
     },
@@ -1417,19 +1417,19 @@ get_space_membership_requests_error_marketplace_disabled_test(Config) ->
             module = user_logic,
             function = get_space_membership_requests,
             args = [auth, SubjectUserId],
-            expected_result = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+            expected_result = ?ERROR_REASON(?ERR_SPACE_MARKETPLACE_DISABLED)
         },
         rest_spec = #rest_spec{
             method = get,
             path = [<<"/user/space_membership_requests">>],
             expected_code = ?HTTP_400_BAD_REQUEST,
-            expected_body = #{<<"error">> => errors:to_json(?ERROR_SPACE_MARKETPLACE_DISABLED)}
+            expected_body = #{<<"error">> => errors:to_json(?ERR_SPACE_MARKETPLACE_DISABLED)}
         },
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_user, id = SubjectUserId, aspect = space_membership_requests},
-            expected_result_op = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED),
-            expected_result_gui = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+            expected_result_op = ?ERROR_REASON(?ERR_SPACE_MARKETPLACE_DISABLED),
+            expected_result_gui = ?ERROR_REASON(?ERR_SPACE_MARKETPLACE_DISABLED)
         }
     })).
 

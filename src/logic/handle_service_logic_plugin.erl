@@ -38,7 +38,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERROR_NOT_FOUND
+%%      if there was an error, such as ?ERR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -49,7 +49,7 @@ fetch_entity(#gri{id = HServiceId}) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {HandleService, Revision}};
         _ ->
-            ?ERROR_NOT_FOUND
+            ?ERR_NOT_FOUND(?err_ctx())
     end.
 
 
@@ -278,7 +278,7 @@ update(Req = #el_req{gri = #gri{id = HServiceId, aspect = {group_privileges, Gro
 delete(#el_req{gri = #gri{id = HServiceId, aspect = instance}}) ->
     case handle_registry:service_has_any_entries(HServiceId) of
         true ->
-            ?ERROR_CANNOT_DELETE_NON_EMPTY_HANDLE_SERVICE;
+            ?ERR_CANNOT_DELETE_NON_EMPTY_HANDLE_SERVICE(?err_ctx());
         false ->
             entity_graph:delete_with_relations(od_handle_service, HServiceId)
     end;

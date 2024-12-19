@@ -341,7 +341,7 @@ ensure_operation_supported(State = #state{req = #el_req{gri = #gri{scope = auto}
 ensure_operation_supported(State) ->
     case ensure_operation_supported_internal(State) of
         true -> State;
-        false -> throw(?ERROR_NOT_SUPPORTED)
+        false -> throw(?ERR_NOT_SUPPORTED(?err_ctx()))
     end.
 
 
@@ -369,7 +369,7 @@ ensure_operation_supported_internal(State) ->
 ensure_exists(State) ->
     case ensure_exists_internal(State) of
         true -> State;
-        false -> throw(?ERROR_NOT_FOUND)
+        false -> throw(?ERR_NOT_FOUND(?err_ctx()))
     end.
 
 
@@ -474,10 +474,10 @@ ensure_authorized_regarding_api_caveats(#state{req = #el_req{auth = Auth, operat
 -spec report_unauthorized(#state{}) -> no_return().
 report_unauthorized(#state{req = #el_req{auth = ?NOBODY}}) ->
     % The client was not authenticated -> unauthorized
-    throw(?ERROR_UNAUTHORIZED);
+    throw(?ERR_UNAUTHORIZED(?err_ctx(), undefined));
 report_unauthorized(_) ->
     % The client was authenticated but cannot access the aspect -> forbidden
-    throw(?ERROR_FORBIDDEN).
+    throw(?ERR_FORBIDDEN(?err_ctx())).
 
 
 %%--------------------------------------------------------------------

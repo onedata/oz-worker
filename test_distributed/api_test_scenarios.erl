@@ -146,7 +146,7 @@ prepare_entity_not_found_logic_spec(undefined) ->
     undefined;
 prepare_entity_not_found_logic_spec(LogicSpec) ->
     LogicSpec#logic_spec{
-        expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        expected_result = ?ERROR_REASON(?ERR_NOT_FOUND)
     }.
 
 
@@ -154,7 +154,7 @@ prepare_entity_not_found_gs_spec(undefined) ->
     undefined;
 prepare_entity_not_found_gs_spec(GsSpec) ->
     GsSpec#gs_spec{
-        expected_result_op = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        expected_result_op = ?ERROR_REASON(?ERR_NOT_FOUND)
     }.
 
 
@@ -443,7 +443,7 @@ create_forbidden_logic_spec(undefined) ->
     undefined;
 create_forbidden_logic_spec(LogicSpec) ->
     LogicSpec#logic_spec{
-        expected_result = ?ERROR_REASON(?ERROR_FORBIDDEN)
+        expected_result = ?ERROR_REASON(?ERR_FORBIDDEN)
     }.
 
 
@@ -451,7 +451,7 @@ create_forbidden_gs_spec(undefined) ->
     undefined;
 create_forbidden_gs_spec(GsSpec) ->
     GsSpec#gs_spec{
-        expected_result_op = ?ERROR_REASON(?ERROR_FORBIDDEN)
+        expected_result_op = ?ERROR_REASON(?ERR_FORBIDDEN)
     }.
 
 

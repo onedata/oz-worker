@@ -40,7 +40,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERROR_NOT_FOUND
+%%      if there was an error, such as ?ERR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -51,7 +51,7 @@ fetch_entity(#gri{id = AtmWorkflowSchemaId}) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {AtmWorkflowSchema, Revision}};
         _ ->
-            ?ERROR_NOT_FOUND
+            ?ERR_NOT_FOUND(?err_ctx())
     end.
 
 
@@ -143,7 +143,7 @@ create(#el_req{gri = #gri{id = AtmWorkflowSchemaId, aspect = dump}, data = Data}
 
         atm_workflow_schema_revision_registry:has_revision(
             IncludedRevision, AtmWorkflowSchema#od_atm_workflow_schema.revision_registry
-        ) orelse throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"includeRevision">>)),
+        ) orelse throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"includeRevision">>)),
 
         {ok, value, od_atm_workflow_schema:dump_to_json(
             AtmWorkflowSchemaId, AtmWorkflowSchema, IncludedRevision

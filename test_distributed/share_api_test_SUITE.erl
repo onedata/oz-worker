@@ -54,7 +54,7 @@ all() ->
 
 
 -define(GEN_NAME_BAD_VALUES(), lists:map(fun(BadName) ->
-    {<<"name">>, BadName, ?ERROR_BAD_DATA(
+    {<<"name">>, BadName, ?ERR_BAD_DATA(
         <<"name">>, <<"Bad value: ", (?SHARE_NAME_REQUIREMENTS_DESCRIPTION)/binary>>
     )}
 end, [
@@ -181,21 +181,21 @@ create_test(Config) ->
     ShareFileGuidWithUndefinedShareId = file_id:pack_share_guid(ExampleFileUuid, SpaceId, undefined),
     ShareFileGuidWithBadFileUuid = file_id:pack_share_guid(<<"">>, SpaceId, ProposedShareId),
     BadDataValues = ?GEN_NAME_BAD_VALUES() ++ [
-        {<<"shareId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"shareId">>)},
-        {<<"shareId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"shareId">>)},
-        {<<"description">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"description">>)},
-        {<<"description">>, ?RAND_UNICODE_STR(100001), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"description">>, 100000)},
-        {<<"rootFileId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"rootFileId">>)},
-        {<<"rootFileId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"rootFileId">>)},
-        {<<"rootFileId">>, NotAGuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
-        {<<"rootFileId">>, ExampleFileUuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
-        {<<"rootFileId">>, NotAShareFileGuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
-        {<<"rootFileId">>, ShareFileGuidWithBadSpaceId, ?ERROR_BAD_DATA(<<"rootFileId">>)},
-        {<<"rootFileId">>, ShareFileGuidWithUndefinedShareId, ?ERROR_BAD_DATA(<<"rootFileId">>)},
-        {<<"rootFileId">>, ShareFileGuidWithBadFileUuid, ?ERROR_BAD_DATA(<<"rootFileId">>)},
-        {<<"fileType">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"fileType">>)},
-        {<<"fileType">>, <<"">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [?REGULAR_FILE_TYPE, ?DIRECTORY_TYPE])},
-        {<<"fileType">>, atom, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [?REGULAR_FILE_TYPE, ?DIRECTORY_TYPE])}
+        {<<"shareId">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"shareId">>)},
+        {<<"shareId">>, 1234, ?ERR_BAD_VALUE_STRING(<<"shareId">>)},
+        {<<"description">>, 1234, ?ERR_BAD_VALUE_STRING(<<"description">>)},
+        {<<"description">>, ?RAND_UNICODE_STR(100001), ?ERR_BAD_VALUE_TEXT_TOO_LARGE(<<"description">>, 100000)},
+        {<<"rootFileId">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"rootFileId">>)},
+        {<<"rootFileId">>, 1234, ?ERR_BAD_VALUE_STRING(<<"rootFileId">>)},
+        {<<"rootFileId">>, NotAGuid, ?ERR_BAD_DATA(<<"rootFileId">>, undefined)},
+        {<<"rootFileId">>, ExampleFileUuid, ?ERR_BAD_DATA(<<"rootFileId">>, undefined)},
+        {<<"rootFileId">>, NotAShareFileGuid, ?ERR_BAD_DATA(<<"rootFileId">>, undefined)},
+        {<<"rootFileId">>, ShareFileGuidWithBadSpaceId, ?ERR_BAD_DATA(<<"rootFileId">>, undefined)},
+        {<<"rootFileId">>, ShareFileGuidWithUndefinedShareId, ?ERR_BAD_DATA(<<"rootFileId">>, undefined)},
+        {<<"rootFileId">>, ShareFileGuidWithBadFileUuid, ?ERR_BAD_DATA(<<"rootFileId">>, undefined)},
+        {<<"fileType">>, 1234, ?ERR_BAD_VALUE_STRING(<<"fileType">>)},
+        {<<"fileType">>, <<"">>, ?ERR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [?REGULAR_FILE_TYPE, ?DIRECTORY_TYPE])},
+        {<<"fileType">>, atom, ?ERR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [?REGULAR_FILE_TYPE, ?DIRECTORY_TYPE])}
     ],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -252,8 +252,8 @@ create_test(Config) ->
                 <<"spaceId">> => [SpaceId]
             },
             bad_values = lists:flatten([
-                {<<"spaceId">>, <<"">>, ?ERROR_FORBIDDEN},
-                {<<"spaceId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN},
+                {<<"spaceId">>, <<"">>, ?ERR_FORBIDDEN},
+                {<<"spaceId">>, <<"asdq4ewfs">>, ?ERR_FORBIDDEN},
                 BadDataValues
             ])
         }
@@ -272,8 +272,8 @@ create_test(Config) ->
         },
         data_spec = DataSpec#data_spec{
             bad_values = lists:flatten([
-                [{<<"spaceId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"spaceId">>)},
-                    {<<"spaceId">>, 1234, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"spaceId">>)}],
+                [{<<"spaceId">>, <<"">>, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"spaceId">>)},
+                    {<<"spaceId">>, 1234, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"spaceId">>)}],
                 BadDataValues
             ])
         }
@@ -475,7 +475,7 @@ update_test(Config) ->
                 <<"description">> => [<<"">>, ?RAND_UNICODE_STR(1397)]
             },
             bad_values = ?GEN_NAME_BAD_VALUES() ++ [
-                {<<"description">>, ?RAND_UNICODE_STR(100001), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"description">>, 100000)}
+                {<<"description">>, ?RAND_UNICODE_STR(100001), ?ERR_BAD_VALUE_TEXT_TOO_LARGE(<<"description">>, 100000)}
             ]
         }
     },
@@ -624,19 +624,19 @@ get_shared_file_or_directory_data_test_base(Config, SubpathWithQs) ->
     end,
 
     % the space is not supported yet
-    ?assert(CheckResult(CorrectObjectId, ?ERROR_SERVICE_UNAVAILABLE)),
+    ?assert(CheckResult(CorrectObjectId, ?ERR_SERVICE_UNAVAILABLE)),
 
     % the space gets support, but the provider is offline
     {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config),
     oz_test_utils:support_space_by_provider(Config, ProviderId, SpaceId),
     clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
-    ?assert(CheckResult(CorrectObjectId, ?ERROR_SERVICE_UNAVAILABLE)),
+    ?assert(CheckResult(CorrectObjectId, ?ERR_SERVICE_UNAVAILABLE)),
 
     % the provider connects, but it is in legacy version
     update_provider_version(Config, ProviderId, <<"19.02.3">>),
     start_provider_graphsync_channel(Config, ProviderId, ProviderToken),
     clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
-    ?assert(CheckResult(CorrectObjectId, ?ERROR_NOT_IMPLEMENTED)),
+    ?assert(CheckResult(CorrectObjectId, ?ERR_NOT_IMPLEMENTED)),
 
     % the provider is connected and in up-to-date version
     update_provider_version(Config, ProviderId, <<"20.02.1">>),
@@ -647,18 +647,18 @@ get_shared_file_or_directory_data_test_base(Config, SubpathWithQs) ->
 
     % the ObjectId is not valid
     clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
-    ?assert(CheckResult(<<"blahblahblah">>, ?ERROR_BAD_DATA(<<"FileId">>))),
+    ?assert(CheckResult(<<"blahblahblah">>, ?ERR_BAD_DATA(<<"FileId">>, undefined))),
 
     % the ObjectId is not a share guid
     NonShareGuid = file_id:pack_guid(str_utils:rand_hex(16), str_utils:rand_hex(16)),
     {ok, NonShareObjectId} = file_id:guid_to_objectid(NonShareGuid),
     clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
-    ?assert(CheckResult(NonShareObjectId, ?ERROR_BAD_DATA(<<"FileId">>))),
+    ?assert(CheckResult(NonShareObjectId, ?ERR_BAD_DATA(<<"FileId">>, undefined))),
 
     % the share does not exist
     NonExistingShareObjectId = gen_example_object_id(<<"non-existent-share">>),
     clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
-    ?assert(CheckResult(NonExistingShareObjectId, ?ERROR_NOT_FOUND)).
+    ?assert(CheckResult(NonExistingShareObjectId, ?ERR_NOT_FOUND)).
 
 
 % The SUITE is run on a single node cluster to test caching of chosen providers
@@ -838,13 +838,13 @@ check_shares_data_redirector(Config, ShareId, ProviderId, ProviderVersion, Subpa
     end,
     case ProviderId of
         undefined ->
-            ?assertEqual(ParsedResult, ?ERROR_SERVICE_UNAVAILABLE);
+            ?assertEqual(ParsedResult, ?ERR_SERVICE_UNAVAILABLE);
         _ ->
             case ProviderVersion of
                 <<"18.02", _/binary>> ->
-                    ?assertEqual(ParsedResult, ?ERROR_NOT_IMPLEMENTED);
+                    ?assertEqual(ParsedResult, ?ERR_NOT_IMPLEMENTED);
                 <<"19.02", _/binary>> ->
-                    ?assertEqual(ParsedResult, ?ERROR_NOT_IMPLEMENTED);
+                    ?assertEqual(ParsedResult, ?ERR_NOT_IMPLEMENTED);
                 _ ->
                     ?assertEqual(ParsedResult, {ok, expected_shared_data_redirect(
                         Config, ProviderId, ExampleObjectId, SubpathWithQs

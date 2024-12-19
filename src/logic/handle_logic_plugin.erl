@@ -42,7 +42,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERROR_NOT_FOUND
+%%      if there was an error, such as ?ERR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -53,7 +53,7 @@ fetch_entity(#gri{id = HandleId}) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Handle, Revision}};
         _ ->
-            ?ERROR_NOT_FOUND
+            ?ERR_NOT_FOUND(?err_ctx())
     end.
 
 
@@ -341,19 +341,19 @@ authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = 
     ShareId = maps:get(<<"resourceId">>, Req#el_req.data, <<"">>),
     SpaceId = try share_logic_plugin:fetch_entity(#gri{id = ShareId}) of
         {error, _} ->
-            throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>));
+            throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"resourceId">>));
         {true, {#od_share{space = SpId}, _}} ->
             SpId
     catch _:_ ->
-        throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>))
+        throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"resourceId">>))
     end,
     HandleService = try handle_service_logic_plugin:fetch_entity(#gri{id = HServiceId}) of
         {error, _} ->
-            throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>));
+            throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"handleServiceId">>));
         {true, {HService, _}} ->
             HService
     catch _:_ ->
-        throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>))
+        throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"handleServiceId">>))
     end,
     case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
@@ -588,7 +588,7 @@ create_handle_unsafe(ShareId, Req = #el_req{gri = GRI, auth = Auth, data = Data}
 
     {ok, #document{value = InitialShareRecord}} = od_share:get(ShareId),
 
-    InitialShareRecord#od_share.handle =:= undefined orelse throw(?ERROR_ALREADY_EXISTS),
+    InitialShareRecord#od_share.handle =:= undefined orelse throw(?ERR_ALREADY_EXISTS(?err_ctx())),
 
     RevisedMetadata = raw_metadata_to_revised_for_publication(
         MetadataPrefix, RawMetadata, ShareId, InitialShareRecord
@@ -645,9 +645,9 @@ create_handle_unsafe(ShareId, Req = #el_req{gri = GRI, auth = Auth, data = Data}
 %% @doc must be run in a critical section for ShareId x HandleId
 -spec update_handle_unsafe(od_handle:id(), od_share:id(), entity_logic:data()) -> ok | no_return().
 update_handle_unsafe(HandleId, ShareId, Data) ->
-    % race condition: in case of the share being already deleted, this will throw ?ERROR_NOT_FOUND
+    % race condition: in case of the share being already deleted, this will throw ?ERR_NOT_FOUND
     #document{value = ShareRecord} = ?check(od_share:get(ShareId)),
-    % race condition: in case of the handle being already deleted, this will throw ?ERROR_NOT_FOUND
+    % race condition: in case of the handle being already deleted, this will throw ?ERR_NOT_FOUND
     #document{value = #od_handle{
         handle_service = HandleService,
         timestamp = PreviousTimestamp,
@@ -688,7 +688,7 @@ update_handle_unsafe(HandleId, ShareId, Data) ->
 %%--------------------------------------------------------------------
 -spec delete_handle_unsafe(od_handle:id(), od_share:id()) -> ok | no_return().
 delete_handle_unsafe(HandleId, ShareId) ->
-    % race condition: in case of the handle being already deleted, this will throw ?ERROR_NOT_FOUND
+    % race condition: in case of the handle being already deleted, this will throw ?ERR_NOT_FOUND
     #document{value = #od_handle{
         handle_service = HandleService,
         resource_id = ShareId,
@@ -723,11 +723,11 @@ delete_handle_unsafe(HandleId, ShareId) ->
 raw_metadata_to_revised_for_publication(MetadataPrefix, RawMetadata, ShareId, ShareRecord) ->
     ParsedMetadata = case oai_xml:parse(RawMetadata) of
         {ok, Parsed} -> Parsed;
-        error -> throw(?ERROR_BAD_VALUE_XML(<<"metadata">>))
+        error -> throw(?ERR_BAD_VALUE_XML(?err_ctx(), <<"metadata">>))
     end,
     case oai_metadata:revise_for_publication(MetadataPrefix, ParsedMetadata, ShareId, ShareRecord) of
         {ok, Revised} -> Revised;
-        error -> throw(?ERROR_BAD_VALUE_XML(<<"metadata">>))
+        error -> throw(?ERR_BAD_VALUE_XML(?err_ctx(), <<"metadata">>))
     end.
 
 

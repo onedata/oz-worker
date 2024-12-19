@@ -262,13 +262,13 @@ create_test_base(Config, Creator, SupplementaryAtmLambdas) ->
                 <<"originalAtmWorkflowSchemaId">> => [?RAND_STR(16)]
             },
             bad_values = lists:flatten([
-                {<<"atmInventoryId">>, 1234, ?ERROR_FORBIDDEN},
-                {<<"atmInventoryId">>, <<"">>, ?ERROR_FORBIDDEN},
-                {<<"atmInventoryId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN},
-                {<<"revision">>, bad_spec, ?ERROR_BAD_VALUE_JSON(<<"revision">>)},
-                {<<"revision">>, [1234], ?ERROR_BAD_VALUE_JSON(<<"revision">>)},
-                {<<"originalAtmWorkflowSchemaId">>, [1234], ?ERROR_BAD_VALUE_BINARY(<<"originalAtmWorkflowSchemaId">>)},
-                {<<"originalAtmWorkflowSchemaId">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"originalAtmWorkflowSchemaId">>)},
+                {<<"atmInventoryId">>, 1234, ?ERR_FORBIDDEN},
+                {<<"atmInventoryId">>, <<"">>, ?ERR_FORBIDDEN},
+                {<<"atmInventoryId">>, <<"asdq4ewfs">>, ?ERR_FORBIDDEN},
+                {<<"revision">>, bad_spec, ?ERR_BAD_VALUE_JSON(<<"revision">>)},
+                {<<"revision">>, [1234], ?ERR_BAD_VALUE_JSON(<<"revision">>)},
+                {<<"originalAtmWorkflowSchemaId">>, [1234], ?ERR_BAD_VALUE_STRING(<<"originalAtmWorkflowSchemaId">>)},
+                {<<"originalAtmWorkflowSchemaId">>, <<>>, ?ERR_BAD_VALUE_EMPTY(<<"originalAtmWorkflowSchemaId">>)},
                 name_summary_bad_data_values()
             ])
         }
@@ -311,10 +311,10 @@ create_test_base(Config, Creator, SupplementaryAtmLambdas) ->
         },
         data_spec = DataSpec#data_spec{
             bad_values = lists:flatten([
-                {<<"atmInventoryId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
-                {<<"atmInventoryId">>, <<"asdq4ewfs">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
-                {<<"revision">>, bad_spec, ?ERROR_BAD_VALUE_JSON(<<"revision">>)},
-                {<<"revision">>, [1234], ?ERROR_BAD_VALUE_JSON(<<"revision">>)},
+                {<<"atmInventoryId">>, <<"">>, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
+                {<<"atmInventoryId">>, <<"asdq4ewfs">>, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
+                {<<"revision">>, bad_spec, ?ERR_BAD_VALUE_JSON(<<"revision">>)},
+                {<<"revision">>, [1234], ?ERR_BAD_VALUE_JSON(<<"revision">>)},
                 name_summary_bad_data_values()
             ])
         }
@@ -533,9 +533,9 @@ dump_test(Config) ->
                 <<"includeRevision">> => [RevisionNumber]
             },
             bad_values = [
-                {<<"includeRevision">>, #{<<"bad">> => <<"data">>}, ?ERROR_BAD_VALUE_INTEGER(<<"includeRevision">>)},
-                {<<"includeRevision">>, -7, ?ERROR_BAD_VALUE_TOO_LOW(<<"includeRevision">>, 1)},
-                {<<"includeRevision">>, 9999999, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"includeRevision">>)}
+                {<<"includeRevision">>, #{<<"bad">> => <<"data">>}, ?ERR_BAD_VALUE_INTEGER(<<"includeRevision">>)},
+                {<<"includeRevision">>, -7, ?ERR_BAD_VALUE_TOO_LOW(<<"includeRevision">>, 1)},
+                {<<"includeRevision">>, 9999999, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"includeRevision">>)}
             ]
         }
     },
@@ -738,8 +738,8 @@ update_test_base(Config, Creator, SupplementaryAtmLambdas, ClientType) ->
                 } end]
             },
             bad_values = lists:flatten([
-                {<<"revision">>, bad_spec, ?ERROR_BAD_VALUE_JSON(<<"revision">>)},
-                {<<"revision">>, [1234], ?ERROR_BAD_VALUE_JSON(<<"revision">>)},
+                {<<"revision">>, bad_spec, ?ERR_BAD_VALUE_JSON(<<"revision">>)},
+                {<<"revision">>, [1234], ?ERR_BAD_VALUE_JSON(<<"revision">>)},
                 name_summary_bad_data_values()
             ])
         }
@@ -780,12 +780,12 @@ insert_revision_test(Config) ->
             module = atm_workflow_schema_logic,
             function = insert_revision,
             args = [auth, AtmWorkflowSchemaId, <<"-17">>, data],
-            expected_result = ?ERROR_REASON(?ERROR_BAD_DATA(<<"targetRevisionNumber">>))
+            expected_result = ?ERROR_REASON(?ERR_BAD_DATA(<<"targetRevisionNumber">>, undefined))
         },
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_atm_workflow_schema, id = AtmWorkflowSchemaId, aspect = {revision, <<"undefined">>}},
-            expected_result_op = ?ERROR_REASON(?ERROR_BAD_DATA(<<"targetRevisionNumber">>))
+            expected_result_op = ?ERROR_REASON(?ERR_BAD_DATA(<<"targetRevisionNumber">>, undefined))
         },
         data_spec = #data_spec{
             required = [
@@ -977,10 +977,10 @@ insert_revision_test_base(Config, Creator, SupplementaryAtmLambdas, ClientType, 
                     override_original_revision_number ->
                         [];
                     take_original_revision_number ->
-                        {<<"originalRevisionNumber">>, [<<"a">>], ?ERROR_BAD_VALUE_INTEGER(<<"originalRevisionNumber">>)}
+                        {<<"originalRevisionNumber">>, [<<"a">>], ?ERR_BAD_VALUE_INTEGER(<<"originalRevisionNumber">>)}
                 end,
-                {<<"atmWorkflowSchemaRevision">>, #{<<"k">> => <<"v">>}, ?ERROR_BAD_DATA(<<"atmWorkflowSchemaRevision">>)},
-                {<<"supplementaryAtmLambdas">>, 987, ?ERROR_BAD_VALUE_JSON(<<"supplementaryAtmLambdas">>)}
+                {<<"atmWorkflowSchemaRevision">>, #{<<"k">> => <<"v">>}, ?ERR_BAD_DATA(<<"atmWorkflowSchemaRevision">>, undefined)},
+                {<<"supplementaryAtmLambdas">>, 987, ?ERR_BAD_VALUE_JSON(<<"supplementaryAtmLambdas">>)}
             ])
         }
     },
@@ -1085,7 +1085,7 @@ delete_revision_test_base(Config, RevisionExistence) ->
             args = [auth, atm_workflow_schema_id, revision_number_to_delete],
             expected_result = case RevisionExistence of
                 existent -> ?OK_RES;
-                nonexistent -> ?ERROR_REASON(?ERROR_NOT_FOUND)
+                nonexistent -> ?ERROR_REASON(?ERR_NOT_FOUND)
             end
         },
         gs_spec = #gs_spec{
@@ -1093,7 +1093,7 @@ delete_revision_test_base(Config, RevisionExistence) ->
             gri = #gri{type = od_atm_workflow_schema, id = atm_workflow_schema_id, aspect = {revision, revision_number_to_delete_binary}},
             expected_result_op = case RevisionExistence of
                 existent -> ?OK_RES;
-                nonexistent -> ?ERROR_REASON(?ERROR_NOT_FOUND)
+                nonexistent -> ?ERROR_REASON(?ERR_NOT_FOUND)
             end
         }
     },
@@ -1168,14 +1168,14 @@ dump_revision_test(Config) ->
         },
         logic_spec = LogicSpec#logic_spec{
             args = [auth, AtmWorkflowSchemaId, 0],
-            expected_result = ?ERROR_REASON(?ERROR_BAD_DATA(<<"revisionNumber">>))
+            expected_result = ?ERROR_REASON(?ERR_BAD_DATA(<<"revisionNumber">>, undefined))
         },
         gs_spec = GsSpec#gs_spec{
             gri = #gri{
                 type = od_atm_workflow_schema, id = AtmWorkflowSchemaId,
                 aspect = {dump_revision, <<"asdf">>}, scope = private
             },
-            expected_result_op = ?ERROR_REASON(?ERROR_BAD_DATA(<<"revisionNumber">>))
+            expected_result_op = ?ERROR_REASON(?ERR_BAD_DATA(<<"revisionNumber">>, undefined))
         }
     })).
 
@@ -1251,7 +1251,7 @@ bad_supplementary_lambdas_data_test(_Config) ->
     AnotherAtmInventoryId = ozt_users:create_atm_inventory_for(UserBeta),
 
     % failing to provide the supplementary lambdas should cause bad lambda reference errors
-    ExpBadLambdaReferenceError = ?ERROR_BAD_DATA(
+    ExpBadLambdaReferenceError = ?ERR_BAD_DATA(
         <<"tasks">>,
         <<"The lambda id '", TheOnlyAtmLambdaId/binary, "' referenced by one of the tasks was not found or is "
         "not available for the requesting client. Consider providing supplementary "
@@ -1268,7 +1268,7 @@ bad_supplementary_lambdas_data_test(_Config) ->
 
     % providing invalid lambda definitions should cause data validation errors from lambda creation procedures
     ?assertMatch(
-        ?ERROR_BAD_DATA(<<"supplementaryAtmLambdas[", _/binary>>, ?ERROR_BAD_DATA(<<"atmLambdaRevision">>)),
+        ?ERR_BAD_DATA(<<"supplementaryAtmLambdas[", _/binary>>, ?ERR_BAD_DATA(<<"atmLambdaRevision">>, undefined)),
         ozt_atm_workflow_schemas:try_create(
             ?USER(UserBeta),
             AnotherAtmInventoryId,
@@ -1509,9 +1509,9 @@ recreate_atm_workflow_schema_from_dump_test_base(#recreate_test_spec{
         )),
         case ExpectedErrorType of
             forbidden ->
-                ?assertEqual(?ERROR_FORBIDDEN, ErrorResult);
+                ?assertEqual(?ERR_FORBIDDEN, ErrorResult);
             bad_data ->
-                ?assertMatch(?ERROR_BAD_DATA(<<"tasks">>, <<"The lambda id '", _/binary>>), ErrorResult)
+                ?assertMatch(?ERR_BAD_DATA(<<"tasks">>, <<"The lambda id '", _/binary>>), ErrorResult)
         end
     end, AllRevisionNumbers);
 
@@ -1716,9 +1716,9 @@ generate_supplementary_atm_lambdas(AtmInventoryId) ->
 %% @private
 name_summary_bad_data_values() ->
     lists:flatten([
-        {<<"summary">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"summary">>)},
-        {<<"summary">>, ?RAND_UNICODE_STR(315), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"summary">>, 200)},
-        ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+        {<<"summary">>, 1234, ?ERR_BAD_VALUE_STRING(<<"summary">>)},
+        {<<"summary">>, ?RAND_UNICODE_STR(315), ?ERR_BAD_VALUE_TEXT_TOO_LARGE(<<"summary">>, 200)},
+        ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
     ]).
 
 
