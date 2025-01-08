@@ -311,7 +311,7 @@ run_test_repeat(RequestSpec, RepeatNum) ->
         true
     catch Type:Reason:Stacktrace ->
         ct:pal("Access tokens test failed due to ~tp:~tp~nStacktrace: ~ts", [
-            Type, Reason, lager:pr_stacktrace(Stacktrace)
+            Type, Reason, ?pr_stacktrace(Stacktrace)
         ]),
         false
     end.

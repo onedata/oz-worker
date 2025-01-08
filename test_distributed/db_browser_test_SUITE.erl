@@ -408,7 +408,7 @@ db_browser_test(_) ->
         db_browser_test_unsafe()
     catch Type:Reason:Stacktrace ->
         ct:pal("db_browser test failed with ~w:~w~nStacktrace: ~ts", [
-            Type, Reason, lager:pr_stacktrace(Stacktrace)
+            Type, Reason, ?pr_stacktrace(Stacktrace)
         ]),
         error(test_failed)
     end.

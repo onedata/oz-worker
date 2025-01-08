@@ -108,7 +108,7 @@ run_tests(Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, VerifyFun) ->
             ct:pal("~tp:run_tests failed with unexpected result - ~tp:~tp~n"
             "Stacktrace: ~ts", [
                 ?MODULE, Type, Message,
-                lager:pr_stacktrace(Stacktrace)
+                ?pr_stacktrace(Stacktrace)
             ]),
             ct:pal(io_lib_pretty:print(
                 ApiTestSpec, fun get_api_test_spec_rec_def/2)
@@ -363,7 +363,7 @@ check_logic_call(Config, LogicSpec) ->
             ct:pal(
                 "Logic result verification function crashed - ~tp:~tp~n"
                 "Stacktrace: ~ts", [
-                    Type, Message, lager:pr_stacktrace(Stacktrace)
+                    Type, Message, ?pr_stacktrace(Stacktrace)
                 ]),
             false
     end.
@@ -641,7 +641,7 @@ check_gs_call(GsSpec, Endpoint, GsClient, Data) ->
             ct:pal(
                 "Gs result verification function crashed - ~tp:~tp~n"
                 "Stacktrace: ~ts", [
-                    Type, Message, lager:pr_stacktrace(Stacktrace)
+                    Type, Message, ?pr_stacktrace(Stacktrace)
                 ]),
             false
     end.

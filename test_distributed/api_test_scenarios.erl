@@ -87,8 +87,7 @@ run_scenario(Function, Args) ->
             ct:pal(
                 "Unexpected error in ~tp:run_scenario - ~tp:~tp~nStacktrace: ~ts",
                 [
-                    ?MODULE, Type, Message,
-                    lager:pr_stacktrace(Stacktrace)
+                    ?MODULE, Type, Message, ?pr_stacktrace(Stacktrace)
                 ]
             ),
             false

@@ -60,7 +60,7 @@ catch __Type:__Reason:__Stacktrace ->
     ct:pal("Test crash in ~ts:~B~n~w:~tp~nStacktrace: ~ts", [
         ?MODULE, ?LINE,
         __Type, __Reason,
-        lager:pr_stacktrace(__Stacktrace)
+        ?pr_stacktrace(__Stacktrace)
     ]),
     error(test_crashed)
 end).

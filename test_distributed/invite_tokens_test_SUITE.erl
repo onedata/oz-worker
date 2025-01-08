@@ -1127,7 +1127,7 @@ run_invite_token_tests(Testcase) ->
         true
     catch Type:Reason:Stacktrace ->
         ct:pal("Invite token tests failed due to ~tp:~tp~nStacktrace: ~ts", [
-            Type, Reason, lager:pr_stacktrace(Stacktrace)
+            Type, Reason, ?pr_stacktrace(Stacktrace)
         ]),
         false
     end.

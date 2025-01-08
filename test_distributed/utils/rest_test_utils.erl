@@ -201,7 +201,7 @@ check_rest_call(Config, ArgsMap) ->
                         ct:pal(
                             "Headers verification function crashed - ~tp:~tp~n"
                             "Stacktrace: ~ts", [
-                                Type1, Message1, lager:pr_stacktrace(Stacktrace1)
+                                Type1, Message1, ?pr_stacktrace(Stacktrace1)
                             ]),
                         false
                 end,
@@ -245,7 +245,7 @@ check_rest_call(Config, ArgsMap) ->
                         ct:pal(
                             "Body verification function crashed - ~tp:~tp~n"
                             "Stacktrace: ~ts", [
-                                Type2, Message2, lager:pr_stacktrace(Stacktrace2)
+                                Type2, Message2, ?pr_stacktrace(Stacktrace2)
                             ]),
                         false
                 end,
@@ -315,7 +315,7 @@ check_rest_call(Config, ArgsMap) ->
             ct:pal(
                 "~tp:check_rest_call failed with unexpected result - ~tp:~tp~n"
                 "Stacktrace: ~ts", [
-                    ?MODULE, Type, Message, lager:pr_stacktrace(Stacktrace)
+                    ?MODULE, Type, Message, ?pr_stacktrace(Stacktrace)
                 ]),
             false
     end.
