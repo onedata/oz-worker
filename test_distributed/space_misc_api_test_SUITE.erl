@@ -866,7 +866,7 @@ delete_test(Config) ->
         #{
             space_id => SpaceId,
             in_marketplace => AdvertisedInMarketplace,
-            share_entries => ozt_shares:gen_shares_for_space(SpaceId, ?RAND_INT(0, 1024))
+            share_entries => ozt_shares:gen_shares_for_space(SpaceId, ?RAND_INT(0, 200))
         }
     end,
     DeleteEntityFun = fun(#{space_id := SpaceId} = _Env) ->
@@ -920,7 +920,15 @@ delete_test(Config) ->
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
-    )).
+    )),
+
+    % To avoid long-lasting tests, the above scenario generates moderate number of shares
+    % (the scenario is run multiple times). A bigger share registry is tested below.
+    SpaceWithManyShares = ozt_spaces:create(),
+    utils:repeat(2222, fun() -> ozt_shares:create(SpaceWithManyShares) end),
+    ?assertEqual(2222, length(ozt:rpc(share_registry, list_entries, [SpaceWithManyShares, #{limit => infinity}]))),
+    ?assertMatch(ok, ozt:rpc(space_logic, delete, [aai:root_auth(), SpaceWithManyShares])),
+    ?assertEqual(0, length(ozt:rpc(share_registry, list_entries, [SpaceWithManyShares, #{limit => infinity}]))).
 
 
 list_storages_test(Config) ->
