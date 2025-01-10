@@ -173,18 +173,18 @@ foreach_internal(SpaceId, ForeachFun, StartAfterIndex) ->
     },
 
     FoldFun = fun(Link, Acc) -> {ok, [Link#link.name | Acc]} end,
-    {ok, LinkKeys} = datastore_model:fold_links(
+    {ok, ReversedLinkKeys} = datastore_model:fold_links(
         ?CTX, ?FOREST, ?TREE_FOR_SPACE(SpaceId), FoldFun, [], FoldOpts
     ),
 
-    ShareIds = lists:map(fun link_key_to_share_id/1, LinkKeys),
+    ShareIds = lists:map(fun link_key_to_share_id/1, ReversedLinkKeys),
     lists:foreach(ForeachFun, ShareIds),
 
-    case length(LinkKeys) < ?FOREACH_BATCH_SIZE of
+    case length(ReversedLinkKeys) < ?FOREACH_BATCH_SIZE of
         true ->
             ok;
         false ->
-            foreach_internal(SpaceId, ForeachFun, lists:last(LinkKeys))
+            foreach_internal(SpaceId, ForeachFun, hd(ReversedLinkKeys))
     end.
 
 
