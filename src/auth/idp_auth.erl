@@ -337,7 +337,7 @@ parse_payload(<<"GET">>, Req) ->
 log_error(?ERROR_BAD_AUTH_CONFIG, _, _, Stacktrace) ->
     ?auth_debug(
         "Login request failed due to bad auth config: ~ts", [
-            iolist_to_binary(?pr_stacktrace(Stacktrace))
+            iolist_to_binary(onedata_logger:pr_stacktrace(Stacktrace))
         ]
     );
 log_error(?ERROR_INVALID_STATE, _, StateToken, _) ->
@@ -348,7 +348,7 @@ log_error(?ERROR_INVALID_STATE, _, StateToken, _) ->
 log_error(?ERROR_INVALID_AUTH_REQUEST, IdP, StateToken, Stacktrace) ->
     ?auth_debug(
         "Cannot validate login request for IdP '~tp' (state: ~ts) - invalid auth request~n"
-        "Stacktrace: ~ts", [IdP, StateToken, iolist_to_binary(?pr_stacktrace(Stacktrace))]
+        "Stacktrace: ~ts", [IdP, StateToken, iolist_to_binary(onedata_logger:pr_stacktrace(Stacktrace))]
     );
 log_error(?ERROR_USER_BLOCKED, IdP, StateToken, _) ->
     ?auth_debug(
@@ -386,7 +386,7 @@ log_error(?ERROR_ATTRIBUTE_MAPPING_ERROR(Attribute, IdPAttributes, EType, EReaso
         "could not be mapped due to an error - ~tp:~tp~n"
         "IdP attributes: ~tp~n"
         "Stacktrace: ~ts",
-        [IdP, StateToken, Attribute, EType, EReason, IdPAttributes, iolist_to_binary(?pr_stacktrace(Stacktrace))]
+        [IdP, StateToken, Attribute, EType, EReason, IdPAttributes, iolist_to_binary(onedata_logger:pr_stacktrace(Stacktrace))]
     );
 log_error(?ERROR_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(UserId), IdP, StateToken, _) ->
     ?auth_debug(
@@ -407,5 +407,5 @@ log_error(?ERROR_INTERNAL_SERVER_ERROR, IdP, StateToken, _) ->
 log_error(Error, IdP, StateToken, Stacktrace) ->
     ?auth_error(
         "Cannot validate login request for IdP '~tp' (state: ~ts) - ~tp~n"
-        "Stacktrace: ~ts", [IdP, StateToken, Error, iolist_to_binary(?pr_stacktrace(Stacktrace))]
+        "Stacktrace: ~ts", [IdP, StateToken, Error, iolist_to_binary(onedata_logger:pr_stacktrace(Stacktrace))]
     ).

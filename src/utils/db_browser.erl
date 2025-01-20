@@ -299,7 +299,7 @@ parse_and_format_collection(Collection, SortBy, SortOrder) ->
             "~ts",
             [
                 ?MODULE, Type, Reason,
-                ?pr_stacktrace(Stacktrace),
+                onedata_logger:pr_stacktrace(Stacktrace),
                 format_help()
             ]
         )}

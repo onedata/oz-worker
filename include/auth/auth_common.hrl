@@ -34,7 +34,7 @@ end).
     idp_auth_test_mode:gather_log(
         debug,
         Format ++ "~n> Caught: ~ts:~tp~n> Stacktrace:~ts",
-        Args ++ [Class, Reason, ?pr_stacktrace(Stacktrace)]
+        Args ++ [Class, Reason, onedata_logger:pr_stacktrace(Stacktrace)]
     ),
     ?debug_exception(Format, Class, Reason, Args, Stacktrace)
 end).

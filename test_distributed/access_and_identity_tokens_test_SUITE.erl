@@ -310,9 +310,9 @@ run_test_repeat(RequestSpec, RepeatNum) ->
         RepeatNum == ?TEST_REPEATS andalso check_subject_deleted_scenarios(RequestSpec),
         true
     catch Type:Reason:Stacktrace ->
-        ct:pal("Access tokens test failed due to ~tp:~tp~nStacktrace: ~ts", [
-            Type, Reason, ?pr_stacktrace(Stacktrace)
-        ]),
+        ?error_exception(
+            "Access tokens test failed due to ", Type, Reason, Stacktrace
+        ),
         false
     end.
 
