@@ -203,7 +203,7 @@ exists(ShareId) ->
     {ok, {od_provider:id() | undefined, onedata:release_version() | undefined}} | od_error_not_found:t().
 choose_provider_for_public_share_handling(ShareId) ->
     case get_space(?ROOT, ShareId) of
-        ?ERR_NOT_FOUND = NotFoundError ->
+        ?ERROR_NOT_FOUND = NotFoundError ->
             NotFoundError;
         {ok, SpaceId} ->
             {ok, Result} = node_cache:acquire({chosen_provider_for_share_handling, SpaceId}, fun() ->

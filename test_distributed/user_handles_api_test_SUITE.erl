@@ -214,7 +214,7 @@ create_handle_test(Config) ->
                     ?ERR_BAD_VALUE_STRING(<<"resourceType">>)},
                 {<<"resourceId">>, <<"">>, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"resourceId">>, 1234, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
-                {<<"resourceId">>, ShareIdThatAlreadyHasAHandle, ?ERR_ALREADY_EXISTS},
+                {<<"resourceId">>, ShareIdThatAlreadyHasAHandle, ?ERROR_ALREADY_EXISTS},
                 {<<"metadataPrefix">>, <<"bad_metadata">>,
                     ?ERR_BAD_VALUE_NOT_ALLOWED(<<"metadataPrefix">>, ozt_handles:supported_metadata_prefixes())},
                 {<<"metadata">>, 1234,

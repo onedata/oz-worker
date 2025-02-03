@@ -112,7 +112,7 @@ delete_revision(AtmWorkflowSchemaId, RevisionNumber) ->
                 {ok, UpdatedRegistry} ->
                     {ok, UpdatedRegistry};
                 error ->
-                    ?ERR_NOT_FOUND(?err_ctx())
+                    ?ERROR_NOT_FOUND
             end
         end)
     end).

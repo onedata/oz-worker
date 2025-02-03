@@ -31,7 +31,7 @@
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
     {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> no_return().
 create_response(_GRI, _, _Format, _Result) ->
-    throw(?ERR_NOT_SUPPORTED(?err_ctx())).
+    throw(?ERROR_NOT_SUPPORTED).
 
 
 %%--------------------------------------------------------------------

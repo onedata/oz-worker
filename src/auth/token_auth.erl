@@ -365,7 +365,7 @@ verify_token(Token = #token{persistence = {temporary, TokenGen}, subject = Subje
         {ok, {_, OlderGen}} when OlderGen < TokenGen ->
             % The token must have been forged (its generation is newer than actual).
             ?ERR_TOKEN_INVALID(?err_ctx());
-        ?ERR_NOT_FOUND ->
+        ?ERROR_NOT_FOUND ->
             % The subject may have been deleted in the meantime.
             ?ERR_TOKEN_SUBJECT_INVALID(?err_ctx())
     end;

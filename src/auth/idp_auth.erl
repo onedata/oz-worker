@@ -130,7 +130,7 @@ validate_login(Method, Req) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Acquires an access token for given user, issued by given IdP.
-%% Returns ?ERR_NOT_FOUND when:
+%% Returns ?ERROR_NOT_FOUND when:
 %%  * the user does not have an account in such IdP
 %%  * there is no access token stored
 %%  * the stored access token has expired and there is no viable refresh token
@@ -149,19 +149,19 @@ acquire_idp_access_token(#od_user{linked_accounts = LinkedAccounts}, IdP) ->
             acquire_idp_access_token(LinkedAcc);
         (_, Acc) ->
             Acc
-    end, ?ERR_NOT_FOUND(?err_ctx()), LinkedAccounts).
+    end, ?ERROR_NOT_FOUND, LinkedAccounts).
 
 %% @private
 -spec acquire_idp_access_token(od_user:linked_account()) ->
     {ok, {access_token(), access_token_ttl()}} | {error, term()}.
 acquire_idp_access_token(#linked_account{access_token = {undefined, 0}, refresh_token = _}) ->
-    ?ERR_NOT_FOUND(?err_ctx());
+    ?ERROR_NOT_FOUND;
 acquire_idp_access_token(#linked_account{access_token = {AccessToken, Expires}, refresh_token = undefined}) ->
     % No refresh token - no point in trying to refresh the access token
     Now = ?NOW_SECONDS(),
     case Expires > Now of
         true -> {ok, {AccessToken, Expires - Now}};
-        false -> ?ERR_NOT_FOUND(?err_ctx())
+        false -> ?ERROR_NOT_FOUND
     end;
 acquire_idp_access_token(#linked_account{idp = IdP, access_token = {AccessToken, Expires}, refresh_token = RefreshToken}) ->
     Now = ?NOW_SECONDS(),

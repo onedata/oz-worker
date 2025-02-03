@@ -38,7 +38,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERR_NOT_FOUND
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -49,7 +49,7 @@ fetch_entity(#gri{id = ClusterId}) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Cluster, Revision}};
         _ ->
-            ?ERR_NOT_FOUND(?err_ctx())
+            ?ERROR_NOT_FOUND
     end.
 
 

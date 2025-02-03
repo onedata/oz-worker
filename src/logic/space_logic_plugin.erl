@@ -63,7 +63,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERR_NOT_FOUND
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -74,7 +74,7 @@ fetch_entity(#gri{id = SpaceId}) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Space, Revision}};
         _ ->
-            ?ERR_NOT_FOUND(?err_ctx())
+            ?ERROR_NOT_FOUND
     end.
 
 
@@ -220,7 +220,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             {ok, #document{key = Key}} ->
                 Key;
             {error, already_exists} ->
-                throw(?ERR_ALREADY_EXISTS(?err_ctx()))
+                throw(?ERROR_ALREADY_EXISTS)
         end
     end),
 
@@ -365,7 +365,7 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
                                     % as the first direct member of the space
                                     {ok, CurrentSpace};
                                 true ->
-                                    ?ERR_ALREADY_EXISTS(?err_ctx());
+                                    ?ERROR_ALREADY_EXISTS;
                                 false ->
                                     {ok, CurrentSpace#od_space{owners = [UserId | Owners]}}
                             end
@@ -749,7 +749,7 @@ update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {group_privileges, GroupI
 
 update(#el_req{gri = #gri{id = SpaceId, aspect = {support_parameters, ProviderId}}, data = Data}) ->
     {ok, ProviderVersion} = cluster_logic:get_worker_release_version(?ROOT, ProviderId),
-    onedata:compare_release_line(ProviderVersion, ?LINE_21_02) =:= lower andalso throw(?ERR_NOT_SUPPORTED(?err_ctx())),
+    onedata:compare_release_line(ProviderVersion, ?LINE_21_02) =:= lower andalso throw(?ERROR_NOT_SUPPORTED),
 
     SupportParametersOverlay = jsonable_record:from_json(Data, support_parameters),
     ?extract_ok(od_space:update_support_parameters(SpaceId, ProviderId, SupportParametersOverlay)).
@@ -790,7 +790,7 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
     ?extract_ok(od_space:update(SpaceId, fun(Space = #od_space{owners = Owners}) ->
         case lists:member(UserId, Owners) of
             false ->
-                ?ERR_NOT_FOUND(?err_ctx());
+                ?ERROR_NOT_FOUND;
             true ->
                 case Owners of
                     [UserId] -> ?ERR_CANNOT_REMOVE_LAST_OWNER(?err_ctx(), od_space, SpaceId);

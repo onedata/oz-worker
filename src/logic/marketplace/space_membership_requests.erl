@@ -98,13 +98,13 @@ submit(SpaceId, UserId, ContactEmail, Message, InitialRecord) ->
 lookup_pending_request_id(SpaceId, #space_membership_requests{pending = Pending}) ->
     case maps:find(SpaceId, Pending) of
         {ok, #request{id = RequestId}} -> RequestId;
-        _ -> throw(?ERR_NOT_FOUND(?err_ctx()))
+        _ -> throw(?ERROR_NOT_FOUND)
     end.
 
 
 -spec lookup_email_for_pending(od_space:id(), request_id(), record()) -> od_user:email() | no_return().
 lookup_email_for_pending(SpaceId, RequestId, Record) ->
-    od_space:is_advertised_in_marketplace(SpaceId) orelse throw(?ERR_NOT_FOUND(?err_ctx())),
+    od_space:is_advertised_in_marketplace(SpaceId) orelse throw(?ERROR_NOT_FOUND),
     Request = lookup_pending(SpaceId, RequestId, Record),  % throws in case of nonexistent pending request
     assert_not_a_member(infer_requester_id(RequestId), SpaceId),
     Request#request.contact_email.
@@ -211,7 +211,7 @@ db_decode(RecordJson, _NestedRecordDecoder) ->
 lookup_pending(SpaceId, RequestId, #space_membership_requests{pending = Pending}) ->
     case maps:find(SpaceId, Pending) of
         {ok, #request{id = RequestId} = Request} -> Request;
-        _ -> throw(?ERR_NOT_FOUND(?err_ctx()))
+        _ -> throw(?ERROR_NOT_FOUND)
     end.
 
 
@@ -282,7 +282,7 @@ qualify(SpaceId, UserId, Record) ->
                 true ->
                     {{reuse, Request}, NewRecord};
                 false ->
-                    throw(?ERR_FORBIDDEN_TODO(?err_ctx(), str_utils:format_bin(
+                    throw(?ERR_FORBIDDEN_WITH_HINT(?err_ctx(), str_utils:format_bin(
                         "A membership request to this space has been submitted recently. "
                         "A reminder can be generated not sooner than at ~ts",
                         [time:seconds_to_iso8601(NextRequestAllowedAt)]
@@ -308,7 +308,7 @@ check_if_not_recently_rejected(SpaceId, Record) ->
             NewRecord = forget_outdated_rejected_history(Record),
             case maps:find(SpaceId, NewRecord#space_membership_requests.rejected) of
                 {ok, #request{last_activity = LastActivity}} ->
-                    throw(?ERR_FORBIDDEN_TODO(?err_ctx(), str_utils:format_bin(
+                    throw(?ERR_FORBIDDEN_WITH_HINT(?err_ctx(), str_utils:format_bin(
                         "A membership request to this space has been recently rejected. "
                         "Another request can be made not sooner than at ~ts",
                         [time:seconds_to_iso8601(LastActivity + ?MIN_BACKOFF_AFTER_REJECTION_SECONDS)]

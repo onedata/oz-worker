@@ -288,7 +288,7 @@ get_eff_oz_privileges(Auth, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves space alias for given space of a user. Returns ?ERR_NOT_FOUND
+%% Retrieves space alias for given space of a user. Returns ?ERROR_NOT_FOUND
 %% if the user does not have a space alias for given space.
 %% @end
 %%--------------------------------------------------------------------

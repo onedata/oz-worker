@@ -37,7 +37,7 @@ register(?SUB(SubjectType, SubjectId), TokenName, TokenId) ->
     Ctx = datastore_ctx(SubjectType),
     case datastore_model:add_links(Ctx, SubjectId, ?TOKEN_NAMES_TREE, {TokenName, TokenId}) of
         {ok, _} -> ok;
-        {error, already_exists} -> ?ERR_ALREADY_EXISTS(?err_ctx())
+        {error, already_exists} -> ?ERROR_ALREADY_EXISTS
     end.
 
 
@@ -67,14 +67,14 @@ update(Subject, OldName, TokenId, NewName) ->
     case register(Subject, NewName, TokenId) of
         ok ->
             unregister(Subject, OldName);
-        ?ERR_ALREADY_EXISTS ->
+        ?ERROR_ALREADY_EXISTS ->
             % If the mapping exists, check if it already points to the desired token id.
             % This check covers:
             %   - updating to the same name as the old one
             %   - possible desynchronizations with the token name in od_token record
             case lookup(Subject, NewName) of
                 {ok, TokenId} -> ok;
-                _ -> ?ERR_ALREADY_EXISTS(?err_ctx())
+                _ -> ?ERROR_ALREADY_EXISTS
             end
     end.
 

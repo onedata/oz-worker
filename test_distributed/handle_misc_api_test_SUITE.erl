@@ -253,7 +253,7 @@ create_test(Config) ->
                 {<<"resourceId">>, <<"">>,
                     ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"resourceId">>, ShareIdThatAlreadyHasAHandle,
-                    ?ERR_ALREADY_EXISTS},
+                    ?ERROR_ALREADY_EXISTS},
                 {<<"resourceId">>, 1234,
                     ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"metadataPrefix">>, <<"bad_metadata">>,

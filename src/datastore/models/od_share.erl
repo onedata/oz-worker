@@ -198,7 +198,7 @@ migrate_legacy_share_21_02_8(ShareId, ShareRecord = #od_share{handle = HandleId}
     try
         % ensure idempotency in case of multiple re-runs
         share_registry:report_created(ShareId, ShareRecordWithoutHandle)
-    catch throw:?ERR_ALREADY_EXISTS ->
+    catch throw:?ERROR_ALREADY_EXISTS ->
         ok
     end,
     case HandleId of
@@ -220,7 +220,7 @@ migrate_legacy_share_21_02_8(ShareId, ShareRecord = #od_share{handle = HandleId}
                         share_registry:report_handle_created_for(
                             ShareId, ShareRecordWithoutHandle, HandleId, PublicHandle
                         )
-                    catch throw:?ERR_ALREADY_EXISTS ->
+                    catch throw:?ERROR_ALREADY_EXISTS ->
                         ok
                     end
             end

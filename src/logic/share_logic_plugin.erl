@@ -41,7 +41,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERR_NOT_FOUND
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -52,7 +52,7 @@ fetch_entity(#gri{id = ShareId}) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Share, Revision}};
         _ ->
-            ?ERR_NOT_FOUND(?err_ctx())
+            ?ERROR_NOT_FOUND
     end.
 
 
@@ -134,7 +134,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         {error, already_exists} ->
             % This can potentially happen if a share with given share id
             % has been created between data verification and create
-            ?ERR_ALREADY_EXISTS(?err_ctx())
+            ?ERROR_ALREADY_EXISTS
     end.
 
 
@@ -352,7 +352,7 @@ delete_internal(Auth, ShareId) ->
         {handle_must_be_deleted_first, HandleId} ->
             case handle_logic:delete(Auth, HandleId) of
                 ok -> ok;
-                ?ERR_NOT_FOUND -> ok;
+                ?ERROR_NOT_FOUND -> ok;
                 {error, _} = Error -> throw(Error)
             end,
             delete_internal(Auth, ShareId)
@@ -362,7 +362,7 @@ delete_internal(Auth, ShareId) ->
 %% @private
 -spec delete_share_unsafe(od_share:id()) -> done | {handle_must_be_deleted_first, od_handle:id()}.
 delete_share_unsafe(ShareId) ->
-    % race condition: in case of the share being already deleted, this will throw ?ERR_NOT_FOUND
+    % race condition: in case of the share being already deleted, this will throw ?ERROR_NOT_FOUND
     #document{value = #od_share{handle = HandleId} = PreviousShareRecord} = ?check(od_share:get(ShareId)),
     % in case of DB inconsistencies (share points to a handle that does not exist) we
     % must not try to delete the handle first, otherwise we get infinite recursion

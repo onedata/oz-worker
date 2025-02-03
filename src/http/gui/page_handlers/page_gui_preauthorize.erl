@@ -56,13 +56,13 @@ handle(<<"POST">>, Req) ->
                 Service = try
                     onedata:service_by_gui(onedata:gui_by_prefix(GuiPrefix), ClusterId)
                 catch error:badarg ->
-                    throw(?ERR_NOT_FOUND(?err_ctx()))
+                    throw(?ERROR_NOT_FOUND)
                 end,
 
                 ClusterType = onedata:service_to_cluster_type(Service),
                 case cluster_logic:get(?ROOT, ClusterId) of
                     {ok, #od_cluster{type = ClusterType}} -> ok;
-                    _ -> throw(?ERR_NOT_FOUND(?err_ctx()))
+                    _ -> throw(?ERROR_NOT_FOUND)
                 end,
 
                 cowboy_req:reply(

@@ -204,12 +204,12 @@ resolve_error_not_found_test(_Config) ->
     ExistingRequestId = ozt_spaces:submit_membership_request(ExistingSpaceId, RequesterId, RequesterEmail),
     ForgedSpaceId = datastore_key:new(),
     ForgedRequestId = <<RequesterId/binary, "-7832648714">>,
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ExistingSpaceId, ForgedRequestId, grant)),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ExistingSpaceId, ForgedRequestId, {reject, ?RAND_REASON()})),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ExistingRequestId, grant)),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ExistingRequestId, {reject, ?RAND_REASON()})),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ForgedRequestId, grant)),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ForgedRequestId, {reject, ?RAND_REASON()})).
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ExistingSpaceId, ForgedRequestId, grant)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ExistingSpaceId, ForgedRequestId, {reject, ?RAND_REASON()})),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ExistingRequestId, grant)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ExistingRequestId, {reject, ?RAND_REASON()})),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ForgedRequestId, grant)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ForgedSpaceId, ForgedRequestId, {reject, ?RAND_REASON()})).
 
 
 resolve_error_mailer_malfunction_test(_Config) ->
@@ -228,12 +228,12 @@ get_membership_requester_info_forged_ids_test(_Config) ->
     ExistingRequestId = ozt_spaces:submit_membership_request(ExistingSpaceId, RequesterId),
     ForgedSpaceId = datastore_key:new(),
     ForgedRequestId = <<RequesterId/binary, "-iuysdtgfuye">>,
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_get_membership_info(ExistingSpaceId, ForgedRequestId)),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_get_membership_info(ExistingSpaceId, ForgedRequestId)),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_get_membership_info(ForgedSpaceId, ExistingRequestId)),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_get_membership_info(ForgedSpaceId, ExistingRequestId)),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_get_membership_info(ForgedSpaceId, ForgedRequestId)),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_get_membership_info(ForgedSpaceId, ForgedRequestId)).
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(ExistingSpaceId, ForgedRequestId)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(ExistingSpaceId, ForgedRequestId)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(ForgedSpaceId, ExistingRequestId)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(ForgedSpaceId, ExistingRequestId)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(ForgedSpaceId, ForgedRequestId)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(ForgedSpaceId, ForgedRequestId)).
 
 
 filter_advertised_test(_Config) ->
@@ -282,7 +282,7 @@ submit_reminder_error_too_soon_test(_Config) ->
     ozt_spaces:submit_membership_request(SpaceId, RequesterId),
     ozt_mocks:simulate_seconds_passing(?MIN_BACKOFF_BETWEEN_REMINDERS_SECONDS - 1),
     ReminderAllowedDate = time:seconds_to_iso8601(?FROZEN_TIME() + 1),
-    ExpError = ?ERR_FORBIDDEN_TODO(<<
+    ExpError = ?ERR_FORBIDDEN_WITH_HINT(<<
         "A membership request to this space has been submitted recently. "
         "A reminder can be generated not sooner than at ", ReminderAllowedDate/binary
     >>),
@@ -347,7 +347,7 @@ submit_another_error_recently_rejected_test(_Config) ->
 
     ozt_mocks:simulate_seconds_passing(?MIN_BACKOFF_AFTER_REJECTION_SECONDS - 1),
     ReminderAllowedDate = time:seconds_to_iso8601(?FROZEN_TIME() + 1),
-    ExpError = ?ERR_FORBIDDEN_TODO(<<
+    ExpError = ?ERR_FORBIDDEN_WITH_HINT(<<
         "A membership request to this space has been recently rejected. "
         "Another request can be made not sooner than at ", ReminderAllowedDate/binary
     >>),
@@ -409,14 +409,14 @@ get_membership_requester_info_space_deleted_test(_Config) ->
     {RequesterId, SpaceId} = {ozt_users:create(), ozt_spaces:create_advertised()},
     RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),
     ozt_spaces:delete(SpaceId),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_get_membership_info(SpaceId, RequestId)).
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(SpaceId, RequestId)).
 
 
 get_membership_requester_info_space_no_longer_advertised_test(_Config) ->
     {RequesterId, SpaceId} = {ozt_users:create(), ozt_spaces:create_advertised()},
     RequestId = ozt_spaces:submit_membership_request(SpaceId, RequesterId),
     ozt_spaces:update(SpaceId, #{<<"advertisedInMarketplace">> => false}),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_get_membership_info(SpaceId, RequestId)).
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_get_membership_info(SpaceId, RequestId)).
 
 
 get_membership_requester_info_user_already_a_member_test(_Config) ->
@@ -447,8 +447,8 @@ resolve_no_longer_valid_test(_Config) ->
     FirstSpaceId = ozt_spaces:create_advertised(),
     FirstRequestId = ozt_spaces:submit_membership_request(FirstSpaceId, RequesterId, RequesterEmail),
     ozt_spaces:add_user(FirstSpaceId, RequesterId),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(FirstSpaceId, FirstRequestId, grant)),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(FirstSpaceId, FirstRequestId, {reject, ?RAND_REASON()})),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(FirstSpaceId, FirstRequestId, grant)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(FirstSpaceId, FirstRequestId, {reject, ?RAND_REASON()})),
     ?assertNot(has_registered_space_membership_request(
         any, RequesterId, FirstSpaceId, FirstRequestId, RequesterEmail, ?FROZEN_TIME())
     ),
@@ -457,8 +457,8 @@ resolve_no_longer_valid_test(_Config) ->
     SecondSpaceId = ozt_spaces:create_advertised(),
     SecondRequestId = ozt_spaces:submit_membership_request(SecondSpaceId, RequesterId, RequesterEmail),
     ozt_spaces:update(SecondSpaceId, #{<<"advertisedInMarketplace">> => false}),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(SecondSpaceId, SecondRequestId, grant)),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(SecondSpaceId, SecondRequestId, {reject, ?RAND_REASON()})),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(SecondSpaceId, SecondRequestId, grant)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(SecondSpaceId, SecondRequestId, {reject, ?RAND_REASON()})),
     ?assertNot(has_registered_space_membership_request(
         any, RequesterId, SecondSpaceId, SecondRequestId, RequesterEmail, ?FROZEN_TIME())
     ),
@@ -469,8 +469,8 @@ resolve_no_longer_valid_test(_Config) ->
     ThirdSpaceId = ozt_spaces:create_advertised(),
     ThirdRequestId = ozt_spaces:submit_membership_request(ThirdSpaceId, RequesterId, RequesterEmail),
     ozt_spaces:delete(ThirdSpaceId),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ThirdSpaceId, ThirdRequestId, grant)),
-    ?assertMatch(?ERR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ThirdSpaceId, ThirdRequestId, {reject, ?RAND_REASON()})),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ThirdSpaceId, ThirdRequestId, grant)),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_spaces:try_resolve_membership_request(ThirdSpaceId, ThirdRequestId, {reject, ?RAND_REASON()})),
     ?assert(has_registered_space_membership_request(
         pending, RequesterId, ThirdSpaceId, ThirdRequestId, RequesterEmail, ?FROZEN_TIME())
     ),
@@ -629,7 +629,7 @@ prune_rejected_history_test(_Config) ->
     % however, ExpectedPrematurelyPrunedSpaces should still be in the history and hence
     % it should not be possible to request membership in them
     lists:foreach(fun(SpaceId) ->
-        ?assertMatch(?ERR_FORBIDDEN_TODO(_), ozt_spaces:try_submit_membership_request(SpaceId, RequesterId))
+        ?assertMatch(?ERR_FORBIDDEN_WITH_HINT(_), ozt_spaces:try_submit_membership_request(SpaceId, RequesterId))
     end, ?RAND_SUBLIST(ExpectedPrematurelyPrunedSpaces, 5)),
     % with every new rejection, the history should become overflown, and the oldest of
     % ExpectedPrematurelyPrunedSpaces should be pruned, despite that the backoff has not
@@ -645,7 +645,7 @@ prune_rejected_history_test(_Config) ->
                 ok;
             _ ->
                 NotYetPrunedSpaceId = lists:nth(Ordinal + 1, ExpectedPrematurelyPrunedSpaces),
-                ?assertMatch(?ERR_FORBIDDEN_TODO(_), ozt_spaces:try_submit_membership_request(NotYetPrunedSpaceId, RequesterId))
+                ?assertMatch(?ERR_FORBIDDEN_WITH_HINT(_), ozt_spaces:try_submit_membership_request(NotYetPrunedSpaceId, RequesterId))
         end
     end, lists:seq(1, 50)).
 

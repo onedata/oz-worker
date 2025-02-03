@@ -491,7 +491,7 @@ offline_access(Config) ->
         },
         offlineAccess => true
     }}]),
-    ?assertMatch(?ERR_NOT_FOUND, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+    ?assertMatch(?ERROR_NOT_FOUND, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % Logging in should cause the tokens to be cached
     simulate_login_flow(Config, ?DUMMY_IDP, false, false, OidcSpec, #{<<"sub">> => SubjectId}),
@@ -608,7 +608,7 @@ offline_access_internals(Config) ->
     ?assertMatch({ok, {<<"at4">>, Ttl4}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
     % Though when the expiration time is reached, the token should no longer be served
     oz_test_utils:simulate_seconds_passing(Ttl4 + 1),
-    ?assertMatch(?ERR_NOT_FOUND, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+    ?assertMatch(?ERROR_NOT_FOUND, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % Refreshing the token should also fetch user data and refresh it
     ?assertMatch(

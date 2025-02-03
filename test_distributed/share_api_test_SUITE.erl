@@ -658,7 +658,7 @@ get_shared_file_or_directory_data_test_base(Config, SubpathWithQs) ->
     % the share does not exist
     NonExistingShareObjectId = gen_example_object_id(<<"non-existent-share">>),
     clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
-    ?assert(CheckResult(NonExistingShareObjectId, ?ERR_NOT_FOUND)).
+    ?assert(CheckResult(NonExistingShareObjectId, ?ERROR_NOT_FOUND)).
 
 
 % The SUITE is run on a single node cluster to test caching of chosen providers

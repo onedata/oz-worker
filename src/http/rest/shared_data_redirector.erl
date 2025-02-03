@@ -47,7 +47,7 @@ handle(ObjectId, Req) ->
                 Err1;
             {ok, ShareId} ->
                 case share_logic:choose_provider_for_public_share_handling(ShareId) of
-                    ?ERR_NOT_FOUND = NotFoundError -> NotFoundError;
+                    ?ERROR_NOT_FOUND = NotFoundError -> NotFoundError;
                     % there is no suitable, online provider
                     {ok, {undefined, _}} -> ?ERR_SERVICE_UNAVAILABLE(?err_ctx());
                     % only a legacy provider is available, but providers before 20.02 do

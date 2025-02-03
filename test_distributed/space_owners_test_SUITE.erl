@@ -203,7 +203,7 @@ space_member_cannot_be_granted_ownership_twice(_Config) ->
     AnotherUser = ozt_users:create(),
     ozt_spaces:add_user(Space, AnotherUser),
     ?assertEqual(ok, ozt:rpc(space_logic, add_owner, [?ROOT, Space, AnotherUser])),
-    ?assertEqual(?ERR_ALREADY_EXISTS, ozt:rpc(space_logic, add_owner, [?ROOT, Space, AnotherUser])).
+    ?assertEqual(?ERROR_ALREADY_EXISTS, ozt:rpc(space_logic, add_owner, [?ROOT, Space, AnotherUser])).
 
 
 the_only_space_owner_cannot_be_revoked_of_ownership(_Config) ->
@@ -240,7 +240,7 @@ one_of_space_owners_cannot_be_revoked_of_ownership_twice(_Config) ->
     ozt_spaces:add_user(Space, AnotherUser),
     ozt_spaces:add_owner(Space, AnotherUser),
     ?assertEqual(ok, ozt:rpc(space_logic, remove_owner, [?ROOT, Space, AnotherUser])),
-    ?assertEqual(?ERR_NOT_FOUND, ozt:rpc(space_logic, remove_owner, [?ROOT, Space, AnotherUser])).
+    ?assertEqual(?ERROR_NOT_FOUND, ozt:rpc(space_logic, remove_owner, [?ROOT, Space, AnotherUser])).
 
 
 removed_member_that_was_an_owner_loses_ownership(_Config) ->
@@ -824,7 +824,7 @@ adding_an_indirect_user_as_owner_while_removing_him_directly_from_space_is_safe_
             {?ERR_RELATION_DOES_NOT_EXIST(od_space, Space, od_user, User), ok} ->
                 % scenario 2)
                 false;
-            {ok, ?ERR_NOT_FOUND} ->
+            {ok, ?ERROR_NOT_FOUND} ->
                 % scenario 3)
                 {true, User};
             Other ->

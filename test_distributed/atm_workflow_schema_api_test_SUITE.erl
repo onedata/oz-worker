@@ -1085,7 +1085,7 @@ delete_revision_test_base(Config, RevisionExistence) ->
             args = [auth, atm_workflow_schema_id, revision_number_to_delete],
             expected_result = case RevisionExistence of
                 existent -> ?OK_RES;
-                nonexistent -> ?ERROR_REASON(?ERR_NOT_FOUND)
+                nonexistent -> ?ERROR_REASON(?ERROR_NOT_FOUND)
             end
         },
         gs_spec = #gs_spec{
@@ -1093,7 +1093,7 @@ delete_revision_test_base(Config, RevisionExistence) ->
             gri = #gri{type = od_atm_workflow_schema, id = atm_workflow_schema_id, aspect = {revision, revision_number_to_delete_binary}},
             expected_result_op = case RevisionExistence of
                 existent -> ?OK_RES;
-                nonexistent -> ?ERROR_REASON(?ERR_NOT_FOUND)
+                nonexistent -> ?ERROR_REASON(?ERROR_NOT_FOUND)
             end
         }
     },

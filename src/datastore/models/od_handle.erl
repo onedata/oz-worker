@@ -186,7 +186,7 @@ migrate_legacy_handle_21_02_5(HServiceId, HandleId, #od_handle{
     case ?catch_exceptions(handle_registry:report_created(?OAI_DC_METADATA_PREFIX, HServiceId, HandleId, Timestamp)) of
         ok ->
             ok;
-        ?ERR_ALREADY_EXISTS ->
+        ?ERROR_ALREADY_EXISTS ->
             ?info("The handle ~ts appears to already be registered (during a previous run?)", [HandleId])
     end,
     % legacy code allowed invalid XML DC metadata - in such a case, use empty metadata

@@ -575,7 +575,7 @@ update_test_base(Config, ScenarioType) ->
             function = update,
             args = [auth, atm_lambda_id, data],
             expected_result = case ScenarioType of
-                new_revision_same_as_initial -> ?ERROR_REASON(?ERR_ALREADY_EXISTS);
+                new_revision_same_as_initial -> ?ERROR_REASON(?ERROR_ALREADY_EXISTS);
                 _ -> ?OK_RES
             end
         },
@@ -583,7 +583,7 @@ update_test_base(Config, ScenarioType) ->
             operation = update,
             gri = #gri{type = od_atm_lambda, id = atm_lambda_id, aspect = instance},
             expected_result_op = case ScenarioType of
-                new_revision_same_as_initial -> ?ERROR_REASON(?ERR_ALREADY_EXISTS);
+                new_revision_same_as_initial -> ?ERROR_REASON(?ERROR_ALREADY_EXISTS);
                 _ -> ?OK_RES
             end
         },
@@ -762,7 +762,7 @@ add_revision_test_base(Config, RevisionNumberProvisionMode, ScenarioType) ->
             function = add_revision,
             args = [auth, atm_lambda_id, target_revision_number_binary, data],
             expected_result = case ScenarioType of
-                new_revision_same_as_initial -> ?ERROR_REASON(?ERR_ALREADY_EXISTS);
+                new_revision_same_as_initial -> ?ERROR_REASON(?ERROR_ALREADY_EXISTS);
                 _ -> ?OK_RES
             end
         },
@@ -770,7 +770,7 @@ add_revision_test_base(Config, RevisionNumberProvisionMode, ScenarioType) ->
             operation = create,
             gri = #gri{type = od_atm_lambda, id = atm_lambda_id, aspect = {revision, target_revision_number_binary}},
             expected_result_op = case ScenarioType of
-                new_revision_same_as_initial -> ?ERROR_REASON(?ERR_ALREADY_EXISTS);
+                new_revision_same_as_initial -> ?ERROR_REASON(?ERROR_ALREADY_EXISTS);
                 _ -> ?OK_RES
             end
         },
@@ -913,7 +913,7 @@ update_revision_lifecycle_state_test(Config, ScenarioType) ->
             function = update_revision_lifecycle_state,
             args = [auth, atm_lambda_id, revision_to_update_binary, data],
             expected_result = case ScenarioType of
-                nonexistent_revision -> ?ERROR_REASON(?ERR_NOT_FOUND);
+                nonexistent_revision -> ?ERROR_REASON(?ERROR_NOT_FOUND);
                 _ -> ?OK_RES
             end
         },
@@ -921,7 +921,7 @@ update_revision_lifecycle_state_test(Config, ScenarioType) ->
             operation = update,
             gri = #gri{type = od_atm_lambda, id = atm_lambda_id, aspect = {revision, revision_to_update_binary}},
             expected_result_op = case ScenarioType of
-                nonexistent_revision -> ?ERROR_REASON(?ERR_NOT_FOUND);
+                nonexistent_revision -> ?ERROR_REASON(?ERROR_NOT_FOUND);
                 _ -> ?OK_RES
             end
         },
@@ -1236,7 +1236,7 @@ unlink_from_inventory_test_base(Config, FromWhichInventory, UsageInWorkflowSchem
         },
         logic_spec = LogicSpec#logic_spec{
             args = [auth, UnrelatedAtmLambda, TargetAtmInventoryId],
-            expected_result = ?ERROR_REASON(?ERR_NOT_FOUND)
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
         % TODO VFS-4520 Tests for GraphSync API
     },

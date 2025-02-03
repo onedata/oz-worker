@@ -1912,7 +1912,7 @@ ensure_entitlement_group(GroupId, Name, Type) ->
                         {ok, GroupId} -> ok = set_protected(GroupId);
                         % The group might have been created
                         % by another process in the meantime
-                        ?ERR_ALREADY_EXISTS -> ok;
+                        ?ERROR_ALREADY_EXISTS -> ok;
                         {error, _} = Error -> Error
                     end
             end

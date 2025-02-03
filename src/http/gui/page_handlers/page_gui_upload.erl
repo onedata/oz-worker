@@ -87,7 +87,7 @@ handle_gui_upload(Req) ->
     GuiType = try
         onedata:gui_by_prefix(GuiPrefix)
     catch error:badarg ->
-        throw(?ERR_NOT_FOUND(?err_ctx()))
+        throw(?ERROR_NOT_FOUND)
     end,
 
     ServiceReleaseVersion = validate_and_authorize(GuiType, GuiId, Req),
@@ -112,7 +112,7 @@ handle_gui_upload(Req) ->
 -spec validate_and_authorize(onedata:gui(), gui_static:gui_id(), cowboy_req:req()) ->
     onedata:release_version() | no_return().
 validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
-    harvester_logic:exists(HarvesterId) orelse throw(?ERR_NOT_FOUND(?err_ctx())),
+    harvester_logic:exists(HarvesterId) orelse throw(?ERROR_NOT_FOUND),
     case token_auth:authenticate_for_rest_interface(Req) of
         {true, ?USER(UserId) = Auth} ->
             ensure_authorized_to_upload_gui(Auth, ?HARVESTER_GUI, HarvesterId),
@@ -134,12 +134,12 @@ validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
 % Covers all service GUIs
 validate_and_authorize(GuiType, ClusterId, Req) ->
     Service = onedata:service_by_gui(GuiType, ClusterId),
-    lists:member(Service, [?OP_WORKER, ?OP_PANEL]) orelse throw(?ERR_NOT_FOUND(?err_ctx())),
+    lists:member(Service, [?OP_WORKER, ?OP_PANEL]) orelse throw(?ERROR_NOT_FOUND),
     Cluster = try cluster_logic:get(?ROOT, ClusterId) of
         {ok, #od_cluster{type = ?ONEPROVIDER} = Cl} -> Cl;
-        _ -> throw(?ERR_NOT_FOUND(?err_ctx()))
+        _ -> throw(?ERROR_NOT_FOUND)
     catch _:_ ->
-        throw(?ERR_NOT_FOUND(?err_ctx()))
+        throw(?ERROR_NOT_FOUND)
     end,
 
     {ReleaseVersion, _, _} = case Service of

@@ -42,7 +42,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERR_NOT_FOUND
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -53,7 +53,7 @@ fetch_entity(#gri{id = StorageId}) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Storage, Revision}};
         _ ->
-            ?ERR_NOT_FOUND(?err_ctx())
+            ?ERROR_NOT_FOUND
     end.
 
 
@@ -128,7 +128,7 @@ create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PRO
     },
     case od_storage:create(StorageDoc) of
         {error, already_exists} ->
-            throw(?ERR_ALREADY_EXISTS(?err_ctx()));
+            throw(?ERROR_ALREADY_EXISTS);
         {ok, #document{key = StorageId}} ->
             entity_graph:add_relation(
                 od_storage, StorageId,

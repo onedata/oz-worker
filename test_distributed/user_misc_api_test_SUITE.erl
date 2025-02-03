@@ -115,7 +115,7 @@ create_with_predefined_id_test(Config) ->
     ?assertEqual(ExpUsername, User#od_user.username),
 
     % Second try should fail (such id exists)
-    ?assertMatch(?ERR_ALREADY_EXISTS,
+    ?assertMatch(?ERROR_ALREADY_EXISTS,
         oz_test_utils:call_oz(
             Config, user_logic, create, [?ROOT, PredefinedUserId, #{<<"fullName">> => ?UNIQUE_STRING}]
         )
@@ -957,7 +957,7 @@ acquire_idp_access_token_test(Config) ->
         },
         logic_spec = LogicSpec#logic_spec{
             args = [auth, U1, dummyIdP],
-            expected_result = ?ERROR_REASON(?ERR_NOT_FOUND)
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),

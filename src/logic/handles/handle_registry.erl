@@ -129,7 +129,7 @@ lookup_deleted(HandleId) ->
 purge_deleted_entry(HandleId) ->
     case deleted_handle_registry:lookup(HandleId) of
         error ->
-            ?ERR_NOT_FOUND(?err_ctx());
+            ?ERROR_NOT_FOUND;
         {ok, {MetadataPrefix, #handle_listing_entry{
             timestamp = Timestamp,
             handle_id = HandleId,
@@ -377,7 +377,7 @@ add_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp, Status) ->
     lists:foreach(fun(TreeId) ->
         case datastore_model:add_links(?CTX, ?FOREST, TreeId, Link) of
             {ok, _} -> ok;
-            {error, already_exists} -> throw(?ERR_ALREADY_EXISTS(?err_ctx()))
+            {error, already_exists} -> throw(?ERROR_ALREADY_EXISTS)
         end
     end, [
         ?TREE_FOR_METADATA_PREFIX(MetadataPrefix),

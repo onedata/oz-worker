@@ -606,7 +606,7 @@ add_owner_test(Config) ->
         },
         logic_spec = LogicSpec#logic_spec{
             args = [auth, Space, userId],
-            expected_result = ?ERROR_REASON(?ERR_ALREADY_EXISTS)
+            expected_result = ?ERROR_REASON(?ERROR_ALREADY_EXISTS)
         }
     },
     ?assert(api_test_utils:run_tests(

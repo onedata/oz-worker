@@ -56,7 +56,7 @@
     {ok, {tokens:secret(), tokens:temporary_token_generation()}} | od_error_not_found:t().
 get_for_subject(Subject) ->
     case fetch_entity(Subject) of
-        ?ERR_NOT_FOUND = NotFoundError ->
+        ?ERROR_NOT_FOUND = NotFoundError ->
             NotFoundError;
         {true, {#temporary_token_secret{secret = Secret, generation = Generation}, _}} ->
             {ok, {Secret, Generation}}
@@ -185,13 +185,13 @@ fetch_entity(Subject) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Record, Revision}};
         _ ->
-            ?ERR_NOT_FOUND(?err_ctx())
+            ?ERROR_NOT_FOUND
     end.
 
 
 -spec create(entity_logic:req()) -> errors:error().
 create(_) ->
-    ?ERR_NOT_SUPPORTED(?err_ctx()).
+    ?ERROR_NOT_SUPPORTED.
 
 
 -spec get(entity_logic:req(), entity_logic:entity()) ->
@@ -202,12 +202,12 @@ get(#el_req{gri = #gri{scope = shared}}, Record) ->
 
 -spec update(entity_logic:req()) -> errors:error().
 update(_) ->
-    ?ERR_NOT_SUPPORTED(?err_ctx()).
+    ?ERROR_NOT_SUPPORTED.
 
 
 -spec delete(entity_logic:req()) -> errors:error().
 delete(_) ->
-    ?ERR_NOT_SUPPORTED(?err_ctx()).
+    ?ERROR_NOT_SUPPORTED.
 
 
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
@@ -237,4 +237,4 @@ required_admin_privileges(_) ->
 
 -spec validate(entity_logic:req()) -> errors:error().
 validate(_) ->
-    ?ERR_NOT_SUPPORTED(?err_ctx()).
+    ?ERROR_NOT_SUPPORTED.

@@ -298,7 +298,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     ),
 
     % Tokens can be generated only for existing clusters
-    ?assertMatch(?ERR_NOT_FOUND, AcquireGuiToken(CookieU2, ?OP_WORKER_GUI, <<"bad-cluster">>)),
+    ?assertMatch(?ERROR_NOT_FOUND, AcquireGuiToken(CookieU2, ?OP_WORKER_GUI, <<"bad-cluster">>)),
 
     % Make sure provider gui tokens are properly accepted in REST
     {ok, ProviderIdentityToken} = oz_test_utils:call_oz(Config, token_logic, create_provider_temporary_token, [

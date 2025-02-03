@@ -254,7 +254,7 @@ unknown_gui_messages_are_not_found(Config) ->
             module = zone_logic,
             function = get_gui_message_as_map,
             args = [<<"badMessageId">>],
-            expected_result = ?ERROR_REASON(?ERR_NOT_FOUND)
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
     },
     UpdateApiTestSpec = #api_test_spec{
@@ -265,7 +265,7 @@ unknown_gui_messages_are_not_found(Config) ->
             module = zone_logic,
             function = update_gui_message,
             args = [auth, <<"badMessageId">>, data],
-            expected_result = ?ERROR_REASON(?ERR_NOT_FOUND)
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetApiTestSpec)),

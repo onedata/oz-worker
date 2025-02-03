@@ -545,7 +545,7 @@ get_space_alias_test(Config) ->
             module = user_logic,
             function = get_space_alias,
             args = [auth, U1, S1],
-            expected_result = ?ERROR_REASON(?ERR_NOT_FOUND)
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
         % TODO VFS-4520 Tests for GraphSync API
     },
@@ -616,7 +616,7 @@ delete_space_alias_test(Config) ->
             Config, user_logic, get_space_alias, [?ROOT, U1, S1]
         ),
         case ShouldSucceed of
-            true -> ?assertMatch(?ERR_NOT_FOUND, Result);
+            true -> ?assertMatch(?ERROR_NOT_FOUND, Result);
             false -> ?assertMatch({ok, ExpAlias}, Result)
         end
     end,

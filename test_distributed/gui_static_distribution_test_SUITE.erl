@@ -282,19 +282,19 @@ gui_upload_is_not_possible_for_onezone_services(Config) ->
     {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
 
     % With no auth
-    ?assertMatch(?ERR_NOT_FOUND, perform_upload(
+    ?assertMatch(?ERROR_NOT_FOUND, perform_upload(
         Config, <<"ozw">>, ?ONEZONE_CLUSTER_ID, GuiPackage, #{}
     )),
-    ?assertMatch(?ERR_NOT_FOUND, perform_upload(
+    ?assertMatch(?ERROR_NOT_FOUND, perform_upload(
         Config, <<"onp">>, ?ONEZONE_CLUSTER_ID, GuiPackage, #{}
     )),
 
     % With provider auth
     {ok, {_Provider, ProviderToken}} = oz_test_utils:create_provider(Config),
-    ?assertMatch(?ERR_NOT_FOUND, perform_upload(
+    ?assertMatch(?ERROR_NOT_FOUND, perform_upload(
         Config, <<"ozw">>, ?ONEZONE_CLUSTER_ID, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
-    ?assertMatch(?ERR_NOT_FOUND, perform_upload(
+    ?assertMatch(?ERROR_NOT_FOUND, perform_upload(
         Config, <<"onp">>, ?ONEZONE_CLUSTER_ID, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )).
 
@@ -304,10 +304,10 @@ gui_upload_for_inexistent_service_returns_not_found(Config) ->
     ClusterId = ProviderId,
     {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
 
-    ?assertMatch(?ERR_NOT_FOUND, perform_upload(
+    ?assertMatch(?ERROR_NOT_FOUND, perform_upload(
         Config, <<"abc">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
-    ?assertMatch(?ERR_NOT_FOUND, perform_upload(
+    ?assertMatch(?ERROR_NOT_FOUND, perform_upload(
         Config, <<"xyz">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )).
 
@@ -315,10 +315,10 @@ gui_upload_for_inexistent_service_returns_not_found(Config) ->
 gui_upload_for_inexistent_cluster_returns_not_found(Config) ->
     {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
 
-    ?assertMatch(?ERR_NOT_FOUND, perform_upload(
+    ?assertMatch(?ERROR_NOT_FOUND, perform_upload(
         Config, <<"opw">>, <<"bad-cluster-id">>, GuiPackage, #{}
     )),
-    ?assertMatch(?ERR_NOT_FOUND, perform_upload(
+    ?assertMatch(?ERROR_NOT_FOUND, perform_upload(
         Config, <<"onp">>, <<"bad-cluster-id">>, GuiPackage, #{}
     )).
 

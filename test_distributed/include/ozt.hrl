@@ -38,7 +38,7 @@
 -define(assertSuccessOrAlreadyExists(Result), ?assertMatch(ok, case Result of
     ok -> ok;
     {ok, _} -> ok;
-    ?ERR_ALREADY_EXISTS -> ok;
+    ?ERROR_ALREADY_EXISTS -> ok;
     ?ERR_RELATION_ALREADY_EXISTS(_, _, _, _) -> ok;
     Other -> Other
 end)).
@@ -48,7 +48,7 @@ end)).
 -define(assertSuccessOrDoesNotExist(Result), ?assertMatch(ok, case Result of
     ok -> ok;
     {ok, _} -> ok;
-    ?ERR_NOT_FOUND -> ok;
+    ?ERROR_NOT_FOUND -> ok;
     ?ERR_RELATION_DOES_NOT_EXIST(_, _, _, _) -> ok;
     Other -> Other
 end)).

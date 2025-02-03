@@ -293,7 +293,7 @@ create_with_custom_id_generator_seed_test(Config) ->
     ?assertEqual(SpaceId, datastore_key:new_from_digest([<<"customSpaceIdGeneratorSeed">>, IdGeneratorSeed])),
 
     ErrorResults = lists:delete({ok, SpaceId}, Results),
-    ?assertEqual(lists:duplicate(SpaceCount - 1, ?ERR_ALREADY_EXISTS), ErrorResults).
+    ?assertEqual(lists:duplicate(SpaceCount - 1, ?ERROR_ALREADY_EXISTS), ErrorResults).
 
 
 list_privileges_test(Config) ->
@@ -579,16 +579,16 @@ get_marketplace_data_test(Config) ->
             method = get,
             path = [<<"/spaces/marketplace/">>, S2],
             expected_code = ?HTTP_404_NOT_FOUND,
-            expected_body = #{<<"error">> => errors:to_json(?ERR_NOT_FOUND)}
+            expected_body = #{<<"error">> => errors:to_json(?ERROR_NOT_FOUND)}
         },
         logic_spec = LogicSpec#logic_spec{
             args = [auth, S2],
-            expected_result = ?ERROR_REASON(?ERR_NOT_FOUND)
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         },
         gs_spec = GSSpec#gs_spec{
             gri = #gri{type = od_space, id = S2, aspect = marketplace_data, scope = protected},
-            expected_result_op = ?ERROR_REASON(?ERR_NOT_FOUND),
-            expected_result_gui = ?ERROR_REASON(?ERR_NOT_FOUND)
+            expected_result_op = ?ERROR_REASON(?ERROR_NOT_FOUND),
+            expected_result_gui = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
     })).
 
@@ -866,7 +866,7 @@ delete_test(Config) ->
         #{
             space_id => SpaceId,
             in_marketplace => AdvertisedInMarketplace,
-            share_entries => ozt_shares:gen_shares_for_space(SpaceId, ?RAND_INT(0, 1024))
+            share_entries => ozt_shares:gen_shares_for_space(SpaceId, ?RAND_INT(0, 200))
         }
     end,
     DeleteEntityFun = fun(#{space_id := SpaceId} = _Env) ->
@@ -920,7 +920,15 @@ delete_test(Config) ->
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
-    )).
+    )),
+
+    % To avoid long-lasting tests, the above scenario generates moderate number of shares
+    % (the scenario is run multiple times). A bigger share registry is tested below.
+    SpaceWithManyShares = ozt_spaces:create(),
+    utils:repeat(2222, fun() -> ozt_shares:create(SpaceWithManyShares) end),
+    ?assertEqual(2222, length(ozt:rpc(share_registry, list_entries, [SpaceWithManyShares, #{limit => infinity}]))),
+    ?assertMatch(ok, ozt:rpc(space_logic, delete, [aai:root_auth(), SpaceWithManyShares])),
+    ?assertEqual(0, length(ozt:rpc(share_registry, list_entries, [SpaceWithManyShares, #{limit => infinity}]))).
 
 
 list_storages_test(Config) ->
@@ -1266,7 +1274,7 @@ get_membership_requester_info_test(Config) ->
     ?assertEqual(?ERR_BAD_VALUE_IDENTIFIER(<<"requestId">>), ozt:rpc(
         space_logic, get_membership_requester_info, [?USER(SpaceOperatorId), SpaceId, <<"abc">>]
     )),
-    ?assertEqual(?ERR_NOT_FOUND, ozt:rpc(
+    ?assertEqual(?ERROR_NOT_FOUND, ozt:rpc(
         space_logic, get_membership_requester_info, [?USER(SpaceOperatorId), SpaceId, <<"baduserid-xyz">>]
     )).
 
@@ -1600,7 +1608,7 @@ update_support_parameters_test(Config) ->
                                 success
                         end;
                     false ->
-                        {failure, ?ERR_NOT_SUPPORTED}
+                        {failure, ?ERROR_NOT_SUPPORTED}
                 end
         end
     end,

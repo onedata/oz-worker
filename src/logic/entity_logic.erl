@@ -341,7 +341,7 @@ ensure_operation_supported(State = #state{req = #el_req{gri = #gri{scope = auto}
 ensure_operation_supported(State) ->
     case ensure_operation_supported_internal(State) of
         true -> State;
-        false -> throw(?ERR_NOT_SUPPORTED(?err_ctx()))
+        false -> throw(?ERROR_NOT_SUPPORTED)
     end.
 
 
@@ -369,7 +369,7 @@ ensure_operation_supported_internal(State) ->
 ensure_exists(State) ->
     case ensure_exists_internal(State) of
         true -> State;
-        false -> throw(?ERR_NOT_FOUND(?err_ctx()))
+        false -> throw(?ERROR_NOT_FOUND)
     end.
 
 

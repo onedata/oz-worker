@@ -42,7 +42,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERR_NOT_FOUND
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -53,7 +53,7 @@ fetch_entity(#gri{id = HandleId}) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Handle, Revision}};
         _ ->
-            ?ERR_NOT_FOUND(?err_ctx())
+            ?ERROR_NOT_FOUND
     end.
 
 
@@ -588,7 +588,7 @@ create_handle_unsafe(ShareId, Req = #el_req{gri = GRI, auth = Auth, data = Data}
 
     {ok, #document{value = InitialShareRecord}} = od_share:get(ShareId),
 
-    InitialShareRecord#od_share.handle =:= undefined orelse throw(?ERR_ALREADY_EXISTS(?err_ctx())),
+    InitialShareRecord#od_share.handle =:= undefined orelse throw(?ERROR_ALREADY_EXISTS),
 
     RevisedMetadata = raw_metadata_to_revised_for_publication(
         MetadataPrefix, RawMetadata, ShareId, InitialShareRecord
@@ -645,9 +645,9 @@ create_handle_unsafe(ShareId, Req = #el_req{gri = GRI, auth = Auth, data = Data}
 %% @doc must be run in a critical section for ShareId x HandleId
 -spec update_handle_unsafe(od_handle:id(), od_share:id(), entity_logic:data()) -> ok | no_return().
 update_handle_unsafe(HandleId, ShareId, Data) ->
-    % race condition: in case of the share being already deleted, this will throw ?ERR_NOT_FOUND
+    % race condition: in case of the share being already deleted, this will throw ?ERROR_NOT_FOUND
     #document{value = ShareRecord} = ?check(od_share:get(ShareId)),
-    % race condition: in case of the handle being already deleted, this will throw ?ERR_NOT_FOUND
+    % race condition: in case of the handle being already deleted, this will throw ?ERROR_NOT_FOUND
     #document{value = #od_handle{
         handle_service = HandleService,
         timestamp = PreviousTimestamp,
@@ -688,7 +688,7 @@ update_handle_unsafe(HandleId, ShareId, Data) ->
 %%--------------------------------------------------------------------
 -spec delete_handle_unsafe(od_handle:id(), od_share:id()) -> ok | no_return().
 delete_handle_unsafe(HandleId, ShareId) ->
-    % race condition: in case of the handle being already deleted, this will throw ?ERR_NOT_FOUND
+    % race condition: in case of the handle being already deleted, this will throw ?ERROR_NOT_FOUND
     #document{value = #od_handle{
         handle_service = HandleService,
         resource_id = ShareId,

@@ -38,7 +38,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERR_NOT_FOUND
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -83,7 +83,7 @@ is_subscribable(_, _) -> false.
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(_Req) ->
-    ?ERR_NOT_SUPPORTED(?err_ctx()).
+    ?ERROR_NOT_SUPPORTED.
 
 
 %%--------------------------------------------------------------------
@@ -150,7 +150,7 @@ get(#el_req{gri = #gri{aspect = privileges}}, _) ->
 get(#el_req{gri = #gri{aspect = {gui_message, MessageId}}}, _) ->
     case gui_message:get(MessageId) of
         {ok, #document{value = Message}} -> {ok, Message};
-        {error, not_found} -> throw(?ERR_NOT_FOUND(?err_ctx()))
+        {error, not_found} -> throw(?ERROR_NOT_FOUND)
     end;
 
 get(#el_req{gri = #gri{aspect = health}}, _) ->
@@ -175,7 +175,7 @@ update(#el_req{gri = #gri{aspect = {gui_message, MessageId}}, data = Data}) ->
     end,
     case gui_message:update(MessageId, UpdateFun) of
         {ok, _} -> ok;
-        {error, not_found} -> throw(?ERR_NOT_FOUND(?err_ctx()))
+        {error, not_found} -> throw(?ERROR_NOT_FOUND)
     end.
 
 
@@ -186,7 +186,7 @@ update(#el_req{gri = #gri{aspect = {gui_message, MessageId}}, data = Data}) ->
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(_GRI) ->
-    ?ERR_NOT_SUPPORTED(?err_ctx()).
+    ?ERROR_NOT_SUPPORTED.
 
 
 %%--------------------------------------------------------------------

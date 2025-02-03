@@ -37,7 +37,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERR_NOT_FOUND
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -48,7 +48,7 @@ fetch_entity(#gri{id = GroupId}) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Group, Revision}};
         _ ->
-            ?ERR_NOT_FOUND(?err_ctx())
+            ?ERROR_NOT_FOUND
     end.
 
 
@@ -178,7 +178,7 @@ create(Req = #el_req{gri = #gri{id = ProposedGroupId, aspect = instance} = GRI, 
     }},
     case od_group:create(GroupDoc) of
         {error, already_exists} ->
-            throw(?ERR_ALREADY_EXISTS(?err_ctx()));
+            throw(?ERROR_ALREADY_EXISTS);
         {ok, #document{key = GroupId}} ->
             case Req#el_req.auth_hint of
                 ?AS_USER(UserId) ->

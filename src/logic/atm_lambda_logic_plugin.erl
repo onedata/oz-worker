@@ -43,7 +43,7 @@
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
-%%      if there was an error, such as ?ERR_NOT_FOUND
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(gri:gri()) ->
@@ -54,7 +54,7 @@ fetch_entity(#gri{id = AtmLambdaId}) ->
             {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {AtmLambda, Revision}};
         _ ->
-            ?ERR_NOT_FOUND(?err_ctx())
+            ?ERROR_NOT_FOUND
     end.
 
 
@@ -526,7 +526,7 @@ add_revision_to_lambda(AtmLambda = #od_atm_lambda{
             end,
             case atm_lambda_revision_registry:has_revision(TargetRevisionNumber, RevisionRegistry) of
                 true ->
-                    ?ERR_ALREADY_EXISTS(?err_ctx());
+                    ?ERROR_ALREADY_EXISTS;
                 false ->
                     {ok, AtmLambda#od_atm_lambda{
                         revision_registry = atm_lambda_revision_registry:add_revision(
