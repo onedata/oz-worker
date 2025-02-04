@@ -387,7 +387,7 @@ verify_logic_result({ok, GotList}, ?OK_LIST_CONTAINS(ExpList)) ->
         ExpList -- GotList =:= [];
 verify_logic_result({ok, GotList}, ?OK_LIST_DOESNT_CONTAIN(ExpList)) ->
         GotList -- ExpList =:= GotList;
-verify_logic_result(?ERR = Error, ?ERROR_REASON(Error)) ->
+verify_logic_result({error, Error}, ?ERROR_REASON({error, Error})) ->
     true;
 verify_logic_result({ok, Result}, ?OK_TERM(VerifyFun)) when is_function(VerifyFun) ->
     VerifyFun(Result);
@@ -651,7 +651,7 @@ check_gs_call(GsSpec, Endpoint, GsClient, Data) ->
 % Verifies if gs result is as expected
 verify_gs_result({ok, ?GS_RESP(undefined)}, ?OK_RES) ->
     true;
-verify_gs_result(?ERR = Error, ?ERROR_REASON(Error)) ->
+verify_gs_result({error, Error}, ?ERROR_REASON({error, Error})) ->
     true;
 verify_gs_result({ok, ?GS_RESP(Map)}, ?OK_MAP(ExpMap)) when is_map(Map) ->
     case maps:take(<<"gri">>, ExpMap) of
