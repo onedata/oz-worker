@@ -26,6 +26,7 @@
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
 -define(MINIMUM_SUPPORT_SIZE, oz_worker:get_env(minimum_space_support_size, 1000000)).
+-define(DEFAULT_OP_WORKER_PORT, 443).
 
 %%%===================================================================
 %%% API
@@ -69,6 +70,7 @@ operation_supported(create, support, private) -> true;
 operation_supported(create, map_idp_user, private) -> true;
 operation_supported(create, map_idp_group, private) -> true;
 operation_supported(create, verify_provider_identity, private) -> true;
+% deprecated operation replaced with update dns_txt_records
 operation_supported(create, {dns_txt_record, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
@@ -93,9 +95,11 @@ operation_supported(get, current_time, private) -> true;
 operation_supported(update, instance, private) -> true;
 operation_supported(update, {space, _}, private) -> true;
 operation_supported(update, domain_config, private) -> true;
+operation_supported(update, dns_txt_records, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {space, _}, private) -> true;
+% deprecated operation replaced with update dns_txt_records
 operation_supported(delete, {dns_txt_record, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
@@ -150,18 +154,6 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
     {ok, resource, {NewGRI, {SpaceData, Rev}}};
 
-create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}, data = Data}) ->
-    case fetch_entity(#gri{id = ProviderId}) of
-        {true, {#od_provider{subdomain_delegation = true}, _}} ->
-            #{<<"content">> := Content} = Data,
-            TTL = maps:get(<<"ttl">>, Data, undefined),
-            ok = dns_state:set_txt_record(ProviderId, RecordName, Content, TTL);
-        {true, {#od_provider{subdomain_delegation = false}, _}} ->
-            ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
-        Error ->
-            Error
-    end;
-
 create(#el_req{gri = #gri{aspect = map_idp_user}, data = Data}) ->
     IdP = maps:get(<<"idp">>, Data),
     UserId = maps:get(<<"userId">>, Data),
@@ -192,6 +184,21 @@ create(#el_req{auth = Auth, gri = #gri{aspect = verify_provider_identity}, data 
         {ok, {?SUB(?ONEPROVIDER, ProviderId), _}} -> ok;
         {ok, _} -> ?ERROR_TOKEN_INVALID;
         Error -> Error
+    end;
+
+create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}, data = Data}) ->
+    case fetch_entity(#gri{id = ProviderId}) of
+        {true, {#od_provider{subdomain_delegation = true}, _}} ->
+            #{<<"content">> := Content} = Data,
+            TTL = maps:get(<<"ttl">>, Data, undefined),
+            TxtRecordsDiff = #{op_worker => #{
+                set => #{RecordName => {Content, TTL}}
+            }},
+            ok = dns_state:update_txt_records(ProviderId, TxtRecordsDiff);
+        {true, {#od_provider{subdomain_delegation = false}, _}} ->
+            ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
+        Error ->
+            Error
     end.
 
 
@@ -227,20 +234,31 @@ get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Provider) ->
 
 get(#el_req{gri = #gri{aspect = domain_config, id = ProviderId}}, Provider) ->
     #od_provider{
-        domain = Domain, subdomain_delegation = SubdomainDelegation
+        domain = Domain, subdomain_delegation = SubdomainDelegation,
+        op_worker_port = OpWorkerPort, ones3_port = Ones3Port
     } = Provider,
     Response = #{
         <<"domain">> => Domain,
         <<"subdomainDelegation">> => SubdomainDelegation,
         <<"subdomain">> => null,
-        <<"ipList">> => []
+        %% TODO VFS-11504 rm in 23.02.x
+        <<"ipList">> => [],
+        <<"opWorkerIpAddresses">> => [],
+        <<"opWorkerPort">> => OpWorkerPort,
+        <<"oneS3IpAddresses">> => [],
+        <<"oneS3Port">> => utils:undefined_to_null(Ones3Port)
     },
     case SubdomainDelegation of
         true ->
-            {ok, Subdomain, IPs} = dns_state:get_delegation_config(ProviderId),
+            {ok, Subdomain, ProviderIps} = dns_state:get_delegation_config(ProviderId),
+            OpWorkerIps = maps:get(op_worker, ProviderIps, []),
+            OneS3Ips = maps:get(ones3, ProviderIps, []),
             {ok, Response#{
                 <<"subdomain">> => Subdomain,
-                <<"ipList">> => IPs
+                %% TODO VFS-11504 rm in 23.02.x
+                <<"ipList">> => OpWorkerIps,
+                <<"opWorkerIpAddresses">> => OpWorkerIps,
+                <<"oneS3IpAddresses">> => OneS3Ips
             }};
         false ->
             {ok, Response}
@@ -321,7 +339,36 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}
             true -> update_provider_subomain(ProviderId, Data);
             false -> update_provider_domain(ProviderId, Data)
         end
-    end).
+    end);
+
+update(#el_req{gri = #gri{id = ProviderId, aspect = dns_txt_records}, data = Data}) ->
+    case fetch_entity(#gri{id = ProviderId}) of
+        {true, {#od_provider{subdomain_delegation = true}, _}} ->
+            DecodeTxtRecordsFun = fun(FieldKey) ->
+                lists:foldl(fun(TxtRecordJson, Acc) ->
+                    TxtRecordName = maps:get(<<"name">>, TxtRecordJson),
+                    TxtRecordContent = maps:get(<<"content">>, TxtRecordJson),
+                    TxtRecordTTL = maps:get(<<"ttl">>, TxtRecordJson, undefined),
+
+                    Acc#{TxtRecordName => {TxtRecordContent, TxtRecordTTL}}
+                end, #{}, utils:ensure_list(maps:get(FieldKey, Data, [])))
+            end,
+            TxtRecordsDiff = #{
+                op_worker => #{
+                    set => DecodeTxtRecordsFun(<<"setOpWorkerTxtRecord">>),
+                    unset => utils:ensure_list(maps:get(<<"unsetOpWorkerTxtRecordName">>, Data, []))
+                },
+                ones3 => #{
+                    set => DecodeTxtRecordsFun(<<"setOneS3TxtRecord">>),
+                    unset => utils:ensure_list(maps:get(<<"unsetOneS3TxtRecordName">>, Data, []))
+                }
+            },
+            ok = dns_state:update_txt_records(ProviderId, TxtRecordsDiff);
+        {true, {#od_provider{subdomain_delegation = false}, _}} ->
+            ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
+        Error ->
+            Error
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -367,7 +414,8 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
     storage_logic:revoke_support(?PROVIDER(ProviderId), ProviderId, SpaceId);
 
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}}) ->
-    ok = dns_state:remove_txt_record(ProviderId, RecordName).
+    TxtRecordsDiff = #{op_worker => #{unset => [RecordName]}},
+    ok = dns_state:update_txt_records(ProviderId, TxtRecordsDiff).
 
 
 %%--------------------------------------------------------------------
@@ -431,11 +479,11 @@ authorize(#el_req{operation = create, gri = #gri{id = undefined, aspect = instan
 authorize(#el_req{operation = create, gri = #gri{id = undefined, aspect = instance_dev}}, _) ->
     true =:= oz_worker:get_env(dev_mode, true);
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->
-    auth_by_self(Req);
-
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
     auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
+
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->
+    auth_by_self(Req);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = {check_my_ip, _}}}, _) ->
     true;
@@ -536,14 +584,17 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = {space, _}}}, _)
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = domain_config}}, _) ->
     auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = dns_txt_records}}, _) ->
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
+
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, _) ->
     auth_by_self_or_cluster_privilege(Req, ?CLUSTER_DELETE);
 
-authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
-    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
-
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, _) ->
     auth_by_self(Req);
+
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(_, _) ->
     false.
@@ -602,35 +653,16 @@ required_admin_privileges(_) ->
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}) ->
-    SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
-    SubdomainDelegationParam = maps:get(<<"subdomainDelegation">>, Data, undefined),
-    DomainRelatedFields = case {SubdomainDelegationParam, SubdomainDelegationSupported} of
-        {true, false} ->
-            throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED);
-        {true, true} ->
-            #{
-                <<"subdomain">> => {binary, subdomain},
-                <<"ipList">> => {list_of_ipv4_addresses, any}
-            };
-        {false, _} ->
-            #{<<"domain">> => {binary, domain}};
-        {_, _} ->
-            % valid subdomainDelegation field was not sent, which will cause
-            % BAD_DATA error. No need to generate domain related fields.
-            #{}
-    end,
-    #{
-        required => DomainRelatedFields#{
-            <<"token">> => {invite_token, ?REGISTER_ONEPROVIDER},
-            <<"name">> => {binary, name},
-            <<"subdomainDelegation">> => {boolean, any},
-            <<"adminEmail">> => {binary, email}
-        },
-        optional => #{
-            <<"latitude">> => {float, {between, -90, 90}},
-            <<"longitude">> => {float, {between, -180, 180}}
-        }
-    };
+    RequiredFields = #{
+        <<"token">> => {invite_token, ?REGISTER_ONEPROVIDER},
+        <<"name">> => {binary, name},
+        <<"adminEmail">> => {binary, email}
+    },
+    OptionalFields = #{
+        <<"latitude">> => {float, {between, -90, 90}},
+        <<"longitude">> => {float, {between, -180, 180}}
+    },
+    build_domain_config_sanitizer_spec(RequiredFields, OptionalFields, Data);
 
 validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = instance_dev}}) ->
     ValidationRules = #{required := Required} = validate(Req#el_req{gri = GRI#gri{aspect = instance}}),
@@ -646,17 +678,6 @@ validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
         <<"size">> => {integer, {not_lower_than, ?MINIMUM_SUPPORT_SIZE}}
     }
 };
-
-validate(#el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}) ->
-    #{
-        required => #{
-            {aspect, <<"recordName">>} => {binary, non_empty},
-            <<"content">> => {binary, non_empty}
-        },
-        optional => #{
-            <<"ttl">> => {integer, {not_lower_than, 0}}
-        }
-    };
 
 validate(#el_req{operation = create, gri = #gri{aspect = map_idp_user}}) -> #{
     required => #{
@@ -685,6 +706,17 @@ validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identit
         }
     };
 
+validate(#el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}) ->
+    #{
+        required => #{
+            {aspect, <<"recordName">>} => {binary, non_empty},
+            <<"content">> => {binary, non_empty}
+        },
+        optional => #{
+            <<"ttl">> => {integer, {not_lower_than, 0}}
+        }
+    };
+
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
@@ -701,29 +733,106 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = domain_config}, data = Data}) ->
-    case maps:get(<<"subdomainDelegation">>, Data, undefined) of
-        true ->
-            true == oz_worker:get_env(subdomain_delegation_supported, true) orelse
-                throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED),
-            #{required => #{
-                <<"subdomainDelegation">> => {boolean, any},
-                <<"subdomain">> => {binary, subdomain},
-                <<"ipList">> => {list_of_ipv4_addresses, any}
-            }};
-        false ->
-            #{required => #{
-                <<"subdomainDelegation">> => {boolean, any},
-                <<"domain">> => {binary, domain}
-            }};
-        _ ->
-            #{required => #{
-                <<"subdomainDelegation">> => {boolean, any}
-            }}
-    end.
+    build_domain_config_sanitizer_spec(#{}, #{}, Data);
+
+validate(#el_req{operation = update, gri = #gri{aspect = dns_txt_records}}) ->
+    TxtRecordValidator = #{
+        <<"name">> => {binary, non_empty},
+        <<"content">> => {binary, non_empty},
+        <<"ttl">> => {optional, integer, {not_lower_than, 0}}
+    },
+
+    #{
+        at_least_one => #{
+            <<"setOpWorkerTxtRecord">> => {json, TxtRecordValidator},
+            <<"setOneS3TxtRecord">> => {json, TxtRecordValidator},
+            <<"unsetOpWorkerTxtRecordName">> => {binary, non_empty},
+            <<"unsetOneS3TxtRecordName">> => {binary, non_empty}
+        }
+    }.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+
+%% @private
+-spec build_domain_config_sanitizer_spec(
+    entity_logic_sanitizer:parameter_specs(),
+    entity_logic_sanitizer:parameter_specs(),
+    entity_logic:data()
+) ->
+    entity_logic_sanitizer:sanitizer_spec().
+build_domain_config_sanitizer_spec(OtherRequiredFields, OtherOptionalFields, Data) ->
+    AlwaysRequiredFields = OtherRequiredFields#{<<"subdomainDelegation">> => {boolean, any}},
+    OptionalFields = OtherOptionalFields#{<<"opWorkerPort">> => {integer, {between, 0, 65535}}},
+
+    case maps:get(<<"subdomainDelegation">>, Data, undefined) of
+        true ->
+            assert_subdomain_delegation_supported(),
+
+            #{
+                required => case is_map_key(<<"oneS3Port">>, Data) orelse is_map_key(<<"oneS3IpAddresses">>, Data) of
+                    true ->
+                        AlwaysRequiredFields#{
+                            <<"subdomain">> => {binary, subdomain},
+                            <<"oneS3IpAddresses">> => {list_of_ipv4_addresses, any},
+                            <<"oneS3Port">> => {integer, {between, 0, 65535}}
+                        };
+                    false ->
+                        AlwaysRequiredFields#{<<"subdomain">> => {binary, subdomain}}
+                end,
+                at_least_one => #{
+                    <<"opWorkerIpAddresses">> => {list_of_ipv4_addresses, any},
+                    %% TODO VFS-11504 rm in 23.02.x
+                    <<"ipList">> => {list_of_ipv4_addresses, any}
+                },
+                optional => OptionalFields
+            };
+        false ->
+            DomainKey = <<"domain">>,
+            IsSubdomainDelegationSupported = is_subdomain_delegation_supported(),
+
+            #{
+                required => AlwaysRequiredFields#{DomainKey => {binary, fun(OpDomain) ->
+                    OpDomain =:= <<>> andalso throw(?ERROR_BAD_VALUE_EMPTY(DomainKey)),
+
+                    case IsSubdomainDelegationSupported of
+                        true ->
+                            OneZoneDomain = oz_worker:get_domain(),
+                            dns_utils:is_equal_or_subdomain(OpDomain, OneZoneDomain) andalso throw(
+                                ?ERROR_BAD_DATA(DomainKey, <<"Cannot use Onezone's subdomain as the provider domain (use the subdomainDelegation=true option)">>)
+                            );
+                        false ->
+                            ok
+                    end,
+
+                    entity_logic_sanitizer:validate_domain(OpDomain),
+                    true
+                end}},
+                optional => OptionalFields#{<<"oneS3Port">> => {integer, {between, 0, 65535}}}
+            };
+        _ ->
+            % valid subdomainDelegation field was not sent, which will cause
+            % BAD_DATA error. No need to generate domain related fields.
+            #{required => AlwaysRequiredFields, optional => OptionalFields}
+    end.
+
+
+%% @private
+-spec assert_subdomain_delegation_supported() -> ok | no_return().
+assert_subdomain_delegation_supported() ->
+    case is_subdomain_delegation_supported() of
+        true -> ok;
+        false -> throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED)
+    end.
+
+
+%% @private
+-spec is_subdomain_delegation_supported() -> boolean().
+is_subdomain_delegation_supported() ->
+    oz_worker:get_env(subdomain_delegation_supported, true).
+
 
 -spec auth_by_self(entity_logic:req()) -> boolean().
 auth_by_self(#el_req{auth = ?PROVIDER(ProvId), gri = #gri{id = ProvId}}) ->
@@ -751,11 +860,11 @@ auth_by_self_or_cluster_privilege(Req, _) ->
 -spec update_provider_domain(ProviderId :: od_provider:id(),
     Data :: entity_logic:data()) -> entity_logic:update_result().
 update_provider_domain(ProviderId, Data) ->
-    Domain = maps:get(<<"domain">>, Data),
+    OpDomainName = maps:get(<<"domain">>, Data),
     Result = od_provider:update(ProviderId, fun(Provider) ->
         {ok, Provider#od_provider{
             subdomain_delegation = false,
-            domain = Domain,
+            domain = OpDomainName,
             subdomain = undefined
         }}
     end),
@@ -776,16 +885,22 @@ update_provider_domain(ProviderId, Data) ->
 -spec update_provider_subomain(ProviderId :: od_provider:id(),
     Data :: entity_logic:data()) -> entity_logic:update_result().
 update_provider_subomain(ProviderId, Data) ->
-    Subdomain = maps:get(<<"subdomain">>, Data),
-    Domain = dns_config:build_fqdn_from_subdomain(Subdomain),
-    IPs = maps:get(<<"ipList">>, Data),
-    Result = case dns_state:set_delegation_config(ProviderId, Subdomain, IPs) of
+    ProviderSubdomainLabel = maps:get(<<"subdomain">>, Data),
+    ProviderIps = #{
+        op_worker => get_op_worker_ips(Data),
+        ones3 => maps:get(<<"oneS3IpAddresses">>, Data, [])
+    },
+
+    Result = case dns_state:set_delegation_config(ProviderId, ProviderSubdomainLabel, ProviderIps) of
         ok ->
+            ProviderDomainName = dns_utils:build_fqdn_from_subdomain(ProviderSubdomainLabel),
             od_provider:update(ProviderId, fun(Provider) ->
                 {ok, Provider#od_provider{
                     subdomain_delegation = true,
-                    domain = Domain,
-                    subdomain = Subdomain
+                    domain = ProviderDomainName,
+                    subdomain = ProviderSubdomainLabel,
+                    op_worker_port = maps:get(<<"opWorkerPort">>, Data, ?DEFAULT_OP_WORKER_PORT),
+                    ones3_port = utils:null_to_undefined(maps:get(<<"oneS3Port">>, Data, null))
                 }}
             end);
         {error, subdomain_exists} ->
@@ -818,11 +933,15 @@ create_provider(Auth, Data, ProviderId, GRI) ->
             false ->
                 {maps:get(<<"domain">>, Data), undefined};
             true ->
-                ReqSubdomain = maps:get(<<"subdomain">>, Data),
-                IPs = maps:get(<<"ipList">>, Data),
-                case dns_state:set_delegation_config(ProviderId, ReqSubdomain, IPs) of
+                ProviderSubdomainLabel = maps:get(<<"subdomain">>, Data),
+                ProviderIps = #{
+                    op_worker => get_op_worker_ips(Data),
+                    ones3 => maps:get(<<"oneS3IpAddresses">>, Data, [])
+                },
+                case dns_state:set_delegation_config(ProviderId, ProviderSubdomainLabel, ProviderIps) of
                     ok ->
-                        {dns_config:build_fqdn_from_subdomain(ReqSubdomain), ReqSubdomain};
+                        ProviderDomainName = dns_utils:build_fqdn_from_subdomain(ProviderSubdomainLabel),
+                        {ProviderDomainName, ProviderSubdomainLabel};
                     {error, subdomain_exists} ->
                         throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>))
                 end
@@ -831,7 +950,10 @@ create_provider(Auth, Data, ProviderId, GRI) ->
         ProviderRecord = #od_provider{
             name = Name,
             subdomain_delegation = SubdomainDelegation,
-            domain = Domain, subdomain = Subdomain,
+            domain = Domain,
+            subdomain = Subdomain,
+            op_worker_port = maps:get(<<"opWorkerPort">>, Data, ?DEFAULT_OP_WORKER_PORT),
+            ones3_port = utils:null_to_undefined(maps:get(<<"oneS3Port">>, Data, null)),
             latitude = Latitude, longitude = Longitude,
             admin_email = AdminEmail,
             creation_time = global_clock:timestamp_seconds()
@@ -856,3 +978,9 @@ create_provider(Auth, Data, ProviderId, GRI) ->
             ?ERROR_INTERNAL_SERVER_ERROR
         end
     end).
+
+
+%% @private
+-spec get_op_worker_ips(map()) -> [inet:ip4_address()].
+get_op_worker_ips(#{<<"opWorkerIpAddresses">> := Ips}) -> Ips;
+get_op_worker_ips(#{<<"ipList">> := Ips}) -> Ips.

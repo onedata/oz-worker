@@ -21,7 +21,9 @@
 %%%     pointing to a resource based on root FileId
 %%%   * if there is a WebResource element without any specified rdf:about
 %%%     attribute, insert the attribute with the same value as the
-%%%     rdf:resource in edm:isShownBy.
+%%%     rdf:resource in edm:isShownBy; empty attribute is treated as no attribute
+%%%   * make sure there is a dcterms:isPartOf element with value exactly "EUreka3D"
+%%%     (insert if not), allow other dcterms:isPartOf elements to coexist
 %%%
 %%% Public handle insertion step:
 %%%   * add an rdf:about attr to edm:ProvidedCHO
@@ -60,7 +62,9 @@
 -define(rdf_resource_attr(Value), #xmlAttribute{name = 'rdf:resource', value = Value}).
 
 -define(is_shown_by_value(FileId), str_utils:format("https://eureka3d.vm.fedcloud.eu/3d/~ts", [FileId])).
+-define(IS_PART_OF_VALUE, "EUreka3D").
 
+-define(INDENT_SIZE, 4).  % per nesting level of an XML, for pretty-formatting
 
 %%%===================================================================
 %%% onezone_plugin_behaviour callbacks
@@ -102,18 +106,19 @@ main_namespace() ->
     {ok, od_handle:parsed_metadata()} | error.
 revise_for_publication(#xmlElement{
     name = 'rdf:RDF', content = MetadataElements
-} = RdfXml, _ShareId, ShareRecord) ->
-    ShareRootFileId = ?check(file_id:guid_to_objectid(ShareRecord#od_share.root_file)),
+} = RdfXml, ShareId, ShareRecord) ->
+    ShareRootFileId = od_share:build_root_file(objectid, ShareId, ShareRecord),
     IsShownByValue = ?is_shown_by_value(ShareRootFileId),
 
     MetadataElementsWithPublicHandles = lists:map(fun
-        (#xmlElement{name = 'edm:ProvidedCHO', attributes = CHOAttrs} = CHOElement) ->
+        (#xmlElement{name = 'edm:ProvidedCHO', content = PCHOContent0, attributes = CHOAttrs} = CHOElement) ->
             CHOElement#xmlElement{
-                attributes = remove_rdf_about_attr(CHOAttrs)
+                attributes = remove_rdf_about_attr(CHOAttrs),
+                content = ensure_text_element(PCHOContent0, 2, 'dcterms:isPartOf', ?IS_PART_OF_VALUE)
             };
         (#xmlElement{name = 'ore:Aggregation', content = AggContent0, attributes = AggAttrs} = AggElement) ->
             AggContent1 = remove_rdf_resource_attr_from_aggregated_cho_element(AggContent0),
-            AggContent2 = insert_element(AggContent1, 'edm:isShownBy', [?rdf_resource_attr(IsShownByValue)]),
+            AggContent2 = insert_empty_element(AggContent1, 2, 'edm:isShownBy', [?rdf_resource_attr(IsShownByValue)]),
             AggElement#xmlElement{
                 attributes = remove_rdf_about_attr(AggAttrs),
                 content = AggContent2
@@ -146,7 +151,7 @@ insert_public_handle(#xmlElement{
         (#xmlElement{name = 'ore:Aggregation', content = AggContent, attributes = AggAttrs} = AggElement) ->
             AggElement#xmlElement{
                 attributes = insert_rdf_about_attr(AggAttrs, overwrite, <<PublicHandle/binary, <<"_AGG">>/binary>>),
-                content = insert_element(AggContent, 'edm:aggregatedCHO', [?rdf_resource_attr(PublicHandle)])
+                content = insert_empty_element(AggContent, 2, 'edm:aggregatedCHO', [?rdf_resource_attr(PublicHandle)])
             };
         (Other) ->
             Other
@@ -197,14 +202,33 @@ remove_rdf_resource_attr_from_aggregated_cho_element(Elements) ->
 
 
 %% @private
-%% @doc existing attrs (if any) are always overwritten with the provided ones
--spec insert_element([#xmlElement{}], atom(), [#xmlAttribute{}]) -> [#xmlElement{}].
-insert_element(Elements, Name, Attrs) ->
+-spec ensure_text_element([#xmlElement{}], non_neg_integer(), atom(), string()) -> [#xmlElement{}].
+ensure_text_element(Elements, XmlDepth, Name, Text) ->
+    case ?find_matching_element(#xmlElement{name = Name, content = [#xmlText{value = Text}]}, Elements) of
+        {ok, _} ->
+            Elements;
+        error ->
+            oai_xml:prepend_element_with_indent(
+                XmlDepth * ?INDENT_SIZE,
+                #xmlElement{name = Name, content = [#xmlText{value = Text}]},
+                Elements
+            )
+    end.
+
+
+%% @private
+%% @doc existing attrs (if any) are always overwritten with the provided ones, the content is always empty
+-spec insert_empty_element([#xmlElement{}], non_neg_integer(), atom(), [#xmlAttribute{}]) -> [#xmlElement{}].
+insert_empty_element(Elements, XmlDepth, Name, Attrs) ->
     case ?find_matching_element(#xmlElement{name = Name}, Elements) of
         {ok, Found} ->
             lists_utils:replace(Found, Found#xmlElement{attributes = Attrs}, Elements);
         error ->
-            oai_xml:prepend_element_with_indent(8, #xmlElement{name = Name, attributes = Attrs}, Elements)
+            oai_xml:prepend_element_with_indent(
+                XmlDepth * ?INDENT_SIZE,
+                #xmlElement{name = Name, attributes = Attrs},
+                Elements
+            )
     end.
 
 
@@ -221,6 +245,9 @@ remove_rdf_about_attr(Attrs) ->
 -spec insert_rdf_about_attr([#xmlAttribute{}], overwrite | honour_existing, binary()) -> [#xmlAttribute{}].
 insert_rdf_about_attr(Attrs, Strategy, Identifier) ->
     case ?find_matching_element(?rdf_about_attr(_), Attrs) of
+        {ok, #xmlAttribute{value = ""} = Found} ->
+            % empty attribute value is treated the same as no attribute
+            lists_utils:replace(Found, ?rdf_about_attr(Identifier), Attrs);
         {ok, Found} when Strategy == honour_existing ->
             Attrs;
         {ok, Found} when Strategy == overwrite ->
@@ -241,7 +268,9 @@ insert_rdf_about_attr(Attrs, Strategy, Identifier) ->
     provided_cho_about_attr :: attr_not_provided | binary(),
     ore_aggregation_about_attr :: attr_not_provided | binary(),
     aggregated_cho_resource_attr :: element_not_provided | attr_not_provided | binary(),
-    is_shown_by_resource_attr :: element_not_provided | attr_not_provided | binary()
+    is_shown_by_resource_attr :: element_not_provided | attr_not_provided | binary(),
+    ispartof_eureka_3d_element_provided :: boolean(),
+    other_ispartof_element_count :: non_neg_integer()
 }).
 
 
@@ -289,7 +318,9 @@ gen_validation_examples() -> lists:flatten([
             provided_cho_about_attr = ?RAND_ELEMENT([attr_not_provided, <<"oai:325sa/ffa72790ef7">>]),
             ore_aggregation_about_attr = ?RAND_ELEMENT([attr_not_provided, <<"oai:kv8ds/kjf7ahi13f">>]),
             aggregated_cho_resource_attr = ?RAND_ELEMENT([attr_not_provided, element_not_provided, <<"oai:ks72a/bma9w8hfdalb">>]),
-            is_shown_by_resource_attr = ?RAND_ELEMENT([attr_not_provided, element_not_provided, <<"https://example.com/about/oai:83jjd:sdfnb1m9x98">>])
+            is_shown_by_resource_attr = ?RAND_ELEMENT([attr_not_provided, element_not_provided, <<"https://example.com/about/oai:83jjd:sdfnb1m9x98">>]),
+            ispartof_eureka_3d_element_provided = ?RAND_ELEMENT([true, false]),
+            other_ispartof_element_count = rand:uniform(4) - 1
         })
     end, 30)
 ]).
@@ -306,14 +337,14 @@ gen_validation_example(Ctx) ->
     #handle_metadata_plugin_validation_example{
         input_raw_xml = gen_input_raw_xml_example(OpeningRdfTag, Ctx),
         input_qualifies_for_publication = true,
-        exp_revised_metadata_generator = fun(_ShareId, ShareRecord) ->
-            gen_exp_metadata(revised, OpeningRdfTag, ShareRecord, undefined, Ctx)
+        exp_revised_metadata_generator = fun(ShareId, ShareRecord) ->
+            gen_exp_metadata(revised, OpeningRdfTag, ShareId, ShareRecord, undefined, Ctx)
         end,
-        exp_final_metadata_generator = fun(_ShareId, ShareRecord, PublicHandle) ->
-            gen_exp_metadata(final, OpeningRdfTag, ShareRecord, PublicHandle, Ctx)
+        exp_final_metadata_generator = fun(ShareId, ShareRecord, PublicHandle) ->
+            gen_exp_metadata(final, OpeningRdfTag, ShareId, ShareRecord, PublicHandle, Ctx)
         end,
-        exp_oai_pmh_metadata_generator = fun(_ShareId, ShareRecord, PublicHandle) ->
-            gen_exp_metadata(oai_pmh, OpeningRdfTag, ShareRecord, PublicHandle, Ctx)
+        exp_oai_pmh_metadata_generator = fun(ShareId, ShareRecord, PublicHandle) ->
+            gen_exp_metadata(oai_pmh, OpeningRdfTag, ShareId, ShareRecord, PublicHandle, Ctx)
         end
     }.
 
@@ -324,8 +355,9 @@ gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
     provided_cho_about_attr = ProvidedChoAboutAttr,
     ore_aggregation_about_attr = OreAggregationAboutAttr,
     aggregated_cho_resource_attr = AggregatedChoResourceAttr,
-    is_shown_by_resource_attr = IsShownByResourceAttr
-}) ->
+    is_shown_by_resource_attr = IsShownByResourceAttr,
+    ispartof_eureka_3d_element_provided = IsPartOfEureka3DElementProvided
+} = ValidationExampleBuilderCtx) ->
     BuildAboutAttrStr = fun
         (attr_not_provided) -> <<"">>;
         (Value) -> <<" rdf:about=\"", Value/binary, "\"">>
@@ -343,17 +375,32 @@ gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
             <<"        <", ElementName/binary, " rdf:resource=\"", ResourceValue/binary, "\"/>\n">>
     end,
 
+    IsPartOfEureka3DElement = case IsPartOfEureka3DElementProvided of
+        true -> <<"        <dcterms:isPartOf>EUreka3D</dcterms:isPartOf>\n">>;
+        false -> <<"">>
+    end,
+
     <<
         "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
         OpeningRdfTag/binary, "\n",
         "    <edm:ProvidedCHO", (BuildAboutAttrStr(ProvidedChoAboutAttr))/binary, ">\n",
+        (build_other_is_part_of_element(1, ValidationExampleBuilderCtx))/binary,
         "        <dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>\n",
         "        <dc:type>book</dc:type>\n",
         "        <dc:language>deu</dc:language>\n",
+        (build_other_is_part_of_element(2, ValidationExampleBuilderCtx))/binary,
+        IsPartOfEureka3DElement/binary,
         "        <edm:type>TEXT</edm:type>\n",
         "        <dcterms:isPartOf>Europeana Foundation Example Records</dcterms:isPartOf>\n",
         "        <dc:identifier>some/internal/identifier/123456</dc:identifier>\n",
+        (build_other_is_part_of_element(3, ValidationExampleBuilderCtx))/binary,
         "    </edm:ProvidedCHO>\n",
+        % empty rdf:about attribute should be treated like no attribute at all
+        "    <edm:WebResource rdf:about=\"\">\n",
+        "        <dc:description>CHO representation</dc:description>\n",
+        "        <dc:type>PMG</dc:type>\n",
+        "        <edm:rights rdf:resource=\"http://creativecommons.org/licenses/by-nc-nd/4.0/\"/>\n",
+        "    </edm:WebResource>\n",
         "    <ore:Aggregation", (BuildAboutAttrStr(OreAggregationAboutAttr))/binary, ">\n",
         (BuildLineWithElementAndResource(<<"edm:aggregatedCHO">>, AggregatedChoResourceAttr))/binary,
         "        <edm:dataProvider>Europeana Foundation</edm:dataProvider>\n",
@@ -380,15 +427,17 @@ gen_input_raw_xml_example(OpeningRdfTag, #validation_example_builder_ctx{
 -spec gen_exp_metadata(
     revised | final | oai_pmh,
     binary(),
+    od_share:id(),
     od_share:record(),
     od_handle:public_handle(),
     #validation_example_builder_ctx{}
 ) ->
     binary().
-gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #validation_example_builder_ctx{
+gen_exp_metadata(MetadataType, OpeningRdfTag, ShareId, ShareRecord, PublicHandle, #validation_example_builder_ctx{
     is_shown_by_resource_attr = IsShownByResourceAttr,
-    aggregated_cho_resource_attr = AggChoResourceAttr
-}) ->
+    aggregated_cho_resource_attr = AggChoResourceAttr,
+    ispartof_eureka_3d_element_provided = IsPartOfEureka3DElementProvided
+} = ValidationExampleBuilderCtx) ->
     {ExpProvChoRdfAboutStr, ExpOreAggRdfAboutStr, ExpAggChoRdfResourceStr} = case MetadataType of
         revised -> {<<"">>, <<"">>, <<"">>};
         _ -> {
@@ -398,24 +447,34 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
         }
     end,
 
-    ShareRootFileId = ?check(file_id:guid_to_objectid(ShareRecord#od_share.root_file)),
+    ShareRootFileId = od_share:build_root_file(objectid, ShareId, ShareRecord),
     ExpIsShownByUrl = <<"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary>>,
     ExpIsShownByLine = <<"        <edm:isShownBy rdf:resource=\"", ExpIsShownByUrl/binary, "\"/>\n">>,
     ExpAggChoLine = <<"        <edm:aggregatedCHO", ExpAggChoRdfResourceStr/binary, "/>\n">>,
-
+    ExpIsPartOfEureka3DElement =  <<"        <dcterms:isPartOf>EUreka3D</dcterms:isPartOf>\n">>,
     <<
         "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
         OpeningRdfTag/binary, "\n",
         "    <edm:ProvidedCHO", ExpProvChoRdfAboutStr/binary, ">\n",
+        (case IsPartOfEureka3DElementProvided of true -> <<"">>; false -> ExpIsPartOfEureka3DElement end)/binary,
+        (build_other_is_part_of_element(1, ValidationExampleBuilderCtx))/binary,
         "        <dc:title xml:lang=\"en\">Metadata Example Record Tier A</dc:title>\n",
         "        <dc:type>book</dc:type>\n",
         "        <dc:language>deu</dc:language>\n",
+        (build_other_is_part_of_element(2, ValidationExampleBuilderCtx))/binary,
+        (case IsPartOfEureka3DElementProvided of true -> ExpIsPartOfEureka3DElement; false -> <<"">> end)/binary,
         "        <edm:type>TEXT</edm:type>\n",
         "        <dcterms:isPartOf>Europeana Foundation Example Records</dcterms:isPartOf>\n",
         "        <dc:identifier>some/internal/identifier/123456</dc:identifier>\n",
+        (build_other_is_part_of_element(3, ValidationExampleBuilderCtx))/binary,
         "    </edm:ProvidedCHO>\n",
+        "    <edm:WebResource rdf:about=\"", (ExpIsShownByUrl)/binary, "\">\n",
+        "        <dc:description>CHO representation</dc:description>\n",
+        "        <dc:type>PMG</dc:type>\n",
+        "        <edm:rights rdf:resource=\"http://creativecommons.org/licenses/by-nc-nd/4.0/\"/>\n",
+        "    </edm:WebResource>\n",
         "    <ore:Aggregation", ExpOreAggRdfAboutStr/binary, ">\n",
-        (case {MetadataType, AggChoResourceAttr} of {revised, _} -> <<"">>; {_, element_not_provided} -> ExpAggChoLine; _ -> <<"">> end)/binary,
+        (case MetadataType /= revised andalso AggChoResourceAttr == element_not_provided of true -> ExpAggChoLine; _ -> <<"">> end)/binary,
         (case IsShownByResourceAttr of element_not_provided -> ExpIsShownByLine; _ -> <<"">> end)/binary,
         (case {MetadataType, AggChoResourceAttr} of {_, element_not_provided} -> <<"">>; _ -> ExpAggChoLine end)/binary,
         "        <edm:dataProvider>Europeana Foundation</edm:dataProvider>\n",
@@ -436,3 +495,22 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareRecord, PublicHandle, #valida
         "    </edm:WebResource>\n",
         "</rdf:RDF>"
     >>.
+
+
+%% @private
+-spec build_other_is_part_of_element(pos_integer(), #validation_example_builder_ctx{}) -> binary().
+build_other_is_part_of_element(Ordinal, #validation_example_builder_ctx{
+    other_ispartof_element_count = OtherIsPartOfElementCount
+}) ->
+    if
+        Ordinal > OtherIsPartOfElementCount ->
+            <<"">>;
+        Ordinal == 1 ->
+            <<"        <dcterms:isPartOf>Europeana Foundation Example Records</dcterms:isPartOf>\n">>;
+        Ordinal == 2 ->
+            <<"        <dcterms:isPartOf>Some other collection</dcterms:isPartOf>\n">>;
+        Ordinal >= 3 ->
+            <<"        <dcterms:isPartOf>We need to go deeper</dcterms:isPartOf>\n">>;
+        true ->
+            <<"">>
+    end.

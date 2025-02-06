@@ -32,6 +32,8 @@
     list_from_until_test/1,
     list_from_until_with_resumption_token_test/1,
     add_element_that_already_exist_test/1,
+    purge_deleted_entry_test/1,
+    purge_deleted_entries_for_service_test/1,
 
     % sequential_tests
     list_handles_from_services_test/1,
@@ -58,7 +60,9 @@ groups() -> [
         list_size_elements_test,
         list_from_until_test,
         list_from_until_with_resumption_token_test,
-        add_element_that_already_exist_test
+        add_element_that_already_exist_test,
+        purge_deleted_entry_test,
+        purge_deleted_entries_for_service_test
     ]},
 
     {sequential_tests, [sequential], [
@@ -232,6 +236,51 @@ add_element_that_already_exist_test(_Config) ->
     ?assertEqual(InitialList, list_completely(
         #{service_id => ?FIRST_HSERVICE, metadata_prefix => MetadataPrefix})
     ).
+
+
+purge_deleted_entry_test(_Config) ->
+    HServiceId = str_utils:format_bin("hs-~ts", [?FUNCTION_NAME]),
+    MetadataPrefix = str_utils:format_bin("mp-~ts", [?FUNCTION_NAME]),
+    HandleId = ?RAND_ID(),
+    Timestamp = ?RAND_TIMESTAMP(),
+
+    ozt:rpc(handle_registry, report_created, [MetadataPrefix, HServiceId, HandleId, Timestamp]),
+
+    DelTimestamp = Timestamp + 100,
+    ?assertEqual(ok, ozt:rpc(handle_registry, report_deleted, [MetadataPrefix, HServiceId, HandleId, Timestamp, DelTimestamp])),
+    ?assertMatch({ok, _}, ozt:rpc(handle_registry, lookup_deleted, [HandleId])),
+
+    ?assertEqual(ok, ozt:rpc(handle_registry, purge_deleted_entry, [HandleId])),
+    ?assertEqual(error, ozt:rpc(handle_registry, lookup_deleted, [HandleId])),
+
+    ?assertMatch(?ERROR_NOT_FOUND, ozt:rpc(handle_registry, purge_deleted_entry, [HandleId])).
+
+
+purge_deleted_entries_for_service_test(_Config) ->
+    HServiceId = str_utils:format_bin("hs-~ts", [?FUNCTION_NAME]),
+    MetadataPrefix = str_utils:format_bin("mp-~ts", [?FUNCTION_NAME]),
+
+    utils:repeat(2222, fun() -> create_entry(HServiceId, MetadataPrefix) end),
+    AllEntries = list_completely(#{metadata_prefix => MetadataPrefix, service_id => HServiceId}),
+
+    lists:foreach(fun(HandleEntry) ->
+        delete_entry(MetadataPrefix, HandleEntry#handle_listing_entry.timestamp, HandleEntry)
+    end, AllEntries),
+    ExpAllDeletedEntries = [E#handle_listing_entry{status = deleted} || E <- AllEntries],
+    ?assertEqual(ExpAllDeletedEntries, list_completely(#{
+        metadata_prefix => MetadataPrefix, service_id => HServiceId, include_deleted => true
+    })),
+    ?assertEqual([], list_completely(#{
+        metadata_prefix => MetadataPrefix, service_id => HServiceId, include_deleted => false
+    })),
+
+    ?assertEqual(ok, ozt:rpc(handle_registry, purge_deleted_entries_for_service, [HServiceId])),
+    ?assertEqual([], list_completely(#{
+        metadata_prefix => MetadataPrefix, service_id => HServiceId, include_deleted => true
+    })),
+    ?assertEqual([], list_completely(#{
+        metadata_prefix => MetadataPrefix, service_id => HServiceId, include_deleted => false
+    })).
 
 
 list_handles_from_services_test(_Config) ->
@@ -473,10 +522,12 @@ update_entry(MetadataPrefix, HandleId, NewTimestamp) ->
         )
     end).
 
-delete_entry(MetadataPrefix, #handle_listing_entry{
+delete_entry(MetadataPrefix, HandleEntry) ->
+    delete_entry(MetadataPrefix, ?RAND_TIMESTAMP(), HandleEntry).
+
+delete_entry(MetadataPrefix, DeletionTimestamp, #handle_listing_entry{
     timestamp = Timestamp, handle_id = HandleId, service_id = HServiceId
 } = HandleEntry) ->
-    DeletionTimestamp = ?RAND_TIMESTAMP(),
     ozt:rpc(handle_registry, report_deleted, [MetadataPrefix, HServiceId, HandleId, Timestamp, DeletionTimestamp]),
     update_expected_entries(MetadataPrefix, HServiceId, fun(OldExpected) ->
         lists:umerge(
@@ -561,12 +612,12 @@ init_per_suite(Config) ->
             end, load_all_expected_entries(#{metadata_prefix => MetadataPrefix})),
             clear_expected_entries(MetadataPrefix)
         end, [?OAI_DC_METADATA_PREFIX, ?EDM_METADATA_PREFIX]),
-        ok = ozt:rpc(handle_registry, purge_all_deleted_entries, []),
-        lists:foreach(fun(MetadataPrefix) ->
-            lists:foreach(fun(HServiceId) ->
+        lists:foreach(fun(HServiceId) ->
+            ok = ozt:rpc(handle_registry, purge_deleted_entries_for_service, [HServiceId]),
+            lists:foreach(fun(MetadataPrefix) ->
                 clear_expected_entries(MetadataPrefix, HServiceId)
-            end, [?FIRST_HSERVICE, ?ANOTHER_HSERVICE, ?SMALL_HSERVICE])
-        end, [?OAI_DC_METADATA_PREFIX, ?EDM_METADATA_PREFIX]),
+            end, [?OAI_DC_METADATA_PREFIX, ?EDM_METADATA_PREFIX])
+        end, [?FIRST_HSERVICE, ?ANOTHER_HSERVICE, ?SMALL_HSERVICE]),
         utils:repeat(?INITIAL_HANDLE_COUNT_IN_SMALL_HSERVICE, fun() -> create_entry(?SMALL_HSERVICE) end),
         utils:repeat(?INITIAL_TOTAL_HANDLE_COUNT - ?INITIAL_HANDLE_COUNT_IN_SMALL_HSERVICE,
             fun() -> create_entry(?RAND_SERVICE()) end)

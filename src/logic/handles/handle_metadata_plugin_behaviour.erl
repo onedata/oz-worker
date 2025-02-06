@@ -5,21 +5,21 @@
 %%% cited in 'LICENSE.txt'.
 %%% @doc
 %%% Behaviour for onezone plugins that handle specific types of metadata
-%%% for Open Data handles (e.g. Dublin Core).
+%%% for Public Data handles (e.g. Dublin Core).
 %%%
-%%% The process of publishing Open Data from the PoV of metadata is as follows:
+%%% The process of publishing Public Data from the PoV of metadata is as follows:
 %%%
-%%%   1) A user submits a request to create a new Open Data handle, providing
+%%%   1) A user submits a request to create a new Public Data handle, providing
 %%%      some metadata (in XML format) along with it.
 %%%   2) The metadata is revised (see revise_for_publication/3):
 %%%      * sanitized as far as format (XML) and schema is concerned
 %%%      * modified by adding/modifying properties in an automatic way (if needed)
-%%%   3) The Open Data record with revised metadata is published in a handle service,
+%%%   3) The Public Data record with revised metadata is published in a handle service,
 %%%      the handle service assigns a public handle (PID, DOI) for the record.
 %%%   4) The metadata is enriched with the public handle (see insert_public_handle/2)
 %%%      and in this "final" version saved to Onezone's DB - whenever the record
 %%%      is viewed through the UI or REST API, this version is served.
-%%%   5) The Open Data record is advertised through the OAI-PMH protocol along with
+%%%   5) The Public Data record is advertised through the OAI-PMH protocol along with
 %%%      the "final" metadata. OAI-PMH is based on XML; when responses are formed, the
 %%%      metadata has to be slightly adopted (see adapt_for_oai_pmh/1), but this does
 %%%      not impact the carried information, just the surrounding structure of the XML.
@@ -154,8 +154,8 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
         description = str_utils:rand_hex(50),
         space = datastore_key:new(),
         handle = datastore_key:new(),
-        root_file = ?check(file_id:guid_to_objectid(file_id:pack_guid(datastore_key:new(), datastore_key:new()))),
-        file_type = case rand:uniform(2) of 1 -> file; 2 -> dir end,
+        root_file_uuid = datastore_key:new(),
+        file_type = case rand:uniform(2) of 1 -> ?REGULAR_FILE_TYPE; 2 -> ?DIRECTORY_TYPE end,
         creation_time = global_clock:timestamp_seconds(),
         creator = ?SUB(user, datastore_key:new())
     },

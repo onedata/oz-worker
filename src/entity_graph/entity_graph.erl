@@ -12,7 +12,6 @@
 %%%     - od_user
 %%%     - od_group
 %%%     - od_space
-%%%     - od_share
 %%%     - od_provider
 %%%     - od_handle_service
 %%%     - od_handle
@@ -264,12 +263,6 @@ ensure_up_to_date(RetriesLeft, Timeout) ->
 %%--------------------------------------------------------------------
 -spec add_relation(ChildType :: entity_type(), ChildId :: entity_id(),
     ParentType :: entity_type(), ParentId :: entity_id()) -> ok | no_return().
-add_relation(od_share, ShareId, od_space, SpaceId) ->
-    add_relation(od_share, ShareId, undefined, od_space, SpaceId, undefined);
-add_relation(od_handle, HandleId, od_share, ShareId) ->
-    add_relation(od_handle, HandleId, undefined, od_share, ShareId, undefined);
-add_relation(od_handle, HandleId, od_handle_service, HServiceId) ->
-    add_relation(od_handle, HandleId, undefined, od_handle_service, HServiceId, undefined);
 add_relation(od_atm_lambda, AtmLambdaId, od_atm_inventory, AtmInventoryId) ->
     add_relation(od_atm_lambda, AtmLambdaId, undefined, od_atm_inventory, AtmInventoryId, undefined);
 add_relation(od_atm_lambda, AtmLambdaId, od_atm_workflow_schema, AtmWorkflowSchemaId) ->
@@ -951,18 +944,11 @@ set_refresh_in_progress(Flag) ->
 %%--------------------------------------------------------------------
 -spec update_dirty_queue(direction(), Flag :: boolean(),
     entity_type(), entity_id()) -> ok.
-update_dirty_queue(_, _, od_share, _) ->
-    % Shares do not take part in eff graph recomputation
-    ok;
 update_dirty_queue(_, _, od_atm_lambda, _) ->
     % atm_lambdas do not take part in eff graph recomputation
     ok;
 update_dirty_queue(_, _, od_atm_workflow_schema, _) ->
     % atm_workflow_schemas do not take part in eff graph recomputation
-    ok;
-update_dirty_queue(top_down, _, od_handle, _) ->
-    % Handles are children towards shares only, modifying this relation should
-    % not cause graph recalculation.
     ok;
 update_dirty_queue(Direction, Flag, EntityType, EntityId) ->
     Priority = get_priority(Direction, EntityType),
@@ -1174,9 +1160,6 @@ get_priority(top_down, od_user) -> 4.
 %% @end
 %%--------------------------------------------------------------------
 -spec mark_record_dirty(direction(), Flag :: boolean(), entity()) -> entity().
-mark_record_dirty(_, _, #od_share{} = Entity) ->
-    % Shares do not take part in eff graph recomputation
-    Entity;
 mark_record_dirty(_, _, #od_atm_lambda{} = Entity) ->
     % atm_lambdas do not take part in eff graph recomputation
     Entity;
@@ -1208,10 +1191,6 @@ mark_record_dirty(top_down, Flag, #od_group{} = Group) ->
     Group#od_group{top_down_dirty = Flag};
 mark_record_dirty(top_down, Flag, #od_space{} = Space) ->
     Space#od_space{top_down_dirty = Flag};
-mark_record_dirty(top_down, _, #od_handle{} = Entity) ->
-    % Handles are children towards shares only, modifying this relation should
-    % not cause graph recalculation.
-    Entity;
 mark_record_dirty(top_down, Flag, #od_harvester{} = Harvester) ->
     Harvester#od_harvester{top_down_dirty = Flag};
 mark_record_dirty(top_down, Flag, #od_storage{} = Storage) ->
@@ -1257,13 +1236,8 @@ has_child(#od_space{users = Users}, od_user, UserId) ->
     maps:is_key(UserId, Users);
 has_child(#od_space{groups = Groups}, od_group, GroupId) ->
     maps:is_key(GroupId, Groups);
-has_child(#od_space{shares = Shares}, od_share, ShareId) ->
-    lists:member(ShareId, Shares);
 has_child(#od_space{harvesters = Harvesters}, od_harvester, HarvesterId) ->
     lists:member(HarvesterId, Harvesters);
-
-has_child(#od_share{handle = Handle}, od_handle, HandleId) ->
-    Handle =:= HandleId;
 
 has_child(#od_provider{storages = Storages}, od_storage, StorageId) ->
     lists:member(StorageId, Storages);
@@ -1327,13 +1301,8 @@ add_child(#od_space{owners = Owners, users = Users} = Space, od_user, UserId, Pr
     };
 add_child(#od_space{groups = Groups} = Space, od_group, GroupId, Privs) ->
     Space#od_space{groups = maps:put(GroupId, Privs, Groups)};
-add_child(#od_space{shares = Shares} = Space, od_share, ShareId, _) ->
-    Space#od_space{shares = [ShareId | Shares]};
 add_child(#od_space{harvesters = Harvesters} = Space, od_harvester, HarvesterId, _) ->
     Space#od_space{harvesters = [HarvesterId | Harvesters]};
-
-add_child(#od_share{} = Share, od_handle, HandleId, _) ->
-    Share#od_share{handle = HandleId};
 
 add_child(#od_provider{storages = Storages} = Provider, od_storage, StorageId, _) ->
     Provider#od_provider{storages = [StorageId | Storages]};
@@ -1471,13 +1440,8 @@ remove_child(#od_space{owners = Owners, users = Users} = Space, od_user, UserId)
     };
 remove_child(#od_space{groups = Groups} = Space, od_group, GroupId) ->
     Space#od_space{groups = maps:remove(GroupId, Groups)};
-remove_child(#od_space{shares = Shares} = Space, od_share, ShareId) ->
-    Space#od_space{shares = lists:delete(ShareId, Shares)};
 remove_child(#od_space{harvesters = Harvesters} = Space, od_harvester, HarvesterId) ->
     Space#od_space{harvesters = lists:delete(HarvesterId, Harvesters)};
-
-remove_child(#od_share{} = Share, od_handle, _HandleId) ->
-    Share#od_share{handle = undefined};
 
 remove_child(#od_provider{storages = Storages} = Provider, od_storage, StorageId) ->
     Provider#od_provider{storages = lists:delete(StorageId, Storages)};
@@ -1558,12 +1522,6 @@ has_parent(#od_group{atm_inventories = AtmInventories}, od_atm_inventory, AtmInv
 has_parent(#od_space{storages = Storages}, od_storage, StorageId) ->
     maps:is_key(StorageId, Storages);
 
-has_parent(#od_share{space = Space}, od_space, SpaceId) ->
-    SpaceId =:= Space;
-
-has_parent(#od_handle{resource_type = ResType, resource_id = ResId}, od_share, ShareId) ->
-    ResType =:= <<"Share">> andalso ResId =:= ShareId;
-
 has_parent(#od_harvester{spaces = Spaces}, od_space, SpaceId) ->
     lists:member(SpaceId, Spaces);
 
@@ -1619,12 +1577,6 @@ add_parent(#od_group{atm_inventories = AtmInventories} = Group, od_atm_inventory
 
 add_parent(#od_space{storages = Storages} = Space, od_storage, StorageId, SupportSize) ->
     Space#od_space{storages = maps:put(StorageId, SupportSize, Storages)};
-
-add_parent(#od_share{} = Share, od_space, SpaceId, _) ->
-    Share#od_share{space = SpaceId};
-
-add_parent(#od_handle{} = Handle, od_share, ShareId, _) ->
-    Handle#od_handle{resource_type = <<"Share">>, resource_id = ShareId};
 
 add_parent(#od_harvester{spaces = Spaces} = Harvester, od_space, SpaceId, _) ->
     Harvester#od_harvester{spaces = [SpaceId | Spaces]};
@@ -1695,12 +1647,6 @@ remove_parent(#od_group{atm_inventories = AtmInventories} = Group, od_atm_invent
 
 remove_parent(#od_space{storages = Storages} = Space, od_storage, StorageId) ->
     Space#od_space{storages = maps:remove(StorageId, Storages)};
-
-remove_parent(#od_share{} = Share, od_space, _SpaceId) ->
-    Share#od_share{space = undefined};
-
-remove_parent(#od_handle{} = Handle, od_share, _ShareId) ->
-    Handle#od_handle{resource_type = undefined, resource_id = undefined};
 
 remove_parent(#od_harvester{spaces = Spaces} = Harvester, od_space, SpaceId) ->
     Harvester#od_harvester{spaces = lists:delete(SpaceId, Spaces)};
@@ -2050,17 +1996,8 @@ update_eff_relations(top_down, #od_storage{} = Storage, EffNeighbours) ->
 %%--------------------------------------------------------------------
 -spec get_children(entity()) ->
     #{dependent => #{entity_type() => relations()}, independent => #{entity_type() => relations()}}.
-get_children(#od_space{shares = Shares} = Space) -> #{
-    dependent => #{od_share => Shares},
-    independent => get_successors(top_down, Space)
-};
 get_children(#od_provider{storages = Storages}) -> #{
     dependent => #{od_storage => Storages}
-};
-get_children(#od_share{handle = undefined}) -> #{
-};
-get_children(#od_share{handle = Handle}) -> #{
-    dependent => #{od_handle => [Handle]}
 };
 get_children(#od_handle_service{} = HService) -> #{
     independent => get_successors(top_down, HService)
@@ -2093,16 +2030,6 @@ get_children(Entity) -> #{
 %%--------------------------------------------------------------------
 -spec get_parents(entity()) ->
     #{dependent => #{entity_type() => relations()}, independent => #{entity_type() => relations()}}.
-get_parents(#od_share{space = Space}) -> #{
-    independent => #{od_space => [Space]}
-};
-get_parents(#od_handle{resource_type = ResourceType, resource_id = ResourceId}) ->
-    #{
-        independent => case ResourceType of
-            <<"Share">> -> #{od_share => [ResourceId]};
-            _ -> #{}
-        end
-    };
 get_parents(#od_atm_lambda{atm_inventories = AtmInventories, atm_workflow_schemas = AtmWorkflowSchemas}) -> #{
     independent => #{
         od_atm_inventory => AtmInventories,

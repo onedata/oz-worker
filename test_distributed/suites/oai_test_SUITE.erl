@@ -15,10 +15,12 @@
 -include_lib("ctool/include/test/performance.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/http/headers.hrl").
+-include_lib("onenv_ct/include/oct_background.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include("http/handlers/oai.hrl").
 
+-define(OZ_NAME, "dev-onezone").
 
 %% API
 -export([all/0, init_per_suite/1, init_per_testcase/2, end_per_testcase/2, end_per_suite/1]).
@@ -543,7 +545,7 @@ identify_test_base(Config, Method) ->
 
     #handle_listing_entry{timestamp = Timestamp} = create_handle(),
     ExpResponseContent = [
-        #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
+        #xmlElement{name = repositoryName, content = [#xmlText{value = ?OZ_NAME}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]}
     ] ++ [
@@ -569,7 +571,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
 
     % identify earliest datestamp with empty repository
     ExpResponseContentEmpty = [
-        #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
+        #xmlElement{name = repositoryName, content = [#xmlText{value = ?OZ_NAME}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]}
     ] ++ [
@@ -585,7 +587,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     create_handle_with_mocked_timestamp(Timestamp2),
 
     ExpResponseContent1 = [
-        #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
+        #xmlElement{name = repositoryName, content = [#xmlText{value = ?OZ_NAME}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]}
     ] ++ [
@@ -600,7 +602,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     modify_handle_with_mocked_timestamp(HandleEntry, Timestamp3),
 
     ExpResponseContent2 = [
-        #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
+        #xmlElement{name = repositoryName, content = [#xmlText{value = ?OZ_NAME}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]}
     ] ++ [
@@ -654,8 +656,15 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
         {ok, _} = ozt:rpc(od_handle_service, update, [HServiceId, fun(HS = #od_handle_service{handles = Handles}) ->
             {ok, HS#od_handle_service{handles = [HandleId | Handles]}}
         end]),
+        {ok, _} = ozt:rpc(od_space, update, [SpaceId, fun(Sp = #od_space{shares = Shares}) ->
+            {ok, Sp#od_space{shares = [ShareId | Shares]}}
+        end]),
+        {ok, _} = ozt:rpc(od_share, update, [ShareId, fun(Sh) ->
+            {ok, Sh#od_share{handle = HandleId}}
+        end]),
 
-        ?assertMatch(ok, ozt:rpc(od_handle, migrate_legacy_handles, [])),
+        ?assertMatch(ok, ozt:rpc(od_handle, migrate_legacy_handles_21_02_5, [])),
+        ?assertMatch(ok, ozt:rpc(od_share, migrate_legacy_shares_21_02_8, [])),
 
         Args = [
             {<<"identifier">>, oai_identifier(HandleId)},
@@ -679,7 +688,7 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
                 #xmlText{value = "\n    "},
                 #xmlElement{
                     name = 'dc:identifier',
-                    content = [#xmlText{value = binary_to_list(ozt:rpc(share_logic, build_public_url, [ShareId]))}]
+                    content = [#xmlText{value = binary_to_list(ozt:rpc(od_share, build_public_url, [ShareId]))}]
                 }
             ]}
         ]),
@@ -1082,41 +1091,48 @@ filtering_of_broken_records_test_base(Config, Method) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    ssl:start(),
-    application:ensure_all_started(hackney),
-    ozt:init_per_suite(Config, fun() ->
-        ozt:set_env(oai_pmh_list_identifiers_batch_size, ?TESTED_LIST_BATCH_SIZE),
-        ozt:set_env(oai_pmh_list_records_batch_size, ?TESTED_LIST_BATCH_SIZE)
-    end).
+    ozt:onenv_init_per_suite(Config, #onenv_test_config{
+        onenv_scenario = "1oz",
+        envs = [{oz_worker, oz_worker, [
+            {oz_name, ?OZ_NAME},
+            {oai_pmh_list_identifiers_batch_size, ?TESTED_LIST_BATCH_SIZE},
+            {oai_pmh_list_records_batch_size, ?TESTED_LIST_BATCH_SIZE}
+        ]}]
+    }).
 
 init_per_testcase(_, Config) ->
     ozt_mocks:freeze_time(),
     ozt_mocks:mock_handle_proxy(),
+
+    % due to simulated DB inconsistencies or the suite failing midway, there
+    % may be some inconsistencies in the share/handle registry, so we need a specialized cleanup
+    AllHandles = [D#document.key || D <- element(2, ozt:rpc(od_handle, list, []))],
+    lists_utils:pforeach(fun(HandleId) ->
+        try
+            ok = ozt:rpc(handle_logic, delete, [?ROOT, HandleId])
+        catch _:_ ->
+            ozt:rpc(od_handle, force_delete, [HandleId])
+        end
+    end, AllHandles),
+
+    lists:foreach(fun(MetadataPrefix) ->
+        lists:foreach(fun(#handle_listing_entry{timestamp = Timestamp, handle_id = HandleId, service_id = HServiceId}) ->
+            ozt:rpc(handle_registry, report_deleted, [MetadataPrefix, HServiceId, HandleId, Timestamp, Timestamp]),
+            ozt:rpc(handle_registry, purge_deleted_entry, [HandleId])
+        end, ozt:rpc(handle_registry, list_completely, [#{metadata_prefix => MetadataPrefix}]))
+    end, ozt_handles:supported_metadata_prefixes()),
+
     ozt:delete_all_entities(),
     Config.
 
-end_per_testcase(filtering_of_broken_records_get_test, _Config) ->
-    end_per_testcase(filtering_of_broken_records_post_test, _Config);
-end_per_testcase(filtering_of_broken_records_post_test, _Config) ->
-    % this test simulates some DB inconsistencies so a specialized cleanup is needed
-    try
-        ozt:delete_all_entities()
-    catch _:_ ->
-        lists:foreach(fun(MetadataPrefix) ->
-            lists:foreach(fun(#handle_listing_entry{timestamp = Timestamp, handle_id = HandleId, service_id = HServiceId}) ->
-                ozt:rpc(handle_registry, report_deleted, [MetadataPrefix, HServiceId, HandleId, Timestamp, Timestamp])
-            end, ozt:rpc(handle_registry, list_completely, [#{metadata_prefix => MetadataPrefix}]))
-        end, ozt_handles:supported_metadata_prefixes())
-    end,
-    end_per_testcase(default, _Config);
+
 end_per_testcase(_, _Config) ->
     ozt_mocks:unmock_handle_proxy(),
     ozt_mocks:unfreeze_time(),
     ok.
 
 end_per_suite(_Config) ->
-    application:stop(hackney),
-    ssl:stop().
+    ozt:onenv_end_per_suite().
 
 %%%===================================================================
 %%% Functions used to validate REST calls
@@ -1266,7 +1282,7 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
         _ -> add_verb(Verb, Args)
     end,
     ResponseDate = time:seconds_to_datetime(?NOW()),
-    ExpectedBody = expected_body(ExpResponseContent, ResponseType, Args2, ResponseDate),
+    ExpectedBody = expected_body(URL, ExpResponseContent, ResponseType, Args2, ResponseDate),
     QueryString = prepare_querystring(Args2),
 
     Request = case Method of
@@ -1299,7 +1315,7 @@ check_oai_request(Code, Verb, Args, Method, ExpResponseContent, ResponseType, Co
 %%%===================================================================
 
 get_oai_pmh_URL() ->
-    str_utils:format_bin("http://~ts", [ozt:get_domain()]).
+    str_utils:format_bin("~ts://~ts", [?RAND_ELEMENT(["http", "https"]), ozt:get_domain()]).
 
 
 get_oai_pmh_api_path() ->
@@ -1334,9 +1350,8 @@ get_domain(Hostname) ->
     string:join(Domain, ".").
 
 
-expected_body(ExpectedResponse, ResponseType, Args, ResponseDate) ->
+expected_body(URL, ExpectedResponse, ResponseType, Args, ResponseDate) ->
     Path = get_oai_pmh_api_path(),
-    URL = get_oai_pmh_URL(),
     RequestURL = binary_to_list(<<URL/binary, Path/binary>>),
 
     ExpectedResponseElement = case ResponseType of
@@ -1420,7 +1435,7 @@ create_handle_with_mocked_timestamp(MetadataPrefix, Metadata, MockedTimestamp) -
     ozt_spaces:list() == [] andalso lists_utils:generate(fun ozt_spaces:create/0, 10),
     HServiceId = ?RAND_ELEMENT(ozt_handle_services:list()),
     SpaceId = ?RAND_ELEMENT(ozt_spaces:list()),
-    ShareId = ozt_spaces:create_share(SpaceId),
+    ShareId = ozt_shares:create(SpaceId),
     create_handle_with_mocked_timestamp(HServiceId, ShareId, MetadataPrefix, Metadata, MockedTimestamp).
 
 create_handle_with_mocked_timestamp(HServiceId, ShareId, MetadataPrefix, Metadata, MockedTimestamp) ->

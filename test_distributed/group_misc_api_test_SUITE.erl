@@ -258,7 +258,7 @@ get_test(Config) ->
     ozt_handle_services:add_user(HandleServiceId, MemberWithView, [?HANDLE_SERVICE_VIEW]),
     ozt_handle_services:add_user(HandleServiceId, MemberWithoutView, []),
 
-    HandleId = ozt_handles:create(HandleServiceId, ozt_spaces:create_share(SpaceId, datastore_key:new())),
+    HandleId = ozt_handles:create(HandleServiceId, ozt_shares:create(SpaceId)),
     oz_test_utils:handle_add_group(Config, HandleId, GroupId),
     oz_test_utils:handle_add_user(Config, HandleId, MemberWithView),
     oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithView, [?HANDLE_VIEW], []),
@@ -348,22 +348,10 @@ get_test(Config) ->
             expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1_BIN,
-                <<"parents">> => [ParentGroupId],
-                <<"children">> => #{
-                    ChildGroupId => []
-                },
-                <<"effectiveChildren">> => #{
-                    ChildGroupId => []
-                },
-                <<"users">> => #{
-                    MemberWithoutView => AllPrivsBin -- [<<"group_view">>],
-                    MemberWithView => [<<"group_view">>]
-                },
                 <<"effectiveUsers">> => #{
                     MemberWithoutView => AllPrivsBin -- [<<"group_view">>],
                     MemberWithView => [<<"group_view">>]
                 },
-                <<"spaces">> => [SpaceId],
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(GroupId, Id)

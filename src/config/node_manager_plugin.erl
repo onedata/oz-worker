@@ -41,12 +41,14 @@
 % When cluster is not in newest generation it will be upgraded during initialization.
 % This can be used to e.g. move models between services.
 % Oldest upgradable generation is the lowest one that can be directly upgraded to newest.
-% Human readable version is included to for logging purposes.
+% Human readable version is included to for logging purposes. It's the last version
+% where this cluster generation was the current one.
 -define(CLUSTER_GENERATIONS, [
     {1, ?LINE_19_02},
     {2, ?LINE_20_02},
     {3, ?LINE_21_02(<<"4">>)},
-    {4, oz_worker:get_release_version()}
+    {4, ?LINE_21_02(<<"7">>)},
+    {5, oz_worker:get_release_version()}
 ]).
 -define(OLDEST_UPGRADABLE_CLUSTER_GENERATION, 2).
 
@@ -159,8 +161,11 @@ upgrade_cluster(2) ->
     {ok, 3};
 upgrade_cluster(3) ->
     onezone_plugins:init(),  % required for the handle migration
-    od_handle:migrate_legacy_handles(),
-    {ok, 4}.
+    od_handle:migrate_legacy_handles_21_02_5(),
+    {ok, 4};
+upgrade_cluster(4) ->
+    od_share:migrate_legacy_shares_21_02_8(),
+    {ok, 5}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -213,7 +218,6 @@ before_listeners_start() ->
 %%--------------------------------------------------------------------
 -spec listeners() -> Listeners :: [atom()].
 listeners() -> [
-    http_listener,
     https_listener
 ].
 

@@ -17,44 +17,17 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([build_config/0, insert_config/1]).
--export([build_domain/2, build_fqdn_from_subdomain/1]).
 -export([get_ns_hosts/0]).
 
--type domain() :: binary().
--type domain_entry() :: {domain(), [inet:ip4_address()]}.
--type dns_config() :: {Name :: domain(), _Version :: <<>>, Records :: [#dns_rr{}]}.
+-type domain_entry() :: {dns_utils:domain_name(), [inet:ip4_address()]}.
+-type dns_config() :: {Name :: dns_utils:domain_name(), _Version :: <<>>, Records :: [#dns_rr{}]}.
 -type serial() :: -2147483648..2147483647.
--export_type([domain/0, dns_config/0]).
+-export_type([dns_config/0]).
 
 
 %%%===================================================================
 %%% API
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Joins subdomain with domain to build fully qualified domain.
-%% Makes the string lowercase to provide some normalization to
-%% names given in custom (app.config) entries.
-%% Note that the Onezone domain is expected to be already in lowercase
-%% and is not always passed through this function.
-%% @end
-%%--------------------------------------------------------------------
--spec build_domain(Subdomain :: domain(), Domain :: domain()) -> domain().
-build_domain(<<>>, Domain) ->
-    string:lowercase(Domain);
-build_domain(Subdomain, Domain) ->
-    string:lowercase(<<Subdomain/binary, ".", Domain/binary>>).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Joins provided subdomain with onezone domain.
-%% @end
-%%--------------------------------------------------------------------
--spec build_fqdn_from_subdomain(Subdomain :: domain()) -> domain().
-build_fqdn_from_subdomain(Subdomain) ->
-    build_domain(Subdomain, oz_worker:get_domain()).
 
 
 %%--------------------------------------------------------------------
@@ -163,15 +136,17 @@ wrap_like_signed_32bit(Integer) -> wrap_like_signed_32bit(Integer - (1 bsl 32)).
 build_a_records(NSDomains, OneZoneIPs) ->
     OneZoneDomain = oz_worker:get_domain(),
 
-    ProviderSubdomains = maps:to_list(dns_state:get_subdomains_to_ips()),
+    ProviderRelativeDomainNamesToIps = dns_state:get_provider_relative_domain_names_to_ips(),
 
     % check if there are any overlapping records
-    StaticSubdomains = filter_shadowed_entries(oz_worker:get_env(dns_static_a_records, [])),
+    StaticSubdomainsToIps = filter_shadowed_entries(oz_worker:get_env(dns_static_a_records, [])),
 
-    ProviderDomains = [{build_domain(Sub, OneZoneDomain), IPs}
-        || {Sub, IPs} <- ProviderSubdomains ++ StaticSubdomains],
+    ProviderDomainsToIps = [
+        {dns_utils:build_domain(Sub, OneZoneDomain), IPs}
+        || {Sub, IPs} <- StaticSubdomainsToIps ++ maps:to_list(ProviderRelativeDomainNamesToIps)
+    ],
 
-    Entries = [{OneZoneDomain, OneZoneIPs} | ProviderDomains ++ NSDomains],
+    Entries = [{OneZoneDomain, OneZoneIPs} | ProviderDomainsToIps ++ NSDomains],
 
     lists:flatmap(fun({Domain, IPs}) ->
         [build_record_a(Domain, IP) || IP <- IPs]
@@ -199,7 +174,7 @@ build_ns_records(OneZoneNS) ->
             _ -> [Nameservers]
         end,
 
-        Domain = build_domain(Subdomain, OneZoneDomain),
+        Domain = dns_utils:build_domain(Subdomain, OneZoneDomain),
         [build_record_ns(Domain, NS) || NS <- NSs]
     end, StaticEntries),
 
@@ -231,7 +206,7 @@ build_onezone_ns_entries(OneZoneIPs) ->
 
     {NSDomainsIPs, _} = lists:foldl(fun(IP, {DomainsIPs, Count}) ->
         Index = integer_to_binary(Count),
-        Domain = build_domain(<<"ns", Index/binary>>, OneZoneDomain),
+        Domain = dns_utils:build_domain(<<"ns", Index/binary>>, OneZoneDomain),
         {
             [{Domain, [IP]} | DomainsIPs],
             Count + 1
@@ -256,13 +231,13 @@ build_txt_records() ->
 
     lists:map(fun
         ({Name, {Content, undefined}}) ->
-            Domain = build_domain(Name, OneZoneDomain),
+            Domain = dns_utils:build_domain(Name, OneZoneDomain),
             build_record_txt(Domain, Content);
         ({Name, {Value, TTL}}) ->
-            Domain = build_domain(Name, OneZoneDomain),
+            Domain = dns_utils:build_domain(Name, OneZoneDomain),
             build_record_txt(Domain, Value, TTL);
         ({Name, Value}) ->
-            Domain = build_domain(Name, OneZoneDomain),
+            Domain = dns_utils:build_domain(Name, OneZoneDomain),
             build_record_txt(Domain, Value)
     end, ProviderEntries ++ StaticEntries).
 
@@ -279,7 +254,7 @@ build_mx_records() ->
     StaticEntries = oz_worker:get_env(dns_static_mx_records, []),
 
     lists:map(fun({Subdomain, Mailserver, Preference}) ->
-        Domain = build_domain(Subdomain, OneZoneDomain),
+        Domain = dns_utils:build_domain(Subdomain, OneZoneDomain),
         build_record_mx(Domain, Mailserver, Preference)
     end, StaticEntries).
 
@@ -296,7 +271,7 @@ build_cname_records() ->
     StaticEntries = filter_shadowed_entries(oz_worker:get_env(dns_static_cname_records, [])),
 
     lists:map(fun({Subdomain, Target}) ->
-        Domain = build_domain(Subdomain, OneZoneDomain),
+        Domain = dns_utils:build_domain(Subdomain, OneZoneDomain),
         build_record_cname(Domain, Target)
     end, StaticEntries).
 
@@ -310,16 +285,20 @@ build_cname_records() ->
 %%--------------------------------------------------------------------
 -spec filter_shadowed_entries([T]) -> [T] when T :: tuple().
 filter_shadowed_entries(StaticEntries) ->
-    ProviderSubdomains = dns_state:get_subdomains_to_ips(),
+    ProviderSubdomainLabels = dns_state:get_provider_subdomain_labels(),
+
     % check if there are any overlapping records
     lists:filter(fun(Entry) ->
-        Subdomain = element(1, Entry), % not all tuples are 2-element, eg. MX entries
-        NormalizedSubdomain = string:lowercase(Subdomain),
-        case maps:is_key(NormalizedSubdomain, ProviderSubdomains) of
-            false -> true;
+        SubdomainLabel = element(1, Entry), % not all tuples are 2-element, eg. MX entries
+        NormalizedSubdomainLabel = string:lowercase(SubdomainLabel),
+        IsSubdomain = fun(Domain) -> dns_utils:is_equal_or_subdomain(NormalizedSubdomainLabel, Domain) end,
+
+        case lists:any(IsSubdomain, ProviderSubdomainLabels) of
+            false ->
+                true;
             _ ->
                 ?warning("Ignoring static entry for subdomain \"~ts\" "
-                "as the subdomain is already used by a provider.", [Subdomain]),
+                "as the domain is already used by a provider.", [SubdomainLabel]),
                 false
         end
     end, StaticEntries).
@@ -331,7 +310,7 @@ filter_shadowed_entries(StaticEntries) ->
 %% Builds a dns A record for erldns.
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_a(domain(), inet:ip4_address()) -> #dns_rr{}.
+-spec build_record_a(dns_utils:domain_name(), inet:ip4_address()) -> #dns_rr{}.
 build_record_a(Domain, IP) ->
     #dns_rr{
         name = Domain,
@@ -347,7 +326,7 @@ build_record_a(Domain, IP) ->
 %% Builds a dns SOA record for erldns.
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_soa(Name :: domain(), MainName :: domain(),
+-spec build_record_soa(Name :: dns_utils:domain_name(), MainName :: dns_utils:domain_name(),
     Admin :: binary(), serial()) -> #dns_rr{}.
 build_record_soa(Name, MainName, Admin, Serial) ->
     #dns_rr{
@@ -372,7 +351,7 @@ build_record_soa(Name, MainName, Admin, Serial) ->
 %% Builds a NS record for erldns.
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_ns(Name :: domain(), Nameserver :: domain()) -> #dns_rr{}.
+-spec build_record_ns(Name :: dns_utils:domain_name(), Nameserver :: dns_utils:domain_name()) -> #dns_rr{}.
 build_record_ns(Name, Nameserver) ->
     #dns_rr{
         name = Name,
@@ -389,7 +368,7 @@ build_record_ns(Name, Nameserver) ->
 %% to string (list).
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_txt(domain(), binary() | string()) -> #dns_rr{}.
+-spec build_record_txt(dns_utils:domain_name(), binary() | string()) -> #dns_rr{}.
 build_record_txt(Domain, Value) ->
     build_record_txt(Domain, Value, oz_worker:get_env(dns_txt_ttl, 120)).
 
@@ -401,7 +380,7 @@ build_record_txt(Domain, Value) ->
 %% by erl_dns.
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_txt(Domain :: domain(), Value :: binary() | string(),
+-spec build_record_txt(Domain :: dns_utils:domain_name(), Value :: binary() | string(),
     TTL :: time:seconds()) -> #dns_rr{}.
 build_record_txt(Domain, Value, TTL) when is_binary(Value) ->
     build_record_txt(Domain, binary:bin_to_list(Value), TTL);
@@ -420,7 +399,7 @@ build_record_txt(Domain, Value, TTL) ->
 %% Builds a MX record for erldns.
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_mx(domain(), domain(), integer()) -> #dns_rr{}.
+-spec build_record_mx(dns_utils:domain_name(), dns_utils:domain_name(), integer()) -> #dns_rr{}.
 build_record_mx(Domain, Address, Preference) ->
     #dns_rr{
         name = Domain,
@@ -436,7 +415,7 @@ build_record_mx(Domain, Address, Preference) ->
 %% Builds a CNAME record for erldns.
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_cname(domain(), domain()) -> #dns_rr{}.
+-spec build_record_cname(dns_utils:domain_name(), dns_utils:domain_name()) -> #dns_rr{}.
 build_record_cname(Name, Target) ->
     #dns_rr{
         name = Name,

@@ -111,6 +111,7 @@ stages:
         - oai
         - onezone_mailer
         - openid
+        - oz_worker_circuit_breaker
         - provider_api
         - rest_auth
         - session
@@ -120,6 +121,7 @@ stages:
         - space_lifecycle
         - space_marketplace
         - space_misc_api
+        - space_shares_api
         - space_owners
         - space_users_api
         - storage_misc_api
@@ -152,7 +154,7 @@ Build:
           integration: custom
         buildHangingConfig.enabled: 'false'
   tasks:
-    - script:
+    - script: &run-script
         interpreter: SHELL
         scripts:
           - |-
@@ -220,6 +222,12 @@ Build:
 
 _Codetag Tracker:
   key: CT
+  other: &common-opts
+    clean-working-dir: true
+    all-other-apps:
+      custom:
+        auto: { }
+        buildHangingConfig.enabled: 'false'
   tasks:
     - checkout: &fake-checkout
         conditions:
@@ -230,7 +238,7 @@ _Codetag Tracker:
         scripts:
           - tar -xzmf oz_worker.tar.gz
         description: Unpack
-    - script:
+    - script: &run-script-working-dir
         interpreter: BINSH_OR_CMDEXE
         scripts:
           - ./make.py -r ${bamboo.agentWorkingDirectory} codetag-tracker BRANCH=${bamboo.planRepository.branchName}
@@ -249,12 +257,7 @@ _Codetag Tracker:
 
 _Dialyze:
   key: DIAL
-  other: &common-opts
-    clean-working-dir: true
-    all-other-apps:
-      custom:
-        auto: { }
-        buildHangingConfig.enabled: 'false'
+  other: *common-opts
   tasks:
     - checkout: *fake-checkout
     - script: *unpack
@@ -459,12 +462,57 @@ db_browser:
     - <<: *ct_logs
       name: ct_logs_db_browser.tar.gz
 
-dns:
-  <<: *ct-job
+dns: &ct-onenv-job
   key: DNS
+  other: *common-opts
+  tasks:
+    - checkout: *fake-checkout
+    - script: *clear-env
+    - script:
+        <<: *run-script
+        scripts:
+          - sudo ${HOME}/restart_minikube.sh
+        description: Restart minikube
+    - script: *unpack
+    - script:
+        <<: *run-script-working-dir
+        scripts:
+          - one-env/onenv pull_artifacts --hostname ${bamboo.artifactRepoHostname} --port ${bamboo.artifactRepoPort} --path .. branchConfig.yaml
+        description: Download artifacts
+    - script:
+        <<: *run-script-working-dir
+        scripts:
+          - ./ct_onenv.py --suite ${bamboo.shortJobName} --path-to-sources ..
+        description: Run CT onenv tests
+  final-tasks:
+    - test-parser:
+        <<: *parse-test-results
+        test-results: oz_worker/test_distributed/logs/*/surefire.xml
+    - script:
+        <<: *run-script-working-dir
+        scripts:
+          - |-
+            tar czf surefire_${bamboo.shortJobName}.tar.gz test_distributed/logs/*/surefire.xml
+            echo ./bamboos/artifacts/push_artifact.py --hostname ${bamboo.artifactRepoHostname} --port ${bamboo.artifactRepoPort} \
+                --username ${bamboo.artifactRepoUsername} --branch ${bamboo.planRepository.branchName} --plan ${bamboo.planRepository.name} \
+                --artifact-name surefire_${bamboo.shortJobName}.tar.gz
+            ./bamboos/artifacts/push_artifact.py --hostname ${bamboo.artifactRepoHostname} --port ${bamboo.artifactRepoPort} \
+                --username ${bamboo.artifactRepoUsername} --branch ${bamboo.planRepository.branchName} --plan ${bamboo.planRepository.name} \
+                --artifact-name surefire_${bamboo.shortJobName}.tar.gz
+        description: Pack and push surefire artifact
+    - script:
+        <<: *run-script
+        interpreter: BINSH_OR_CMDEXE
+        scripts:
+          - tar -mczf ct_logs_${bamboo.shortJobName}.tar.gz oz_worker/test_distributed/logs/
+        description: Pack test logs
+    - script: *clear-env
   artifacts:
     - <<: *ct_logs
       name: ct_logs_dns.tar.gz
+  requirements:
+    - minikube
+  artifact-subscriptions: *oz-worker
 
 entities_setup:
   <<: *ct-job
@@ -656,7 +704,7 @@ model_upgrade:
       name: ct_logs_model_upgrade.tar.gz
 
 oai:
-  <<: *ct-job
+  <<: *ct-onenv-job
   key: OAI
   artifacts:
     - <<: *ct_logs
@@ -675,6 +723,13 @@ openid:
   artifacts:
     - <<: *ct_logs
       name: ct_logs_openid.tar.gz
+
+oz_worker_circuit_breaker:
+  <<: *ct-onenv-job
+  key: OWCB
+  artifacts:
+    - <<: *ct_logs
+      name: ct_logs_oz_worker_circuit_breaker.tar.gz
 
 provider_api:
   <<: *ct-job
@@ -738,6 +793,13 @@ space_misc_api:
   artifacts:
     - <<: *ct_logs
       name: ct_logs_space_misc_api.tar.gz
+
+space_shares_api:
+  <<: *ct-job
+  key: SSHA
+  artifacts:
+    - <<: *ct_logs
+      name: ct_logs_space_shares_api.tar.gz
 
 space_owners:
   <<: *ct-job
@@ -953,6 +1015,7 @@ Coverage report:
     - artifact: ct_logs_oai.tar.gz
     - artifact: ct_logs_onezone_mailer.tar.gz
     - artifact: ct_logs_openid.tar.gz
+    - artifact: ct_logs_oz_worker_circuit_breaker.tar.gz
     - artifact: ct_logs_provider_api.tar.gz
     - artifact: ct_logs_rest_auth.tar.gz
     - artifact: ct_logs_session.tar.gz
@@ -962,6 +1025,7 @@ Coverage report:
     - artifact: ct_logs_space_lifecycle.tar.gz
     - artifact: ct_logs_space_marketplace.tar.gz
     - artifact: ct_logs_space_misc_api.tar.gz
+    - artifact: ct_logs_space_shares_api.tar.gz
     - artifact: ct_logs_space_owners.tar.gz
     - artifact: ct_logs_space_users_api.tar.gz
     - artifact: ct_logs_storage_misc_api.tar.gz

@@ -35,7 +35,7 @@ routes() -> [
         method = 'POST',
         b_gri = #b_gri{type = od_handle, id = undefined, aspect = instance}
     }},
-    %% List handles
+    %% List handles (admin)
     %% This operation requires one of the following privileges:
     %% - oz_handles_list
     {<<"/handles">>, #rest_req{

@@ -27,14 +27,14 @@
 %%--------------------------------------------------------------------
 -spec routes() -> [{binary(), #rest_req{}}].
 routes() -> [
-    %% Add handle service
+    %% Create handle service (admin)
     %% This operation requires one of the following privileges:
     %% - oz_handle_services_create
     {<<"/handle_services">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_handle_service, id = undefined, aspect = instance}
     }},
-    %% List handle services
+    %% List handle services (admin)
     %% This operation requires one of the following privileges:
     %% - oz_handle_services_list
     {<<"/handle_services">>, #rest_req{
@@ -65,13 +65,20 @@ routes() -> [
         method = 'PATCH',
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = instance}
     }},
-    %% Unregister handle service
+    %% Delete handle service
     %% This operation requires one of the following privileges:
     %% - handle_service_delete
     %% - oz_handle_services_delete
     {<<"/handle_services/:id">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = instance}
+    }},
+    %% Get public handle service details
+    %% This operation does not require any specific privileges.
+    {<<"/handle_services/:id/public">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = instance, scope = public}
     }},
     %% Get handle service users
     %% This operation requires one of the following privileges:

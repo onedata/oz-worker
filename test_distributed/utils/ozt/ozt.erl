@@ -19,15 +19,16 @@
 -define(OZT_MODULES, [
     oz_test_utils, % Load the old utils until the migration is complete
     ozt, ozt_http, ozt_gs, ozt_tokens, ozt_mocks, ozt_mailer,
-    ozt_users, ozt_groups, ozt_spaces, ozt_providers,
+    ozt_users, ozt_groups, ozt_spaces, ozt_shares, ozt_providers,
     ozt_handle_services, ozt_handles, ozt_clusters, ozt_harvesters,
     ozt_atm_inventories, ozt_atm_lambdas, ozt_atm_workflow_schemas
 ]).
 
--type ct_test_config() :: term().
+-type ct_test_config() :: test_config:config().
 
 %% API
 -export([init_per_suite/1, init_per_suite/2, get_test_config/0]).
+-export([onenv_init_per_suite/2, onenv_end_per_suite/0]).
 -export([rpc/3, rpc/4]).
 -export([rpc_multicall/3]).
 -export([timestamp_seconds/0]).
@@ -75,6 +76,22 @@ get_test_config() ->
         undefined -> error(str_utils:format("Call ~ts:init_per_suite/1 at the beggining of the test.", [?MODULE]));
         Config -> Config
     end.
+
+
+-spec onenv_init_per_suite(ct_test_config(), oct_background:onenv_test_config()) -> ct_test_config().
+onenv_init_per_suite(CtConfig, #onenv_test_config{posthook = Posthook} = OnenvTestConfig) ->
+    ModulesToLoad = ?OZT_MODULES ++ proplists:get_value(?LOAD_MODULES, CtConfig, []),
+    oct_background:init_per_suite([{?LOAD_MODULES, ModulesToLoad} | CtConfig], OnenvTestConfig#onenv_test_config{
+        posthook = fun(NewCtConfig) ->
+            store_test_config(NewCtConfig),
+            Posthook(NewCtConfig)
+        end
+    }).
+
+
+-spec onenv_end_per_suite() -> ok.
+onenv_end_per_suite() ->
+    oct_background:end_per_suite().
 
 
 -spec rpc(module(), Function :: atom(), Args :: [term()]) -> term().

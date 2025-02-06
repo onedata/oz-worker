@@ -353,7 +353,56 @@ get_test(Config) ->
         }
         % TODO VFS-4520 Tests for GraphSync API
     },
-    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
+
+    GetPublicDataApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                nobody,
+                root,
+                {user, U2},
+                {admin, [?OZ_HANDLE_SERVICES_VIEW]},
+                {user, NonAdmin},
+                {user, U1}
+            ],
+            unauthorized = [],
+            forbidden = []
+        },
+        logic_spec = #logic_spec{
+            module = handle_service_logic,
+            function = get_public_data,
+            args = [auth, HService],
+            expected_result = ?OK_TERM(
+                fun(#{<<"name">> := Name}) ->
+                    ?assertEqual(?HANDLE_SERVICE_NAME1, Name)
+                end
+            )
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/handle_services/">>, HService, <<"/public">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = fun(#{<<"name">> := Name, <<"handleServiceId">> := HandleServiceId}) ->
+                ?assertEqual(HService, HandleServiceId),
+                ?assertEqual(?HANDLE_SERVICE_NAME1, Name),
+                true
+            end
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{
+                type = od_handle_service, id = HService, aspect = instance, scope = public
+            },
+            expected_result_op = ?OK_MAP_CONTAINS(#{
+                <<"name">> => ?HANDLE_SERVICE_NAME1,
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
+                    ?assertEqual(HService, Id)
+                end
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec)).
 
 
 update_test(Config) ->
@@ -535,16 +584,16 @@ delete_test(Config, HasAnyHandles) ->
 
 list_handles_test(Config) ->
     % create handle service with 2 users:
-    %   U2 gets the HANDLE_SERVICE_VIEW privilege
-    %   U1 gets all remaining privileges
-    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+    %   MemberWithPrivs gets the HANDLE_SERVICE_LIST_HANDLES privilege
+    %   MemberWithoutPrivs gets all remaining privileges
+    {HService, MemberWithoutPrivs, MemberWithPrivs} = api_test_scenarios:create_basic_doi_hservice_env(
 %%        TODO VFS-7381
-        Config, ?HANDLE_SERVICE_VIEW
+        Config, ?HANDLE_SERVICE_LIST_HANDLES
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, S2} = oz_test_utils:create_space(Config, ?USER(U2), ?SPACE_NAME2),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(MemberWithoutPrivs), ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(MemberWithPrivs), ?SPACE_NAME2),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -564,12 +613,12 @@ list_handles_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_HANDLE_SERVICES_LIST_RELATIONSHIPS]},
-                {user, U2}
+                {user, MemberWithPrivs}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {user, U1}
+                {user, MemberWithoutPrivs}
             ]
         },
         rest_spec = #rest_spec{

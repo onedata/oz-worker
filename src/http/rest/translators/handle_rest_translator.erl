@@ -64,7 +64,7 @@ get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
 
 get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleData) ->
     #{
-        <<"handleServiceId">> := HandleService,
+        <<"handleServiceId">> := HandleServiceId,
         <<"publicHandle">> := PublicHandle,
         <<"resourceType">> := ResourceType,
         <<"resourceId">> := ResourceId,
@@ -76,8 +76,8 @@ get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleDa
     } = HandleData,
     rest_translator:ok_body_reply(#{
         <<"handleId">> => HandleId,
+        <<"handleServiceId">> => HandleServiceId,
         <<"publicHandle">> => PublicHandle,
-        <<"handleServiceId">> => HandleService,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadataPrefix">> => MetadataPrefix,
@@ -89,6 +89,7 @@ get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleDa
 
 get_response(#gri{id = HandleId, aspect = instance, scope = public}, HandleData) ->
     #{
+        <<"handleServiceId">> := HandleServiceId,
         <<"publicHandle">> := PublicHandle,
         <<"resourceType">> := ResourceType,
         <<"resourceId">> := ResourceId,
@@ -99,6 +100,7 @@ get_response(#gri{id = HandleId, aspect = instance, scope = public}, HandleData)
     } = HandleData,
     rest_translator:ok_body_reply(#{
         <<"handleId">> => HandleId,
+        <<"handleServiceId">> => HandleServiceId,
         <<"publicHandle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,

@@ -27,14 +27,14 @@
 %%--------------------------------------------------------------------
 -spec routes() -> [{binary(), #rest_req{}}].
 routes() -> [
-    %% Create new space
+    %% Create new space (admin)
     %% This operation requires one of the following privileges:
     %% - oz_spaces_create
     {<<"/spaces">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_space, id = undefined, aspect = instance}
     }},
-    %% List all spaces
+    %% List all spaces (admin)
     %% This operation requires one of the following privileges:
     %% - oz_spaces_list
     {<<"/spaces">>, #rest_req{
@@ -49,30 +49,35 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = undefined, aspect = privileges}
     }},
-    %% List space marketplace
+    %% List the Space Marketplace
     %% This operation does not require any specific privileges.
     {<<"/spaces/marketplace/list">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_space, id = undefined, aspect = list_marketplace, scope = protected}
     }},
-    %% Get space details in marketplace
+    %% Get space details in the Marketplace
     %% This operation does not require any specific privileges.
     {<<"/spaces/marketplace/:id">>, #rest_req{
         method = 'GET',
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = marketplace_data, scope = protected}
     }},
-    %% TODO VFS-10687 swaggers for space marketplace
+    %% Request space membership via Marketplace
+    %% This operation does not require any specific privileges.
     {<<"/spaces/marketplace/:id/request">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = membership_request}
     }},
-    %% TODO VFS-10687 swaggers for space marketplace
+    %% Get membership requester info
+    %% This operation requires one of the following privileges:
+    %% - space_manage_in_marketplace
+    %% - oz_spaces_view
     {<<"/spaces/marketplace/:id/request/:rid/requester_info">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {membership_requester_info, ?BINDING(rid)}}
     }},
-    %% TODO VFS-10687 swaggers for space marketplace
+    %% Resolve space membership request
+    %% This operation does not require any specific privileges.
     {<<"/spaces/marketplace/:id/request/:rid/resolve">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {resolve_membership_request, ?BINDING(rid)}}
@@ -330,7 +335,7 @@ routes() -> [
     %% - oz_shares_view
     {<<"/spaces/:id/shares/:sid">>, #rest_req{
         method = 'GET',
-        b_gri = #b_gri{type = od_share, id = ?BINDING(sid), aspect = instance},
+        b_gri = #b_gri{type = od_share, id = ?BINDING(sid), aspect = instance, scope = private},
         b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
     }},
     %% List space providers

@@ -27,7 +27,7 @@
 %%--------------------------------------------------------------------
 -spec routes() -> [{binary(), #rest_req{}}].
 routes() -> [
-    %% List providers
+    %% List providers (admin)
     %% This operation requires one of the following privileges:
     %% - oz_providers_list
     {<<"/providers">>, #rest_req{

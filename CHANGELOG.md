@@ -1,8 +1,39 @@
-Release notes for project oz-worker
-===================================
+# Release notes for project oz-worker
 
-CHANGELOG
----------
+## CHANGELOG
+
+### 21.02.8
+
+-   **VFS-12477** Greatly optimized the listing of Shares in GUI; both
+    the Space's and global view of Shares are now based on an
+    infinite-scroll mechanism.
+-   **VFS-12469** Web GUI: Improved UX of managing share name and Open
+    Data title; disabled some operations when user has insufficient
+    privileges for space shares.
+-   **VFS-12370** Web GUI: Changed default views which are opened using
+    tabs, remembering last used resource (eg. space), improved look of
+    main views loading indicators and added "recently used" space icons.
+-   **VFS-12083** Web GUI: Enabled copying a token directly from the
+    temporarily opened sidebar.
+-   **VFS-10787** Added a circuit breaker mechanism that disables
+    Oneprovider services when the database is close to running out of
+    disk space.
+-   **VFS-10341** Web GUI: Upgraded EmberJS to v3.16.
+
+### 21.02.7
+
+-   **VFS-12080** Web GUI: Added support for creating custom login view
+    pages.
+
+### 21.02.6
+
+-   **VFS-12197** Web GUI: Improved share list views.
+-   **VFS-12195** The name of the handle service where an Open Data
+    handle has been registered is now publicly visible and always
+    displayed on the Share view.
+-   **VFS-12110** Added a circuit breaker mechanism that disables all
+    Onezone services when the database is close to running out of disk
+    space.
 
 ### 21.02.5
 

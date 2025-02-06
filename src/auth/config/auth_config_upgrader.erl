@@ -205,7 +205,7 @@ supported_idps(AuthConfig, SamlConfig) ->
     end, proplists:delete(basicAuth, AuthConfig)),
     SamlIdPs = lists:map(fun({IdP, Config}) ->
         saml_entry(IdP, Config)
-    end, maps:to_list(maps:get(supported_idps, SamlConfig, #{}))),
+    end, lists:sort(maps:to_list(maps:get(supported_idps, SamlConfig, #{})))),
     lists:flatten([OnepanelAuthIdP, OidcIdPs, SamlIdPs]).
 
 

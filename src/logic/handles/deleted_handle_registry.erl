@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Link-tree-based persistent storage for deleted OpenData handles.
+%%% Link-tree-based persistent storage for deleted Public Data handles.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(deleted_handle_registry).

@@ -16,6 +16,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include("http/handlers/oai.hrl").
 
+-include_lib("ctool/include/onedata_file.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -45,6 +46,13 @@
     macaroon_auth_upgrade_test/1,
     generate_cluster_for_a_legacy_provider_test/1
 ]).
+
+
+% those three macros must have constant values
+-define(TEST_SHARE_FILE_UUID, datastore_key:new_from_digest(uuid)).
+-define(TEST_SHARE_SPACE_ID, datastore_key:new_from_digest(space_id)).
+-define(TEST_SHARE_ID, datastore_key:new_from_digest(share_id)).
+
 
 %%%===================================================================
 %%% API functions
@@ -2818,9 +2826,9 @@ get_record(od_space, 15) -> #od_space{
 get_record(od_share, 1) -> {od_share,
     <<"name">>,
     <<"https://onezone.example.com/share/123456">>,
-    <<"parent_space_id">>,
+    ?TEST_SHARE_SPACE_ID,
     <<"handle_id">>,
-    <<"root_file_id">>,
+    file_id:pack_share_guid(?TEST_SHARE_FILE_UUID, ?TEST_SHARE_SPACE_ID, ?TEST_SHARE_ID),
     [],  % eff_users
     [],  % eff_groups
     false  % bottom_up_dirty
@@ -2828,9 +2836,9 @@ get_record(od_share, 1) -> {od_share,
 get_record(od_share, 2) -> {od_share,
     <<"name">>,
     <<"https://onezone.example.com/share/123456">>,
-    <<"parent_space_id">>,
+    ?TEST_SHARE_SPACE_ID,
     <<"handle_id">>,
-    <<"root_file_id">>
+    file_id:pack_share_guid(?TEST_SHARE_FILE_UUID, ?TEST_SHARE_SPACE_ID, ?TEST_SHARE_ID)
 };
 get_record(od_share, 3) -> {
     % Returns two records:
@@ -2839,9 +2847,9 @@ get_record(od_share, 3) -> {
     {od_share,
         <<"name">>,
         <<"https://onezone.example.com/share/123456">>,
-        <<"parent_space_id">>,
+        ?TEST_SHARE_SPACE_ID,
         <<"handle_id">>,
-        <<"root_file_id">>,
+        file_id:pack_share_guid(?TEST_SHARE_FILE_UUID, ?TEST_SHARE_SPACE_ID, ?TEST_SHARE_ID),
 
         ozt_mocks:get_frozen_time_seconds(),
         undefined
@@ -2849,9 +2857,9 @@ get_record(od_share, 3) -> {
     {od_share,
         <<"name">>,
         <<"https://onezone.example.com/share/123456">>,
-        <<"parent_space_id">>,
+        ?TEST_SHARE_SPACE_ID,
         <<"handle_id">>,
-        <<"root_file_id">>,
+        file_id:pack_share_guid(?TEST_SHARE_FILE_UUID, ?TEST_SHARE_SPACE_ID, ?TEST_SHARE_ID),
 
         ozt_mocks:get_frozen_time_seconds(),
         {client, root, <<"">>}
@@ -2860,9 +2868,9 @@ get_record(od_share, 3) -> {
 get_record(od_share, 4) -> {od_share,
     <<"name">>,
     <<"https://onezone.example.com/share/123456">>,
-    <<"parent_space_id">>,
+    ?TEST_SHARE_SPACE_ID,
     <<"handle_id">>,
-    <<"root_file_id">>,
+    file_id:pack_share_guid(?TEST_SHARE_FILE_UUID, ?TEST_SHARE_SPACE_ID, ?TEST_SHARE_ID),
 
     ozt_mocks:get_frozen_time_seconds(),
     {subject, nobody, undefined}
@@ -2871,10 +2879,10 @@ get_record(od_share, 5) -> {od_share,
     <<"name">>,
     <<"https://onezone.example.com/share/123456">>,
 
-    <<"parent_space_id">>,
+    ?TEST_SHARE_SPACE_ID,
     <<"handle_id">>,
 
-    <<"root_file_id">>,
+    file_id:pack_share_guid(?TEST_SHARE_FILE_UUID, ?TEST_SHARE_SPACE_ID, ?TEST_SHARE_ID),
     dir,
 
     ozt_mocks:get_frozen_time_seconds(),
@@ -2885,10 +2893,10 @@ get_record(od_share, 6) -> {od_share,
     <<"">>,
     <<"https://onezone.example.com/share/123456">>,
 
-    <<"parent_space_id">>,
+    ?TEST_SHARE_SPACE_ID,
     <<"handle_id">>,
 
-    <<"root_file_id">>,
+    file_id:pack_share_guid(?TEST_SHARE_FILE_UUID, ?TEST_SHARE_SPACE_ID, ?TEST_SHARE_ID),
     dir,
 
     ozt_mocks:get_frozen_time_seconds(),
@@ -2898,11 +2906,24 @@ get_record(od_share, 7) -> #od_share{
     name = <<"name">>,
     description = <<"">>,
 
-    space = <<"parent_space_id">>,
+    space = ?TEST_SHARE_SPACE_ID,
     handle = <<"handle_id">>,
 
-    root_file = <<"root_file_id">>,
+    root_file_uuid = file_id:pack_share_guid(?TEST_SHARE_FILE_UUID, ?TEST_SHARE_SPACE_ID, ?TEST_SHARE_ID),
     file_type = dir,
+
+    creation_time = ozt_mocks:get_frozen_time_seconds(),
+    creator = ?SUB(nobody)
+};
+get_record(od_share, 8) -> #od_share{
+    name = <<"name">>,
+    description = <<"">>,
+
+    space = ?TEST_SHARE_SPACE_ID,
+    handle = <<"handle_id">>,
+
+    root_file_uuid = ?TEST_SHARE_FILE_UUID,
+    file_type = ?DIRECTORY_TYPE,
 
     creation_time = ozt_mocks:get_frozen_time_seconds(),
     creator = ?SUB(nobody)
@@ -3045,7 +3066,37 @@ get_record(od_provider, 6) -> {od_provider,
 
     true
 };
-get_record(od_provider, 7) -> #od_provider{
+get_record(od_provider, 7) -> {od_provider,
+    <<"name">>,
+    undefined,
+    undefined,
+
+    false,
+    <<"redirection_point">>,
+    undefined,
+
+    -93.2341,
+    17,
+
+    #{
+        <<"space1">> => 0,
+        <<"space2">> => 0,
+        <<"space3">> => 0,
+        <<"space4">> => 0
+    },
+    [],
+
+    #{},
+    #{},
+    #{},
+    #{},
+
+    ozt_mocks:get_frozen_time_seconds(),
+    0,
+
+    true
+};
+get_record(od_provider, 8) -> #od_provider{
     name = <<"name">>,
     admin_email = undefined,
     root_token = undefined,
@@ -3053,6 +3104,8 @@ get_record(od_provider, 7) -> #od_provider{
     subdomain_delegation = false,
     domain = <<"redirection_point">>,
     subdomain = undefined,
+    op_worker_port = 443,
+    ones3_port = undefined,
 
     latitude = -93.2341,
     longitude = 17,
@@ -3917,6 +3970,17 @@ get_record(dns_state, 2) -> {dns_state,
         {<<"_acme-challenge">>, <<"token">>, undefined},
         {<<"second">>, <<"value">>, undefined}
     ]}
+};
+get_record(dns_state, 3) -> {dns_state,
+    #{<<"sub">> => <<"p1">>},
+    #{<<"p1">> => <<"sub">>},
+    #{<<"p1">> => #{op_worker => [{1, 2, 3, 4}, {192, 168, 192, 1}]}},
+    #{<<"p1">> => #{
+        op_worker => #{
+            <<"_acme-challenge">> => {<<"token">>, undefined},
+            <<"second">> => {<<"value">>, undefined}
+        }
+    }}
 };
 
 
