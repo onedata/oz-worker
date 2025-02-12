@@ -198,9 +198,9 @@ create_parent_test(Config) ->
             },
             bad_values = [
                 {<<"type">>, kingdom,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
-                {<<"type">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"type">>)}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
+                {<<"type">>, 1234, ?ERR_BAD_VALUE_STRING(<<"type">>)}
+                | ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
             ]
         }
     },
@@ -290,11 +290,11 @@ join_parent_test(Config) ->
                 end]
             },
             bad_values = [
-                {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"token">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"token">>)},
                 {<<"token">>, CreateTokenForItselfFun,
-                    ?ERROR_CANNOT_ADD_RELATION_TO_SELF},
-                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                {<<"token">>, <<"123qwe">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)}
+                    ?ERR_CANNOT_ADD_RELATION_TO_SELF},
+                {<<"token">>, 1234, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)},
+                {<<"token">>, <<"123qwe">>, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)}
             ]
         }
     },
@@ -327,7 +327,7 @@ join_parent_test(Config) ->
             module = group_logic,
             function = join_group,
             args = [auth, Child, data],
-            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_group, Child, od_group, Group))
+            expected_result = ?ERROR_REASON(?ERR_RELATION_ALREADY_EXISTS(od_group, Child, od_group, Group))
         },
         % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
@@ -353,7 +353,7 @@ join_parent_test(Config) ->
             expected_code = ?HTTP_400_BAD_REQUEST
         },
         logic_spec = LogicSpec#logic_spec{
-            expected_result = ?ERROR_REASON(?ERROR_CANNOT_ADD_RELATION_TO_SELF)
+            expected_result = ?ERROR_REASON(?ERR_CANNOT_ADD_RELATION_TO_SELF)
         },
         data_spec = #data_spec{
             required = [<<"token">>],

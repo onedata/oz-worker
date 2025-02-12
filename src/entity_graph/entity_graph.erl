@@ -330,12 +330,12 @@ add_relation(od_space, SpaceId, od_storage, StorageId, SupportSize) ->
     ParentId :: entity_id(), ParentAttributes :: attributes()) ->
     ok | no_return().
 add_relation(EntityType, EntityId, _, EntityType, EntityId, _) ->
-    throw(?ERROR_CANNOT_ADD_RELATION_TO_SELF);
+    throw(?ERR_CANNOT_ADD_RELATION_TO_SELF(?err_ctx()));
 add_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChType, ChId) of
             true ->
-                ?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId);
+                ?ERR_RELATION_ALREADY_EXISTS(?err_ctx(), ChType, ChId, ParType, ParId);
             false ->
                 {ok, mark_record_dirty(bottom_up, true, add_child(
                     Parent, ChType, ChId, ChAttrs
@@ -345,7 +345,7 @@ add_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
     ChildUpdateFun = fun(Child) ->
         case has_parent(Child, ParType, ParId) of
             true ->
-                ?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId);
+                ?ERR_RELATION_ALREADY_EXISTS(?err_ctx(), ChType, ChId, ParType, ParId);
             false ->
                 {ok, mark_record_dirty(top_down, true, add_parent(
                     Child, ParType, ParId, ParAttrs
@@ -373,7 +373,7 @@ add_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
             case sync_on_entity(ChType, ChId, ChildSync) of
                 ok ->
                     ok;
-                ?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId) ->
+                ?ERR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId) ->
                     % Relation exists, but apparently it did not exist
                     % in the parent, so we just fixed the relation -> ok.
                     ok;
@@ -455,7 +455,7 @@ update_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChType, ChId) of
             false ->
-                ?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId);
+                ?ERR_RELATION_DOES_NOT_EXIST(?err_ctx(), ChType, ChId, ParType, ParId);
             true ->
                 {ok, mark_record_dirty(bottom_up, true, update_child(
                     Parent, ChType, ChId, ChAttrs
@@ -465,7 +465,7 @@ update_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
     ChildUpdateFun = fun(Child) ->
         case has_parent(Child, ParType, ParId) of
             false ->
-                ?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId);
+                ?ERR_RELATION_DOES_NOT_EXIST(?err_ctx(), ChType, ChId, ParType, ParId);
             true ->
                 {ok, mark_record_dirty(top_down, true, update_parent(
                     Child, ParType, ParId, ParAttrs
@@ -547,7 +547,7 @@ remove_relation(ChType, ChId, ParType, ParId) ->
 
     case {ParentResult, ChildResult} of
         % both sides of relation were not found (either the entity or its relation)
-        {not_found, not_found} -> throw(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId));
+        {not_found, not_found} -> throw(?ERR_RELATION_DOES_NOT_EXIST(?err_ctx(), ChType, ChId, ParType, ParId));
         % at least one side of relation existed, which means success (either both sides
         % were removed, or a broken one-side relation was fixed by removing the other side)
         {_, _} -> ok
@@ -768,7 +768,7 @@ remove_all_relations(EntityType, EntityId, Entity) ->
                 try
                     remove_relation(EntityType, EntityId, ParType, ParId)
                 catch
-                    throw:?ERROR_RELATION_DOES_NOT_EXIST(_, _, _, _) -> ok
+                    throw:?ERR_RELATION_DOES_NOT_EXIST(_, _, _, _) -> ok
                 end
             end, ParentIds)
         end, IndependentParents),
@@ -778,7 +778,7 @@ remove_all_relations(EntityType, EntityId, Entity) ->
                 try
                     remove_relation(ChType, ChId, EntityType, EntityId)
                 catch
-                    throw:?ERROR_RELATION_DOES_NOT_EXIST(_, _, _, _) -> ok
+                    throw:?ERR_RELATION_DOES_NOT_EXIST(_, _, _, _) -> ok
                 end
             end, ChIds)
         end, IndependentChildren),
@@ -813,7 +813,7 @@ remove_all_relations(EntityType, EntityId, Entity) ->
                 [EntityType, EntityId, Type, Message],
                 Stacktrace
             ),
-            throw(?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId))
+            throw(?ERR_CANNOT_DELETE_ENTITY(?err_ctx(), EntityType, EntityId))
     end.
 
 
@@ -1413,7 +1413,7 @@ ensure_can_remove_child(SpaceId, #od_space{owners = Owners} = Space, od_user, Us
         {[UserId], [_ | _]} ->
             % if there are any other effective members, removing the user without
             % transferring ownership is forbidden
-            ?ERROR_CANNOT_REMOVE_LAST_OWNER(od_space, SpaceId);
+            ?ERR_CANNOT_REMOVE_LAST_OWNER(?err_ctx(), od_space, SpaceId);
         _ ->
             ok
     end;

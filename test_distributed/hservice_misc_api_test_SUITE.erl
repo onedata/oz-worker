@@ -129,12 +129,12 @@ create_test(Config) ->
             },
             bad_values = [
                 {<<"proxyEndpoint">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"proxyEndpoint">>)},
+                    ?ERR_BAD_VALUE_STRING(<<"proxyEndpoint">>)},
                 {<<"serviceProperties">>, 1234,
-                    ?ERROR_BAD_VALUE_JSON(<<"serviceProperties">>)},
+                    ?ERR_BAD_VALUE_JSON(<<"serviceProperties">>)},
                 {<<"serviceProperties">>, #{},
-                    ?ERROR_BAD_VALUE_EMPTY(<<"serviceProperties">>)}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                    ?ERR_BAD_VALUE_EMPTY(<<"serviceProperties">>)}
+                | ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
             ]
         }
     },
@@ -479,12 +479,12 @@ update_test(Config) ->
             },
             bad_values = [
                 {<<"proxyEndpoint">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"proxyEndpoint">>)},
+                    ?ERR_BAD_VALUE_STRING(<<"proxyEndpoint">>)},
                 {<<"serviceProperties">>, 1234,
-                    ?ERROR_BAD_VALUE_JSON(<<"serviceProperties">>)},
+                    ?ERR_BAD_VALUE_JSON(<<"serviceProperties">>)},
                 {<<"serviceProperties">>, #{},
-                    ?ERROR_BAD_VALUE_EMPTY(<<"serviceProperties">>)}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                    ?ERR_BAD_VALUE_EMPTY(<<"serviceProperties">>)}
+                | ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
             ]
         }
     },
@@ -563,7 +563,7 @@ delete_test(Config, HasAnyHandles) ->
             args = [auth, hserviceId],
             expected_result = case HasAnyHandles of
                 false -> ?OK_RES;
-                true -> ?ERROR_REASON(?ERROR_CANNOT_DELETE_NON_EMPTY_HANDLE_SERVICE)
+                true -> ?ERROR_REASON(?ERR_CANNOT_DELETE_NON_EMPTY_HANDLE_SERVICE)
             end
         },
         gs_spec = #gs_spec{
@@ -573,7 +573,7 @@ delete_test(Config, HasAnyHandles) ->
             },
             expected_result_op = case HasAnyHandles of
                 false -> ?OK_RES;
-                true -> ?ERROR_REASON(?ERROR_CANNOT_DELETE_NON_EMPTY_HANDLE_SERVICE)
+                true -> ?ERROR_REASON(?ERR_CANNOT_DELETE_NON_EMPTY_HANDLE_SERVICE)
             end
         }
     },

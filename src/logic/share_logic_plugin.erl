@@ -114,7 +114,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         true = is_binary(FileUuid) andalso byte_size(FileUuid) > 0,
         FileUuid
     catch _:_ ->
-        throw(?ERROR_BAD_DATA(<<"rootFileId">>))
+        throw(?ERR_BAD_DATA(?err_ctx(), <<"rootFileId">>, undefined))
     end,
 
     ShareDoc = #document{key = ShareId, value = #od_share{
@@ -352,7 +352,7 @@ delete_internal(Auth, ShareId) ->
         {handle_must_be_deleted_first, HandleId} ->
             case handle_logic:delete(Auth, HandleId) of
                 ok -> ok;
-                {error, not_found} -> ok;
+                ?ERROR_NOT_FOUND -> ok;
                 {error, _} = Error -> throw(Error)
             end,
             delete_internal(Auth, ShareId)
@@ -418,5 +418,5 @@ validate_name(ShareName) ->
             true;
         _ ->
             % TODO VFS-12486 Rework all ERROR_BAD_DATA errors with hint into individual ones (waiting for od_error)
-            throw(?ERROR_BAD_DATA(<<"name">>, <<"Bad value: ", (?SHARE_NAME_REQUIREMENTS_DESCRIPTION)/binary>>))
+            throw(?ERR_BAD_DATA(?err_ctx(), <<"name">>, <<"Bad value: ", (?SHARE_NAME_REQUIREMENTS_DESCRIPTION)/binary>>))
     end.

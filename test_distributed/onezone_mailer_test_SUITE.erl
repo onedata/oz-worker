@@ -54,7 +54,7 @@ all() ->
 
 unconfigured_mailer_test(_Config) ->
     % by default, the mailer config is not set; attempts to send an email should result in errors
-    ?assertMatch(?ERROR_INTERNAL_SERVER_ERROR(_), call_onezone_mailer_send()).
+    ?assertMatch(?ERR_INTERNAL_SERVER_ERROR(_), call_onezone_mailer_send()).
 
 
 error_handling_test(_Config) ->
@@ -63,16 +63,16 @@ error_handling_test(_Config) ->
     ozt:set_env(onezone_mailer_password, "password"),
     % bad relay
     ozt:set_env(onezone_mailer_smtp_client_opts, [{onezone_mailer_relay, "inexistent-relay-host"}]),
-    ?assertMatch(?ERROR_INTERNAL_SERVER_ERROR(_), call_onezone_mailer_send()),
+    ?assertMatch(?ERR_INTERNAL_SERVER_ERROR(_), call_onezone_mailer_send()),
     ?assertMatch({error, {retries_exceeded, {network_failure, _, {error, econnrefused}}}}, call_smtp_client_send()),
     % bad port
     ozt:set_env(onezone_mailer_relay, ?STUB_SMTP_SERVER_HOST),
     ozt:set_env(onezone_mailer_smtp_client_opts, [{port, "not-a-port"}]),
-    ?assertMatch(?ERROR_INTERNAL_SERVER_ERROR(_), call_onezone_mailer_send()),
+    ?assertMatch(?ERR_INTERNAL_SERVER_ERROR(_), call_onezone_mailer_send()),
     ?assertMatch({error, {bad_options, invalid_port}}, call_smtp_client_send()),
     % unreachable port
     ozt:set_env(onezone_mailer_smtp_client_opts, [{port, ?STUB_SMTP_SERVER_PORT + 1}]),
-    ?assertMatch(?ERROR_INTERNAL_SERVER_ERROR(_), call_onezone_mailer_send()),
+    ?assertMatch(?ERR_INTERNAL_SERVER_ERROR(_), call_onezone_mailer_send()),
     ?assertMatch({error, {retries_exceeded, {network_failure, _, {error, econnrefused}}}}, call_smtp_client_send()).
 
 

@@ -96,8 +96,8 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec deploy_package(onedata:gui(), onedata:release_version(), file:name_all()) ->
-    {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE |
-    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED(onedata:gui_hash()).
+    {ok, onedata:gui_hash()} | od_error_bad_gui_package:t() | od_error_gui_package_too_large:t() |
+    od_error_gui_package_unverified:t().
 deploy_package(GuiType, ReleaseVsn, PackagePath) ->
     deploy_package(GuiType, ReleaseVsn, PackagePath, true).
 
@@ -110,8 +110,8 @@ deploy_package(GuiType, ReleaseVsn, PackagePath) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec deploy_package(onedata:gui(), onedata:release_version(), file:name_all(), VerifyGuiHash :: boolean()) ->
-    {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE |
-    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED(onedata:gui_hash()).
+    {ok, onedata:gui_hash()} | od_error_bad_gui_package:t() | od_error_gui_package_too_large:t() |
+    od_error_gui_package_unverified:t().
 deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
     case gui:read_package(PackagePath) of
         {ok, _, PackageBin} ->
@@ -121,7 +121,7 @@ deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
                     ensure_package(GuiType, PackageBin, GuiHash),
                     {ok, GuiHash};
                 false ->
-                    ?ERROR_GUI_PACKAGE_UNVERIFIED(GuiHash)
+                    ?ERR_GUI_PACKAGE_UNVERIFIED(?err_ctx(), GuiHash)
             end;
         {error, _} = Error ->
             Error
@@ -136,7 +136,7 @@ deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec deploy_default_harvester_package(file:name_all()) ->
-    ok | ?ERROR_BAD_GUI_PACKAGE | ?ERROR_GUI_PACKAGE_TOO_LARGE.
+    ok | od_error_bad_gui_package:t() | od_error_gui_package_too_large:t().
 deploy_default_harvester_package(PackagePath) ->
     case gui:read_package(PackagePath) of
         {ok, _, PackageBin} ->

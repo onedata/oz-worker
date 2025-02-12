@@ -125,7 +125,7 @@ create_test_base(Config, ReadonlyValue) ->
                 ExpectedReadonly = maps:get(<<"readonly">>, DataSet, false),
                 case ExpectedReadonly andalso ExpectedImported =:= false of
                     true ->
-                        ?ERROR_REASON(?ERROR_REQUIRES_IMPORTED_STORAGE(<<"'newly created storage'">>));
+                        ?ERROR_REASON(?ERR_REQUIRES_IMPORTED_STORAGE(<<"'newly created storage'">>));
                     false ->
                         ?OK_TERM(fun(StorageId) ->
                             VerifyFun(StorageId, ExpectedQosParams(StorageId, QosParams), ExpectedImported, ExpectedReadonly)
@@ -146,7 +146,7 @@ create_test_base(Config, ReadonlyValue) ->
                 ExpectedReadonly = maps:get(<<"readonly">>, DataSet, false),
                 case ExpectedReadonly andalso ExpectedImported =:= false of
                     true ->
-                        ?ERROR_REASON(?ERROR_REQUIRES_IMPORTED_STORAGE(<<"'newly created storage'">>));
+                        ?ERROR_REASON(?ERR_REQUIRES_IMPORTED_STORAGE(<<"'newly created storage'">>));
                     false ->
                         ?OK_MAP_CONTAINS(#{
                             <<"provider">> => P1,
@@ -169,15 +169,15 @@ create_test_base(Config, ReadonlyValue) ->
             },
             bad_values = [
                 %% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
-                {<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)},
-                {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"qosParameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qosParameters">>)},
-                {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"qos_parameters">>, <<"binary">>, ?ERR_BAD_VALUE_JSON(<<"qos_parameters">>)},
+                {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"qosParameters">>, <<"binary">>, ?ERR_BAD_VALUE_JSON(<<"qosParameters">>)},
+                {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"qosParameters">>, #{<<"providerId">> => <<"not_correct_provider_id">>},
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.providerId">>, [P1])},
-                {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)},
-                {<<"readonly">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"readonly">>)}
-            ] ++ ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.providerId">>, [P1])},
+                {<<"imported">>, <<"binary">>, ?ERR_BAD_VALUE_BOOLEAN(<<"imported">>)},
+                {<<"readonly">>, <<"binary">>, ?ERR_BAD_VALUE_BOOLEAN(<<"readonly">>)}
+            ] ++ ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -381,7 +381,7 @@ update_test(Config, ReadonlyValue) ->
                 case ExpectedReadonly andalso ExpectedImported =:= false of
                     true ->
                         StorageId = maps:get(storageId, Env),
-                        ?ERROR_REASON(?ERROR_REQUIRES_IMPORTED_STORAGE(StorageId));
+                        ?ERROR_REASON(?ERR_REQUIRES_IMPORTED_STORAGE(StorageId));
                     false ->
                         ?OK
                 end
@@ -396,7 +396,7 @@ update_test(Config, ReadonlyValue) ->
                 case ExpectedReadonly andalso ExpectedImported =:= false of
                     true ->
                         StorageId = maps:get(storageId, Env),
-                        ?ERROR_REASON(?ERROR_REQUIRES_IMPORTED_STORAGE(StorageId));
+                        ?ERROR_REASON(?ERR_REQUIRES_IMPORTED_STORAGE(StorageId));
                     false ->
                         ?OK
                 end
@@ -413,18 +413,18 @@ update_test(Config, ReadonlyValue) ->
             },
             bad_values = [
                 %% @TODO VFS-5856 <<"qos_parameters">> deprecated, included for backward compatibility 
-                {<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)},
-                {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
-                {<<"qosParameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qosParameters">>)},
-                {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"qos_parameters">>, <<"binary">>, ?ERR_BAD_VALUE_JSON(<<"qos_parameters">>)},
+                {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"qosParameters">>, <<"binary">>, ?ERR_BAD_VALUE_JSON(<<"qosParameters">>)},
+                {<<"qosParameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERR_BAD_VALUE_QOS_PARAMETERS},
                 {<<"qosParameters">>, #{<<"providerId">> => <<"not_correct_provider_id">>},
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.providerId">>, [P1])},
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.providerId">>, [P1])},
                 {<<"qosParameters">>, #{<<"storageId">> => <<"not_correct_storage_id">>},
                     fun(#{storageId := StorageId}) ->
-                        ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.storageId">>, [StorageId])
+                        ?ERR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.storageId">>, [StorageId])
                     end},
-                {<<"imported">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"imported">>)},
-                {<<"readonly">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"readonly">>)}
+                {<<"imported">>, <<"binary">>, ?ERR_BAD_VALUE_BOOLEAN(<<"imported">>)},
+                {<<"readonly">>, <<"binary">>, ?ERR_BAD_VALUE_BOOLEAN(<<"readonly">>)}
             ]
         }
     },
@@ -498,17 +498,17 @@ support_space_test(Config) ->
 
     % Reused in all specs
     BadValues = lists:flatten([
-        {<<"token">>, <<"bad-token">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-        {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-        {<<"token">>, BadInviteTokenSerialized, ?ERROR_BAD_VALUE_TOKEN(<<"token">>,
-            ?ERROR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, UnrelatedSpaceId)))},
-        {<<"size">>, <<"binary">>, ?ERROR_BAD_VALUE_INTEGER(<<"size">>)},
-        {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
-        {<<"size">>, -1000, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
-        {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
-        {<<"spaceSupportParameters">>, 23452, ?ERROR_BAD_DATA(<<"spaceSupportParameters">>)},
-        {<<"spaceSupportParameters">>, <<"bad-data">>, ?ERROR_BAD_DATA(<<"spaceSupportParameters">>)},
-        {<<"spaceSupportParameters">>, IllegalSupportParamsJson, ?ERROR_BAD_DATA(
+        {<<"token">>, <<"bad-token">>, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)},
+        {<<"token">>, 1234, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)},
+        {<<"token">>, BadInviteTokenSerialized, ?ERR_BAD_VALUE_TOKEN(<<"token">>,
+            ?ERR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, UnrelatedSpaceId)))},
+        {<<"size">>, <<"binary">>, ?ERR_BAD_VALUE_INTEGER(<<"size">>)},
+        {<<"size">>, 0, ?ERR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+        {<<"size">>, -1000, ?ERR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+        {<<"size">>, MinSupportSize - 1, ?ERR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+        {<<"spaceSupportParameters">>, 23452, ?ERR_BAD_DATA(<<"spaceSupportParameters">>, undefined)},
+        {<<"spaceSupportParameters">>, <<"bad-data">>, ?ERR_BAD_DATA(<<"spaceSupportParameters">>, undefined)},
+        {<<"spaceSupportParameters">>, IllegalSupportParamsJson, ?ERR_BAD_DATA(
             <<"dirStatsServiceEnabled">>, <<"Dir stats service must be enabled if accounting is enabled">>
         )},
         lists:map(fun({MissingField, {AccountingEnabled, DirStatsEnabled, DirStatsStatus}}) ->
@@ -517,7 +517,7 @@ support_space_test(Config) ->
                 dir_stats_service_enabled = DirStatsEnabled,
                 dir_stats_service_status = DirStatsStatus
             }),
-            {<<"spaceSupportParameters">>, MissingSupportParamsJson, ?ERROR_MISSING_REQUIRED_VALUE(
+            {<<"spaceSupportParameters">>, MissingSupportParamsJson, ?ERR_MISSING_REQUIRED_VALUE(
                 <<"supportParameters.", MissingField/binary>>
             )}
         end, [
@@ -636,8 +636,8 @@ support_space_test(Config) ->
         gs_spec = undefined,
         data_spec = (GenDataSpec(deserialized))#data_spec{
             bad_values = BadValues ++ [
-                {<<"token">>, BadToken3, ?ERROR_BAD_VALUE_TOKEN(<<"token">>,
-                    ?ERROR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, UnrelatedSpaceId)))}
+                {<<"token">>, BadToken3, ?ERR_BAD_VALUE_TOKEN(<<"token">>,
+                    ?ERR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, UnrelatedSpaceId)))}
             ]
         }
     },
@@ -707,10 +707,10 @@ update_support_size_test(Config) ->
                 <<"size">> => [MinSupportSize]
             },
             bad_values = [
-                {<<"size">>, <<"binary">>, ?ERROR_BAD_VALUE_INTEGER(<<"size">>)},
-                {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
-                {<<"size">>, -1000, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
-                {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
+                {<<"size">>, <<"binary">>, ?ERR_BAD_VALUE_INTEGER(<<"size">>)},
+                {<<"size">>, 0, ?ERR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+                {<<"size">>, -1000, ?ERR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+                {<<"size">>, MinSupportSize - 1, ?ERR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
             ]
         }
     },
@@ -944,12 +944,12 @@ support_with_imported_storage_test(Config) ->
             module = storage_logic,
             function = support_space,
             args = [auth, ImportedStorageP2, data],
-            expected_result = ?ERROR_REASON(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(S1, ImportedStorageP1))
+            expected_result = ?ERROR_REASON(?ERR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(S1, ImportedStorageP1))
         },
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_storage, id = ImportedStorageP2, aspect = support},
-            expected_result_op = ?ERROR_REASON(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(S1, ImportedStorageP1))
+            expected_result_op = ?ERROR_REASON(?ERR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(S1, ImportedStorageP1))
         },
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
@@ -998,12 +998,12 @@ support_with_imported_storage_test(Config) ->
             module = storage_logic,
             function = support_space,
             args = [auth, ImportedStorageP1, data],
-            expected_result = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
+            expected_result = ?ERROR_REASON(?ERR_STORAGE_IN_USE)
         },
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_storage, id = ImportedStorageP1, aspect = support},
-            expected_result_op = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
+            expected_result_op = ?ERROR_REASON(?ERR_STORAGE_IN_USE)
         },
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
@@ -1058,9 +1058,9 @@ parallel_supports_test_retry() ->
     IsSuccessResult = fun({Result, _RequestedParams}) -> case Result of
         {ok, SubjectSpace} ->
             true;
-        ?ERROR_RELATION_ALREADY_EXISTS(od_space, SubjectSpace, od_storage, SupportingStorage) ->
+        ?ERR_RELATION_ALREADY_EXISTS(od_space, SubjectSpace, od_storage, SupportingStorage) ->
             false;
-        ?ERROR_BAD_DATA(<<"dirStatsServiceEnabled">>, _) ->
+        ?ERR_BAD_DATA(<<"dirStatsServiceEnabled">>, _) ->
             false
     end end,
 
@@ -1093,12 +1093,12 @@ modify_imported_storage_test(Config) ->
                 module = storage_logic,
                 function = update,
                 args = [auth, St, data],
-                expected_result = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
+                expected_result = ?ERROR_REASON(?ERR_STORAGE_IN_USE)
             },
             gs_spec = #gs_spec{
                 operation = update,
                 gri = #gri{type = od_storage, id = St, aspect = instance},
-                expected_result_op = ?ERROR_REASON(?ERROR_STORAGE_IN_USE)
+                expected_result_op = ?ERROR_REASON(?ERR_STORAGE_IN_USE)
             },
             data_spec = #data_spec{
                 at_least_one = [<<"imported">>],

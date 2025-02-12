@@ -63,7 +63,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
                     ?error(?autoformat_with_msg("Error registering a handle", [
                         Type, HandleServiceName, ProxyEndpoint, HttpCallResult
                     ])),
-                    throw(?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(HandleServiceName))
+                    throw(?ERR_EXTERNAL_SERVICE_OPERATION_FAILED(?err_ctx(), HandleServiceName))
             end;
         _ -> % <<"PID">> and other types
             PidHandle = ?RANDOM_ID(),
@@ -75,7 +75,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
                     ?error(?autoformat_with_msg("Error registering a handle", [
                         Type, HandleServiceName, ProxyEndpoint, HttpCallResult
                     ])),
-                    throw(?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(HandleServiceName))
+                    throw(?ERR_EXTERNAL_SERVICE_OPERATION_FAILED(?err_ctx(), HandleServiceName))
             end
     end.
 
@@ -125,7 +125,7 @@ unregister_handle(HandleId) ->
             ?error(?autoformat_with_msg("Error unregistering a handle", [
                 Type, HandleServiceName, ProxyEndpoint, HttpCallResult
             ])),
-            throw(?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(HandleServiceName))
+            throw(?ERR_EXTERNAL_SERVICE_OPERATION_FAILED(?err_ctx(), HandleServiceName))
     end.
 
 %%--------------------------------------------------------------------

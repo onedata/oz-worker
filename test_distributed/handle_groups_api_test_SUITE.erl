@@ -137,9 +137,9 @@ add_group_test(Config) ->
             },
             bad_values = [
                 {<<"privileges">>, <<"">>,
-                    ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
+                    ?ERR_BAD_VALUE_LIST_OF_STRINGS(<<"privileges">>)},
                 {<<"privileges">>, [?SPACE_VIEW, ?GROUP_VIEW],
-                    ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
+                    ?ERR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
             ]
         }
     },

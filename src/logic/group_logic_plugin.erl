@@ -441,7 +441,7 @@ delete(#el_req{gri = #gri{id = GroupId, aspect = instance}}) ->
     {true, {Group, _}} = fetch_entity(#gri{aspect = instance, id = GroupId}),
     case Group#od_group.protected of
         true ->
-            throw(?ERROR_PROTECTED_GROUP);
+            throw(?ERR_PROTECTED_GROUP(?err_ctx()));
         false ->
             entity_graph:delete_with_relations(od_group, GroupId, Group)
     end;

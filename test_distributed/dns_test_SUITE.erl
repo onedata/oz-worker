@@ -365,35 +365,35 @@ update_fails_on_duplicated_subdomain_test(Config) ->
 
     % subdomain used by another provider
     ?assertMatch(
-        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
+        ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
         oz_test_utils:call_oz(Config, provider_logic, update_domain_config, [?ROOT, P2, Data])
     ),
 
     % subdomain reserved for nameserver
     Data2 = Data#{<<"subdomain">> := <<"ns19">>},
     ?assertMatch(
-        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
+        ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
         oz_test_utils:call_oz(Config, provider_logic, update_domain_config, [?ROOT, P2, Data2])
     ),
 
     % static subdomain configured in app config
     Data3 = Data#{<<"subdomain">> := StaticSubdomain},
     ?assertMatch(
-        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
+        ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
         oz_test_utils:call_oz(Config, provider_logic, update_domain_config, [?ROOT, P2, Data3])
     ),
 
     % nested static subdomain configured in app config
     Data4 = Data#{<<"subdomain">> := NestedStaticSubdomainTopElement},
     ?assertMatch(
-        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
+        ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
         oz_test_utils:call_oz(Config, provider_logic, update_domain_config, [?ROOT, P2, Data4])
     ),
 
     % subdomain configured in app config for ns server
     Data6 = Data#{<<"subdomain">> := StaticNSSubdomain},
     ?assertMatch(
-        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
+        ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
         oz_test_utils:call_oz(Config, provider_logic, update_domain_config, [?ROOT, P2, Data6])
     ).
 
@@ -575,7 +575,7 @@ txt_record_forbidden_without_subdomain_delegation(Config) ->
     {ok, {P1, _}} = oz_test_utils:create_provider(Config, OpName),
 
     ?assertMatch(
-        ?ERROR_SUBDOMAIN_DELEGATION_DISABLED,
+        ?ERR_SUBDOMAIN_DELEGATION_DISABLED,
         set_dns_txt_record(Config, ?RAND_ELEMENT([op_worker, ones3]), P1, RecordName, RecordContent, 5)
     ).
 

@@ -254,7 +254,7 @@ unknown_gui_messages_are_not_found(Config) ->
             module = zone_logic,
             function = get_gui_message_as_map,
             args = [<<"badMessageId">>],
-            expected_result = ?ERROR_REASON({error, not_found})
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
     },
     UpdateApiTestSpec = #api_test_spec{
@@ -265,7 +265,7 @@ unknown_gui_messages_are_not_found(Config) ->
             module = zone_logic,
             function = update_gui_message,
             args = [auth, <<"badMessageId">>, data],
-            expected_result = ?ERROR_REASON({error, not_found})
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetApiTestSpec)),
@@ -295,9 +295,9 @@ gui_message_is_updated(Config) ->
                 <<"body">> => [<<"some <span>html text</span>">>]
             },
             bad_values = [
-                {<<"enabled">>, 1234, ?ERROR_BAD_VALUE_BOOLEAN(<<"enabled">>)},
-                {<<"enabled">>, atom, ?ERROR_BAD_VALUE_BOOLEAN(<<"enabled">>)},
-                {<<"body">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"body">>)}
+                {<<"enabled">>, 1234, ?ERR_BAD_VALUE_BOOLEAN(<<"enabled">>)},
+                {<<"enabled">>, atom, ?ERR_BAD_VALUE_BOOLEAN(<<"enabled">>)},
+                {<<"body">>, 1234, ?ERR_BAD_VALUE_STRING(<<"body">>)}
             ]
         }
     },

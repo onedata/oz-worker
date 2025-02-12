@@ -237,38 +237,38 @@ create_test(Config) ->
             optional = [<<"latitude">>, <<"longitude">>, <<"opWorkerPort">>, <<"oneS3Port">>],
             correct_values = CorrectValues#{<<"subdomainDelegation">> => [false]},
             bad_values = [
-                {<<"domain">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"domain">>)},
-                {<<"domain">>, <<"https://domain.com">>, ?ERROR_BAD_VALUE_DOMAIN},
-                {<<"domain">>, <<"domain.com:443">>, ?ERROR_BAD_VALUE_DOMAIN},
-                {<<"domain">>, <<".leadingdot">>, ?ERROR_BAD_VALUE_DOMAIN},
-                {<<"domain">>, <<"trailing-.hyphen">>, ?ERROR_BAD_VALUE_DOMAIN},
-                {<<"subdomainDelegation">>, true, ?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED},
-                {<<"subdomainDelegation">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
-                {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
-                {<<"adminEmail">>, <<"adminwithoutdomain">>, ?ERROR_BAD_VALUE_EMAIL},
-                {<<"latitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"latitude">>)},
-                {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, 90.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
-                {<<"longitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"longitude">>)},
-                {<<"longitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
-                {<<"opWorkerPort">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_INTEGER(<<"opWorkerPort">>)},
-                {<<"opWorkerPort">>, -1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"opWorkerPort">>, 0, 65535)},
-                {<<"opWorkerPort">>, 65536, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"opWorkerPort">>, 0, 65535)},
-                {<<"oneS3Port">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_INTEGER(<<"oneS3Port">>)},
-                {<<"oneS3Port">>, -1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"oneS3Port">>, 0, 65535)},
-                {<<"oneS3Port">>, 65536, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"oneS3Port">>, 0, 65535)},
-                {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"token">>, <<"zxvcsadfgasdfasdf">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                {<<"token">>, ClientToken, ?ERROR_BAD_VALUE_TOKEN(
-                    <<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?REGISTER_ONEPROVIDER, ?ACCESS_TOKEN))},
-                {<<"token">>, SpaceInviteTokenSerialized, ?ERROR_BAD_VALUE_TOKEN(
-                    <<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?REGISTER_ONEPROVIDER, ?INVITE_TOKEN(?USER_JOIN_SPACE, Space)))}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                {<<"domain">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"domain">>)},
+                {<<"domain">>, <<"https://domain.com">>, ?ERR_BAD_VALUE_DOMAIN},
+                {<<"domain">>, <<"domain.com:443">>, ?ERR_BAD_VALUE_DOMAIN},
+                {<<"domain">>, <<".leadingdot">>, ?ERR_BAD_VALUE_DOMAIN},
+                {<<"domain">>, <<"trailing-.hyphen">>, ?ERR_BAD_VALUE_DOMAIN},
+                {<<"subdomainDelegation">>, true, ?ERR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED},
+                {<<"subdomainDelegation">>, <<"binary">>, ?ERR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"subdomainDelegation">>, bad_bool, ?ERR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"adminEmail">>, <<"adminwithoutdomain">>, ?ERR_BAD_VALUE_EMAIL},
+                {<<"latitude">>, <<"ASDASD">>, ?ERR_BAD_VALUE_FLOAT(<<"latitude">>)},
+                {<<"latitude">>, -1500, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, -90.1, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, 90.1, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, 1500, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
+                {<<"longitude">>, <<"ASDASD">>, ?ERR_BAD_VALUE_FLOAT(<<"longitude">>)},
+                {<<"longitude">>, -1500, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, -180.1, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, 180.1, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, 1500, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"opWorkerPort">>, <<"ASDASD">>, ?ERR_BAD_VALUE_INTEGER(<<"opWorkerPort">>)},
+                {<<"opWorkerPort">>, -1, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"opWorkerPort">>, 0, 65535)},
+                {<<"opWorkerPort">>, 65536, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"opWorkerPort">>, 0, 65535)},
+                {<<"oneS3Port">>, <<"ASDASD">>, ?ERR_BAD_VALUE_INTEGER(<<"oneS3Port">>)},
+                {<<"oneS3Port">>, -1, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"oneS3Port">>, 0, 65535)},
+                {<<"oneS3Port">>, 65536, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"oneS3Port">>, 0, 65535)},
+                {<<"token">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"token">>, <<"zxvcsadfgasdfasdf">>, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)},
+                {<<"token">>, ClientToken, ?ERR_BAD_VALUE_TOKEN(
+                    <<"token">>, ?ERR_NOT_AN_INVITE_TOKEN(?REGISTER_ONEPROVIDER, ?ACCESS_TOKEN))},
+                {<<"token">>, SpaceInviteTokenSerialized, ?ERR_BAD_VALUE_TOKEN(
+                    <<"token">>, ?ERR_NOT_AN_INVITE_TOKEN(?REGISTER_ONEPROVIDER, ?INVITE_TOKEN(?USER_JOIN_SPACE, Space)))}
+                | ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
             ]
         }
     },
@@ -286,7 +286,7 @@ create_test(Config) ->
             correct_values = CorrectValues#{<<"subdomainDelegation">> => [false]},
             bad_values = [
                 {<<"domain">>, <<"mugging.", OZDomain/binary>>,
-                    ?ERROR_BAD_DATA(<<"domain">>, <<"Cannot use Onezone's subdomain as the provider domain (use the subdomainDelegation=true option)">>)}
+                    ?ERR_BAD_DATA(<<"domain">>, <<"Cannot use Onezone's subdomain as the provider domain (use the subdomainDelegation=true option)">>)}
             ]
         }
     },
@@ -304,20 +304,20 @@ create_test(Config) ->
             optional = [<<"latitude">>, <<"longitude">>],
             correct_values = CorrectValues#{<<"subdomainDelegation">> => [true]},
             bad_values = [
-                {<<"subdomain">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"subdomain">>)},
-                {<<"subdomain">>, <<"port:443">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"subdomain">>, <<"Uppercase">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"subdomain">>, <<"under_score">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"subdomain">>, <<"-leadinghyphen">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"subdomain">>, <<"trailingdot.">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"subdomain">>, <<"multi.part">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"subdomain">>, <<"https://protocol">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"ipList">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ipList">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"opWorkerIpAddresses">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
-                {<<"opWorkerIpAddresses">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
-                {<<"opWorkerIpAddresses">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)}
+                {<<"subdomain">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"subdomain">>)},
+                {<<"subdomain">>, <<"port:443">>, ?ERR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"Uppercase">>, ?ERR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"under_score">>, ?ERR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"-leadinghyphen">>, ?ERR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"trailingdot.">>, ?ERR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"multi.part">>, ?ERR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"https://protocol">>, ?ERR_BAD_VALUE_SUBDOMAIN},
+                {<<"ipList">>, [atom], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, atom, ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, [<<"256.256.256.256">>], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"opWorkerIpAddresses">>, [atom], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
+                {<<"opWorkerIpAddresses">>, atom, ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
+                {<<"opWorkerIpAddresses">>, [<<"256.256.256.256">>], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)}
             ]
         }
     },
@@ -335,9 +335,9 @@ create_test(Config) ->
             optional = [<<"latitude">>, <<"longitude">>],
             correct_values = CorrectValues#{<<"subdomainDelegation">> => [true]},
             bad_values = [
-                {<<"oneS3Addresses">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3Addresses">>)},
-                {<<"oneS3Addresses">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3Addresses">>)},
-                {<<"oneS3Addresses">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3Addresses">>)}
+                {<<"oneS3Addresses">>, [atom], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3Addresses">>)},
+                {<<"oneS3Addresses">>, atom, ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3Addresses">>)},
+                {<<"oneS3Addresses">>, [<<"256.256.256.256">>], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3Addresses">>)}
             ]
         }
     },
@@ -637,19 +637,19 @@ update_test(Config) ->
                 <<"longitude">> => [rand:uniform() * 180]
             },
             bad_values = [
-                {<<"adminEmail">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"adminEmail">>)},
-                {<<"adminEmail">>, <<"nodomain">>, ?ERROR_BAD_VALUE_EMAIL},
-                {<<"latitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"latitude">>)},
-                {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, 90.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
-                {<<"longitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"longitude">>)},
-                {<<"longitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                {<<"adminEmail">>, 1234, ?ERR_BAD_VALUE_STRING(<<"adminEmail">>)},
+                {<<"adminEmail">>, <<"nodomain">>, ?ERR_BAD_VALUE_EMAIL},
+                {<<"latitude">>, <<"ASDASD">>, ?ERR_BAD_VALUE_FLOAT(<<"latitude">>)},
+                {<<"latitude">>, -1500, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, -90.1, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, 90.1, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, 1500, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
+                {<<"longitude">>, <<"ASDASD">>, ?ERR_BAD_VALUE_FLOAT(<<"longitude">>)},
+                {<<"longitude">>, -1500, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, -180.1, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, 180.1, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, 1500, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)}
+                | ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
             ]
         }
     },
@@ -1564,14 +1564,14 @@ legacy_support_space_test(Config) ->
 
     % Reused in all specs
     BadValues = [
-        {<<"token">>, <<"bad-token">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-        {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-        {<<"token">>, BadInviteTokenSerialized, ?ERROR_BAD_VALUE_TOKEN(<<"token">>,
-            ?ERROR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, S1)))},
-        {<<"size">>, <<"binary">>, ?ERROR_BAD_VALUE_INTEGER(<<"size">>)},
-        {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
-        {<<"size">>, -1000, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
-        {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
+        {<<"token">>, <<"bad-token">>, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)},
+        {<<"token">>, 1234, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)},
+        {<<"token">>, BadInviteTokenSerialized, ?ERR_BAD_VALUE_TOKEN(<<"token">>,
+            ?ERR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, S1)))},
+        {<<"size">>, <<"binary">>, ?ERR_BAD_VALUE_INTEGER(<<"size">>)},
+        {<<"size">>, 0, ?ERR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+        {<<"size">>, -1000, ?ERR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+        {<<"size">>, MinSupportSize - 1, ?ERR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
     ],
 
     VerifyFun = fun(SpaceId) ->
@@ -1668,8 +1668,8 @@ legacy_support_space_test(Config) ->
                 <<"size">> => [MinSupportSize]
             },
             bad_values = BadValues ++ [
-                {<<"token">>, BadToken3, ?ERROR_BAD_VALUE_TOKEN(<<"token">>,
-                    ?ERROR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, S1)))}
+                {<<"token">>, BadToken3, ?ERR_BAD_VALUE_TOKEN(<<"token">>,
+                    ?ERR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, S1)))}
             ]
         }
     },
@@ -1723,10 +1723,10 @@ legacy_update_support_size_test(Config) ->
                 <<"size">> => [MinSupportSize]
             },
             bad_values = [
-                {<<"size">>, <<"binary">>, ?ERROR_BAD_VALUE_INTEGER(<<"size">>)},
-                {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
-                {<<"size">>, -1000, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
-                {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
+                {<<"size">>, <<"binary">>, ?ERR_BAD_VALUE_INTEGER(<<"size">>)},
+                {<<"size">>, 0, ?ERR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+                {<<"size">>, -1000, ?ERR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+                {<<"size">>, MinSupportSize - 1, ?ERR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
             ]
         }
     },
@@ -1905,7 +1905,7 @@ map_user_test(Config) ->
                     <<"userId">> => [SubjectId]
                 },
                 bad_values = [
-                    {<<"idp">>, bad_idp_name, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"idp">>)}
+                    {<<"idp">>, bad_idp_name, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"idp">>)}
                 ]
             }
         },
@@ -1979,7 +1979,7 @@ map_group_test(Config) ->
                     <<"groupId">> => [RawEntitlement]
                 },
                 bad_values = [
-                    {<<"idp">>, bad_idp_name, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"idp">>)}
+                    {<<"idp">>, bad_idp_name, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"idp">>)}
                 ]
             }
         },
@@ -2075,21 +2075,21 @@ update_subdomain_test(Config) ->
                 <<"oneS3Port">> => [OneS3Port]
             },
             bad_values = [
-                {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
-                {<<"subdomain">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"subdomain">>)},
-                {<<"subdomain">>, <<"port:443">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"subdomain">>, <<"Uppercase">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"subdomain">>, <<"under_score">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"subdomain">>, <<".leadingdot">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"subdomain">>, <<"trailingdot.">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"subdomain">>, <<"multi.part">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"subdomain">>, <<"https://protocol">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"ipList">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ipList">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"opWorkerIpAddresses">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
-                {<<"opWorkerIpAddresses">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
-                {<<"opWorkerIpAddresses">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)}
+                {<<"subdomainDelegation">>, bad_bool, ?ERR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"subdomain">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"subdomain">>)},
+                {<<"subdomain">>, <<"port:443">>, ?ERR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"Uppercase">>, ?ERR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"under_score">>, ?ERR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<".leadingdot">>, ?ERR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"trailingdot.">>, ?ERR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"multi.part">>, ?ERR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"https://protocol">>, ?ERR_BAD_VALUE_SUBDOMAIN},
+                {<<"ipList">>, [atom], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, atom, ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, [<<"256.256.256.256">>], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"opWorkerIpAddresses">>, [atom], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
+                {<<"opWorkerIpAddresses">>, atom, ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
+                {<<"opWorkerIpAddresses">>, [<<"256.256.256.256">>], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)}
             ]
         }
     },
@@ -2103,12 +2103,12 @@ update_subdomain_test(Config) ->
         gs_spec = undefined,
         data_spec = DataSpec#data_spec{
             bad_values = [
-                {<<"ipList">>, [{256, 256, 256, 256}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ipList">>, [{-1, -1, -1, -1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ipList">>, [{1, 1, 1, 1, 1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"opWorkerIpAddresses">>, [{256, 256, 256, 256}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
-                {<<"opWorkerIpAddresses">>, [{-1, -1, -1, -1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
-                {<<"opWorkerIpAddresses">>, [{1, 1, 1, 1, 1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)}
+                {<<"ipList">>, [{256, 256, 256, 256}], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, [{-1, -1, -1, -1}], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, [{1, 1, 1, 1, 1}], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"opWorkerIpAddresses">>, [{256, 256, 256, 256}], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
+                {<<"opWorkerIpAddresses">>, [{-1, -1, -1, -1}], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)},
+                {<<"opWorkerIpAddresses">>, [{1, 1, 1, 1, 1}], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"opWorkerIpAddresses">>)}
             ]
         }
     },
@@ -2121,12 +2121,12 @@ update_subdomain_test(Config) ->
         data_spec = DataSpec#data_spec{
             required = [<<"subdomainDelegation">>, <<"subdomain">>, <<"oneS3IpAddresses">>, <<"oneS3Port">>],
             bad_values = [
-                {<<"oneS3IpAddresses">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
-                {<<"oneS3IpAddresses">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
-                {<<"oneS3IpAddresses">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
-                {<<"oneS3Port">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_INTEGER(<<"oneS3Port">>)},
-                {<<"oneS3Port">>, -1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"oneS3Port">>, 0, 65535)},
-                {<<"oneS3Port">>, 65536, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"oneS3Port">>, 0, 65535)}
+                {<<"oneS3IpAddresses">>, [atom], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
+                {<<"oneS3IpAddresses">>, atom, ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
+                {<<"oneS3IpAddresses">>, [<<"256.256.256.256">>], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
+                {<<"oneS3Port">>, <<"ASDASD">>, ?ERR_BAD_VALUE_INTEGER(<<"oneS3Port">>)},
+                {<<"oneS3Port">>, -1, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"oneS3Port">>, 0, 65535)},
+                {<<"oneS3Port">>, 65536, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"oneS3Port">>, 0, 65535)}
             ]
         }
     },
@@ -2137,9 +2137,9 @@ update_subdomain_test(Config) ->
     ApiTestSpec4 = ApiTestSpec3#api_test_spec{
         data_spec = DataSpec#data_spec{
             bad_values = [
-                {<<"oneS3IpAddresses">>, [{256, 256, 256, 256}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
-                {<<"oneS3IpAddresses">>, [{-1, -1, -1, -1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
-                {<<"oneS3IpAddresses">>, [{1, 1, 1, 1, 1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)}
+                {<<"oneS3IpAddresses">>, [{256, 256, 256, 256}], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
+                {<<"oneS3IpAddresses">>, [{-1, -1, -1, -1}], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)},
+                {<<"oneS3IpAddresses">>, [{1, 1, 1, 1, 1}], ?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"oneS3IpAddresses">>)}
             ]
         }
     },
@@ -2173,7 +2173,7 @@ update_domain_test(Config) ->
 
             % Disable subdomain delegation in onezone to test
             % ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED
-            % or enable to test ?ERROR_BAD_DATA(<<"domain">>, <<"Cannot use Onezone's subdomain as the provider domain (use the subdomainDelegation=true option)">>)
+            % or enable to test ?ERR_BAD_DATA(<<"domain">>, <<"Cannot use Onezone's subdomain as the provider domain (use the subdomainDelegation=true option)">>)
             oz_test_utils:set_env(Config, subdomain_delegation_supported, SubdomainDelegationSupported),
 
             #{
@@ -2207,10 +2207,10 @@ update_domain_test(Config) ->
         },
         bad_values = [
             {<<"subdomainDelegation">>, bad_bool,
-                ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                ?ERR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
             {<<"subdomainDelegation">>, true,
-                ?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED},
-            {<<"domain">>, <<"https://hasprotocol">>, ?ERROR_BAD_VALUE_DOMAIN}
+                ?ERR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED},
+            {<<"domain">>, <<"https://hasprotocol">>, ?ERR_BAD_VALUE_DOMAIN}
         ]
     },
     ApiTestSpec = #api_test_spec{
@@ -2248,7 +2248,7 @@ update_domain_test(Config) ->
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         data_spec = DataSpec#data_spec{bad_values = [
             {<<"domain">>, <<"mugging.", OZDomain/binary>>,
-                ?ERROR_BAD_DATA(<<"domain">>, <<"Cannot use Onezone's subdomain as the provider domain (use the subdomainDelegation=true option)">>)}
+                ?ERR_BAD_DATA(<<"domain">>, <<"Cannot use Onezone's subdomain as the provider domain (use the subdomainDelegation=true option)">>)}
         ]}
     },
     ?assert(api_test_utils:run_tests(
@@ -2584,14 +2584,14 @@ verify_provider_identity_test(Config) ->
                 <<"token">> => CorrectTokens
             },
             bad_values = [
-                {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
-                {<<"providerId">>, 1234, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
-                {<<"providerId">>, <<"sdfagh2345qwefg">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
-                {<<"providerId">>, P2, ?ERROR_TOKEN_INVALID},
+                {<<"providerId">>, <<"">>, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
+                {<<"providerId">>, 1234, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
+                {<<"providerId">>, <<"sdfagh2345qwefg">>, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
+                {<<"providerId">>, P2, ?ERR_TOKEN_INVALID},
 
-                {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                {<<"token">>, IdentityTokenExpiredBin, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = Timestamp - 200})}
+                {<<"token">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"token">>, 1234, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)},
+                {<<"token">>, IdentityTokenExpiredBin, ?ERR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = Timestamp - 200})}
             ]
         }
     },
@@ -2608,14 +2608,14 @@ verify_provider_identity_test(Config) ->
                 <<"macaroon">> => CorrectTokens
             },
             bad_values = [
-                {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
-                {<<"providerId">>, 1234, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
-                {<<"providerId">>, <<"sdfagh2345qwefg">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
-                {<<"providerId">>, P2, ?ERROR_TOKEN_INVALID},
+                {<<"providerId">>, <<"">>, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
+                {<<"providerId">>, 1234, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
+                {<<"providerId">>, <<"sdfagh2345qwefg">>, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
+                {<<"providerId">>, P2, ?ERR_TOKEN_INVALID},
 
-                {<<"macaroon">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"macaroon">>)},
-                {<<"macaroon">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"macaroon">>, ?ERROR_BAD_TOKEN)},
-                {<<"macaroon">>, IdentityTokenExpiredBin, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = Timestamp - 200})}
+                {<<"macaroon">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"macaroon">>)},
+                {<<"macaroon">>, 1234, ?ERR_BAD_VALUE_TOKEN(<<"macaroon">>, ?ERR_BAD_TOKEN)},
+                {<<"macaroon">>, IdentityTokenExpiredBin, ?ERR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = Timestamp - 200})}
             ]
         }
     },

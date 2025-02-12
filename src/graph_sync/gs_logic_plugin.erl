@@ -188,14 +188,14 @@ verify_auth_override(?PROVIDER(ProviderId) = Auth, #auth_override{client_auth = 
             },
             case token_auth:authenticate(Token, AuthCtx) of
                 {true, ?USER = UserAuth} -> {ok, UserAuth};
-                {true, _} -> ?ERROR_FORBIDDEN;
+                {true, _} -> ?ERR_FORBIDDEN(?err_ctx());
                 {error, _} = Err1 -> Err1
             end;
         {error, _} = Err2 ->
-            ?ERROR_UNAUTHORIZED(Err2)
+            ?ERR_UNAUTHORIZED(?err_ctx(), Err2)
     end;
 verify_auth_override(_, _) ->
-    ?ERROR_FORBIDDEN.
+    ?ERR_FORBIDDEN(?err_ctx()).
 
 
 %%--------------------------------------------------------------------
@@ -277,7 +277,7 @@ handle_rpc(_, Auth, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
             idp_auth:get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode)
     end;
 handle_rpc(_, _, _, _) ->
-    ?ERROR_RPC_UNDEFINED.
+    ?ERR_RPC_UNDEFINED(?err_ctx()).
 
 
 %%--------------------------------------------------------------------

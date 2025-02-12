@@ -92,7 +92,7 @@ create_registration_token(UserId) ->
 -spec simulate_version(od_provider:id(), onedata:release_version()) -> ok.
 simulate_version(ProviderId, ReleaseVersion) ->
     % this should finish with an error (bad GUI hash was given), but nevertheless set the release version
-    ?assertMatch(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"workerVersion.gui">>), ozt:rpc(cluster_logic, update_version_info, [
+    ?assertMatch(?ERR_BAD_VALUE_ID_NOT_FOUND(<<"workerVersion.gui">>), ozt:rpc(cluster_logic, update_version_info, [
         ?PROVIDER(ProviderId), ProviderId, ?WORKER,
         {ReleaseVersion, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH}
     ])),

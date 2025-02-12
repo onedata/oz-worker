@@ -109,10 +109,10 @@ create_test(Config) ->
     end,
 
     BadDataValues = [
-        {<<"revision">>, bad_spec, ?ERROR_BAD_VALUE_JSON(<<"revision">>)},
-        {<<"revision">>, [1234], ?ERROR_BAD_VALUE_JSON(<<"revision">>)},
-        {<<"originalAtmLambdaId">>, [1234], ?ERROR_BAD_VALUE_BINARY(<<"originalAtmLambdaId">>)},
-        {<<"originalAtmLambdaId">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"originalAtmLambdaId">>)}
+        {<<"revision">>, bad_spec, ?ERR_BAD_VALUE_JSON(<<"revision">>)},
+        {<<"revision">>, [1234], ?ERR_BAD_VALUE_JSON(<<"revision">>)},
+        {<<"originalAtmLambdaId">>, [1234], ?ERR_BAD_VALUE_STRING(<<"originalAtmLambdaId">>)},
+        {<<"originalAtmLambdaId">>, <<>>, ?ERR_BAD_VALUE_EMPTY(<<"originalAtmLambdaId">>)}
     ],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -174,9 +174,9 @@ create_test(Config) ->
                 <<"originalAtmLambdaId">> => [?RAND_STR(16)]
             },
             bad_values = lists:flatten([
-                {<<"atmInventoryId">>, 1234, ?ERROR_FORBIDDEN},
-                {<<"atmInventoryId">>, <<"">>, ?ERROR_FORBIDDEN},
-                {<<"atmInventoryId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN},
+                {<<"atmInventoryId">>, 1234, ?ERR_FORBIDDEN},
+                {<<"atmInventoryId">>, <<"">>, ?ERR_FORBIDDEN},
+                {<<"atmInventoryId">>, <<"asdq4ewfs">>, ?ERR_FORBIDDEN},
                 BadDataValues
             ])
         }
@@ -219,8 +219,8 @@ create_test(Config) ->
         },
         data_spec = DataSpec#data_spec{
             bad_values = lists:flatten([
-                {<<"atmInventoryId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
-                {<<"atmInventoryId">>, <<"asdq4ewfs">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
+                {<<"atmInventoryId">>, <<"">>, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
+                {<<"atmInventoryId">>, <<"asdq4ewfs">>, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"atmInventoryId">>)},
                 BadDataValues
             ])
         }
@@ -478,9 +478,9 @@ dump_test(Config) ->
                 <<"includeRevision">> => [RevisionNumber]
             },
             bad_values = [
-                {<<"includeRevision">>, #{<<"bad">> => <<"data">>}, ?ERROR_BAD_VALUE_INTEGER(<<"includeRevision">>)},
-                {<<"includeRevision">>, -7, ?ERROR_BAD_VALUE_TOO_LOW(<<"includeRevision">>, 1)},
-                {<<"includeRevision">>, 9999999, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"includeRevision">>)}
+                {<<"includeRevision">>, #{<<"bad">> => <<"data">>}, ?ERR_BAD_VALUE_INTEGER(<<"includeRevision">>)},
+                {<<"includeRevision">>, -7, ?ERR_BAD_VALUE_TOO_LOW(<<"includeRevision">>, 1)},
+                {<<"includeRevision">>, 9999999, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"includeRevision">>)}
             ]
         }
     },
@@ -596,11 +596,11 @@ update_test_base(Config, ScenarioType) ->
                 }]
             },
             bad_values = [
-                {<<"revision">>, str_utils:rand_hex(250), ?ERROR_BAD_VALUE_JSON(<<"revision">>)},
+                {<<"revision">>, str_utils:rand_hex(250), ?ERR_BAD_VALUE_JSON(<<"revision">>)},
                 {<<"revision">>, #{
                     <<"originalRevisionNumber">> => NewRevisionNumber,
                     <<"atmLambdaRevision">> => #{<<"a">> => <<"b">>}
-                }, ?ERROR_BAD_DATA(<<"atmLambdaRevision">>)}
+                }, ?ERR_BAD_DATA(<<"atmLambdaRevision">>, undefined)}
             ]
         }
     },
@@ -630,12 +630,12 @@ add_revision_test(Config) ->
             module = atm_lambda_logic,
             function = add_revision,
             args = [auth, AtmLambdaId, <<"string">>, data],
-            expected_result = ?ERROR_REASON(?ERROR_BAD_DATA(<<"targetRevisionNumber">>))
+            expected_result = ?ERROR_REASON(?ERR_BAD_DATA(<<"targetRevisionNumber">>, undefined))
         },
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_atm_lambda, id = AtmLambdaId, aspect = {revision, <<"undefined">>}},
-            expected_result_op = ?ERROR_REASON(?ERROR_BAD_DATA(<<"targetRevisionNumber">>))
+            expected_result_op = ?ERROR_REASON(?ERR_BAD_DATA(<<"targetRevisionNumber">>, undefined))
         },
         data_spec = #data_spec{
             required = [
@@ -799,9 +799,9 @@ add_revision_test_base(Config, RevisionNumberProvisionMode, ScenarioType) ->
                     override_original_revision_number ->
                         [];
                     take_original_revision_number ->
-                        {<<"originalRevisionNumber">>, [<<"a">>], ?ERROR_BAD_VALUE_INTEGER(<<"originalRevisionNumber">>)}
+                        {<<"originalRevisionNumber">>, [<<"a">>], ?ERR_BAD_VALUE_INTEGER(<<"originalRevisionNumber">>)}
                 end,
-                {<<"atmLambdaRevision">>, #{<<"k">> => <<"v">>}, ?ERROR_BAD_DATA(<<"atmLambdaRevision">>)}
+                {<<"atmLambdaRevision">>, #{<<"k">> => <<"v">>}, ?ERR_BAD_DATA(<<"atmLambdaRevision">>, undefined)}
             ])
         }
     },
@@ -933,8 +933,8 @@ update_revision_lifecycle_state_test(Config, ScenarioType) ->
             bad_values = case ScenarioType of
                 nonexistent_revision -> [];
                 existent_revision -> [
-                    {<<"state">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"state">>)},
-                    {<<"state">>, str_utils:rand_hex(250), ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"state">>, AllowedStatesJson)}
+                    {<<"state">>, 1234, ?ERR_BAD_VALUE_STRING(<<"state">>)},
+                    {<<"state">>, str_utils:rand_hex(250), ?ERR_BAD_VALUE_NOT_ALLOWED(<<"state">>, AllowedStatesJson)}
                 ]
             end
         }
@@ -1010,14 +1010,14 @@ dump_revision_test(Config) ->
         },
         logic_spec = LogicSpec#logic_spec{
             args = [auth, AtmLambdaId, 0],
-            expected_result = ?ERROR_REASON(?ERROR_BAD_DATA(<<"revisionNumber">>))
+            expected_result = ?ERROR_REASON(?ERR_BAD_DATA(<<"revisionNumber">>, undefined))
         },
         gs_spec = GsSpec#gs_spec{
             gri = #gri{
                 type = od_atm_lambda, id = AtmLambdaId,
                 aspect = {dump_revision, <<"asdf">>}, scope = private
             },
-            expected_result_op = ?ERROR_REASON(?ERROR_BAD_DATA(<<"revisionNumber">>))
+            expected_result_op = ?ERROR_REASON(?ERR_BAD_DATA(<<"revisionNumber">>, undefined))
         }
     })).
 
@@ -1083,7 +1083,7 @@ link_to_inventory_test(Config) ->
         },
         logic_spec = LogicSpec#logic_spec{
             args = [auth, MemberAtmLambda, OriginalAtmInventoryId],
-            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(
+            expected_result = ?ERROR_REASON(?ERR_RELATION_ALREADY_EXISTS(
                 od_atm_lambda, MemberAtmLambda, od_atm_inventory, OriginalAtmInventoryId
             ))
         }
@@ -1206,7 +1206,7 @@ unlink_from_inventory_test_base(Config, FromWhichInventory, UsageInWorkflowSchem
                         ?OK_RES;
                     used ->
                         % referenced lambdas are sorted during usage checks
-                        ?ERROR_REASON(?ERROR_ATM_LAMBDA_IN_USE(lists:sort(ReferencedAtmWorkflowSchemas)))
+                        ?ERROR_REASON(?ERR_ATM_LAMBDA_IN_USE(lists:sort(ReferencedAtmWorkflowSchemas)))
                 end
             end)
         }
