@@ -203,7 +203,7 @@ create(#el_req{gri = GRI = #gri{id = ProposedUserId, aspect = instance}, data = 
                 case od_user:get_by_username(Username) of
                     {ok, #document{}} ->
                         % Username is occupied by another user
-                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>);
+                        ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(?err_ctx(), <<"username">>);
                     _ ->
                         CreateFun()
                 end
@@ -391,7 +391,7 @@ update(#el_req{gri = #gri{id = UserId, aspect = instance}, data = Data}) ->
                         UserUpdateFun(Username);
                     {ok, #document{}} ->
                         % Username is occupied by another user
-                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>);
+                        ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(?err_ctx(), <<"username">>);
                     _ ->
                         % Username is not occupied -> update user doc
                         UserUpdateFun(Username)

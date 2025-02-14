@@ -156,10 +156,10 @@ validate_domain(Domain) ->
         true ->
             case re:run(Domain, ?DOMAIN_VALIDATION_REGEXP, [{capture, none}]) of
                 match -> Domain;
-                _ -> throw(?ERROR_BAD_VALUE_DOMAIN)
+                _ -> throw(?ERR_BAD_VALUE_DOMAIN(?err_ctx()))
             end;
         _ ->
-            throw(?ERROR_BAD_VALUE_DOMAIN)
+            throw(?ERR_BAD_VALUE_DOMAIN(?err_ctx()))
     end.
 
 
@@ -183,7 +183,7 @@ ensure_valid(SanitizerSpec, GriAspect, Data) ->
     DataWithAspect = case Data of
         undefined -> #{aspect => GriAspect};
         Map when is_map(Map) -> Data#{aspect => GriAspect};
-        _ -> throw(?ERROR_MALFORMED_DATA)
+        _ -> throw(?ERR_MALFORMED_DATA(?err_ctx()))
     end,
     % Start with required parameters. Transform the data if needed, fail when
     % any key is missing or cannot be validated.
@@ -191,7 +191,7 @@ ensure_valid(SanitizerSpec, GriAspect, Data) ->
         fun(Key, DataAcc) ->
             case transform_and_check_value(Key, DataWithAspect, Required) of
                 false ->
-                    throw(?ERROR_MISSING_REQUIRED_VALUE(Key));
+                    throw(?ERR_MISSING_REQUIRED_VALUE(?err_ctx(), Key));
                 {true, SanitizedData} ->
                     maps:merge(DataAcc, SanitizedData)
             end
@@ -225,7 +225,7 @@ ensure_valid(SanitizerSpec, GriAspect, Data) ->
         {0, false} ->
             ok;
         {_, false} ->
-            throw(?ERROR_MISSING_AT_LEAST_ONE_VALUE(lists:sort(maps:keys(AtLeastOne))))
+            throw(?ERR_MISSING_AT_LEAST_ONE_VALUE(?err_ctx(), lists:sort(maps:keys(AtLeastOne))))
     end,
     Data4.
 
@@ -275,7 +275,7 @@ transform_and_check_value(TypeRule, ValueRule, Key, Value) ->
                 [Type, Message],
                 Stacktrace
             ),
-            throw(?ERROR_BAD_DATA(Key))
+            throw(?ERR_BAD_DATA(?err_ctx(), Key, undefined))
     end.
 
 
@@ -300,19 +300,19 @@ sanitize_type(atom, _Key, Binary) when is_binary(Binary) ->
             ''
     end;
 sanitize_type(atom, Key, _) ->
-    throw(?ERROR_BAD_VALUE_ATOM(Key));
+    throw(?ERR_BAD_VALUE_STRING(?err_ctx(), Key));
 sanitize_type(boolean, _Key, true) ->
     true;
 sanitize_type(boolean, _Key, false) ->
     false;
 sanitize_type(boolean, Key, _) ->
-    throw(?ERROR_BAD_VALUE_BOOLEAN(Key));
+    throw(?ERR_BAD_VALUE_BOOLEAN(?err_ctx(), Key));
 sanitize_type(list_of_atoms, Key, Values) ->
     try
         [sanitize_type(atom, Key, Val) || Val <- Values]
     catch
         _:_ ->
-            throw(?ERROR_BAD_VALUE_LIST_OF_ATOMS(Key))
+            throw(?ERR_BAD_VALUE_LIST_OF_STRINGS(?err_ctx(), Key))
     end;
 sanitize_type(binary, _Key, Binary) when is_binary(Binary) ->
     Binary;
@@ -323,7 +323,7 @@ sanitize_type(binary, _Key, undefined) ->
 sanitize_type(binary, _Key, Atom) when is_atom(Atom) ->
     atom_to_binary(Atom, utf8);
 sanitize_type(binary, Key, _) ->
-    throw(?ERROR_BAD_VALUE_BINARY(Key));
+    throw(?ERR_BAD_VALUE_STRING(?err_ctx(), Key));
 sanitize_type(list_of_binaries, Key, Values) ->
     try
         lists:map(fun
@@ -332,18 +332,18 @@ sanitize_type(list_of_binaries, Key, Values) ->
         end, Values)
     catch
         _:_ ->
-            throw(?ERROR_BAD_VALUE_LIST_OF_BINARIES(Key))
+            throw(?ERR_BAD_VALUE_LIST_OF_STRINGS(?err_ctx(), Key))
     end;
 sanitize_type(integer, Key, Bin) when is_binary(Bin) ->
     try
         binary_to_integer(Bin)
     catch _:_ ->
-        throw(?ERROR_BAD_VALUE_INTEGER(Key))
+        throw(?ERR_BAD_VALUE_INTEGER(?err_ctx(), Key))
     end;
 sanitize_type(integer, _Key, Int) when is_integer(Int) ->
     Int;
 sanitize_type(integer, Key, _) ->
-    throw(?ERROR_BAD_VALUE_INTEGER(Key));
+    throw(?ERR_BAD_VALUE_INTEGER(?err_ctx(), Key));
 sanitize_type(integer_or_infinity, _Key, ?INFINITY) ->
     ?INFINITY;
 sanitize_type(integer_or_infinity, Key, Value) ->
@@ -357,7 +357,7 @@ sanitize_type(float, Key, Bin) when is_binary(Bin) ->
             % floating point dot, but we still want to accept integers as floats.
             float(binary_to_integer(Bin))
         catch _:_ ->
-            throw(?ERROR_BAD_VALUE_FLOAT(Key))
+            throw(?ERR_BAD_VALUE_FLOAT(?err_ctx(), Key))
         end
     end;
 sanitize_type(float, _Key, Int) when is_integer(Int) ->
@@ -365,44 +365,44 @@ sanitize_type(float, _Key, Int) when is_integer(Int) ->
 sanitize_type(float, _Key, Float) when is_float(Float) ->
     Float;
 sanitize_type(float, Key, _) ->
-    throw(?ERROR_BAD_VALUE_FLOAT(Key));
+    throw(?ERR_BAD_VALUE_FLOAT(?err_ctx(), Key));
 sanitize_type(json, _Key, JSON) when is_map(JSON) ->
     JSON;
 sanitize_type(json, Key, _) ->
-    throw(?ERROR_BAD_VALUE_JSON(Key));
+    throw(?ERR_BAD_VALUE_JSON(?err_ctx(), Key));
 sanitize_type(token, Key, <<>>) ->
-    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+    throw(?ERR_BAD_VALUE_EMPTY(?err_ctx(), Key));
 sanitize_type(token, Key, Serialized) when is_binary(Serialized) ->
     case tokens:deserialize(Serialized) of
         {ok, Token} -> Token;
-        {error, _} = Error -> throw(?ERROR_BAD_VALUE_TOKEN(Key, Error))
+        {error, _} = Error -> throw(?ERR_BAD_VALUE_TOKEN(?err_ctx(), Key, Error))
     end;
 sanitize_type(token, Key, Token) ->
     case tokens:is_token(Token) of
         true -> Token;
-        false -> throw(?ERROR_BAD_VALUE_TOKEN(Key, ?ERROR_BAD_TOKEN))
+        false -> throw(?ERR_BAD_VALUE_TOKEN(?err_ctx(), Key, ?ERR_BAD_TOKEN(?err_ctx())))
     end;
 sanitize_type(invite_token, Key, <<>>) ->
-    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+    throw(?ERR_BAD_VALUE_EMPTY(?err_ctx(), Key));
 sanitize_type(invite_token, Key, Serialized) when is_binary(Serialized) ->
     case tokens:deserialize(Serialized) of
         {ok, Token} -> Token;
-        {error, _} = Error -> throw(?ERROR_BAD_VALUE_TOKEN(Key, Error))
+        {error, _} = Error -> throw(?ERR_BAD_VALUE_TOKEN(?err_ctx(), Key, Error))
     end;
 sanitize_type(invite_token, Key, Token) ->
     case tokens:is_token(Token) of
         true -> Token;
-        false -> throw(?ERROR_BAD_VALUE_TOKEN(Key, ?ERROR_BAD_TOKEN))
+        false -> throw(?ERR_BAD_VALUE_TOKEN(?err_ctx(), Key, ?ERR_BAD_TOKEN(?err_ctx())))
     end;
 sanitize_type(token_type, Key, TokenType) ->
     case token_type:sanitize(TokenType) of
         {true, Sanitized} -> Sanitized;
-        false -> throw(?ERROR_BAD_VALUE_TOKEN_TYPE(Key))
+        false -> throw(?ERR_BAD_VALUE_TOKEN_TYPE(?err_ctx(), Key))
     end;
 sanitize_type(invite_type, Key, InviteType) ->
     case token_type:sanitize_invite_type(InviteType) of
         {true, Sanitized} -> Sanitized;
-        false -> throw(?ERROR_BAD_VALUE_INVITE_TYPE(Key))
+        false -> throw(?ERR_BAD_VALUE_INVITE_TYPE(?err_ctx(), Key))
     end;
 sanitize_type(caveats, Key, Caveats) ->
     try
@@ -416,12 +416,12 @@ sanitize_type(caveats, Key, Caveats) ->
                         Bin when is_binary(Bin) -> Bin;
                         Term -> str_utils:format_bin("~tp", [Term])
                     end,
-                    throw(?ERROR_BAD_VALUE_CAVEAT(JsonableCaveat))
+                    throw(?ERR_BAD_VALUE_CAVEAT(?err_ctx(), JsonableCaveat))
             end
         end, Caveats)
     catch
         throw:{error, _} = Error -> throw(Error);
-        _:_ -> throw(?ERROR_BAD_DATA(Key))
+        _:_ -> throw(?ERR_BAD_DATA(?err_ctx(), Key, undefined))
     end;
 sanitize_type(ipv4_address, _Key, undefined) ->
     undefined;
@@ -430,13 +430,13 @@ sanitize_type(ipv4_address, _Key, null) ->
 sanitize_type(ipv4_address, Key, IPAddress) ->
     case ip_utils:to_ip4_address(IPAddress) of
         {ok, Ip4Address} -> Ip4Address;
-        {error, ?EINVAL} -> throw(?ERROR_BAD_VALUE_IPV4_ADDRESS(Key))
+        {error, ?EINVAL} -> throw(?ERR_BAD_VALUE_IPV4_ADDRESS(?err_ctx(), Key))
     end;
 sanitize_type(list_of_ipv4_addresses, Key, ListOfIPs) ->
     try
         [sanitize_type(ipv4_address, Key, IP) || IP <- ListOfIPs]
     catch _:_ ->
-        throw(?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(Key))
+        throw(?ERR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(?err_ctx(), Key))
     end;
 sanitize_type({jsonable_record, single, RecordType}, Key, Value) ->
     try
@@ -445,7 +445,7 @@ sanitize_type({jsonable_record, single, RecordType}, Key, Value) ->
         throw:{error, _} = Error ->
             throw(Error);
         _:_ ->
-            throw(?ERROR_BAD_DATA(Key))
+            throw(?ERR_BAD_DATA(?err_ctx(), Key, undefined))
     end;
 sanitize_type({jsonable_record, list, RecordType}, Key, Values) ->
     try
@@ -456,7 +456,7 @@ sanitize_type({jsonable_record, list, RecordType}, Key, Values) ->
         throw:{error, _} = Error ->
             throw(Error);
         _:_ ->
-            throw(?ERROR_BAD_DATA(Key))
+            throw(?ERR_BAD_DATA(?err_ctx(), Key, undefined))
     end;
 sanitize_type({persistent_record, single, RecordType}, Key, Value) ->
     try
@@ -465,11 +465,11 @@ sanitize_type({persistent_record, single, RecordType}, Key, Value) ->
         throw:{error, _} = Error ->
             throw(Error);
         _:_ ->
-            throw(?ERROR_BAD_DATA(Key))
+            throw(?ERR_BAD_DATA(?err_ctx(), Key, undefined))
     end;
 sanitize_type(Rule, Key, _) ->
     ?error("Unknown type rule: ~tp for key: ~tp", [Rule, Key]),
-    throw(?ERROR_INTERNAL_SERVER_ERROR).
+    throw(?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined)).
 
 
 %%--------------------------------------------------------------------
@@ -487,17 +487,17 @@ sanitize_value(Type, {all, Rules}, Key, Value) ->
 sanitize_value(_, any, _Key, Value) ->
     Value;
 sanitize_value(atom, non_empty, Key, '') ->
-    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+    throw(?ERR_BAD_VALUE_EMPTY(?err_ctx(), Key));
 sanitize_value(list_of_atoms, non_empty, Key, []) ->
-    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+    throw(?ERR_BAD_VALUE_EMPTY(?err_ctx(), Key));
 sanitize_value(binary, non_empty, Key, <<"">>) ->
-    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+    throw(?ERR_BAD_VALUE_EMPTY(?err_ctx(), Key));
 sanitize_value(binary, non_empty, Key, undefined) ->
-    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+    throw(?ERR_BAD_VALUE_EMPTY(?err_ctx(), Key));
 sanitize_value(list_of_binaries, non_empty, Key, []) ->
-    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+    throw(?ERR_BAD_VALUE_EMPTY(?err_ctx(), Key));
 sanitize_value(json, non_empty, Key, Map) when map_size(Map) == 0 ->
-    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+    throw(?ERR_BAD_VALUE_EMPTY(?err_ctx(), Key));
 sanitize_value(_, non_empty, _Key, Value) ->
     Value;
 sanitize_value(_, {not_lower_than, _Threshold}, _Key, ?INFINITY) ->
@@ -507,31 +507,31 @@ sanitize_value(_, {not_lower_than, Threshold}, Key, Value) ->
         true ->
             Value;
         false ->
-            throw(?ERROR_BAD_VALUE_TOO_LOW(Key, Threshold))
+            throw(?ERR_BAD_VALUE_TOO_LOW(?err_ctx(), Key, Threshold))
     end;
 sanitize_value(_, {not_greater_than, Threshold}, Key, ?INFINITY) ->
-    throw(?ERROR_BAD_VALUE_TOO_HIGH(Key, Threshold));
+    throw(?ERR_BAD_VALUE_TOO_HIGH(?err_ctx(), Key, Threshold));
 sanitize_value(_, {not_greater_than, Threshold}, Key, Value) ->
     case Value =< Threshold of
         true ->
             Value;
         false ->
-            throw(?ERROR_BAD_VALUE_TOO_HIGH(Key, Threshold))
+            throw(?ERR_BAD_VALUE_TOO_HIGH(?err_ctx(), Key, Threshold))
     end;
 sanitize_value(_, {between, Low, High}, Key, Value) ->
     case Value >= Low andalso Value =< High of
         true ->
             Value;
         false ->
-            throw(?ERROR_BAD_VALUE_NOT_IN_RANGE(Key, Low, High))
+            throw(?ERR_BAD_VALUE_NOT_IN_RANGE(?err_ctx(), Key, Low, High))
     end;
 sanitize_value(binary, domain, Key, <<"">>) ->
-    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+    throw(?ERR_BAD_VALUE_EMPTY(?err_ctx(), Key));
 sanitize_value(binary, domain, _Key, Value) ->
     validate_domain(Value);
 
 sanitize_value(binary, subdomain, Key, <<"">>) ->
-    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+    throw(?ERR_BAD_VALUE_EMPTY(?err_ctx(), Key));
 sanitize_value(binary, subdomain, _Key, Value) ->
     case re:run(Value, ?SUBDOMAIN_VALIDATION_REGEXP, [{capture, none}]) of
         match -> % Check length
@@ -539,17 +539,17 @@ sanitize_value(binary, subdomain, _Key, Value) ->
             DomainLength = size(Value) + byte_size(oz_worker:get_domain()) + 1,
             case DomainLength =< ?MAX_DOMAIN_LENGTH of
                 true -> Value;
-                _ -> throw(?ERROR_BAD_VALUE_SUBDOMAIN)
+                _ -> throw(?ERR_BAD_VALUE_SUBDOMAIN(?err_ctx()))
             end;
-        _ -> throw(?ERROR_BAD_VALUE_SUBDOMAIN)
+        _ -> throw(?ERR_BAD_VALUE_SUBDOMAIN(?err_ctx()))
     end;
 
 sanitize_value(binary, email, Key, <<"">>) ->
-    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+    throw(?ERR_BAD_VALUE_EMPTY(?err_ctx(), Key));
 sanitize_value(binary, email, _Key, Value) ->
     case http_utils:validate_email(Value) of
         true -> Value;
-        false -> throw(?ERROR_BAD_VALUE_EMAIL)
+        false -> throw(?ERR_BAD_VALUE_EMAIL(?err_ctx()))
     end;
 
 sanitize_value(json, JsonValidator, Key, Map) when is_map(JsonValidator) ->
@@ -567,7 +567,7 @@ sanitize_value(json, JsonValidator, Key, Map) when is_map(JsonValidator) ->
             error when FieldType == optional ->
                 Acc;
             error when FieldType == required ->
-                throw(?ERROR_BAD_VALUE_EMPTY(FullKey))
+                throw(?ERR_BAD_VALUE_EMPTY(?err_ctx(), FullKey))
         end
     end, #{}, JsonValidator);
 
@@ -576,7 +576,7 @@ sanitize_value(json, qos_parameters, _Key, Map) ->
         Acc andalso is_binary(K) andalso (is_binary(V) or is_number(V))
     end, true, Map) of
         true -> Map;
-        false -> throw(?ERROR_BAD_VALUE_QOS_PARAMETERS)
+        false -> throw(?ERR_BAD_VALUE_QOS_PARAMETERS(?err_ctx()))
     end;
 
 sanitize_value(token_type, VerifyFun, Key, Val) when is_function(VerifyFun, 1) ->
@@ -584,7 +584,7 @@ sanitize_value(token_type, VerifyFun, Key, Val) when is_function(VerifyFun, 1) -
         true ->
             Val;
         false ->
-            throw(?ERROR_BAD_VALUE_TOKEN_TYPE(Key))
+            throw(?ERR_BAD_VALUE_TOKEN_TYPE(?err_ctx(), Key))
     end;
 
 sanitize_value(_, AllowedVals, Key, Vals) when is_list(AllowedVals) andalso is_list(Vals) ->
@@ -592,35 +592,35 @@ sanitize_value(_, AllowedVals, Key, Vals) when is_list(AllowedVals) andalso is_l
         [] ->
             Vals;
         _ ->
-            throw(?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(Key, AllowedVals))
+            throw(?ERR_BAD_VALUE_LIST_NOT_ALLOWED(?err_ctx(), Key, AllowedVals))
     end;
 sanitize_value(_, AllowedVals, Key, Val) when is_list(AllowedVals) ->
     case lists:member(Val, AllowedVals) of
         true ->
             Val;
         _ ->
-            throw(?ERROR_BAD_VALUE_NOT_ALLOWED(Key, AllowedVals))
+            throw(?ERR_BAD_VALUE_NOT_ALLOWED(?err_ctx(), Key, AllowedVals))
     end;
 sanitize_value(list_of_atoms, VerifyFun, Key, Vals) when is_function(VerifyFun, 1) andalso is_list(Vals) ->
     case VerifyFun(Vals) of
         true ->
             Vals;
         false ->
-            throw(?ERROR_BAD_DATA(Key))
+            throw(?ERR_BAD_DATA(?err_ctx(), Key, undefined))
     end;
 sanitize_value(_, VerifyFun, Key, Vals) when is_function(VerifyFun, 1) andalso is_list(Vals) ->
     case lists:all(VerifyFun, Vals) of
         true ->
             Vals;
         false ->
-            throw(?ERROR_BAD_DATA(Key))
+            throw(?ERR_BAD_DATA(?err_ctx(), Key, undefined))
     end;
 sanitize_value(_, VerifyFun, Key, Val) when is_function(VerifyFun, 1) ->
     case VerifyFun(Val) of
         true ->
             Val;
         false ->
-            throw(?ERROR_BAD_DATA(Key))
+            throw(?ERR_BAD_DATA(?err_ctx(), Key, undefined))
     end;
 sanitize_value(binary, {text_length_limit, SizeLimit}, Key, Val) ->
     % string:length/1 counts characters rather than bytes (one unicode character can be a couple of bytes long)
@@ -628,18 +628,18 @@ sanitize_value(binary, {text_length_limit, SizeLimit}, Key, Val) ->
         true ->
             Val;
         false ->
-            throw(?ERROR_BAD_VALUE_TEXT_TOO_LARGE(Key, SizeLimit))
+            throw(?ERR_BAD_VALUE_TEXT_TOO_LARGE(?err_ctx(), Key, SizeLimit))
     catch _:_ ->
-        throw(?ERROR_BAD_VALUE_BINARY(Key))
+        throw(?ERR_BAD_VALUE_STRING(?err_ctx(), Key))
     end;
 sanitize_value(_, {exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
     try VerifyFun(Val) of
         true ->
             Val;
         false ->
-            throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(Key))
+            throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), Key))
     catch _:_ ->
-        throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(Key))
+        throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), Key))
     end;
 sanitize_value(Type, {not_exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
     sanitize_value(Type, non_empty, Key, Val),
@@ -647,50 +647,50 @@ sanitize_value(Type, {not_exists, VerifyFun}, Key, Val) when is_function(VerifyF
         true ->
             Val;
         false ->
-            throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(Key))
+            throw(?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(?err_ctx(), Key))
     catch _:_ ->
-        throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(Key))
+        throw(?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(?err_ctx(), Key))
     end;
 sanitize_value(_, {relation_exists, ChType, ChId, ParType, ParId, VerifyFun}, _Key, Val) when is_function(VerifyFun, 1) ->
     try VerifyFun(Val) of
         true ->
             Val;
         false ->
-            throw(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId))
+            throw(?ERR_RELATION_DOES_NOT_EXIST(?err_ctx(), ChType, ChId, ParType, ParId))
     catch _:_ ->
-        throw(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId))
+        throw(?ERR_RELATION_DOES_NOT_EXIST(?err_ctx(), ChType, ChId, ParType, ParId))
     end;
 sanitize_value(token, any, _Key, _Token) ->
     ok;
 sanitize_value(invite_token, ExpectedType, Key, Token = #token{type = ReceivedType}) ->
     case tokens:is_invite_token(Token, ExpectedType) of
         true -> Token;
-        false -> throw(?ERROR_BAD_VALUE_TOKEN(Key, ?ERROR_NOT_AN_INVITE_TOKEN(ExpectedType, ReceivedType)))
+        false -> throw(?ERR_BAD_VALUE_TOKEN(?err_ctx(), Key, ?ERR_NOT_AN_INVITE_TOKEN(?err_ctx(), ExpectedType, ReceivedType)))
     end;
 sanitize_value(binary, username, _Key, Value) ->
     case user_logic:validate_username(Value) of
         true -> Value;
-        false -> throw(?ERROR_BAD_VALUE_USERNAME)
+        false -> throw(?ERR_BAD_VALUE_USERNAME(?err_ctx()))
     end;
 sanitize_value(binary, full_name, _Key, Value) ->
     case user_logic:validate_full_name(Value) of
         true -> Value;
-        false -> throw(?ERROR_BAD_VALUE_FULL_NAME)
+        false -> throw(?ERR_BAD_VALUE_FULL_NAME(?err_ctx()))
     end;
 sanitize_value(binary, password, _Key, undefined) ->
-    throw(?ERROR_BAD_VALUE_PASSWORD);
+    throw(?ERR_BAD_VALUE_PASSWORD(?err_ctx()));
 sanitize_value(binary, password, _Key, Value) ->
     case size(Value) >= ?PASSWORD_MIN_LENGTH of
         true -> Value;
-        false -> throw(?ERROR_BAD_VALUE_PASSWORD)
+        false -> throw(?ERR_BAD_VALUE_PASSWORD(?err_ctx()))
     end;
 sanitize_value(binary, name, _Key, Value) ->
     case validate_name(Value) of
         true -> Value;
-        false -> throw(?ERROR_BAD_VALUE_NAME)
+        false -> throw(?ERR_BAD_VALUE_NAME(?err_ctx(), undefined))
     end;
 sanitize_value(TypeRule, ValueRule, Key, _) ->
     ?error("Unknown {type, value} rule: {~tp, ~tp} for key: ~tp", [
         TypeRule, ValueRule, Key
     ]),
-    throw(?ERROR_INTERNAL_SERVER_ERROR).
+    throw(?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined)).

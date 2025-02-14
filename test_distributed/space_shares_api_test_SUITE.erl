@@ -282,10 +282,10 @@ list_shares_test_base(Config, Owner, SpaceId, ExpAllShareEntries) ->
     },
 
     BadValues = [
-        {<<"index">>, 10, ?ERROR_BAD_VALUE_BINARY(<<"index">>)},
-        {<<"offset">>, <<"a">>, ?ERROR_BAD_VALUE_INTEGER(<<"offset">>)},
-        {<<"limit">>, <<"a">>, ?ERROR_BAD_VALUE_INTEGER(<<"limit">>)},
-        {<<"limit">>, 0, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"limit">>, 1, 1000)}
+        {<<"index">>, 10, ?ERR_BAD_VALUE_STRING(<<"index">>)},
+        {<<"offset">>, <<"a">>, ?ERR_BAD_VALUE_INTEGER(<<"offset">>)},
+        {<<"limit">>, <<"a">>, ?ERR_BAD_VALUE_INTEGER(<<"limit">>)},
+        {<<"limit">>, 0, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"limit">>, 1, 1000)}
     ],
 
     % those two runs focus on auth checks, bad value checks and Logic + GraphSync interfaces

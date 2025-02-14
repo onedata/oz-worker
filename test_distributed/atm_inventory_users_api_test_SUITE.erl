@@ -223,9 +223,9 @@ add_user_with_privileges_test(Config) ->
                 },
                 bad_values = [
                     {<<"privileges">>, <<"">>,
-                        ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
+                        ?ERR_BAD_VALUE_LIST_OF_STRINGS(<<"privileges">>)},
                     {<<"privileges">>, [?ATM_INVENTORY_VIEW, ?GROUP_VIEW],
-                        ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, ?ALL_PRIVS)}
+                        ?ERR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, ?ALL_PRIVS)}
                 ]
             }
         },

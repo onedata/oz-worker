@@ -59,11 +59,11 @@ run_validation_procedures(Ctx, ValidationProcedures) ->
 raise_validation_error(DataKeyName, Description) when is_list(Description) ->
     raise_validation_error(DataKeyName, str_utils:unicode_list_to_binary(Description));
 raise_validation_error(DataKeyName, Description) when is_binary(Description) ->
-    throw(?ERROR_BAD_DATA(DataKeyName, Description)).
+    throw(?ERR_BAD_DATA(?err_ctx(), DataKeyName, Description)).
 
 -spec raise_validation_error(data_key_name(), string(), [term()]) -> no_return().
 raise_validation_error(DataKeyName, Format, Args) ->
-    throw(?ERROR_BAD_DATA(DataKeyName, str_utils:format_bin(Format, Args))).
+    throw(?ERR_BAD_DATA(?err_ctx(), DataKeyName, str_utils:format_bin(Format, Args))).
 
 
 -spec assert_unique_identifiers(id | name, [automation:id() | automation:name()], data_key_name()) -> ok | no_return().

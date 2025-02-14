@@ -291,26 +291,26 @@ end_per_testcase(_, _Config) ->
 ]).
 
 -define(BAD_TYPE_VALUES, [
-    {<<"type">>, <<>>, ?ERROR_BAD_VALUE_TOKEN_TYPE(<<"type">>)},
-    {<<"type">>, 123123, ?ERROR_BAD_VALUE_TOKEN_TYPE(<<"type">>)},
-    {<<"type">>, <<"dsfdsfasdf">>, ?ERROR_BAD_VALUE_TOKEN_TYPE(<<"type">>)},
-    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_GROUP, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_GROUP, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?SUPPORT_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?REGISTER_ONEPROVIDER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_CLUSTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
-    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?SPACE_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)}
+    {<<"type">>, <<>>, ?ERR_BAD_VALUE_TOKEN_TYPE(<<"type">>)},
+    {<<"type">>, 123123, ?ERR_BAD_VALUE_TOKEN_TYPE(<<"type">>)},
+    {<<"type">>, <<"dsfdsfasdf">>, ?ERR_BAD_VALUE_TOKEN_TYPE(<<"type">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_GROUP, <<"123">>)), ?ERR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_GROUP, <<"123">>)), ?ERR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_SPACE, <<"123">>)), ?ERR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_SPACE, <<"123">>)), ?ERR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?SUPPORT_SPACE, <<"123">>)), ?ERR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?REGISTER_ONEPROVIDER, <<"123">>)), ?ERR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_CLUSTER, <<"123">>)), ?ERR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, <<"123">>)), ?ERR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?USER_JOIN_HARVESTER, <<"123">>)), ?ERR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?GROUP_JOIN_HARVESTER, <<"123">>)), ?ERR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, token_type:to_json(?INVITE_TOKEN(?SPACE_JOIN_HARVESTER, <<"123">>)), ?ERR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)}
 ]).
 
 -define(BAD_TYPE_VALUES_FOR_PROVIDER(GroupId, SpaceId, AdminUserId, ClusterId, HarvesterId),
     lists:map(
         fun(Type) ->
-            {<<"type">>, token_type:to_json(Type), ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED}
+            {<<"type">>, token_type:to_json(Type), ?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED}
         end,
         ?INVITE_TOKEN_TYPE_EXAMPLES(GroupId, SpaceId, AdminUserId, ClusterId, HarvesterId) --
         ?PROVIDER_ALLOWED_INVITE_TOKEN_TYPES(ClusterId)
@@ -318,32 +318,32 @@ end_per_testcase(_, _Config) ->
 ).
 
 -define(BAD_CAVEATS_VALUES, [
-    {<<"caveats">>, <<>>, ?ERROR_BAD_DATA(<<"caveats">>)},
-    {<<"caveats">>, 345345, ?ERROR_BAD_DATA(<<"caveats">>)},
-    {<<"caveats">>, 1.56, ?ERROR_BAD_DATA(<<"caveats">>)},
-    {<<"caveats">>, <<"string literal">>, ?ERROR_BAD_DATA(<<"caveats">>)},
-    {<<"caveats">>, #{}, ?ERROR_BAD_DATA(<<"caveats">>)},
-    {<<"caveats">>, [#{}], ?ERROR_BAD_VALUE_CAVEAT(#{})},
-    {<<"caveats">>, [#{<<"a">> => <<"b">>}], ?ERROR_BAD_VALUE_CAVEAT(#{<<"a">> => <<"b">>})},
-    {<<"caveats">>, [#{<<"type">> => <<"tiem">>}], ?ERROR_BAD_VALUE_CAVEAT(#{<<"type">> => <<"tiem">>})},
-    {<<"caveats">>, [1, 2, 3], ?ERROR_BAD_VALUE_CAVEAT(<<"1">>)},
-    {<<"caveats">>, [<<"a">>, <<"b">>, <<"c">>], ?ERROR_BAD_VALUE_CAVEAT(<<"a">>)},
-    {<<"caveats">>, [<<"time > 1234">>], ?ERROR_BAD_VALUE_CAVEAT(<<"time > 1234">>)},
-    {<<"caveats">>, [<<"ip = 1.2.3.4.5">>], ?ERROR_BAD_VALUE_CAVEAT(<<"ip = 1.2.3.4.5">>)}
+    {<<"caveats">>, <<>>, ?ERR_BAD_DATA(<<"caveats">>, undefined)},
+    {<<"caveats">>, 345345, ?ERR_BAD_DATA(<<"caveats">>, undefined)},
+    {<<"caveats">>, 1.56, ?ERR_BAD_DATA(<<"caveats">>, undefined)},
+    {<<"caveats">>, <<"string literal">>, ?ERR_BAD_DATA(<<"caveats">>, undefined)},
+    {<<"caveats">>, #{}, ?ERR_BAD_DATA(<<"caveats">>, undefined)},
+    {<<"caveats">>, [#{}], ?ERR_BAD_VALUE_CAVEAT(#{})},
+    {<<"caveats">>, [#{<<"a">> => <<"b">>}], ?ERR_BAD_VALUE_CAVEAT(#{<<"a">> => <<"b">>})},
+    {<<"caveats">>, [#{<<"type">> => <<"tiem">>}], ?ERR_BAD_VALUE_CAVEAT(#{<<"type">> => <<"tiem">>})},
+    {<<"caveats">>, [1, 2, 3], ?ERR_BAD_VALUE_CAVEAT(<<"1">>)},
+    {<<"caveats">>, [<<"a">>, <<"b">>, <<"c">>], ?ERR_BAD_VALUE_CAVEAT(<<"a">>)},
+    {<<"caveats">>, [<<"time > 1234">>], ?ERR_BAD_VALUE_CAVEAT(<<"time > 1234">>)},
+    {<<"caveats">>, [<<"ip = 1.2.3.4.5">>], ?ERR_BAD_VALUE_CAVEAT(<<"ip = 1.2.3.4.5">>)}
 ]).
 
 -define(BAD_CUSTOM_METADATA_VALUES, [
-    {<<"customMetadata">>, <<>>, ?ERROR_BAD_VALUE_JSON(<<"customMetadata">>)},
-    {<<"customMetadata">>, 345345, ?ERROR_BAD_VALUE_JSON(<<"customMetadata">>)},
-    {<<"customMetadata">>, 1.56, ?ERROR_BAD_VALUE_JSON(<<"customMetadata">>)},
-    {<<"customMetadata">>, <<"string literal">>, ?ERROR_BAD_VALUE_JSON(<<"customMetadata">>)}
+    {<<"customMetadata">>, <<>>, ?ERR_BAD_VALUE_JSON(<<"customMetadata">>)},
+    {<<"customMetadata">>, 345345, ?ERR_BAD_VALUE_JSON(<<"customMetadata">>)},
+    {<<"customMetadata">>, 1.56, ?ERR_BAD_VALUE_JSON(<<"customMetadata">>)},
+    {<<"customMetadata">>, <<"string literal">>, ?ERR_BAD_VALUE_JSON(<<"customMetadata">>)}
 ]).
 
 -define(BAD_REVOKED_VALUES, [
-    {<<"revoked">>, <<>>, ?ERROR_BAD_VALUE_BOOLEAN(<<"revoked">>)},
-    {<<"revoked">>, 345345, ?ERROR_BAD_VALUE_BOOLEAN(<<"revoked">>)},
-    {<<"revoked">>, 1.56, ?ERROR_BAD_VALUE_BOOLEAN(<<"revoked">>)},
-    {<<"revoked">>, <<"string literal">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"revoked">>)}
+    {<<"revoked">>, <<>>, ?ERR_BAD_VALUE_BOOLEAN(<<"revoked">>)},
+    {<<"revoked">>, 345345, ?ERR_BAD_VALUE_BOOLEAN(<<"revoked">>)},
+    {<<"revoked">>, 1.56, ?ERR_BAD_VALUE_BOOLEAN(<<"revoked">>)},
+    {<<"revoked">>, <<"string literal">>, ?ERR_BAD_VALUE_BOOLEAN(<<"revoked">>)}
 ]).
 
 
@@ -794,8 +794,8 @@ create_user_named_token(_Config) ->
             },
             % If the expected result is an error, do no feed bad values
             bad_values = lists:flatten([
-                {<<"name">>, AlreadyExistingName, ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"name">>)},
-                ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME),
+                {<<"name">>, AlreadyExistingName, ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"name">>)},
+                ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined)),
                 ?BAD_TYPE_VALUES,
                 ?BAD_CAVEATS_VALUES,
                 ?BAD_CUSTOM_METADATA_VALUES
@@ -866,8 +866,8 @@ create_provider_named_token(_Config) ->
                 <<"metadata">> => ?CUSTOM_METADATA_EXAMPLES
             },
             bad_values = lists:flatten([
-                {<<"name">>, AlreadyExistingName, ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"name">>)},
-                ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME),
+                {<<"name">>, AlreadyExistingName, ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"name">>)},
+                ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined)),
                 ?BAD_TYPE_VALUES,
                 ?BAD_TYPE_VALUES_FOR_PROVIDER(Group, Space, User, Cluster, Harvester),
                 ?BAD_CAVEATS_VALUES,
@@ -942,11 +942,11 @@ create_user_temporary_token(_Config) ->
                 <<"caveats">> => ?CAVEATS_EXAMPLES_FOR_TEMPORARY_TOKENS(Now, MaxTtl)
             },
             bad_values = ?BAD_TYPE_VALUES ++ ?BAD_CAVEATS_VALUES ++ [
-                {<<"caveats">>, [], ?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTtl)},
+                {<<"caveats">>, [], ?ERR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTtl)},
                 {<<"caveats">>, ?CAVEATS_TO_JSON([
                     #cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)]},
                     #cv_time{valid_until = Now + MaxTtl + 1}
-                ]), ?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTtl)}
+                ]), ?ERR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTtl)}
             ]
         }
     },
@@ -1020,12 +1020,12 @@ create_provider_temporary_token(_Config) ->
                 ?BAD_TYPE_VALUES_FOR_PROVIDER(Group, Space, User, Cluster, Harvester),
                 ?BAD_CAVEATS_VALUES,
                 [
-                    {<<"type">>, token_type:to_json(?ACCESS_TOKEN(SessionId)), ?ERROR_TOKEN_SESSION_INVALID},
-                    {<<"caveats">>, [], ?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTtl)},
+                    {<<"type">>, token_type:to_json(?ACCESS_TOKEN(SessionId)), ?ERR_TOKEN_SESSION_INVALID},
+                    {<<"caveats">>, [], ?ERR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTtl)},
                     {<<"caveats">>, ?CAVEATS_TO_JSON([
                         #cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)]},
                         #cv_time{valid_until = Now + MaxTtl + 50}
-                    ]), ?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTtl)}
+                    ]), ?ERR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTtl)}
                 ]
             ])
         }
@@ -1071,13 +1071,13 @@ create_access_token_for_gui(_Config) ->
         {?SERVICE(?OP_PANEL, Provider),
             ?OK_TERM(VerifyFun)},
         {?SERVICE(?OZ_WORKER, <<"123">>),
-            ?ERROR_REASON(?ERROR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OZ_WORKER, <<"123">>)))},
+            ?ERROR_REASON(?ERR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OZ_WORKER, <<"123">>)))},
         {?SERVICE(?OZ_PANEL, <<"123">>),
-            ?ERROR_REASON(?ERROR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OZ_PANEL, <<"123">>)))},
+            ?ERROR_REASON(?ERR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OZ_PANEL, <<"123">>)))},
         {?SERVICE(?OP_WORKER, AnotherProvider),
-            ?ERROR_REASON(?ERROR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_WORKER, AnotherProvider)))},
+            ?ERROR_REASON(?ERR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_WORKER, AnotherProvider)))},
         {?SERVICE(?OP_PANEL, AnotherProvider),
-            ?ERROR_REASON(?ERROR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_PANEL, AnotherProvider)))}
+            ?ERROR_REASON(?ERR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_PANEL, AnotherProvider)))}
     ],
 
     lists:foreach(fun({Service, ExpResult}) ->
@@ -1566,7 +1566,7 @@ update_named_token(SubjectId, CorrectClients) ->
             bad_values = lists:flatten([
                 ?BAD_CUSTOM_METADATA_VALUES,
                 ?BAD_REVOKED_VALUES,
-                ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
             ])
         },
         env_set_up_fun_generator = fun(TokenToCheck) ->
@@ -1825,7 +1825,7 @@ assert_token_deleted(true, Token, TokenName) ->
     ?assertMatch({error, not_found}, ozt:rpc(token_names, lookup, [Subject, TokenName])),
     case Type of
         ?ACCESS_TOKEN ->
-            ?assertEqual(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_INVALID), ozt_tokens:authenticate(Token));
+            ?assertEqual(?ERR_UNAUTHORIZED(?ERR_TOKEN_INVALID), ozt_tokens:authenticate(Token));
         _ ->
             ok
     end;
@@ -1989,5 +1989,5 @@ assert_temporary_token_revoked(IsRevoked, Token = #token{subject = Subject}) ->
     VerificationResult = ozt_tokens:verify(Token),
     case IsRevoked of
         false -> ?assertMatch({ok, #{<<"subject">> := Subject}}, VerificationResult);
-        true -> ?assertMatch(?ERROR_TOKEN_REVOKED, VerificationResult)
+        true -> ?assertMatch(?ERR_TOKEN_REVOKED, VerificationResult)
     end.

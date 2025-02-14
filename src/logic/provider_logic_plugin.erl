@@ -164,11 +164,11 @@ create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
     GroupId = maps:get(<<"groupId">>, Data),
     try entitlement_mapping:map_entitlement(IdP, GroupId) of
         {ok, {OnedataGroupId, _}} -> {ok, value, OnedataGroupId};
-        {error, malformed} -> ?ERROR_BAD_DATA(<<"groupId">>)
+        {error, malformed} -> ?ERR_BAD_DATA(?err_ctx(), <<"groupId">>, undefined)
     catch
         Class:Reason:Stacktrace ->
             ?debug_exception("Cannot map group '~ts' from IdP '~tp'", [GroupId, IdP], Class, Reason, Stacktrace),
-            ?ERROR_MALFORMED_DATA
+            ?ERR_MALFORMED_DATA(?err_ctx())
     end;
 
 %% @TODO VFS-5846 old provider verification API kept for backward compatibility
@@ -182,7 +182,7 @@ create(#el_req{auth = Auth, gri = #gri{aspect = verify_provider_identity}, data 
     AuthCtx = #auth_ctx{ip = Auth#auth.peer_ip, consumer = Auth#auth.subject, scope = identity_token},
     case token_auth:verify_identity_token(Token, AuthCtx) of
         {ok, {?SUB(?ONEPROVIDER, ProviderId), _}} -> ok;
-        {ok, _} -> ?ERROR_TOKEN_INVALID;
+        {ok, _} -> ?ERR_TOKEN_INVALID(?err_ctx());
         Error -> Error
     end;
 
@@ -196,7 +196,7 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}
             }},
             ok = dns_state:update_txt_records(ProviderId, TxtRecordsDiff);
         {true, {#od_provider{subdomain_delegation = false}, _}} ->
-            ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
+            ?ERR_SUBDOMAIN_DELEGATION_DISABLED(?err_ctx());
         Error ->
             Error
     end.
@@ -365,7 +365,7 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = dns_txt_records}, data = Dat
             },
             ok = dns_state:update_txt_records(ProviderId, TxtRecordsDiff);
         {true, {#od_provider{subdomain_delegation = false}, _}} ->
-            ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
+            ?ERR_SUBDOMAIN_DELEGATION_DISABLED(?err_ctx());
         Error ->
             Error
     end.
@@ -795,13 +795,13 @@ build_domain_config_sanitizer_spec(OtherRequiredFields, OtherOptionalFields, Dat
 
             #{
                 required => AlwaysRequiredFields#{DomainKey => {binary, fun(OpDomain) ->
-                    OpDomain =:= <<>> andalso throw(?ERROR_BAD_VALUE_EMPTY(DomainKey)),
+                    OpDomain =:= <<>> andalso throw(?ERR_BAD_VALUE_EMPTY(?err_ctx(), DomainKey)),
 
                     case IsSubdomainDelegationSupported of
                         true ->
                             OneZoneDomain = oz_worker:get_domain(),
                             dns_utils:is_equal_or_subdomain(OpDomain, OneZoneDomain) andalso throw(
-                                ?ERROR_BAD_DATA(DomainKey, <<"Cannot use Onezone's subdomain as the provider domain (use the subdomainDelegation=true option)">>)
+                                ?ERR_BAD_DATA(?err_ctx(), DomainKey, <<"Cannot use Onezone's subdomain as the provider domain (use the subdomainDelegation=true option)">>)
                             );
                         false ->
                             ok
@@ -824,7 +824,7 @@ build_domain_config_sanitizer_spec(OtherRequiredFields, OtherOptionalFields, Dat
 assert_subdomain_delegation_supported() ->
     case is_subdomain_delegation_supported() of
         true -> ok;
-        false -> throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED)
+        false -> throw(?ERR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED(?err_ctx()))
     end.
 
 
@@ -904,7 +904,7 @@ update_provider_subomain(ProviderId, Data) ->
                 }}
             end);
         {error, subdomain_exists} ->
-            ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>)
+            ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(?err_ctx(), <<"subdomain">>)
     end,
     case Result of
         {ok, _} -> ok;
@@ -943,7 +943,7 @@ create_provider(Auth, Data, ProviderId, GRI) ->
                         ProviderDomainName = dns_utils:build_fqdn_from_subdomain(ProviderSubdomainLabel),
                         {ProviderDomainName, ProviderSubdomainLabel};
                     {error, subdomain_exists} ->
-                        throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>))
+                        throw(?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(?err_ctx(), <<"subdomain">>))
                 end
         end,
 
@@ -975,7 +975,7 @@ create_provider(Auth, Data, ProviderId, GRI) ->
         catch Type:Reason:Stacktrace ->
             ?error_stacktrace("Cannot create a new provider due to ~tp:~tp", [Type, Reason], Stacktrace),
             dns_state:remove_delegation_config(ProviderId),
-            ?ERROR_INTERNAL_SERVER_ERROR
+            ?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined)
         end
     end).
 

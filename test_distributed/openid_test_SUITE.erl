@@ -374,7 +374,7 @@ validate_login_base(Config, TestMode) ->
             )),
             oz_test_utils:toggle_user_access_block(Config, ExpUserId, true),
             ?assertMatch(
-                {auth_error, ?ERROR_USER_BLOCKED, _, RedirectAfterLogin},
+                {auth_error, ?ERR_USER_BLOCKED, _, RedirectAfterLogin},
                 oz_test_utils:call_oz(Config, idp_auth, validate_login, [<<"GET">>, MockedCowboyReq2])
             ),
 
@@ -482,7 +482,7 @@ offline_access(Config) ->
     }}]),
     simulate_login_flow(Config, ?DUMMY_IDP, false, false, OidcSpec, #{<<"sub">> => SubjectId}),
     UserId = gen_user_id(Config, ?DUMMY_IDP, SubjectId),
-    ?assertMatch(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, []), ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+    ?assertMatch(?ERR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, []), ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % The user does not have any access/refresh token cached -> not found
     overwrite_auth_config(Config, false, [{?DUMMY_IDP, OidcSpec, #{
@@ -514,7 +514,7 @@ offline_access(Config) ->
 
     % but first, check if user blocking works as expected when the token is to be refreshed
     oz_test_utils:toggle_user_access_block(Config, UserId, true),
-    ?assertMatch(?ERROR_USER_BLOCKED, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+    ?assertMatch(?ERR_USER_BLOCKED, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % after unblocking, offline access should work again
     oz_test_utils:toggle_user_access_block(Config, UserId, false),
@@ -528,7 +528,7 @@ offline_access(Config) ->
 
     % check if user blocking works as expected when a token is cached (no refresh is needed)
     oz_test_utils:toggle_user_access_block(Config, UserId, true),
-    ?assertMatch(?ERROR_USER_BLOCKED, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+    ?assertMatch(?ERR_USER_BLOCKED, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     oz_test_utils:toggle_user_access_block(Config, UserId, false),
     ?assertMatch({ok, {_, ?MOCK_ACCESS_TOKEN_TTL}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)).
@@ -772,7 +772,7 @@ bad_xrds_endpoint(Config, TestMode) ->
             }
         }
     end),
-    ?assertEqual(?ERROR_INTERNAL_SERVER_ERROR, oz_test_utils:call_oz(
+    ?assertEqual(?ERR_INTERNAL_SERVER_ERROR(undefined), oz_test_utils:call_oz(
         Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
     )).
 
@@ -785,7 +785,7 @@ bad_authorize_endpoint(Config, TestMode) ->
             }
         }
     end),
-    ?assertEqual(?ERROR_INTERNAL_SERVER_ERROR, oz_test_utils:call_oz(
+    ?assertEqual(?ERR_INTERNAL_SERVER_ERROR(undefined), oz_test_utils:call_oz(
         Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
     )).
 

@@ -195,7 +195,7 @@ create_atm_inventory_test(Config) ->
         data_spec = #data_spec{
             required = [<<"name">>],
             correct_values = #{<<"name">> => [ExpName]},
-            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+            bad_values = ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -269,9 +269,9 @@ join_atm_inventory_test(Config) ->
                 end]
             },
             bad_values = [
-                {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                {<<"token">>, <<"123qwe">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)}
+                {<<"token">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"token">>, 1234, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)},
+                {<<"token">>, <<"123qwe">>, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)}
             ]
         }
     },
@@ -301,7 +301,7 @@ join_atm_inventory_test(Config) ->
             module = group_logic,
             function = join_atm_inventory,
             args = [auth, SubjectGroup, data],
-            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_group, SubjectGroup, od_atm_inventory, AtmInventory))
+            expected_result = ?ERROR_REASON(?ERR_RELATION_ALREADY_EXISTS(od_group, SubjectGroup, od_atm_inventory, AtmInventory))
         },
         % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{

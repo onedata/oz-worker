@@ -341,19 +341,19 @@ authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = 
     ShareId = maps:get(<<"resourceId">>, Req#el_req.data, <<"">>),
     SpaceId = try share_logic_plugin:fetch_entity(#gri{id = ShareId}) of
         {error, _} ->
-            throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>));
+            throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"resourceId">>));
         {true, {#od_share{space = SpId}, _}} ->
             SpId
     catch _:_ ->
-        throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>))
+        throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"resourceId">>))
     end,
     HandleService = try handle_service_logic_plugin:fetch_entity(#gri{id = HServiceId}) of
         {error, _} ->
-            throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>));
+            throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"handleServiceId">>));
         {true, {HService, _}} ->
             HService
     catch _:_ ->
-        throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>))
+        throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"handleServiceId">>))
     end,
     case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
@@ -723,11 +723,11 @@ delete_handle_unsafe(HandleId, ShareId) ->
 raw_metadata_to_revised_for_publication(MetadataPrefix, RawMetadata, ShareId, ShareRecord) ->
     ParsedMetadata = case oai_xml:parse(RawMetadata) of
         {ok, Parsed} -> Parsed;
-        error -> throw(?ERROR_BAD_VALUE_XML(<<"metadata">>))
+        error -> throw(?ERR_BAD_VALUE_XML(?err_ctx(), <<"metadata">>))
     end,
     case oai_metadata:revise_for_publication(MetadataPrefix, ParsedMetadata, ShareId, ShareRecord) of
         {ok, Revised} -> Revised;
-        error -> throw(?ERROR_BAD_VALUE_XML(<<"metadata">>))
+        error -> throw(?ERR_BAD_VALUE_XML(?err_ctx(), <<"metadata">>))
     end.
 
 

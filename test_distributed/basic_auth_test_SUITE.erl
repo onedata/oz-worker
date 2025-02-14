@@ -45,7 +45,7 @@ all() ->
         migrate_onepanel_user_to_onezone
     ]).
 
--define(assertUnauthorized(AuthError, Term), ?assertEqual(?ERROR_UNAUTHORIZED(AuthError), Term)).
+-define(assertUnauthorized(AuthError, Term), ?assertEqual(?ERR_UNAUTHORIZED(AuthError), Term)).
 
 %%%===================================================================
 %%% Test functions
@@ -65,34 +65,34 @@ basic_auth_authenticate(Config) ->
     ?assertEqual({ok, U1}, authenticate_by_http_endpoint(Config, Username1, Pass1)),
     ?assertEqual({ok, U2}, authenticate_by_http_endpoint(Config, Username2, Pass2)),
 
-    ?assertUnauthorized(?ERROR_BAD_BASIC_CREDENTIALS, authenticate(Config, Username1, Pass2)),
-    ?assertUnauthorized(?ERROR_BAD_BASIC_CREDENTIALS, authenticate(Config, Username2, Pass1)),
-    ?assertUnauthorized(?ERROR_BAD_BASIC_CREDENTIALS, authenticate_by_http_endpoint(Config, Username1, Pass2)),
-    ?assertUnauthorized(?ERROR_BAD_BASIC_CREDENTIALS, authenticate_by_http_endpoint(Config, Username2, Pass1)),
+    ?assertUnauthorized(?ERR_BAD_BASIC_CREDENTIALS, authenticate(Config, Username1, Pass2)),
+    ?assertUnauthorized(?ERR_BAD_BASIC_CREDENTIALS, authenticate(Config, Username2, Pass1)),
+    ?assertUnauthorized(?ERR_BAD_BASIC_CREDENTIALS, authenticate_by_http_endpoint(Config, Username1, Pass2)),
+    ?assertUnauthorized(?ERR_BAD_BASIC_CREDENTIALS, authenticate_by_http_endpoint(Config, Username2, Pass1)),
 
     % Try some inexistent user credentials
-    ?assertUnauthorized(?ERROR_BAD_BASIC_CREDENTIALS, authenticate(Config, <<"foo">>, <<"bar">>)),
-    ?assertUnauthorized(?ERROR_BAD_BASIC_CREDENTIALS, authenticate_by_http_endpoint(Config, <<"foo">>, <<"bar">>)),
+    ?assertUnauthorized(?ERR_BAD_BASIC_CREDENTIALS, authenticate(Config, <<"foo">>, <<"bar">>)),
+    ?assertUnauthorized(?ERR_BAD_BASIC_CREDENTIALS, authenticate_by_http_endpoint(Config, <<"foo">>, <<"bar">>)),
 
     % If basic auth is disabled for given user, he should not be able to authenticate
     toggle_basic_auth(Config, U1, false),
     toggle_basic_auth(Config, U2, false),
-    ?assertUnauthorized(?ERROR_BASIC_AUTH_DISABLED, authenticate(Config, Username1, Pass1)),
-    ?assertUnauthorized(?ERROR_BASIC_AUTH_DISABLED, authenticate(Config, Username2, Pass2)),
-    ?assertUnauthorized(?ERROR_BASIC_AUTH_DISABLED, authenticate_by_http_endpoint(Config, Username1, Pass1)),
-    ?assertUnauthorized(?ERROR_BASIC_AUTH_DISABLED, authenticate_by_http_endpoint(Config, Username2, Pass2)),
+    ?assertUnauthorized(?ERR_BASIC_AUTH_DISABLED, authenticate(Config, Username1, Pass1)),
+    ?assertUnauthorized(?ERR_BASIC_AUTH_DISABLED, authenticate(Config, Username2, Pass2)),
+    ?assertUnauthorized(?ERR_BASIC_AUTH_DISABLED, authenticate_by_http_endpoint(Config, Username1, Pass1)),
+    ?assertUnauthorized(?ERR_BASIC_AUTH_DISABLED, authenticate_by_http_endpoint(Config, Username2, Pass2)),
 
     toggle_basic_auth(Config, U2, true),
-    ?assertUnauthorized(?ERROR_BASIC_AUTH_DISABLED, authenticate(Config, Username1, Pass1)),
-    ?assertUnauthorized(?ERROR_BASIC_AUTH_DISABLED, authenticate_by_http_endpoint(Config, Username1, Pass1)),
+    ?assertUnauthorized(?ERR_BASIC_AUTH_DISABLED, authenticate(Config, Username1, Pass1)),
+    ?assertUnauthorized(?ERR_BASIC_AUTH_DISABLED, authenticate_by_http_endpoint(Config, Username1, Pass1)),
     ?assertMatch({true, ?USER(U2)}, authenticate(Config, Username2, Pass2)),
     ?assertEqual({ok, U2}, authenticate_by_http_endpoint(Config, Username2, Pass2)),
 
     oz_test_utils:toggle_basic_auth(Config, false),
-    ?assertUnauthorized(?ERROR_BASIC_AUTH_NOT_SUPPORTED, authenticate(Config, Username1, Pass1)),
-    ?assertUnauthorized(?ERROR_BASIC_AUTH_NOT_SUPPORTED, authenticate(Config, Username2, Pass2)),
-    ?assertUnauthorized(?ERROR_BASIC_AUTH_NOT_SUPPORTED, authenticate_by_http_endpoint(Config, Username1, Pass1)),
-    ?assertUnauthorized(?ERROR_BASIC_AUTH_NOT_SUPPORTED, authenticate_by_http_endpoint(Config, Username2, Pass2)).
+    ?assertUnauthorized(?ERR_BASIC_AUTH_NOT_SUPPORTED, authenticate(Config, Username1, Pass1)),
+    ?assertUnauthorized(?ERR_BASIC_AUTH_NOT_SUPPORTED, authenticate(Config, Username2, Pass2)),
+    ?assertUnauthorized(?ERR_BASIC_AUTH_NOT_SUPPORTED, authenticate_by_http_endpoint(Config, Username1, Pass1)),
+    ?assertUnauthorized(?ERR_BASIC_AUTH_NOT_SUPPORTED, authenticate_by_http_endpoint(Config, Username2, Pass2)).
 
 
 user_access_block(Config) ->
@@ -104,8 +104,8 @@ user_access_block(Config) ->
     ?assertEqual({ok, User}, authenticate_by_http_endpoint(Config, Username, Pass)),
 
     oz_test_utils:toggle_user_access_block(Config, User, true),
-    ?assertUnauthorized(?ERROR_USER_BLOCKED, authenticate(Config, Username, Pass)),
-    ?assertUnauthorized(?ERROR_USER_BLOCKED, authenticate_by_http_endpoint(Config, Username, Pass)),
+    ?assertUnauthorized(?ERR_USER_BLOCKED, authenticate(Config, Username, Pass)),
+    ?assertUnauthorized(?ERR_USER_BLOCKED, authenticate_by_http_endpoint(Config, Username, Pass)),
 
     oz_test_utils:toggle_user_access_block(Config, User, false),
     ?assertMatch({true, ?USER(User)}, authenticate(Config, Username, Pass)),
@@ -119,13 +119,13 @@ change_password(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #{<<"username">> => Username1, <<"password">> => OldPass1}),
 
     ?assertMatch({true, ?USER(U1)}, authenticate(Config, Username1, OldPass1)),
-    ?assertUnauthorized(?ERROR_BAD_BASIC_CREDENTIALS, authenticate(Config, Username1, NewPass1)),
+    ?assertUnauthorized(?ERR_BAD_BASIC_CREDENTIALS, authenticate(Config, Username1, NewPass1)),
 
-    ?assertUnauthorized(?ERROR_BAD_BASIC_CREDENTIALS, change_password(Config, U1, <<"asdfsdaf">>, NewPass1)),
-    ?assertMatch(?ERROR_BAD_VALUE_PASSWORD, change_password(Config, U1, OldPass1, <<"1">>)),
+    ?assertUnauthorized(?ERR_BAD_BASIC_CREDENTIALS, change_password(Config, U1, <<"asdfsdaf">>, NewPass1)),
+    ?assertMatch(?ERR_BAD_VALUE_PASSWORD, change_password(Config, U1, OldPass1, <<"1">>)),
 
     ?assertMatch(ok, change_password(Config, U1, OldPass1, NewPass1)),
-    ?assertUnauthorized(?ERROR_BAD_BASIC_CREDENTIALS, authenticate(Config, Username1, OldPass1)),
+    ?assertUnauthorized(?ERR_BAD_BASIC_CREDENTIALS, authenticate(Config, Username1, OldPass1)),
     ?assertMatch({true, ?USER(U1)}, authenticate(Config, Username1, NewPass1)),
 
     % Create second user without basic auth enabled
@@ -134,16 +134,16 @@ change_password(Config) ->
     SecondPass2 = <<"newPass2">>,
     {ok, U2} = oz_test_utils:create_user(Config, #{<<"username">> => Username2}),
 
-    ?assertUnauthorized(?ERROR_BASIC_AUTH_DISABLED, change_password(Config, U2, undefined, FirstPass2)),
+    ?assertUnauthorized(?ERR_BASIC_AUTH_DISABLED, change_password(Config, U2, undefined, FirstPass2)),
     toggle_basic_auth(Config, U2, true),
-    ?assertUnauthorized(?ERROR_BAD_BASIC_CREDENTIALS, change_password(Config, U2, <<"123">>, FirstPass2)),
+    ?assertUnauthorized(?ERR_BAD_BASIC_CREDENTIALS, change_password(Config, U2, <<"123">>, FirstPass2)),
     ?assertMatch(ok, change_password(Config, U2, undefined, FirstPass2)),
 
     ?assertMatch({true, ?USER(U2)}, authenticate(Config, Username2, FirstPass2)),
-    ?assertUnauthorized(?ERROR_BAD_BASIC_CREDENTIALS, authenticate(Config, Username2, SecondPass2)),
+    ?assertUnauthorized(?ERR_BAD_BASIC_CREDENTIALS, authenticate(Config, Username2, SecondPass2)),
 
     ?assertMatch(ok, change_password(Config, U2, FirstPass2, SecondPass2)),
-    ?assertUnauthorized(?ERROR_BAD_BASIC_CREDENTIALS, authenticate(Config, Username2, FirstPass2)),
+    ?assertUnauthorized(?ERR_BAD_BASIC_CREDENTIALS, authenticate(Config, Username2, FirstPass2)),
     ?assertMatch({true, ?USER(U2)}, authenticate(Config, Username2, SecondPass2)),
 
     ok.
@@ -154,15 +154,15 @@ set_password(Config) ->
     NewPass1 = <<"newPass1">>,
     {ok, U1} = oz_test_utils:create_user(Config, #{<<"username">> => Username1}),
 
-    ?assertUnauthorized(?ERROR_BASIC_AUTH_DISABLED, authenticate(Config, Username1, NewPass1)),
+    ?assertUnauthorized(?ERR_BASIC_AUTH_DISABLED, authenticate(Config, Username1, NewPass1)),
     toggle_basic_auth(Config, U1, true),
     % If no password was set, ERROR_BASIC_AUTH_DISABLED is expected
-    ?assertUnauthorized(?ERROR_BASIC_AUTH_DISABLED, authenticate(Config, Username1, NewPass1)),
+    ?assertUnauthorized(?ERR_BASIC_AUTH_DISABLED, authenticate(Config, Username1, NewPass1)),
 
-    ?assertMatch(?ERROR_BAD_VALUE_PASSWORD, set_password(Config, U1, <<"1">>)),
+    ?assertMatch(?ERR_BAD_VALUE_PASSWORD, set_password(Config, U1, <<"1">>)),
     ?assertMatch(ok, set_password(Config, U1, NewPass1)),
     ?assertMatch({true, ?USER(U1)}, authenticate(Config, Username1, NewPass1)),
-    ?assertUnauthorized(?ERROR_BAD_BASIC_CREDENTIALS, authenticate(Config, Username1, <<"bad-pass">>)),
+    ?assertUnauthorized(?ERR_BAD_BASIC_CREDENTIALS, authenticate(Config, Username1, <<"bad-pass">>)),
     ok.
 
 

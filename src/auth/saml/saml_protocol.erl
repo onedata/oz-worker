@@ -46,7 +46,7 @@ get_login_endpoint(IdP, State) ->
     case LoginLocation of
         undefined ->
             ?alert("Cannot resolve login location for IdP '~tp'", [IdP]),
-            throw(?ERROR_INTERNAL_SERVER_ERROR);
+            throw(?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined));
         _ ->
             ok
     end,

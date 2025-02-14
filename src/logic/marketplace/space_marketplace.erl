@@ -186,5 +186,5 @@ filter_advertised(QuerySpaceIds) ->
 assert_enabled() ->
     case oz_worker:get_env(space_marketplace_enabled) of
         true -> true;
-        false -> throw(?ERROR_SPACE_MARKETPLACE_DISABLED)
+        false -> throw(?ERR_SPACE_MARKETPLACE_DISABLED(?err_ctx()))
     end.

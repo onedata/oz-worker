@@ -163,7 +163,7 @@ session_cookie_refresh_and_grace_period(Config) ->
     oz_test_utils:simulate_seconds_passing(get_gui_config(Config, session_cookie_grace_period) + 1),
 
     ?assertMatch({error, invalid}, validate_session(Config, Cookie)),
-    ?assertMatch(?ERROR_UNAUTHORIZED, start_gs_connection(Config, {cookie, Cookie})).
+    ?assertMatch(?ERR_UNAUTHORIZED(_), start_gs_connection(Config, {cookie, Cookie})).
 
 
 last_activity_tracking(Config) ->
@@ -224,7 +224,7 @@ session_cleanup_test_base(Config, CauseCleanupFun) ->
 
     CauseCleanupFun(Cookie),
 
-    ?assertMatch(?ERROR_UNAUTHORIZED, start_gs_connection(Config, {cookie, Cookie})),
+    ?assertMatch(?ERR_UNAUTHORIZED(_), start_gs_connection(Config, {cookie, Cookie})),
 
     ?assert(compare_user_sessions(Config, UserId, [])),
     ?assert(compare_connections_per_user(Config, UserId, [])),
@@ -279,7 +279,7 @@ cleanup_of_expired_sessions_upon_other_session_expiry(Config) ->
     end, fun(Cookie) ->
         % due to the adjusted time, this cookie is already expired and an attempt
         % to connect should cause a cleanup of expired sessions
-        ?assertMatch(?ERROR_UNAUTHORIZED, start_gs_connection(Config, {cookie, Cookie}))
+        ?assertMatch(?ERR_UNAUTHORIZED(_), start_gs_connection(Config, {cookie, Cookie}))
     end).
 
 
