@@ -131,7 +131,6 @@ db_nodes() ->
 before_init() ->
     try
         oz_worker_sup:start_link(),
-        onedata_logger:configure_logger(),
         ok
     catch
         Class:Reason:Stacktrace ->
