@@ -109,7 +109,7 @@ create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PRO
     ImportedStorage = maps:get(<<"imported">>, Data, unknown),
     Readonly = maps:get(<<"readonly">>, Data, false),
     case Readonly andalso ImportedStorage =:= false of
-        true -> throw(?ERROR_REQUIRES_IMPORTED_STORAGE(<<"'newly created storage'">>));
+        true -> throw(?ERR_REQUIRES_IMPORTED_STORAGE(?err_ctx(), <<"'newly created storage'">>));
         _ -> ok
     end,
     StorageId = ensure_id(ProposedId),
@@ -156,12 +156,12 @@ create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_legacy_support, Spac
         try
             support_space(ProviderId, SpaceId, StorageId, #{<<"size">> => SupportSize})
         catch
-            _:(?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _)) -> ok
+            _:(?ERR_RELATION_ALREADY_EXISTS(_, _, _, _)) -> ok
         end,
         try
             entity_graph:remove_relation(od_space, SpaceId, od_storage, ProviderId)
         catch
-            _:(?ERROR_RELATION_DOES_NOT_EXIST(_, _, _, _)) -> ok
+            _:(?ERR_RELATION_DOES_NOT_EXIST(_, _, _, _)) -> ok
         end,
         ?notice("Successfully upgraded legacy support of space '~ts' by provider '~ts'", [SpaceId, ProviderId])
     end.
@@ -437,7 +437,7 @@ support_space_insecure(ProviderId, SpaceId, StorageId, Data) ->
 
     % possible if multiple processes enter the critical section one after another
     storage_logic:supports_space(Storage, SpaceId) andalso throw(
-        ?ERROR_RELATION_ALREADY_EXISTS(od_space, SpaceId, od_storage, StorageId)
+        ?ERR_RELATION_ALREADY_EXISTS(?err_ctx(), od_space, SpaceId, od_storage, StorageId)
     ),
 
     case is_imported_storage(Storage) of
@@ -494,14 +494,14 @@ ensure_space_not_supported_by_imported_storage(SpaceId) ->
     {true, {#od_space{storages = StorageIds}, _}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
     lists:foreach(fun(StorageId) ->
         is_imported_storage(StorageId)
-            andalso throw(?ERROR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(SpaceId, StorageId))
+            andalso throw(?ERR_SPACE_ALREADY_SUPPORTED_WITH_IMPORTED_STORAGE(?err_ctx(), SpaceId, StorageId))
     end, maps:keys(StorageIds)).
 
 
 %% @private
 -spec ensure_storage_not_supporting_any_space(od_storage:record()) -> false | no_return().
 ensure_storage_not_supporting_any_space(Storage) ->
-    supports_any_space(Storage) andalso throw(?ERROR_STORAGE_IN_USE).
+    supports_any_space(Storage) andalso throw(?ERR_STORAGE_IN_USE(?err_ctx())).
 
 
 %% @private
@@ -566,14 +566,14 @@ get_qos_parameters(Data, Default) ->
 check_imported_storage_value(unknown = _PreviousValue, _NewValue, _SupportsAnySpace) -> ok;
 check_imported_storage_value(_PreviousValue, _NewValue, false = _SupportsAnySpace) -> ok;
 check_imported_storage_value(PreviousValue, PreviousValue = _NewValue, _SupportsAnySpace) -> ok;
-check_imported_storage_value(_PreviousValue, _NewValue, _SupportsAnySpace) -> throw(?ERROR_STORAGE_IN_USE).
+check_imported_storage_value(_PreviousValue, _NewValue, _SupportsAnySpace) -> throw(?ERR_STORAGE_IN_USE(?err_ctx())).
 
 
 %% @private
 -spec check_readonly_value(ReadonlyValue :: boolean(), IsImportedStorage :: boolean(), od_storage:id()) ->
     ok | no_return().
 check_readonly_value(true = _ReadonlyValue, false = _IsImportedStorage, StorageId) ->
-    throw(?ERROR_REQUIRES_IMPORTED_STORAGE(StorageId));
+    throw(?ERR_REQUIRES_IMPORTED_STORAGE(?err_ctx(), StorageId));
 check_readonly_value(_ReadonlyValue, _IsImportedStorage, _StorageId) -> ok.
 
 
@@ -581,9 +581,9 @@ check_readonly_value(_ReadonlyValue, _IsImportedStorage, _StorageId) -> ok.
 -spec add_implicit_qos_parameters(od_storage:id(), od_provider:id(), od_storage:qos_parameters()) ->
     od_storage:qos_parameters() | no_return().
 add_implicit_qos_parameters(_StorageId, ProviderId, #{<<"providerId">> := OtherProvider}) when ProviderId =/= OtherProvider ->
-    throw(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.providerId">>, [ProviderId]));
+    throw(?ERR_BAD_VALUE_NOT_ALLOWED(?err_ctx(), <<"qosParameters.providerId">>, [ProviderId]));
 add_implicit_qos_parameters(StorageId, _ProviderId, #{<<"storageId">> := OtherStorage}) when StorageId =/= OtherStorage ->
-    throw(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"qosParameters.storageId">>, [StorageId]));
+    throw(?ERR_BAD_VALUE_NOT_ALLOWED(?err_ctx(), <<"qosParameters.storageId">>, [StorageId]));
 add_implicit_qos_parameters(StorageId, ProviderId, QosParameters) ->
     QosParameters#{
         <<"storageId">> => StorageId,

@@ -74,14 +74,14 @@ access_token_test(Config) ->
 
     ?assert(check_rest_call(Config,
         #{?HDR_X_AUTH_TOKEN => <<"bad-token">>},
-        ?ERROR_BAD_TOKEN
+        ?ERR_BAD_TOKEN
     )),
 
     % check if user blocking works as expected
     oz_test_utils:toggle_user_access_block(Config, UserId, true),
     ?assert(check_rest_call(Config,
         #{?HDR_X_AUTH_TOKEN => Token},
-        ?ERROR_USER_BLOCKED
+        ?ERR_USER_BLOCKED
     )),
 
     % after unblocking, authentication should work again
@@ -107,14 +107,14 @@ basic_auth_test(Config) ->
 
     ?assert(check_rest_call(Config,
         basic_auth_header(?BAD_USERNAME, ?BAD_PASSWORD),
-        ?ERROR_BAD_BASIC_CREDENTIALS
+        ?ERR_BAD_BASIC_CREDENTIALS
     )),
 
     % check if user blocking works as expected
     oz_test_utils:toggle_user_access_block(Config, UserId, true),
     ?assert(check_rest_call(Config,
         basic_auth_header(?CORRECT_USERNAME, ?CORRECT_PASSWORD),
-        ?ERROR_USER_BLOCKED
+        ?ERR_USER_BLOCKED
     )),
 
     % after unblocking, authentication should work again
@@ -128,11 +128,11 @@ basic_auth_test(Config) ->
     oz_test_utils:toggle_basic_auth(Config, false),
     ?assert(check_rest_call(Config,
         basic_auth_header(?CORRECT_USERNAME, ?CORRECT_PASSWORD),
-        ?ERROR_BASIC_AUTH_NOT_SUPPORTED
+        ?ERR_BASIC_AUTH_NOT_SUPPORTED
     )),
     ?assert(check_rest_call(Config,
         basic_auth_header(?BAD_USERNAME, ?BAD_PASSWORD),
-        ?ERROR_BASIC_AUTH_NOT_SUPPORTED
+        ?ERR_BASIC_AUTH_NOT_SUPPORTED
     )).
 
 
@@ -169,11 +169,11 @@ external_access_token_test(Config) ->
     oz_test_utils:toggle_user_access_block(Config, UserIdFun(AnotherIdP), true),
     ?assert(check_rest_call(Config,
         #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(DummyIdP)},
-        ?ERROR_USER_BLOCKED
+        ?ERR_USER_BLOCKED
     )),
     ?assert(check_rest_call(Config,
         #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(AnotherIdP)},
-        ?ERROR_USER_BLOCKED
+        ?ERR_USER_BLOCKED
     )),
 
     % after unblocking, authentication should work again
@@ -191,18 +191,18 @@ external_access_token_test(Config) ->
     % DisabledIdP has disabled authority delegation
     ?assert(check_rest_call(Config,
         #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(DisabledIdP)},
-        ?ERROR_BAD_TOKEN
+        ?ERR_BAD_TOKEN
     )),
 
     % prefix from DummyIdP, access token from AnotherIdP
     ?assert(check_rest_call(Config,
         #{?HDR_X_AUTH_TOKEN => <<(PrefixFun(DummyIdP))/binary, (CorrectAccessTokenFun(AnotherIdP))/binary>>},
-        ?ERROR_BAD_IDP_ACCESS_TOKEN(DummyIdP)
+        ?ERR_BAD_IDP_ACCESS_TOKEN(DummyIdP)
     )),
 
     ?assert(check_rest_call(Config,
         #{?HDR_X_AUTH_TOKEN => <<"completely-bad-token">>},
-        ?ERROR_BAD_TOKEN
+        ?ERR_BAD_TOKEN
     )).
 
 
@@ -253,7 +253,7 @@ gui_token_test(Config) ->
             ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
             ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
         },
-        ?ERROR_TOKEN_SESSION_INVALID
+        ?ERR_TOKEN_SESSION_INVALID
     )),
 
     % invalid service
@@ -263,7 +263,7 @@ gui_token_test(Config) ->
             ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
             ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider2ServiceToken
         },
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [?SERVICE(?OP_PANEL, Provider1)]})
+        ?ERR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [?SERVICE(?OP_PANEL, Provider1)]})
     )),
 
     % bad service token
@@ -273,7 +273,7 @@ gui_token_test(Config) ->
             ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
             ?HDR_X_ONEDATA_SERVICE_TOKEN => SerializedGuiToken1
         },
-        ?ERROR_BAD_SERVICE_TOKEN(?ERROR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN(SessionId)))
+        ?ERR_BAD_SERVICE_TOKEN(?ERR_NOT_AN_IDENTITY_TOKEN(?ACCESS_TOKEN(SessionId)))
     )),
 
     % missing service token
@@ -282,7 +282,7 @@ gui_token_test(Config) ->
             ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
             ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
         },
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [?SERVICE(?OP_WORKER, Provider1)]})
+        ?ERR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [?SERVICE(?OP_WORKER, Provider1)]})
     )),
 
     % check if user blocking works as expected
@@ -293,7 +293,7 @@ gui_token_test(Config) ->
             ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
             ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
         },
-        ?ERROR_USER_BLOCKED
+        ?ERR_USER_BLOCKED
     )),
 
     % blocking the user causes the session to be deleted - despite unblocking,
@@ -305,7 +305,7 @@ gui_token_test(Config) ->
             ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
             ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
         },
-        ?ERROR_TOKEN_SESSION_INVALID
+        ?ERR_TOKEN_SESSION_INVALID
     )),
 
     % after unblocking and with a new session and token, authentication should work again
@@ -330,7 +330,7 @@ gui_token_test(Config) ->
             ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,  % old cookie
             ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
         },
-        ?ERROR_TOKEN_SESSION_INVALID
+        ?ERR_TOKEN_SESSION_INVALID
     )),
 
     % expired token
@@ -341,7 +341,7 @@ gui_token_test(Config) ->
             ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>,
             ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1ServiceToken
         },
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = oz_test_utils:timestamp_seconds(Config) - 1})
+        ?ERR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = oz_test_utils:timestamp_seconds(Config) - 1})
     )).
 
 %%%===================================================================
@@ -363,7 +363,7 @@ check_rest_call(Config, Headers, ExpResult) ->
         {error, _} = Error ->
             % during encoding to json, atoms are converted to strings and the
             % payload can slightly change - do the same to match the REST responses
-            ExpErrorJson = json_utils:decode(json_utils:encode(errors:to_json(?ERROR_UNAUTHORIZED(Error)))),
+            ExpErrorJson = json_utils:decode(json_utils:encode(errors:to_json(?ERR_UNAUTHORIZED(Error)))),
             #{
                 code => 401,
                 body => #{<<"error">> => ExpErrorJson}

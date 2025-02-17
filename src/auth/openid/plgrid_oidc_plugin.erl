@@ -126,7 +126,7 @@ validate_login(IdP, QueryParams, _RedirectUri) ->
 -spec refresh_access_token(auth_config:idp(), idp_auth:refresh_token()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 refresh_access_token(_IdP, _RefreshToken) ->
-    ?ERROR_NOT_IMPLEMENTED.
+    ?ERR_NOT_IMPLEMENTED(?err_ctx()).
 
 
 %%--------------------------------------------------------------------
@@ -137,7 +137,7 @@ refresh_access_token(_IdP, _RefreshToken) ->
 -spec get_user_info(auth_config:idp(), idp_auth:access_token()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 get_user_info(_IdP, _AccessToken) ->
-    ?ERROR_NOT_IMPLEMENTED.
+    ?ERR_NOT_IMPLEMENTED(?err_ctx()).
 
 %%%===================================================================
 %%% Internal functions

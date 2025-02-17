@@ -128,11 +128,11 @@ find_user(LinkedAccount) ->
 %% Checks if the user is blocked and returns an error if so.
 %% @end
 %%--------------------------------------------------------------------
--spec acquire_user(od_user:linked_account()) -> {ok, od_user:doc()} | ?ERROR_USER_BLOCKED.
+-spec acquire_user(od_user:linked_account()) -> {ok, od_user:doc()} | od_error_user_blocked:t().
 acquire_user(LinkedAccount) ->
     case find_user(LinkedAccount) of
         {ok, #document{value = #od_user{blocked = true}}} ->
-            ?ERROR_USER_BLOCKED;
+            ?ERR_USER_BLOCKED(?err_ctx());
         {ok, #document{key = UserId}} ->
             merge(UserId, LinkedAccount);
         {error, not_found} ->

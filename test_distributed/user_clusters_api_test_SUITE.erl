@@ -251,9 +251,9 @@ join_cluster_test(Config) ->
                 end]
             },
             bad_values = [
-                {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                {<<"token">>, <<"123qwe">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)}
+                {<<"token">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"token">>, 1234, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)},
+                {<<"token">>, <<"123qwe">>, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)}
             ]
         }
     },
@@ -309,7 +309,7 @@ join_cluster_test(Config) ->
             module = user_logic,
             function = join_cluster,
             args = [auth, U1, data],
-            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_user, U1, od_cluster, NewCluster))
+            expected_result = ?ERROR_REASON(?ERR_RELATION_ALREADY_EXISTS(od_user, U1, od_cluster, NewCluster))
         },
         % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{

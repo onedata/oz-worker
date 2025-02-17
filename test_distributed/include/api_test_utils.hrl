@@ -312,7 +312,7 @@ end).
     {<<"name">>, <<"asd ">>, Error},
     {<<"name">>, <<" asd ">>, Error},
     {<<"name">>, <<" asd">>, Error},
-    {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)}
+    {<<"name">>, 1234, ?ERR_BAD_VALUE_STRING(<<"name">>)}
 ]).
 
 -define(BAD_VALUES_FULL_NAME(Error), [
@@ -328,7 +328,7 @@ end).
     {<<"fullName">>, <<"Tom ">>, Error},
     {<<"fullName">>, <<" Tom ">>, Error},
     {<<"fullName">>, <<" Tom">>, Error},
-    {<<"fullName">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"fullName">>)}
+    {<<"fullName">>, 1234, ?ERR_BAD_VALUE_STRING(<<"fullName">>)}
 ]).
 
 -define(CORRECT_NAME, <<"_πœę ßþą_śðæŋ-əłżź.ćńµジ(ャパル)パスで 日本を- 旅す.る()"/utf8>>).

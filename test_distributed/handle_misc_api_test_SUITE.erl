@@ -242,28 +242,28 @@ create_test(Config) ->
             },
             bad_values = [
                 {<<"handleServiceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
+                    ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
                 {<<"handleServiceId">>, 1234,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
+                    ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
                 {<<"resourceType">>, <<"">>,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"resourceType">>,
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"resourceType">>,
                         [<<"Share">>])},
                 {<<"resourceType">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
+                    ?ERR_BAD_VALUE_STRING(<<"resourceType">>)},
                 {<<"resourceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
+                    ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"resourceId">>, ShareIdThatAlreadyHasAHandle,
                     ?ERROR_ALREADY_EXISTS},
                 {<<"resourceId">>, 1234,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
+                    ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"metadataPrefix">>, <<"bad_metadata">>,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"metadataPrefix">>, ozt_handles:supported_metadata_prefixes())},
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"metadataPrefix">>, ozt_handles:supported_metadata_prefixes())},
                 {<<"metadata">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
+                    ?ERR_BAD_VALUE_STRING(<<"metadata">>)},
                 {<<"metadata">>, ?RAND_UNICODE_STR(100001),
-                    ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"metadata">>, 100000)},
-                {<<"metadata">>, <<"null">>, ?ERROR_BAD_VALUE_XML(<<"metadata">>)},
-                {<<"metadata">>, <<"<a></b>">>, ?ERROR_BAD_VALUE_XML(<<"metadata">>)}
+                    ?ERR_BAD_VALUE_TEXT_TOO_LARGE(<<"metadata">>, 100000)},
+                {<<"metadata">>, <<"null">>, ?ERR_BAD_VALUE_XML(<<"metadata">>)},
+                {<<"metadata">>, <<"<a></b>">>, ?ERR_BAD_VALUE_XML(<<"metadata">>)}
             ]
         }
     },
@@ -524,9 +524,9 @@ update_test(Config, MetadataPrefix) ->
             required = [<<"metadata">>],
             correct_values = #{<<"metadata">> => [TargetRawMetadata]},
             bad_values = [
-                {<<"metadata">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
+                {<<"metadata">>, 1234, ?ERR_BAD_VALUE_STRING(<<"metadata">>)},
                 {<<"metadata">>, ?RAND_UNICODE_STR(100001),
-                    ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"metadata">>, 100000)}
+                    ?ERR_BAD_VALUE_TEXT_TOO_LARGE(<<"metadata">>, 100000)}
             ]
         }
     },

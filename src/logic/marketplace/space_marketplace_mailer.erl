@@ -43,7 +43,7 @@
     od_user:email(),
     binary()
 ) ->
-    ok | ?ERROR_INTERNAL_SERVER_ERROR(_).
+    ok | od_error_internal_server_error:t().
 check_send_membership_request(SpaceId, RequesterUserId, RequestId, RequestClassification, RequesterEmail, Message) ->
     {SpaceName, MarketplaceContactEmail} = get_space_info(SpaceId),
     {RequesterFullName, RequesterUsername} = get_user_info(RequesterUserId),
@@ -102,7 +102,7 @@ check_send_membership_request(SpaceId, RequesterUserId, RequestId, RequestClassi
     od_user:email(),
     space_membership_requests:decision()
 ) ->
-    ok | ?ERROR_INTERNAL_SERVER_ERROR(_).
+    ok | od_error_internal_server_error:t().
 best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision) ->
     {SpaceName, _} = get_space_info(SpaceId),
     DecisionStr = case Decision of
@@ -143,7 +143,7 @@ best_effort_notify_request_resolved(SpaceId, UserContactEmail, Decision) ->
     od_space:id(),
     od_user:email()
 ) ->
-    ok | ?ERROR_INTERNAL_SERVER_ERROR(_).
+    ok | od_error_internal_server_error:t().
 best_effort_notify_membership_already_granted(SpaceId, UserContactEmail) ->
     {SpaceName, _} = get_space_info(SpaceId),
     Subject = str_utils:format_bin("Membership already GRANTED - space '~ts'", [SpaceName]),
@@ -167,7 +167,7 @@ best_effort_notify_membership_already_granted(SpaceId, UserContactEmail) ->
     od_space:id(),
     od_user:email()
 ) ->
-    ok | ?ERROR_INTERNAL_SERVER_ERROR(_).
+    ok | od_error_internal_server_error:t().
 best_effort_notify_request_cancelled(SpaceId, UserContactEmail) ->
     SpaceName = try
         {Name, _} = get_space_info(SpaceId),

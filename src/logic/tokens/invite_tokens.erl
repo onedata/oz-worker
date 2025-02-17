@@ -48,13 +48,13 @@ consume(ConsumerAuth, Token, ExpectedType, ConsumeFun) ->
     AuthCtx = #auth_ctx{ip = PeerIp, consumer = ConsumerSubject},
     case token_auth:verify_invite_token(Token, ExpectedType, AuthCtx) of
         {ok, _} -> ok;
-        ?ERROR_USER_BLOCKED -> throw(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED);
+        ?ERR_USER_BLOCKED -> throw(?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED(?err_ctx()));
         {error, _} = Err1 -> throw(Err1)
     end,
 
     #token{type = ?INVITE_TOKEN(InviteType, _)} = Token,
     is_valid_consumer(InviteType, ConsumerSubject) orelse
-        throw(?ERROR_INVITE_TOKEN_CONSUMER_INVALID(ConsumerSubject)),
+        throw(?ERR_INVITE_TOKEN_CONSUMER_INVALID(?err_ctx(), ConsumerSubject)),
 
     consume_internal(Token, ConsumeFun).
 
@@ -70,13 +70,13 @@ consume(ConsumerAuth, Token, ExpectedType, ConsumeFun) ->
     token_metadata:privileges_profile()) -> true | no_return().
 ensure_valid_invitation(Subject, InviteType, EntityId, default_privileges) ->
     is_valid_target_id(InviteType, EntityId) orelse
-        throw(?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(EntityId)),
+        throw(?ERR_INVITE_TOKEN_TARGET_ID_INVALID(?err_ctx(), EntityId)),
     is_authorized_to_invite(Subject, InviteType, EntityId) orelse
-        throw(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED);
+        throw(?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED(?err_ctx()));
 ensure_valid_invitation(Subject, InviteType, EntityId, custom_privileges) ->
     ensure_valid_invitation(Subject, InviteType, EntityId, default_privileges),
     is_authorized_to_set_privileges(Subject, InviteType, EntityId) orelse
-        throw(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED).
+        throw(?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED(?err_ctx())).
 
 %%%===================================================================
 %%% Internal functions
@@ -150,7 +150,7 @@ consume_named_unsafe(Token, ConsumeFun) ->
     {ok, #document{value = #od_token{metadata = Metadata}}} = od_token:get(TokenId),
 
     token_metadata:is_usage_limit_reached(Metadata) andalso
-        throw(?ERROR_INVITE_TOKEN_USAGE_LIMIT_REACHED),
+        throw(?ERR_INVITE_TOKEN_USAGE_LIMIT_REACHED(?err_ctx())),
 
     {Profile, Privileges} = token_metadata:inspect_carried_privileges(InviteType, Metadata),
     ensure_valid_invitation(Subject, InviteType, EntityId, Profile),

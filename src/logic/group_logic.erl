@@ -1905,7 +1905,7 @@ ensure_entitlement_group(GroupId, Name, Type) ->
         false ->
             case entity_logic_sanitizer:normalize_name(Name, undefined) of
                 undefined ->
-                    ?ERROR_BAD_VALUE_NAME;
+                    ?ERR_BAD_VALUE_NAME(?err_ctx(), undefined);
                 NormalizedName ->
                     Data = #{<<"name">> => NormalizedName, <<"type">> => Type},
                     case create_with_predefined_id(?ROOT, GroupId, Data) of

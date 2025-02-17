@@ -264,9 +264,10 @@ build_lambda_search_ctx(OriginalAtmLambdaId, RevisionNumber, AtmLambdaData) ->
                     end,
                     AtmLambdaRevision#atm_lambda_revision.checksum
                 catch _:_ ->
-                    throw(?ERROR_BAD_DATA(
+                    throw(?ERR_BAD_DATA(
+                        ?err_ctx(),
                         <<"supplementaryAtmLambdas[", OriginalAtmLambdaId/binary, "].revision.atmLambdaRevision">>,
-                        ?ERROR_BAD_DATA(<<"atmLambdaRevision">>)
+                        ?ERR_BAD_DATA(?err_ctx(), <<"atmLambdaRevision">>, undefined)
                     ))
                 end
         end,
@@ -534,7 +535,8 @@ validate_workflow_schema_revision(#builder_ctx{
             {ok, AtmLambdaWithRevisions} ->
                 AtmLambdaWithRevisions;
             {error, _} = Error ->
-                throw(?ERROR_BAD_DATA(
+                throw(?ERR_BAD_DATA(
+                    ?err_ctx(),
                     <<"supplementaryAtmLambdas[", OriginalAtmLambdaId/binary, "].revision.atmLambdaRevision">>,
                     Error
                 ))
@@ -548,7 +550,8 @@ validate_workflow_schema_revision(#builder_ctx{
             {ok, AtmLambdaWithRevisions} ->
                 AtmLambdaWithRevisions;
             {error, _} = Error ->
-                throw(?ERROR_BAD_DATA(
+                throw(?ERR_BAD_DATA(
+                    ?err_ctx(),
                     <<"supplementaryAtmLambdas[", OriginalAtmLambdaId/binary, "].revision.atmLambdaRevision">>,
                     Error
                 ))
