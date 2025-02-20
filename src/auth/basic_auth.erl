@@ -44,11 +44,11 @@
 %% Tries to authenticate a client by basic credentials (username and password).
 %%   {true, #auth{}} - the client was authenticated
 %%   false - credentials were not found
-%%   errors:unauthorized_error() - provided credentials were invalid
+%%   od_error:auth_error() - provided credentials were invalid
 %% @end
 %%--------------------------------------------------------------------
 -spec authenticate(cowboy_req:req()) ->
-    {true, aai:auth()} | false | errors:unauthorized_error().
+    {true, aai:auth()} | false | od_error:auth_error().
 authenticate(Req) ->
     case cowboy_req:header(?HDR_AUTHORIZATION, Req, undefined) of
         <<"Basic ", UserPasswdB64/binary>> ->
@@ -57,33 +57,42 @@ authenticate(Req) ->
                 [Username, Password] = binary:split(UsernamePassword, <<":">>),
                 authenticate(Username, Password)
             catch _:_ ->
-                ?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS)
+                ErrorCtx = ?err_ctx(),
+                ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_BAD_BASIC_CREDENTIALS(ErrorCtx))
             end;
         _ ->
             false
     end.
 
 -spec authenticate(od_user:username(), password()) ->
-    {true, aai:auth()} | errors:unauthorized_error().
+    {true, aai:auth()} | od_error:auth_error().
 authenticate(Username, Password) ->
     case auth_config:is_basic_auth_enabled() of
         false ->
-            ?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_NOT_SUPPORTED);
+            ErrorCtx = ?err_ctx(),
+            ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_BASIC_AUTH_NOT_SUPPORTED(ErrorCtx));
         true ->
             case od_user:get_by_username(Username) of
                 {ok, #document{value = #od_user{blocked = true}}} ->
-                    ?ERROR_UNAUTHORIZED(?ERROR_USER_BLOCKED);
+                    ErrorCtx = ?err_ctx(),
+                    ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_USER_BLOCKED(ErrorCtx));
                 {ok, #document{value = #od_user{basic_auth_enabled = false}}} ->
-                    ?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED);
+                    ErrorCtx = ?err_ctx(),
+                    ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_BASIC_AUTH_DISABLED(ErrorCtx));
                 {ok, #document{value = #od_user{password_hash = undefined}}} ->
-                    ?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED);
+                    ErrorCtx = ?err_ctx(),
+                    ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_BASIC_AUTH_DISABLED(ErrorCtx));
                 {ok, #document{value = #od_user{password_hash = Hash}, key = UserId}} ->
                     case onedata_passwords:verify(Password, Hash) of
-                        true -> {true, ?USER(UserId)};
-                        false -> ?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS)
+                        true ->
+                            {true, ?USER(UserId)};
+                        false ->
+                            ErrorCtx = ?err_ctx(),
+                            ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_BAD_BASIC_CREDENTIALS(ErrorCtx))
                     end;
                 {error, not_found} ->
-                    ?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS)
+                    ErrorCtx = ?err_ctx(),
+                    ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_BAD_BASIC_CREDENTIALS(ErrorCtx))
             end
     end.
 
@@ -105,21 +114,25 @@ toggle_basic_auth(UserRecord, Flag) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec change_password(od_user:record(), OldPass :: password(), NewPass :: password()) ->
-    {ok, od_user:record()} | errors:unauthorized_error().
+    {ok, od_user:record()} | od_error:auth_error().
 change_password(#od_user{basic_auth_enabled = false} = _User, _OldPass, _NewPass) ->
-    ?ERROR_UNAUTHORIZED(?ERROR_BASIC_AUTH_DISABLED);
+    ErrorCtx = ?err_ctx(),
+    ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_BASIC_AUTH_DISABLED(ErrorCtx));
 change_password(#od_user{password_hash = undefined} = User, undefined, NewPass) ->
     {ok, User#od_user{password_hash = onedata_passwords:create_hash(NewPass)}};
 change_password(#od_user{password_hash = undefined} = _User, _OldPass, _NewPass) ->
-    ?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS);
+    ErrorCtx = ?err_ctx(),
+    ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_BAD_BASIC_CREDENTIALS(ErrorCtx));
 change_password(#od_user{password_hash = _Hash} = _User, undefined, _NewPass) ->
-    ?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS);
+    ErrorCtx = ?err_ctx(),
+    ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_BAD_BASIC_CREDENTIALS(ErrorCtx));
 change_password(#od_user{password_hash = Hash} = User, OldPass, NewPass) ->
     case onedata_passwords:verify(OldPass, Hash) of
         true ->
             {ok, User#od_user{password_hash = onedata_passwords:create_hash(NewPass)}};
         false ->
-            ?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS)
+            ErrorCtx = ?err_ctx(),
+            ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_BAD_BASIC_CREDENTIALS(ErrorCtx))
     end.
 
 
@@ -131,7 +144,7 @@ change_password(#od_user{password_hash = Hash} = User, OldPass, NewPass) ->
 -spec set_password(od_user:record(), NewPass :: password()) ->
     {ok, od_user:record()} | errors:error().
 set_password(#od_user{basic_auth_enabled = false}, _) ->
-    ?ERROR_BASIC_AUTH_DISABLED;
+    ?ERR_BASIC_AUTH_DISABLED(?err_ctx());
 set_password(User, NewPass) ->
     {ok, User#od_user{password_hash = onedata_passwords:create_hash(NewPass)}}.
 
@@ -227,7 +240,7 @@ add_user_to_groups(UserId, GroupIds) ->
             {ok, UserId} ->
                 {ok, GroupName} = group_logic:get_name(?ROOT, GroupId),
                 ?info("Added user '~ts' to group '~ts'", [UserId, GroupName]);
-            ?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _) ->
+            ?ERR_RELATION_ALREADY_EXISTS(_, _, _, _) ->
                 ok
         end
     end, GroupIds).
@@ -249,7 +262,7 @@ maybe_make_cluster_admin(UserId, admin) ->
         {ok, _} ->
             ?info("Added user '~ts' as admin of cluster '~ts'", [UserId, ?ONEZONE_CLUSTER_ID]),
             ok;
-        ?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _) ->
+        ?ERR_RELATION_ALREADY_EXISTS(_, _, _, _) ->
             ok;
         Error ->
             Error

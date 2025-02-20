@@ -31,8 +31,8 @@
 end).
 
 -define(CONNECT_OPTS, [
-    {connect_timeout, 60000},
-    {recv_timeout, 60000}
+    {connect_timeout, 120000},
+    {recv_timeout, 120000}
 ]).
 
 

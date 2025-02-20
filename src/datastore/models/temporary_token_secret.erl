@@ -53,11 +53,11 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec get_for_subject(aai:subject()) ->
-    {ok, {tokens:secret(), tokens:temporary_token_generation()}} | ?ERROR_NOT_FOUND.
+    {ok, {tokens:secret(), tokens:temporary_token_generation()}} | od_error_not_found:t().
 get_for_subject(Subject) ->
     case fetch_entity(Subject) of
-        ?ERROR_NOT_FOUND ->
-            ?ERROR_NOT_FOUND;
+        ?ERROR_NOT_FOUND = NotFoundError ->
+            NotFoundError;
         {true, {#temporary_token_secret{secret = Secret, generation = Generation}, _}} ->
             {ok, {Secret, Generation}}
     end.

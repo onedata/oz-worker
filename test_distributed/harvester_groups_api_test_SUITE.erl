@@ -227,7 +227,7 @@ add_group_with_privileges_test(Config) ->
             },
             bad_values = [
                 {<<"privileges">>, <<"">>,
-                    ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)}
+                    ?ERR_BAD_VALUE_LIST_OF_STRINGS(<<"privileges">>)}
             ]
         }
     },
@@ -301,9 +301,9 @@ create_group_test(Config) ->
             },
             bad_values = [
                 {<<"type">>, kingdom,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
-                {<<"type">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"type">>)}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
+                {<<"type">>, 1234, ?ERR_BAD_VALUE_STRING(<<"type">>)}
+                | ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
             ]
         }
     },

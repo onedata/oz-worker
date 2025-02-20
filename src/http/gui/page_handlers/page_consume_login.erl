@@ -79,7 +79,7 @@ format_error_reason(?ERROR_INVALID_STATE) ->
     <<"invalid_state:", (integer_to_binary(state_token:ttl()))/binary>>;
 format_error_reason(?ERROR_INVALID_AUTH_REQUEST) ->
     <<"invalid_auth_request">>;
-format_error_reason(?ERROR_USER_BLOCKED) ->
+format_error_reason(?ERR_USER_BLOCKED) ->
     <<"user_blocked">>;
 format_error_reason(?ERROR_IDP_UNREACHABLE(_)) ->
     <<"idp_unreachable">>;
@@ -95,7 +95,7 @@ format_error_reason(?ERROR_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(_)) ->
     <<"account_already_linked_to_current_user">>;
 format_error_reason(?ERROR_ACCOUNT_ALREADY_LINKED_TO_ANOTHER_USER(_, _)) ->
     <<"account_already_linked_to_another_user">>;
-format_error_reason(?ERROR_INTERNAL_SERVER_ERROR) ->
+format_error_reason(?ERR_INTERNAL_SERVER_ERROR(_)) ->
     <<"internal_server_error">>.
 
 

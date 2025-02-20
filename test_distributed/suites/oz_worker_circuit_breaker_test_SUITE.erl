@@ -59,7 +59,7 @@ rest_handler_circuit_breaker_test(_Config) ->
     ?assertMatch(ok, get_rest_response()),
 
     set_circuit_breaker_state(open),
-    ?assertMatch(?ERROR_SERVICE_UNAVAILABLE, get_rest_response()),
+    ?assertMatch(?ERR_SERVICE_UNAVAILABLE, get_rest_response()),
 
     set_circuit_breaker_state(closed),
     ?assertMatch(ok, get_rest_response()).
@@ -81,8 +81,8 @@ gs_circuit_breaker_test_base(Endpoint, Auth = #auth{subject = Subject}) ->
     ?assertMatch({ok, _}, gs_client:sync_request(GsClient, RequestSpec)),
 
     set_circuit_breaker_state(open),
-    ?assertMatch(?ERROR_SERVICE_UNAVAILABLE, gs_client:sync_request(GsClient, RequestSpec)),
-    ?assertMatch(?ERROR_SERVICE_UNAVAILABLE, ozt_gs:connect(Endpoint, ClientAuth, PushCallback)),
+    ?assertMatch(?ERR_SERVICE_UNAVAILABLE, gs_client:sync_request(GsClient, RequestSpec)),
+    ?assertMatch(?ERR_SERVICE_UNAVAILABLE, ozt_gs:connect(Endpoint, ClientAuth, PushCallback)),
 
     set_circuit_breaker_state(closed),
     ?assertMatch({ok, _}, gs_client:sync_request(GsClient, RequestSpec)),
@@ -98,7 +98,7 @@ gui_upload_circuit_breaker_test(_Config) ->
     ?assertMatch(ok, get_page_upload_response(ProviderId, ProviderToken, GuiPackage)),
 
     set_circuit_breaker_state(open),
-    ?assertMatch(?ERROR_SERVICE_UNAVAILABLE, get_page_upload_response(ProviderId, ProviderToken, GuiPackage)),
+    ?assertMatch(?ERR_SERVICE_UNAVAILABLE, get_page_upload_response(ProviderId, ProviderToken, GuiPackage)),
 
     set_circuit_breaker_state(closed),
     ?assertMatch(ok, get_page_upload_response(ProviderId, ProviderToken, GuiPackage)).

@@ -145,7 +145,7 @@ create_user_temporary_access_token(UserId) ->
 are_basic_credentials_valid(UserName, Password) ->
     case basic_auth:authenticate(UserName, Password) of
         {true, _} -> true;
-        ?ERROR_UNAUTHORIZED(?ERROR_BAD_BASIC_CREDENTIALS) -> false
+        ?ERR_UNAUTHORIZED(?ERR_BAD_BASIC_CREDENTIALS) -> false
     end.
 
 

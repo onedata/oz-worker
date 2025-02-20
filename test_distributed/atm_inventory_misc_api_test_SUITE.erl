@@ -98,7 +98,7 @@ create_test(Config) ->
         data_spec = #data_spec{
             required = [<<"name">>],
             correct_values = #{<<"name">> => [?CORRECT_NAME]},
-            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+            bad_values = ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -441,7 +441,7 @@ update_test(Config) ->
         data_spec = #data_spec{
             at_least_one = [<<"name">>],
             correct_values = #{<<"name">> => [TargetName]},
-            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+            bad_values = ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
         }
     },
     ?assert(api_test_utils:run_tests(

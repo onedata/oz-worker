@@ -340,7 +340,7 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
         case space_logic:has_eff_user(PreviousSpace, UserId) of
             false ->
                 % only effective members can be assigned as owners
-                ?ERROR_RELATION_DOES_NOT_EXIST(od_space, SpaceId, od_user, UserId);
+                ?ERR_RELATION_DOES_NOT_EXIST(?err_ctx(), od_space, SpaceId, od_user, UserId);
             true ->
                 % add the user as direct member if he wasn't one
                 UserWasDirectMember = space_logic:has_direct_user(PreviousSpace, UserId),
@@ -356,7 +356,7 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
                             % as the adding of direct member and this update are not in one transaction,
                             % it is possible that the direct membership has been removed in the
                             % meantime - in such case deny the operation
-                            ?ERROR_RELATION_DOES_NOT_EXIST(od_space, SpaceId, od_user, UserId);
+                            ?ERR_RELATION_DOES_NOT_EXIST(?err_ctx(), od_space, SpaceId, od_user, UserId);
                         true ->
                             case lists:member(UserId, Owners) of
                                 true when not UserWasDirectMember ->
@@ -445,7 +445,7 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
     catch error:{parallel_call_failed, {failed_processes, Errors}} ->
         ?error("Harvesting metadata in space ~tp failed due to: ~tp",
             [SpaceId, Errors]),
-        throw(?ERROR_TEMPORARY_FAILURE)
+        throw(?ERR_TEMPORARY_FAILURE(?err_ctx()))
     end,
 
     {ok, value, lists:foldl(
@@ -793,7 +793,7 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {owner, UserId}}}) ->
                 ?ERROR_NOT_FOUND;
             true ->
                 case Owners of
-                    [UserId] -> ?ERROR_CANNOT_REMOVE_LAST_OWNER(od_space, SpaceId);
+                    [UserId] -> ?ERR_CANNOT_REMOVE_LAST_OWNER(?err_ctx(), od_space, SpaceId);
                     _ -> {ok, Space#od_space{owners = lists:delete(UserId, Owners)}}
                 end
         end
