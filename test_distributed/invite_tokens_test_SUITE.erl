@@ -220,7 +220,7 @@ user_join_group_token(_Config) ->
             ozt_groups:delete(GroupId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
-            ?ERROR_RELATION_ALREADY_EXISTS(od_user, UserId, od_group, GroupId)
+            ?ERR_RELATION_ALREADY_EXISTS(od_user, UserId, od_group, GroupId)
         end
     })).
 
@@ -295,7 +295,7 @@ group_join_group_token(_Config) ->
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             ChildGroupId = node_cache:get({user_group, UserId}),
-            ?ERROR_RELATION_ALREADY_EXISTS(od_group, ChildGroupId, od_group, ParentGroupId)
+            ?ERR_RELATION_ALREADY_EXISTS(od_group, ChildGroupId, od_group, ParentGroupId)
         end
     })).
 
@@ -347,7 +347,7 @@ user_join_space_token(_Config) ->
             ozt_spaces:delete(SpaceId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
-            ?ERROR_RELATION_ALREADY_EXISTS(od_user, UserId, od_space, SpaceId)
+            ?ERR_RELATION_ALREADY_EXISTS(od_user, UserId, od_space, SpaceId)
         end
     })).
 
@@ -424,7 +424,7 @@ group_join_space_token(_Config) ->
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             GroupId = node_cache:get({user_group, UserId}),
-            ?ERROR_RELATION_ALREADY_EXISTS(od_group, GroupId, od_space, SpaceId)
+            ?ERR_RELATION_ALREADY_EXISTS(od_group, GroupId, od_space, SpaceId)
         end
     })).
 
@@ -492,7 +492,7 @@ support_space_token(_Config) ->
         end,
         expected_reuse_result_fun = fun(?SUB(?ONEPROVIDER, ProviderId)) ->
             StorageId = ProviderId,
-            ?ERROR_RELATION_ALREADY_EXISTS(od_space, SpaceId, od_storage, StorageId)
+            ?ERR_RELATION_ALREADY_EXISTS(od_space, SpaceId, od_storage, StorageId)
         end
     })).
 
@@ -565,7 +565,7 @@ harvester_join_space_token(_Config) ->
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             HarvesterId = node_cache:get({user_harvester, UserId}),
-            ?ERROR_RELATION_ALREADY_EXISTS(od_harvester, HarvesterId, od_space, SpaceId)
+            ?ERR_RELATION_ALREADY_EXISTS(od_harvester, HarvesterId, od_space, SpaceId)
         end
     })).
 
@@ -684,7 +684,7 @@ user_join_cluster_token(_Config) ->
             ozt_providers:delete(ProviderId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
-            ?ERROR_RELATION_ALREADY_EXISTS(od_user, UserId, od_cluster, ClusterId)
+            ?ERR_RELATION_ALREADY_EXISTS(od_user, UserId, od_cluster, ClusterId)
         end
     } end,
 
@@ -766,7 +766,7 @@ group_join_cluster_token(_Config) ->
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             GroupId = node_cache:get({user_group, UserId}),
-            ?ERROR_RELATION_ALREADY_EXISTS(od_group, GroupId, od_cluster, ClusterId)
+            ?ERR_RELATION_ALREADY_EXISTS(od_group, GroupId, od_cluster, ClusterId)
         end
     } end,
 
@@ -825,7 +825,7 @@ user_join_harvester_token(_Config) ->
             ozt_harvesters:delete(HarvesterId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
-            ?ERROR_RELATION_ALREADY_EXISTS(od_user, UserId, od_harvester, HarvesterId)
+            ?ERR_RELATION_ALREADY_EXISTS(od_user, UserId, od_harvester, HarvesterId)
         end
     })).
 
@@ -898,7 +898,7 @@ group_join_harvester_token(_Config) ->
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             GroupId = node_cache:get({user_group, UserId}),
-            ?ERROR_RELATION_ALREADY_EXISTS(od_group, GroupId, od_harvester, HarvesterId)
+            ?ERR_RELATION_ALREADY_EXISTS(od_group, GroupId, od_harvester, HarvesterId)
         end
     })).
 
@@ -971,7 +971,7 @@ space_join_harvester_token(_Config) ->
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             SpaceId = node_cache:get({user_space, UserId}),
-            ?ERROR_RELATION_ALREADY_EXISTS(od_harvester, HarvesterId, od_space, SpaceId)
+            ?ERR_RELATION_ALREADY_EXISTS(od_harvester, HarvesterId, od_space, SpaceId)
         end
     })).
 
@@ -1021,7 +1021,7 @@ user_join_atm_inventory_token(_Config) ->
             ozt_atm_inventories:delete(AtmInventoryId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
-            ?ERROR_RELATION_ALREADY_EXISTS(od_user, UserId, od_atm_inventory, AtmInventoryId)
+            ?ERR_RELATION_ALREADY_EXISTS(od_user, UserId, od_atm_inventory, AtmInventoryId)
         end
     })).
 
@@ -1096,7 +1096,7 @@ group_join_atm_inventory_token(_Config) ->
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             GroupId = node_cache:get({user_group, UserId}),
-            ?ERROR_RELATION_ALREADY_EXISTS(od_group, GroupId, od_atm_inventory, AtmInventoryId)
+            ?ERR_RELATION_ALREADY_EXISTS(od_group, GroupId, od_atm_inventory, AtmInventoryId)
         end
     })).
 
@@ -1151,20 +1151,20 @@ check_bad_token_scenarios(Tc = #testcase{token_type = TokenType = ?INVITE_TOKEN(
     lists:foreach(fun(EligibleConsumerType) ->
         Consumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
         ?assertEqual(
-            ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(InviteType, ?ACCESS_TOKEN)),
+            ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_NOT_AN_INVITE_TOKEN(InviteType, ?ACCESS_TOKEN)),
             consume_token(Tc, Consumer, AccessToken)
         ),
         ?assertEqual(
-            ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(InviteType, ?ACCESS_TOKEN(SessId))),
+            ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_NOT_AN_INVITE_TOKEN(InviteType, ?ACCESS_TOKEN(SessId))),
             consume_token(Tc, Consumer, GuiAccessToken)
         ),
         ?assertEqual(
-            ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN),
+            ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN),
             consume_token(Tc, Consumer, BadToken)
         ),
         ?assertEqual(
             % This token passes data validation but is declined in internal logic
-            ?ERROR_TOKEN_INVALID,
+            ?ERR_TOKEN_INVALID,
             consume_token(Tc, Consumer, ForgedToken)
         )
     end, Tc#testcase.eligible_consumer_types).
@@ -1183,30 +1183,30 @@ check_invalid_subject_scenarios(Tc = #testcase{token_type = TokenType}) ->
 
     assert_creation_fails(
         ?USER(SomeUser), ?SUB(user, SomeUser), #{<<"type">> => TokenType},
-        ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
+        ?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
     ),
     assert_creation_fails(
         ?USER(TokenManager), ?SUB(user, SomeUser), #{<<"type">> => TokenType},
-        ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
+        ?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
     ),
     assert_creation_fails(
         ?PROVIDER(SomeProvider), ?SUB(?ONEPROVIDER, SomeProvider), #{<<"type">> => TokenType},
-        ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
+        ?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
     ),
     assert_creation_fails(
         ?USER(TokenManager), ?SUB(?ONEPROVIDER, SomeProvider), #{<<"type">> => TokenType},
-        ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
+        ?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
     ),
 
     EligibleSubject = Tc#testcase.eligible_to_invite,
     % SomeUser and SomeProvider should not be able to create tokens for other subject
     assert_creation_fails(
         ?USER(SomeUser), EligibleSubject, #{<<"type">> => TokenType},
-        ?ERROR_FORBIDDEN
+        ?ERR_FORBIDDEN
     ),
     assert_creation_fails(
         ?PROVIDER(SomeProvider), EligibleSubject, #{<<"type">> => TokenType},
-        ?ERROR_FORBIDDEN
+        ?ERR_FORBIDDEN
     ).
 
 
@@ -1237,11 +1237,11 @@ check_valid_subject_scenarios(Tc = #testcase{token_type = TokenType}) ->
                 ModifyPrivsFun(EligibleSubject, {revoke, to_invite}),
                 assert_creation_fails(
                     Persistence, Auth, EligibleSubject, #{<<"type">> => TokenType},
-                    ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
+                    ?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
                 ),
                 assert_creation_fails(
                     Persistence, ?USER(TokenManager), EligibleSubject, #{<<"type">> => TokenType},
-                    ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
+                    ?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
                 ),
                 ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
                 assert_creation_succeeds(
@@ -1257,7 +1257,7 @@ check_valid_subject_scenarios(Tc = #testcase{token_type = TokenType}) ->
                     Token = ozt_tokens:create(Persistence, EligibleSubject, TokenType),
                     ModifyPrivsFun(EligibleSubject, {revoke, to_invite}),
                     Consumer = create_consumer_by_type(EligibleConsumerType),
-                    ?assertMatch(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, Consumer, Token)),
+                    ?assertMatch(?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, Consumer, Token)),
                     ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
                     ?assertEqual(ok, consume_token(Tc, Consumer, Token))
                 end, Tc#testcase.eligible_consumer_types)
@@ -1277,8 +1277,8 @@ check_invalid_consumer_scenarios(Tc = #testcase{token_type = TokenType}) ->
             InvalidConsumer = create_consumer_by_type(InvalidConsumerType),
             Error = ?assertMatch({error, _}, consume_token(Tc, InvalidConsumer, Token)),
             ExpectedErrors = case InvalidConsumerType of
-                nobody -> [?ERROR_UNAUTHORIZED];
-                _ -> [?ERROR_FORBIDDEN, ?ERROR_INVITE_TOKEN_CONSUMER_INVALID(InvalidConsumer)]
+                nobody -> [?ERR_UNAUTHORIZED(undefined)];
+                _ -> [?ERR_FORBIDDEN, ?ERR_INVITE_TOKEN_CONSUMER_INVALID(InvalidConsumer)]
             end,
             ?assert(lists:member(Error, ExpectedErrors))
         end, InvalidConsumerTypes)
@@ -1305,7 +1305,7 @@ check_valid_consumer_scenarios(Tc = #testcase{token_type = TokenType}) ->
                         CheckPrivilegesFun(Consumer, Tc#testcase.default_carried_privileges);
                 true ->
                     ModifyPrivsFun(Consumer, {revoke, to_consume}),
-                    ?assertMatch(?ERROR_FORBIDDEN, consume_token(Tc, Consumer, Token)),
+                    ?assertMatch(?ERR_FORBIDDEN, consume_token(Tc, Consumer, Token)),
                     ModifyPrivsFun(Consumer, {grant, to_consume}),
                     ?assertEqual(ok, consume_token(Tc, Consumer, Token)),
                     Tc#testcase.supports_carried_privileges andalso
@@ -1320,7 +1320,7 @@ check_valid_consumer_scenarios(Tc = #testcase{token_type = TokenType}) ->
             Consumer = ?SUB(user, UserId) = create_consumer_by_type(EligibleConsumerType),
             ModifyPrivsFun(Consumer, {revoke, to_consume}),
             ozt_users:revoke_oz_privileges(UserId, [Tc#testcase.admin_privilege_to_consume]),
-            ?assertMatch(?ERROR_FORBIDDEN, consume_token(Tc, Consumer, Token)),
+            ?assertMatch(?ERR_FORBIDDEN, consume_token(Tc, Consumer, Token)),
             ozt_users:grant_oz_privileges(UserId, [Tc#testcase.admin_privilege_to_consume]),
             ?assertEqual(ok, consume_token(Tc, Consumer, Token)),
             Tc#testcase.supports_carried_privileges andalso
@@ -1339,7 +1339,7 @@ check_user_blocking(Tc = #testcase{token_type = TokenType}) ->
                     Consumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
 
                     ozt_users:toggle_access_block(InvitingUserId, true),
-                    ?assertMatch(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, Consumer, Token)),
+                    ?assertMatch(?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, Consumer, Token)),
 
                     ozt_users:toggle_access_block(InvitingUserId, false),
                     ?assertEqual(ok, consume_token(Tc, Consumer, Token))
@@ -1401,19 +1401,19 @@ check_adding_carried_privileges_to_named_token(Tc = #testcase{token_type = Token
             ModifyPrivsFun(EligibleSubject, {revoke, to_set_privs}),
             assert_creation_fails(
                 named, Auth, EligibleSubject, #{<<"type">> => TokenType, <<"privileges">> => CustomPrivileges},
-                ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
+                ?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
             ),
             ModifyPrivsFun(EligibleSubject, {revoke, to_set_privs}),
             ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
             assert_creation_fails(
                 named, Auth, EligibleSubject, #{<<"type">> => TokenType, <<"privileges">> => CustomPrivileges},
-                ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
+                ?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
             ),
             ModifyPrivsFun(EligibleSubject, {revoke, to_invite}),
             ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
             assert_creation_fails(
                 named, Auth, EligibleSubject, #{<<"type">> => TokenType, <<"privileges">> => CustomPrivileges},
-                ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
+                ?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
             ),
             ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
             ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
@@ -1425,7 +1425,7 @@ check_adding_carried_privileges_to_named_token(Tc = #testcase{token_type = Token
     % Check if privileges are correctly validated
     assert_creation_fails(
         named, Auth, EligibleSubject, #{<<"type">> => TokenType, <<"privileges">> => [abc | CustomPrivileges]},
-        ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllowedPrivileges)
+        ?ERR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllowedPrivileges)
     ),
 
     % Additional privileges are required to create a token carrying privileges,
@@ -1444,7 +1444,7 @@ check_adding_carried_privileges_to_named_token(Tc = #testcase{token_type = Token
                 ?assert(CheckPrivilegesFun(Consumer, CustomPrivileges));
             false ->
                 ModifyPrivsFun(EligibleSubject, {revoke, to_set_privs}),
-                ?assertMatch(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, Consumer, Token)),
+                ?assertMatch(?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, Consumer, Token)),
                 % But it becomes valid again if the privileges are restored
                 ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
                 ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
@@ -1457,7 +1457,7 @@ check_adding_carried_privileges_to_named_token(Tc = #testcase{token_type = Token
     assert_creation_fails(
         named, ?USER(AdminWithoutSetPrivs), ?SUB(user, AdminWithoutSetPrivs),
         #{<<"type">> => TokenType, <<"privileges">> => CustomPrivileges},
-        ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
+        ?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED
     ),
     assert_creation_succeeds(
         named, ?USER(AdminWithSetPrivs), ?SUB(user, AdminWithSetPrivs),
@@ -1487,7 +1487,7 @@ check_multi_use_named_token(Tc = #testcase{token_type = TokenType}) ->
     EligibleSubject = Tc#testcase.eligible_to_invite,
     ensure_privileges_to_invite(Tc, EligibleSubject),
 
-    ?ERROR_BAD_VALUE_TOO_LOW(<<"usageLimit">>, 1) = ozt_tokens:try_create(
+    ?ERR_BAD_VALUE_TOO_LOW(<<"usageLimit">>, 1) = ozt_tokens:try_create(
         named, EligibleSubject, #{<<"type">> => TokenType, <<"usageLimit">> => 0}
     ),
 
@@ -1497,7 +1497,7 @@ check_multi_use_named_token(Tc = #testcase{token_type = TokenType}) ->
     ConsumerAlpha = create_consumer_with_privs_to_consume(Tc, random_eligible),
     ConsumerBeta = create_consumer_with_privs_to_consume(Tc, random_eligible),
     ?assertEqual(ok, consume_token(Tc, ConsumerAlpha, SingleUseToken)),
-    ?assertMatch(?ERROR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, ConsumerBeta, SingleUseToken)),
+    ?assertMatch(?ERR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, ConsumerBeta, SingleUseToken)),
 
     UsageLimit = 18,
     MultiUseToken = ozt_tokens:create(named, EligibleSubject, #{
@@ -1510,7 +1510,7 @@ check_multi_use_named_token(Tc = #testcase{token_type = TokenType}) ->
         ?assertEqual(ok, consume_token(Tc, Consumer, MultiUseToken))
     end, ConsumersOfMultiUseToken),
     ConsumerGamma = create_consumer_with_privs_to_consume(Tc, random_eligible),
-    ?assertMatch(?ERROR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, ConsumerGamma, MultiUseToken)),
+    ?assertMatch(?ERR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, ConsumerGamma, MultiUseToken)),
 
     InfiniteUseToken = ozt_tokens:create(named, EligibleSubject, #{
         <<"type">> => TokenType, <<"usageLimit">> => ?INFINITY
@@ -1546,7 +1546,7 @@ check_multi_use_privileges_carrying_named_token(Tc = #testcase{token_type = Toke
             ?assertEqual(ok, consume_token(Tc, ConsumerAlpha, Token));
         true ->
             ModifyPrivsFun(ConsumerAlpha, {revoke, to_consume}),
-            ?assertMatch(?ERROR_FORBIDDEN, consume_token(Tc, ConsumerAlpha, Token)),
+            ?assertMatch(?ERR_FORBIDDEN, consume_token(Tc, ConsumerAlpha, Token)),
             ModifyPrivsFun(ConsumerAlpha, {grant, to_consume}),
             ?assertEqual(ok, consume_token(Tc, ConsumerAlpha, Token))
     end,
@@ -1570,7 +1570,7 @@ check_multi_use_privileges_carrying_named_token(Tc = #testcase{token_type = Toke
                     ModifyPrivsFun(EligibleSubject, {grant, to_set_privs});
                 false ->
                     ModifyPrivsFun(EligibleSubject, {revoke, to_set_privs}),
-                    ?assertMatch(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, ConsumerBeta, Token)),
+                    ?assertMatch(?ERR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, ConsumerBeta, Token)),
                     ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
                     ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
                     ?assertEqual(ok, consume_token(Tc, ConsumerBeta, Token)),
@@ -1587,14 +1587,14 @@ check_multi_use_privileges_carrying_named_token(Tc = #testcase{token_type = Toke
             ?SUB(user, UserId) = ConsumerGamma,
             ModifyPrivsFun(ConsumerGamma, {revoke, to_consume}),
             ozt_users:revoke_oz_privileges(UserId, [Tc#testcase.admin_privilege_to_consume]),
-            ?assertMatch(?ERROR_FORBIDDEN, consume_token(Tc, ConsumerGamma, Token)),
+            ?assertMatch(?ERR_FORBIDDEN, consume_token(Tc, ConsumerGamma, Token)),
             ozt_users:grant_oz_privileges(UserId, [Tc#testcase.admin_privilege_to_consume]),
             ?assertEqual(ok, consume_token(Tc, ConsumerGamma, Token))
     end,
     CheckPrivilegesFun(ConsumerGamma, CustomPrivileges),
     % There should be no uses left
     ConsumerDelta = create_consumer_with_privs_to_consume(Tc, random_eligible),
-    ?assertMatch(?ERROR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, ConsumerDelta, Token)).
+    ?assertMatch(?ERR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, ConsumerDelta, Token)).
 
 
 % Temporary tokens are not revocable individually, but can be revoked all at once
@@ -1613,7 +1613,7 @@ check_temporary_token_revocation(Tc = #testcase{token_type = TokenType}) ->
     ozt_tokens:revoke_all_temporary_tokens(EligibleSubject),
     lists:foreach(fun(Token) ->
         Consumer = create_consumer_with_privs_to_consume(Tc, random_eligible),
-        ?assertMatch(?ERROR_TOKEN_REVOKED, consume_token(Tc, Consumer, Token))
+        ?assertMatch(?ERR_TOKEN_REVOKED, consume_token(Tc, Consumer, Token))
     end, [TokenAlpha, TokenBeta, TokenGamma]).
 
 
@@ -1624,11 +1624,11 @@ check_named_token_revocation(Tc = #testcase{token_type = TokenType}) ->
     Token = ozt_tokens:create(named, EligibleSubject, TokenType),
     Consumer = create_consumer_with_privs_to_consume(Tc, random_eligible),
     ozt_tokens:toggle_revoked(Token, true),
-    ?assertMatch(?ERROR_TOKEN_REVOKED, consume_token(Tc, Consumer, Token)),
+    ?assertMatch(?ERR_TOKEN_REVOKED, consume_token(Tc, Consumer, Token)),
     ozt_tokens:toggle_revoked(Token, false),
     ?assertEqual(ok, consume_token(Tc, Consumer, Token)),
     ozt_tokens:toggle_revoked(Token, true),
-    ?assertMatch(?ERROR_TOKEN_REVOKED, consume_token(Tc, Consumer, Token)).
+    ?assertMatch(?ERR_TOKEN_REVOKED, consume_token(Tc, Consumer, Token)).
 
 
 % Depending on the token type, some tokens can be consumed once (e.g. joining
@@ -1675,7 +1675,7 @@ check_token_reuse(Tc = #testcase{token_type = TokenType}) ->
         % If reuse is allowed, the token should have reached its usage limit
         case ExpectedReuseResultFun(AnotherConsumer) of
             ok ->
-                ?assertMatch(?ERROR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, AnotherConsumer, MultiUseToken));
+                ?assertMatch(?ERR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, AnotherConsumer, MultiUseToken));
             _ ->
                 ok
         end
@@ -1695,7 +1695,7 @@ check_invalid_target_scenarios(Tc = #testcase{token_type = ?INVITE_TOKEN(InviteT
                 {error, _},
                 ozt_tokens:try_create(Auth, Persistence, EligibleSubject, #{<<"type">> => BadTokenType})
             ),
-            ?assert(lists:member(Error, [?ERROR_FORBIDDEN, ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"1234">>)]))
+            ?assert(lists:member(Error, [?ERR_FORBIDDEN, ?ERR_INVITE_TOKEN_TARGET_ID_INVALID(<<"1234">>)]))
         end, [EligibleAuth, ?USER(Admin)])
     end, [named, temporary]).
 
@@ -1718,8 +1718,8 @@ check_token_caveats_handling(Tc = #testcase{token_type = TokenType}) ->
                 [] ->
                     ?assertEqual(ok, Result);
                 _ ->
-                    ?assertMatch(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_), Result),
-                    ?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiedCaveat) = Result,
+                    ?assertMatch(?ERR_TOKEN_CAVEAT_UNVERIFIED(_), Result),
+                    ?ERR_TOKEN_CAVEAT_UNVERIFIED(_, UnverifiedCaveat) = Result,
                     ?assert(lists:member(UnverifiedCaveat, RandUnverifiedCaveats))
             end
         end, lists:seq(1, 20))
@@ -1820,8 +1820,8 @@ check_subject_or_target_entity_deleted_scenarios(Tc = #testcase{token_type = Tok
         lists:foreach(fun(EligibleConsumerType) ->
             Consumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
             ExpError = case Subject of
-                ?SUB(_, TargetEntityId) -> ?ERROR_TOKEN_INVALID;
-                _ -> ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(TargetEntityId)
+                ?SUB(_, TargetEntityId) -> ?ERR_TOKEN_INVALID;
+                _ -> ?ERR_INVITE_TOKEN_TARGET_ID_INVALID(TargetEntityId)
             end,
             ?assertEqual(ExpError, consume_token(Tc, Consumer, TokenToCheck))
         end, Tc#testcase.eligible_consumer_types)
@@ -1835,7 +1835,7 @@ check_subject_or_target_entity_deleted_scenarios(Tc = #testcase{token_type = Tok
         end,
         lists:foreach(fun(EligibleConsumerType) ->
             Consumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
-            ?assertMatch(?ERROR_TOKEN_INVALID, consume_token(Tc, Consumer, TokenToCheck))
+            ?assertMatch(?ERR_TOKEN_INVALID, consume_token(Tc, Consumer, TokenToCheck))
         end, Tc#testcase.eligible_consumer_types)
     end, TokensToCheck).
 

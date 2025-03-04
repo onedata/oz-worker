@@ -77,8 +77,8 @@ get_protected_provider_data(Auth, ProviderId) ->
 
 -spec deploy_static_gui_package(onedata:gui(), onedata:release_version(),
     file:name_all(), VerifyGuiHash :: boolean()) ->
-    {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE |
-    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED(onedata:gui_hash()).
+    {ok, onedata:gui_hash()} | od_error_bad_gui_package:t() |
+    od_error_gui_package_too_large:t() | od_error_gui_package_unverified:t().
 deploy_static_gui_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
     gui_static:deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash).
 

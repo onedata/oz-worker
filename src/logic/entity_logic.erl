@@ -474,10 +474,10 @@ ensure_authorized_regarding_api_caveats(#state{req = #el_req{auth = Auth, operat
 -spec report_unauthorized(#state{}) -> no_return().
 report_unauthorized(#state{req = #el_req{auth = ?NOBODY}}) ->
     % The client was not authenticated -> unauthorized
-    throw(?ERROR_UNAUTHORIZED);
+    throw(?ERR_UNAUTHORIZED(?err_ctx(), undefined));
 report_unauthorized(_) ->
     % The client was authenticated but cannot access the aspect -> forbidden
-    throw(?ERROR_FORBIDDEN).
+    throw(?ERR_FORBIDDEN(?err_ctx())).
 
 
 %%--------------------------------------------------------------------

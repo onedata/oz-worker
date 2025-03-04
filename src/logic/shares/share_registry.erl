@@ -64,6 +64,7 @@
 -define(FOREST, <<"share-forest">>).
 -define(TREE_FOR_SPACE(SpaceId), <<"shares-of-", SpaceId/binary>>).
 
+-define(FOREACH_BATCH_SIZE, 1000).
 
 % Uses NULL char for separator to ensure alphabetical sorting
 -define(SEP, 0).
@@ -153,7 +154,7 @@ list_entries(SpaceId, ListingOpts) ->
 
 -spec foreach(od_space:id(), fun((od_share:id()) -> ok)) -> ok.
 foreach(SpaceId, ForeachFun) ->
-    foreach_internal(SpaceId, ForeachFun, #{limit => 1000}).
+    foreach_internal(SpaceId, ForeachFun, <<"">>).
 
 
 %%%===================================================================
@@ -162,18 +163,28 @@ foreach(SpaceId, ForeachFun) ->
 
 
 %% @private
--spec foreach_internal(od_space:id(), fun((od_share:id()) -> ok), listing_opts()) -> ok.
-foreach_internal(SpaceId, ForeachFun, ListingOpts) ->
-    ShareEntries = list_entries(SpaceId, ListingOpts),
-    lists:foreach(ForeachFun, [ShareId || #{<<"shareId">> := ShareId} <- ShareEntries]),
-    case length(ShareEntries) < maps:get(limit, ListingOpts) of
+-spec foreach_internal(od_space:id(), fun((od_share:id()) -> ok), link_key()) -> ok.
+foreach_internal(SpaceId, ForeachFun, StartAfterIndex) ->
+    FoldOpts = #{
+        size => ?FOREACH_BATCH_SIZE,
+        prev_link_name => StartAfterIndex,
+        prev_tree_id => ?TREE_FOR_SPACE(SpaceId),  % necessary for inclusive => false to work
+        inclusive => false
+    },
+
+    FoldFun = fun(Link, Acc) -> {ok, [Link#link.name | Acc]} end,
+    {ok, ReversedLinkKeys} = datastore_model:fold_links(
+        ?CTX, ?FOREST, ?TREE_FOR_SPACE(SpaceId), FoldFun, [], FoldOpts
+    ),
+
+    ShareIds = lists:map(fun link_key_to_share_id/1, ReversedLinkKeys),
+    lists:foreach(ForeachFun, ShareIds),
+
+    case length(ReversedLinkKeys) < ?FOREACH_BATCH_SIZE of
         true ->
             ok;
         false ->
-            foreach_internal(SpaceId, ForeachFun, ListingOpts#{
-                start_index => maps:get(<<"index">>, lists:last(ShareEntries)),
-                offset => 1 % for exclusive listing
-            })
+            foreach_internal(SpaceId, ForeachFun, hd(ReversedLinkKeys))
     end.
 
 

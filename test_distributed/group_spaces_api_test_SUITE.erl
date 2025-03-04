@@ -246,7 +246,7 @@ create_space_test(Config) ->
         data_spec = #data_spec{
             required = [<<"name">>],
             correct_values = #{<<"name">> => [?SPACE_NAME1]},
-            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+            bad_values = ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -327,9 +327,9 @@ join_space_test(Config) ->
                 end]
             },
             bad_values = [
-                {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                {<<"token">>, <<"123qwe">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)}
+                {<<"token">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"token">>, 1234, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)},
+                {<<"token">>, <<"123qwe">>, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)}
             ]
         }
     },
@@ -363,7 +363,7 @@ join_space_test(Config) ->
             module = group_logic,
             function = join_space,
             args = [auth, G1, data],
-            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_group, G1, od_space, Space))
+            expected_result = ?ERROR_REASON(?ERR_RELATION_ALREADY_EXISTS(od_group, G1, od_space, Space))
         },
         % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{

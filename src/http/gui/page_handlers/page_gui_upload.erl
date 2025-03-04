@@ -122,12 +122,12 @@ validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
                     % Harvester packages are versioned along with Onezone
                     oz_worker:get_release_version();
                 _ ->
-                    throw(?ERROR_FORBIDDEN)
+                    throw(?ERR_FORBIDDEN(?err_ctx()))
             end;
         {true, _} ->
-            throw(?ERROR_FORBIDDEN);
+            throw(?ERR_FORBIDDEN(?err_ctx()));
         false ->
-            throw(?ERROR_UNAUTHORIZED);
+            throw(?ERR_UNAUTHORIZED(?err_ctx(), undefined));
         {error, _} = Error ->
             throw(Error)
     end;
@@ -152,9 +152,9 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
             ensure_authorized_to_upload_gui(Auth, GuiType, ClusterId),
             ReleaseVersion;
         {true, _} ->
-            throw(?ERROR_FORBIDDEN);
+            throw(?ERR_FORBIDDEN(?err_ctx()));
         false ->
-            throw(?ERROR_UNAUTHORIZED);
+            throw(?ERR_UNAUTHORIZED(?err_ctx(), undefined));
         {error, _} = Error ->
             throw(Error)
     end.
@@ -220,7 +220,7 @@ stream_and_deploy_package(Req, GuiType, GuiId, ServiceReleaseVersion) ->
             [GuiPrefix, GuiId, Type, Message],
             Stacktrace
         ),
-        ?ERROR_INTERNAL_SERVER_ERROR
+        ?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined)
     after
         mochitemp:rmtempdir(TempDir)
     end.

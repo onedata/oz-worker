@@ -253,10 +253,10 @@ gui_upload_requires_provider_auth(Config) ->
     {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
 
     % No auth
-    ?assertMatch(?ERROR_UNAUTHORIZED, perform_upload(
+    ?assertMatch(?ERR_UNAUTHORIZED(undefined), perform_upload(
         Config, <<"opw">>, ClusterId, GuiPackage, #{}
     )),
-    ?assertMatch(?ERROR_UNAUTHORIZED, perform_upload(
+    ?assertMatch(?ERR_UNAUTHORIZED(undefined), perform_upload(
         Config, <<"onp">>, ClusterId, GuiPackage, #{}
     )),
 
@@ -270,10 +270,10 @@ gui_upload_requires_provider_auth(Config) ->
 
     % Upload is only possible for own cluster
     {ok, {_AnotherProvider, AnotherProviderToken}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    ?assertMatch(?ERROR_FORBIDDEN, perform_upload(
+    ?assertMatch(?ERR_FORBIDDEN, perform_upload(
         Config, <<"opw">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => AnotherProviderToken}
     )),
-    ?assertMatch(?ERROR_FORBIDDEN, perform_upload(
+    ?assertMatch(?ERR_FORBIDDEN, perform_upload(
         Config, <<"onp">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => AnotherProviderToken}
     )).
 
@@ -331,10 +331,10 @@ gui_upload_with_invalid_package_returns_proper_error(Config) ->
     {ok, Contents} = file:read_file(GuiPackage),
     ok = file:write_file(GuiPackage, <<"lalalalala-bad-bytes", Contents/binary>>),
 
-    ?assertMatch(?ERROR_BAD_GUI_PACKAGE, perform_upload(
+    ?assertMatch(?ERR_BAD_GUI_PACKAGE, perform_upload(
         Config, <<"opw">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
-    ?assertMatch(?ERROR_BAD_GUI_PACKAGE, perform_upload(
+    ?assertMatch(?ERR_BAD_GUI_PACKAGE, perform_upload(
         Config, <<"onp">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )).
 
@@ -347,10 +347,10 @@ gui_upload_with_too_large_package_returns_proper_error(Config) ->
     % Set the package limit to one byte
     oz_test_utils:set_app_env(Config, gui, max_gui_package_size_mb, 1 / 1048576),
 
-    ?assertMatch(?ERROR_GUI_PACKAGE_TOO_LARGE, perform_upload(
+    ?assertMatch(?ERR_GUI_PACKAGE_TOO_LARGE, perform_upload(
         Config, <<"opw">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
-    ?assertMatch(?ERROR_GUI_PACKAGE_TOO_LARGE, perform_upload(
+    ?assertMatch(?ERR_GUI_PACKAGE_TOO_LARGE, perform_upload(
         Config, <<"onp">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )).
 
@@ -366,7 +366,7 @@ gui_upload_with_confined_or_no_token_returns_proper_error(Config) ->
 
     UserCaveat = #cv_data_path{whitelist = [<<"/abc">>]},
     ConfinedGuiToken = tokens:confine(GuiToken, UserCaveat),
-    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(UserCaveat)), perform_upload(
+    ?assertMatch(?ERR_UNAUTHORIZED(?ERR_TOKEN_CAVEAT_UNVERIFIED(UserCaveat)), perform_upload(
         Config, <<"hrv">>, HarvesterId, HrvGuiPackage, #{?HDR_X_AUTH_TOKEN => ConfinedGuiToken}
     )),
 
@@ -374,12 +374,12 @@ gui_upload_with_confined_or_no_token_returns_proper_error(Config) ->
     {OpGuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
     ProviderCaveat = #cv_api{whitelist = [{?OZ_WORKER, get, ?GRI_PATTERN('*', <<"*">>, <<"*">>, '*')}]},
     ConfinedProviderToken = tokens:confine(ProviderToken, ProviderCaveat),
-    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_CAVEAT_UNVERIFIED(ProviderCaveat)), perform_upload(
+    ?assertMatch(?ERR_UNAUTHORIZED(?ERR_TOKEN_CAVEAT_UNVERIFIED(ProviderCaveat)), perform_upload(
         Config, <<"opw">>, ProviderId, OpGuiPackage, #{?HDR_X_AUTH_TOKEN => ConfinedProviderToken}
     )),
 
     % Harvester GUI upload with no auth should cause UNAUTHORIZED error
-    ?assertMatch(?ERROR_UNAUTHORIZED, perform_upload(
+    ?assertMatch(?ERR_UNAUTHORIZED(_), perform_upload(
         Config, <<"hrv">>, HarvesterId, HrvGuiPackage, #{}
     )).
 
@@ -392,7 +392,7 @@ gui_upload_page_deploys_op_worker_gui_on_all_nodes(Config) ->
     {ok, OpGuiHash} = gui:package_hash(OpGuiPackage),
 
     ?assertNot(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?OP_WORKER_GUI, OpGuiHash])),
-    ?assertMatch(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"workerVersion.gui">>), oz_test_utils:call_oz(
+    ?assertMatch(?ERR_BAD_VALUE_ID_NOT_FOUND(<<"workerVersion.gui">>), oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
             ?PROVIDER(ProviderId), ClusterId, ?WORKER, {<<"18.07.1">>, <<"build">>, OpGuiHash}
         ]
@@ -426,7 +426,7 @@ gui_upload_page_deploys_op_panel_gui_on_all_nodes(Config) ->
     {ok, OppGuiHash} = gui:package_hash(OppGuiPackage),
 
     ?assertNot(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?ONEPANEL_GUI, OppGuiHash])),
-    ?assertMatch(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"onepanelVersion.gui">>), oz_test_utils:call_oz(
+    ?assertMatch(?ERR_BAD_VALUE_ID_NOT_FOUND(<<"onepanelVersion.gui">>), oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
             ?PROVIDER(ProviderId), ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build">>, OppGuiHash}
         ]
@@ -473,7 +473,7 @@ gui_upload_page_deploys_harvester_gui_on_all_nodes(Config) ->
     )),
 
     % without the session cookie, upload fails (as the GUI token is bound to the cookie)
-    ?assertMatch(?ERROR_UNAUTHORIZED(?ERROR_TOKEN_SESSION_INVALID), perform_upload(
+    ?assertMatch(?ERR_UNAUTHORIZED(?ERR_TOKEN_SESSION_INVALID), perform_upload(
         Config, <<"hrv">>, HarvesterId, HrvGuiPackage, #{?HDR_X_AUTH_TOKEN => GuiToken}
     )),
 
@@ -497,7 +497,7 @@ gui_package_verification_works(Config) ->
     {ok, OpGuiHash} = gui:package_hash(OpGuiPackage),
 
     % GUI hash is not whitelisted
-    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED(OpGuiHash), perform_upload(
+    ?assertMatch(?ERR_GUI_PACKAGE_UNVERIFIED(OpGuiHash), perform_upload(
         Config, <<"opw">>, ClusterId, OpGuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
@@ -517,7 +517,7 @@ gui_package_verification_works(Config) ->
     )),
 
     % Make sure that only packages for op-worker with such hash are accepted
-    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED(OpGuiHash), perform_upload(
+    ?assertMatch(?ERR_GUI_PACKAGE_UNVERIFIED(OpGuiHash), perform_upload(
         Config, <<"onp">>, ClusterId, OpGuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
@@ -545,7 +545,7 @@ gui_package_verification_works(Config) ->
     {ok, HrvGuiHash1} = gui:package_hash(HrvGuiPackage1),
 
     % GUI hash is not whitelisted
-    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED(HrvGuiHash1), perform_upload(
+    ?assertMatch(?ERR_GUI_PACKAGE_UNVERIFIED(HrvGuiHash1), perform_upload(
         Config, <<"hrv">>, HarvesterId, HrvGuiPackage1, #{
             ?HDR_X_AUTH_TOKEN => GuiToken, ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", SessionCookie/binary>>
         }
@@ -573,7 +573,7 @@ gui_package_verification_works(Config) ->
     {HrvGuiPackage2, _HrvIndexContent2} = oz_test_utils:create_dummy_gui_package(),
     {ok, HrvGuiHash2} = gui:package_hash(HrvGuiPackage2),
 
-    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED(HrvGuiHash2), perform_upload(
+    ?assertMatch(?ERR_GUI_PACKAGE_UNVERIFIED(HrvGuiHash2), perform_upload(
         Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{
             ?HDR_X_AUTH_TOKEN => GuiToken, ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", SessionCookie/binary>>
         }
@@ -588,7 +588,7 @@ gui_package_verification_works(Config) ->
     )),
 
     % It should not work for other services
-    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED(HrvGuiHash2), perform_upload(
+    ?assertMatch(?ERR_GUI_PACKAGE_UNVERIFIED(HrvGuiHash2), perform_upload(
         Config, <<"onp">>, ClusterId, HrvGuiPackage2, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
@@ -688,7 +688,7 @@ empty_gui_is_linked_after_failed_op_worker_version_update(Config) ->
     ?assert(version_info_is_set(Config, ClusterId, ?WORKER, {<<"18.07.1">>, <<"build-1">>, OpGuiHash})),
 
     % Trying to update to an inexistent gui version should link service's GUI to the empty page
-    ?assertMatch(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"workerVersion.gui">>), oz_test_utils:call_oz(
+    ?assertMatch(?ERR_BAD_VALUE_ID_NOT_FOUND(<<"workerVersion.gui">>), oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
             ?PROVIDER(ProviderId), ClusterId, ?WORKER, {<<"18.07.2">>, <<"build-2">>, <<"bad-gui-hash">>}
         ]
@@ -716,7 +716,7 @@ empty_gui_is_linked_after_failed_op_panel_version_update(Config) ->
     ?assert(version_info_is_set(Config, ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build-1">>, OppGuiHash})),
 
     % Trying to update to an inexistent gui version should link service's GUI to the empty page
-    ?assertMatch(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"onepanelVersion.gui">>), oz_test_utils:call_oz(
+    ?assertMatch(?ERR_BAD_VALUE_ID_NOT_FOUND(<<"onepanelVersion.gui">>), oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
             ?PROVIDER(ProviderId), ClusterId, ?ONEPANEL, {<<"18.07.2">>, <<"build-2">>, <<"bad-gui-hash">>}
         ]

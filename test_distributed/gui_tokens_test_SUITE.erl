@@ -66,11 +66,11 @@ all() ->
 -define(OPP_SRV(ServiceId), ?SERVICE(?OP_PANEL, ServiceId)).
 
 -define(assertUnauthorized(AuthError, Term), ?assertEqual(
-    ?ERROR_UNAUTHORIZED(AuthError), Term)
+    ?ERR_UNAUTHORIZED(AuthError), Term)
 ).
 
 -define(assertUnverifiedService(ExpService, Term), ?assertUnauthorized(
-    ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [ExpService]}), Term
+    ?ERR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [ExpService]}), Term
 )).
 
 %%%===================================================================
@@ -84,7 +84,7 @@ gui_tokens_are_bound_to_specific_service(Config) ->
 
     % Tokens can be created only for existing sessions
     ?assertEqual(
-        ?ERROR_TOKEN_SESSION_INVALID,
+        ?ERR_TOKEN_SESSION_INVALID,
         create_access_token_for_gui(Config, UserId, <<"bad-session">>, ?OZW_SRV(?ONEZONE_CLUSTER_ID))
     ),
 
@@ -108,11 +108,11 @@ gui_tokens_are_bound_to_specific_service(Config) ->
     {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config),
 
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(<<"non-existent">>)),
+        ?ERR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(<<"non-existent">>)),
         create_access_token_for_gui(Config, UserId, Session2, ?OPW_SRV(<<"non-existent">>))
     ),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId)),
+        ?ERR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId)),
         create_access_token_for_gui(Config, UserId, Session2, ?OPW_SRV(ProviderId))
     ),
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
@@ -134,17 +134,17 @@ gui_tokens_are_bound_to_specific_service(Config) ->
     OpClusterId = ProviderId,
 
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OZP_SRV(OzClusterId)),
+        ?ERR_TOKEN_SERVICE_FORBIDDEN(?OZP_SRV(OzClusterId)),
         create_access_token_for_gui(Config, UserId, Session2, ?OZP_SRV(OzClusterId))
     ),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPP_SRV(OpClusterId)),
+        ?ERR_TOKEN_SERVICE_FORBIDDEN(?OPP_SRV(OpClusterId)),
         create_access_token_for_gui(Config, UserId, Session1, ?OPP_SRV(OpClusterId))
     ),
     oz_test_utils:cluster_add_user(Config, OzClusterId, UserId),
     {ok, {Token3, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OZP_SRV(OzClusterId)),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPP_SRV(OpClusterId)),
+        ?ERR_TOKEN_SERVICE_FORBIDDEN(?OPP_SRV(OpClusterId)),
         create_access_token_for_gui(Config, UserId, Session1, ?OPP_SRV(OpClusterId))
     ),
     oz_test_utils:cluster_add_user(Config, OpClusterId, UserId),
@@ -176,7 +176,7 @@ gui_tokens_for_onezone_work_only_with_session_cookie(Config) ->
     {ok, SerializedToken} = tokens:serialize(Token),
 
     % GS or REST requests with the token should work only if the cookie is provided
-    ?assertUnauthorized(?ERROR_TOKEN_SESSION_INVALID, connect_via_graph_sync(
+    ?assertUnauthorized(?ERR_TOKEN_SESSION_INVALID, connect_via_graph_sync(
         Config, Token, []
     )),
     ?assertMatch({ok, _, #gs_resp_handshake{identity = ?SUB(user, UserId)}}, connect_via_graph_sync(
@@ -253,7 +253,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     % so he can't generate a token for the provider GUI.
     ?assertMatch({ok, _}, AcquireGuiToken(CookieU1, ?ONEPANEL_GUI, ProviderId)),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_WORKER, ProviderId)),
+        ?ERR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_WORKER, ProviderId)),
         AcquireGuiToken(CookieU1, ?OP_WORKER_GUI, ProviderId)
     ),
 
@@ -276,7 +276,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     {ok, User2} = oz_test_utils:create_user(Config),
     {ok, {SessionU2, CookieU2}} = oz_test_utils:log_in(Config, User2),
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_WORKER, ProviderId)),
+        ?ERR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_WORKER, ProviderId)),
         AcquireGuiToken(CookieU2, ?OP_WORKER_GUI, ProviderId)
     ),
 
@@ -288,7 +288,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     {ok, OpwTokenU2Serialized} = ?assertMatch({ok, _}, AcquireGuiToken(CookieU2, ?OP_WORKER_GUI, ProviderId)),
     % ... but not for the Onepanel GUI
     ?assertMatch(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_PANEL, ProviderId)),
+        ?ERR_TOKEN_SERVICE_FORBIDDEN(?SERVICE(?OP_PANEL, ProviderId)),
         AcquireGuiToken(CookieU2, ?ONEPANEL_GUI, ProviderId)
     ),
     {ok, OpwTokenU2} = tokens:deserialize(OpwTokenU2Serialized),
@@ -387,7 +387,7 @@ gui_tokens_expire(Config) ->
     oz_test_utils:simulate_seconds_passing(Ttl1 - 10 + 1),
 
     ?assertUnauthorized(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil1}),
+        ?ERR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil1}),
         verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))
     ),
     ?assertMatch(
@@ -397,11 +397,11 @@ gui_tokens_expire(Config) ->
 
     oz_test_utils:simulate_seconds_passing(10),
     ?assertUnauthorized(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil1}),
+        ?ERR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil1}),
         verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))
     ),
     ?assertUnauthorized(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil2}),
+        ?ERR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ValidUntil2}),
         verify_token(Config, Token2, ?OPW_SRV(ProviderId))
     ).
 
@@ -417,19 +417,19 @@ gui_tokens_are_invalidated_upon_logout(Config) ->
     {ok, {Token4, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OPP_SRV(ProviderId)),
 
     oz_test_utils:log_out(Config, Cookie1),
-    ?assertUnauthorized(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertUnauthorized(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertUnauthorized(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
+    ?assertUnauthorized(?ERR_TOKEN_SESSION_INVALID, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertUnauthorized(?ERR_TOKEN_SESSION_INVALID, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertUnauthorized(?ERR_TOKEN_SESSION_INVALID, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
     ?assertMatch(
         {true, ?EXP_AUTH(UserId, Session2)},
         verify_token(Config, Token4, ?OPP_SRV(ProviderId))
     ),
 
     oz_test_utils:log_out(Config, Cookie2),
-    ?assertUnauthorized(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertUnauthorized(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertUnauthorized(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
-    ?assertUnauthorized(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
+    ?assertUnauthorized(?ERR_TOKEN_SESSION_INVALID, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertUnauthorized(?ERR_TOKEN_SESSION_INVALID, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertUnauthorized(?ERR_TOKEN_SESSION_INVALID, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
+    ?assertUnauthorized(?ERR_TOKEN_SESSION_INVALID, verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
 
 
 gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
@@ -454,7 +454,7 @@ gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
     ?assertMatch({true, _}, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
     ?assertMatch({true, _}, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
     ?assertUnauthorized(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId)),
+        ?ERR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId)),
         verify_token(Config, Token3, ?OPW_SRV(ProviderId))
     ),
     ?assertMatch({true, _}, verify_token(Config, Token4, ?OPP_SRV(ProviderId))),
@@ -462,11 +462,11 @@ gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
     oz_test_utils:cluster_remove_user(Config, ?ONEZONE_CLUSTER_ID, UserId),
     ?assertMatch({true, _}, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
     ?assertUnauthorized(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OZP_SRV(?ONEZONE_CLUSTER_ID)),
+        ?ERR_TOKEN_SERVICE_FORBIDDEN(?OZP_SRV(?ONEZONE_CLUSTER_ID)),
         verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))
     ),
     ?assertUnauthorized(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId)),
+        ?ERR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId)),
         verify_token(Config, Token3, ?OPW_SRV(ProviderId))
     ),
     ?assertMatch({true, _}, verify_token(Config, Token4, ?OPP_SRV(ProviderId))),
@@ -474,15 +474,15 @@ gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
     oz_test_utils:cluster_remove_user(Config, ProviderId, UserId),
     ?assertMatch({true, _}, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
     ?assertUnauthorized(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OZP_SRV(?ONEZONE_CLUSTER_ID)),
+        ?ERR_TOKEN_SERVICE_FORBIDDEN(?OZP_SRV(?ONEZONE_CLUSTER_ID)),
         verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))
     ),
     ?assertUnauthorized(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId)),
+        ?ERR_TOKEN_SERVICE_FORBIDDEN(?OPW_SRV(ProviderId)),
         verify_token(Config, Token3, ?OPW_SRV(ProviderId))
     ),
     ?assertUnauthorized(
-        ?ERROR_TOKEN_SERVICE_FORBIDDEN(?OPP_SRV(ProviderId)),
+        ?ERR_TOKEN_SERVICE_FORBIDDEN(?OPP_SRV(ProviderId)),
         verify_token(Config, Token4, ?OPP_SRV(ProviderId))
     ).
 
@@ -508,10 +508,10 @@ gui_tokens_are_invalidated_upon_temporary_token_secret_change(Config) ->
 
     % Make sure that this works for the tested user
     oz_test_utils:call_oz(Config, temporary_token_secret, regenerate_for_subject, [?SUB(user, UserId)]),
-    ?assertUnauthorized(?ERROR_TOKEN_REVOKED, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertUnauthorized(?ERROR_TOKEN_REVOKED, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertUnauthorized(?ERROR_TOKEN_REVOKED, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
-    ?assertUnauthorized(?ERROR_TOKEN_REVOKED, verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
+    ?assertUnauthorized(?ERR_TOKEN_REVOKED, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertUnauthorized(?ERR_TOKEN_REVOKED, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertUnauthorized(?ERR_TOKEN_REVOKED, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
+    ?assertUnauthorized(?ERR_TOKEN_REVOKED, verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
 
 
 gui_tokens_are_invalidated_when_user_is_deleted(Config) ->
@@ -525,10 +525,10 @@ gui_tokens_are_invalidated_when_user_is_deleted(Config) ->
     {ok, {Token4, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OPP_SRV(ProviderId)),
 
     oz_test_utils:delete_user(Config, UserId),
-    ?assertUnauthorized(?ERROR_TOKEN_INVALID, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertUnauthorized(?ERROR_TOKEN_INVALID, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertUnauthorized(?ERROR_TOKEN_INVALID, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
-    ?assertUnauthorized(?ERROR_TOKEN_INVALID, verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
+    ?assertUnauthorized(?ERR_TOKEN_INVALID, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertUnauthorized(?ERR_TOKEN_INVALID, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertUnauthorized(?ERR_TOKEN_INVALID, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
+    ?assertUnauthorized(?ERR_TOKEN_INVALID, verify_token(Config, Token4, ?OPP_SRV(ProviderId))).
 
 
 gui_tokens_are_not_accepted_when_user_is_blocked(Config) ->
@@ -542,17 +542,17 @@ gui_tokens_are_not_accepted_when_user_is_blocked(Config) ->
     {ok, {Token4, _}} = create_access_token_for_gui(Config, UserId, Session2, ?OPP_SRV(ProviderId)),
 
     oz_test_utils:toggle_user_access_block(Config, UserId, true),
-    ?assertUnauthorized(?ERROR_USER_BLOCKED, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertUnauthorized(?ERROR_USER_BLOCKED, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertUnauthorized(?ERROR_USER_BLOCKED, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
-    ?assertUnauthorized(?ERROR_USER_BLOCKED, verify_token(Config, Token4, ?OPP_SRV(ProviderId))),
+    ?assertUnauthorized(?ERR_USER_BLOCKED, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertUnauthorized(?ERR_USER_BLOCKED, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertUnauthorized(?ERR_USER_BLOCKED, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
+    ?assertUnauthorized(?ERR_USER_BLOCKED, verify_token(Config, Token4, ?OPP_SRV(ProviderId))),
 
     oz_test_utils:toggle_user_access_block(Config, UserId, false),
     % blocking a user destroys his session, so another one must be created
-    ?assertUnauthorized(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertUnauthorized(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
-    ?assertUnauthorized(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
-    ?assertUnauthorized(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token4, ?OPP_SRV(ProviderId))),
+    ?assertUnauthorized(?ERR_TOKEN_SESSION_INVALID, verify_token(Config, Token1, ?OZW_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertUnauthorized(?ERR_TOKEN_SESSION_INVALID, verify_token(Config, Token2, ?OZP_SRV(?ONEZONE_CLUSTER_ID))),
+    ?assertUnauthorized(?ERR_TOKEN_SESSION_INVALID, verify_token(Config, Token3, ?OPW_SRV(ProviderId))),
+    ?assertUnauthorized(?ERR_TOKEN_SESSION_INVALID, verify_token(Config, Token4, ?OPP_SRV(ProviderId))),
 
     {ok, {Session3, _Cookie3}} = oz_test_utils:log_in(Config, UserId),
     {ok, {Token5, _}} = create_access_token_for_gui(Config, UserId, Session3, ?OZW_SRV(?ONEZONE_CLUSTER_ID)),

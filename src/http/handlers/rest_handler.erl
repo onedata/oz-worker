@@ -166,14 +166,15 @@ is_authorized(Req, State) ->
         end
     catch
         throw:Error3 ->
-            ?ERROR_UNAUTHORIZED(Error3);
+            ?ERR_UNAUTHORIZED(?err_ctx(), Error3);
         Type:Message:Stacktrace ->
             ?error_stacktrace(
                 "Unexpected error in ~tp:is_authorized - ~tp:~tp",
                 [?MODULE, Type, Message],
                 Stacktrace
             ),
-            ?ERROR_UNAUTHORIZED(?ERROR_INTERNAL_SERVER_ERROR)
+            ErrorCtx = ?err_ctx(),
+            ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_INTERNAL_SERVER_ERROR(ErrorCtx, undefined))
     end,
 
     case Result of
@@ -419,7 +420,7 @@ call_entity_logic_and_translate_response(ElReq) ->
                 [Operation, GRI, AuthHint, Result, Type, Message],
                 Stacktrace
             ),
-            rest_translator:response(ElReq, ?ERROR_INTERNAL_SERVER_ERROR)
+            rest_translator:response(ElReq, ?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined))
     end.
 
 
@@ -440,7 +441,7 @@ get_data(Req) ->
             _ -> json_utils:decode(Body)
         end
     catch _:_ ->
-        throw(?ERROR_MALFORMED_DATA)
+        throw(?ERR_MALFORMED_DATA(?err_ctx()))
     end,
     {Data, Req2}.
 

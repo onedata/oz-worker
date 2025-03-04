@@ -1145,9 +1145,9 @@ validate(#el_req{operation = create, gri = #gri{aspect = index}}) -> #{
         <<"schema">> => {binary, non_empty},
         <<"includeMetadata">> => {list_of_atoms, fun(Vals) ->
             Key = <<"includeMetadata">>,
-            Vals == [] andalso throw(?ERROR_BAD_VALUE_EMPTY(Key)),
+            Vals == [] andalso throw(?ERR_BAD_VALUE_EMPTY(?err_ctx(), Key)),
             lists:all(fun(Val) -> lists:member(Val, od_harvester:all_metadata_types()) end, Vals)
-                orelse throw(?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(Key, od_harvester:all_metadata_types())),
+                orelse throw(?ERR_BAD_VALUE_LIST_NOT_ALLOWED(?err_ctx(), Key, od_harvester:all_metadata_types())),
             true
         end},
         <<"includeFileDetails">> => {list_of_atoms, od_harvester:all_file_details()},

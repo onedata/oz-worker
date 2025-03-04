@@ -130,7 +130,7 @@ atm_lambda_non_unique_config_parameter_spec_names(_Config) ->
             SpecBeta = maps:merge(ozt_atm_lambdas:example_parameter_spec_json(), #{<<"name">> => <<"same name">>}),
             {
                 lists_utils:shuffle([SpecAlpha, SpecBeta | ConfigParameterSpecsJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"configParameterSpecs">>,
                     <<"The provided list contains duplicate names">>
                 )
@@ -148,7 +148,7 @@ atm_lambda_non_unique_argument_spec_names(_Config) ->
             SpecBeta = maps:merge(ozt_atm_lambdas:example_parameter_spec_json(), #{<<"name">> => <<"same name">>}),
             {
                 lists_utils:shuffle([SpecAlpha, SpecBeta | ArgumentSpecsJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"argumentSpecs">>,
                     <<"The provided list contains duplicate names">>
                 )
@@ -166,7 +166,7 @@ atm_lambda_non_unique_result_spec_names(_Config) ->
             SpecBeta = maps:merge(ozt_atm_lambdas:example_result_spec_json(), #{<<"name">> => <<"same name">>}),
             {
                 lists_utils:shuffle([SpecAlpha, SpecBeta | ResultSpecsJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"resultSpecs">>,
                     <<"The provided list contains duplicate names">>
                 )
@@ -262,7 +262,7 @@ atm_workflow_schema_non_unique_store_ids(_Config) ->
             StoreBeta = maps:merge(ozt_atm_workflow_schemas:example_store_schema_json(), #{<<"id">> => <<"duplicate id">>}),
             {
                 lists_utils:shuffle([StoreAlpha, StoreBeta | StoresJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"stores">>,
                     <<"The provided list contains duplicate ids">>
                 )
@@ -286,7 +286,7 @@ atm_workflow_schema_reserved_store_id(_Config) ->
             }),
             {
                 lists_utils:shuffle([BadStore | StoresJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"stores[", ReservedStoreId/binary, "].id">>,
                     <<"The provided store schema Id is reserved and cannot be used in store schema definitions">>
                 )
@@ -313,7 +313,7 @@ atm_workflow_schema_non_unique_lane_ids(_Config) ->
             ),
             {
                 lists_utils:shuffle([LaneAlpha, LaneBeta | LanesJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"lanes">>,
                     <<"The provided list contains duplicate ids">>
                 )
@@ -346,7 +346,7 @@ atm_workflow_schema_non_unique_parallel_box_ids(_Config) ->
             ),
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"parallelBoxes">>,
                     <<"The provided list contains duplicate ids">>
                 )
@@ -372,7 +372,7 @@ atm_workflow_schema_non_unique_task_ids(_Config) ->
             OffendingLane = gen_lane_including_tasks([TaskAlpha, TaskBeta], AtmLambdas, StoreSchemasJson),
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"tasks">>,
                     <<"The provided list contains duplicate ids">>
                 )
@@ -425,7 +425,7 @@ atm_workflow_schema_disallowed_iterated_store_type(_Config) ->
             end, StoresJson),
             {
                 lists_utils:shuffle(SpoiledStoresJson),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"lanes[", LaneId/binary, "].storeIteratorSpec.storeSchemaId">>,
                     <<"Iterating over stores of type '", (automation:store_type_to_json(DisallowedType))/binary, "' is disallowed">>
                 )
@@ -447,7 +447,7 @@ atm_workflow_schema_bad_store_reference_in_iterator(_Config) ->
             #{<<"id">> := LaneId} = OffendingLane,
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"lanes[", LaneId/binary, "].storeIteratorSpec.storeSchemaId">>,
                     <<"The provided storeSchemaId = '", BadStoreSchemaId/binary, "' was not found among defined store schemas">>
                 )
@@ -495,7 +495,7 @@ atm_workflow_schema_bad_store_reference_in_argument_value_builder(_Config) ->
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemasJson),
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"tasks[", TaskId/binary, "].argumentMappings[", OffendingArgumentName/binary, "].valueBuilder.recipe">>,
                     <<"The provided storeSchemaId = '", BadStoreSchemaId/binary, "' was not found among defined store schemas">>
                 )
@@ -526,7 +526,7 @@ atm_workflow_schema_bad_store_reference_in_result_mapper(_Config) ->
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, StoreSchemasJson),
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"tasks[", TaskId/binary, "].resultMappings[", OffendingResultName/binary, "].storeSchemaId">>,
                     <<"The provided storeSchemaId = '", BadStoreSchemaId/binary, "' was not found among defined store schemas">>
                 )
@@ -559,7 +559,7 @@ atm_workflow_schema_bad_current_task_time_series_store_reference_in_result_mappe
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, StoreSchemasJson),
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"tasks[", TaskId/binary, "].resultMappings[", OffendingResultName/binary, "].storeSchemaId">>,
                     <<"The time series store for current task cannot be referenced if its config is not defined in the task.">>
                 )
@@ -582,7 +582,7 @@ atm_workflow_schema_bad_lambda_reference_in_task(_Config) ->
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemasJson),
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"tasks">>,
                     <<"The lambda id '", BadLambdaId/binary, "' referenced by one of the tasks was not found or is "
                     "not available for the requesting client. Consider providing supplementary "
@@ -622,7 +622,7 @@ atm_workflow_schema_bad_config_parameter_reference_in_lambda_config(_Config) ->
             OffendingNamesStr = <<BadParameterName1/binary, ", ", BadParameterName2/binary>>,
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"tasks[", TaskId/binary, "].lambdaConfig">>,
                     <<"The following names were not recognized (they reference inexistent definitions): ", OffendingNamesStr/binary>>
                 )
@@ -669,7 +669,7 @@ atm_workflow_schema_missing_required_lambda_config_value(_Config) ->
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemasJson),
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"lambdaConfig">>,
                     <<"Missing value for required lambda config parameter '", MissingParameterName/binary, "'">>
                 )
@@ -757,7 +757,7 @@ atm_workflow_schema_lambda_argument_mapped_more_than_once(_Config) ->
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemasJson),
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"tasks[", TaskId/binary, "].argumentMappings">>,
                     <<"The provided list contains duplicate names">>
                 )
@@ -801,7 +801,7 @@ atm_workflow_schema_bad_argument_reference_in_mapper(_Config) ->
             OffendingNamesStr = <<BadArgumentName1/binary, ", ", BadArgumentName2/binary>>,
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"tasks[", TaskId/binary, "].argumentMappings">>,
                     <<"The following names were not recognized (they reference inexistent definitions): ", OffendingNamesStr/binary>>
                 )
@@ -848,7 +848,7 @@ atm_workflow_schema_missing_required_argument_mapper(_Config) ->
             OffendingLane = gen_lane_including_tasks([OffendingTask], AtmLambdas, CorrectStoreSchemasJson),
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"argumentMappings">>,
                     <<"Missing argument mapper for required argument '", MissingArgumentName/binary, "'">>
                 )
@@ -894,7 +894,7 @@ atm_workflow_schema_bad_result_reference_in_mapper(_Config) ->
             OffendingNamesStr = <<BadResultName1/binary, ", ", BadResultName2/binary, ", ", BadResultName3/binary>>,
             {
                 lists_utils:shuffle([OffendingLane | LanesJson]),
-                ?ERROR_BAD_DATA(
+                ?ERR_BAD_DATA(
                     <<"tasks[", TaskId/binary, "].resultMappings">>,
                     <<"The following names were not recognized (they reference inexistent definitions): ", OffendingNamesStr/binary>>
                 )
@@ -1090,7 +1090,7 @@ example_invalid_default_initial_contents_for_store_with_error(DataKeyName, list)
                         list,
                         #atm_list_store_config{item_data_spec = DataSpec},
                         InvalidPredefinedValue,
-                        ?ERROR_BAD_DATA(
+                        ?ERR_BAD_DATA(
                             DataKeyName,
                             <<"List store requires default initial content to be an array of values">>
                         )
@@ -1117,7 +1117,7 @@ example_invalid_default_initial_contents_for_store_with_error(DataKeyName, tree_
                                 tree_forest,
                                 #atm_tree_forest_store_config{item_data_spec = DataSpec},
                                 InvalidPredefinedValue,
-                                ?ERROR_BAD_DATA(
+                                ?ERR_BAD_DATA(
                                     DataKeyName,
                                     <<"Tree forest store requires default initial content to be an array of values">>
                                 )
@@ -1137,7 +1137,7 @@ example_invalid_default_initial_contents_for_store_with_error(DataKeyName, tree_
                     tree_forest,
                     #atm_tree_forest_store_config{item_data_spec = DataSpec},
                     InvalidPredefinedValue,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(
                         <<"treeForestStoreConfig.dataSpec.type">>,
                         [atm_data_type:type_to_json(T) || T <- [atm_file_type, atm_dataset_type]]
                     )
@@ -1150,7 +1150,7 @@ example_invalid_default_initial_contents_for_store_with_error(DataKeyName, range
             range,
             #atm_range_store_config{},
             InvalidPredefinedValue,
-            ?ERROR_BAD_DATA(
+            ?ERR_BAD_DATA(
                 DataKeyName,
                 <<"Range store requires default initial content to be an object with the following fields: "
                 "\"end\" (required), \"start\" (optional), \"step\" (optional)">>
@@ -1168,7 +1168,7 @@ example_invalid_default_initial_contents_for_store_with_error(_DataKeyName, audi
 exp_disallowed_predefined_value_error(DataKeyName, #atm_array_data_spec{item_data_spec = NestedItemDataSpec}, Values) ->
     case is_list(Values) of
         false ->
-            ?ERROR_BAD_DATA(
+            ?ERR_BAD_DATA(
                 DataKeyName,
                 <<"The provided predefined value for type 'array' must be an array of values">>
             );
@@ -1196,7 +1196,7 @@ exp_disallowed_predefined_value_error(DataKeyName, #atm_array_data_spec{item_dat
     end;
 exp_disallowed_predefined_value_error(DataKeyName, AtmDataSpec, _) ->
     DataType = atm_data_spec:get_data_type(AtmDataSpec),
-    ?ERROR_BAD_DATA(
+    ?ERR_BAD_DATA(
         DataKeyName,
         <<"The provided predefined value is invalid for type '", (atm_data_type:type_to_json(DataType))/binary, "'">>
     ).
@@ -1205,7 +1205,7 @@ exp_disallowed_predefined_value_error(DataKeyName, AtmDataSpec, _) ->
 %% @private
 %% DataTypeStr :: <<"file">> | <<"group">>
 exp_bad_attributes_in_data_spec_error(DataKeyName, DataTypeStr) ->
-    ?ERROR_BAD_DATA(
+    ?ERR_BAD_DATA(
         DataKeyName,
         <<"This field must be provided and must be a list containing at least one ", DataTypeStr/binary, " attribute">>
     ).

@@ -140,16 +140,16 @@ all() -> [
 ).
 
 -define(BAD_PARAMETER_VALUES_FOR_NON_ADVERTISED_SPACE, [
-    {<<"description">>, 10, ?ERROR_BAD_VALUE_BINARY(<<"description">>)},
-    {<<"organizationName">>, 10, ?ERROR_BAD_VALUE_BINARY(<<"organizationName">>)},
-    {<<"tags">>, [<<"troll">>], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"tags">>, ozt_spaces:available_space_tags())},
-    {<<"advertisedInMarketplace">>, 10, ?ERROR_BAD_VALUE_BOOLEAN(<<"advertisedInMarketplace">>)},
-    {<<"marketplaceContactEmail">>, 10, ?ERROR_BAD_VALUE_BINARY(<<"marketplaceContactEmail">>)}
+    {<<"description">>, 10, ?ERR_BAD_VALUE_STRING(<<"description">>)},
+    {<<"organizationName">>, 10, ?ERR_BAD_VALUE_STRING(<<"organizationName">>)},
+    {<<"tags">>, [<<"troll">>], ?ERR_BAD_VALUE_LIST_NOT_ALLOWED(<<"tags">>, ozt_spaces:available_space_tags())},
+    {<<"advertisedInMarketplace">>, 10, ?ERR_BAD_VALUE_BOOLEAN(<<"advertisedInMarketplace">>)},
+    {<<"marketplaceContactEmail">>, 10, ?ERR_BAD_VALUE_STRING(<<"marketplaceContactEmail">>)}
 ]).
 -define(BAD_PARAMETER_VALUES_FOR_ADVERTISED_SPACE, [
-    {<<"description">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"description">>)},
-    {<<"organizationName">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"organizationName">>)},
-    {<<"marketplaceContactEmail">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"marketplaceContactEmail">>)}
+    {<<"description">>, <<>>, ?ERR_BAD_VALUE_EMPTY(<<"description">>)},
+    {<<"organizationName">>, <<>>, ?ERR_BAD_VALUE_EMPTY(<<"organizationName">>)},
+    {<<"marketplaceContactEmail">>, <<>>, ?ERR_BAD_VALUE_EMPTY(<<"marketplaceContactEmail">>)}
 ]).
 
 -define(CORRECT_DATA_FOR_ADVERTISED_SPACE(__VALUES), maps:merge(
@@ -201,7 +201,7 @@ create_test(Config) ->
         }),
         bad_values = lists:flatten([
             ?BAD_PARAMETER_VALUES_FOR_NON_ADVERTISED_SPACE,
-            ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+            ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
         ])
     },
     WithMarketplaceDataSpec = #data_spec{
@@ -544,7 +544,7 @@ get_marketplace_data_test(Config) ->
     GSSpec = #gs_spec{
         operation = get,
         gri = #gri{type = od_space, id = S1, aspect = marketplace_data, scope = protected},
-        expected_result_op = ?ERROR_REASON(?ERROR_FORBIDDEN),
+        expected_result_op = ?ERROR_REASON(?ERR_FORBIDDEN),
         expected_result_gui = ?OK_MAP(S1Data#{
             <<"gri">> => gri:serialize(?GRI(od_space, S1, marketplace_data, protected))
         })
@@ -645,7 +645,7 @@ update_space_not_in_marketplace_test(Config) ->
                 correct_values = ?CORRECT_PARAMETER_VALUES_FOR_NON_ADVERTISED_SPACE,
                 bad_values = lists:flatten([
                     ?BAD_PARAMETER_VALUES_FOR_NON_ADVERTISED_SPACE,
-                    ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                    ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
                 ])
             };
         (adds_to_marketplace, ContactEmailModification) ->
@@ -717,7 +717,7 @@ update_space_not_in_marketplace_test(Config) ->
     ?assert(RunTests(does_not_add_to_marketplace, modifies_contact_email)),
     ?assert(RunTests(adds_to_marketplace, modifies_contact_email)),
     % if the space is added to marketplace, marketplace contact email is required
-    ?assertEqual(?ERROR_MISSING_REQUIRED_VALUE(<<"marketplaceContactEmail">>), ozt:rpc(space_logic, update, [
+    ?assertEqual(?ERR_MISSING_REQUIRED_VALUE(<<"marketplaceContactEmail">>), ozt:rpc(space_logic, update, [
         ?USER(Owner), ozt_users:create_space_for(Owner), #{
             <<"advertisedInMarketplace">> => true,
             <<"description">> => ?RAND_UNICODE_STR(),
@@ -774,7 +774,7 @@ update_space_in_marketplace_test(Config) ->
                 }),
                 bad_values = lists:flatten([
                     ?BAD_PARAMETER_VALUES_FOR_ADVERTISED_SPACE,
-                    ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                    ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
                 ])
             };
         (removes_from_marketplace, ContactEmailModification) ->
@@ -866,7 +866,7 @@ delete_test(Config) ->
         #{
             space_id => SpaceId,
             in_marketplace => AdvertisedInMarketplace,
-            share_entries => ozt_shares:gen_shares_for_space(SpaceId, ?RAND_INT(0, 1024))
+            share_entries => ozt_shares:gen_shares_for_space(SpaceId, ?RAND_INT(0, 200))
         }
     end,
     DeleteEntityFun = fun(#{space_id := SpaceId} = _Env) ->
@@ -920,7 +920,15 @@ delete_test(Config) ->
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
-    )).
+    )),
+
+    % To avoid long-lasting tests, the above scenario generates moderate number of shares
+    % (the scenario is run multiple times). A bigger share registry is tested below.
+    SpaceWithManyShares = ozt_spaces:create(),
+    utils:repeat(2222, fun() -> ozt_shares:create(SpaceWithManyShares) end),
+    ?assertEqual(2222, length(ozt:rpc(share_registry, list_entries, [SpaceWithManyShares, #{limit => infinity}]))),
+    ?assertMatch(ok, ozt:rpc(space_logic, delete, [aai:root_auth(), SpaceWithManyShares])),
+    ?assertEqual(0, length(ozt:rpc(share_registry, list_entries, [SpaceWithManyShares, #{limit => infinity}]))).
 
 
 list_storages_test(Config) ->
@@ -1200,10 +1208,10 @@ submit_membership_request_test(Config) ->
                 <<"message">> => [<<"">>, ?RAND_STR(), ?RAND_STR(2000)]
             },
             bad_values = [
-                {<<"contactEmail">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_BINARY(<<"contactEmail">>)},
-                {<<"contactEmail">>, <<"emailwithoutdomain">>, ?ERROR_BAD_VALUE_EMAIL},
-                {<<"message">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"message">>)},
-                {<<"message">>, ?RAND_UNICODE_STR(2001), ?ERROR_BAD_VALUE_TEXT_TOO_LARGE(<<"message">>, 2000)}
+                {<<"contactEmail">>, #{<<"a">> => <<"b">>}, ?ERR_BAD_VALUE_STRING(<<"contactEmail">>)},
+                {<<"contactEmail">>, <<"emailwithoutdomain">>, ?ERR_BAD_VALUE_EMAIL},
+                {<<"message">>, 1234, ?ERR_BAD_VALUE_STRING(<<"message">>)},
+                {<<"message">>, ?RAND_UNICODE_STR(2001), ?ERR_BAD_VALUE_TEXT_TOO_LARGE(<<"message">>, 2000)}
             ]
         }
     }, EnvSetUpFun, undefined, undefined)).
@@ -1258,12 +1266,12 @@ get_membership_requester_info_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_space, id = SpaceId, aspect = {membership_requester_info, RequestId}},
-            expected_result_op = ?ERROR_REASON(?ERROR_FORBIDDEN),
+            expected_result_op = ?ERROR_REASON(?ERR_FORBIDDEN),
             expected_result_gui = ?OK_MAP_CONTAINS(ExpectedInfo)
         }
     })),
 
-    ?assertEqual(?ERROR_BAD_VALUE_IDENTIFIER(<<"requestId">>), ozt:rpc(
+    ?assertEqual(?ERR_BAD_VALUE_IDENTIFIER(<<"requestId">>), ozt:rpc(
         space_logic, get_membership_requester_info, [?USER(SpaceOperatorId), SpaceId, <<"abc">>]
     )),
     ?assertEqual(?ERROR_NOT_FOUND, ozt:rpc(
@@ -1325,8 +1333,8 @@ resolve_membership_request_test(Config) ->
                     <<"decision">> => [Decision]
                 },
                 bad_values = [
-                    {<<"decision">>, not_sure, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"decision">>, [grant, reject])},
-                    {<<"decision">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"decision">>)}
+                    {<<"decision">>, not_sure, ?ERR_BAD_VALUE_NOT_ALLOWED(<<"decision">>, [grant, reject])},
+                    {<<"decision">>, 1234, ?ERR_BAD_VALUE_STRING(<<"decision">>)}
                 ]
             }
         }, EnvSetUpFun, undefined, undefined))
@@ -1334,11 +1342,11 @@ resolve_membership_request_test(Config) ->
 
     SpaceId = ozt_users:create_advertised_space_for(SpaceOperatorId),
     ?assertEqual(
-        ?ERROR_BAD_VALUE_EMPTY(<<"requestId">>),
+        ?ERR_BAD_VALUE_EMPTY(<<"requestId">>),
         ozt_spaces:try_resolve_membership_request(SpaceId, <<"">>, ?RAND_ELEMENT([grant, {reject, <<"">>}]))
     ),
     ?assertEqual(
-        ?ERROR_BAD_VALUE_BINARY(<<"requestId">>),
+        ?ERR_BAD_VALUE_STRING(<<"requestId">>),
         ozt_spaces:try_resolve_membership_request(SpaceId, [1, 2, 3], ?RAND_ELEMENT([grant, {reject, <<"">>}]))
     ).
 
@@ -1544,9 +1552,9 @@ update_support_parameters_test(Config) ->
                 <<"dirStatsServiceStatus">> => [atom_to_binary(S) || S <- support_parameters:all_dir_stats_service_statuses()]
             },
             bad_values = BadValues = [
-                {<<"accountingEnabled">>, atom, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"accountingEnabled">>, [true, false, null])},
-                {<<"dirStatsServiceEnabled">>, [1, 2, 3], ?ERROR_BAD_VALUE_ATOM(<<"dirStatsServiceEnabled">>)},
-                {<<"dirStatsServiceStatus">>, <<"text">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(
+                {<<"accountingEnabled">>, atom, ?ERR_BAD_VALUE_NOT_ALLOWED(<<"accountingEnabled">>, [true, false, null])},
+                {<<"dirStatsServiceEnabled">>, [1, 2, 3], ?ERR_BAD_VALUE_STRING(<<"dirStatsServiceEnabled">>)},
+                {<<"dirStatsServiceStatus">>, <<"text">>, ?ERR_BAD_VALUE_NOT_ALLOWED(
                     <<"dirStatsServiceStatus">>, [null] ++ [atom_to_binary(S) || S <- support_parameters:all_dir_stats_service_statuses()]
                 )}
             ]
@@ -1577,7 +1585,7 @@ update_support_parameters_test(Config) ->
     InferExpectedOutcome = fun(Client, PreviousSupportParameters, Data, <<MajorProviderVersion:2/binary, _/binary>>) ->
         case ShouldBeAuthorized(Client, Data) of
             false ->
-                {failure, ?ERROR_FORBIDDEN};
+                {failure, ?ERR_FORBIDDEN};
             true ->
                 case binary_to_integer(MajorProviderVersion) >= 21 of
                     true ->
@@ -1591,7 +1599,7 @@ update_support_parameters_test(Config) ->
                         ),
                         case FinalAccountingEnabled =:= true andalso FinalDirStatsServiceEnabled =:= false of
                             true ->
-                                {failure, ?ERROR_BAD_DATA(
+                                {failure, ?ERR_BAD_DATA(
                                     <<"dirStatsServiceEnabled">>,
                                     <<"Dir stats service must be enabled if accounting is enabled">>
                                 )};
@@ -1702,19 +1710,19 @@ get_marketplace_data_error_marketplace_disabled_test(Config) ->
             method = get,
             path = [<<"/spaces/marketplace/">>, SubjectSpace],
             expected_code = ?HTTP_400_BAD_REQUEST,
-            expected_body = #{<<"error">> => errors:to_json(?ERROR_SPACE_MARKETPLACE_DISABLED)}
+            expected_body = #{<<"error">> => errors:to_json(?ERR_SPACE_MARKETPLACE_DISABLED)}
         },
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_marketplace_data,
             args = [auth, SubjectSpace],
-            expected_result = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+            expected_result = ?ERROR_REASON(?ERR_SPACE_MARKETPLACE_DISABLED)
         },
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_space, id = SubjectSpace, aspect = marketplace_data, scope = protected},
-            expected_result_op = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED),
-            expected_result_gui = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+            expected_result_op = ?ERROR_REASON(?ERR_SPACE_MARKETPLACE_DISABLED),
+            expected_result_gui = ?ERROR_REASON(?ERR_SPACE_MARKETPLACE_DISABLED)
         }
     })).
 
@@ -1909,13 +1917,13 @@ list_marketplace_test(Config) ->
                 <<"tags">> => [?RAND_SUBLIST(ozt_spaces:available_space_tags()), []]
             },
             bad_values = [
-                {<<"index">>, 10, ?ERROR_BAD_VALUE_BINARY(<<"index">>)},
-                {<<"token">>, 10, ?ERROR_BAD_VALUE_BINARY(<<"token">>)},
-                {<<"token">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"offset">>, <<"a">>, ?ERROR_BAD_VALUE_INTEGER(<<"offset">>)},
-                {<<"limit">>, <<"a">>, ?ERROR_BAD_VALUE_INTEGER(<<"limit">>)},
-                {<<"limit">>, 0, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"limit">>, 1, 1000)},
-                {<<"tags">>, [<<"troll">>], ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"tags">>, ozt_spaces:available_space_tags())}
+                {<<"index">>, 10, ?ERR_BAD_VALUE_STRING(<<"index">>)},
+                {<<"token">>, 10, ?ERR_BAD_VALUE_STRING(<<"token">>)},
+                {<<"token">>, <<>>, ?ERR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"offset">>, <<"a">>, ?ERR_BAD_VALUE_INTEGER(<<"offset">>)},
+                {<<"limit">>, <<"a">>, ?ERR_BAD_VALUE_INTEGER(<<"limit">>)},
+                {<<"limit">>, 0, ?ERR_BAD_VALUE_NOT_IN_RANGE(<<"limit">>, 1, 1000)},
+                {<<"tags">>, [<<"troll">>], ?ERR_BAD_VALUE_LIST_NOT_ALLOWED(<<"tags">>, ozt_spaces:available_space_tags())}
             ]
         }
         % TODO VFS-4520 Tests for GraphSync API
@@ -1968,19 +1976,19 @@ list_marketplace_error_marketplace_disabled_test(Config) ->
             method = post,
             path = <<"/spaces/marketplace/list">>,
             expected_code = ?HTTP_400_BAD_REQUEST,
-            expected_body = #{<<"error">> => errors:to_json(?ERROR_SPACE_MARKETPLACE_DISABLED)}
+            expected_body = #{<<"error">> => errors:to_json(?ERR_SPACE_MARKETPLACE_DISABLED)}
         },
         logic_spec = LogicSpec = #logic_spec{
             module = space_logic,
             function = list_marketplace,
             args = [auth, data],
-            expected_result = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+            expected_result = ?ERROR_REASON(?ERR_SPACE_MARKETPLACE_DISABLED)
         },
         gs_spec = GsSpec = #gs_spec{
             operation = create,
             gri = #gri{type = od_space, aspect = list_marketplace, scope = protected},
-            expected_result_op = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED),
-            expected_result_gui = ?ERROR_REASON(?ERROR_SPACE_MARKETPLACE_DISABLED)
+            expected_result_op = ?ERROR_REASON(?ERR_SPACE_MARKETPLACE_DISABLED),
+            expected_result_gui = ?ERROR_REASON(?ERR_SPACE_MARKETPLACE_DISABLED)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpecForBasicListing)),

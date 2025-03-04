@@ -40,7 +40,7 @@
 %%% API
 %%%===================================================================
 
--spec send([smtp_client:email_address()], binary(), binary()) -> ok | ?ERROR_INTERNAL_SERVER_ERROR(_).
+-spec send([smtp_client:email_address()], binary(), binary()) -> ok | od_error_internal_server_error:t().
 send(RecipientAddresses, Subject, Body) ->
     ?catch_exceptions(send_unsafe(RecipientAddresses, Subject, Body)).
 
@@ -50,7 +50,7 @@ send(RecipientAddresses, Subject, Body) ->
 
 %% @private
 -spec send_unsafe([smtp_client:email_address()], binary(), binary()) ->
-    ok | ?ERROR_INTERNAL_SERVER_ERROR(_) | no_return().
+    ok | od_error_internal_server_error:t() | no_return().
 send_unsafe(RecipientAddresses, Subject, Body) ->
     EmailSpec = #email_spec{
         relay = ?RELAY,

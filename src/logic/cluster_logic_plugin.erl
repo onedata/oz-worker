@@ -713,9 +713,9 @@ update_cluster(ClusterId, Data) ->
     % updated and error is returned to the client. Applies to Oneprovider cluster only.
     case {Data, UpgradedCluster} of
         {#{<<"workerVersion">> := _}, #od_cluster{worker_version = {_, _, ?EMPTY_GUI_HASH}}} ->
-            throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"workerVersion.gui">>));
+            throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"workerVersion.gui">>));
         {#{<<"onepanelVersion">> := _}, #od_cluster{onepanel_version = {_, _, ?EMPTY_GUI_HASH}}} ->
-            throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"onepanelVersion.gui">>));
+            throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"onepanelVersion.gui">>));
         _ ->
             ok
     end.
@@ -742,7 +742,7 @@ update_version_info(Cluster, ClusterId, ServiceType, VersionKey, Data) ->
                     ?EMPTY_GUI_HASH;
                 {false, ?ONEZONE} ->
                     % Though in case of Onezone cluster, the whole operation fails.
-                    throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<VersionKey/binary, ".gui">>))
+                    throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<VersionKey/binary, ".gui">>))
             end,
             {_, _, OldGuiHash} = get_version_info(Cluster, ServiceType),
             GuiHash /= OldGuiHash andalso gui_static:link_gui(GuiType, ClusterId, GuiHash),

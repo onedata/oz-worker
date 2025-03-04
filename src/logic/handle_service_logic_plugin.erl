@@ -278,7 +278,7 @@ update(Req = #el_req{gri = #gri{id = HServiceId, aspect = {group_privileges, Gro
 delete(#el_req{gri = #gri{id = HServiceId, aspect = instance}}) ->
     case handle_registry:service_has_any_entries(HServiceId) of
         true ->
-            ?ERROR_CANNOT_DELETE_NON_EMPTY_HANDLE_SERVICE;
+            ?ERR_CANNOT_DELETE_NON_EMPTY_HANDLE_SERVICE(?err_ctx());
         false ->
             entity_graph:delete_with_relations(od_handle_service, HServiceId)
     end;

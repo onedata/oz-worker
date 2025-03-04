@@ -39,7 +39,7 @@
     ok -> ok;
     {ok, _} -> ok;
     ?ERROR_ALREADY_EXISTS -> ok;
-    ?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _) -> ok;
+    ?ERR_RELATION_ALREADY_EXISTS(_, _, _, _) -> ok;
     Other -> Other
 end)).
 
@@ -49,7 +49,7 @@ end)).
     ok -> ok;
     {ok, _} -> ok;
     ?ERROR_NOT_FOUND -> ok;
-    ?ERROR_RELATION_DOES_NOT_EXIST(_, _, _, _) -> ok;
+    ?ERR_RELATION_DOES_NOT_EXIST(_, _, _, _) -> ok;
     Other -> Other
 end)).
 

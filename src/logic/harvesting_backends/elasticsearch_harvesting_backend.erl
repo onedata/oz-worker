@@ -106,7 +106,7 @@ ping(Endpoint) ->
     try
         ?EXTRACT_OK(do_request(get, Endpoint, <<>>, <<>>, <<>>, [200]))
     catch _:_ ->
-        ?ERROR_BAD_DATA(<<"endpoint">>)
+        ?ERR_BAD_DATA(?err_ctx(), <<"endpoint">>, undefined)
     end.
 
 
@@ -125,7 +125,7 @@ create_index(Endpoint, IndexId, IndexInfo, Schema) ->
         ?EXTRACT_OK(do_request(
             put, Endpoint, IndexId, <<>>, json_utils:encode(ExtendedSchema), [{200, 300}]))
     catch _:invalid_json ->
-        ?ERROR_BAD_VALUE_JSON(<<"schema">>)
+        ?ERR_BAD_VALUE_JSON(?err_ctx(), <<"schema">>)
     end.
 
 
@@ -179,7 +179,7 @@ query_index(Endpoint, IndexId, Data) ->
     } = Data,
     Body = maps:get(<<"body">>, Data, <<>>),
     is_path_allowed(Method, Path) orelse
-        throw(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"path">>, allowed_paths(Method))),
+        throw(?ERR_BAD_VALUE_NOT_ALLOWED(?err_ctx(), <<"path">>, allowed_paths(Method))),
     case do_request(Method, Endpoint, IndexId, <<"/", Path/binary>>, Body) of
         {ok, Code, Headers, ResponseBody} ->
             {ok, #{
@@ -358,14 +358,14 @@ do_request(Method, Endpoint, IndexId, Path, Data, Headers, ExpectedCodes) ->
                 _ ->
                     ?error(?prepare_log("~tp ~tp returned unexpected response ~tp:~n ~tp~n~tp",
                         [Method, Url, Code, RespHeaders, json_utils:decode(Body)])),
-                    ?ERROR_BAD_DATA(<<"payload">>)
+                    ?ERR_BAD_DATA(?err_ctx(), <<"payload">>, undefined)
             end;
         {ok, _, _, _} = Response ->
             Response;
         {error, _} = Error ->
             ?error(?prepare_log("~tp ~tp was unsuccessful due to ~w",
                 [Method, Url, Error])),
-            ?ERROR_EXTERNAL_SERVICE_OPERATION_FAILED(get_name())
+            ?ERR_EXTERNAL_SERVICE_OPERATION_FAILED(?err_ctx(), get_name())
     end.
 
 

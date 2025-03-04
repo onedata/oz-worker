@@ -210,7 +210,8 @@ error_to_rest_expectations(Config, ErrorType) ->
         _ -> Headers
     end,
     ExpBody = case Body of
-        {binary, <<"">>} -> undefined;
+        {binary, <<"">>} ->
+            undefined;
         _ ->
             %% Encoding to json transforms all atoms in response to binary strings
             EncodedBody = json_utils:encode(Body),
@@ -761,9 +762,9 @@ run_test_combinations(
             )
         end, [
             {UnauthorizedClients, RequiredDataSets,
-                "unauthorized client should fail", ?ERROR_UNAUTHORIZED},
+                "unauthorized client should fail", ?ERR_UNAUTHORIZED(undefined)},
             {ForbiddenClients, RequiredDataSets,
-                "forbidden client should fail", ?ERROR_FORBIDDEN},
+                "forbidden client should fail", ?ERR_FORBIDDEN},
             {CorrectClients, BadDataSets,
                 "bad data should fail: ~ts => ~tp", undefined}
         ]

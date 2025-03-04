@@ -125,7 +125,7 @@ lookup_deleted(HandleId) ->
     deleted_handle_registry:lookup(HandleId).
 
 
--spec purge_deleted_entry(od_handle:id()) -> ok | ?ERROR_NOT_FOUND.
+-spec purge_deleted_entry(od_handle:id()) -> ok | od_error_not_found:t().
 purge_deleted_entry(HandleId) ->
     case deleted_handle_registry:lookup(HandleId) of
         error ->
