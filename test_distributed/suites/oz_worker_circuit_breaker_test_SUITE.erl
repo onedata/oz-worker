@@ -114,9 +114,6 @@ init_per_suite(Config) ->
         envs = [
             {oz_panel, onepanel, [
                 {db_disk_monitor_verbose_logs, true}
-            ]},
-            {op_panel, onepanel, [
-                {db_disk_monitor_verbose_logs, true}
             ]}
         ]
     }).

@@ -39,9 +39,20 @@ assert_closed() ->
 
 
 -spec toggle(open | closed) -> ok.
-toggle(open) ->
-    oz_worker:set_env(service_circuit_breaker_state, open),
-    ?emergency("The circuit breaker has been set to 'open' - consult Onepanel logs for details");
-toggle(closed) ->
-    oz_worker:set_env(service_circuit_breaker_state, closed),
-    ?notice("The circuit breaker has been set to 'closed'").
+toggle(NewState) ->
+    PrevState = oz_worker:get_env(service_circuit_breaker_state, closed),
+    oz_worker:set_env(service_circuit_breaker_state, NewState),
+    case {PrevState, NewState} of
+        {open, closed} ->
+            ?notice(
+                "The circuit breaker has been set to 'closed', all services resume operation - "
+                "consult Onepanel logs for details"
+            );
+        {closed, open} ->
+            ?emergency(
+                "The circuit breaker has been set to 'open', ALL SERVICES HAVE BEEN DISABLED - "
+                "consult Onepanel logs for details"
+            );
+        {Same, Same} ->
+            ok
+    end.
