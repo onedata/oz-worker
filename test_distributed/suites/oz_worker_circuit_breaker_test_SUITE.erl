@@ -110,7 +110,12 @@ gui_upload_circuit_breaker_test(_Config) ->
 
 init_per_suite(Config) ->
     ozt:onenv_init_per_suite(Config, #onenv_test_config{
-        onenv_scenario = "1oz"
+        onenv_scenario = "1oz",
+        envs = [
+            {oz_panel, onepanel, [
+                {db_disk_monitor_verbose_logs, true}
+            ]}
+        ]
     }).
 
 
