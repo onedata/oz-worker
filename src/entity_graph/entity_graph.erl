@@ -191,31 +191,35 @@ init_state() ->
 %%--------------------------------------------------------------------
 -spec verify_state_of_all_entities() -> ok.
 verify_state_of_all_entities() ->
+    ?info("Verifying the state of all entities..."),
     EntityTypesToCheck = [
         od_user, od_group, od_space, od_provider, od_handle_service,
         od_handle, od_harvester, od_cluster, od_storage, od_atm_inventory
     ],
-    lists:foreach(
-        fun(EntityType) ->
-            {ok, Entities} = EntityType:list(),
-            lists:foreach(
-                fun(#document{key = EntityId, value = Entity}) ->
-                    lists:foreach(
-                        fun(Direction) ->
-                            case is_dirty(Direction, Entity) of
-                                true ->
-                                    ?info("Scheduling ~tp refresh of dirty entity: ~ts", [
-                                        Direction, EntityType:to_string(EntityId)
-                                    ]),
-                                    update_dirty_queue(
-                                        Direction, true, EntityType, EntityId
-                                    );
-                                false ->
-                                    ok
-                            end
-                        end, [top_down, bottom_up])
-                end, Entities)
-        end, EntityTypesToCheck),
+
+    lists:foreach(fun(EntityType) ->
+        {ok, Entities} = EntityType:list(),
+        Count = length(Entities),
+        ?info("* ~tp: ~B record(s)", [EntityType, Count]),
+        lists:foldl(fun(#document{key = EntityId, value = Entity}, Ordinal) ->
+            Ordinal rem 1000 == 0 andalso ?info("  > progress: ~.2f%", [Ordinal * 100 / Count]),
+            lists:foreach(fun(Direction) ->
+                case is_dirty(Direction, Entity) of
+                    true ->
+                        ?info("  * scheduling ~tp refresh: ~ts", [
+                            Direction, EntityType:to_string(EntityId)
+                        ]),
+                        update_dirty_queue(
+                            Direction, true, EntityType, EntityId
+                        );
+                    false ->
+                        ok
+                end
+            end, [top_down, bottom_up]),
+            Ordinal + 1
+        end, 1, Entities)
+    end, EntityTypesToCheck),
+
     schedule_refresh().
 
 

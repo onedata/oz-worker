@@ -178,6 +178,7 @@ custom_workers() ->
         {supervisor_flags, gs_worker:supervisor_flags()}
     ]}].
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Overrides {@link node_manager_plugin_default:before_listeners_start/0}.
@@ -185,7 +186,8 @@ custom_workers() ->
 %% NOTE: this callback blocks the application supervisor and must not be used to
 %% interact with the main supervision tree.
 %%
-%% This callback is executed on all cluster nodes.
+%% NOTE: this callback is run on all cluster nodes and is awaited
+%% for before cluster setup proceeds.
 %% @end
 %%--------------------------------------------------------------------
 -spec before_listeners_start() -> ok | {error, Reason :: term()}.
