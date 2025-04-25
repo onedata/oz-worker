@@ -358,9 +358,10 @@ expected_configuration(Config) ->
 
     OZVersion = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
 
-    OZBuild = case oz_test_utils:get_env(Config, build_version) of
-        "" -> <<"unknown">>;
-        Build -> list_to_binary(Build)
+    OZBuild = case oz_test_utils:call_oz(Config, ctool, get_env, [onedata_service_build_version, undefined]) of
+        undefined -> <<"unknown">>;
+        <<>> -> <<"unknown">>;
+        Build -> Build
     end,
 
     {_, []} = utils:rpc_multicall(Nodes, application, set_env, [
