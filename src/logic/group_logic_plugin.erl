@@ -439,6 +439,7 @@ update(Req = #el_req{gri = #gri{id = ParGrId, aspect = {child_privileges, ChGrId
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = GroupId, aspect = instance}}) ->
     {true, {Group, _}} = fetch_entity(#gri{aspect = instance, id = GroupId}),
+    % fixme this should also block other group modifications like type or name
     case Group#od_group.protected of
         true ->
             throw(?ERR_PROTECTED_GROUP(?err_ctx()));
