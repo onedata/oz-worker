@@ -36,6 +36,7 @@
 -type state() :: #state{}.
 
 -define(DNS_UPDATE_RETRY_INTERVAL, 5000).
+-define(GS_WORKER_POOL_SIZE, oz_worker:get_env(graph_sync_worker_pool_size, 20)).
 
 % List of all known cluster generations.
 % When cluster is not in newest generation it will be upgraded during initialization.
@@ -193,6 +194,8 @@ custom_workers() ->
 -spec before_listeners_start() -> ok | {error, Reason :: term()}.
 before_listeners_start() ->
     try
+        gs_worker_pool:init(?GS_WORKER_POOL_SIZE),
+
         % Logic that should be run on every node of the cluster
         onezone_plugins:init(),
 
