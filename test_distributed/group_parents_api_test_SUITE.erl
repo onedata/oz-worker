@@ -117,7 +117,6 @@ create_parent_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllPrivs = privileges:group_privileges(),
-    AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(ParentId, Data) ->
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -208,78 +207,102 @@ create_parent_test(Config) ->
 
 
 join_parent_test(Config) ->
-    % create group with 2 users:
-    %   U2 gets the GROUP_ADD_PARENT privilege
-    %   U1 gets all remaining privileges
-    {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_ADD_PARENT
+    UserWithPrivilege = ozt_users:create(),
+    UserWithoutPrivilege = ozt_users:create(),
+
+    join_parent_test_base(
+        Config, UserWithPrivilege, UserWithoutPrivilege,
+        allowed, fun ozt_groups:create/0, fun ozt_groups:create/0
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    join_parent_test_base(
+        Config, UserWithPrivilege, UserWithoutPrivilege,
+        allowed, fun ozt_groups:create_protected/0, fun ozt_groups:create/0
+    ),
+    join_parent_test_base(
+        Config, UserWithPrivilege, UserWithoutPrivilege,
+        allowed, fun ozt_groups:create/0, fun ozt_groups:create_protected/0
+    ),
+    join_parent_test_base(
+        Config, UserWithPrivilege, UserWithoutPrivilege,
+        blocked_by_protection, fun ozt_groups:create_protected/0, fun ozt_groups:create_protected/0
+    ).
+
+
+join_parent_test_base(Config, UserWithPrivilege, UserWithoutPrivilege, ExpOutcome, ChildCreateFun, ParentCreateFun) ->
+    NonAdmin = ozt_users:create(),
+
+    ChildId = ChildCreateFun(),
+    ozt_groups:add_user(ChildId, UserWithPrivilege, [?GROUP_ADD_PARENT, ?GROUP_ADD_CHILD]),
+    ozt_groups:add_user(ChildId, UserWithoutPrivilege, privileges:group_admin() -- [?GROUP_ADD_PARENT]),
 
     CreateTokenForItselfFun = fun() ->
-        {ok, Token} = oz_test_utils:group_invite_group_token(
-            Config, ?USER(U1), Child
-        ),
-        {ok, Serialized} = tokens:serialize(Token),
-        Serialized
+        ozt_tokens:ensure_serialized(ozt_groups:create_one_shot_group_invite_token(ChildId, UserWithPrivilege))
     end,
 
     EnvSetUpFun = fun() ->
-        {ok, Creator} = oz_test_utils:create_user(Config),
-        {ok, Group} = oz_test_utils:create_group(Config, ?USER(Creator), ?GROUP_NAME2),
-        {ok, Token2} = oz_test_utils:group_invite_group_token(
-            Config, ?USER(Creator), Group
-        ),
-        {ok, Serialized2} = tokens:serialize(Token2),
+        ParentId = ParentCreateFun(),
+        TokenCreatorId = ozt_users:create(),
+        ozt_groups:add_user(ParentId, TokenCreatorId, [?GROUP_ADD_CHILD]),
+        Token = ozt_groups:create_one_shot_group_invite_token(ParentId, TokenCreatorId),
         #{
-            groupId => Group,
-            tokenNonce => Token2#token.id,
-            token => Serialized2
+            parentId => ParentId,
+            token => ozt_tokens:ensure_serialized(Token),
+            tokenId => Token
         }
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId, tokenNonce := TokenId} = _Env, _) ->
-        {ok, ChildGroups} = oz_test_utils:group_get_children(Config, GroupId),
-        ?assertEqual(lists:member(Child, ChildGroups), ShouldSucceed),
-        case ShouldSucceed of
-            true ->
-                oz_test_utils:assert_invite_token_usage_limit_reached(Config, true, TokenId);
-            false -> ok
-        end
+
+    VerifyEndFun = fun(ClientAuthorized, #{parentId := ParentId, token := Token} = _Env, _) ->
+        ShouldSucceed = ClientAuthorized andalso ExpOutcome == allowed,
+        ?assertEqual(ShouldSucceed, lists:member(ChildId, ozt_groups:get_children(ParentId))),
+        ShouldSucceed andalso ozt_tokens:assert_invite_token_usage_limit_reached(Token, true)
     end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]},
-                {user, U2}
+                {user, UserWithPrivilege}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, NonAdmin},
-                {user, U1}
+                {user, UserWithoutPrivilege},
+                {user, NonAdmin}
             ]
         },
         rest_spec = #rest_spec{
             method = post,
-            path = [<<"/groups/">>, Child, <<"/parents/join">>],
-            expected_code = ?HTTP_201_CREATED,
-            expected_headers = ?OK_ENV(fun(#{groupId := GroupId} = _Env, _) ->
-                fun(#{?HDR_LOCATION := Location} = _Headers) ->
-                    ExpLocation = ?URL(Config,
-                        [<<"/groups/">>, Child, <<"/parents/">>, GroupId]
-                    ),
-                    ?assertMatch(ExpLocation, Location),
-                    true
-                end
-            end)
+            path = [<<"/groups/">>, ChildId, <<"/parents/join">>],
+            expected_code = case ExpOutcome of
+                blocked_by_protection -> ?HTTP_403_FORBIDDEN;
+                allowed -> ?HTTP_201_CREATED
+            end,
+            expected_headers = case ExpOutcome of
+                blocked_by_protection ->
+                    undefined;
+                allowed ->
+                    ?OK_ENV(fun(#{parentId := ParentId} = _Env, _) ->
+                        fun(#{?HDR_LOCATION := Location} = _Headers) ->
+                            ExpLocation = ?URL(Config,
+                                [<<"/groups/">>, ChildId, <<"/parents/">>, ParentId]
+                            ),
+                            ?assertMatch(ExpLocation, Location),
+                            true
+                        end
+                    end)
+            end
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = join_group,
-            args = [auth, Child, data],
-            expected_result = ?OK_ENV(fun(#{groupId := GroupId} = _Env, _) ->
-                ?OK_BINARY(GroupId)
-            end)
+            args = [auth, ChildId, data],
+            expected_result = case ExpOutcome of
+                blocked_by_protection ->
+                    ?ERROR_REASON(?ERR_PROTECTED_GROUP);
+                allowed ->
+                    ?OK_ENV(fun(#{parentId := ParentId} = _Env, _) ->
+                        ?OK_BINARY(ParentId)
+                    end)
+            end
         },
         % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
@@ -291,8 +314,10 @@ join_parent_test(Config) ->
             },
             bad_values = [
                 {<<"token">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"token">>, CreateTokenForItselfFun,
-                    ?ERR_CANNOT_ADD_RELATION_TO_SELF},
+                {<<"token">>, CreateTokenForItselfFun, case ozt_groups:is_protected(ChildId) of
+                    true -> ?ERR_PROTECTED_GROUP;
+                    false -> ?ERR_CANNOT_ADD_RELATION_TO_SELF
+                end},
                 {<<"token">>, 1234, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)},
                 {<<"token">>, <<"123qwe">>, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)}
             ]
@@ -303,113 +328,150 @@ join_parent_test(Config) ->
     )),
 
     % Check that token is not consumed upon failed operation
-    {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1),
-        #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
-    ),
-    {ok, Token2} = oz_test_utils:group_invite_group_token(
-        Config, ?USER(U1), Group
-    ),
-    {ok, Serialized2} = tokens:serialize(Token2),
-    oz_test_utils:group_add_group(Config, Group, Child),
+    AnotherParentId = ParentCreateFun(),
+    AnotherTokenCreatorId = ozt_users:create(),
+    ozt_groups:add_user(AnotherParentId, AnotherTokenCreatorId, [?GROUP_ADD_CHILD]),
+    AnotherToken = ozt_groups:create_one_shot_group_invite_token(AnotherParentId, AnotherTokenCreatorId),
+
+    ozt_groups:run_without_protection(ChildId, fun() -> ozt_groups:add_child(AnotherParentId, ChildId) end),
+
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]},
-                {user, U2}
+                {user, UserWithPrivilege}
             ]
         },
         rest_spec = RestSpec = #rest_spec{
             method = post,
-            path = [<<"/groups/">>, Child, <<"/parents/join">>],
-            expected_code = ?HTTP_409_CONFLICT
+            path = [<<"/groups/">>, ChildId, <<"/parents/join">>],
+            expected_code = case ExpOutcome of
+                blocked_by_protection -> ?HTTP_403_FORBIDDEN;
+                allowed -> ?HTTP_409_CONFLICT
+            end
         },
         logic_spec = LogicSpec = #logic_spec{
             module = group_logic,
             function = join_group,
-            args = [auth, Child, data],
-            expected_result = ?ERROR_REASON(?ERR_RELATION_ALREADY_EXISTS(od_group, Child, od_group, Group))
+            args = [auth, ChildId, data],
+            expected_result = ?ERROR_REASON(case ExpOutcome of
+                blocked_by_protection -> ?ERR_PROTECTED_GROUP;
+                allowed -> ?ERR_RELATION_ALREADY_EXISTS(od_group, ChildId, od_group, AnotherParentId)
+            end)
         },
         % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"token">>],
-            correct_values = #{<<"token">> => [Serialized2]}
+            correct_values = #{<<"token">> => [ozt_tokens:ensure_serialized(AnotherToken)]}
         }
     },
     VerifyEndFun1 = fun(Token) ->
         fun(_ShouldSucceed, _Env, _) ->
-            oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token#token.id)
+            ozt_tokens:assert_invite_token_usage_limit_reached(Token, false)
         end
     end,
     ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1(Token2)
+        Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1(AnotherToken)
     )),
 
-    {ok, Token3} = oz_test_utils:group_invite_group_token(
-        Config, ?USER(U1), Child
-    ),
-    {ok, Serialized3} = tokens:serialize(Token3),
+    % check that it's not possible for a group to join itself
+    TheLastToken = ozt_groups:create_one_shot_group_invite_token(ChildId, UserWithPrivilege),
     ApiTestSpec2 = ApiTestSpec1#api_test_spec{
         rest_spec = RestSpec#rest_spec{
-            expected_code = ?HTTP_400_BAD_REQUEST
+            expected_code = case ozt_groups:is_protected(ChildId) of
+                true -> ?HTTP_403_FORBIDDEN;
+                false -> ?HTTP_400_BAD_REQUEST
+            end
         },
         logic_spec = LogicSpec#logic_spec{
-            expected_result = ?ERROR_REASON(?ERR_CANNOT_ADD_RELATION_TO_SELF)
+            expected_result = ?ERROR_REASON(case ozt_groups:is_protected(ChildId) of
+                true -> ?ERR_PROTECTED_GROUP;
+                false -> ?ERR_CANNOT_ADD_RELATION_TO_SELF
+            end)
         },
         data_spec = #data_spec{
             required = [<<"token">>],
-            correct_values = #{<<"token">> => [Serialized3]}
+            correct_values = #{<<"token">> => [ozt_tokens:ensure_serialized(TheLastToken)]}
         }
     },
     ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec2, undefined, undefined, VerifyEndFun1(Token3)
+        Config, ApiTestSpec2, undefined, undefined, VerifyEndFun1(TheLastToken)
     )).
 
 
 leave_parent_test(Config) ->
-    % create group with 2 users:
-    %   U2 gets the GROUP_LEAVE_PARENT privilege
-    %   U1 gets all remaining privileges
-    {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_LEAVE_PARENT
+    UserWithPrivilege = ozt_users:create(),
+    UserWithoutPrivilege = ozt_users:create(),
+
+    leave_parent_test_base(
+        Config, UserWithPrivilege, UserWithoutPrivilege,
+        allowed, fun ozt_groups:create/0, fun ozt_groups:create/0
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    leave_parent_test_base(
+        Config, UserWithPrivilege, UserWithoutPrivilege,
+        allowed, fun ozt_groups:create_protected/0, fun ozt_groups:create/0
+    ),
+    leave_parent_test_base(
+        Config, UserWithPrivilege, UserWithoutPrivilege,
+        allowed, fun ozt_groups:create/0, fun ozt_groups:create_protected/0
+    ),
+    leave_parent_test_base(
+        Config, UserWithPrivilege, UserWithoutPrivilege,
+        blocked_by_protection, fun ozt_groups:create_protected/0, fun ozt_groups:create_protected/0
+    ).
+
+
+leave_parent_test_base(Config, UserWithPrivilege, UserWithoutPrivilege, ExpOutcome, ChildCreateFun, ParentCreateFun) ->
+    NonAdmin = ozt_users:create(),
+
+    ChildId = ChildCreateFun(),
+    ozt_groups:add_user(ChildId, UserWithPrivilege, [?GROUP_LEAVE_PARENT]),
+    ozt_groups:add_user(ChildId, UserWithoutPrivilege, privileges:group_admin() -- [?GROUP_LEAVE_PARENT]),
 
     EnvSetUpFun = fun() ->
-        {ok, Group} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME2),
-        {ok, Child} = oz_test_utils:group_add_group(Config, Group, Child),
-        #{groupId => Group}
+        ParentId = ParentCreateFun(),
+        ozt_groups:run_without_protection(ParentId, fun() -> ozt_groups:add_child(ParentId, ChildId) end),
+        #{parentId => ParentId}
     end,
-    DeleteEntityFun = fun(#{groupId := GroupId} = _Env) ->
-        oz_test_utils:group_remove_group(Config, GroupId, Child)
+
+    VerifyEndFun = fun(ClientAuthorized, #{parentId := ParentId} = _Env, _) ->
+        ShouldSucceed = ClientAuthorized andalso ExpOutcome == allowed,
+        ?assertEqual(not ShouldSucceed, lists:member(ChildId, ozt_groups:get_children(ParentId)))
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, _) ->
-        {ok, ChildGroups} = oz_test_utils:group_get_children(Config, GroupId),
-        ?assertEqual(lists:member(Child, ChildGroups), not ShouldSucceed)
+
+    DeleteEntityFun = fun(#{parentId := ParentId} = _Env) ->
+        ozt_groups:run_without_protection(ParentId, fun() -> ozt_groups:remove_child(ParentId, ChildId) end)
     end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2},
+                {user, UserWithPrivilege},
                 {admin, [?OZ_GROUPS_REMOVE_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {user, U1}
+                {user, UserWithoutPrivilege}
             ]
         },
         rest_spec = #rest_spec{
             method = delete,
-            path = [<<"/groups/">>, Child, <<"/parents/">>, groupId],
-            expected_code = ?HTTP_204_NO_CONTENT
+            path = [<<"/groups/">>, ChildId, <<"/parents/">>, parentId],
+            expected_code = case ExpOutcome of
+                blocked_by_protection -> ?HTTP_403_FORBIDDEN;
+                allowed -> ?HTTP_204_NO_CONTENT
+            end
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = leave_group,
-            args = [auth, Child, groupId],
-            expected_result = ?OK_RES
+            args = [auth, ChildId, parentId],
+            expected_result = case ExpOutcome of
+                blocked_by_protection -> ?ERROR_REASON(?ERR_PROTECTED_GROUP);
+                allowed -> ?OK_RES
+            end
         }
         % TODO VFS-4520 Tests for GraphSync API
     },

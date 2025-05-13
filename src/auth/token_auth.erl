@@ -295,8 +295,8 @@ authenticate_by_idp_access_token(Serialized) ->
             case linked_accounts:acquire_user(LinkedAccount) of
                 {ok, #document{key = UserId}} ->
                     {true, ?USER(UserId)};
-                ?ERR_USER_BLOCKED = UserBlockerError ->
-                    ?ERR_UNAUTHORIZED(?err_ctx(), UserBlockerError)
+                {error, _} = Error ->
+                    ?ERR_UNAUTHORIZED(?err_ctx(), Error)
             end;
         ?ERR_UNAUTHORIZED(_) = AuthenticationError ->
             AuthenticationError;

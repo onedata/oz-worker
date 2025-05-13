@@ -26,18 +26,16 @@
 -spec mock(Config :: proplists:proplist(), #oidc_spec{}) -> ok.
 mock(Config, OidcSpec) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, [openid_protocol], [passthrough]),
+    ok = test_utils:mock_new(Nodes, openid_protocol, [passthrough]),
     ok = test_utils:mock_expect(Nodes, openid_protocol, request_idp, fun mock_request_idp/5),
     ok = test_utils:mock_expect(Nodes, openid_protocol, request_idp, fun mock_request_idp/6),
-    testmaster_save_everywhere(Config, mock_spec, OidcSpec),
-
-    ok.
+    testmaster_save_everywhere(Config, mock_spec, OidcSpec).
 
 
 unmock(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_unload(Nodes, [openid_protocol]),
-    ok.
+    ok = test_utils:mock_unload(Nodes, openid_protocol).
+
 
 %%--------------------------------------------------------------------
 %% @doc

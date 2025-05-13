@@ -216,6 +216,8 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
                     Privileges
                 );
             ?AS_GROUP(ChildGroupId) ->
+                assert_not_both_groups_protected(ChildGroupId, GroupId),
+
                 entity_graph:add_relation(
                     od_group, ChildGroupId,
                     od_group, GroupId,
@@ -268,17 +270,19 @@ create(#el_req{gri = #gri{id = GrId, aspect = {user, UserId}}, data = Data}) ->
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
     {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), {UserData, Rev}}};
 
-create(#el_req{gri = #gri{id = GrId, aspect = {child, ChGrId}}, data = Data}) ->
+create(#el_req{gri = #gri{id = ParentGroupId, aspect = {child, ChildGroupId}}, data = Data}) ->
+    assert_not_both_groups_protected(ChildGroupId, ParentGroupId),
+
     Privileges = maps:get(<<"privileges">>, Data, privileges:group_member()),
     entity_graph:add_relation(
-        od_group, ChGrId,
-        od_group, GrId,
+        od_group, ChildGroupId,
+        od_group, ParentGroupId,
         Privileges
     ),
-    NewGRI = #gri{type = od_group, id = ChGrId, aspect = instance, scope = shared},
-    {true, {ChildGroup, Rev}} = fetch_entity(#gri{aspect = instance, id = ChGrId}),
+    NewGRI = #gri{type = od_group, id = ChildGroupId, aspect = instance, scope = shared},
+    {true, {ChildGroup, Rev}} = fetch_entity(#gri{aspect = instance, id = ChildGroupId}),
     {ok, ChildGroupData} = get(#el_req{gri = NewGRI}, ChildGroup),
-    {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), {ChildGroupData, Rev}}}.
+    {ok, resource, {NewGRI, ?THROUGH_GROUP(ParentGroupId), {ChildGroupData, Rev}}}.
 
 
 %%--------------------------------------------------------------------
@@ -399,13 +403,17 @@ get(#el_req{gri = #gri{aspect = eff_atm_inventories}}, Group) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = GroupId, aspect = instance}, data = Data}) ->
-    {ok, _} = od_group:update(GroupId, fun(Group) ->
-        #od_group{name = OldName, type = OldType} = Group,
-        NewName = maps:get(<<"name">>, Data, OldName),
-        NewType = maps:get(<<"type">>, Data, OldType),
-        {ok, Group#od_group{name = NewName, type = NewType}}
-    end),
-    ok;
+    fun(CachedGroup) ->
+        assert_group_not_protected(CachedGroup),
+
+        {ok, _} = od_group:update(GroupId, fun(Group) ->
+            #od_group{name = OldName, type = OldType} = Group,
+            NewName = maps:get(<<"name">>, Data, OldName),
+            NewType = maps:get(<<"type">>, Data, OldType),
+            {ok, Group#od_group{name = NewName, type = NewType}}
+        end),
+        ok
+    end;
 
 update(#el_req{gri = #gri{id = GroupId, aspect = oz_privileges}, data = Data}) ->
     PrivsToGrant = maps:get(<<"grant">>, Data, []),
@@ -421,12 +429,14 @@ update(Req = #el_req{gri = #gri{id = GroupId, aspect = {user_privileges, UserId}
         {PrivsToGrant, PrivsToRevoke}
     );
 
-update(Req = #el_req{gri = #gri{id = ParGrId, aspect = {child_privileges, ChGrId}}}) ->
+update(Req = #el_req{gri = #gri{id = ParentGroupId, aspect = {child_privileges, ChildGroupId}}}) ->
+    assert_not_both_groups_protected(ChildGroupId, ParentGroupId),
+
     PrivsToGrant = maps:get(<<"grant">>, Req#el_req.data, []),
     PrivsToRevoke = maps:get(<<"revoke">>, Req#el_req.data, []),
     entity_graph:update_relation(
-        od_group, ChGrId,
-        od_group, ParGrId,
+        od_group, ChildGroupId,
+        od_group, ParentGroupId,
         {PrivsToGrant, PrivsToRevoke}
     ).
 
@@ -439,13 +449,8 @@ update(Req = #el_req{gri = #gri{id = ParGrId, aspect = {child_privileges, ChGrId
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = GroupId, aspect = instance}}) ->
     {true, {Group, _}} = fetch_entity(#gri{aspect = instance, id = GroupId}),
-    % fixme this should also block other group modifications like type or name
-    case Group#od_group.protected of
-        true ->
-            throw(?ERR_PROTECTED_GROUP(?err_ctx()));
-        false ->
-            entity_graph:delete_with_relations(od_group, GroupId, Group)
-    end;
+    assert_group_not_protected(Group),
+    entity_graph:delete_with_relations(od_group, GroupId, Group);
 
 delete(#el_req{gri = #gri{id = GroupId, aspect = oz_privileges}}) ->
     update(#el_req{gri = #gri{id = GroupId, aspect = oz_privileges}, data = #{
@@ -459,12 +464,16 @@ delete(#el_req{gri = #gri{id = GroupId, aspect = {user, UserId}}}) ->
     );
 
 delete(#el_req{gri = #gri{id = ChildGroupId, aspect = {parent, ParentGroupId}}}) ->
+    assert_not_both_groups_protected(ChildGroupId, ParentGroupId),
+
     entity_graph:remove_relation(
         od_group, ChildGroupId,
         od_group, ParentGroupId
     );
 
 delete(#el_req{gri = #gri{id = ParentGroupId, aspect = {child, ChildGroupId}}}) ->
+    assert_not_both_groups_protected(ChildGroupId, ParentGroupId),
+
     entity_graph:remove_relation(
         od_group, ChildGroupId,
         od_group, ParentGroupId
@@ -1091,3 +1100,35 @@ auth_by_privilege(#el_req{auth = _OtherAuth}, _GroupOrId, _Privilege) ->
     false;
 auth_by_privilege(UserId, GroupOrId, Privilege) ->
     group_logic:has_eff_privilege(GroupOrId, UserId, Privilege).
+
+
+%% @private
+-spec assert_group_not_protected(od_group:record()) -> ok | no_return().
+assert_group_not_protected(Group) ->
+    is_group_protected(Group) andalso throw(?ERR_PROTECTED_GROUP(?err_ctx())),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Some operations are allowed if at least one of the groups is not protected,
+%% e.g. adding a regular group as a child of a protected group. If bot hare protected,
+%% some operations would interfere with the hierarchy inherited from an IdP and
+%% must be disallowed.
+%% @end
+%%--------------------------------------------------------------------
+-spec assert_not_both_groups_protected(od_group:id() | od_group:record(), od_group:id() | od_group:record()) ->
+    ok | no_return().
+assert_not_both_groups_protected(GroupA, GroupB) ->
+    is_group_protected(GroupA) andalso is_group_protected(GroupB) andalso throw(?ERR_PROTECTED_GROUP(?err_ctx())),
+    ok.
+
+
+%% @private
+-spec is_group_protected(od_group:id() | od_group:record()) -> boolean().
+is_group_protected(#od_group{protected = Flag}) ->
+    Flag;
+is_group_protected(GroupId) ->
+    {ok, #document{value = Group}} = od_group:get(GroupId),
+    is_group_protected(Group).
