@@ -50,9 +50,9 @@
     entitlements_are_added_with_admin_and_vo_group_upon_consecutive_login/1,
     highest_role_prevails_with_duplicate_entitlements/1,
     user_privileges_are_modified_on_consecutive_login/1,
-    group_privileges_are_not_modified_on_consecutive_login/1,
-    manual_changes_in_user_privileges_are_overwritten_upon_change_in_idp/1,
-    manual_changes_in_group_privileges_are_persisted/1,
+    group_privileges_are_reconciled_upon_every_login/1,
+    manual_changes_in_user_privileges_are_overwritten_upon_every_login/1,
+    manual_changes_in_group_privileges_are_not_possible/1,
     invalid_entitlements_are_ignored/1,
     entitlements_resulting_in_invalid_onedata_group_name_or_type_are_ignored/1,
     entitlements_with_invalid_privileges_default_to_none/1,
@@ -91,9 +91,9 @@ all() ->
         entitlements_are_added_with_admin_and_vo_group_upon_consecutive_login,
         highest_role_prevails_with_duplicate_entitlements,
         user_privileges_are_modified_on_consecutive_login,
-        group_privileges_are_not_modified_on_consecutive_login,
-        manual_changes_in_user_privileges_are_overwritten_upon_change_in_idp,
-        manual_changes_in_group_privileges_are_persisted,
+        group_privileges_are_reconciled_upon_every_login,
+        manual_changes_in_user_privileges_are_overwritten_upon_every_login,
+        manual_changes_in_group_privileges_are_not_possible,
         invalid_entitlements_are_ignored,
         entitlements_resulting_in_invalid_onedata_group_name_or_type_are_ignored,
         entitlements_with_invalid_privileges_default_to_none,
@@ -586,31 +586,31 @@ user_privileges_are_modified_on_consecutive_login(_) ->
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:manager">>, direct).
 
 
-group_privileges_are_not_modified_on_consecutive_login(_) ->
+group_privileges_are_reconciled_upon_every_login(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
-        {voGroupName, "Third-VO"}, {adminGroup, "staff:member/admins:manager/privileged:admin"}
+        {voGroupName, "Third-VO"}
     ]),
 
-    simulate_first_login(?THIRD_IDP, [<<"staff:member/admins:manager">>]),
-    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
+    simulate_first_login(?THIRD_IDP, [<<"staff:member/sub-unit:member">>]),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/sub-unit:member">>, direct),
 
-    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:admin">>]),
-    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
-    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:admin">>, direct),
+    % if the privileges change in the IdP, they should be reconciled upon login
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/sub-unit:admin">>]),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/sub-unit:admin">>, direct),
+    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/sub-unit:member">>, direct),
 
-    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:member">>]),
-    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
-    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:member">>, direct),
+    % another change in the IdP
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/sub-unit:manager">>]),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/sub-unit:manager">>, direct),
+    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/sub-unit:admin">>, direct),
 
-    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:none">>]),
-    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
-    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:none">>, direct),
-
-    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager">>]),
-    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct).
+    % change them back and check again
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/sub-unit:member">>]),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/sub-unit:member">>, direct),
+    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/sub-unit:manager">>, direct).
 
 
-manual_changes_in_user_privileges_are_overwritten_upon_change_in_idp(Config) ->
+manual_changes_in_user_privileges_are_overwritten_upon_every_login(Config) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
         {voGroupName, "Third-VO"}, {adminGroup, "staff:member/admins:manager/privileged:admin"}
     ]),
@@ -627,19 +627,18 @@ manual_changes_in_user_privileges_are_overwritten_upon_change_in_idp(Config) ->
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:manager">>, direct),
     ?assertHasGroup(false, ?THIRD_IDP, <<"staff:member/admins:manager/user:admin">>, direct),
 
-    % Simulate the next login with the same entitlement as before - manually set
-    % privileges should remain unchanged
+    % Simulate the next login with the same entitlement as before, the manual changes should be overwritten
     simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:admin">>]),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:manager">>, direct),
-    ?assertHasGroup(false, ?THIRD_IDP, <<"staff:member/admins:manager/user:admin">>, direct),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:admin">>, direct),
+    ?assertHasGroup(false, ?THIRD_IDP, <<"staff:member/admins:manager/user:manager">>, direct),
 
-    % If the privileges change in the IdP, the manual changes should be overwritten
+    % If the privileges change in the IdP, the manual changes should be overwritten too
     simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:none">>]),
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:none">>, direct),
     ?assertHasGroup(false, ?THIRD_IDP, <<"staff:member/admins:manager/user:manager">>, direct).
 
 
-manual_changes_in_group_privileges_are_persisted(Config) ->
+manual_changes_in_group_privileges_are_not_possible(Config) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
         {voGroupName, "Third-VO"}, {adminGroup, "staff:member/admins:manager/privileged:admin"}
     ]),
@@ -649,31 +648,10 @@ manual_changes_in_group_privileges_are_persisted(Config) ->
     simulate_first_login(?THIRD_IDP, [<<"staff:member/admins:manager">>]),
     ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
 
-    % Change the privileges manually to member
     MemberPrivileges = entitlement_mapping:map_privileges(member),
-    oz_test_utils:group_set_group_privileges(
-        Config, StaffGroupId, AdminsGroupId, MemberPrivileges, privileges:group_privileges() -- MemberPrivileges
-    ),
-    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:member">>, direct),
-    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
-
-    % Even if the privileges change in the IdP, the manual changes should remain unchanged
-    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:admin">>]),
-    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:member">>, direct),
-    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:admin">>, direct),
-
-    % Change the privileges manually to admin
-    AdminPrivileges = entitlement_mapping:map_privileges(admin),
-    oz_test_utils:group_set_group_privileges(
-        Config, StaffGroupId, AdminsGroupId, AdminPrivileges, privileges:group_privileges() -- AdminPrivileges
-    ),
-    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:admin">>, direct),
-    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
-    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:member">>, direct),
-
-    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:member">>]),
-    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:admin">>, direct),
-    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:member">>, direct).
+    ?assertEqual(?ERR_PROTECTED_GROUP, oz_test_utils:call_oz(Config, group_logic, update_child_privileges, [
+        ?ROOT, StaffGroupId, AdminsGroupId, MemberPrivileges, privileges:group_privileges() -- MemberPrivileges
+    ])).
 
 
 invalid_entitlements_are_ignored(_) ->

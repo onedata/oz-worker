@@ -30,6 +30,7 @@
 -export([revoke_all_temporary_tokens/1]).
 -export([ensure_time_caveat/1]).
 -export([ensure_serialized/1, ensure_deserialized/1]).
+-export([assert_invite_token_usage_limit_reached/2]).
 
 %%%===================================================================
 %%% API
@@ -176,3 +177,20 @@ ensure_deserialized(Serialized) when is_binary(Serialized) ->
     Token;
 ensure_deserialized(Token) ->
     Token.
+
+
+-spec assert_invite_token_usage_limit_reached(tokens:token() | tokens:serialized(), boolean()) ->
+    ok | no_return().
+assert_invite_token_usage_limit_reached(Token, Expected) ->
+    #token{id = TokenId} = ensure_deserialized(Token),
+    {ok, #document{value = #od_token{
+        metadata = Metadata
+    }}} = ?assertMatch({ok, _}, ozt:rpc(od_token, get, [TokenId])),
+    UsageCount = maps:get(<<"usageCount">>, Metadata, 0),
+    IsReached = case maps:get(<<"usageLimit">>, Metadata, <<"infinity">>) of
+        <<"infinity">> ->
+            false;
+        UsageLimit when is_integer(UsageLimit) ->
+            UsageCount >= UsageLimit
+    end,
+    ?assertEqual(Expected, IsReached).

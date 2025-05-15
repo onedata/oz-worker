@@ -1939,7 +1939,7 @@ ensure_predefined_group(GroupId, Name, Privileges) ->
             ?info("Predefined group '~ts' already exists, refreshing name and privileges", [
                 NormalizedName
             ]),
-            ok = update(?ROOT, GroupId, #{<<"name">> => NormalizedName});
+            {ok, _} = od_group:update(GroupId, fun(Group) -> {ok, Group#od_group{name = NormalizedName}} end);
         false ->
             {ok, GroupId} = create_with_predefined_id(?ROOT, GroupId, #{
                 <<"name">> => NormalizedName, <<"type">> => role_holders

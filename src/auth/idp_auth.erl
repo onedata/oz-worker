@@ -183,16 +183,16 @@ refresh_idp_access_token(IdP, RefreshToken) ->
         {ok, Attributes} = openid_protocol:refresh_idp_access_token(IdP, RefreshToken),
         LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
         case linked_accounts:acquire_user(LinkedAccount) of
-            ?ERR_USER_BLOCKED = UserBlockedError ->
-                log_error(UserBlockedError, IdP, <<"refresh_token_flow">>, []),
-                UserBlockedError;
+            {error, _} = Error ->
+                log_error(Error, IdP, <<"refresh_token_flow">>, []),
+                Error;
             {ok, _} ->
                 #linked_account{access_token = {AccessToken, Expires}} = LinkedAccount,
                 {ok, {AccessToken, Expires - ?NOW_SECONDS()}}
         end
     catch
-        throw:Error:Stacktrace ->
-            log_error(Error, IdP, <<"refresh_token_flow">>, Stacktrace),
+        throw:ThrownError:Stacktrace ->
+            log_error(ThrownError, IdP, <<"refresh_token_flow">>, Stacktrace),
             ?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined);
         Type:Reason:Stacktrace ->
             log_error({Type, Reason}, IdP, <<"refresh_token_flow">>, Stacktrace),
@@ -243,10 +243,10 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
 
 %% @private
 -spec validate_login_by_linked_account(od_user:linked_account()) ->
-    {ok, od_user:id()}.
+    {ok, od_user:id()} | errors:error().
 validate_login_by_linked_account(LinkedAccount) ->
     case linked_accounts:acquire_user(LinkedAccount) of
-        ?ERR_USER_BLOCKED = Error ->
+        {error, _} = Error ->
             Error;
         {ok, #document{key = UserId, value = #od_user{full_name = FullName}}} ->
             ?info("User '~ts' has logged in (~ts)", [FullName, UserId]),
@@ -398,11 +398,11 @@ log_error(?ERROR_ACCOUNT_ALREADY_LINKED_TO_ANOTHER_USER(UserId, OtherUserId), Id
         "Cannot link account from IdP '~tp' for user '~ts' (state: ~ts) - account already linked to user '~ts'",
         [IdP, UserId, StateToken, OtherUserId]
     );
-log_error(?ERR_INTERNAL_SERVER_ERROR(_), IdP, StateToken, _) ->
+log_error(?ERR_INTERNAL_SERVER_ERROR(Ref), IdP, StateToken, _) ->
     % The logging is already done when throwing this error
     ?auth_debug(
-        "Cannot validate login request for IdP '~tp' (state: ~ts) - internal server error",
-        [IdP, StateToken]
+        "Cannot validate login request for IdP '~tp' (state: ~ts) - internal server error (ref: ~ts)",
+        [IdP, StateToken, Ref]
     );
 log_error(Error, IdP, StateToken, Stacktrace) ->
     ?auth_error(

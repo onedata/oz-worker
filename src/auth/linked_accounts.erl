@@ -15,6 +15,7 @@
 -include("auth/entitlement_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([to_map/2, to_maps/2]).
@@ -128,7 +129,7 @@ find_user(LinkedAccount) ->
 %% Checks if the user is blocked and returns an error if so.
 %% @end
 %%--------------------------------------------------------------------
--spec acquire_user(od_user:linked_account()) -> {ok, od_user:doc()} | od_error_user_blocked:t().
+-spec acquire_user(od_user:linked_account()) -> {ok, od_user:doc()} | errors:error().
 acquire_user(LinkedAccount) ->
     case find_user(LinkedAccount) of
         {ok, #document{value = #od_user{blocked = true}}} ->
@@ -147,17 +148,24 @@ acquire_user(LinkedAccount) ->
 %% user's effective relations have been fully synchronized.
 %% @end
 %%--------------------------------------------------------------------
--spec merge(od_user:id(), od_user:linked_account()) -> {ok, od_user:doc()}.
+-spec merge(od_user:id(), od_user:linked_account()) -> {ok, od_user:doc()} | errors:error().
 merge(UserId, LinkedAccount) ->
     % The update cannot be done in one transaction, because linked account
     % merging causes adding/removing the user from groups, which modifies user
     % doc and would cause a deadlock. Instead, use a critical section to make
     % sure that merging accounts is sequential.
-    {ok, Doc} = critical_section:run({merge_acc, UserId}, fun() ->
-        merge_unsafe(UserId, LinkedAccount)
+    Result = critical_section:run({merge_acc, UserId}, fun() ->
+        ?catch_exceptions(merge_unsafe(UserId, LinkedAccount))
     end),
-    entity_graph:ensure_up_to_date(),
-    {ok, Doc}.
+    case Result of
+        {ok, Doc} ->
+            entity_graph:ensure_up_to_date(),
+            {ok, Doc};
+        {error, not_found} ->
+            ?ERROR_NOT_FOUND;
+        ?ERR = Error ->
+            Error
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -203,7 +211,7 @@ build_test_user_info(LinkedAccount) ->
 %% it must be ensured that a user with such linked account does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user(od_user:linked_account()) -> {ok, od_user:doc()}.
+-spec create_user(od_user:linked_account()) -> {ok, od_user:doc()} | errors:error().
 create_user(LinkedAccount = #linked_account{full_name = FullName, username = Username}) ->
     ProposedUserId = gen_user_id(LinkedAccount),
     {ok, UserId} = user_logic:create(?ROOT, ProposedUserId, #{
@@ -226,7 +234,7 @@ create_user(LinkedAccount = #linked_account{full_name = FullName, username = Use
     {ok, od_user:doc()}.
 merge_unsafe(UserId, LinkedAccount) ->
     {ok, #document{value = #od_user{
-        emails = Emails, linked_accounts = LinkedAccounts, entitlements = OldEntitlements
+        emails = Emails, linked_accounts = LinkedAccounts, entitlements = PreviousEntitlements
     } = UserInfo}} = od_user:get(UserId),
     #linked_account{
         idp = IdP, subject_id = SubjectId, emails = LinkedEmails,
@@ -248,7 +256,7 @@ merge_unsafe(UserId, LinkedAccount) ->
     end,
 
     NewEntitlements = entitlement_mapping:coalesce_entitlements(
-        UserId, NewLinkedAccs, OldEntitlements
+        UserId, NewLinkedAccs, PreviousEntitlements
     ),
 
     % Return updated user info

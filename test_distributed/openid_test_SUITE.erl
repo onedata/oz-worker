@@ -101,24 +101,19 @@ init_per_suite(Config) ->
     [{?LOAD_MODULES, [oz_test_utils, rest_test_utils, oidc_server_mock]} | Config].
 
 
-init_per_testcase(offline_access_internals, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, openid_protocol, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, openid_protocol, refresh_idp_access_token,
-        fun call_mocked_refresh_endpoint/2
-    ),
-    init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
     oz_test_utils:delete_all_entities(Config),
     oz_test_utils:set_env(Config, openid_xrds_cache_ttl_seconds, -1),
     oz_test_utils:freeze_time(Config),
     Config.
 
-end_per_testcase(offline_access_internals, Config) ->
-    end_per_testcase(default, Config);
+
 end_per_testcase(_, Config) ->
+    % the mock is set up in test cases separately
+    oidc_server_mock:unmock(Config),
     oz_test_utils:unfreeze_time(Config),
     ok.
+
 
 end_per_suite(_Config) ->
     application:stop(hackney),
@@ -536,6 +531,12 @@ offline_access(Config) ->
 
 
 offline_access_internals(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_new(Nodes, openid_protocol, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, openid_protocol, refresh_idp_access_token,
+        fun call_mocked_refresh_endpoint/2
+    ),
+
     SubjectId = <<"offline_access_internals-abcdewq">>,
     RefreshThreshold = oz_test_utils:get_env(Config, idp_access_token_refresh_threshold),
     overwrite_auth_config(Config, false, [{?DUMMY_IDP, ?CORRECT_OIDC_SPEC, #{

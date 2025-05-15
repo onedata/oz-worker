@@ -36,6 +36,7 @@
 -type state() :: #state{}.
 
 -define(DNS_UPDATE_RETRY_INTERVAL, 5000).
+-define(GS_WORKER_POOL_SIZE, oz_worker:get_env(graph_sync_worker_pool_size, 20)).
 
 % List of all known cluster generations.
 % When cluster is not in newest generation it will be upgraded during initialization.
@@ -178,6 +179,7 @@ custom_workers() ->
         {supervisor_flags, gs_worker:supervisor_flags()}
     ]}].
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Overrides {@link node_manager_plugin_default:before_listeners_start/0}.
@@ -185,12 +187,15 @@ custom_workers() ->
 %% NOTE: this callback blocks the application supervisor and must not be used to
 %% interact with the main supervision tree.
 %%
-%% This callback is executed on all cluster nodes.
+%% NOTE: this callback is run on all cluster nodes and is awaited
+%% for before cluster setup proceeds.
 %% @end
 %%--------------------------------------------------------------------
 -spec before_listeners_start() -> ok | {error, Reason :: term()}.
 before_listeners_start() ->
     try
+        gs_worker_pool:init(?GS_WORKER_POOL_SIZE),
+
         % Logic that should be run on every node of the cluster
         onezone_plugins:init(),
 

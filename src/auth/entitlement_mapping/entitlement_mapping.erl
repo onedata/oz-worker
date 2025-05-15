@@ -9,8 +9,22 @@
 %%% Entitlement mapping is used to automatically map users entitlements in an
 %%% IdP to group memberships in Onedata. Entitlements can be understood as the
 %%% right to be a member of a group (or, possibly, a group structure) with
-%%% certain privileges. The section in auth.config concerning the Entitlement
-%%% Mapping has the following structure (example):
+%%% certain privileges.
+%%%
+%%% For each entitlement, a group is created in Onedata that mirrors the group
+%%% in the IdP, together with hierarchical relations (nested groups). They are
+%%% created gradually at every user login, which causes reconciliation of all
+%%% his entitlements, but only them (Onedata is not aware of the other groups
+%%% from the IdP, unless they come with another user login). Hence, typically,
+%%% Onedata holds a subset of all groups originating from an IdP.
+%%%
+%%% All IdP-related groups in Onedata are protected - they cannot be deleted or
+%%% modified, and their membership or privileges in other protected groups cannot
+%%% be changed. They can however be added to non-IdP groups and vice-versa, as well
+%%% as other resources in Onedata. Users can be added manually to the IdP-related groups.
+%%%
+%%% The section in auth.config concerning the Entitlement Mapping has the following
+%%% structure (example):
 %%%
 %%%     entitlementMapping => #{
 %%%         enabled => true,
@@ -176,22 +190,16 @@
 %%% of the nested structure or privileges of the groups in the nested chain
 %%% towards their parents.
 %%%
-%%% User privileges in the bottom group are set when the membership is created
-%%% and each time the privileges resulting from the entitlement mapping change.
-%%% They can be changed manually, but the changes would be overwritten by
-%%% entitlement mapping changes received from an IdP. Example:
-%%% 1) User logs in with entitlement "developers" and "manager" privileges
-%%% 2) User is manually granted "admin" privileges in the "developers" group
-%%% 3) User logs in again with "developers:manager" but his privileges are not
-%%%    changed because no difference since the last login is detected; he still
-%%%    has "admin" privileges
-%%% 4) User logs in again with "developers:member", which causes his privileges
-%%%    to be changed down to "member" - manual changes have been overwritten
+%%% User privileges in the bottom group are reconciled upon every login.
+%%% They can be changed manually, but the changes will be overwritten during
+%%% a consecutive login. Example:
+%%% 1) User logs in with entitlement "developers" and "manager" privileges.
+%%% 2) User is manually granted "admin" privileges in the "developers" group.
+%%% 3) User logs in again with "developers:member", which causes his privileges
+%%%    to be changed down to "member" - manual changes have been overwritten.
 %%%
-%%% For child groups, the privileges are set only when creating a new
-%%% membership - later changes in the corresponding entitlement will NOT be
-%%% taken into account. The privileges can be changed manually without the risk
-%%% of being overwritten by the entitlement mapping.
+%%% For child groups in the hierarchy, the privileges are reconciled every time a user with
+%%% given group logs in. They cannot be changed manually as the groups are protected.
 %%%
 %%% There are three possible sets of privileges: member, manager, admin.
 %%% They expand to a certain set of Onedata group privileges:
@@ -335,6 +343,16 @@
 -include_lib("ctool/include/errors.hrl").
 
 
+%% API
+-export([
+    enabled/1,
+    coalesce_entitlements/3,
+    gen_group_id/1,
+    map_entitlement/2, map_entitlements/2,
+    map_privileges/1
+]).
+
+
 -type raw_entitlement() :: binary().
 -type idp_group() :: #idp_group{}.
 -type idp_entitlement() :: #idp_entitlement{}.
@@ -354,16 +372,6 @@
 -define(CFG_ADMIN_GROUP(__IdP), ?bin(?cfg(__IdP, [adminGroup], {default, undefined}))).
 -define(CFG_PARSER(__IdP), ?cfg(__IdP, [parser], {default, ?DEFAULT_PARSER})).
 -define(CFG_PARSER_CONFIG(__IdP), ?cfg(__IdP, [parserConfig], {default, #{}})).
-
-
-%% API
--export([
-    enabled/1,
-    coalesce_entitlements/3,
-    gen_group_id/1,
-    map_entitlement/2, map_entitlements/2,
-    map_privileges/1
-]).
 
 
 %%%===================================================================
@@ -390,38 +398,34 @@ enabled(IdP) ->
 %%--------------------------------------------------------------------
 -spec coalesce_entitlements(od_user:id(), [od_user:linked_account()], od_user:entitlements()) ->
     od_user:entitlements().
-coalesce_entitlements(UserId, LinkedAccounts, OldEntitlements) ->
-    NewEntitlements = lists:flatmap(fun(LinkedAccount) ->
+coalesce_entitlements(UserId, LinkedAccounts, PreviousEntitlements) ->
+    CurrentEntitlements = lists:flatmap(fun(LinkedAccount) ->
         map_entitlements(LinkedAccount)
     end, LinkedAccounts),
 
-    EntitlementsToAdd = lists:filter(fun({GroupId, #idp_entitlement{privileges = Privileges}}) ->
-        not lists:member({GroupId, Privileges}, OldEntitlements)
-    end, NewEntitlements),
-
-    EntitlementsToRemove = lists:foldl(fun({GroupId, _NewIdPEntitlement}, AccGroups) ->
-        proplists:delete(GroupId, AccGroups)
-    end, OldEntitlements, NewEntitlements),
-
+    % the group structure, group member privileges, and user member privileges are
+    % reconciled upon every login for every entitlement
     lists:foreach(fun({GroupId, IdPEnt = #idp_entitlement{privileges = UserPrivileges}}) ->
         case ensure_group_structure(IdPEnt) of
             {ok, _} ->
-                ensure_member(GroupId, UserId, map_privileges(UserPrivileges));
+                ensure_user_membership(GroupId, UserId, UserPrivileges);
             {error, _} = Error ->
                 ?auth_debug("Cannot create group structure for entitlement due to ~w, ignoring: ~tp", [
                     Error, IdPEnt
                 ])
         end
-    end, EntitlementsToAdd),
+    end, CurrentEntitlements),
 
+    % remove the user from the groups he no longer is entitled to
     lists:foreach(fun({GroupId, _}) ->
-        group_logic:remove_user(?ROOT, GroupId, UserId)
-    end, EntitlementsToRemove),
+        proplists:is_defined(GroupId, CurrentEntitlements) orelse
+            ?check(group_logic:remove_user(?ROOT, GroupId, UserId))
+    end, PreviousEntitlements),
 
     % Return the new entitlements list in proper format
     lists:map(fun({GroupId, #idp_entitlement{privileges = Privileges}}) ->
         {GroupId, Privileges}
-    end, NewEntitlements).
+    end, CurrentEntitlements).
 
 
 %%--------------------------------------------------------------------
@@ -571,7 +575,7 @@ ensure_group_structure(Depth, Path, ParentId, AdminGroupId) ->
     SubGroupPath = lists:sublist(Path, Depth),
     case ensure_child_group(SubGroupPath, ParentId) of
         {ok, GroupId} ->
-            add_admin_group_as_child(GroupId, AdminGroupId),
+            ensure_admin_group_membership(GroupId, AdminGroupId),
             ensure_group_structure(Depth + 1, Path, GroupId, AdminGroupId);
         {error, _} = Error ->
             Error
@@ -582,36 +586,54 @@ ensure_group_structure(Depth, Path, ParentId, AdminGroupId) ->
 -spec ensure_child_group([idp_group()], ParentId :: undefined | od_group:id()) ->
     {ok, od_group:id()} | errors:error().
 ensure_child_group(Path, ParentId) ->
-    GroupId = gen_group_id(Path),
+    ChildId = gen_group_id(Path),
     #idp_group{type = Type, name = Name, privileges = Privileges} = lists:last(Path),
-    case group_logic:ensure_entitlement_group(GroupId, Name, Type) of
+    case group_logic:ensure_entitlement_group(ChildId, Name, Type) of
         ok ->
-            ParentId /= undefined andalso group_logic:add_group(
-                ?ROOT, ParentId, GroupId, map_privileges(Privileges)
-            ),
-            {ok, GroupId};
+            ParentId /= undefined andalso ensure_child_membership(ParentId, ChildId, Privileges),
+            {ok, ChildId};
         {error, _} = Error ->
             Error
     end.
 
 
 %% @private
--spec ensure_member(od_group:id(), od_user:id(), [privileges:group_privilege()]) -> ok.
-ensure_member(GroupId, UserId, PrivsToGrant) ->
-    group_logic:add_user(?ROOT, GroupId, UserId), % Fails silently if already a member
-    PrivsToRevoke = privileges:group_privileges() -- PrivsToGrant,
-    ok = group_logic:update_user_privileges(?ROOT, GroupId, UserId, PrivsToGrant, PrivsToRevoke).
+-spec ensure_user_membership(od_group:id(), od_user:id(), privileges()) -> ok.
+ensure_user_membership(GroupId, UserId, Privileges) ->
+    PrivsToGrant = map_privileges(Privileges),
+    case group_logic:add_user(?ROOT, GroupId, UserId, PrivsToGrant) of
+        {ok, _} ->
+            ok;
+        ?ERR_RELATION_ALREADY_EXISTS(_, _, _, _) ->
+            PrivsToRevoke = privileges:group_admin() -- PrivsToGrant,
+            ok = group_logic:update_user_privileges(?ROOT, GroupId, UserId, PrivsToGrant, PrivsToRevoke)
+    end.
 
 
 %% @private
--spec add_admin_group_as_child(od_group:id(), AdminGroupId :: undefined | od_group:id()) -> ok.
-add_admin_group_as_child(_GroupId, undefined) ->
+-spec ensure_child_membership(od_group:id(), od_group:id(), privileges()) -> ok.
+ensure_child_membership(ParentId, ChildId, Privileges) ->
+    PrivsToGrant = map_privileges(Privileges),
+    % bypass group_logic as it enforces checks on protected groups
+    try entity_graph:add_relation(od_group, ChildId, od_group, ParentId, PrivsToGrant) of
+        ok ->
+            ok
+    catch
+        throw:?ERR_RELATION_ALREADY_EXISTS(_, _, _, _) ->
+            PrivsToRevoke = privileges:group_admin() -- PrivsToGrant,
+            entity_graph:update_relation(od_group, ChildId, od_group, ParentId, {PrivsToGrant, PrivsToRevoke})
+    end.
+
+
+%% @private
+-spec ensure_admin_group_membership(od_group:id(), AdminGroupId :: undefined | od_group:id()) -> ok.
+ensure_admin_group_membership(_GroupId, undefined) ->
     ok;
-add_admin_group_as_child(GroupId, GroupId) ->
+ensure_admin_group_membership(GroupId, GroupId) ->
     % Do not add the admin group to itself
     ok;
-add_admin_group_as_child(GroupId, AdminGroupId) ->
-    group_logic:add_group(?ROOT, GroupId, AdminGroupId, map_privileges(admin)),
+ensure_admin_group_membership(GroupId, AdminGroupId) ->
+    ensure_child_membership(GroupId, AdminGroupId, admin),
     ?auth_debug("Added admin group '~ts' as subgroup of '~ts' with admin privileges", [
         AdminGroupId, GroupId
     ]),
