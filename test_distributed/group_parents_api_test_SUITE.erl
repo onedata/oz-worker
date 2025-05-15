@@ -232,7 +232,7 @@ join_parent_test_base(Config, UserWithPrivilege, UserWithoutPrivilege, ExpOutcom
     NonAdmin = ozt_users:create(),
 
     ChildId = ChildCreateFun(),
-    ozt_groups:add_user(ChildId, UserWithPrivilege, [?GROUP_ADD_PARENT, ?GROUP_ADD_CHILD]),
+    ozt_groups:add_user(ChildId, UserWithPrivilege, [?GROUP_ADD_PARENT]),
     ozt_groups:add_user(ChildId, UserWithoutPrivilege, privileges:group_admin() -- [?GROUP_ADD_PARENT]),
 
     CreateTokenForItselfFun = fun() ->
