@@ -27,7 +27,7 @@
 -export([add_child/2, add_child/3]).
 -export([get_children/1]).
 -export([remove_child/2]).
--export([set_user_privileges/3, get_user_privileges/2]).
+-export([set_user_privileges/3, update_user_privileges/4, get_user_privileges/2]).
 -export([set_child_privileges/3, update_child_privileges/4, get_child_privileges/2]).
 -export([get_atm_inventories/1]).
 -export([grant_oz_privileges/2, revoke_oz_privileges/2]).
@@ -138,9 +138,19 @@ remove_child(ParentId, ChildId) ->
 
 -spec set_user_privileges(od_group:id(), od_user:id(), [privileges:group_privilege()]) -> ok.
 set_user_privileges(GroupId, UserId, Privileges) ->
-    ?assertMatch(ok, ozt:rpc(group_logic, update_user_privileges, [?ROOT, GroupId, UserId, #{
-        <<"grant">> => Privileges,
-        <<"revoke">> => lists_utils:subtract(privileges:group_admin(), Privileges)
+    update_user_privileges(GroupId, UserId, Privileges, lists_utils:subtract(privileges:group_admin(), Privileges)).
+
+
+-spec update_user_privileges(
+    od_group:id(),
+    od_user:id(),
+    [privileges:group_privilege()],
+    [privileges:group_privilege()]
+) -> ok.
+update_user_privileges(ParentId, UserId, ToGrant, ToRevoke) ->
+    ?assertMatch(ok, ozt:rpc(group_logic, update_user_privileges, [?ROOT, ParentId, UserId, #{
+        <<"grant">> => ToGrant,
+        <<"revoke">> => ToRevoke
     }])).
 
 

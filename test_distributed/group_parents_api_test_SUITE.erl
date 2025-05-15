@@ -235,8 +235,12 @@ join_parent_test_base(Config, UserWithPrivilege, UserWithoutPrivilege, ExpOutcom
     ozt_groups:add_user(ChildId, UserWithPrivilege, [?GROUP_ADD_PARENT]),
     ozt_groups:add_user(ChildId, UserWithoutPrivilege, privileges:group_admin() -- [?GROUP_ADD_PARENT]),
 
+    TokenCreatorInChildGroup = ozt_users:create(),
+    ozt_groups:add_user(ChildId, TokenCreatorInChildGroup, [?GROUP_ADD_CHILD]),
     CreateTokenForItselfFun = fun() ->
-        ozt_tokens:ensure_serialized(ozt_groups:create_one_shot_group_invite_token(ChildId, UserWithPrivilege))
+        ozt_tokens:ensure_serialized(
+            ozt_groups:create_one_shot_group_invite_token(ChildId, TokenCreatorInChildGroup)
+        )
     end,
 
     EnvSetUpFun = fun() ->
@@ -375,7 +379,7 @@ join_parent_test_base(Config, UserWithPrivilege, UserWithoutPrivilege, ExpOutcom
     )),
 
     % check that it's not possible for a group to join itself
-    TheLastToken = ozt_groups:create_one_shot_group_invite_token(ChildId, UserWithPrivilege),
+    TheLastToken = ozt_groups:create_one_shot_group_invite_token(ChildId, TokenCreatorInChildGroup),
     ApiTestSpec2 = ApiTestSpec1#api_test_spec{
         rest_spec = RestSpec#rest_spec{
             expected_code = case ozt_groups:is_protected(ChildId) of
