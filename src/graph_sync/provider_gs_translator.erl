@@ -242,7 +242,11 @@ translate_resource(_, #gri{type = od_space, id = SpaceId, aspect = instance, sco
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"storages">> => Storages,
 
+        % TODO VFS-12760 because this field is emulated, we don't get GS updates if it changes!
+        %                probably we must trigger od_space doc update every time a share is created
+        % TODO VFS-12760 double-check all other emulated fields for the same problem
         <<"shares">> => share_registry:list_ids(SpaceId, #{limit => infinity}),
+        % TODO VFS-12760 remove the hack in op_worker: space_logic
         <<"harvesters">> => Harvesters,
 
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry)

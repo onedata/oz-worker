@@ -17,18 +17,26 @@
 -include("ozt.hrl").
 
 %% API
--export([create/0, create/1]).
--export([get/1]).
+-export([create/0, create/1, create_protected/0]).
+-export([list/0, get/1]).
 -export([create_space_for/1]).
 -export([create_atm_inventory_for/1, create_atm_inventory_for/2]).
 -export([add_user/2, add_user/3]).
 -export([remove_user/2]).
+-export([create_one_shot_group_invite_token/2]).
 -export([add_child/2, add_child/3]).
--export([set_user_privileges/3, get_user_privileges/2, get_child_privileges/2]).
+-export([get_children/1]).
+-export([remove_child/2]).
+-export([set_user_privileges/3, update_user_privileges/4, get_user_privileges/2]).
+-export([set_child_privileges/3, update_child_privileges/4, get_child_privileges/2]).
 -export([get_atm_inventories/1]).
 -export([grant_oz_privileges/2, revoke_oz_privileges/2]).
 -export([join_space/3]).
 -export([delete/1]).
+-export([mark_protected/2, is_protected/1]).
+-export([run_without_protection/2]).
+
+-compile({no_auto_import, [get/1]}).
 
 %%%===================================================================
 %%% API
@@ -42,6 +50,19 @@ create() ->
 create(Data) ->
     {ok, GroupId} = ?assertMatch({ok, _}, ozt:rpc(group_logic, create, [?ROOT, Data])),
     GroupId.
+
+
+-spec create_protected() -> od_group:id().
+create_protected() ->
+    GroupId = create(),
+    mark_protected(GroupId, true),
+    GroupId.
+
+
+-spec list() -> [od_group:id()].
+list() ->
+    {ok, GroupIds} = ?assertMatch({ok, _}, ozt:rpc(group_logic, list, [?ROOT])),
+    GroupIds.
 
 
 -spec get(od_group:id()) -> od_group:record().
@@ -86,6 +107,14 @@ remove_user(GroupId, UserId) ->
     ?assertMatch(ok, ozt:rpc(group_logic, remove_user, [?ROOT, GroupId, UserId])).
 
 
+-spec create_one_shot_group_invite_token(od_group:id(), od_user:id()) -> tokens:token().
+create_one_shot_group_invite_token(GroupId, CreatorUserId) ->
+    ozt_tokens:create(named, ?SUB(user, CreatorUserId), #{
+        <<"type">> => ?INVITE_TOKEN(?GROUP_JOIN_GROUP, GroupId),
+        <<"usageLimit">> => 1
+    }).
+
+
 -spec add_child(od_group:id(), od_group:id()) -> ok.
 add_child(ParentId, ChildId) ->
     add_child(ParentId, ChildId, privileges:group_member()).
@@ -96,11 +125,32 @@ add_child(ParentId, ChildId, Privileges) ->
     ok.
 
 
+-spec get_children(od_group:id()) -> [od_group:id()].
+get_children(GroupId) ->
+    {ok, ChildIds} = ?assertMatch({ok, _}, ozt:rpc(group_logic, get_children, [?ROOT, GroupId])),
+    ChildIds.
+
+
+-spec remove_child(od_group:id(), od_group:id()) -> ok.
+remove_child(ParentId, ChildId) ->
+    ?assertMatch(ok, ozt:rpc(group_logic, remove_group, [?ROOT, ParentId, ChildId])).
+
+
 -spec set_user_privileges(od_group:id(), od_user:id(), [privileges:group_privilege()]) -> ok.
 set_user_privileges(GroupId, UserId, Privileges) ->
-    ?assertMatch(ok, ozt:rpc(group_logic, update_user_privileges, [?ROOT, GroupId, UserId, #{
-        <<"grant">> => Privileges,
-        <<"revoke">> => lists_utils:subtract(privileges:group_admin(), Privileges)
+    update_user_privileges(GroupId, UserId, Privileges, lists_utils:subtract(privileges:group_admin(), Privileges)).
+
+
+-spec update_user_privileges(
+    od_group:id(),
+    od_user:id(),
+    [privileges:group_privilege()],
+    [privileges:group_privilege()]
+) -> ok.
+update_user_privileges(ParentId, UserId, ToGrant, ToRevoke) ->
+    ?assertMatch(ok, ozt:rpc(group_logic, update_user_privileges, [?ROOT, ParentId, UserId, #{
+        <<"grant">> => ToGrant,
+        <<"revoke">> => ToRevoke
     }])).
 
 
@@ -108,6 +158,24 @@ set_user_privileges(GroupId, UserId, Privileges) ->
 get_user_privileges(GroupId, UserId) ->
     {ok, Privs} = ?assertMatch({ok, _}, ozt:rpc(group_logic, get_user_privileges, [?ROOT, GroupId, UserId])),
     Privs.
+
+
+-spec set_child_privileges(od_group:id(), od_group:id(), [privileges:group_privilege()]) -> ok.
+set_child_privileges(ParentId, ChildId, Privileges) ->
+    update_child_privileges(ParentId, ChildId, Privileges, lists_utils:subtract(privileges:group_admin(), Privileges)).
+
+
+-spec update_child_privileges(
+    od_group:id(),
+    od_group:id(),
+    [privileges:group_privilege()],
+    [privileges:group_privilege()]
+) -> ok.
+update_child_privileges(ParentId, ChildId, ToGrant, ToRevoke) ->
+    ?assertMatch(ok, ozt:rpc(group_logic, update_child_privileges, [?ROOT, ParentId, ChildId, #{
+        <<"grant">> => ToGrant,
+        <<"revoke">> => ToRevoke
+    }])).
 
 
 -spec get_child_privileges(Parent :: od_group:id(), Child :: od_group:id()) -> [privileges:group_privilege()].
@@ -143,3 +211,26 @@ join_space(GroupId, ConsumerUserId, Token) ->
 -spec delete(od_group:id()) -> ok.
 delete(GroupId) ->
     ?assertMatch(ok, ozt:rpc(group_logic, delete, [?ROOT, GroupId])).
+
+
+-spec mark_protected(od_group:id(), boolean()) -> ok.
+mark_protected(GroupId, Flag) ->
+    ?assertMatch({ok, _}, ozt:rpc(od_group, update, [GroupId, fun(Group) ->
+        {ok, Group#od_group{protected = Flag}}
+    end])),
+    ok.
+
+
+-spec is_protected(od_group:id()) -> boolean().
+is_protected(GroupId) ->
+    #od_group{protected = Protected} = get(GroupId),
+    Protected.
+
+
+-spec run_without_protection(od_group:id(), fun(() -> ok)) -> ok.
+run_without_protection(GroupId, Procedure) ->
+    WasProtected = ozt_groups:is_protected(GroupId),
+    WasProtected andalso ozt_groups:mark_protected(GroupId, false),
+    Procedure(),
+    WasProtected andalso ozt_groups:mark_protected(GroupId, true),
+    ok.
