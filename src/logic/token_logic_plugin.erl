@@ -786,6 +786,7 @@ build_data_access_scope_info(SpaceIds, Caveats) ->
                     case lists:member(ProviderId, AllowedProviderIds) of
                         true ->
                             Acc#{ProviderId => #{
+                                % TODO VFS-12743 add storageId here
                                 % the support of a provider is marked as readonly when
                                 % all its supporting storages are readonly
                                 <<"readonly">> => Readonly andalso kv_utils:get([ProviderId, <<"readonly">>], Acc, true)
