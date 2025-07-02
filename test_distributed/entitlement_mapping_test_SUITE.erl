@@ -442,14 +442,14 @@ entitlements_are_added_with_admin_and_vo_group_upon_first_login(_) ->
         {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
     ]),
     simulate_first_login(?THIRD_IDP, [
-        <<"staff:member/vm-operators:member/user:manager">>,
+        <<"staff:member/vm-operators:none/user:manager">>,
         <<"task4.1:manager/user:member">>,
         <<"testGroup:admin/user:admin">>,
         <<"staff:member/admins:member/readonly:member/user:none">>,
         <<"staff:member/admins:member/privileged:admin/user:manager">>
     ]),
     ?assertUserGroupsCount(5, 8),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:manager">>, direct),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:none/user:manager">>, direct),
     ?assertHasGroup(true, ?THIRD_IDP, <<"task4.1:manager/user:member">>, direct),
     ?assertHasGroup(true, ?THIRD_IDP, <<"testGroup:admin/user:admin">>, direct),
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:member/readonly:member/user:none">>, direct),
@@ -461,7 +461,9 @@ entitlements_are_added_with_admin_and_vo_group_upon_first_login(_) ->
     ?assertTotalGroupsCount(8),
     % All groups should belong to their parents and the top parent to the VO group
     ?assertGroupStructure(?THIRD_IDP,
-        <<"staff:member">>, <<"staff:member/vm-operators:member/user:manager">>, direct),
+        <<"staff:member">>, <<"staff:member/vm-operators:none">>, direct),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"staff:member">>, <<"staff:member/vm-operators:none/user:manager">>, direct),
     ?assertGroupStructure(?THIRD_IDP,
         <<"staff:member">>, <<"staff:member/admins:member">>, direct),
     ?assertGroupStructure(?THIRD_IDP,
@@ -475,7 +477,7 @@ entitlements_are_added_with_admin_and_vo_group_upon_first_login(_) ->
     ?assertGroupStructure(?THIRD_IDP,
         <<"Third-VO">>, <<"staff:member">>, direct),
     ?assertGroupStructure(?THIRD_IDP,
-        <<"Third-VO">>, <<"staff:member/vm-operators:member/user:manager">>, effective),
+        <<"Third-VO">>, <<"staff:member/vm-operators:none/user:manager">>, effective),
     ?assertGroupStructure(?THIRD_IDP,
         <<"Third-VO">>, <<"staff:member/admins:member">>, effective),
     ?assertGroupStructure(?THIRD_IDP,
