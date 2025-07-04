@@ -31,12 +31,10 @@
 -export([parse/3]).
 -export([validation_examples/0]).
 
-% Special admin group as defined in https://docs.egi.eu/users/aai/check-in/vos/#managing-cou-admin-members
-% Admin groups are created automatically for each COU (Collaborative Organisation Unit) group
-% and members of such admin group should have administrative privileges in the parent COU group.
--define(EGI_COU_ADMINS_GROUP, <<"admins">>).
-% Similar to the admins group, but with regular privileges
--define(EGI_COU_MEMBERS_GROUP, <<"members">>).
+
+% The top group for all the groups coming from EGI IdP.
+-define(EGI_ORIGIN_GROUP, <<"aai.egi.eu">>).
+
 
 %%%===================================================================
 %%% API functions
@@ -95,35 +93,52 @@ validation_examples() ->
 %% @doc
 %% Returns an #idp_entitlement{} that represents user's group membership for EGI.
 %%
+%% The mapping is performed with compliance to the AARC-G069 guidelines. The information
+%% in this doc is extracted from the guidelines for convenience.
+%%      https://aarc-community.org/guidelines/aarc-g069
+%%
 %% Group format:
-%%      urn:mace:egi.eu:group:<VO>[[:<GROUP>][:<SUBGROUP>*]][:role=<ROLE>]#<GROUP-AUTHORITY>
+%%      <NAMESPACE>:group:<GROUP>[:<SUBGROUP>*][:role=<ROLE>][#<AUTHORITY>]
 %% where:
-%%      <VO> is the name of the Virtual Organisation
-%%      <GROUP> is the name of a group in the identified <VO>;
-%%          specifying a group is optional
-%%      zero or more <SUBGROUP> components represent the hierarchy of subgroups
-%%          in the <GROUP>; specifying sub-groups is optional
-%%      the optional <ROLE> component is scoped to the rightmost (sub)group;
-%%          if no group information is specified, the role applies to the VO
-%%      <GROUP-AUTHORITY> is a non-empty string that indicates the authoritative
-%%          source for the entitlement value. For example, it can be the FQDN of
-%%          the group management system that is responsible for the identified
-%%          group membership information
+%%      <NAMESPACE> is the namespace identifier associated with a URN namespace
+%%           registered with IANA, as per [RFC8141], ensuring global uniqueness.
+%%
+%%      The literal string "group" indicates a value expressing group membership information.
+%%
+%%      <GROUP> is the name of a Virtual Organisation (VO), research collaboration or a top
+%%           level arbitrary group. Group names MUST be unique within a given namespace.
+%%
+%%      An optional list of <SUBGROUP> components represents the hierarchy of subgroups in
+%%           the <GROUP>.
+%%
+%%      The optional <ROLE> component is scoped to the rightmost (sub)group; if no subgroup
+%%           information is specified, the role applies to the top level group/VO.
+%%
+%%      The <AUTHORITY> can be specified in the optional f-component of the URN.
+%%          Specifying the <AUTHORITY> is deprecated by this specification and may be removed
+%%          in a future revision. When specified, the <AUTHORITY> MUST be a non-empty string
+%%          introduced by the number sign ("#") character and terminated by the end of the URN.
+%%
+%% IMPORTANT NOTES:
+%%     * Currently, only groups with namespace "urn:mace:egi.eu" are accepted.
+%%     * Currently, all groups from EGI are plugged as children of the ?EGI_ORIGIN_GROUP,
+%%       although this group is not transmitted in the entitlements (it's added artificially).
+%%     * Group names are expected to be URL-encoded as specified in the AARC-G069 guidelines.
+%%     * The "#<AUTHORITY>" suffix is ignored, present or not, to account for its
+%%       deprecation and prepare for its removal in the future.
 %% @end
 %%--------------------------------------------------------------------
 -spec parse_egi_entitlement(entitlement_mapping:raw_entitlement(), auth_config:parser_config()) ->
     entitlement_mapping:idp_entitlement().
 parse_egi_entitlement(<<"urn:mace:egi.eu:group:", Group/binary>>, ParserConfig) ->
-    % Strip out the prefix standard for EGI
+    % strip out the prefix standard for EGI - currently the only accepted namespace
 
-    OriginGroupType = maps:get(originGroupType, ParserConfig, organization),
-    TopGroupType = maps:get(topGroupType, ParserConfig, team),
-    SubGroupsType = maps:get(subGroupsType, ParserConfig, team),
+    % As of AARC-G069 Guidelines, the "#<AUTHORITY>" suffix is deprecated and
+    % should be ignored.
+    GroupStructureEncoded = hd(binary:split(Group, <<"#">>)),
 
-    [GroupStructureEncoded, Origin] = binary:split(Group, <<"#">>),
-    % Replace plus sings with spaces
-    GroupStructure = binary:replace(GroupStructureEncoded, <<"+">>, <<" ">>, [global]),
-    GroupTokens = binary:split(GroupStructure, <<":">>, [global, trim_all]),
+    GroupTokensEncoded = binary:split(GroupStructureEncoded, <<":">>, [global, trim_all]),
+    GroupTokens = lists:map(fun http_utils:url_decode/1, GroupTokensEncoded),
 
     {GroupNames, RoleStr} = case lists:last(GroupTokens) of
         <<"role=", Role/binary>> ->
@@ -132,44 +147,30 @@ parse_egi_entitlement(<<"urn:mace:egi.eu:group:", Group/binary>>, ParserConfig) 
             {GroupTokens, undefined}
     end,
 
-    UserPrivileges = case RoleStr of
-        <<"member">> -> member;
-        <<"manager">> -> manager;
-        <<"admin">> -> admin;
-        <<"chair">> -> admin;
-        <<"owner">> -> admin;
-        _ -> member
-    end,
-
     TopGroupName = hd(GroupNames),
     SubGroupNames = tl(GroupNames),
 
-    {MappedSubGroups, _} = lists:mapfoldl(fun(SubGroupName, ParentGroupName) ->
-        MappedGroup = #idp_group{
-            type = SubGroupsType,
-            name = case SubGroupName of
-                ?EGI_COU_ADMINS_GROUP -> <<ParentGroupName/binary, " - ", SubGroupName/binary>>;
-                ?EGI_COU_MEMBERS_GROUP -> <<ParentGroupName/binary, " - ", SubGroupName/binary>>;
-                _ -> SubGroupName
-            end,
-            privileges = case SubGroupName of
-                ?EGI_COU_ADMINS_GROUP -> admin;
-                _ -> member
-            end
-        },
-        {MappedGroup, SubGroupName}
-    end, TopGroupName, SubGroupNames),
+    OriginGroupType = maps:get(originGroupType, ParserConfig, organization),
+    TopGroupType = maps:get(topGroupType, ParserConfig, team),
+    SubGroupsType = maps:get(subGroupsType, ParserConfig, team),
 
-    Path = [
-        #idp_group{type = OriginGroupType, name = Origin},
-        #idp_group{type = TopGroupType, name = TopGroupName}
-        | MappedSubGroups
-    ],
+    Path = lists:flatten([
+        #idp_group{type = OriginGroupType, name = ?EGI_ORIGIN_GROUP},
+        #idp_group{type = TopGroupType, name = TopGroupName},
+        [#idp_group{type = SubGroupsType, name = SubGroupName} || SubGroupName <- SubGroupNames]
+    ]),
 
     #idp_entitlement{
         idp = egi,
         path = Path,
-        privileges = UserPrivileges
+        privileges = case RoleStr of
+            <<"member">> -> member;
+            <<"manager">> -> manager;
+            <<"admin">> -> admin;
+            <<"chair">> -> admin;
+            <<"owner">> -> admin;
+            _ -> member
+        end
     }.
 
 
@@ -278,13 +279,13 @@ egi_validation_examples() -> [
         ], privileges = member}
     },
     {
-        <<"urn:mace:egi.eu:group:fedcloud.egi.eu:child:role=member#sso.egi.eu">>,
+        <<"urn:mace:egi.eu:group:fedcloud.egi.eu:child:role=manager#aai.egi.eu">>,
         #{},
         #idp_entitlement{idp = egi, path = [
-            #idp_group{type = organization, name = <<"sso.egi.eu">>, privileges = member},
+            #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"fedcloud.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"child">>, privileges = member}
-        ], privileges = member}
+        ], privileges = manager}
     },
     {
         <<"urn:mace:egi.eu:group:fedcloud.egi.eu:members:role=owner#aai.egi.eu">>,
@@ -296,19 +297,29 @@ egi_validation_examples() -> [
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = unit, name = <<"aai.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"fedcloud.egi.eu">>, privileges = member},
-            #idp_group{type = role_holders, name = <<"fedcloud.egi.eu - members">>, privileges = member}
+            #idp_group{type = role_holders, name = <<"members">>, privileges = member}
         ], privileges = admin}
     },
     {
-        <<"urn:mace:egi.eu:group:egi-engage-members:role=manager#sso.egi.eu">>,
+        <<"urn:mace:egi.eu:group:egi-engage-members:role=admin#aai.egi.eu">>,
         #{},
         #idp_entitlement{idp = egi, path = [
-            #idp_group{type = organization, name = <<"sso.egi.eu">>, privileges = member},
+            #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"egi-engage-members">>, privileges = member}
-        ], privileges = manager}
+        ], privileges = admin}
     },
     {
-        <<"urn:mace:egi.eu:group:egi-engage-members:role=admin#aai.egi.eu">>,
+        % the #<AUTHORITY> bit is ignored so this should be equivalent to the above
+        <<"urn:mace:egi.eu:group:egi-engage-members:role=admin#sso.egi.eu">>,
+        #{},
+        #idp_entitlement{idp = egi, path = [
+            #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
+            #idp_group{type = team, name = <<"egi-engage-members">>, privileges = member}
+        ], privileges = admin}
+    },
+    {
+        % the #<AUTHORITY> bit is ignored so this should be equivalent to the above
+        <<"urn:mace:egi.eu:group:egi-engage-members:role=admin">>,
         #{},
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
@@ -321,7 +332,7 @@ egi_validation_examples() -> [
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"vo.access.egi.eu">>, privileges = member},
-            #idp_group{type = team, name = <<"vo.access.egi.eu - admins">>, privileges = admin}
+            #idp_group{type = team, name = <<"admins">>, privileges = member}
         ], privileges = admin}
     },
     {
@@ -331,27 +342,29 @@ egi_validation_examples() -> [
             #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"vo.access.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"subgroup">>, privileges = member},
-            #idp_group{type = team, name = <<"subgroup - admins">>, privileges = admin}
+            #idp_group{type = team, name = <<"admins">>, privileges = member}
         ], privileges = manager}
     },
     {
-        <<"urn:mace:egi.eu:group:vo.access.egi.eu:subgroup:admins:uberadmins:role=vm_operator#aai.egi.eu">>,
+        <<"urn:mace:egi.eu:group:vo.access.egi.eu:subgroup:admins:uberadmins:role=chair#aai.egi.eu">>,
         #{},
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"vo.access.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"subgroup">>, privileges = member},
-            #idp_group{type = team, name = <<"subgroup - admins">>, privileges = admin},
+            #idp_group{type = team, name = <<"admins">>, privileges = member},
             #idp_group{type = team, name = <<"uberadmins">>, privileges = member}
-        ], privileges = member}
+        ], privileges = admin}
     },
     {
-        <<"urn:mace:egi.eu:group:egi-engage-members:role=chair#other.origin.com">>,
+        <<"urn:mace:egi.eu:group:parent:Minun%20Ryhm%c3%A4ni:za%C5%BC%C3%B3%C5%82%C4%87%20%5B%5C%22%27%3B%3A%2C.%3C%3E%21%40%23%24%25%5E%26%2A%28%29%60%7B%7C%7D%5D#aai.egi.eu">>,
         #{},
         #idp_entitlement{idp = egi, path = [
-            #idp_group{type = organization, name = <<"other.origin.com">>, privileges = member},
-            #idp_group{type = team, name = <<"egi-engage-members">>, privileges = member}
-        ], privileges = admin}
+            #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
+            #idp_group{type = team, name = <<"parent">>, privileges = member},
+            #idp_group{type = team, name = <<"Minun Ryhmäni"/utf8>>, privileges = member},
+            #idp_group{type = team, name = <<"zażółć [\\\"';:,.<>!@#$%^&*()`{|}]"/utf8>>, privileges = member}
+        ], privileges = member}
     },
     {
         <<"urn:mace:egi.eu:bad-prefix:egi-engage-members:role=chair#other.origin.com">>,
@@ -359,12 +372,7 @@ egi_validation_examples() -> [
         {error, malformed}
     },
     {
-        <<"urn:mace:egi.eu:group:group-without-origin">>,
-        #{},
-        {error, malformed}
-    },
-    {
-        <<"unconfromant-group-name">>,
+        <<"unconformant-group-name">>,
         #{},
         {error, malformed}
     }
