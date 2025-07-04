@@ -152,11 +152,12 @@ parse_egi_entitlement(<<"urn:mace:egi.eu:group:", Group/binary>>, ParserConfig) 
 
     OriginGroupType = maps:get(originGroupType, ParserConfig, organization),
     TopGroupType = maps:get(topGroupType, ParserConfig, team),
+    TopGroupPrivileges = maps:get(topGroupPrivileges, ParserConfig, none),
     SubGroupsType = maps:get(subGroupsType, ParserConfig, team),
 
     Path = lists:flatten([
         #idp_group{type = OriginGroupType, name = ?EGI_ORIGIN_GROUP},
-        #idp_group{type = TopGroupType, name = TopGroupName},
+        #idp_group{type = TopGroupType, name = TopGroupName, privileges = TopGroupPrivileges},
         [#idp_group{type = SubGroupsType, name = SubGroupName} || SubGroupName <- SubGroupNames]
     ]),
 
@@ -275,7 +276,7 @@ egi_validation_examples() -> [
         #{},
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
-            #idp_group{type = team, name = <<"fedcloud.egi.eu">>, privileges = member}
+            #idp_group{type = team, name = <<"fedcloud.egi.eu">>, privileges = none}
         ], privileges = member}
     },
     {
@@ -283,7 +284,7 @@ egi_validation_examples() -> [
         #{},
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
-            #idp_group{type = team, name = <<"fedcloud.egi.eu">>, privileges = member},
+            #idp_group{type = team, name = <<"fedcloud.egi.eu">>, privileges = none},
             #idp_group{type = team, name = <<"child">>, privileges = member}
         ], privileges = manager}
     },
@@ -292,11 +293,12 @@ egi_validation_examples() -> [
         #{
             originGroupType => unit,
             topGroupType => team,
+            topGroupPrivileges => manager,
             subGroupsType => role_holders
         },
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = unit, name = <<"aai.egi.eu">>, privileges = member},
-            #idp_group{type = team, name = <<"fedcloud.egi.eu">>, privileges = member},
+            #idp_group{type = team, name = <<"fedcloud.egi.eu">>, privileges = manager},
             #idp_group{type = role_holders, name = <<"members">>, privileges = member}
         ], privileges = admin}
     },
@@ -305,7 +307,7 @@ egi_validation_examples() -> [
         #{},
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
-            #idp_group{type = team, name = <<"egi-engage-members">>, privileges = member}
+            #idp_group{type = team, name = <<"egi-engage-members">>, privileges = none}
         ], privileges = admin}
     },
     {
@@ -314,7 +316,7 @@ egi_validation_examples() -> [
         #{},
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
-            #idp_group{type = team, name = <<"egi-engage-members">>, privileges = member}
+            #idp_group{type = team, name = <<"egi-engage-members">>, privileges = none}
         ], privileges = admin}
     },
     {
@@ -323,7 +325,7 @@ egi_validation_examples() -> [
         #{},
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
-            #idp_group{type = team, name = <<"egi-engage-members">>, privileges = member}
+            #idp_group{type = team, name = <<"egi-engage-members">>, privileges = none}
         ], privileges = admin}
     },
     {
@@ -331,7 +333,7 @@ egi_validation_examples() -> [
         #{},
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
-            #idp_group{type = team, name = <<"vo.access.egi.eu">>, privileges = member},
+            #idp_group{type = team, name = <<"vo.access.egi.eu">>, privileges = none},
             #idp_group{type = team, name = <<"admins">>, privileges = member}
         ], privileges = admin}
     },
@@ -340,14 +342,16 @@ egi_validation_examples() -> [
         #{},
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
-            #idp_group{type = team, name = <<"vo.access.egi.eu">>, privileges = member},
+            #idp_group{type = team, name = <<"vo.access.egi.eu">>, privileges = none},
             #idp_group{type = team, name = <<"subgroup">>, privileges = member},
             #idp_group{type = team, name = <<"admins">>, privileges = member}
         ], privileges = manager}
     },
     {
         <<"urn:mace:egi.eu:group:vo.access.egi.eu:subgroup:admins:uberadmins:role=chair#aai.egi.eu">>,
-        #{},
+        #{
+            topGroupPrivileges => member
+        },
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"vo.access.egi.eu">>, privileges = member},
@@ -361,7 +365,7 @@ egi_validation_examples() -> [
         #{},
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
-            #idp_group{type = team, name = <<"parent">>, privileges = member},
+            #idp_group{type = team, name = <<"parent">>, privileges = none},
             #idp_group{type = team, name = <<"Minun Ryhmäni"/utf8>>, privileges = member},
             #idp_group{type = team, name = <<"zażółć [\\\"';:,.<>!@#$%^&*()`{|}]"/utf8>>, privileges = member}
         ], privileges = member}
