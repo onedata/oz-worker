@@ -433,6 +433,7 @@ support_space(ProviderId, SpaceId, StorageId, Data) ->
 -spec support_space_insecure(od_provider:id(), od_space:id(), od_storage:id(), entity_logic:data()) ->
     entity_logic:create_result().
 support_space_insecure(ProviderId, SpaceId, StorageId, Data) ->
+    SupportSize = maps:get(<<"size">>, Data),
     {true, {Storage, _}} = fetch_entity(#gri{id = StorageId}),
 
     % possible if multiple processes enter the critical section one after another
@@ -456,13 +457,12 @@ support_space_insecure(ProviderId, SpaceId, StorageId, Data) ->
     RequestedSpaceSupportParameters = ?check(support_parameters:sanitize(maps:get(
         <<"spaceSupportParameters">>, Data, ?DEFAULT_SUPPORT_PARAMETERS_FOR_LEGACY_PROVIDERS
     ))),
-    case od_space:insert_support_parameters(SpaceId, ProviderId, RequestedSpaceSupportParameters) of
-        {ok, _} -> ok;
+    SpaceName = case od_space:insert_support_parameters(SpaceId, ProviderId, RequestedSpaceSupportParameters) of
+        {ok, #document{value = #od_space{name = Name}}} -> Name;
         {error, _} = Error2 -> throw(Error2)
     end,
 
     try
-        SupportSize = maps:get(<<"size">>, Data),
         entity_graph:add_relation(
             od_space, SpaceId,
             od_storage, StorageId,
@@ -474,6 +474,20 @@ support_space_insecure(ProviderId, SpaceId, StorageId, Data) ->
     end,
 
     wait_for_recalculated_eff_support_state(true, ProviderId, StorageId, SpaceId),
+
+    {ok, #document{value = #od_provider{name = ProviderName}}} = od_provider:get(ProviderId),
+    ?notice(
+        "New support has been granted:~n"
+        "> Space:    '~ts' (~ts)~n"
+        "> Provider: '~ts' (~ts)~n"
+        "> Storage:  '~ts' (~ts)~n"
+        "> Size:     ~ts", [
+            SpaceName, SpaceId,
+            ProviderName, ProviderId,
+            Storage#od_storage.name, StorageId,
+            str_utils:format_byte_size(SupportSize)
+        ]
+    ),
 
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {true, {Space, Rev}} = space_logic_plugin:fetch_entity(NewGRI),
