@@ -1034,16 +1034,31 @@ verify_invite_token_base(AllClients, Token, PeerIp, Consumer, ExpType, ShouldSuc
     })).
 
 
+%% @formatter:off
 -record(infer_access_token_scope_test_spec, {
     subject_user :: od_user:id(),
     providers :: [od_provider:id()],
-    space_supports :: #{od_space:id() => #{od_provider:id() => Readonly :: boolean()}},
+    storages_by_provider :: #{
+        od_provider:id() => [od_storage:id()]
+    },
+    space_supports :: #{
+        od_space:id() => #{
+            od_provider:id() => #{
+                readonly => boolean(),
+                storages => #{
+                    od_storage:id() => Readonly :: boolean()
+                }
+            }
+        }
+    },
     token_caveats = [] :: [caveats:caveat()],
     consumer_token = undefined,
     exp_general_result = success :: success | errors:error(),
-    exp_allowed_spaces = [] :: [atom()],
-    exp_allowed_providers = [] :: [atom()]
+    exp_allowed_spaces = [] :: [binary()],
+    exp_allowed_providers = [] :: [binary()],
+    exp_allowed_storages = [] :: [binary()]
 }).
+%% @formatter:on
 
 infer_access_token_scope(_Config) ->
     SubjectUser = ozt_users:create(),
@@ -1060,34 +1075,121 @@ infer_access_token_scope(_Config) ->
     Delta = ozt_users:create_space_for(SubjectUser, <<"Delta">>),
     Kappa = ozt_users:create_space_for(SubjectUser, <<"Kappa">>),
 
-    % provider's support should be treated as readonly if all supporting storages of a provider are readonly
-    add_support_with_new_storage(Alpha, Krakow, #{<<"readonly">> => true}),
-    add_support_with_new_storage(Alpha, Krakow, #{<<"readonly">> => false}),
+    % create a bunch of storage backends that will not be used and should not show
+    % up in the endpoint results
+    ozt_providers:create_storage(Krakow, #{<<"readonly">> => ?RAND_BOOL()}),
+    ozt_providers:create_storage(Krakow, #{<<"readonly">> => ?RAND_BOOL()}),
+    ozt_providers:create_storage(Krakow, #{<<"readonly">> => ?RAND_BOOL()}),
+    ozt_providers:create_storage(Paris, #{<<"readonly">> => ?RAND_BOOL()}),
+    ozt_providers:create_storage(Bari, #{<<"readonly">> => ?RAND_BOOL()}),
+    ozt_providers:create_storage(Bari, #{<<"readonly">> => ?RAND_BOOL()}),
+    ozt_providers:create_storage(Lisbon, #{<<"readonly">> => ?RAND_BOOL()}),
 
-    add_support_with_new_storage(Beta, Krakow, #{<<"readonly">> => false}),
-    add_support_with_new_storage(Beta, Paris, #{<<"readonly">> => true}),
-    add_support_with_new_storage(Beta, Paris, #{<<"readonly">> => true}),
-    add_support_with_new_storage(Beta, Bari, #{<<"readonly">> => false}),
+    % these storage backends will be used for more than one support
+    CommonKraReadwrite = ozt_providers:create_storage(Krakow, #{<<"readonly">> => false}),
+    CommonParReadonly = ozt_providers:create_storage(Paris, #{<<"readonly">> => true}),
 
-    add_support_with_new_storage(Gamma, Krakow, #{<<"readonly">> => false}),
-    add_support_with_new_storage(Gamma, Krakow, #{<<"readonly">> => false}),
-    add_support_with_new_storage(Gamma, Paris, #{<<"readonly">> => true}),
-    add_support_with_new_storage(Gamma, Bari, #{<<"readonly">> => true}),
-    add_support_with_new_storage(Gamma, Lisbon, #{<<"readonly">> => false}),
-    add_support_with_new_storage(Gamma, Lisbon, #{<<"readonly">> => false}),
-    add_support_with_new_storage(Gamma, Lisbon, #{<<"readonly">> => true}),
+    % other storage backends will be used for just one support
+    CommonKraReadwrite = add_support_with_existing_storage(Alpha, Krakow, CommonKraReadwrite),
+    AlphaKraPrim = add_support_with_new_storage(Alpha, Krakow, #{<<"readonly">> => true}),
 
-    add_support_with_new_storage(Delta, Paris, #{<<"readonly">> => true}),
-    add_support_with_new_storage(Delta, Lisbon, #{<<"readonly">> => true}),
+    CommonKraReadwrite = add_support_with_existing_storage(Beta, Krakow, CommonKraReadwrite),
+    CommonParReadonly = add_support_with_existing_storage(Beta, Paris, CommonParReadonly),
+    BetaParPrim = add_support_with_new_storage(Beta, Paris, #{<<"readonly">> => true}),
+    BetaBarPrim = add_support_with_new_storage(Beta, Bari, #{<<"readonly">> => false}),
+
+    GammaKraPrim = add_support_with_new_storage(Gamma, Krakow, #{<<"readonly">> => false}),
+    CommonKraReadwrite = add_support_with_existing_storage(Gamma, Krakow, CommonKraReadwrite),
+    CommonParReadonly = add_support_with_existing_storage(Gamma, Paris, CommonParReadonly),
+    GammaBarPrim = add_support_with_new_storage(Gamma, Bari, #{<<"readonly">> => true}),
+    GammaLisPrim = add_support_with_new_storage(Gamma, Lisbon, #{<<"readonly">> => false}),
+    GammaLisBis = add_support_with_new_storage(Gamma, Lisbon, #{<<"readonly">> => false}),
+    GammaLisTer = add_support_with_new_storage(Gamma, Lisbon, #{<<"readonly">> => true}),
+
+    DeltaParPrim = add_support_with_new_storage(Delta, Paris, #{<<"readonly">> => true}),
+    DeltaLisPrim = add_support_with_new_storage(Delta, Lisbon, #{<<"readonly">> => true}),
 
     CommonSpec = #infer_access_token_scope_test_spec{
         subject_user = SubjectUser,
         providers = [Krakow, Paris, Bari, Lisbon],
+        storages_by_provider = #{
+            Krakow => [AlphaKraPrim, CommonKraReadwrite, GammaKraPrim],
+            Paris => [CommonParReadonly, BetaParPrim, DeltaParPrim],
+            Bari => [BetaBarPrim, GammaBarPrim],
+            Lisbon => [GammaLisPrim, GammaLisBis, GammaLisTer, DeltaLisPrim]
+        },
+        % NOTE: provider's support should be treated as readonly if all supporting storages of a provider are readonly
         space_supports = #{
-            Alpha => #{Krakow => false},
-            Beta => #{Krakow => false, Paris => true, Bari => false},
-            Gamma => #{Krakow => false, Paris => true, Bari => true, Lisbon => false},
-            Delta => #{Paris => true, Lisbon => true},
+            Alpha => #{
+                Krakow => #{
+                    readonly => false,
+                    storages => #{
+                        AlphaKraPrim => true,
+                        CommonKraReadwrite => false
+                    }
+                }
+            },
+            Beta => #{
+                Krakow => #{
+                    readonly => false,
+                    storages => #{
+                        CommonKraReadwrite => false
+                    }
+                },
+                Paris => #{
+                    readonly => true,
+                    storages => #{
+                        CommonParReadonly => true,
+                        BetaParPrim => true
+                    }
+                },
+                Bari => #{
+                    readonly => false,
+                    storages => #{
+                        BetaBarPrim => false
+                    }
+                }},
+            Gamma => #{
+                Krakow => #{
+                    readonly => false,
+                    storages => #{
+                        GammaKraPrim => false,
+                        CommonKraReadwrite => false
+                    }
+                },
+                Paris => #{
+                    readonly => true,
+                    storages => #{
+                        CommonParReadonly => true
+                    }
+                },
+                Bari => #{
+                    readonly => true,
+                    storages => #{
+                        GammaBarPrim => true
+                    }
+                },
+                Lisbon => #{
+                    readonly => false,
+                    storages => #{
+                        GammaLisPrim => false,
+                        GammaLisBis => false,
+                        GammaLisTer => true
+                    }
+                }},
+            Delta => #{
+                Paris => #{
+                    readonly => true,
+                    storages => #{
+                        DeltaParPrim => true
+                    }
+                },
+                Lisbon => #{
+                    readonly => true,
+                    storages => #{
+                        DeltaLisPrim => true
+                    }
+                }},
             Kappa => #{}
         }
     },
@@ -1095,14 +1197,23 @@ infer_access_token_scope(_Config) ->
     ?assert(run_infer_access_token_scope_test(CommonSpec#infer_access_token_scope_test_spec{
         token_caveats = [],
         exp_allowed_spaces = [Alpha, Beta, Gamma, Delta, Kappa],
-        exp_allowed_providers = [Krakow, Paris, Bari, Lisbon]
+        exp_allowed_providers = [Krakow, Paris, Bari, Lisbon],
+        exp_allowed_storages = [
+            AlphaKraPrim, CommonKraReadwrite, GammaKraPrim,
+            CommonParReadonly, BetaParPrim, DeltaParPrim,
+            BetaBarPrim, GammaBarPrim,
+            GammaLisPrim, GammaLisBis, GammaLisTer, DeltaLisPrim
+        ]
     })),
     ?assert(run_infer_access_token_scope_test(CommonSpec#infer_access_token_scope_test_spec{
         token_caveats = [
             #cv_service{whitelist = [?SERVICE(?OP_WORKER, Krakow)]}
         ],
         exp_allowed_spaces = [Alpha, Beta, Gamma, Delta, Kappa],
-        exp_allowed_providers = [Krakow]
+        exp_allowed_providers = [Krakow],
+        exp_allowed_storages = [
+            AlphaKraPrim, CommonKraReadwrite, GammaKraPrim
+        ]
     })),
     ?assert(run_infer_access_token_scope_test(CommonSpec#infer_access_token_scope_test_spec{
         token_caveats = [
@@ -1110,12 +1221,16 @@ infer_access_token_scope(_Config) ->
             #cv_service{whitelist = [?SERVICE(?OP_WORKER, Krakow), ?SERVICE(?OP_WORKER, Bari), ?SERVICE(?OZ_WORKER, <<"*">>)]}
         ],
         exp_allowed_spaces = [Alpha, Beta, Gamma, Delta, Kappa],
-        exp_allowed_providers = [Krakow]
+        exp_allowed_providers = [Krakow],
+        exp_allowed_storages = [
+            AlphaKraPrim, CommonKraReadwrite, GammaKraPrim
+        ]
     })),
     ?assert(run_infer_access_token_scope_test(CommonSpec#infer_access_token_scope_test_spec{
         token_caveats = [#cv_service{whitelist = [?SERVICE(?OP_PANEL, Krakow)]}],
         exp_allowed_spaces = [Alpha, Beta, Gamma, Delta, Kappa],
-        exp_allowed_providers = []
+        exp_allowed_providers = [],
+        exp_allowed_storages = []
     })),
     ?assert(run_infer_access_token_scope_test(CommonSpec#infer_access_token_scope_test_spec{
         token_caveats = [
@@ -1126,7 +1241,12 @@ infer_access_token_scope(_Config) ->
             ]}
         ],
         exp_allowed_spaces = [Alpha, Beta, Kappa],
-        exp_allowed_providers = [Krakow, Paris, Bari]
+        exp_allowed_providers = [Krakow, Paris, Bari],
+        exp_allowed_storages = [
+            AlphaKraPrim, CommonKraReadwrite,
+            CommonParReadonly, BetaParPrim,
+            BetaBarPrim
+        ]
     })),
     ?assert(run_infer_access_token_scope_test(CommonSpec#infer_access_token_scope_test_spec{
         token_caveats = [
@@ -1138,7 +1258,13 @@ infer_access_token_scope(_Config) ->
             ]}
         ],
         exp_allowed_spaces = [Beta, Gamma, Delta],
-        exp_allowed_providers = [Krakow, Paris, Bari, Lisbon]
+        exp_allowed_providers = [Krakow, Paris, Bari, Lisbon],
+        exp_allowed_storages = [
+            CommonKraReadwrite, GammaKraPrim,
+            CommonParReadonly, BetaParPrim, DeltaParPrim,
+            BetaBarPrim, GammaBarPrim,
+            GammaLisPrim, GammaLisBis, GammaLisTer, DeltaLisPrim
+        ]
     })),
     ?assert(run_infer_access_token_scope_test(CommonSpec#infer_access_token_scope_test_spec{
         token_caveats = [
@@ -1153,7 +1279,11 @@ infer_access_token_scope(_Config) ->
             ]}
         ],
         exp_allowed_spaces = [Beta],
-        exp_allowed_providers = [Paris, Bari]
+        exp_allowed_providers = [Paris, Bari],
+        exp_allowed_storages = [
+            CommonParReadonly, BetaParPrim,
+            BetaBarPrim
+        ]
     })),
     ?assert(run_infer_access_token_scope_test(CommonSpec#infer_access_token_scope_test_spec{
         token_caveats = [
@@ -1165,7 +1295,8 @@ infer_access_token_scope(_Config) ->
             ]}
         ],
         exp_allowed_spaces = [],
-        exp_allowed_providers = []
+        exp_allowed_providers = [],
+        exp_allowed_storages = []
     })),
     ?assert(run_infer_access_token_scope_test(CommonSpec#infer_access_token_scope_test_spec{
         token_caveats = [
@@ -1174,7 +1305,8 @@ infer_access_token_scope(_Config) ->
             ]}
         ],
         exp_allowed_spaces = [],
-        exp_allowed_providers = []
+        exp_allowed_providers = [],
+        exp_allowed_storages = []
     })),
     ?assert(run_infer_access_token_scope_test(CommonSpec#infer_access_token_scope_test_spec{
         token_caveats = [
@@ -1185,7 +1317,10 @@ infer_access_token_scope(_Config) ->
         ],
         consumer_token = ozt_tokens:ensure_serialized(create_user_temporary_token(ConsumerUser, ?IDENTITY_TOKEN)),
         exp_allowed_spaces = [Gamma],
-        exp_allowed_providers = [Krakow]
+        exp_allowed_providers = [Krakow],
+        exp_allowed_storages = [
+            GammaKraPrim, CommonKraReadwrite
+        ]
     })),
 
     lists:foreach(fun(UnverifiableCaveat) ->
@@ -1246,12 +1381,14 @@ infer_access_token_scope(_Config) ->
 run_infer_access_token_scope_test(#infer_access_token_scope_test_spec{
     subject_user = SubjectUser,
     providers = Providers,
+    storages_by_provider = StoragesByProvider,
     space_supports = SpaceSupports,
     token_caveats = TokenCaveats,
     consumer_token = ConsumerToken,
     exp_general_result = ExpGeneralResult,
     exp_allowed_spaces = ExpAllowedSpaces,
-    exp_allowed_providers = ExpAllowedProviders
+    exp_allowed_providers = ExpAllowedProviders,
+    exp_allowed_storages = ExpAllowedStorages
 }) ->
     ProviderToVersion = maps_utils:generate_from_list(fun(ProviderId) ->
         ReleaseVersion = <<"21.02.", (integer_to_binary(?RAND_INT(1, 20)))/binary>>,
@@ -1273,13 +1410,20 @@ run_infer_access_token_scope_test(#infer_access_token_scope_test_spec{
         <<"dataAccessScope">> => #{
             <<"readonly">> => lists:member(#cv_data_readonly{}, TokenCaveats),
             <<"spaces">> => maps_utils:generate_from_list(fun(SpaceId) ->
-                ProviderToReadonly = maps:get(SpaceId, SpaceSupports),
-                AllowedProvidersForSpace = lists_utils:intersect(maps:keys(ProviderToReadonly), ExpAllowedProviders),
+                SupportsForThisSpace = maps:get(SpaceId, SpaceSupports),
+                AllowedProvidersForSpace = lists_utils:intersect(maps:keys(SupportsForThisSpace), ExpAllowedProviders),
                 {SpaceId, #{
                     <<"name">> => (ozt_spaces:get(SpaceId))#od_space.name,
-                    <<"supports">> => maps:map(fun(_, Readonly) ->
-                        #{<<"readonly">> => Readonly}
-                    end, maps:with(AllowedProvidersForSpace, ProviderToReadonly))
+                    <<"supports">> => maps:map(fun(_, StoragesAndReadonly) ->
+                        #{
+                            <<"readonly">> => maps:get(readonly, StoragesAndReadonly),
+                            <<"storages">> => maps:map(fun(_, ReadonlyByStorage) ->
+                                #{
+                                    <<"readonly">> => ReadonlyByStorage
+                                }
+                            end, maps:get(storages, StoragesAndReadonly))
+                        }
+                    end, maps:with(AllowedProvidersForSpace, SupportsForThisSpace))
                 }}
             end, ExpAllowedSpaces),
             <<"providers">> => maps_utils:generate_from_list(fun(ProviderId) ->
@@ -1288,7 +1432,8 @@ run_infer_access_token_scope_test(#infer_access_token_scope_test_spec{
                     <<"name">> => ProviderRecord#od_provider.name,
                     <<"domain">> => ProviderRecord#od_provider.domain,
                     <<"version">> => maps:get(ProviderId, ProviderToVersion),
-                    <<"online">> => ozt:rpc(provider_connections, is_online, [ProviderId])
+                    <<"online">> => ozt:rpc(provider_connections, is_online, [ProviderId]),
+                    <<"storages">> => lists_utils:intersect(ExpAllowedStorages, maps:get(ProviderId, StoragesByProvider))
                 }}
             end, ExpAllowedProviders)
         }
@@ -1592,7 +1737,12 @@ get_testmaster_ip() ->
 
 add_support_with_new_storage(SpaceId, ProviderId, StorageData) ->
     StorageId = ozt_providers:create_storage(ProviderId, StorageData),
-    ozt_providers:support_space(ProviderId, StorageId, SpaceId).
+    add_support_with_existing_storage(SpaceId, ProviderId, StorageId).
+
+
+add_support_with_existing_storage(SpaceId, ProviderId, StorageId) ->
+    ozt_providers:support_space(ProviderId, StorageId, SpaceId),
+    StorageId.
 
 
 prepare_token_verification_logic_args(Auth, Data, _Env) ->

@@ -786,7 +786,12 @@ build_data_access_scope_info(SpaceIds, Caveats) ->
                     case lists:member(ProviderId, AllowedProviderIds) of
                         true ->
                             Acc#{ProviderId => #{
-                                % TODO VFS-12743 add storageId here
+                                <<"storages">> => maps:merge(
+                                    kv_utils:get([ProviderId, <<"storages">>], Acc, #{}),
+                                    #{StorageId => #{
+                                        <<"readonly">> => Readonly
+                                    }}
+                                ),
                                 % the support of a provider is marked as readonly when
                                 % all its supporting storages are readonly
                                 <<"readonly">> => Readonly andalso kv_utils:get([ProviderId, <<"readonly">>], Acc, true)
@@ -797,12 +802,15 @@ build_data_access_scope_info(SpaceIds, Caveats) ->
                 end, #{}, Storages)
             }
         end, SpacesById),
-        <<"providers">> => maps:map(fun(ProviderId, #od_provider{name = Name, domain = Domain}) ->
+        <<"providers">> => maps:map(fun(ProviderId, #od_provider{
+            name = Name, domain = Domain, storages = ProviderStorages
+        }) ->
             #{
                 <<"name">> => Name,
                 <<"domain">> => Domain,
                 <<"version">> => ?check(cluster_logic:get_worker_release_version(?ROOT, ProviderId)),
-                <<"online">> => provider_connections:is_online(ProviderId)
+                <<"online">> => provider_connections:is_online(ProviderId),
+                <<"storages">> => lists_utils:intersect(ProviderStorages, StorageIds)
             }
         end, AllowedProvidersById)
     }.
