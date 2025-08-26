@@ -201,8 +201,9 @@
 %%% For child groups in the hierarchy, the privileges are reconciled every time a user with
 %%% given group logs in. They cannot be changed manually as the groups are protected.
 %%%
-%%% There are three possible sets of privileges: member, manager, admin.
+%%% There are four possible sets of privileges: none, member, manager, admin.
 %%% They expand to a certain set of Onedata group privileges:
+%%%     * none -> []
 %%%     * member -> [group_view]
 %%%     * manager -> [group_view,
 %%%         group_invite_user, group_remove_user,
@@ -228,7 +229,7 @@
 %%%         idp = myIdP,
 %%%         path = [
 %%%             #idp_group{type = organization, name = <<"my-org">>, privileges = member},
-%%%             #idp_group{type = unit, name = <<"my-unit">>, privileges = member},
+%%%             #idp_group{type = unit, name = <<"my-unit">>, privileges = none},
 %%%             #idp_group{type = team, name = <<"my-team">>, privileges = manager}
 %%%         ],
 %%%         % user privileges in the bottom group
@@ -243,7 +244,7 @@
 %%%
 %%%     my-organization [organization]
 %%%         u
-%%%         |<member privs)
+%%%         |<no privs)
 %%%         |
 %%%         my-unit [unit]
 %%%             u
@@ -262,7 +263,7 @@
 %%%         idp = myIdP,
 %%%         path = [
 %%%             #idp_group{type = organization, name = <<"my-org">>, privileges = member},
-%%%             #idp_group{type = unit, name = <<"my-unit">>, privileges = member},
+%%%             #idp_group{type = unit, name = <<"my-unit">>, privileges = none},
 %%%             #idp_group{type = team, name = <<"my-team">>, privileges = manager}
 %%%         ],
 %%%         % user privileges in the bottom group
@@ -281,7 +282,7 @@
 %%%
 %%%                          my-organization [organization]
 %%%                          u   u
-%%%                          |   |<member privs)
+%%%                          |   |<no privs)
 %%%                .---------'   |
 %%%   (admin privs>|             my-unit [unit]
 %%%                |             u   u
@@ -306,7 +307,7 @@
 %%%                  |   |
 %%%           .------'   '---------------my-organization [organization]
 %%%           |                          u   u
-%%%           |                          |   |<member privs)
+%%%           |                          |   |<no privs)
 %%%           |                .---------'   |
 %%%           |   (admin privs>|             my-unit [unit]
 %%%           |                |             u   u
