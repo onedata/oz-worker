@@ -38,7 +38,6 @@
     get_test/1,
     update_test/1,
     delete_test/1,
-    protected_group_test/1,
     get_oz_privileges_test/1,
     update_oz_privileges_test/1,
     delete_oz_privileges_test/1,
@@ -57,7 +56,6 @@ all() ->
         get_test,
         update_test,
         delete_test,
-        protected_group_test,
         get_oz_privileges_test,
         update_oz_privileges_test,
         delete_oz_privileges_test,
@@ -486,30 +484,42 @@ get_test(Config) ->
 
 
 update_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
-    {ok, U2} = oz_test_utils:create_user(Config),
+    UserWithPrivilege = ozt_users:create(),
+    UserWithoutPrivilege = ozt_users:create(),
+
+    update_test_base(
+        Config, UserWithPrivilege, UserWithoutPrivilege, allowed, fun ozt_groups:create/0
+    ),
+    update_test_base(
+        Config, UserWithPrivilege, UserWithoutPrivilege, blocked_by_protection, fun ozt_groups:create_protected/0
+    ).
+
+
+update_test_base(Config, UserWithPrivilege, UserWithoutPrivilege, ExpOutcome, GroupCreateFun) ->
+    NonAdmin = ozt_users:create(),
 
     EnvSetUpFun = fun() ->
-        {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-        oz_test_utils:group_set_user_privileges(Config, G1, U1, [], [
-            ?GROUP_UPDATE
-        ]),
-        oz_test_utils:group_add_user(Config, G1, U2),
-        oz_test_utils:group_set_user_privileges(Config, G1, U2, [
-            ?GROUP_UPDATE
-        ], []),
-        #{groupId => G1}
+        GroupId = GroupCreateFun(),
+        Group = ozt_groups:get(GroupId),
+        ozt_groups:add_user(GroupId, UserWithPrivilege, [?GROUP_UPDATE]),
+        ozt_groups:add_user(GroupId, UserWithoutPrivilege, privileges:group_admin() -- [?GROUP_UPDATE]),
+        #{groupId => GroupId, groupName => Group#od_group.name, groupType => Group#od_group.type}
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, Data) ->
-        {ok, Group} = oz_test_utils:get_group(Config, GroupId),
-        {ExpType, ExpName} = case ShouldSucceed of
-            false ->
-                {?DEFAULT_GROUP_TYPE, ?GROUP_NAME1};
+
+    VerifyEndFun = fun(ShouldSucceed, #{
+        groupId := GroupId,
+        groupName := OriginalName,
+        groupType := OriginalType
+    }, Data) ->
+        Group = ozt_groups:get(GroupId),
+        {ExpName, ExpType} = case ShouldSucceed andalso ExpOutcome == allowed of
             true ->
                 {
-                    maps:get(<<"type">>, Data, ?DEFAULT_GROUP_TYPE),
-                    maps:get(<<"name">>, Data, ?GROUP_NAME1)
-                }
+                    maps:get(<<"name">>, Data, OriginalName),
+                    maps:get(<<"type">>, Data, OriginalType)
+                };
+            false ->
+                {OriginalName, OriginalType}
         end,
         ?assertEqual(ExpName, Group#od_group.name),
         ?assertEqual(ExpType, Group#od_group.type)
@@ -519,27 +529,39 @@ update_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2},
+                {user, UserWithPrivilege},
                 {admin, [?OZ_GROUPS_UPDATE]}
             ],
             unauthorized = [nobody],
-            forbidden = [{user, U1}]
+            forbidden = [
+                {user, UserWithoutPrivilege},
+                {user, NonAdmin}
+            ]
         },
         rest_spec = #rest_spec{
             method = patch,
             path = [<<"/groups/">>, groupId],
-            expected_code = ?HTTP_204_NO_CONTENT
+            expected_code = case ExpOutcome of
+                allowed -> ?HTTP_204_NO_CONTENT;
+                blocked_by_protection -> ?HTTP_403_FORBIDDEN
+            end
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = update,
             args = [auth, groupId, data],
-            expected_result = ?OK_RES
+            expected_result = case ExpOutcome of
+                allowed -> ?OK_RES;
+                blocked_by_protection -> ?ERROR_REASON(?ERR_PROTECTED_GROUP)
+            end
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_group, id = groupId, aspect = instance},
-            expected_result_op = ?OK_RES
+            expected_result_op = case ExpOutcome of
+                allowed -> ?OK_RES;
+                blocked_by_protection -> ?ERROR_REASON(?ERR_PROTECTED_GROUP)
+            end
         },
         data_spec = #data_spec{
             at_least_one = [<<"name">>, <<"type">>],
@@ -561,100 +583,80 @@ update_test(Config) ->
 
 
 delete_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
-    {ok, U2} = oz_test_utils:create_user(Config),
+    UserWithPrivilege = ozt_users:create(),
+    UserWithoutPrivilege = ozt_users:create(),
+    delete_test_base(
+        Config, UserWithPrivilege, UserWithoutPrivilege, allowed, fun ozt_groups:create/0
+    ),
+    delete_test_base(
+        Config, UserWithPrivilege, UserWithoutPrivilege, blocked_by_protection, fun ozt_groups:create_protected/0
+    ).
+
+
+delete_test_base(Config, UserWithPrivilege, UserWithoutPrivilege, ExpOutcome, GroupCreateFun) ->
+    NonAdmin = ozt_users:create(),
 
     EnvSetUpFun = fun() ->
-        {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-        oz_test_utils:group_set_user_privileges(Config, G1, U1, [], [
-            ?GROUP_DELETE
-        ]),
-        oz_test_utils:group_add_user(Config, G1, U2),
-        oz_test_utils:group_set_user_privileges(Config, G1, U2, [
-            ?GROUP_DELETE
-        ], []),
-        #{groupId => G1}
+        GroupId = GroupCreateFun(),
+        ozt_groups:add_user(GroupId, UserWithPrivilege, [?GROUP_DELETE]),
+        ozt_groups:add_user(GroupId, UserWithoutPrivilege, privileges:group_admin() -- [?GROUP_DELETE]),
+        #{groupId => GroupId}
     end,
+
     DeleteEntityFun = fun(#{groupId := GroupId} = _Env) ->
-        oz_test_utils:delete_group(Config, GroupId)
+        ozt_groups:mark_protected(GroupId, false),
+        ozt_groups:delete(GroupId)
     end,
+
     VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, _) ->
-        {ok, Groups} = oz_test_utils:list_groups(Config),
-        ?assertEqual(lists:member(GroupId, Groups), not ShouldSucceed)
+        ?assertEqual(
+            lists:member(GroupId, ozt_groups:list()),
+            not ShouldSucceed orelse ExpOutcome == blocked_by_protection
+        )
     end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2},
+                {user, UserWithPrivilege},
                 {admin, [?OZ_GROUPS_DELETE]}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, U1}
+                {user, UserWithoutPrivilege},
+                {user, NonAdmin}
             ]
         },
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/groups/">>, groupId],
-            expected_code = ?HTTP_204_NO_CONTENT
+            expected_code = case ExpOutcome of
+                allowed -> ?HTTP_204_NO_CONTENT;
+                blocked_by_protection -> ?HTTP_403_FORBIDDEN
+            end
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = delete,
             args = [auth, groupId],
-            expected_result = ?OK_RES
+            expected_result = case ExpOutcome of
+                allowed -> ?OK_RES;
+                blocked_by_protection -> ?ERROR_REASON(?ERR_PROTECTED_GROUP)
+            end
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_group, id = groupId, aspect = instance},
-            expected_result_op = ?OK_RES
+            expected_result_op = case ExpOutcome of
+                allowed -> ?OK_RES;
+                blocked_by_protection -> ?ERROR_REASON(?ERR_PROTECTED_GROUP)
+            end
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
-
-
-protected_group_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
-    {ok, GroupId} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    oz_test_utils:group_set_user_privileges(Config, GroupId, U1, [
-        ?GROUP_DELETE
-    ], []),
-    oz_test_utils:mark_group_protected(Config, GroupId, true),
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U1},
-                {admin, [?OZ_GROUPS_DELETE]}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = delete,
-            path = [<<"/groups/">>, GroupId],
-            expected_code = ?HTTP_403_FORBIDDEN
-        },
-        logic_spec = #logic_spec{
-            module = group_logic,
-            function = delete,
-            args = [auth, GroupId],
-            expected_result = ?ERROR_REASON(?ERR_PROTECTED_GROUP)
-        },
-        gs_spec = #gs_spec{
-            operation = delete,
-            gri = #gri{type = od_group, id = GroupId, aspect = instance},
-            expected_result_op = ?ERROR_REASON(?ERR_PROTECTED_GROUP)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % Verify that group exists
-    {ok, Groups} = oz_test_utils:list_groups(Config),
-    ?assertEqual(lists:member(GroupId, Groups), true).
 
 
 get_oz_privileges_test(Config) ->

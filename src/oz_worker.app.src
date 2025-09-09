@@ -11,6 +11,7 @@
 
 {application, oz_worker, [
     {description, "Onezone worker node."},
+    %% Beware - this version is parsed and used in Makefile
     {vsn, "21.02.8"},
     {registered, [oz_worker_sup]},
     {applications, [

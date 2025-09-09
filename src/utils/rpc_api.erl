@@ -31,7 +31,8 @@
     cluster_logic_get_eff_users/2, cluster_logic_get_groups/2,
     cluster_logic_get_eff_groups/2, cluster_logic_create_invite_token_to_onezone_for_admin/0,
     reconcile_dns_config/0, dns_config_get_ns_hosts/0,
-    gui_message_exists/1, get_gui_message_as_map/1, update_gui_message/3
+    gui_message_exists/1, get_gui_message_as_map/1, update_gui_message/3,
+    circuit_breaker_toggle/1
 ]).
 
 -define(PRIVS_TO_INVITE_ADMIN, [?CLUSTER_ADD_USER, ?CLUSTER_SET_PRIVILEGES]).
@@ -266,3 +267,8 @@ get_gui_message_as_map(MessageId) ->
     ok | {error, term()}.
 update_gui_message(Auth, MessageId, Data) ->
     zone_logic:update_gui_message(Auth, MessageId, Data).
+
+
+-spec circuit_breaker_toggle(open | closed) -> ok.
+circuit_breaker_toggle(State) ->
+    oz_worker_circuit_breaker:toggle(State).

@@ -35,7 +35,7 @@
 %%--------------------------------------------------------------------
 -callback validation_examples() ->
     [{auth_config:idp(), entitlement_mapping:raw_entitlement(), auth_config:parser_config(),
-    entitlement_mapping:idp_entitlement() | {error, malformed}}].
+        entitlement_mapping:idp_entitlement() | {error, malformed}}].
 
 
 %%%===================================================================
@@ -59,23 +59,31 @@ validate_example(Module, {IdP, Input, ParserConfig, ExpectedOutput}) ->
         {{error, malformed}, {error, malformed, _, _, _}} ->
             ok;
         {_, {error, malformed, EType, EReason, EStacktrace}} ->
-            ?error("Validation example crashed:~n"
-            "IdP: ~tp~n"
-            "Input: ~tp~n"
-            "ParserConfig: ~tp~n"
-            "Expected: ~tp~n"
-            "Error: ~tp~n"
-            "Stacktrace: ~ts~n", [
-                IdP, Input, ParserConfig, ExpectedOutput, {EType, EReason},
-                iolist_to_binary(onedata_logger:pr_stacktrace(EStacktrace))
-            ]),
+            ?error(
+                "Validation example crashed:~n"
+                "IdP: ~tp~n"
+                "Input: ~tp~n"
+                "ParserConfig: ~tp~n"
+                "Expected: ~tp~n"
+                "Error: ~tp~n"
+                "Stacktrace: ~ts~n",
+                [
+                    IdP, Input, ParserConfig, ExpectedOutput, {EType, EReason},
+                    iolist_to_binary(onedata_logger:pr_stacktrace(EStacktrace))
+                ]
+            ),
             throw(validation_failed);
         {_, Got} ->
-            ?error("Validation example failed:~n"
-            "IdP: ~tp~n"
-            "Input: ~tp~n"
-            "ParserConfig: ~tp~n"
-            "Expected: ~tp~n"
-            "Got: ~tp", [IdP, Input, ParserConfig, ExpectedOutput, Got]),
+            ?error(
+                "Validation example failed:~n"
+                "IdP: ~tp~n"
+                "Input: ~tp~n"
+                "ParserConfig: ~tp~n"
+                "Expected: ~tp~n"
+                "Got:      ~tp",
+                [
+                    IdP, Input, ParserConfig, ExpectedOutput, Got
+                ]
+            ),
             throw(validation_failed)
     end.

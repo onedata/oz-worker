@@ -211,18 +211,18 @@ remove_group(SpaceId, GroupId) ->
 
 
 -spec create_user_invite_token(od_space:id(), od_user:id()) -> tokens:token().
-create_user_invite_token(SpaceId, UserId) ->
-    ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?USER_JOIN_SPACE, SpaceId)).
+create_user_invite_token(SpaceId, CreatorUserId) ->
+    ozt_tokens:create(temporary, ?SUB(user, CreatorUserId), ?INVITE_TOKEN(?USER_JOIN_SPACE, SpaceId)).
 
 
 -spec create_group_invite_token(od_space:id(), od_user:id()) -> tokens:token().
-create_group_invite_token(SpaceId, UserId) ->
-    ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?GROUP_JOIN_SPACE, SpaceId)).
+create_group_invite_token(SpaceId, CreatorUserId) ->
+    ozt_tokens:create(temporary, ?SUB(user, CreatorUserId), ?INVITE_TOKEN(?GROUP_JOIN_SPACE, SpaceId)).
 
 
 -spec create_support_token(od_space:id(), od_user:id()) -> tokens:token().
-create_support_token(SpaceId, UserId) ->
-    ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId)).
+create_support_token(SpaceId, CreatorUserId) ->
+    ozt_tokens:create(temporary, ?SUB(user, CreatorUserId), ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId)).
 
 
 -spec create_share(od_space:id()) -> od_share:id().
