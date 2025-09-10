@@ -84,7 +84,7 @@ run_scenario(Function, Args) ->
         throw:fail ->
             false;
         Type:Message:Stacktrace ->
-            ?error_exception(?autoformat_with_msg(
+            ?ct_pal_exception(?autoformat_with_msg(
                 "Unexpected error in: ", ?MODULE
             ), Type, Message, Stacktrace),
             false

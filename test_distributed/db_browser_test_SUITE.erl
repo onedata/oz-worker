@@ -407,7 +407,7 @@ db_browser_test(_) ->
     try
         db_browser_test_unsafe()
     catch Type:Reason:Stacktrace ->
-        ?error_exception(
+        ?ct_pal_exception(
             "db_browser test failed with", Type, Reason, Stacktrace
         ),
         error(test_failed)

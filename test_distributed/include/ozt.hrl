@@ -57,7 +57,7 @@ end)).
 -define(wrap_in_try_catch(Term), try
     Term
 catch __Type:__Reason:__Stacktrace ->
-    ?error_exception(?autoformat_with_msg(
+    ?ct_pal_exception(?autoformat_with_msg(
         "Test crash in", [?MODULE, ?LINE]
     ), __Type, __Reason, __Stacktrace),
     error(test_crashed)

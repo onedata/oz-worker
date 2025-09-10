@@ -198,7 +198,7 @@ check_rest_call(Config, ArgsMap) ->
                     Fun(RespHeaders)
                 catch
                     Type1:Message1:Stacktrace1 ->
-                        ?error_exception("Headers verification function crashed", Type1, Message1, Stacktrace1),
+                        ?ct_pal_exception("Headers verification function crashed", Type1, Message1, Stacktrace1),
                         false
                 end,
                 case Result of
@@ -238,7 +238,7 @@ check_rest_call(Config, ArgsMap) ->
                     Fun2(ActualBodyMap)
                 catch
                     Type2:Message2:Stacktrace2 ->
-                        ?error_exception("Body verification function crashed", Type2, Message2, Stacktrace2),
+                        ?ct_pal_exception("Body verification function crashed", Type2, Message2, Stacktrace2),
                         false
                 end,
                 case Result2 of
@@ -304,7 +304,7 @@ check_rest_call(Config, ArgsMap) ->
             };
         % Unexpected error
         Type:Message:Stacktrace ->
-            ?error_exception(?autoformat_with_msg(
+            ?ct_pal_exception(?autoformat_with_msg(
                 "check_rest_call failed with unexpected result", ?MODULE
             ), Type, Message, Stacktrace),
             false
