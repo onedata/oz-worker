@@ -1417,7 +1417,7 @@ run_infer_access_token_scope_test(#infer_access_token_scope_test_spec{
                     <<"supports">> => maps:map(fun(_, StoragesAndReadonly) ->
                         #{
                             <<"readonly">> => maps:get(readonly, StoragesAndReadonly),
-                            <<"storages">> => maps:map(fun(_, ReadonlyByStorage) ->
+                            <<"storageBackends">> => maps:map(fun(_, ReadonlyByStorage) ->
                                 #{
                                     <<"readonly">> => ReadonlyByStorage
                                 }
@@ -1433,7 +1433,7 @@ run_infer_access_token_scope_test(#infer_access_token_scope_test_spec{
                     <<"domain">> => ProviderRecord#od_provider.domain,
                     <<"version">> => maps:get(ProviderId, ProviderToVersion),
                     <<"online">> => ozt:rpc(provider_connections, is_online, [ProviderId]),
-                    <<"storages">> => lists_utils:intersect(ExpAllowedStorages, maps:get(ProviderId, StoragesByProvider))
+                    <<"storageBackends">> => lists_utils:intersect(ExpAllowedStorages, maps:get(ProviderId, StoragesByProvider))
                 }}
             end, ExpAllowedProviders)
         }

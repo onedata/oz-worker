@@ -786,8 +786,8 @@ build_data_access_scope_info(SpaceIds, Caveats) ->
                     case lists:member(ProviderId, AllowedProviderIds) of
                         true ->
                             Acc#{ProviderId => #{
-                                <<"storages">> => maps:merge(
-                                    kv_utils:get([ProviderId, <<"storages">>], Acc, #{}),
+                                <<"storageBackends">> => maps:merge(
+                                    kv_utils:get([ProviderId, <<"storageBackends">>], Acc, #{}),
                                     #{StorageId => #{
                                         <<"readonly">> => Readonly
                                     }}
@@ -810,7 +810,7 @@ build_data_access_scope_info(SpaceIds, Caveats) ->
                 <<"domain">> => Domain,
                 <<"version">> => ?check(cluster_logic:get_worker_release_version(?ROOT, ProviderId)),
                 <<"online">> => provider_connections:is_online(ProviderId),
-                <<"storages">> => lists_utils:intersect(ProviderStorages, StorageIds)
+                <<"storageBackends">> => lists_utils:intersect(ProviderStorages, StorageIds)
             }
         end, AllowedProvidersById)
     }.

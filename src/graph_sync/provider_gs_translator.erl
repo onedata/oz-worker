@@ -240,7 +240,8 @@ translate_resource(_, #gri{type = od_space, id = SpaceId, aspect = instance, sco
         <<"effectiveGroups">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_group, Space),
 
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
-        <<"storages">> => Storages,
+        <<"storages">> => Storages,  %% @TODO VFS-13082 Deprecated, included for backward compatibility
+        <<"storageBackends">> => Storages,
 
         % TODO VFS-12760 because this field is emulated, we don't get GS updates if it changes!
         %                probably we must trigger od_space doc update every time a share is created
@@ -353,7 +354,9 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
 
         <<"online">> => provider_connections:is_online(Id),
 
+        %% @TODO VFS-13082 Deprecated, included for backward compatibility
         <<"storages">> => entity_graph:get_relations(direct, bottom_up, od_storage, Provider),
+        <<"storageBackends">> => entity_graph:get_relations(direct, bottom_up, od_storage, Provider),
         %% @TODO VFS-5554 Deprecated, included for backward compatibility
         <<"spaces">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_space, Provider),
         <<"effectiveSpaces">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_space, Provider),
