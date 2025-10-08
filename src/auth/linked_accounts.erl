@@ -20,7 +20,7 @@
 %% API
 -export([to_map/2, to_maps/2]).
 -export([gen_user_id/1, gen_user_id/2]).
--export([find_user/1, acquire_user/1]).
+-export([find_user/1, acquire_user/2]).
 -export([merge/2]).
 -export([build_test_user_info/1]).
 
@@ -129,15 +129,16 @@ find_user(LinkedAccount) ->
 %% Checks if the user is blocked and returns an error if so.
 %% @end
 %%--------------------------------------------------------------------
--spec acquire_user(od_user:linked_account()) -> {ok, od_user:doc()} | errors:error().
-acquire_user(LinkedAccount) ->
+-spec acquire_user(od_user:linked_account(), gui_login | idp_access_token) ->
+    {ok, od_user:doc()} | errors:error().
+acquire_user(LinkedAccount, Context) ->
     case find_user(LinkedAccount) of
         {ok, #document{value = #od_user{blocked = true}}} ->
             ?ERR_USER_BLOCKED(?err_ctx());
         {ok, #document{key = UserId}} ->
             merge(UserId, LinkedAccount);
         {error, not_found} ->
-            create_user(LinkedAccount)
+            create_user(LinkedAccount, Context)
     end.
 
 
@@ -211,12 +212,32 @@ build_test_user_info(LinkedAccount) ->
 %% it must be ensured that a user with such linked account does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user(od_user:linked_account()) -> {ok, od_user:doc()} | errors:error().
-create_user(LinkedAccount = #linked_account{full_name = FullName, username = Username}) ->
+-spec create_user(od_user:linked_account(), gui_login | idp_access_token) ->
+    {ok, od_user:doc()} | errors:error().
+create_user(LinkedAccount = #linked_account{full_name = FullName, username = Username}, Context) ->
     ProposedUserId = gen_user_id(LinkedAccount),
     {ok, UserId} = user_logic:create(?ROOT, ProposedUserId, #{
         <<"fullName">> => user_logic:normalize_full_name(FullName)
     }),
+    ?notice(
+        "New user account has been created:~n"
+        "> reason:    '~ts'~n"
+        "> userId:    '~ts'~n"
+        "> fullName:  '~ts'~n"
+        "> username:  '~ts'~n"
+        "> IdP:       '~ts'~n"
+        "> subjectId: '~ts'", [
+            case Context of
+                gui_login -> "first login via GUI";
+                idp_access_token -> "first authentication using a delegated IdP access token"
+            end ,
+            UserId,
+            FullName,
+            Username,
+            LinkedAccount#linked_account.idp,
+            LinkedAccount#linked_account.subject_id
+        ]
+    ),
     % Setting the username might fail (if it's not unique) - it's not considered a failure.
     user_logic:update_username(?ROOT, UserId, user_logic:normalize_username(Username)),
     merge(UserId, LinkedAccount).

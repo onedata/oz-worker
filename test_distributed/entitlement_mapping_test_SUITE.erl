@@ -980,7 +980,7 @@ simulate_first_login(IdP, Entitlements) ->
     LinkedAccount = ?LINKED_ACC(IdP, Entitlements),
     Config = get_test_config(),
     {ok, #document{key = UserId}} = oz_test_utils:call_oz(
-        Config, linked_accounts, acquire_user, [LinkedAccount]
+        Config, linked_accounts, acquire_user, [LinkedAccount, gui_login]
     ),
     put(test_data_user, UserId),
     ?assertHasLinkedAccount(LinkedAccount),

@@ -182,7 +182,7 @@ refresh_idp_access_token(IdP, RefreshToken) ->
     try
         {ok, Attributes} = openid_protocol:refresh_idp_access_token(IdP, RefreshToken),
         LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
-        case linked_accounts:acquire_user(LinkedAccount) of
+        case linked_accounts:acquire_user(LinkedAccount, idp_access_token) of
             {error, _} = Error ->
                 log_error(Error, IdP, <<"refresh_token_flow">>, []),
                 Error;
@@ -245,7 +245,7 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
 -spec validate_login_by_linked_account(od_user:linked_account()) ->
     {ok, od_user:id()} | errors:error().
 validate_login_by_linked_account(LinkedAccount) ->
-    case linked_accounts:acquire_user(LinkedAccount) of
+    case linked_accounts:acquire_user(LinkedAccount, gui_login) of
         {error, _} = Error ->
             Error;
         {ok, #document{key = UserId, value = #od_user{full_name = FullName}}} ->
