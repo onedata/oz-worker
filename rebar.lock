@@ -47,7 +47,7 @@
        {ref,"9919871e5313df24497914bb50791f0690a3be97"}},
   2},
  {<<"erldns">>,
-  {git,"https://github.com/KasiaS999/erldns.git",
+  {git,"https://github.com/mistanisz/erldns.git",
        {ref,"0f9f6b1b978ab021e89502f7b1f31686b5b0ab6e"}},
   0},
  {<<"esaml">>,
