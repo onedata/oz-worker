@@ -129,16 +129,16 @@ find_user(LinkedAccount) ->
 %% Checks if the user is blocked and returns an error if so.
 %% @end
 %%--------------------------------------------------------------------
--spec acquire_user(od_user:linked_account(), gui_login | idp_access_token) ->
+-spec acquire_user(od_user:linked_account(), idp_auth:flow_type()) ->
     {ok, od_user:doc()} | errors:error().
-acquire_user(LinkedAccount, Context) ->
+acquire_user(LinkedAccount, FlowType) ->
     case find_user(LinkedAccount) of
         {ok, #document{value = #od_user{blocked = true}}} ->
             ?ERR_USER_BLOCKED(?err_ctx());
         {ok, #document{key = UserId}} ->
             merge(UserId, LinkedAccount);
         {error, not_found} ->
-            create_user(LinkedAccount, Context)
+            create_user(LinkedAccount, FlowType)
     end.
 
 
@@ -212,25 +212,25 @@ build_test_user_info(LinkedAccount) ->
 %% it must be ensured that a user with such linked account does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user(od_user:linked_account(), gui_login | idp_access_token) ->
+-spec create_user(od_user:linked_account(), idp_auth:flow_type()) ->
     {ok, od_user:doc()} | errors:error().
-create_user(LinkedAccount = #linked_account{full_name = FullName, username = Username}, Context) ->
+create_user(LinkedAccount = #linked_account{full_name = FullName, username = Username}, FlowType) ->
     ProposedUserId = gen_user_id(LinkedAccount),
     {ok, UserId} = user_logic:create(?ROOT, ProposedUserId, #{
         <<"fullName">> => user_logic:normalize_full_name(FullName)
     }),
     ?notice(
         "New user account has been created:~n"
-        "> reason:    '~ts'~n"
-        "> userId:    '~ts'~n"
-        "> fullName:  '~ts'~n"
-        "> username:  '~ts'~n"
-        "> IdP:       '~ts'~n"
-        "> subjectId: '~ts'", [
-            case Context of
+        "> reason:    ~ts~n"
+        "> userId:    ~ts~n"
+        "> fullName:  ~ts~n"
+        "> username:  ~ts~n"
+        "> IdP:       ~ts~n"
+        "> subjectId: ~ts", [
+            case FlowType of
                 gui_login -> "first login via GUI";
                 idp_access_token -> "first authentication using a delegated IdP access token"
-            end ,
+            end,
             UserId,
             FullName,
             Username,
