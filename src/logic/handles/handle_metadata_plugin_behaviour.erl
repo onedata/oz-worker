@@ -30,6 +30,7 @@
 -author("Lukasz Opiola").
 
 -include("plugins/onezone_plugins.hrl").
+-include("http/handlers/oai.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -140,8 +141,22 @@ validate_example(Module, ValidationExample) ->
 
 
 %% @private
--spec validate_handle_metadata_plugin_example_unsafe(module(), validation_example()) -> ok | no_return().
-validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_validation_example{
+-spec validate_handle_metadata_plugin_example_unsafe(module(), validation_example()) ->
+    ok | no_return().
+validate_handle_metadata_plugin_example_unsafe(Module, ValidationExample) ->
+    DummyPidPublicHandle = str_utils:format_bin("http://hdl.handle.net/~ts/~ts", [
+        datastore_key:new(), datastore_key:new()
+    ]),
+    validate_handle_metadata_plugin_example_unsafe(Module, DummyPidPublicHandle, ValidationExample),
+
+    DummyDoiPublicHandle = ?DOI_IDENTIFIER(str_utils:format_bin("~ts/~ts", [datastore_key:new(), datastore_key:new()])),
+    validate_handle_metadata_plugin_example_unsafe(Module, DummyDoiPublicHandle, ValidationExample).
+
+
+%% @private
+-spec validate_handle_metadata_plugin_example_unsafe(module(), od_handle:public_handle(), validation_example()) ->
+    ok | no_return().
+validate_handle_metadata_plugin_example_unsafe(Module, PublicHandle, #handle_metadata_plugin_validation_example{
     input_raw_xml = InputRawXml,
     input_qualifies_for_publication = InputQualifiesForPublication,
     exp_revised_metadata_generator = ExpRevisedMetadataGenerator,
@@ -159,7 +174,6 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
         creation_time = global_clock:timestamp_seconds(),
         creator = ?SUB(user, datastore_key:new())
     },
-    DummyPublicHandle = str_utils:format_bin("http://hdl.handle.net/~ts/~ts", [datastore_key:new(), datastore_key:new()]),
 
     {ok, ParsedMetadata} = oai_xml:parse(InputRawXml),
 
@@ -184,8 +198,8 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
                 "Unmet expectation: revise_for_publication is not idempotent"
             ),
 
-            FinalMetadata = Module:insert_public_handle(RevisedMetadata, DummyPublicHandle),
-            ExpRawFinalMetadata = ExpFinalMetadataGenerator(DummyShareId, DummyShareRecord, DummyPublicHandle),
+            FinalMetadata = Module:insert_public_handle(RevisedMetadata, PublicHandle),
+            ExpRawFinalMetadata = ExpFinalMetadataGenerator(DummyShareId, DummyShareRecord, PublicHandle),
             assert_result_equals_expectation(
                 Module,
                 InputRawXml,
@@ -196,7 +210,7 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
             assert_result_equals_expectation(
                 Module,
                 InputRawXml,
-                Module:insert_public_handle(FinalMetadata, DummyPublicHandle),
+                Module:insert_public_handle(FinalMetadata, PublicHandle),
                 ExpRawFinalMetadata,
                 "Unmet expectation: insert_public_handle is not idempotent"
             ),
@@ -206,14 +220,14 @@ validate_handle_metadata_plugin_example_unsafe(Module, #handle_metadata_plugin_v
                 InputRawXml,
                 Module:insert_public_handle(
                     ?check(Module:revise_for_publication(FinalMetadata, DummyShareId, DummyShareRecord)),
-                    DummyPublicHandle
+                    PublicHandle
                 ),
                 ExpRawFinalMetadata,
                 "Unmet expectation: revise_for_publication + insert_public_handle on final metadata is not idempotent"
             ),
 
             OaiPmhMetadata = Module:adapt_for_oai_pmh(FinalMetadata),
-            ExpOaiPmhMetadata = ExpOaiPmhMetadataGenerator(DummyShareId, DummyShareRecord, DummyPublicHandle),
+            ExpOaiPmhMetadata = ExpOaiPmhMetadataGenerator(DummyShareId, DummyShareRecord, PublicHandle),
             assert_result_equals_expectation(
                 Module,
                 InputRawXml,

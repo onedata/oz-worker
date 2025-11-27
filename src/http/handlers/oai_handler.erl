@@ -65,7 +65,7 @@ allowed_methods(Req, State) ->
     Params :: '*' | [{binary(), binary()}],
     ProvideResource :: atom().
 content_types_provided(Req, State) ->
-    {[{<<"text/xml">>, provide_resource}], Req, State}.
+    {[{{<<"text">>, <<"xml">>, '*'}, provide_resource}], Req, State}.
 
 
 %%%--------------------------------------------------------------------

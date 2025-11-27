@@ -5,7 +5,7 @@
 %%% cited in 'LICENSE.txt'.
 %%% @doc
 %%% Implementation of the onezone_plugin_behaviour and the handle_metadata_plugin_behaviour
-%%% for handling DC (Dublin Core) metadata format.
+%%% for handling Dublin Core metadata format ("oai_dc" in OAI-PMH).
 %%%
 %%% @see handle_metadata_plugin_behaviour for general information about metadata plugins.
 %%%
@@ -20,7 +20,7 @@
 %%%
 %%% @end
 %%%-------------------------------------------------------------------
--module(dublin_core_metadata_plugin).
+-module(oai_dc_metadata_plugin).
 -author("Jakub Kudzia").
 -author("Lukasz Opiola").
 
@@ -133,7 +133,7 @@ encode_xml(Metadata) ->
 %% @doc {@link handle_metadata_plugin_behaviour} callback validation_examples/0
 -spec validation_examples() -> [handle_metadata_plugin_behaviour:validation_example()].
 validation_examples() -> [
-    % TODO VFS-7454 add better validation of the DC XML; currently, any XML with metadata tag is accepted
+    % TODO VFS-7454 add better validation of the DC XML (schema)
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",

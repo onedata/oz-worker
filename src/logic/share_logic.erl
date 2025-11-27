@@ -35,12 +35,7 @@
 -export([
     exists/1
 ]).
--export([
-    choose_provider_for_public_share_handling/1
-]).
 
-% Time for which a provider choice for public view is cached, per space.
--define(CHOSEN_PROVIDER_CACHE_TTL, 30).
 
 %%%===================================================================
 %%% API
@@ -184,70 +179,3 @@ delete(Auth, ShareId) ->
 exists(ShareId) ->
     {ok, Exists} = od_share:exists(ShareId),
     Exists.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Chooses a provider to handle requests concerning public share information
-%% and data (for all interfaces). Online providers that
-%% are in newest version are preferred, then any online provider. Returns the
-%% provider Id and its version, or undefined values if there are no online providers.
-%% This operation is performed each time a public share is visited. To minimize
-%% the cost (as each choice requires several request to the database), it is
-%% cached for some time per space. There is an additional check in case the
-%% cached, chosen provider has gone offline in the meantime, which repeats the
-%% procedure if needed.
-%% @end
-%%--------------------------------------------------------------------
--spec choose_provider_for_public_share_handling(od_share:id()) ->
-    {ok, {od_provider:id() | undefined, onedata:release_version() | undefined}} | od_error_not_found:t().
-choose_provider_for_public_share_handling(ShareId) ->
-    case get_space(?ROOT, ShareId) of
-        ?ERROR_NOT_FOUND = NotFoundError ->
-            NotFoundError;
-        {ok, SpaceId} ->
-            {ok, Result} = node_cache:acquire({chosen_provider_for_share_handling, SpaceId}, fun() ->
-                {ok, choose_provider_for_public_share_handling_in_space(SpaceId), ?CHOSEN_PROVIDER_CACHE_TTL}
-            end),
-            case Result of
-                {undefined, undefined} ->
-                    {ok, Result};
-                {ChosenProviderId, _} ->
-                    case provider_connections:is_online(ChosenProviderId) of
-                        true ->
-                            {ok, Result};
-                        false ->
-                            node_cache:clear({chosen_provider_for_share_handling, SpaceId}),
-                            choose_provider_for_public_share_handling(ShareId)
-                    end
-            end
-    end.
-
-
-%% @private
--spec choose_provider_for_public_share_handling_in_space(od_space:id()) ->
-    {od_provider:id() | undefined, onedata:release_version() | undefined}.
-choose_provider_for_public_share_handling_in_space(SpaceId) ->
-    {ok, Providers} = space_logic:get_eff_providers(?ROOT, SpaceId),
-    <<OzWorkerReleaseLine:6/binary, _/binary>> = oz_worker:get_release_version(),
-    EligibleProviders = lists:filtermap(fun(ProviderId) ->
-        case provider_connections:is_online(ProviderId) of
-            false ->
-                false;
-            true ->
-                {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, ProviderId),
-                VersionClassification = case Version of
-                    <<OzWorkerReleaseLine:6/binary, _/binary>> -> up_to_date;
-                    _ -> legacy
-                end,
-                {true, {ProviderId, Version, VersionClassification}}
-        end
-    end, Providers),
-    UpToDateProviders = [UpToDateProv || UpToDateProv = {_, _, up_to_date} <- EligibleProviders],
-
-    {ChosenProviderId, ChosenProviderVersion, _} = case {EligibleProviders, UpToDateProviders} of
-        {[], _} -> {undefined, undefined, undefined};
-        {_, []} -> lists_utils:random_element(EligibleProviders);
-        {_, _} -> lists_utils:random_element(UpToDateProviders)
-    end,
-    {ChosenProviderId, ChosenProviderVersion}.

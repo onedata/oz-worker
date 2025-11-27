@@ -603,7 +603,7 @@ translate_share(#gri{id = ShareId, aspect = instance, scope = private}, ShareRec
         <<"hasHandle">> => Handle /= undefined
     };
 translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name">> := Name}) ->
-    {ok, {ChosenProviderId, ChosenProviderVersion}} = share_logic:choose_provider_for_public_share_handling(ShareId),
+    {ChosenProviderId, ChosenProviderVersion} = ?check(od_share:choose_provider_for_public_share_handling(ShareId)),
     #{
         <<"name">> => Name,
         <<"chosenProviderId">> => utils:undefined_to_null(ChosenProviderId),

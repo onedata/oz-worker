@@ -267,7 +267,32 @@ create_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, undefined)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, undefined)),
+
+    BuildPayload = fun(ShareId) -> #{
+        <<"handleServiceId">> => PidHService,
+        <<"resourceType">> => <<"Share">>,
+        <<"resourceId">> => ShareId,
+        <<"metadata">> => RawMetadata,
+        <<"metadataPrefix">> => MetadataPrefix
+    } end,
+
+    ShareAlpha = ozt_shares:create(S1),
+    ExpShareLinkAlpha = api_test_expect:expected_public_share_url(ShareAlpha),
+    HandleAlpha = ozt_handles:create(maps:merge(BuildPayload(ShareAlpha), #{
+        <<"requestPublicHandle">> => false
+    })),
+    ?assertEqual(ExpShareLinkAlpha, (ozt_handles:get(HandleAlpha))#od_handle.public_handle),
+    ?assert(nomatch /= string:find((ozt_handles:get(HandleAlpha))#od_handle.metadata, ExpShareLinkAlpha)),
+
+    ShareBeta = ozt_shares:create(S1),
+    PublicHandleToReuse = <<"https://example.com/12345">>,
+    HandleBeta = ozt_handles:create(maps:merge(BuildPayload(ShareBeta), #{
+        <<"requestPublicHandle">> => false,
+        <<"publicHandleToReuse">> => PublicHandleToReuse
+    })),
+    ?assertEqual(PublicHandleToReuse, (ozt_handles:get(HandleBeta))#od_handle.public_handle),
+    ?assert(nomatch /= string:find((ozt_handles:get(HandleBeta))#od_handle.metadata, PublicHandleToReuse)).
 
 
 get_test(Config) ->

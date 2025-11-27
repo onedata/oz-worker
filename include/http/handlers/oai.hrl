@@ -110,7 +110,13 @@
 
 
 -define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
+-define(OAI_DATACITE_METADATA_PREFIX, <<"oai_datacite">>).
+-define(DATACITE_METADATA_PREFIX, <<"datacite">>).
 -define(EDM_METADATA_PREFIX, <<"edm">>).
+
+% used to denote a DOI identifier, in contrast to URL identifiers that start with http://, https://
+% (one of which is a PID identifier, like http://hdl.handle.net/21.T15999/abcd)
+-define(DOI_IDENTIFIER(Handle), <<"doi:", (Handle)/binary>>).
 
 
 -define(OAI_XML_NAMESPACE, #xmlAttribute{

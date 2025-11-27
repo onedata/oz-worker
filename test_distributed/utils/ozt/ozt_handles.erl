@@ -32,8 +32,11 @@
 %%%===================================================================
 
 -spec create(od_handle_service:id()) -> od_handle:id().
-create(HandleServiceId) ->
-    create(HandleServiceId, ozt_shares:create(ozt_spaces:create())).
+create(HandleServiceId) when is_binary(HandleServiceId) ->
+    create(HandleServiceId, ozt_shares:create(ozt_spaces:create()));
+create(Data) when is_map(Data) ->
+    {ok, HandleId} = ?assertMatch({ok, _}, ozt:rpc(handle_logic, create, [?ROOT, Data])),
+    HandleId.
 
 -spec create(od_handle_service:id(), od_share:id()) -> od_handle:id().
 create(HandleServiceId, ShareId) ->
@@ -41,17 +44,17 @@ create(HandleServiceId, ShareId) ->
     RawMetadata = example_input_metadata(MetadataPrefix),
     create(HandleServiceId, ShareId, MetadataPrefix, RawMetadata).
 
+
 -spec create(od_handle_service:id(), od_share:id(), od_handle:metadata_prefix(), od_handle:raw_metadata()) ->
     od_handle:id().
 create(HandleServiceId, ShareId, MetadataPrefix, RawMetadata) ->
-    {ok, HandleId} = ?assertMatch({ok, _}, ozt:rpc(handle_logic, create, [?ROOT, #{
+    create(#{
         <<"handleServiceId">> => HandleServiceId,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ShareId,
         <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => RawMetadata
-    }])),
-    HandleId.
+    }).
 
 
 -spec get(od_handle:id()) -> od_handle:record().

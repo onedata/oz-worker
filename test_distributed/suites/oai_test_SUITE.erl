@@ -22,6 +22,7 @@
 
 -define(OZ_NAME, "dev-onezone").
 
+
 %% API
 -export([all/0, init_per_suite/1, init_per_testcase/2, end_per_testcase/2, end_per_suite/1]).
 
@@ -1518,11 +1519,19 @@ example_input_metadata(MetadataPrefix) ->
                     )
                 },
                 Content
+            )};
+        _ ->  % covers ?DATACITE_METADATA_PREFIX and ?OAI_DATACITE_METADATA_PREFIX
+            #xmlElement{name = resource, content = Content} = ParsedXml,
+            ParsedXml#xmlElement{content = oai_xml:prepend_element_with_indent(
+                4, #xmlElement{
+                    name = 'identifier',
+                    attributes = [#xmlAttribute{name = identifierType, value = "URN"}],
+                    content = [#xmlText{value = binary_to_list(?RAND_UNICODE_STR())}]
+                },
+                Content
             )}
     end,
     ozt:rpc(oai_metadata, encode_xml, [MetadataPrefix, EnrichedMetadata]).
-
-
 
 
 prepare_harvesting_args(MetadataPrefix, From, Until) ->

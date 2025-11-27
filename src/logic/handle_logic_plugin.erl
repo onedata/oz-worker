@@ -527,7 +527,10 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         }},
         <<"metadataPrefix">> => {binary, ?AVAILABLE_METADATA_FORMATS},
         <<"metadata">> => {binary, {text_length_limit, ?METADATA_SIZE_LIMIT}}
-
+    },
+    optional => #{
+        <<"requestPublicHandle">> => {boolean, any},
+        <<"publicHandleToReuse">> => {binary, non_empty}
     }
 };
 
@@ -594,9 +597,19 @@ create_handle_unsafe(ShareId, Req = #el_req{gri = GRI, auth = Auth, data = Data}
         MetadataPrefix, RawMetadata, ShareId, InitialShareRecord
     ),
 
-    {ok, PublicHandle} = handle_proxy:register_handle(
-        HandleServiceId, ResourceType, ShareId, oai_metadata:encode_xml(MetadataPrefix, RevisedMetadata)
-    ),
+    PublicHandle = case maps:get(<<"requestPublicHandle">>, Data, true) of
+        true ->
+            ?check(handle_proxy:register_handle(
+                HandleServiceId, ResourceType, ShareId, oai_metadata:encode_xml(MetadataPrefix, RevisedMetadata)
+            ));
+        false ->
+            case maps:find(<<"publicHandleToReuse">>, Data) of
+                {ok, PreexistingPublicHandle} ->
+                    PreexistingPublicHandle;
+                error ->
+                    od_share:build_public_url(ShareId)
+            end
+    end,
 
     FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
 

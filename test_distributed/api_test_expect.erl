@@ -271,6 +271,7 @@ public_share(logic, _Id, ShareData) ->
 public_share(rest, Id, ShareData) ->
     #{
         <<"shareId">> => Id,
+        <<"spaceId">> => maps:get(<<"spaceId">>, ShareData),
         <<"name">> => maps:get(<<"name">>, ShareData),
         <<"description">> => maps:get(<<"description">>, ShareData),
         <<"rootFileId">> => ?check(file_id:guid_to_objectid(maps:get(<<"rootFileId">>, ShareData))),
