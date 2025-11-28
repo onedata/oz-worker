@@ -95,13 +95,17 @@ metadata_prefix() ->
 %% @doc {@link handle_metadata_plugin_behaviour} callback schema_URL/0
 -spec schema_URL() -> binary().
 schema_URL() ->
-    <<"http://schema.datacite.org/meta/kernel-4/metadata.xsd">>.
+    % depends on the record's schema version so it's not possible to determine;
+    % see https://oai.datacite.org/oai?verb=ListMetadataFormats
+    <<"http://schema.datacite.org/meta/nonexistant/nonexistant.xsd">>.
 
 
 %% @doc {@link handle_metadata_plugin_behaviour} callback main_namespace/0
 -spec main_namespace() -> {atom(), binary()}.
 main_namespace() ->
-    {'xmlns', <<"http://datacite.org/schema/kernel-4">>}.
+    % depends on the record's schema version so it's not possible to determine;
+    % see https://oai.datacite.org/oai?verb=ListMetadataFormats
+    {'xmlns', <<"http://datacite.org/schema/nonexistant">>}.
 
 
 %% @doc {@link handle_metadata_plugin_behaviour} callback revise_for_publication/3

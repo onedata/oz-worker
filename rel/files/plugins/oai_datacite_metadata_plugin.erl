@@ -17,11 +17,11 @@
 %%%
 %%% @see handle_metadata_plugin_behaviour for general information about metadata plugins.
 %%%
-%%% Metadata revision step:
+%%% Metadata revision step (the same as for @see datacite_metadata_plugin):
 %%%   * remove preexisting identifier element(s) (to be overwritten in the next step)
 %%%   * add an alternateIdentifier element with the value equal to the public share URL
 %%%
-%%% Public handle insertion step:
+%%% Public handle insertion step (the same as for @see datacite_metadata_plugin):
 %%%   * insert an identifier element (serving as primary) with the value equal to the public handle
 %%%
 %%% Adaptation for OAI-PMH step:
