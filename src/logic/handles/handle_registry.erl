@@ -74,9 +74,9 @@
 
 -define(FOREST, <<"handle-forest">>).
 -define(TREE_FOR_METADATA_PREFIX(Prefix),
-    <<Prefix/binary, "-records-all">>).
+    <<(Prefix)/binary, "-records-all">>).
 -define(TREE_FOR_METADATA_PREFIX_AND_HSERVICE(Prefix, HServiceId),
-    <<Prefix/binary, "-records-of-service-", HServiceId/binary>>).
+    <<(Prefix)/binary, "-records-of-service-", HServiceId/binary>>).
 
 
 -define(DEFAULT_LIST_LIMIT, oz_worker:get_env(default_handle_list_limit, 1000)).
@@ -117,7 +117,7 @@ report_updated(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp, Upd
 report_deleted(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp, DeletionTimestamp) ->
     delete_entry(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp),
     add_entry(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp, deleted),
-    deleted_handle_registry:insert(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp).
+    deleted_handle_registry:insert(normalize_prefix(MetadataPrefix), HandleServiceId, HandleId, DeletionTimestamp).
 
 
 -spec lookup_deleted(od_handle:id()) -> error | {ok, {od_handle:metadata_prefix(), handle_listing_entry()}}.
@@ -148,7 +148,7 @@ purge_deleted_entry(HandleId) ->
     ok.
 purge_deleted_entry(MetadataPrefix, HServiceId, HandleId, Timestamp) ->
     deleted_handle_registry:remove(HandleId),
-    delete_entry(MetadataPrefix, HServiceId, HandleId, Timestamp).
+    delete_entry(normalize_prefix(MetadataPrefix), HServiceId, HandleId, Timestamp).
 
 
 -spec purge_deleted_entries_for_service(od_handle_service:id()) -> ok.
@@ -171,7 +171,7 @@ purge_deleted_entries_for_service(SubjectHServiceId) ->
 -spec get_earliest_timestamp() -> undefined | od_handle:timestamp_seconds().
 get_earliest_timestamp() ->
     EntriesWithEarliestTimestamps = lists:flatmap(fun(MetadataPrefix) ->
-        ListingOpts = #{limit => 1, metadata_prefix => MetadataPrefix},
+        ListingOpts = #{limit => 1, metadata_prefix => normalize_prefix(MetadataPrefix)},
         {List, _} = list_portion(ListingOpts),
         List
     end, oai_metadata:supported_formats()),
@@ -202,14 +202,18 @@ gather_by_all_prefixes() ->
 -spec gather_by_all_prefixes(undefined | od_handle_service:id()) -> [handle_listing_entry()].
 gather_by_all_prefixes(HServiceId) ->
     lists:umerge(lists:map(fun(MetadataPrefix) ->
-        list_completely(#{metadata_prefix => MetadataPrefix, service_id => HServiceId})
+        list_completely(#{metadata_prefix => normalize_prefix(MetadataPrefix), service_id => HServiceId})
     end, oai_metadata:supported_formats())).
 
 
 -spec service_has_any_entries(od_handle_service:id()) -> boolean().
 service_has_any_entries(HServiceId) ->
     lists:any(fun(MetadataPrefix) ->
-        {Entries, _} = list_portion(#{metadata_prefix => MetadataPrefix, service_id => HServiceId, limit => 1}),
+        {Entries, _} = list_portion(#{
+            metadata_prefix => normalize_prefix(MetadataPrefix),
+            service_id => HServiceId,
+            limit => 1
+        }),
         not lists_utils:is_empty(Entries)
     end, oai_metadata:supported_formats()).
 
@@ -276,8 +280,8 @@ build_internal_listing_opts(#{resumption_token := ResumptionToken}) ->
 build_internal_listing_opts(#{metadata_prefix := MetadataPrefix} = ListingOpts) ->
     #internal_listing_opts{
         tree_id = case maps:get(service_id, ListingOpts, undefined) of
-            undefined -> ?TREE_FOR_METADATA_PREFIX(MetadataPrefix);
-            HServiceId -> ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HServiceId)
+            undefined -> ?TREE_FOR_METADATA_PREFIX(normalize_prefix(MetadataPrefix));
+            HServiceId -> ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(normalize_prefix(MetadataPrefix), HServiceId)
         end,
         limit = utils:ensure_defined(maps:get(limit, ListingOpts, undefined), ?DEFAULT_LIST_LIMIT),
         start_after_key = encode_link_key(utils:ensure_defined(maps:get(from, ListingOpts, undefined), 0), first),
@@ -380,8 +384,8 @@ add_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp, Status) ->
             {error, already_exists} -> throw(?ERROR_ALREADY_EXISTS)
         end
     end, [
-        ?TREE_FOR_METADATA_PREFIX(MetadataPrefix),
-        ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HandleServiceId)
+        ?TREE_FOR_METADATA_PREFIX(normalize_prefix(MetadataPrefix)),
+        ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(normalize_prefix(MetadataPrefix), HandleServiceId)
     ]).
 
 
@@ -396,6 +400,16 @@ delete_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
             {error, not_found} -> ok
         end
     end, [
-        ?TREE_FOR_METADATA_PREFIX(MetadataPrefix),
-        ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HandleServiceId)
+        ?TREE_FOR_METADATA_PREFIX(normalize_prefix(MetadataPrefix)),
+        ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(normalize_prefix(MetadataPrefix), HandleServiceId)
     ]).
+
+
+%% While there are two similar metadata prefixes ("datacite" and "oai_datacite"), they only differ
+%% in OAI-PMH. On the level of this module, they should be considered the same.
+%% TODO VFS-13188 do this in a more elegant way,
+%% possibly decoupling allowed metadata formats (handle attribute) from harvesting metadataPrefix (OAI-PMH)
+%% @private
+-spec normalize_prefix(od_handle:metadata_prefix()) -> od_handle:metadata_prefix().
+normalize_prefix(?DATACITE_METADATA_PREFIX) -> ?OAI_DATACITE_METADATA_PREFIX;
+normalize_prefix(MetadataPrefix) -> MetadataPrefix.

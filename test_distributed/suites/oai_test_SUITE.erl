@@ -21,7 +21,7 @@
 -include("http/handlers/oai.hrl").
 
 -define(OZ_NAME, "dev-onezone").
-
+% fixme manual tests for the new formats
 
 %% API
 -export([all/0, init_per_suite/1, init_per_testcase/2, end_per_testcase/2, end_per_suite/1]).

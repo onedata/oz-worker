@@ -75,7 +75,7 @@ end).
     get_login_endpoint/3,
     validate_login/3,
     refresh_access_token/2,
-    get_user_info/2
+    get_user_info/3
 ]).
 
 
@@ -126,7 +126,7 @@ validate_login(IdP, #{<<"code">> := Code}, RedirectUri) ->
         <<"redirect_uri">> => RedirectUri,
         <<"grant_type">> => <<"authorization_code">>
     }),
-    {ok, Attributes} = get_user_info(IdP, AccessToken),
+    {ok, Attributes} = get_user_info(IdP, gui_login, AccessToken),
     case auth_config:has_offline_access_enabled(IdP) of
         false ->
             {ok, Attributes};
@@ -155,7 +155,7 @@ refresh_access_token(IdP, RefreshToken) ->
                 <<"refresh_token">> => RefreshToken,
                 <<"scope">> => ?CFG_SCOPE(IdP)
             }),
-            {ok, Attributes} = get_user_info(IdP, NewAccessToken),
+            {ok, Attributes} = get_user_info(IdP, refresh_token, NewAccessToken),
             {ok, Attributes#{
                 <<"access_token">> => {NewAccessToken, Expires},
                 <<"refresh_token">> => NewRefreshToken
@@ -165,12 +165,12 @@ refresh_access_token(IdP, RefreshToken) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link openid_plugin_behaviour} callback get_user_info/2.
+%% {@link openid_plugin_behaviour} callback get_user_info/3.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(auth_config:idp(), idp_auth:access_token()) ->
+-spec get_user_info(auth_config:idp(), idp_auth:flow_type(), idp_auth:access_token()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
-get_user_info(IdP, AccessToken) ->
+get_user_info(IdP, FlowType, AccessToken) ->
     Parameters1 = parameters_append_access_token(#{}, IdP, AccessToken),
     Parameters2 = parameters_append_custom(Parameters1, IdP, userInfo),
 
@@ -191,9 +191,9 @@ get_user_info(IdP, AccessToken) ->
     {ok, lists:foldl(fun(Endpoint, AccAttributes) ->
         Attributes = case Endpoint of
             {AttrKey, Url} ->
-                #{AttrKey => request_user_info(Url, Parameters2, Headers3)};
+                #{AttrKey => request_user_info(IdP, FlowType, Url, Parameters2, Headers3)};
             Url ->
-                request_user_info(Url, Parameters2, Headers3)
+                request_user_info(IdP, FlowType, Url, Parameters2, Headers3)
         end,
         maps:merge(AccAttributes, Attributes)
     end, #{}, UserInfoEndpoints)}.
@@ -253,10 +253,16 @@ acquire_access_token(IdP, Parameters) ->
 
 
 %% @private
--spec request_user_info(http_client:url(), idp_auth:query_params(),
-    http_client:headers()) -> ParsedJson :: #{}.
-request_user_info(URL, Parameters, Headers) ->
+-spec request_user_info(
+    auth_config:idp(),
+    idp_auth:flow_type(),
+    http_client:url(),
+    idp_auth:query_params(),
+    http_client:headers()
+) -> ParsedJson :: #{}.
+request_user_info(IdP, FlowType, URL, Parameters, Headers) ->
     {_, ResponseBody} = openid_protocol:request_idp(get, 200, URL, Headers, Parameters),
+    idp_auth_logger:log_user_info_collection_to_file(IdP, FlowType, ResponseBody),
     json_utils:decode(ResponseBody).
 
 

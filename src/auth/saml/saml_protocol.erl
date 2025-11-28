@@ -90,6 +90,11 @@ validate_login(IdP, QueryParams) ->
         Xml ->
             case esaml_sp:validate_assertion(Xml, SPConfig, IdPConfig) of
                 {ok, #esaml_assertion{attributes = Attributes}} ->
+                    idp_auth_logger:log_user_info_collection_to_file(IdP, gui_login, fun() ->
+                        str_utils:unicode_list_to_binary(xmerl:export_simple([Xml], xmerl_xml, [
+                            {prolog, ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n"]}
+                        ]))
+                    end),
                     {ok, normalize_attributes(Attributes)};
                 {error, Reason} ->
                     ?auth_warning("Invalid login request via SAML. Reason:~tp~nPOST params:~n~tp",

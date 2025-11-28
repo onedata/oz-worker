@@ -89,7 +89,7 @@ type() ->
 %% @doc {@link handle_metadata_plugin_behaviour} callback metadata_prefix/0
 -spec metadata_prefix() -> binary().
 metadata_prefix() ->
-    ?OAI_DATACITE_METADATA_PREFIX.
+    ?DATACITE_METADATA_PREFIX.
 
 
 %% @doc {@link handle_metadata_plugin_behaviour} callback schema_URL/0
