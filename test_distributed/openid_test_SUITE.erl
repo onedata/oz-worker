@@ -553,7 +553,7 @@ offline_access_internals(Config) ->
             subject_id = SubjectId,
             access_token = {<<"at1">>, oz_test_utils:get_frozen_time_seconds() + 1000},
             refresh_token = <<"rt1">>
-        }]
+        }, idp_access_token]
     ),
     ?assertMatch(UserId, gen_user_id(Config, ?DUMMY_IDP, SubjectId)),
     ?assertMatch({ok, {<<"at1">>, 1000}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),

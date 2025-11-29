@@ -31,16 +31,24 @@
 -type access_token_ttl() :: time:seconds().
 % Refresh token - used to refresh access tokens
 -type refresh_token() :: binary().
+
+% indicates what flow is being performed to authenticate a user;
+% either a login process using OpenID/SAML or a user has presented
+% an access token issued by an IdP in another interface (e.g. REST API)
+-type flow_type() :: gui_login | idp_access_token.
+
 -export_type([
     login_endpoint/0,
     redirect_uri/0,
     query_params/0,
     access_token/0,
     access_token_ttl/0,
-    refresh_token/0
+    refresh_token/0,
+    flow_type/0
 ]).
 
 -type protocol_handler() :: saml_protocol | openid_protocol.
+
 
 -define(NOW_SECONDS(), global_clock:timestamp_seconds()).
 -define(REFRESH_THRESHOLD, oz_worker:get_env(idp_access_token_refresh_threshold, 300)).
@@ -182,7 +190,7 @@ refresh_idp_access_token(IdP, RefreshToken) ->
     try
         {ok, Attributes} = openid_protocol:refresh_idp_access_token(IdP, RefreshToken),
         LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
-        case linked_accounts:acquire_user(LinkedAccount) of
+        case linked_accounts:acquire_user(LinkedAccount, idp_access_token) of
             {error, _} = Error ->
                 log_error(Error, IdP, <<"refresh_token_flow">>, []),
                 Error;
@@ -245,7 +253,7 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
 -spec validate_login_by_linked_account(od_user:linked_account()) ->
     {ok, od_user:id()} | errors:error().
 validate_login_by_linked_account(LinkedAccount) ->
-    case linked_accounts:acquire_user(LinkedAccount) of
+    case linked_accounts:acquire_user(LinkedAccount, gui_login) of
         {error, _} = Error ->
             Error;
         {ok, #document{key = UserId, value = #od_user{full_name = FullName}}} ->
