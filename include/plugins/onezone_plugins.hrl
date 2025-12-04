@@ -29,7 +29,7 @@
         (od_share:id(), od_share:record(), od_handle:public_handle()) -> (od_handle:raw_metadata())
     ),
     exp_oai_pmh_metadata_generator:: undefined | fun(
-        (od_share:id(), od_share:record(), od_handle:public_handle()) -> (od_handle:raw_metadata())
+        (oai_metadata:prefix(), od_share:id(), od_share:record(), od_handle:public_handle()) -> (od_handle:raw_metadata())
     )
 }).
 %% @formatter:on

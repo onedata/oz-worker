@@ -15,7 +15,7 @@
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("gui/include/gui_session.hrl").
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 %% @formatter:off
 -type auth() :: nobody | root | {user, UserId :: binary()} |

@@ -19,7 +19,7 @@
 
 %% API
 -export([create/1, create/2, create/4, get/1, update/2, exists/1, delete/1, list/0]).
--export([supported_metadata_prefixes/0]).
+-export([supported_metadata_schemas/0, all_supported_oai_pmh_prefixes/0, supported_oai_pmh_prefixes_by_schema/1]).
 -export([example_input_metadata/1, example_input_metadata/2]).
 -export([expected_final_metadata/1, expected_final_metadata/2]).
 -export([gen_legacy_handle_doc/3]).
@@ -40,19 +40,20 @@ create(Data) when is_map(Data) ->
 
 -spec create(od_handle_service:id(), od_share:id()) -> od_handle:id().
 create(HandleServiceId, ShareId) ->
-    MetadataPrefix = ?RAND_ELEMENT(supported_metadata_prefixes()),
-    RawMetadata = example_input_metadata(MetadataPrefix),
-    create(HandleServiceId, ShareId, MetadataPrefix, RawMetadata).
+    MetadataSchema = ?RAND_ELEMENT(supported_metadata_schemas()),
+    RawMetadata = example_input_metadata(MetadataSchema),
+    create(HandleServiceId, ShareId, MetadataSchema, RawMetadata).
 
 
--spec create(od_handle_service:id(), od_share:id(), od_handle:metadata_prefix(), od_handle:raw_metadata()) ->
+-spec create(od_handle_service:id(), od_share:id(), od_handle:metadata_schema(), od_handle:raw_metadata()) ->
     od_handle:id().
-create(HandleServiceId, ShareId, MetadataPrefix, RawMetadata) ->
-    create(#{
+create(HandleServiceId, ShareId, MetadataSchema, RawMetadata) ->
+    % test that the deprecated argument is still supported
+    PrefixOrSchema = #{?RAND_CHOICE(<<"metadataSchema">>, <<"metadataPrefix">>) => MetadataSchema},
+    create(PrefixOrSchema#{
         <<"handleServiceId">> => HandleServiceId,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ShareId,
-        <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => RawMetadata
     }).
 
@@ -84,18 +85,28 @@ list() ->
     HandleIds.
 
 
--spec supported_metadata_prefixes() -> [od_handle:metadata_prefix()].
-supported_metadata_prefixes() ->
-    ozt:rpc(oai_metadata, supported_formats, []).
+-spec supported_metadata_schemas() -> [od_handle:metadata_schema()].
+supported_metadata_schemas() ->
+    ozt:rpc(oai_metadata, supported_schemas, []).
 
 
--spec example_input_metadata(od_handle:metadata_prefix()) -> od_handle:raw_metadata().
-example_input_metadata(MetadataPrefix) ->
-    example_input_metadata(MetadataPrefix, 1).
+-spec all_supported_oai_pmh_prefixes() -> [oai_metadata:prefix()].
+all_supported_oai_pmh_prefixes() ->
+    ozt:rpc(oai_metadata, all_supported_oai_pmh_prefixes, []).
 
--spec example_input_metadata(od_handle:metadata_prefix(), pos_integer()) -> od_handle:raw_metadata().
-example_input_metadata(MetadataPrefix, ExampleNumber) ->
-    ValidationExample = acquire_constant_validation_example(MetadataPrefix, ExampleNumber),
+
+-spec supported_oai_pmh_prefixes_by_schema(od_handle:metadata_schema()) -> [oai_metadata:prefix()].
+supported_oai_pmh_prefixes_by_schema(MetadataSchema) ->
+    ozt:rpc(oai_metadata, supported_oai_pmh_prefixes_by_schema, [MetadataSchema]).
+
+
+-spec example_input_metadata(od_handle:metadata_schema()) -> od_handle:raw_metadata().
+example_input_metadata(MetadataSchema) ->
+    example_input_metadata(MetadataSchema, 1).
+
+-spec example_input_metadata(od_handle:metadata_schema(), pos_integer()) -> od_handle:raw_metadata().
+example_input_metadata(MetadataSchema, ExampleNumber) ->
+    ValidationExample = acquire_constant_validation_example(MetadataSchema, ExampleNumber),
     ValidationExample#handle_metadata_plugin_validation_example.input_raw_xml.
 
 
@@ -110,11 +121,11 @@ expected_final_metadata(HandleId, ExampleNumber) when is_binary(HandleId) ->
     expected_final_metadata(get(HandleId), ExampleNumber);
 expected_final_metadata(#od_handle{
     resource_id = ShareId,
-    metadata_prefix = MetadataPrefix,
+    metadata_schema = MetadataSchema,
     public_handle = PublicHandle
 }, ExampleNumber) ->
     ShareRecord = ?check(ozt:rpc(share_logic, get, [?ROOT, ShareId])),
-    ValidationExample = acquire_constant_validation_example(MetadataPrefix, ExampleNumber),
+    ValidationExample = acquire_constant_validation_example(MetadataSchema, ExampleNumber),
     % this must be evaluated on a onezone node as this is where the plugin is loaded
     GenExpFinalMetadata = fun() ->
         ExpFinalMetadataGenerator = ValidationExample#handle_metadata_plugin_validation_example.exp_final_metadata_generator,
@@ -135,7 +146,7 @@ gen_legacy_handle_doc(HServiceId, ShareId, Metadata) ->
             resource_type = <<"Share">>,
             resource_id = ShareId,
             public_handle = PublicHandle,
-            metadata_prefix = <<"legacy">>,
+            metadata_schema = <<"legacy">>,
             metadata = Metadata,
             timestamp = ozt:timestamp_seconds()
         }
@@ -148,11 +159,11 @@ gen_legacy_handle_doc(HServiceId, ShareId, Metadata) ->
 
 
 %% @private
--spec acquire_constant_validation_example(od_handle:metadata_prefix(), pos_integer()) ->
+-spec acquire_constant_validation_example(od_handle:metadata_schema(), pos_integer()) ->
     handle_metadata_plugin_behaviour:validation_example().
-acquire_constant_validation_example(MetadataPrefix, ExampleNumber) ->
-    {ok, ValidationExample} = node_cache:acquire({?MODULE, ?FUNCTION_NAME, MetadataPrefix, ExampleNumber}, fun() ->
-        AllExamples = ozt:rpc(oai_metadata, validation_examples, [MetadataPrefix]),
+acquire_constant_validation_example(MetadataSchema, ExampleNumber) ->
+    {ok, ValidationExample} = node_cache:acquire({?MODULE, ?FUNCTION_NAME, MetadataSchema, ExampleNumber}, fun() ->
+        AllExamples = ozt:rpc(oai_metadata, validation_examples, [MetadataSchema]),
         ValidExamples = lists:filter(fun(Example) ->
             Example#handle_metadata_plugin_validation_example.input_qualifies_for_publication
         end, AllExamples),

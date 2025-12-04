@@ -30,7 +30,7 @@
 -author("Lukasz Opiola").
 
 -include("plugins/onezone_plugins.hrl").
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -44,26 +44,35 @@
 
 %%-------------------------------------------------------------------
 %% @doc
-%% Returns metadata prefix for given metadata format.
+%% Returns the handle metadata schema implemented by the plugin.
 %% @end
 %%-------------------------------------------------------------------
--callback metadata_prefix() -> binary().
+-callback metadata_schema() -> od_handle:metadata_schema().
 
 
 %%-------------------------------------------------------------------
 %% @doc
-%% Returns URL of XML schema for given metadata format.
+%% A single metadata schema represented by a plugin can be disseminated
+%% in more than one metadata prefix via OAI-PMH.
 %% @end
 %%-------------------------------------------------------------------
--callback schema_URL() -> binary().
+-callback supported_oai_pmh_metadata_prefixes() -> [od_handle:metadata_schema()].
 
 
 %%-------------------------------------------------------------------
 %% @doc
-%% Returns main XML namespace for given metadata format.
+%% Returns URL of XML schema for given metadata prefix supported by the plugin.
 %% @end
 %%-------------------------------------------------------------------
--callback main_namespace() -> {atom(), binary()}.
+-callback schema_URL(oai_metadata:prefix()) -> binary().
+
+
+%%-------------------------------------------------------------------
+%% @doc
+%% Returns main XML namespace for given metadata prefix supported by the plugin.
+%% @end
+%%-------------------------------------------------------------------
+-callback main_namespace(oai_metadata:prefix()) -> {atom(), binary()}.
 
 
 %%-------------------------------------------------------------------
@@ -94,10 +103,12 @@
 
 %%-------------------------------------------------------------------
 %% @doc
-%% Transforms (if needed) the metadata to be conformant to OAI-PMH spec.
+%% Transforms (if needed) the metadata to the OAI-PMH metadata schema.
+%% Can work differently for different prefixes (must handle all of the
+%% ones returned by supported_oai_pmh_metadata_prefixes()).
 %% @end
 %%-------------------------------------------------------------------
--callback adapt_for_oai_pmh(od_handle:parsed_metadata()) ->
+-callback adapt_for_oai_pmh(oai_metadata:prefix(), od_handle:parsed_metadata()) ->
     od_handle:parsed_metadata().
 
 
@@ -150,7 +161,10 @@ validate_handle_metadata_plugin_example_unsafe(Module, ValidationExample) ->
     validate_handle_metadata_plugin_example_unsafe(Module, DummyPidPublicHandle, ValidationExample),
 
     DummyDoiPublicHandle = ?DOI_IDENTIFIER(str_utils:format_bin("~ts/~ts", [datastore_key:new(), datastore_key:new()])),
-    validate_handle_metadata_plugin_example_unsafe(Module, DummyDoiPublicHandle, ValidationExample).
+    validate_handle_metadata_plugin_example_unsafe(Module, DummyDoiPublicHandle, ValidationExample),
+
+    DummyURLPublicHandle = str_utils:format_bin("https://example.com/~ts", [datastore_key:new()]),
+    validate_handle_metadata_plugin_example_unsafe(Module, DummyURLPublicHandle, ValidationExample).
 
 
 %% @private
@@ -226,15 +240,17 @@ validate_handle_metadata_plugin_example_unsafe(Module, PublicHandle, #handle_met
                 "Unmet expectation: revise_for_publication + insert_public_handle on final metadata is not idempotent"
             ),
 
-            OaiPmhMetadata = Module:adapt_for_oai_pmh(FinalMetadata),
-            ExpOaiPmhMetadata = ExpOaiPmhMetadataGenerator(DummyShareId, DummyShareRecord, PublicHandle),
-            assert_result_equals_expectation(
-                Module,
-                InputRawXml,
-                OaiPmhMetadata,
-                ExpOaiPmhMetadata,
-                "Unmet expectation: obtained oai_pmh metadata different than expected"
-            );
+            lists:foreach(fun(MetadataPrefix) ->
+                OaiPmhMetadata = Module:adapt_for_oai_pmh(MetadataPrefix, FinalMetadata),
+                ExpOaiPmhMetadata = ExpOaiPmhMetadataGenerator(MetadataPrefix, DummyShareId, DummyShareRecord, PublicHandle),
+                assert_result_equals_expectation(
+                    Module,
+                    InputRawXml,
+                    OaiPmhMetadata,
+                    ExpOaiPmhMetadata,
+                    "Unmet expectation: obtained oai_pmh metadata different than expected"
+                )
+            end, Module:supported_oai_pmh_metadata_prefixes());
 
         RevisionResult ->
             ?error(?autoformat_with_msg("Unmet expectation", [InputQualifiesForPublication, RevisionResult])),

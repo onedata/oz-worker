@@ -11,7 +11,7 @@
 -module(list_metadata_formats).
 -author("Jakub Kudzia").
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
 -behaviour(oai_verb_behaviour).
@@ -76,19 +76,19 @@ get_response(<<"metadataFormat">>, Args) ->
         undefined ->
             lists:map(fun(MetadataPrefix) ->
                 get_metadata_format_info(MetadataPrefix)
-            end, oai_metadata:supported_formats());
+            end, oai_metadata:all_supported_oai_pmh_prefixes());
         OAIId ->
             HandleId = oai_utils:oai_identifier_decode(OAIId),
-            MetadataPrefix = case od_handle:get(HandleId) of
+            MetadataSchema = case od_handle:get(HandleId) of
                 {ok, #document{value = HandleRecord}} ->
-                    HandleRecord#od_handle.metadata_prefix;
+                    HandleRecord#od_handle.metadata_schema;
                 {error, not_found} ->
                     case deleted_handle_registry:lookup(HandleId) of
-                        {ok, {MP, _}} -> MP;
+                        {ok, {MS, _}} -> MS;
                         error -> throw({idDoesNotExist, OAIId})
                     end
             end,
-            [get_metadata_format_info(MetadataPrefix)]
+            [get_metadata_format_info(P) || P <- oai_metadata:supported_oai_pmh_prefixes_by_schema(MetadataSchema)]
     end.
 
 %%%===================================================================

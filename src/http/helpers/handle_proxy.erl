@@ -14,7 +14,7 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 -include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/errors.hrl").

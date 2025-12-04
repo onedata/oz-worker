@@ -71,14 +71,14 @@
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), HandleId :: od_handle_service:id(),
     ResourceType :: od_handle:resource_type(), ResourceId :: od_handle:resource_id(),
-    MetadataPrefix :: od_handle:metadata_prefix(), Metadata :: od_handle:raw_metadata())
+    MetadataSchema :: od_handle:metadata_schema(), Metadata :: od_handle:raw_metadata())
         -> {ok, od_handle:id()} | errors:error().
-create(Auth, HServiceId, ResourceType, ResourceId, MetadataPrefix, Metadata) ->
+create(Auth, HServiceId, ResourceType, ResourceId, MetadataSchema, Metadata) ->
     create(Auth, #{
         <<"handleServiceId">> => HServiceId,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
-        <<"metadataPrefix">> => MetadataPrefix,
+        <<"metadataSchema">> => MetadataSchema,
         <<"metadata">> => Metadata
     }).
 

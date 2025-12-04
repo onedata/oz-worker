@@ -26,7 +26,6 @@
     get_protected_data/2,
     get_public_data/2,
     get_name/2,
-    get_worker_release_version/2,
     list/1,
     list_privileges/0
 ]).
@@ -187,22 +186,6 @@ get_name(_Auth, ?ONEZONE_CLUSTER_ID) ->
     {ok, <<"Onezone">>};
 get_name(Auth, ClusterId) ->
     provider_logic:get_name(Auth, ClusterId).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves the release version of the worker service in given cluster.
-%% @end
-%%--------------------------------------------------------------------
--spec get_worker_release_version(aai:auth(), od_cluster:id()) ->
-    {ok, onedata:release_version()} | errors:error().
-get_worker_release_version(Auth, ClusterId) ->
-    case get_public_data(Auth, ClusterId) of
-        {ok, #{<<"workerVersion">> := #{<<"release">> := ReleaseVersion}}} ->
-            {ok, ReleaseVersion};
-        {error, _} = Error ->
-            Error
-    end.
 
 
 %%--------------------------------------------------------------------

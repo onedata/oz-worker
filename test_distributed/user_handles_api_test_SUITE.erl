@@ -147,8 +147,8 @@ create_handle_test(Config) ->
     AllPrivs = privileges:handle_privileges(),
     ExpResourceType = <<"Share">>,
 
-    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
-    RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    MetadataSchema = ?RAND_ELEMENT(ozt_handles:supported_metadata_schemas()),
+    RawMetadata = ozt_handles:example_input_metadata(MetadataSchema),
 
     EnvSetUpFun = fun() ->
         ShareId = datastore_key:new(),
@@ -194,14 +194,18 @@ create_handle_test(Config) ->
                 <<"handleServiceId">>,
                 <<"resourceType">>,
                 <<"resourceId">>,
-                <<"metadataPrefix">>,
                 <<"metadata">>
+            ],
+            at_least_one = [
+                <<"metadataPrefix">>,  % deprecated, to be removed in 23.02
+                <<"metadataSchema">>
             ],
             correct_values = #{
                 <<"handleServiceId">> => [HService],
                 <<"resourceType">> => [<<"Share">>],
                 <<"resourceId">> => [fun(#{shareId := ShareId} = _Env) -> ShareId end],
-                <<"metadataPrefix">> => [MetadataPrefix],
+                <<"metadataPrefix">> => [MetadataSchema],
+                <<"metadataSchema">> => [MetadataSchema],
                 <<"metadata">> => [RawMetadata]
             },
             bad_values = [
@@ -216,7 +220,9 @@ create_handle_test(Config) ->
                 {<<"resourceId">>, 1234, ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"resourceId">>, ShareIdThatAlreadyHasAHandle, ?ERROR_ALREADY_EXISTS},
                 {<<"metadataPrefix">>, <<"bad_metadata">>,
-                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"metadataPrefix">>, ozt_handles:supported_metadata_prefixes())},
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"metadataPrefix">>, ozt_handles:supported_metadata_schemas())},
+                {<<"metadataSchema">>, <<"bad_metadata">>,
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"metadataSchema">>, ozt_handles:supported_metadata_schemas())},
                 {<<"metadata">>, 1234,
                     ?ERR_BAD_VALUE_STRING(<<"metadata">>)},
                 {<<"metadata">>, ?RAND_UNICODE_STR(100001),
@@ -322,13 +328,13 @@ get_handle_test(Config) ->
         Config, ?ROOT, ?DOI_SERVICE
     ),
 
-    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
-    RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    MetadataSchema = ?RAND_ELEMENT(ozt_handles:supported_metadata_schemas()),
+    RawMetadata = ozt_handles:example_input_metadata(MetadataSchema),
     HandleData = #{
         <<"handleServiceId">> => HServiceId,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ShareId,
-        <<"metadataPrefix">> => MetadataPrefix,
+        <<"metadataSchema">> => MetadataSchema,
         <<"metadata">> => RawMetadata
     },
     {ok, HandleId} = oz_test_utils:create_handle(Config, ?ROOT, HandleData),

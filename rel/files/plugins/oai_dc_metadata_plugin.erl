@@ -5,7 +5,7 @@
 %%% cited in 'LICENSE.txt'.
 %%% @doc
 %%% Implementation of the onezone_plugin_behaviour and the handle_metadata_plugin_behaviour
-%%% for handling Dublin Core metadata format ("oai_dc" in OAI-PMH).
+%%% for handling Dublin Core metadata schema ("oai_dc").
 %%%
 %%% @see handle_metadata_plugin_behaviour for general information about metadata plugins.
 %%%
@@ -27,15 +27,15 @@
 -behavior(onezone_plugin_behaviour).
 -behaviour(handle_metadata_plugin_behaviour).
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 
 %% onezone_plugin_behaviour callbacks
 -export([type/0]).
 
 %% handle_metadata_plugin_behaviour callbacks
--export([metadata_prefix/0, schema_URL/0, main_namespace/0]).
--export([revise_for_publication/3, insert_public_handle/2, adapt_for_oai_pmh/1]).
+-export([metadata_schema/0, supported_oai_pmh_metadata_prefixes/0, schema_URL/1, main_namespace/1]).
+-export([revise_for_publication/3, insert_public_handle/2, adapt_for_oai_pmh/2]).
 -export([encode_xml/1]).
 -export([validation_examples/0]).
 
@@ -56,21 +56,27 @@ type() ->
 %%%===================================================================
 
 
-%% @doc {@link handle_metadata_plugin_behaviour} callback metadata_prefix/0
--spec metadata_prefix() -> binary().
-metadata_prefix() ->
+%% @doc {@link handle_metadata_plugin_behaviour} callback metadata_schema/0
+-spec metadata_schema() -> od_handle:metadata_schema().
+metadata_schema() ->
     ?OAI_DC_METADATA_PREFIX.
 
 
-%% @doc {@link handle_metadata_plugin_behaviour} callback schema_URL/0
--spec schema_URL() -> binary().
-schema_URL() ->
+%% @doc {@link handle_metadata_plugin_behaviour} callback supported_oai_pmh_metadata_prefixes/0
+-spec supported_oai_pmh_metadata_prefixes() -> od_handle:metadata_schema().
+supported_oai_pmh_metadata_prefixes() ->
+    [?OAI_DC_METADATA_PREFIX].
+
+
+%% @doc {@link handle_metadata_plugin_behaviour} callback schema_URL/1
+-spec schema_URL(oai_metadata:prefix()) -> binary().
+schema_URL(?OAI_DC_METADATA_PREFIX) ->
     <<"http://www.openarchives.org/OAI/2.0/oai_dc.xsd">>.
 
 
-%% @doc {@link handle_metadata_plugin_behaviour} callback main_namespace/0
--spec main_namespace() -> {atom(), binary()}.
-main_namespace() ->
+%% @doc {@link handle_metadata_plugin_behaviour} callback main_namespace/1
+-spec main_namespace(oai_metadata:prefix()) -> {atom(), binary()}.
+main_namespace(?OAI_DC_METADATA_PREFIX) ->
     {'xmlns:oai_dc', <<"http://www.openarchives.org/OAI/2.0/oai_dc/">>}.
 
 
@@ -107,11 +113,11 @@ ensure_dc_identifier(Value, #xmlElement{content = Content} = MetadataXml) ->
     end.
 
 
-%% @doc {@link handle_metadata_plugin_behaviour} callback adapt_for_oai_pmh/1
--spec adapt_for_oai_pmh(od_handle:parsed_metadata()) -> od_handle:parsed_metadata().
-adapt_for_oai_pmh(#xmlElement{name = metadata, content = Content}) ->
-    {MainNamespaceName, MainNamespaceValue} = main_namespace(),
-    SchemaLocation = str_utils:format("~ts ~ts", [MainNamespaceValue, schema_URL()]),
+%% @doc {@link handle_metadata_plugin_behaviour} callback adapt_for_oai_pmh/2
+-spec adapt_for_oai_pmh(oai_metadata:prefix(), od_handle:parsed_metadata()) -> od_handle:parsed_metadata().
+adapt_for_oai_pmh(?OAI_DC_METADATA_PREFIX, #xmlElement{name = metadata, content = Content}) ->
+    {MainNamespaceName, MainNamespaceValue} = main_namespace(?OAI_DC_METADATA_PREFIX),
+    SchemaLocation = str_utils:format("~ts ~ts", [MainNamespaceValue, schema_URL(?OAI_DC_METADATA_PREFIX)]),
     #xmlElement{
         name = 'oai_dc:dc',
         attributes = [
@@ -206,7 +212,7 @@ validation_examples() -> [
             "    <dc:rights>CC-0</dc:rights>\n",
             "</metadata>"
         >> end,
-        exp_oai_pmh_metadata_generator = fun(ShareId, _ShareRecord, PublicHandle) -> <<
+        exp_oai_pmh_metadata_generator = fun(?OAI_DC_METADATA_PREFIX, ShareId, _ShareRecord, PublicHandle) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
             "<oai_dc:dc"
             " xmlns:oai_dc=\"http://www.openarchives.org/OAI/2.0/oai_dc/\"",
@@ -255,7 +261,7 @@ validation_examples() -> [
             "    <dc:contributor>John Doe</dc:contributor>\n",
             "</metadata>"
         >> end,
-        exp_oai_pmh_metadata_generator = fun(ShareId, _ShareRecord, PublicHandle) -> <<
+        exp_oai_pmh_metadata_generator = fun(?OAI_DC_METADATA_PREFIX, ShareId, _ShareRecord, PublicHandle) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
             "<oai_dc:dc"
             " xmlns:oai_dc=\"http://www.openarchives.org/OAI/2.0/oai_dc/\"",

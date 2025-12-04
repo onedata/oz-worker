@@ -1487,13 +1487,13 @@ create_eff_handles_env(Config) ->
             {ok, ShareId} = oz_test_utils:create_share(
                 Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
             ),
-            MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
-            RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix, ?RAND_INT(1, 10)),
+            MetadataSchema = ?RAND_ELEMENT(ozt_handles:supported_metadata_schemas()),
+            RawMetadata = ozt_handles:example_input_metadata(MetadataSchema, ?RAND_INT(1, 10)),
             HandleData = #{
                 <<"handleServiceId">> => HService,
                 <<"resourceType">> => <<"Share">>,
                 <<"resourceId">> => ShareId,
-                <<"metadataPrefix">> => MetadataPrefix,
+                <<"metadataSchema">> => MetadataSchema,
                 <<"metadata">> => RawMetadata
             },
             {ok, HandleId} = oz_test_utils:create_handle(

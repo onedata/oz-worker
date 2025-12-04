@@ -11,7 +11,7 @@
 -module(oai_errors).
 -author("Jakub Kudzia").
 
--include("http/handlers/oai_errors.hrl").
+-include("http/public_data/oai_errors.hrl").
 
 %% API
 -export([handle/1]).

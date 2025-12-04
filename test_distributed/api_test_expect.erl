@@ -408,7 +408,7 @@ protected_handle(logic, Id, HandleData, Creator) ->
         <<"publicHandle">> => ExpPublicHandle,
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
-        <<"metadataPrefix">> => maps:get(<<"metadataPrefix">>, HandleData),
+        <<"metadataSchema">> => maps:get(<<"metadataSchema">>, HandleData),
         <<"metadata">> => expected_final_handle_metadata(HandleData, ExpPublicHandle),
         <<"timestamp">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
@@ -422,7 +422,8 @@ protected_handle(rest, Id, HandleData, Creator) ->
         <<"publicHandle">> => ExpPublicHandle,
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
-        <<"metadataPrefix">> => maps:get(<<"metadataPrefix">>, HandleData),
+        <<"metadataPrefix">> => maps:get(<<"metadataSchema">>, HandleData),  % deprecated, to be removed in 23.02
+        <<"metadataSchema">> => maps:get(<<"metadataSchema">>, HandleData),
         <<"metadata">> => expected_final_handle_metadata(HandleData, ExpPublicHandle),
         <<"timestamp">> => time:seconds_to_iso8601(ozt_mocks:get_frozen_time_seconds()),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
@@ -438,7 +439,7 @@ public_handle(logic, Id, HandleData) ->
         <<"publicHandle">> => ExpPublicHandle,
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
-        <<"metadataPrefix">> => maps:get(<<"metadataPrefix">>, HandleData),
+        <<"metadataSchema">> => maps:get(<<"metadataSchema">>, HandleData),
         <<"metadata">> => expected_final_handle_metadata(HandleData, ExpPublicHandle),
         <<"timestamp">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
@@ -451,7 +452,8 @@ public_handle(rest, Id, HandleData) ->
         <<"publicHandle">> => ExpPublicHandle,
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
-        <<"metadataPrefix">> => maps:get(<<"metadataPrefix">>, HandleData),
+        <<"metadataPrefix">> => maps:get(<<"metadataSchema">>, HandleData),  % deprecated, to be removed in 23.02
+        <<"metadataSchema">> => maps:get(<<"metadataSchema">>, HandleData),
         <<"metadata">> => expected_final_handle_metadata(HandleData, ExpPublicHandle),
         <<"timestamp">> => time:seconds_to_iso8601(ozt_mocks:get_frozen_time_seconds()),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
@@ -462,7 +464,8 @@ public_handle(gs, Id, HandleData) ->
         <<"gri">> => gri:serialize(?GRI(od_handle, Id, instance, public)),
         <<"handleServiceId">> => maps:get(<<"handleServiceId">>, HandleData),
         <<"publicHandle">> => ExpPublicHandle,
-        <<"metadataPrefix">> => maps:get(<<"metadataPrefix">>, HandleData),
+        <<"metadataPrefix">> => maps:get(<<"metadataSchema">>, HandleData),  % deprecated, to be removed in 23.02
+        <<"metadataSchema">> => maps:get(<<"metadataSchema">>, HandleData),
         <<"metadata">> => expected_final_handle_metadata(HandleData, ExpPublicHandle),
         <<"timestamp">> => time:seconds_to_iso8601(ozt_mocks:get_frozen_time_seconds())
     }).
@@ -772,17 +775,17 @@ expected_cluster_creation_time(?ONEPROVIDER) ->
 
 %% @private
 expected_final_handle_metadata(#{
-    <<"metadataPrefix">> := MetadataPrefix,
+    <<"metadataSchema">> := MetadataSchema,
     <<"metadata">> := RawMetadata,
     <<"resourceId">> := ShareId
 }, PublicHandle) ->
     ShareRecord = ?check(ozt:rpc(share_logic, get, [?ROOT, ShareId])),
     {ok, ParsedMetadata} = ozt:rpc(oai_xml, parse, [RawMetadata]),
     {ok, RevisedMetadata} = ozt:rpc(oai_metadata, revise_for_publication, [
-        MetadataPrefix, ParsedMetadata, ShareId, ShareRecord
+        MetadataSchema, ParsedMetadata, ShareId, ShareRecord
     ]),
-    FinalMetadata = ozt:rpc(oai_metadata, insert_public_handle, [MetadataPrefix, RevisedMetadata, PublicHandle]),
-    ozt:rpc(oai_metadata, encode_xml, [MetadataPrefix, FinalMetadata]).
+    FinalMetadata = ozt:rpc(oai_metadata, insert_public_handle, [MetadataSchema, RevisedMetadata, PublicHandle]),
+    ozt:rpc(oai_metadata, encode_xml, [MetadataSchema, FinalMetadata]).
 
 
 %% @private

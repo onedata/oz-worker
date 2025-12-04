@@ -32,7 +32,7 @@
 }).
 
 -record(oai_metadata, {
-    metadata_prefix :: od_handle:metadata_prefix(),
+    metadata_prefix :: od_handle:metadata_schema(),
     raw_value :: od_handle:raw_metadata()
 }).
 
@@ -109,10 +109,14 @@
 -type oai_date_granularity() :: day_granularity | seconds_granularity.
 
 
+% below prefixes are also identifiers of different types of od_handle:metadata_schema()
 -define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
 -define(OAI_DATACITE_METADATA_PREFIX, <<"oai_datacite">>).
--define(DATACITE_METADATA_PREFIX, <<"datacite">>).
 -define(EDM_METADATA_PREFIX, <<"edm">>).
+% below prefixes function only in OAI-PMH (are used for dissemination, but it's not possible
+% to create a handle with such metadata schema)
+-define(DATACITE_METADATA_PREFIX, <<"datacite">>).
+
 
 % used to denote a DOI identifier, in contrast to URL identifiers that start with http://, https://
 % (one of which is a PID identifier, like http://hdl.handle.net/21.T15999/abcd)

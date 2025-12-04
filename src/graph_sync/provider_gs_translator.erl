@@ -335,11 +335,10 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
     } = Provider,
 
     ClusterId = Id,
-    {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, ClusterId),
 
     #{
         <<"name">> => Name,
-        <<"version">> => Version,
+        <<"version">> => od_cluster:get_worker_release_version(ClusterId),
 
         <<"subdomainDelegation">> => SubdomainDelegation,
         <<"domain">> => Domain,
@@ -372,12 +371,11 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
     } = ProviderData,
 
     ClusterId = Id,
-    {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, ClusterId),
 
     #{
         <<"name">> => Name,
         <<"domain">> => Domain,
-        <<"version">> => Version,
+        <<"version">> => od_cluster:get_worker_release_version(ClusterId),
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
         <<"online">> => Online
@@ -412,7 +410,7 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
         public_handle = PublicHandle,
         resource_type = ResourceType,
         resource_id = ResourceId,
-        metadata_prefix = MetadataPrefix,
+        metadata_schema = MetadataSchema,
         metadata = Metadata,
         timestamp = Timestamp,
         handle_service = HandleServiceId
@@ -422,7 +420,8 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
         <<"publicHandle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
-        <<"metadataPrefix">> => MetadataPrefix,
+        <<"metadataPrefix">> => MetadataSchema,  % deprecated, to be removed in 23.02
+        <<"metadataSchema">> => MetadataSchema,
         <<"metadata">> => Metadata,
         <<"timestamp">> => time:seconds_to_iso8601(Timestamp),  % @TODO VFS-6309 to be removed in 21.02
 
@@ -434,14 +433,15 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public},
     #{
         <<"handleServiceId">> := HandleServiceId,
         <<"publicHandle">> := PublicHandle,
-        <<"metadataPrefix">> := MetadataPrefix,
+        <<"metadataSchema">> := MetadataSchema,
         <<"metadata">> := Metadata,
         <<"timestamp">> := Timestamp
     } = HandleData,
     #{
         <<"handleServiceId">> => HandleServiceId,
         <<"publicHandle">> => PublicHandle,
-        <<"metadataPrefix">> => MetadataPrefix,
+        <<"metadataPrefix">> => MetadataSchema,  % deprecated, to be removed in 23.02
+        <<"metadataSchema">> => MetadataSchema,
         <<"metadata">> => Metadata,
         <<"timestamp">> => time:seconds_to_iso8601(Timestamp)  % @TODO VFS-6309 to be removed in 21.02
     };
@@ -576,7 +576,7 @@ translate_resource(ProtocolVersion, GRI, Data) ->
 %% incompatibilities introduced in subsequent minor versions (automation has experimental status)
 -spec is_automation_available_for_provider(od_provider:id()) -> boolean().
 is_automation_available_for_provider(ProviderId) ->
-    ProviderVersion = ?check(cluster_logic:get_worker_release_version(?ROOT, ProviderId)),
+    ProviderVersion = od_cluster:get_worker_release_version(ProviderId),
     case onedata:compare_release_line(ProviderVersion, <<"21.02">>) of
         lower ->
             false;

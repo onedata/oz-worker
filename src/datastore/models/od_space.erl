@@ -210,7 +210,7 @@ choose_provider_for_request_handling_internal(#od_space{eff_providers = EffProvi
             false ->
                 false;
             true ->
-                {ok, ProviderVsn} = cluster_logic:get_worker_release_version(?ROOT, ProviderId),
+                ProviderVsn = od_cluster:get_worker_release_version(ProviderId),
                 IsUpToDate = equal == onedata:compare_release_line(OnezoneVsn, ProviderVsn),
                 HasAnyReadwriteSupport = has_any_readwrite_support_from(Space, ProviderId),
                 Priority = case {IsUpToDate, HasAnyReadwriteSupport} of

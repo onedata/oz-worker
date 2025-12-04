@@ -16,7 +16,7 @@
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
@@ -171,8 +171,8 @@ create_test(Config) ->
     ),
     ozt_handles:create(DoiHService, ShareIdThatAlreadyHasAHandle),
 
-    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
-    RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    MetadataSchema = ?RAND_ELEMENT(ozt_handles:supported_metadata_schemas()),
+    RawMetadata = ozt_handles:example_input_metadata(MetadataSchema),
 
     EnvSetUpFun = fun() ->
         ShareId = datastore_key:new(),
@@ -188,7 +188,7 @@ create_test(Config) ->
         ?assertEqual(<<"Share">>, Handle#od_handle.resource_type),
         ?assertEqual(ShareId, Handle#od_handle.resource_id),
         ?assertEqual(ozt_handles:expected_final_metadata(Handle), Handle#od_handle.metadata),
-        ?assertEqual(MetadataPrefix, Handle#od_handle.metadata_prefix),
+        ?assertEqual(MetadataSchema, Handle#od_handle.metadata_schema),
         ?assertEqual(HService, Handle#od_handle.handle_service),
         true
     end,
@@ -231,14 +231,19 @@ create_test(Config) ->
         data_spec = #data_spec{
             required = [
                 <<"handleServiceId">>, <<"resourceType">>,
-                <<"resourceId">>, <<"metadata">>, <<"metadataPrefix">>
+                <<"resourceId">>, <<"metadata">>
+            ],
+            at_least_one = [
+                <<"metadataPrefix">>,  % deprecated, to be removed in 23.02
+                <<"metadataSchema">>
             ],
             correct_values = #{
                 <<"handleServiceId">> => [DoiHService, PidHService],
                 <<"resourceType">> => [<<"Share">>],
                 <<"resourceId">> => [fun(#{shareId := ShareId} = _Env) -> ShareId end],
                 <<"metadata">> => [RawMetadata],
-                <<"metadataPrefix">> => [MetadataPrefix]
+                <<"metadataPrefix">> => [MetadataSchema],
+                <<"metadataSchema">> => [MetadataSchema]
             },
             bad_values = [
                 {<<"handleServiceId">>, <<"">>,
@@ -257,7 +262,9 @@ create_test(Config) ->
                 {<<"resourceId">>, 1234,
                     ?ERR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"metadataPrefix">>, <<"bad_metadata">>,
-                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"metadataPrefix">>, ozt_handles:supported_metadata_prefixes())},
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"metadataPrefix">>, ozt_handles:supported_metadata_schemas())},
+                {<<"metadataSchema">>, <<"bad_metadata">>,
+                    ?ERR_BAD_VALUE_NOT_ALLOWED(<<"metadataSchema">>, ozt_handles:supported_metadata_schemas())},
                 {<<"metadata">>, 1234,
                     ?ERR_BAD_VALUE_STRING(<<"metadata">>)},
                 {<<"metadata">>, ?RAND_UNICODE_STR(100001),
@@ -274,7 +281,7 @@ create_test(Config) ->
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ShareId,
         <<"metadata">> => RawMetadata,
-        <<"metadataPrefix">> => MetadataPrefix
+        <<"metadataSchema">> => MetadataSchema
     } end,
 
     ShareAlpha = ozt_shares:create(S1),
@@ -311,13 +318,13 @@ get_test(Config) ->
         Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
-    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
-    RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    MetadataSchema = ?RAND_ELEMENT(ozt_handles:supported_metadata_schemas()),
+    RawMetadata = ozt_handles:example_input_metadata(MetadataSchema),
     HandleData = #{
         <<"handleServiceId">> => HService,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ShareId,
-        <<"metadataPrefix">> => MetadataPrefix,
+        <<"metadataSchema">> => MetadataSchema,
         <<"metadata">> => RawMetadata
     },
     {ok, HandleId} = oz_test_utils:create_handle(
@@ -465,11 +472,11 @@ get_test(Config) ->
 
 
 update_test(Config) ->
-    lists:foreach(fun(MetadataPrefix) ->
-        update_test(Config, MetadataPrefix)
-    end, ozt_handles:supported_metadata_prefixes()).
+    lists:foreach(fun(MetadataSchema) ->
+        update_test(Config, MetadataSchema)
+    end, ozt_handles:supported_metadata_schemas()).
 
-update_test(Config, MetadataPrefix) ->
+update_test(Config, MetadataSchema) ->
     MemberWithAllButThePriv = ozt_users:create(),
     MemberWithOnlyThePriv = ozt_users:create(),
     NonAdmin = ozt_users:create(),
@@ -484,8 +491,8 @@ update_test(Config, MetadataPrefix) ->
 
     Space = ozt_users:create_space_for(MemberWithAllButThePriv),
 
-    PreexistingRawMetadata = ozt_handles:example_input_metadata(MetadataPrefix, 1),
-    TargetRawMetadata = ozt_handles:example_input_metadata(MetadataPrefix, 2),
+    PreexistingRawMetadata = ozt_handles:example_input_metadata(MetadataSchema, 1),
+    TargetRawMetadata = ozt_handles:example_input_metadata(MetadataSchema, 2),
 
     AllPrivs = privileges:handle_privileges(),
     EnvSetUpFun = fun() ->
@@ -493,7 +500,7 @@ update_test(Config, MetadataPrefix) ->
             Config, ?ROOT, datastore_key:new(), ?SHARE_NAME1, Space
         ),
 
-        HandleId = ozt_handles:create(HService, ShareId, MetadataPrefix, PreexistingRawMetadata),
+        HandleId = ozt_handles:create(HService, ShareId, MetadataSchema, PreexistingRawMetadata),
 
         {ok, MemberWithAllButThePriv} = oz_test_utils:handle_add_user(Config, HandleId, MemberWithAllButThePriv),
         oz_test_utils:handle_set_user_privileges(Config, HandleId, MemberWithAllButThePriv,

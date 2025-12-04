@@ -16,7 +16,7 @@
 -module(oai_xml).
 -author("Lukasz Opiola").
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 
 %% API
