@@ -738,6 +738,15 @@ choose_provider_for_public_share_handling_test(Config) ->
         oz_test_utils:call_oz(Config, od_share, choose_provider_for_public_share_handling, [ShareId])
     end,
 
+    IsChosenProviderOneOf = fun(ProviderIds) ->
+        case ChooseProvider() of
+            {error, _} ->
+                false;
+            {ok, {ProviderId, _ProviderVersion}} ->
+                lists:member(ProviderId, ProviderIds)
+        end
+    end,
+
     VerifyProviderChoice = fun(ExpectedChoice, Attempts) ->
         try
             case ExpectedChoice of
@@ -748,7 +757,7 @@ choose_provider_for_public_share_handling_test(Config) ->
                     ?assertMatch(?ERR_SERVICE_UNAVAILABLE, ChooseProvider(), Attempts),
                     undefined;
                 _ ->
-                    ?assert(lists:member(element(1, element(2, ChooseProvider())), ExpectedChoice), Attempts),
+                    ?assert(IsChosenProviderOneOf(ExpectedChoice), Attempts),
                     {ok, {ChosenProviderId, ChosenProviderVersion}} = ChooseProvider(),
                     ?assertEqual(ProviderVersion(ChosenProviderId), ChosenProviderVersion),
                     check_shares_data_redirector(Config, ShareId, ChosenProviderId, ProviderVersion(ChosenProviderId)),

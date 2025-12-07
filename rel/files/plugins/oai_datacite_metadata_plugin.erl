@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C) 2025 ACK CYFRONET AGH
+%%% @copyright (C) 2025 Onedata (onedata.org)
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @doc
@@ -137,7 +137,7 @@ revise_for_publication(_InvalidXml, _ShareId, _ShareRecord) ->
 -spec insert_public_handle(od_handle:parsed_metadata(), od_handle:public_handle()) ->
     od_handle:parsed_metadata().
 insert_public_handle(#xmlElement{name = resource} = ResourceXml, PublicHandle) ->
-    % TODO VFS-12975 this has to reworked for the internal handle service type so as not to
+    % TODO VFS-12975 this has to be reworked for the internal handle service type so as not to
     % duplicate primary and alternate identifiers
     case PublicHandle of
         ?DOI_IDENTIFIER(DoiHandle) ->
@@ -288,7 +288,7 @@ validation_examples() -> [
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
             "<creators>\n"
             "   <creator>\n"
-            "       <creatorName>John Doe</creatorName>\n"
+            "       <creatorName>Jane Doe</creatorName>\n"
             "   </creator>\n"
             "</creators>"
         >>,
@@ -305,7 +305,7 @@ validation_examples() -> [
             "    </alternateIdentifiers>\n"
             "    <creators>\n"
             "        <creator>\n"
-            "            <creatorName nameType=\"Personal\">John Doe</creatorName>\n"
+            "            <creatorName nameType=\"Personal\">Jane Doe</creatorName>\n"
             "            <familyName>Doe</familyName>\n"
             "            <affiliation>University X</affiliation>\n"
             "        </creator>\n"
@@ -337,7 +337,7 @@ validation_examples() -> [
                 "    </alternateIdentifiers>\n"
                 "    <creators>\n"
                 "        <creator>\n"
-                "            <creatorName nameType=\"Personal\">John Doe</creatorName>\n"
+                "            <creatorName nameType=\"Personal\">Jane Doe</creatorName>\n"
                 "            <familyName>Doe</familyName>\n"
                 "            <affiliation>University X</affiliation>\n"
                 "        </creator>\n"
@@ -369,7 +369,7 @@ validation_examples() -> [
                 "    </alternateIdentifiers>\n"
                 "    <creators>\n"
                 "        <creator>\n"
-                "            <creatorName nameType=\"Personal\">John Doe</creatorName>\n"
+                "            <creatorName nameType=\"Personal\">Jane Doe</creatorName>\n"
                 "            <familyName>Doe</familyName>\n"
                 "            <affiliation>University X</affiliation>\n"
                 "        </creator>\n"
@@ -415,7 +415,7 @@ validation_examples() -> [
                     "    </alternateIdentifiers>\n"
                     "    <creators>\n"
                     "        <creator>\n"
-                    "            <creatorName nameType=\"Personal\">John Doe</creatorName>\n"
+                    "            <creatorName nameType=\"Personal\">Jane Doe</creatorName>\n"
                     "            <familyName>Doe</familyName>\n"
                     "            <affiliation>University X</affiliation>\n"
                     "        </creator>\n"
