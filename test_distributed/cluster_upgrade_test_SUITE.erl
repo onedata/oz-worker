@@ -64,10 +64,10 @@ init_per_testcase(_, Config) ->
 
     oz_test_utils:delete_all_entities(Config),
     % if the suite fails midway, there may be some remnants in the handle registry - clean it up
-    % (delete_all_entities won't do it because some of the handles may still have the "legacy" metadata prefix set)
+    % (delete_all_entities won't do it because some of the handles may still have the "legacy" metadata schema set)
     lists:foreach(fun(#handle_listing_entry{timestamp = Timestamp, handle_id = HandleId, service_id = HServiceId}) ->
         ozt:rpc(handle_registry, report_deleted, [?OAI_DC_METADATA_PREFIX, HServiceId, HandleId, Timestamp, Timestamp])
-    end, list_handles_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})),
+    end, list_handles_completely(#{metadata_schema => ?OAI_DC_METADATA_PREFIX})),
     Config.
 
 
@@ -87,7 +87,7 @@ upgrade_from_21_02_4_handles(_Config) ->
 
     Spaces = lists_utils:generate(fun ozt_spaces:create/0, 50),
 
-    ?assertEqual([], list_handles_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})),
+    ?assertEqual([], list_handles_completely(#{metadata_schema => ?OAI_DC_METADATA_PREFIX})),
     ?assertEqual([], gather_handles_by_all_prefixes()),
 
     PreexistingHandleDocs = lists:sort(lists:flatmap(fun(HServiceId) ->
@@ -134,7 +134,7 @@ upgrade_from_21_02_4_handles(_Config) ->
 
     ?assertEqual(
         handle_docs_to_exp_listing_entries(PreexistingHandleDocs),
-        list_handles_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})
+        list_handles_completely(#{metadata_schema => ?OAI_DC_METADATA_PREFIX})
     ),
     ?assertEqual(
         handle_docs_to_exp_listing_entries(PreexistingHandleDocs),
@@ -145,7 +145,7 @@ upgrade_from_21_02_4_handles(_Config) ->
         MigratedHandleRecord = ozt_handles:get(HandleId),
         ?assertEqual(MigratedHandleRecord#od_handle.public_handle, PreexistingHandleRecord#od_handle.public_handle),
         ?assertEqual(MigratedHandleRecord#od_handle.resource_type, PreexistingHandleRecord#od_handle.resource_type),
-        ?assertEqual(MigratedHandleRecord#od_handle.metadata_prefix, ?OAI_DC_METADATA_PREFIX),
+        ?assertEqual(MigratedHandleRecord#od_handle.metadata_schema, ?OAI_DC_METADATA_PREFIX),
         ?assertEqual(MigratedHandleRecord#od_handle.metadata, exp_handle_metadata(PreexistingHandleRecord)),
         ?assertEqual(MigratedHandleRecord#od_handle.timestamp, PreexistingHandleRecord#od_handle.timestamp),
         ?assertEqual(MigratedHandleRecord#od_handle.resource_id, PreexistingHandleRecord#od_handle.resource_id),
@@ -278,8 +278,8 @@ create_legacy_share(SpaceId, without_handle) ->
 %% @private
 create_legacy_share(SpaceId, {with_handle, HServiceId}) ->
     #document{key = ShareId} = create_legacy_share(SpaceId, without_handle),
-    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
-    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    MetadataSchema = ?RAND_ELEMENT(ozt_handles:supported_metadata_schemas()),
+    Metadata = ozt_handles:example_input_metadata(MetadataSchema),
     {ok, PublicHandle} = ozt:rpc(handle_proxy, register_handle, [HServiceId, <<"Share">>, ShareId, Metadata]),
     HandleId = datastore_key:new(),
     {ok, _} = ozt:rpc(od_handle, create, [#document{
@@ -289,7 +289,7 @@ create_legacy_share(SpaceId, {with_handle, HServiceId}) ->
             resource_type = <<"Share">>,
             resource_id = ShareId,
             public_handle = PublicHandle,
-            metadata_prefix = <<"legacy">>,
+            metadata_schema = <<"legacy">>,
             metadata = Metadata,
             timestamp = ozt:timestamp_seconds()
         }
@@ -370,7 +370,7 @@ list_handles_completely(Opts) ->
 
 %% @private
 gather_handles_by_all_prefixes() ->
-    ozt:rpc(handle_registry, gather_by_all_prefixes, []).
+    ozt:rpc(handle_registry, gather_by_all_schemas, []).
 
 
 %% @private

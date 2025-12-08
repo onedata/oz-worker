@@ -12,8 +12,8 @@
 -author("Jakub Kudzia").
 
 -include("entity_logic.hrl").
--include("http/handlers/oai.hrl").
--include("http/handlers/oai_errors.hrl").
+-include("http/public_data/oai.hrl").
+-include("http/public_data/oai_errors.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -21,12 +21,14 @@
 -export([serialize_datestamp/1, deserialize_datestamp/1, is_harvesting/1,
     verb_to_module/1, is_earlier_or_equal/2, dates_have_the_same_granularity/2,
     to_xml/1, ensure_list/1,
-    request_arguments_to_handle_listing_opts/2, harvest/2, oai_identifier_decode/1,
-    build_oai_header/1, build_oai_record/1, build_oai_record/2
+    args_to_prefix_and_handle_listing_opts/2, harvest/3, oai_identifier_decode/1,
+    build_oai_header/1, build_oai_record/2, build_oai_record/3
 ]).
 
 -define(LIST_IDENTIFIERS_BATCH_SIZE, oz_worker:get_env(oai_pmh_list_identifiers_batch_size, 1000)).
 -define(LIST_RECORDS_BATCH_SIZE, oz_worker:get_env(oai_pmh_list_records_batch_size, 100)).
+
+-define(RESUMPTION_TOKEN_SEP, ",").
 
 %%%===================================================================
 %%% API
@@ -65,26 +67,28 @@ build_oai_header(#handle_listing_entry{
         status = Status
     }.
 
--spec build_oai_record(handle_registry:handle_listing_entry()) -> #oai_record{}.
-build_oai_record(#handle_listing_entry{status = present, handle_id = HandleId} = ListingEntry) ->
+-spec build_oai_record(oai_metadata:prefix(), handle_registry:handle_listing_entry()) ->
+    #oai_record{}.
+build_oai_record(MetadataPrefix, #handle_listing_entry{status = present, handle_id = HandleId} = ListingEntry) ->
     case od_handle:get(HandleId) of
         {ok, #document{value = HandleRecord}} ->
-            build_oai_record(ListingEntry, HandleRecord);
+            build_oai_record(MetadataPrefix, ListingEntry, HandleRecord);
         {error, not_found} ->
             ?error("Handle ~ts that is registered as present was not found in the DB, ignoring", [HandleId]),
-            build_oai_record(ListingEntry#handle_listing_entry{status = deleted})
+            build_oai_record(MetadataPrefix, ListingEntry#handle_listing_entry{status = deleted})
     end;
-build_oai_record(#handle_listing_entry{status = deleted} = ListingEntry) ->
+build_oai_record(_MetadataPrefix, #handle_listing_entry{status = deleted} = ListingEntry) ->
     #oai_record{
         header = build_oai_header(ListingEntry)
     }.
 
--spec build_oai_record(handle_registry:handle_listing_entry(), od_handle:record()) -> #oai_record{}.
-build_oai_record(ListingEntry, Handle) ->
+-spec build_oai_record(oai_metadata:prefix(), handle_registry:handle_listing_entry(), od_handle:record()) ->
+    #oai_record{}.
+build_oai_record(MetadataPrefix, ListingEntry, Handle) ->
     #oai_record{
         header = build_oai_header(ListingEntry),
         metadata = #oai_metadata{
-            metadata_prefix = Handle#od_handle.metadata_prefix,
+            metadata_prefix = MetadataPrefix,
             raw_value = Handle#od_handle.metadata
         }
     }.
@@ -128,13 +132,14 @@ deserialize_datestamp(Datestamp) ->
     end.
 
 
--spec request_arguments_to_handle_listing_opts(list_identifiers | list_records, [proplists:property()]) ->
-    handle_registry:listing_opts().
-request_arguments_to_handle_listing_opts(Verb, Args) ->
+-spec args_to_prefix_and_handle_listing_opts(list_identifiers | list_records, [proplists:property()]) ->
+    {oai_metadata:prefix(), handle_registry:listing_opts()}.
+args_to_prefix_and_handle_listing_opts(Verb, Args) ->
     case proplists:get_value(<<"resumptionToken">>, Args) of
         undefined ->
-            #{
-                metadata_prefix => proplists:get_value(<<"metadataPrefix">>, Args),
+            MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
+            {MetadataPrefix, #{
+                metadata_schema => oai_metadata:prefix_to_schema(MetadataPrefix),
                 service_id => proplists:get_value(<<"set">>, Args, undefined),
                 from => utils:convert_defined(
                     deserialize_datestamp(proplists:get_value(<<"from">>, Args, undefined)),
@@ -149,11 +154,12 @@ request_arguments_to_handle_listing_opts(Verb, Args) ->
                     list_records -> ?LIST_RECORDS_BATCH_SIZE
                 end,
                 include_deleted => true
-            };
+            }};
         ResumptionToken ->
-            #{
-                resumption_token => ResumptionToken
-            }
+            {MetadataPrefix, HandleRegistryResumptionToken} = unpack_oai_resumption_token(ResumptionToken),
+            {MetadataPrefix, #{
+                resumption_token => HandleRegistryResumptionToken
+            }}
     end.
 
 %%%--------------------------------------------------------------------
@@ -167,16 +173,16 @@ request_arguments_to_handle_listing_opts(Verb, Args) ->
 %%% @end
 %%%--------------------------------------------------------------------
 -spec harvest(
+    oai_metadata:prefix(),
     handle_registry:listing_opts(),
     fun((handle_registry:handle_listing_entry()) -> #oai_record{} | #oai_header{})
 ) -> oai_response().
-harvest(ListingOpts, HarvestingFun) ->
+harvest(MetadataPrefix, ListingOpts, HarvestingFun) ->
     {HandleListingEntries, NewResumptionToken} = handle_registry:list_portion(ListingOpts),
     HarvestedMetadata = lists:map(HarvestingFun, HandleListingEntries),
 
     case HarvestedMetadata of
         [] ->
-            MetadataPrefix = maps:get(metadata_prefix, ListingOpts),
             SetSpec = maps:get(service_id, ListingOpts),
             FromDatestamp = case maps:get(from, ListingOpts) of
                 undefined -> undefined;
@@ -196,9 +202,12 @@ harvest(ListingOpts, HarvestingFun) ->
                 % However, if the whole list is returned in one response,
                 % there should be no resumption token element at all (undefined).
                 resumption_token = case {NewResumptionToken, ListingOpts} of
-                    {undefined, #{resumption_token := _}} -> <<>>;
-                    {undefined, _} -> undefined;
-                    {Binary, _} when is_binary(Binary) -> Binary
+                    {undefined, #{resumption_token := _}} ->
+                        <<>>;
+                    {undefined, _} ->
+                        undefined;
+                    {HandleRegistryResumptionToken, _} when is_binary(HandleRegistryResumptionToken) ->
+                        pack_oai_resumption_token(MetadataPrefix, HandleRegistryResumptionToken)
                 end
             }
     end.
@@ -425,3 +434,16 @@ ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
 -spec oai_identifier_encode(od_handle:id()) -> oai_id().
 oai_identifier_encode(Id) ->
     <<?OAI_IDENTIFIER_PREFIX/binary, Id/binary>>.
+
+
+-spec pack_oai_resumption_token(oai_metadata:prefix(), handle_registry:resumption_token()) ->
+    oai_arg_parser:resumption_token().
+pack_oai_resumption_token(MetadataPrefix, HandleRegistryResumptionToken) ->
+    str_utils:join_binary([MetadataPrefix, HandleRegistryResumptionToken], <<?RESUMPTION_TOKEN_SEP>>).
+
+
+-spec unpack_oai_resumption_token(oai_arg_parser:resumption_token()) ->
+    {oai_metadata:prefix(), handle_registry:resumption_token()}.
+unpack_oai_resumption_token(ResumptionToken) ->
+    [MetadataPrefix, HandleRegistryResumptionToken] = binary:split(ResumptionToken, <<?RESUMPTION_TOKEN_SEP>>),
+    {MetadataPrefix, HandleRegistryResumptionToken}.

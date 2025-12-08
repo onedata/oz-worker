@@ -368,7 +368,7 @@ end).
 -record(od_handle, {
     public_handle :: od_handle:public_handle() | undefined,
     resource_type :: od_handle:resource_type() | undefined,
-    metadata_prefix :: od_handle:metadata_prefix() | undefined,
+    metadata_schema :: od_handle:metadata_schema() | undefined,
     metadata :: od_handle:raw_metadata() | undefined,
     timestamp = od_handle:current_timestamp() :: od_handle:timestamp_seconds(),
 

@@ -229,7 +229,7 @@ create_user(LinkedAccount = #linked_account{full_name = FullName, username = Use
         "> subjectId: ~ts", [
             case FlowType of
                 gui_login -> "first login via GUI";
-                idp_access_token -> "first authentication using a delegated IdP access token"
+                access_token -> "first authentication using a delegated IdP access token"
             end,
             UserId,
             FullName,

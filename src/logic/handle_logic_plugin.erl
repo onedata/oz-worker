@@ -19,15 +19,15 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/errors.hrl").
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
 -define(METADATA_SIZE_LIMIT, 100000).
--define(AVAILABLE_METADATA_FORMATS, oai_metadata:supported_formats()).
--define(DEFAULT_METADATA_PREFIX, ?OAI_DC_METADATA_PREFIX).
+-define(SUPPORTED_METADATA_SCHEMAS, oai_metadata:supported_schemas()).
+-define(DEFAULT_METADATA_SCHEMA, ?OAI_DC_METADATA_PREFIX).
 
 %%%===================================================================
 %%% API
@@ -160,7 +160,7 @@ get(#el_req{gri = #gri{aspect = list}}, _) ->
     % (which should be reworked at some point), but the handle registry provides
     % a lighter way to list (nevertheless, at some point we should never list whole
     % collections, but do this in batches).
-    {ok, [H#handle_listing_entry.handle_id || H <- handle_registry:gather_by_all_prefixes()]};
+    {ok, [H#handle_listing_entry.handle_id || H <- handle_registry:gather_by_all_schemas()]};
 
 get(#el_req{gri = #gri{aspect = privileges}}, _) ->
     {ok, #{
@@ -173,7 +173,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Handle) ->
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
     #od_handle{handle_service = HandleService, public_handle = PublicHandle,
         resource_type = ResourceType, resource_id = ResourceId,
-        metadata = Metadata, metadata_prefix = MetadataPrefix,
+        metadata = Metadata, metadata_schema = MetadataSchema,
         timestamp = Timestamp, creation_time = CreationTime, creator = Creator
     } = Handle,
     {ok, #{
@@ -182,7 +182,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
-        <<"metadataPrefix">> => MetadataPrefix,
+        <<"metadataSchema">> => MetadataSchema,
         <<"timestamp">> => Timestamp,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
@@ -191,7 +191,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = public}}, Handle) ->
     #od_handle{
         handle_service = HandleServiceId, public_handle = PublicHandle,
         resource_type = ResourceType, resource_id = ResourceId,
-        metadata = Metadata, metadata_prefix = MetadataPrefix,
+        metadata = Metadata, metadata_schema = MetadataSchema,
         timestamp = Timestamp, creation_time = CreationTime
     } = Handle,
     {ok, #{
@@ -200,7 +200,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = public}}, Handle) ->
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
-        <<"metadataPrefix">> => MetadataPrefix,
+        <<"metadataSchema">> => MetadataSchema,
         <<"timestamp">> => Timestamp,
         <<"creationTime">> => CreationTime
     }};
@@ -525,9 +525,15 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"resourceId">> => {any, {exists, fun(Value) ->
             share_logic:exists(Value) end
         }},
-        <<"metadataPrefix">> => {binary, ?AVAILABLE_METADATA_FORMATS},
         <<"metadata">> => {binary, {text_length_limit, ?METADATA_SIZE_LIMIT}}
-
+    },
+    at_least_one => #{
+        <<"metadataPrefix">> => {binary, ?SUPPORTED_METADATA_SCHEMAS},  % deprecated, to be removed in 23.02
+        <<"metadataSchema">> => {binary, ?SUPPORTED_METADATA_SCHEMAS}
+    },
+    optional => #{
+        <<"requestPublicHandle">> => {boolean, any},
+        <<"publicHandleToReuse">> => {binary, non_empty}
     }
 };
 
@@ -583,7 +589,12 @@ create_handle_unsafe(ShareId, Req = #el_req{gri = GRI, auth = Auth, data = Data}
     ResourceType = <<"Share">> = maps:get(<<"resourceType">>, Data),
     ShareId = maps:get(<<"resourceId">>, Data),
     RawMetadata = maps:get(<<"metadata">>, Data),
-    MetadataPrefix = maps:get(<<"metadataPrefix">>, Data, ?DEFAULT_METADATA_PREFIX),
+    MetadataSchema = case maps:find(<<"metadataSchema">>, Data) of
+        {ok, MS} ->
+            MS;
+        error ->
+            maps:get(<<"metadataPrefix">>, Data, ?DEFAULT_METADATA_SCHEMA)  % deprecated, to be removed in 23.02
+    end,
     CreationTime = od_handle:current_timestamp(),
 
     {ok, #document{value = InitialShareRecord}} = od_share:get(ShareId),
@@ -591,20 +602,34 @@ create_handle_unsafe(ShareId, Req = #el_req{gri = GRI, auth = Auth, data = Data}
     InitialShareRecord#od_share.handle =:= undefined orelse throw(?ERROR_ALREADY_EXISTS),
 
     RevisedMetadata = raw_metadata_to_revised_for_publication(
-        MetadataPrefix, RawMetadata, ShareId, InitialShareRecord
+        MetadataSchema, RawMetadata, ShareId, InitialShareRecord
     ),
 
-    {ok, PublicHandle} = handle_proxy:register_handle(
-        HandleServiceId, ResourceType, ShareId, oai_metadata:encode_xml(MetadataPrefix, RevisedMetadata)
-    ),
+    % TODO VFS-12975 temporary solution; add swaggers when a final approach is worked out
+    PublicHandle = case maps:get(<<"requestPublicHandle">>, Data, true) of
+        true ->
+            ?check(handle_proxy:register_handle(
+                HandleServiceId, ResourceType, ShareId, oai_metadata:encode_xml(MetadataSchema, RevisedMetadata)
+            ));
+        false ->
+            % TODO VFS-12975 temporary solution; if the client decides not to request a public handle,
+            % he can either provide a public handle to reuse explicitly, or not so that the share
+            % public URL will be reused implicitly
+            case maps:find(<<"publicHandleToReuse">>, Data) of
+                {ok, PreexistingPublicHandle} ->
+                    PreexistingPublicHandle;
+                error ->
+                    od_share:build_public_url(ShareId)
+            end
+    end,
 
-    FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
+    FinalMetadata = oai_metadata:insert_public_handle(MetadataSchema, RevisedMetadata, PublicHandle),
 
     {ok, #document{key = HandleId}} = od_handle:create(#document{value = #od_handle{
         public_handle = PublicHandle,
         resource_type = ResourceType,
-        metadata_prefix = MetadataPrefix,
-        metadata = oai_metadata:encode_xml(MetadataPrefix, FinalMetadata),
+        metadata_schema = MetadataSchema,
+        metadata = oai_metadata:encode_xml(MetadataSchema, FinalMetadata),
         timestamp = CreationTime,
 
         resource_id = ShareId,
@@ -636,7 +661,7 @@ create_handle_unsafe(ShareId, Req = #el_req{gri = GRI, auth = Auth, data = Data}
     end),
 
     share_registry:report_handle_created_for(ShareId, InitialShareRecord, HandleId, PublicHandle),
-    handle_registry:report_created(MetadataPrefix, HandleServiceId, HandleId, CreationTime),
+    handle_registry:report_created(MetadataSchema, HandleServiceId, HandleId, CreationTime),
     {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
     {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}.
 
@@ -652,15 +677,15 @@ update_handle_unsafe(HandleId, ShareId, Data) ->
         handle_service = HandleService,
         timestamp = PreviousTimestamp,
         resource_id = ShareId,
-        metadata_prefix = MetadataPrefix,
+        metadata_schema = MetadataSchema,
         public_handle = PublicHandle
     }} = ?check(od_handle:get(HandleId)),
 
     % only the metadata field can be updated
     InputRawMetadata = maps:get(<<"metadata">>, Data),
-    RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataPrefix, InputRawMetadata, ShareId, ShareRecord),
-    FinalMetadata = oai_metadata:insert_public_handle(MetadataPrefix, RevisedMetadata, PublicHandle),
-    FinalRawMetadata = oai_metadata:encode_xml(MetadataPrefix, FinalMetadata),
+    RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataSchema, InputRawMetadata, ShareId, ShareRecord),
+    FinalMetadata = oai_metadata:insert_public_handle(MetadataSchema, RevisedMetadata, PublicHandle),
+    FinalRawMetadata = oai_metadata:encode_xml(MetadataSchema, FinalMetadata),
 
     CurrentTimestamp = od_handle:current_timestamp(),
     {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
@@ -670,7 +695,7 @@ update_handle_unsafe(HandleId, ShareId, Data) ->
         }}
     end),
     % every handle modification must be reflected in the handle registry
-    handle_registry:report_updated(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp),
+    handle_registry:report_updated(MetadataSchema, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp),
     % TODO VFS-7454 currently not supported by the handle proxy implementation
     % handle_proxy:modify_handle(HandleId, FinalRawMetadata).
     ok.
@@ -693,7 +718,7 @@ delete_handle_unsafe(HandleId, ShareId) ->
         handle_service = HandleService,
         resource_id = ShareId,
         timestamp = PreviousTimestamp,
-        metadata_prefix = MetadataPrefix,
+        metadata_schema = MetadataSchema,
         public_handle = PublicHandle
     }} = ?check(od_handle:get(HandleId)),
     try
@@ -705,7 +730,7 @@ delete_handle_unsafe(HandleId, ShareId) ->
         ), Class, Reason, Stacktrace)
     end,
     DeletionTimestamp = od_handle:current_timestamp(),
-    handle_registry:report_deleted(MetadataPrefix, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
+    handle_registry:report_deleted(MetadataSchema, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
     entity_graph:delete_with_relations(od_handle, HandleId),
 
     {ok, #document{value = UpdatedShareRecord}} = od_share:update(ShareId, fun(S) ->
@@ -717,15 +742,15 @@ delete_handle_unsafe(HandleId, ShareId) ->
 
 %% @private
 -spec raw_metadata_to_revised_for_publication(
-    od_handle:metadata_prefix(), od_handle:raw_metadata(), od_share:id(), od_share:record()
+    od_handle:metadata_schema(), od_handle:raw_metadata(), od_share:id(), od_share:record()
 ) ->
     od_handle:parsed_metadata().
-raw_metadata_to_revised_for_publication(MetadataPrefix, RawMetadata, ShareId, ShareRecord) ->
+raw_metadata_to_revised_for_publication(MetadataSchema, RawMetadata, ShareId, ShareRecord) ->
     ParsedMetadata = case oai_xml:parse(RawMetadata) of
         {ok, Parsed} -> Parsed;
         error -> throw(?ERR_BAD_VALUE_XML(?err_ctx(), <<"metadata">>))
     end,
-    case oai_metadata:revise_for_publication(MetadataPrefix, ParsedMetadata, ShareId, ShareRecord) of
+    case oai_metadata:revise_for_publication(MetadataSchema, ParsedMetadata, ShareId, ShareRecord) of
         {ok, Revised} -> Revised;
         error -> throw(?ERR_BAD_VALUE_XML(?err_ctx(), <<"metadata">>))
     end.

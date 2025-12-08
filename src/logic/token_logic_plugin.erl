@@ -808,7 +808,7 @@ build_data_access_scope_info(SpaceIds, Caveats) ->
             #{
                 <<"name">> => Name,
                 <<"domain">> => Domain,
-                <<"version">> => ?check(cluster_logic:get_worker_release_version(?ROOT, ProviderId)),
+                <<"version">> => od_cluster:get_worker_release_version(ProviderId),
                 <<"online">> => provider_connections:is_online(ProviderId),
                 <<"storageBackends">> => lists_utils:intersect(ProviderStorages, StorageIds)
             }

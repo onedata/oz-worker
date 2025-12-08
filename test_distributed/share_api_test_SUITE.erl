@@ -627,14 +627,14 @@ get_shared_file_or_directory_data_test_base(Config, SubpathWithQs) ->
     ?assert(CheckResult(CorrectObjectId, ?ERR_SERVICE_UNAVAILABLE)),
 
     % the space gets support, but the provider is offline
-    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config),
+    {ok, {ProviderId, _ProviderToken}} = oz_test_utils:create_provider(Config),
     oz_test_utils:support_space_by_provider(Config, ProviderId, SpaceId),
     clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
     ?assert(CheckResult(CorrectObjectId, ?ERR_SERVICE_UNAVAILABLE)),
 
     % the provider connects, but it is in legacy version
     update_provider_version(Config, ProviderId, <<"19.02.3">>),
-    start_provider_graphsync_channel(Config, ProviderId, ProviderToken),
+    start_provider_graphsync_channel(Config, ProviderId),
     clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId),
     ?assert(CheckResult(CorrectObjectId, ?ERR_NOT_IMPLEMENTED)),
 
@@ -664,106 +664,153 @@ get_shared_file_or_directory_data_test_base(Config, SubpathWithQs) ->
 % The SUITE is run on a single node cluster to test caching of chosen providers
 % (the cache is local for each node).
 choose_provider_for_public_share_handling_test(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config),
-    {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId)),
+    UserId = ozt_users:create(),
+    SpaceId = ozt_users:create_space_for(UserId),
 
-    {ok, {AlphaOffline, _AlphaToken}} = oz_test_utils:create_provider(Config),
-    {ok, {BetaOffline, _BetaToken}} = oz_test_utils:create_provider(Config),
-    {ok, {GammaLegacy, GammaToken}} = oz_test_utils:create_provider(Config),
-    {ok, {DeltaLegacy, DeltaToken}} = oz_test_utils:create_provider(Config),
-    {ok, {SigmaUpToDate, SigmaToken}} = oz_test_utils:create_provider(Config),
-    {ok, {OmegaUpToDate, OmegaToken}} = oz_test_utils:create_provider(Config),
+    AlphaOffline = ozt_providers:create(),
+    BetaOffline = ozt_providers:create(),
+    EpsilonOfflineReadonly = ozt_providers:create(),
 
-    <<OzWorkerReleaseLine:5/binary, _/binary>> = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
+    GammaLegacy = ozt_providers:create(),
+    DeltaLegacy = ozt_providers:create(),
+    RhoLegacyReadonly = ozt_providers:create(),
+
+    SigmaUpToDate = ozt_providers:create(),
+    OmegaUpToDate = ozt_providers:create(),
+    TauUpToDateReadonly = ozt_providers:create(),
+
+    <<OzWorkerReleaseLine:5/binary, _/binary>> = ozt:rpc(oz_worker, get_release_version, []),
 
     ProviderVersion = fun(PrId) ->
         case PrId of
             AlphaOffline -> <<OzWorkerReleaseLine/binary, ".1">>;
             BetaOffline -> <<"18.02.3">>;
+            EpsilonOfflineReadonly -> <<OzWorkerReleaseLine/binary, ".1">>;
+
             GammaLegacy -> <<"19.02.1">>;
-            DeltaLegacy -> <<"19.02.0-rc1">>;
+            DeltaLegacy -> <<"20.02.1">>;
+            RhoLegacyReadonly -> <<"20.02.19">>;
+
             SigmaUpToDate -> <<OzWorkerReleaseLine/binary, ".0-rc1">>;
-            OmegaUpToDate -> <<OzWorkerReleaseLine/binary, ".2">>
+            OmegaUpToDate -> <<OzWorkerReleaseLine/binary, ".2">>;
+            TauUpToDateReadonly -> <<OzWorkerReleaseLine/binary, ".0-alpha37">>
         end
     end,
 
     AllProviders = [
-        AlphaOffline, BetaOffline,
-        GammaLegacy, DeltaLegacy,
-        SigmaUpToDate, OmegaUpToDate
+        AlphaOffline, BetaOffline, EpsilonOfflineReadonly,
+        GammaLegacy, DeltaLegacy, RhoLegacyReadonly,
+        SigmaUpToDate, OmegaUpToDate, TauUpToDateReadonly
     ],
 
+    ReadonlyProviders = [EpsilonOfflineReadonly, RhoLegacyReadonly, TauUpToDateReadonly],
+
     lists:foreach(fun(ProviderId) ->
-        oz_test_utils:support_space_by_provider(Config, ProviderId, SpaceId),
+        % at least one storage must be readwrite for the provider to be prioritized as most eligible,
+        % all storages must be readonly for the provider to get a lower priority
+        ozt_providers:support_space(ProviderId, ozt_providers:create_storage(ProviderId, #{
+            <<"name">> => ?RAND_STR(),
+            <<"readonly">> => lists:member(ProviderId, ReadonlyProviders)
+        }), SpaceId),
+        % randomly generate 0-4 more supports
+        utils:repeat(?RAND_INT(0, 4), fun() ->
+            ozt_providers:support_space(ProviderId, ozt_providers:create_storage(ProviderId, #{
+                <<"name">> => ?RAND_STR(),
+                <<"readonly">> => lists:member(ProviderId, ReadonlyProviders) orelse ?RAND_BOOL()
+            }), SpaceId)
+        end),
         update_provider_version(Config, ProviderId, ProviderVersion(ProviderId))
     end, AllProviders),
+    ozt:reconcile_entity_graph(),
 
     Connections = #{
-        GammaLegacy => start_provider_graphsync_channel(Config, GammaLegacy, GammaToken),
-        DeltaLegacy => start_provider_graphsync_channel(Config, DeltaLegacy, DeltaToken),
-        SigmaUpToDate => start_provider_graphsync_channel(Config, SigmaUpToDate, SigmaToken),
-        OmegaUpToDate => start_provider_graphsync_channel(Config, OmegaUpToDate, OmegaToken)
+        GammaLegacy => start_provider_graphsync_channel(Config, GammaLegacy),
+        DeltaLegacy => start_provider_graphsync_channel(Config, DeltaLegacy),
+        RhoLegacyReadonly => start_provider_graphsync_channel(Config, RhoLegacyReadonly),
+        SigmaUpToDate => start_provider_graphsync_channel(Config, SigmaUpToDate),
+        OmegaUpToDate => start_provider_graphsync_channel(Config, OmegaUpToDate),
+        TauUpToDateReadonly => start_provider_graphsync_channel(Config, TauUpToDateReadonly)
     },
 
-    ShareId = str_utils:rand_hex(16),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
-    ),
+    ShareId = ozt_shares:create(SpaceId),
 
     ChooseProvider = fun() ->
-        {ok, {PrId, PrVersion}} = oz_test_utils:call_oz(
-            Config, share_logic, choose_provider_for_public_share_handling, [ShareId]
-        ),
-        {PrId, PrVersion}
+        oz_test_utils:call_oz(Config, od_share, choose_provider_for_public_share_handling, [ShareId])
     end,
 
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    IsChosenProviderOneOf = fun(ProviderIds) ->
+        case ChooseProvider() of
+            {error, _} ->
+                false;
+            {ok, {ProviderId, _ProviderVersion}} ->
+                lists:member(ProviderId, ProviderIds)
+        end
+    end,
 
-    % One of the up to date providers should be chosen
-    {ChosenProviderId, ChosenProviderVersion} = ChooseProvider(),
-    ?assert(lists:member(ChosenProviderId, [SigmaUpToDate, OmegaUpToDate])),
-    ?assertEqual(ProviderVersion(ChosenProviderId), ChosenProviderVersion),
-    % Choice should be cached and reused
-    ?assertEqual({ChosenProviderId, ChosenProviderVersion}, ChooseProvider()),
-    check_shares_data_redirector(Config, ShareId, ChosenProviderId, ProviderVersion(ChosenProviderId)),
+    VerifyProviderChoice = fun(ExpectedChoice, Attempts) ->
+        try
+            case ExpectedChoice of
+                [] ->
+                    ?assertMatch(?ERR_SERVICE_UNAVAILABLE, ChooseProvider(), Attempts),
+                    check_shares_data_redirector(Config, ShareId, undefined, undefined),
+                    % the choice should be cached and reused
+                    ?assertMatch(?ERR_SERVICE_UNAVAILABLE, ChooseProvider(), Attempts),
+                    undefined;
+                _ ->
+                    ?assert(IsChosenProviderOneOf(ExpectedChoice), Attempts),
+                    {ok, {ChosenProviderId, ChosenProviderVersion}} = ChooseProvider(),
+                    ?assertEqual(ProviderVersion(ChosenProviderId), ChosenProviderVersion),
+                    check_shares_data_redirector(Config, ShareId, ChosenProviderId, ProviderVersion(ChosenProviderId)),
+                    % the choice should be cached and reused
+                    ?assertEqual({ok, {ChosenProviderId, ChosenProviderVersion}}, ChooseProvider()),
+                    ChosenProviderId
+            end
+        catch Class:Reason:Stacktrace ->
+            ?ct_pal_exception("provider choice not as expected", Class, Reason, Stacktrace),
+            error(test_failed)
+        end
+    end,
 
-    % If the chosen provider goes down, another up to date provider should be chosen
-    terminate_provider_graphsync_channel(Config, ChosenProviderId, maps:get(ChosenProviderId, Connections)),
-    [TheOtherUpToDate] = [SigmaUpToDate, OmegaUpToDate] -- [ChosenProviderId],
-    ?assertEqual({TheOtherUpToDate, ProviderVersion(TheOtherUpToDate)}, ChooseProvider()),
-    ?assertEqual({TheOtherUpToDate, ProviderVersion(TheOtherUpToDate)}, ChooseProvider()),
-    check_shares_data_redirector(Config, ShareId, TheOtherUpToDate, ProviderVersion(TheOtherUpToDate)),
+    % one of the up-to-date readwrite providers should be chosen
+    FirstChoice = VerifyProviderChoice([SigmaUpToDate, OmegaUpToDate], 1),
 
-    % When the second up to date provider goes down, a legacy one should be picked
-    terminate_provider_graphsync_channel(Config, TheOtherUpToDate, maps:get(TheOtherUpToDate, Connections)),
-    {LegacyProviderId, LegacyProviderVersion} = ChooseProvider(),
-    ?assert(lists:member(LegacyProviderId, [GammaLegacy, DeltaLegacy])),
-    ?assertEqual(ProviderVersion(LegacyProviderId), LegacyProviderVersion),
-    ?assertEqual({LegacyProviderId, ProviderVersion(LegacyProviderId)}, ChooseProvider()),
-    check_shares_data_redirector(Config, ShareId, LegacyProviderId, ProviderVersion(LegacyProviderId)),
+    % if the chosen provider goes down, another up-to-date provider should be chosen
+    terminate_provider_graphsync_channel(Config, FirstChoice, maps:get(FirstChoice, Connections)),
+    SecondChoice = VerifyProviderChoice([SigmaUpToDate, OmegaUpToDate] -- [FirstChoice], 1),
 
-    % If one of the up to date providers go up, eventually it should be used again
+    % if all of them are down, the up-to-date readonly one should he chosen
+    terminate_provider_graphsync_channel(Config, SecondChoice, maps:get(SecondChoice, Connections)),
+    TauUpToDateReadonly = VerifyProviderChoice([TauUpToDateReadonly], 1),
+
+    % only if it goes down, one of the legacy ones should be picked (but not a readonly one)
+    terminate_provider_graphsync_channel(Config, TauUpToDateReadonly, maps:get(TauUpToDateReadonly, Connections)),
+    VerifyProviderChoice([GammaLegacy, DeltaLegacy], 1),
+
+    % if one of the up-to-date providers go up, eventually it should be used again
     % (after the cache expiration)
-    terminate_provider_graphsync_channel(Config, LegacyProviderId, maps:get(LegacyProviderId, Connections)),
     NewConnections = Connections#{
-        SigmaUpToDate => start_provider_graphsync_channel(Config, SigmaUpToDate, SigmaToken)
+        TauUpToDateReadonly => start_provider_graphsync_channel(Config, TauUpToDateReadonly)
     },
-    ?assertEqual({SigmaUpToDate, ProviderVersion(SigmaUpToDate)}, ChooseProvider(), 60),
-    check_shares_data_redirector(Config, ShareId, SigmaUpToDate, ProviderVersion(SigmaUpToDate)),
+    VerifyProviderChoice([TauUpToDateReadonly], 60),
 
     % If all providers go down, undefined result should be immediately returned
     terminate_provider_graphsync_channel(Config, GammaLegacy, maps:get(GammaLegacy, NewConnections)),
     terminate_provider_graphsync_channel(Config, DeltaLegacy, maps:get(DeltaLegacy, NewConnections)),
-    terminate_provider_graphsync_channel(Config, SigmaUpToDate, maps:get(SigmaUpToDate, NewConnections)),
-    terminate_provider_graphsync_channel(Config, OmegaUpToDate, maps:get(OmegaUpToDate, NewConnections)),
-    ?assertEqual({undefined, undefined}, ChooseProvider()),
-    check_shares_data_redirector(Config, ShareId, undefined, undefined),
+    terminate_provider_graphsync_channel(Config, RhoLegacyReadonly, maps:get(RhoLegacyReadonly, NewConnections)),
+    terminate_provider_graphsync_channel(Config, TauUpToDateReadonly, maps:get(TauUpToDateReadonly, NewConnections)),
+    VerifyProviderChoice([], 1),
 
-    % After some providers go online again and the cache expires, they should be picked again
-    start_provider_graphsync_channel(Config, DeltaLegacy, DeltaToken),
-    start_provider_graphsync_channel(Config, OmegaUpToDate, OmegaToken),
-    ?assertEqual({OmegaUpToDate, ProviderVersion(OmegaUpToDate)}, ChooseProvider(), 60),
-    check_shares_data_redirector(Config, ShareId, OmegaUpToDate, ProviderVersion(OmegaUpToDate)).
+    % after a provider goes online again and the cache expires, they should be picked again
+    start_provider_graphsync_channel(Config, RhoLegacyReadonly),
+    VerifyProviderChoice([RhoLegacyReadonly], 60),
+
+    % after a provider with a better priority goes up and the cache expires, it should be used again
+    start_provider_graphsync_channel(Config, TauUpToDateReadonly),
+    VerifyProviderChoice([TauUpToDateReadonly], 60),
+
+    start_provider_graphsync_channel(Config, SigmaUpToDate),
+    VerifyProviderChoice([SigmaUpToDate], 60).
+
 
 %%%===================================================================
 %%% Internal functions
@@ -778,7 +825,8 @@ update_provider_version(Config, ProviderId, Version) ->
 
 
 %% @private
-start_provider_graphsync_channel(Config, ProviderId, ProviderToken) ->
+start_provider_graphsync_channel(Config, ProviderId) ->
+    ProviderToken = ozt_tokens:ensure_serialized(ozt_providers:get_root_token(ProviderId)),
     Url = oz_test_utils:graph_sync_url(Config, oneprovider),
     SSlOpts = [{secure, only_verify_peercert}, {cacerts, oz_test_utils:gui_ca_certs(Config)}],
     {ok, GsClient, _} = gs_client:start_link(
@@ -876,7 +924,7 @@ expected_shared_data_redirect(Config, ProviderId, ObjectId, SubpathWithQs) ->
 
 %% @private
 clear_cached_chosen_provider_for_public_share_handling(Config, SpaceId) ->
-    oz_test_utils:call_oz(Config, node_cache, clear, [{chosen_provider_for_share_handling, SpaceId}]).
+    oz_test_utils:call_oz(Config, node_cache, clear, [{chosen_provider_for_request_handling, SpaceId}]).
 
 %%%===================================================================
 %%% Setup/teardown functions

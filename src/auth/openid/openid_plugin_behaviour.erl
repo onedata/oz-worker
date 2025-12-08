@@ -55,5 +55,5 @@
 %% in such case they will be stored for offline access.
 %% @end
 %%--------------------------------------------------------------------
--callback get_user_info(auth_config:idp(), idp_auth:access_token()) ->
+-callback get_user_info(auth_config:idp(), idp_auth:flow_type(), idp_auth:access_token()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.

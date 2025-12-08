@@ -14,7 +14,7 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 -include_lib("ctool/include/onedata_file.hrl").
 -include_lib("ctool/include/privileges.hrl").
@@ -3515,10 +3515,36 @@ get_record(od_handle, 7) -> {od_handle,
     ?SUB(nobody),
     true
 };
-get_record(od_handle, 8) -> #od_handle{
+get_record(od_handle, 8) -> {od_handle,
+    <<"public_handle">>,
+    <<"Share">>,
+    <<"legacy">>,
+    <<"<metadata_xml_string/>">>,
+    1459781793,
+
+    <<"resource_id">>,
+    <<"handle_service_id">>,
+
+    #{
+        <<"user1">> => [?HANDLE_VIEW, ?HANDLE_UPDATE],
+        <<"user2">> => [?HANDLE_VIEW, ?HANDLE_UPDATE, ?HANDLE_DELETE]
+    },
+    #{
+        <<"group1">> => [?HANDLE_UPDATE],
+        <<"group2">> => [?HANDLE_DELETE]
+    },
+
+    #{},
+    #{},
+
+    ozt_mocks:get_frozen_time_seconds(),
+    ?SUB(nobody),
+    true
+};
+get_record(od_handle, 9) -> #od_handle{
     public_handle = <<"public_handle">>,
     resource_type = <<"Share">>,
-    metadata_prefix = <<"legacy">>,
+    metadata_schema = <<"legacy">>,
     metadata = <<"<metadata_xml_string/>">>,
     timestamp = 1459781793,
 

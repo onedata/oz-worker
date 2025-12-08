@@ -68,6 +68,7 @@ get_response(#gri{id = ShareId, aspect = instance, scope = private}, ShareRecord
 
 get_response(#gri{id = ShareId, aspect = instance, scope = public}, ShareData) ->
     #{
+        <<"spaceId">> := SpaceId,
         <<"name">> := Name,
         <<"description">> := Description,
         <<"handleId">> := HandleId,
@@ -77,6 +78,7 @@ get_response(#gri{id = ShareId, aspect = instance, scope = public}, ShareData) -
     } = ShareData,
     rest_translator:ok_body_reply(#{
         <<"shareId">> => ShareId,
+        <<"spaceId">> => SpaceId,
         <<"name">> => Name,
         <<"description">> => Description,
         <<"publicUrl">> => od_share:build_public_url(ShareId),

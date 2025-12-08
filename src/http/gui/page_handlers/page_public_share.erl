@@ -40,4 +40,7 @@ handle(<<"GET">>, Req) ->
     catch Class:Reason:Stacktrace ->
         ?debug_exception("Error while redirecting to public share", Class, Reason, Stacktrace),
         cowboy_req:reply(?HTTP_400_BAD_REQUEST, Req)
-    end.
+    end;
+
+handle(<<"HEAD">>, Req) ->
+    handle(<<"GET">>, Req).

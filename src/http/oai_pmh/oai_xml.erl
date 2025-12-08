@@ -16,12 +16,13 @@
 -module(oai_xml).
 -author("Lukasz Opiola").
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 
 %% API
 -export([parse/1, encode/1]).
 -export([prepend_element_with_indent/3]).
+-export([indent_content_in_newline/2]).
 
 
 %%%===================================================================
@@ -59,4 +60,42 @@ encode(Xml) ->
 -spec prepend_element_with_indent(non_neg_integer(), #xmlElement{}, [#xmlElement{} | #xmlText{}]) ->
     [#xmlElement{} | #xmlText{}].
 prepend_element_with_indent(IndentSize, NewElement, BaseXmlContent) ->
-    [#xmlText{value = "\n" ++ lists:duplicate(IndentSize, $ )}, NewElement | BaseXmlContent].
+    [indentation_xml_text(IndentSize), NewElement | BaseXmlContent].
+
+
+%%-------------------------------------------------------------------
+%% @doc
+%% Returns the input content after indentation, where each of the components
+%% has been indented by given size. Additionally, it's wrapped in newline
+%% breaks.
+%% @end
+%%-------------------------------------------------------------------
+-spec indent_content_in_newline(non_neg_integer(), [#xmlElement{} | #xmlText{}]) ->
+    [#xmlElement{} | #xmlText{}].
+indent_content_in_newline(IndentSize, XmlContent) ->
+    {AllButLast, [Last]} = lists:split(length(XmlContent) - 1, XmlContent),
+
+    lists:flatten([
+        lists:map(fun(Component) ->
+            [indentation_xml_text(IndentSize), Component]
+        end, AllButLast),
+
+        indentation_xml_text(IndentSize),
+        case Last of
+            #xmlElement{content = Content} ->
+                Last#xmlElement{content = Content ++ [indentation_xml_text(IndentSize)]};
+            _ ->
+                Last
+        end
+    ]).
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+
+%% @private
+-spec indentation_xml_text(non_neg_integer()) -> #xmlText{}.
+indentation_xml_text(IndentSize) ->
+    #xmlText{value = "\n" ++ lists:duplicate(IndentSize, $ )}.

@@ -603,7 +603,7 @@ translate_share(#gri{id = ShareId, aspect = instance, scope = private}, ShareRec
         <<"hasHandle">> => Handle /= undefined
     };
 translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name">> := Name}) ->
-    {ok, {ChosenProviderId, ChosenProviderVersion}} = share_logic:choose_provider_for_public_share_handling(ShareId),
+    {ChosenProviderId, ChosenProviderVersion} = ?check(od_share:choose_provider_for_public_share_handling(ShareId)),
     #{
         <<"name">> => Name,
         <<"chosenProviderId">> => utils:undefined_to_null(ChosenProviderId),
@@ -630,14 +630,15 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Prov
     } = Provider,
 
     ClusterId = Id,
-    {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, ClusterId),
+    {ReleaseVersion, BuildVersion, _} = od_cluster:get_worker_version_info(ClusterId),
     fun(?USER(UserId)) -> #{
         <<"scope">> => <<"private">>,
         <<"name">> => Name,
         <<"domain">> => Domain,
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
-        <<"version">> => Version,
+        <<"releaseVersion">> => ReleaseVersion,
+        <<"buildVersion">> => BuildVersion,
         <<"cluster">> => gri:serialize(#gri{
             type = od_cluster, id = ClusterId, aspect = instance, scope = auto
         }),
@@ -657,14 +658,15 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = protected}, Pr
     } = Provider,
 
     ClusterId = Id,
-    {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, ClusterId),
+    {ReleaseVersion, BuildVersion, _} = od_cluster:get_worker_version_info(ClusterId),
     fun(?USER(UserId)) -> #{
         <<"scope">> => <<"protected">>,
         <<"name">> => Name,
         <<"domain">> => Domain,
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
-        <<"version">> => Version,
+        <<"releaseVersion">> => ReleaseVersion,
+        <<"buildVersion">> => BuildVersion,
         <<"cluster">> => gri:serialize(#gri{
             type = od_cluster, id = ClusterId, aspect = instance, scope = auto
         }),

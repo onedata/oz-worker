@@ -748,7 +748,7 @@ update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {group_privileges, GroupI
     );
 
 update(#el_req{gri = #gri{id = SpaceId, aspect = {support_parameters, ProviderId}}, data = Data}) ->
-    {ok, ProviderVersion} = cluster_logic:get_worker_release_version(?ROOT, ProviderId),
+    ProviderVersion = od_cluster:get_worker_release_version(ProviderId),
     onedata:compare_release_line(ProviderVersion, ?LINE_21_02) =:= lower andalso throw(?ERROR_NOT_SUPPORTED),
 
     SupportParametersOverlay = jsonable_record:from_json(Data, support_parameters),

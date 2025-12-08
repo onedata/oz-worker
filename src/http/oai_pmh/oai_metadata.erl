@@ -7,7 +7,7 @@
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% Generic module that handles metadata related operations by routing
-%%% logic specific for different metadata formats to corresponding
+%%% logic specific for different metadata schemas and oai-pmh prefixes to corresponding
 %%% handle metadata plugins.
 %%% @end
 %%%-------------------------------------------------------------------
@@ -15,17 +15,33 @@
 -author("Jakub Kudzia").
 -author("Lukasz Opiola").
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 
 %% API
--export([supported_formats/0]).
+-export([supported_schemas/0]).
+-export([all_supported_oai_pmh_prefixes/0, supported_oai_pmh_prefixes_by_schema/1, prefix_to_schema/1]).
 -export([clear_plugin_cache/0]).
 -export([schema_URL/1, main_namespace/1]).
 -export([revise_for_publication/4, insert_public_handle/3, adapt_for_oai_pmh/2]).
 -export([encode_xml/2]).
 -export([validation_examples/1]).
 
+
+% Short literal (e.g. <<"oai_dc">>) that identifies an OAI-PMH metadata prefix, identical to
+% the official prefixes; allowed values depend on loaded handle_metadata_plugins;
+% @see http/public_data/oai.hrl for corresponding macros.
+% Each handle metadata schema can be disseminated using one or more OAI-PMH metadata prefixes, but
+% each OAI-PMH metadata prefix has only one corresponding handle metadata schema.
+-type prefix() :: binary().
+-export_type([prefix/0]).
+
+
+-record(plugin_cache, {
+    schema_to_plugin = #{} :: #{od_handle:metadata_schema() => module()},
+    prefix_to_plugin = #{} :: #{prefix() => module()}
+}).
+-type plugin_cache() :: #plugin_cache{}.
 
 -define(PLUGIN_CACHE_KEY, ?MODULE).
 
@@ -35,9 +51,26 @@
 %%%===================================================================
 
 
--spec supported_formats() -> [od_handle:metadata_prefix()].
-supported_formats() ->
-    maps:keys(acquire_prefix_to_plugin_mapping()).
+-spec supported_schemas() -> [od_handle:metadata_schema()].
+supported_schemas() ->
+    maps:keys((acquire_plugin_cache())#plugin_cache.schema_to_plugin).
+
+
+-spec all_supported_oai_pmh_prefixes() -> [prefix()].
+all_supported_oai_pmh_prefixes() ->
+    maps:keys((acquire_plugin_cache())#plugin_cache.prefix_to_plugin).
+
+
+-spec supported_oai_pmh_prefixes_by_schema(od_handle:metadata_schema()) -> [prefix()].
+supported_oai_pmh_prefixes_by_schema(MetadataSchema) ->
+    Module = module_by_schema(MetadataSchema),
+    Module:supported_oai_pmh_metadata_prefixes().
+
+
+-spec prefix_to_schema(prefix()) -> od_handle:metadata_schema().
+prefix_to_schema(MetadataPrefix) ->
+    Module = module_by_prefix(MetadataPrefix),
+    Module:metadata_schema().
 
 
 -spec clear_plugin_cache() -> ok.
@@ -45,10 +78,10 @@ clear_plugin_cache() ->
     node_cache:clear(?PLUGIN_CACHE_KEY).
 
 
--spec schema_URL(od_handle:metadata_prefix()) -> binary().
+-spec schema_URL(prefix()) -> binary().
 schema_URL(MetadataPrefix) ->
-    Module = module(MetadataPrefix),
-    Module:schema_URL().
+    Module = module_by_prefix(MetadataPrefix),
+    Module:schema_URL(MetadataPrefix).
 
 
 %%--------------------------------------------------------------------
@@ -57,51 +90,50 @@ schema_URL(MetadataPrefix) ->
 %%     * AttributeName is name of XML attribute for main namespace of given
 %%       metadata format (associated with MetadataPrefix)
 %%     * MainNamespace is value of AttributeName that defines the
-%%       correspondence between a metadata format prefix
+%%       correspondence between a metadata schema prefix
 %%       i.e. dc and the namespace URI
 %% @end
 %%--------------------------------------------------------------------
--spec main_namespace(od_handle:metadata_prefix()) -> {atom(), binary()}.
+-spec main_namespace(prefix()) -> {atom(), binary()}.
 main_namespace(MetadataPrefix) ->
-    Module = module(MetadataPrefix),
-    Module:main_namespace().
+    Module = module_by_prefix(MetadataPrefix),
+    Module:main_namespace(MetadataPrefix).
 
 
 % TODO VFS-7454 consider using a different XML parser, e.g. https://github.com/processone/fast_xml
 % TODO VFS-7454 validate the provided XML against corresponding schemas
 % TODO VFS-7454 consider the minimal set of fields to be provided by the client
 -spec revise_for_publication(
-    od_handle:metadata_prefix(), od_handle:parsed_metadata(), od_share:id(), od_share:record()
+    od_handle:metadata_schema(), od_handle:parsed_metadata(), od_share:id(), od_share:record()
 ) ->
     {ok, od_handle:parsed_metadata()} | error.
-revise_for_publication(MetadataPrefix, Metadata, ShareId, ShareRecord) ->
-    Module = module(MetadataPrefix),
+revise_for_publication(MetadataSchema, Metadata, ShareId, ShareRecord) ->
+    Module = module_by_schema(MetadataSchema),
     Module:revise_for_publication(Metadata, ShareId, ShareRecord).
 
 
--spec insert_public_handle(od_handle:metadata_prefix(), od_handle:parsed_metadata(), od_handle:public_handle()) ->
+-spec insert_public_handle(od_handle:metadata_schema(), od_handle:parsed_metadata(), od_handle:public_handle()) ->
     od_handle:parsed_metadata().
-insert_public_handle(MetadataPrefix, Metadata, PublicHandle) ->
-    Module = module(MetadataPrefix),
+insert_public_handle(MetadataSchema, Metadata, PublicHandle) ->
+    Module = module_by_schema(MetadataSchema),
     Module:insert_public_handle(Metadata, PublicHandle).
 
 
--spec adapt_for_oai_pmh(od_handle:metadata_prefix(), od_handle:parsed_metadata()) ->
-    od_handle:parsed_metadata().
+-spec adapt_for_oai_pmh(prefix(), od_handle:parsed_metadata()) -> od_handle:parsed_metadata().
 adapt_for_oai_pmh(MetadataPrefix, Metadata) ->
-    Module = module(MetadataPrefix),
-    Module:adapt_for_oai_pmh(Metadata).
+    Module = module_by_prefix(MetadataPrefix),
+    Module:adapt_for_oai_pmh(MetadataPrefix, Metadata).
 
 
--spec encode_xml(od_handle:metadata_prefix(), od_handle:parsed_metadata()) -> od_handle:raw_metadata().
-encode_xml(MetadataPrefix, Metadata) ->
-    Module = module(MetadataPrefix),
+-spec encode_xml(od_handle:metadata_schema(), od_handle:parsed_metadata()) -> od_handle:raw_metadata().
+encode_xml(MetadataSchema, Metadata) ->
+    Module = module_by_schema(MetadataSchema),
     Module:encode_xml(Metadata).
 
 
--spec validation_examples(od_handle:metadata_prefix()) -> [handle_metadata_plugin_behaviour:validation_example()].
-validation_examples(MetadataPrefix) ->
-    Module = module(MetadataPrefix),
+-spec validation_examples(od_handle:metadata_schema()) -> [handle_metadata_plugin_behaviour:validation_example()].
+validation_examples(MetadataSchema) ->
+    Module = module_by_schema(MetadataSchema),
     Module:validation_examples().
 
 %%%===================================================================
@@ -109,17 +141,30 @@ validation_examples(MetadataPrefix) ->
 %%%===================================================================
 
 %% @private
--spec module(od_handle:metadata_prefix()) -> module().
-module(MetadataPrefix) ->
-    maps:get(MetadataPrefix, acquire_prefix_to_plugin_mapping()).
+-spec module_by_schema(od_handle:metadata_schema()) -> module().
+module_by_schema(MetadataSchema) ->
+    maps:get(MetadataSchema, (acquire_plugin_cache())#plugin_cache.schema_to_plugin).
 
 
 %% @private
--spec acquire_prefix_to_plugin_mapping() -> #{od_handle:metadata_prefix() => module()}.
-acquire_prefix_to_plugin_mapping() ->
+-spec module_by_prefix(prefix()) -> module().
+module_by_prefix(MetadataPrefix) ->
+    maps:get(MetadataPrefix, (acquire_plugin_cache())#plugin_cache.prefix_to_plugin).
+
+
+%% @private
+-spec acquire_plugin_cache() -> plugin_cache().
+acquire_plugin_cache() ->
     ?check(node_cache:acquire(?PLUGIN_CACHE_KEY, fun() ->
-        PrefixToPlugin = maps_utils:generate_from_list(fun(PluginModule) ->
-            {PluginModule:metadata_prefix(), PluginModule}
-        end, onezone_plugins:get_plugins(handle_metadata_plugin)),
-        {ok, PrefixToPlugin, infinity}
+        {ok, #plugin_cache{
+
+            schema_to_plugin = maps_utils:generate_from_list(fun(PluginModule) ->
+                {PluginModule:metadata_schema(), PluginModule}
+            end, onezone_plugins:get_plugins(handle_metadata_plugin)),
+
+            prefix_to_plugin = maps:from_list(lists:flatmap(fun(PluginModule) ->
+                [{Prefix, PluginModule} || Prefix <- PluginModule:supported_oai_pmh_metadata_prefixes()]
+            end, onezone_plugins:get_plugins(handle_metadata_plugin)))
+
+        }, infinity}
     end)).

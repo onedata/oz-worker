@@ -146,13 +146,14 @@ create_handle_service_for(UserId) ->
 
 -spec create_handle_for(od_user:id(), od_handle_service:id(), od_share:id()) -> od_handle:id().
 create_handle_for(UserId, HandleServiceId, ShareId) ->
-    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
-    RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix),
-    {ok, HandleId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create_handle, [?USER(UserId), UserId, #{
+    MetadataSchema = ?RAND_ELEMENT(ozt_handles:supported_metadata_schemas()),
+    RawMetadata = ozt_handles:example_input_metadata(MetadataSchema),
+    % test that the deprecated argument is still supported
+    PrefixOrSchema = #{?RAND_CHOICE(<<"metadataSchema">>, <<"metadataPrefix">>) => MetadataSchema},
+    {ok, HandleId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create_handle, [?USER(UserId), UserId, PrefixOrSchema#{
         <<"handleServiceId">> => HandleServiceId,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ShareId,
-        <<"metadataPrefix">> => MetadataPrefix,
         <<"metadata">> => RawMetadata
     }])),
     HandleId.

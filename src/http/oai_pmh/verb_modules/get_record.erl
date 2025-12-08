@@ -11,7 +11,7 @@
 -module(get_record).
 -author("Jakub Kudzia").
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
@@ -78,24 +78,40 @@ get_response(<<"record">>, Args) ->
     OaiId = proplists:get_value(<<"identifier">>, Args),
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
     HandleId = oai_utils:oai_identifier_decode(OaiId),
-    lists:member(MetadataPrefix, oai_metadata:supported_formats()) orelse throw({cannotDisseminateFormat, MetadataPrefix}),
+    lists:member(MetadataPrefix, oai_metadata:all_supported_oai_pmh_prefixes()) orelse
+        throw({cannotDisseminateFormat, MetadataPrefix}),
     case od_handle:get(HandleId) of
         {ok, #document{value = Handle}} ->
-            Handle#od_handle.metadata_prefix =:= MetadataPrefix orelse throw({cannotDisseminateFormat, MetadataPrefix}),
+            assert_can_disseminate_format(Handle#od_handle.metadata_schema, MetadataPrefix),
             oai_utils:build_oai_record(
+                MetadataPrefix,
                 #handle_listing_entry{
                     timestamp = Handle#od_handle.timestamp,
                     handle_id = HandleId,
                     service_id = Handle#od_handle.handle_service,
                     status = present
-                }, Handle
+                },
+                Handle
             );
         {error, not_found} ->
             case handle_registry:lookup_deleted(HandleId) of
-                {ok, {HandleMetadataPrefix, HandleListingEntry}} ->
-                    HandleMetadataPrefix =:= MetadataPrefix orelse throw({cannotDisseminateFormat, MetadataPrefix}),
-                    oai_utils:build_oai_record(HandleListingEntry);
+                {ok, {HandleMetadataSchema, HandleListingEntry}} ->
+                    assert_can_disseminate_format(HandleMetadataSchema, MetadataPrefix),
+                    oai_utils:build_oai_record(MetadataPrefix, HandleListingEntry);
                 error ->
                     throw({idDoesNotExist, OaiId})
             end
     end.
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+
+%% @private
+-spec assert_can_disseminate_format(od_handle:metadata_schema(), oai_metadata:prefix()) -> ok | no_return().
+assert_can_disseminate_format(HandleMetadataSchema, MetadataPrefix) ->
+    SupportedPrefixesForHandle = oai_metadata:supported_oai_pmh_prefixes_by_schema(HandleMetadataSchema),
+    lists:member(MetadataPrefix, SupportedPrefixesForHandle) orelse throw({cannotDisseminateFormat, MetadataPrefix}),
+    ok.
