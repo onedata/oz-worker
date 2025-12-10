@@ -112,6 +112,7 @@
 % below prefixes are also identifiers of different types of od_handle:metadata_schema()
 -define(OAI_DC_METADATA_PREFIX, <<"oai_dc">>).
 -define(OAI_DATACITE_METADATA_PREFIX, <<"oai_datacite">>).
+-define(OAI_OPENAIRE_METADATA_PREFIX, <<"oai_openaire">>).
 -define(EDM_METADATA_PREFIX, <<"edm">>).
 % below prefixes function only in OAI-PMH (are used for dissemination, but it's not possible
 % to create a handle with such metadata schema)
