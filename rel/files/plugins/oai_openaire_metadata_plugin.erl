@@ -215,140 +215,145 @@ validation_examples() -> [
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-            "<datacite:creators>\n"
-            "   <datacite:creator>\n"
-            "       <datacite:creatorName>Jane Doe</datacite:creatorName>\n"
-            "   </datacite:creator>\n"
+            "<datacite:creators>\n",
+            "   <datacite:creator>\n",
+            "       <datacite:creatorName>Jane Doe</datacite:creatorName>\n",
+            "   </datacite:creator>\n",
             "</datacite:creators>"
         >>,
         input_qualifies_for_publication = false
     },
 
+    % fixme try to retain newlines between attributes like in EDM
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-            "<oaire:resource xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
-            " xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\""
-            " xmlns:dc=\"http://purl.org/dc/elements/1.1/\""
-            " xmlns:datacite=\"http://datacite.org/schema/kernel-4\""
-            " xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\""
-            " xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\""
-            " xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n"
-            "    <datacite:identifier>preexisting-identifier-to-be-deleted</datacite:identifier>\n"
-            "    <datacite:alternateIdentifiers>\n"
-            "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n"
-            "    </datacite:alternateIdentifiers>\n"
-            "    <datacite:titles>\n"
-            "        <datacite:title>${title}</datacite:title>\n"
-            "    </datacite:titles>\n"
-            "    <datacite:creators>\n"
-            "        <datacite:creator>\n"
-            "            <datacite:creatorName>${creator}</datacite:creatorName>\n"
-            "        </datacite:creator>\n"
-            "    </datacite:creators>\n"
-            "    <dc:language>eng</dc:language>\n"
-            "    <datacite:dates>\n"
-            "        <datacite:date dateType=\"Issued\">${year}</datacite:date>\n"
-            "    </datacite:dates>\n"
-            "    <oaire:resourceType resourceTypeGeneral=\"literature\" uri=\"http://purl.org/coar/resource_type/c_93fc\">report</oaire:resourceType>\n"
-            "    <datacite:rights rightsURI=\"http://purl.org/coar/access_right/c_abf2\">open access</datacite:rights>\n"
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
+            "<oaire:resource",
+            " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n",
+            " xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n",
+            " xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n",
+            " xmlns:datacite=\"http://datacite.org/schema/kernel-4\"\n",
+            " xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\"\n",
+            " xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\"\n",
+            " xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
+            "    <datacite:identifier>preexisting-identifier-to-be-deleted</datacite:identifier>\n",
+            "    <datacite:alternateIdentifiers>\n",
+            "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n",
+            "    </datacite:alternateIdentifiers>\n",
+            "    <datacite:titles>\n",
+            "        <datacite:title>${title}</datacite:title>\n",
+            "    </datacite:titles>\n",
+            "    <datacite:creators>\n",
+            "        <datacite:creator>\n",
+            "            <datacite:creatorName>${creator}</datacite:creatorName>\n",
+            "        </datacite:creator>\n",
+            "    </datacite:creators>\n",
+            "    <dc:language>eng</dc:language>\n",
+            "    <datacite:dates>\n",
+            "        <datacite:date dateType=\"Issued\">${year}</datacite:date>\n",
+            "    </datacite:dates>\n",
+            "    <oaire:resourceType resourceTypeGeneral=\"literature\" uri=\"http://purl.org/coar/resource_type/c_93fc\">report</oaire:resourceType>\n",
+            "    <datacite:rights rightsURI=\"http://purl.org/coar/access_right/c_abf2\">open access</datacite:rights>\n",
             "</oaire:resource>"
         >>,
         input_qualifies_for_publication = true,
         exp_revised_metadata_generator = fun(ShareId, _ShareRecord) ->
             <<
-                "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n"
-                "<oaire:resource xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
-                " xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\""
-                " xmlns:dc=\"http://purl.org/dc/elements/1.1/\""
-                " xmlns:datacite=\"http://datacite.org/schema/kernel-4\""
-                " xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\""
-                " xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\""
-                " xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n"
-                "    <datacite:alternateIdentifiers>\n"
-                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n"
-                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n"
-                "    </datacite:alternateIdentifiers>\n"
-                "    <datacite:titles>\n"
-                "        <datacite:title>${title}</datacite:title>\n"
-                "    </datacite:titles>\n"
-                "    <datacite:creators>\n"
-                "        <datacite:creator>\n"
-                "            <datacite:creatorName>${creator}</datacite:creatorName>\n"
-                "        </datacite:creator>\n"
-                "    </datacite:creators>\n"
-                "    <dc:language>eng</dc:language>\n"
-                "    <datacite:dates>\n"
-                "        <datacite:date dateType=\"Issued\">${year}</datacite:date>\n"
-                "    </datacite:dates>\n"
-                "    <oaire:resourceType resourceTypeGeneral=\"literature\" uri=\"http://purl.org/coar/resource_type/c_93fc\">report</oaire:resourceType>\n"
-                "    <datacite:rights rightsURI=\"http://purl.org/coar/access_right/c_abf2\">open access</datacite:rights>\n"
+                "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
+                "<oaire:resource",
+                " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"",
+                " xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"",
+                " xmlns:dc=\"http://purl.org/dc/elements/1.1/\"",
+                " xmlns:datacite=\"http://datacite.org/schema/kernel-4\"",
+                " xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\"",
+                " xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\"",
+                " xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
+                "    <datacite:alternateIdentifiers>\n",
+                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
+                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n",
+                "    </datacite:alternateIdentifiers>\n",
+                "    <datacite:titles>\n",
+                "        <datacite:title>${title}</datacite:title>\n",
+                "    </datacite:titles>\n",
+                "    <datacite:creators>\n",
+                "        <datacite:creator>\n",
+                "            <datacite:creatorName>${creator}</datacite:creatorName>\n",
+                "        </datacite:creator>\n",
+                "    </datacite:creators>\n",
+                "    <dc:language>eng</dc:language>\n",
+                "    <datacite:dates>\n",
+                "        <datacite:date dateType=\"Issued\">${year}</datacite:date>\n",
+                "    </datacite:dates>\n",
+                "    <oaire:resourceType resourceTypeGeneral=\"literature\" uri=\"http://purl.org/coar/resource_type/c_93fc\">report</oaire:resourceType>\n",
+                "    <datacite:rights rightsURI=\"http://purl.org/coar/access_right/c_abf2\">open access</datacite:rights>\n",
                 "</oaire:resource>"
             >>
         end,
         exp_final_metadata_generator = fun(ShareId, _ShareRecord, PublicHandle) ->
             <<
-                "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n"
-                "<oaire:resource xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
-                " xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\""
-                " xmlns:dc=\"http://purl.org/dc/elements/1.1/\""
-                " xmlns:datacite=\"http://datacite.org/schema/kernel-4\""
-                " xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\""
-                " xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\""
-                " xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n"
-                "    ", (exp_primary_identifier(PublicHandle))/binary, "\n"
-                "    <datacite:alternateIdentifiers>\n"
-                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n"
-                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n"
-                "    </datacite:alternateIdentifiers>\n"
-                "    <datacite:titles>\n"
-                "        <datacite:title>${title}</datacite:title>\n"
-                "    </datacite:titles>\n"
-                "    <datacite:creators>\n"
-                "        <datacite:creator>\n"
-                "            <datacite:creatorName>${creator}</datacite:creatorName>\n"
-                "        </datacite:creator>\n"
-                "    </datacite:creators>\n"
-                "    <dc:language>eng</dc:language>\n"
-                "    <datacite:dates>\n"
-                "        <datacite:date dateType=\"Issued\">${year}</datacite:date>\n"
-                "    </datacite:dates>\n"
-                "    <oaire:resourceType resourceTypeGeneral=\"literature\" uri=\"http://purl.org/coar/resource_type/c_93fc\">report</oaire:resourceType>\n"
-                "    <datacite:rights rightsURI=\"http://purl.org/coar/access_right/c_abf2\">open access</datacite:rights>\n"
+                "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
+                "<oaire:resource",
+                " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"",
+                " xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"",
+                " xmlns:dc=\"http://purl.org/dc/elements/1.1/\"",
+                " xmlns:datacite=\"http://datacite.org/schema/kernel-4\"",
+                " xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\"",
+                " xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\"",
+                " xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
+                "    ", (exp_primary_identifier(PublicHandle))/binary, "\n",
+                "    <datacite:alternateIdentifiers>\n",
+                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
+                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n",
+                "    </datacite:alternateIdentifiers>\n",
+                "    <datacite:titles>\n",
+                "        <datacite:title>${title}</datacite:title>\n",
+                "    </datacite:titles>\n",
+                "    <datacite:creators>\n",
+                "        <datacite:creator>\n",
+                "            <datacite:creatorName>${creator}</datacite:creatorName>\n",
+                "        </datacite:creator>\n",
+                "    </datacite:creators>\n",
+                "    <dc:language>eng</dc:language>\n",
+                "    <datacite:dates>\n",
+                "        <datacite:date dateType=\"Issued\">${year}</datacite:date>\n",
+                "    </datacite:dates>\n",
+                "    <oaire:resourceType resourceTypeGeneral=\"literature\" uri=\"http://purl.org/coar/resource_type/c_93fc\">report</oaire:resourceType>\n",
+                "    <datacite:rights rightsURI=\"http://purl.org/coar/access_right/c_abf2\">open access</datacite:rights>\n",
                 "</oaire:resource>"
             >>
         end,
         exp_oai_pmh_metadata_generator = fun(?OAI_OPENAIRE_METADATA_PREFIX, ShareId, _ShareRecord, PublicHandle) ->
-                <<
-                    "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n"
-                    "<oaire:resource xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
-                    " xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\""
-                    " xmlns:dc=\"http://purl.org/dc/elements/1.1/\""
-                    " xmlns:datacite=\"http://datacite.org/schema/kernel-4\""
-                    " xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\""
-                    " xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\""
-                    " xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n"
-                    "    ", (exp_primary_identifier(PublicHandle))/binary, "\n"
-                    "    <datacite:alternateIdentifiers>\n"
-                    "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n"
-                    "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n"
-                    "    </datacite:alternateIdentifiers>\n"
-                    "    <datacite:titles>\n"
-                    "        <datacite:title>${title}</datacite:title>\n"
-                    "    </datacite:titles>\n"
-                    "    <datacite:creators>\n"
-                    "        <datacite:creator>\n"
-                    "            <datacite:creatorName>${creator}</datacite:creatorName>\n"
-                    "        </datacite:creator>\n"
-                    "    </datacite:creators>\n"
-                    "    <dc:language>eng</dc:language>\n"
-                    "    <datacite:dates>\n"
-                    "        <datacite:date dateType=\"Issued\">${year}</datacite:date>\n"
-                    "    </datacite:dates>\n"
-                    "    <oaire:resourceType resourceTypeGeneral=\"literature\" uri=\"http://purl.org/coar/resource_type/c_93fc\">report</oaire:resourceType>\n"
-                    "    <datacite:rights rightsURI=\"http://purl.org/coar/access_right/c_abf2\">open access</datacite:rights>\n"
-                    "</oaire:resource>"
-                >>
+            <<
+                "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
+                "<oaire:resource",
+                " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"",
+                " xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"",
+                " xmlns:dc=\"http://purl.org/dc/elements/1.1/\"",
+                " xmlns:datacite=\"http://datacite.org/schema/kernel-4\"",
+                " xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\"",
+                " xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\"",
+                " xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
+                "    ", (exp_primary_identifier(PublicHandle))/binary, "\n",
+                "    <datacite:alternateIdentifiers>\n",
+                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
+                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n",
+                "    </datacite:alternateIdentifiers>\n",
+                "    <datacite:titles>\n",
+                "        <datacite:title>${title}</datacite:title>\n",
+                "    </datacite:titles>\n",
+                "    <datacite:creators>\n",
+                "        <datacite:creator>\n",
+                "            <datacite:creatorName>${creator}</datacite:creatorName>\n",
+                "        </datacite:creator>\n",
+                "    </datacite:creators>\n",
+                "    <dc:language>eng</dc:language>\n",
+                "    <datacite:dates>\n",
+                "        <datacite:date dateType=\"Issued\">${year}</datacite:date>\n",
+                "    </datacite:dates>\n",
+                "    <oaire:resourceType resourceTypeGeneral=\"literature\" uri=\"http://purl.org/coar/resource_type/c_93fc\">report</oaire:resourceType>\n",
+                "    <datacite:rights rightsURI=\"http://purl.org/coar/access_right/c_abf2\">open access</datacite:rights>\n",
+                "</oaire:resource>"
+            >>
         end
     }
 ].
