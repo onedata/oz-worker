@@ -19,7 +19,7 @@
  {<<"certifi">>,{pkg,<<"certifi">>,<<"2.6.1">>},2},
  {<<"cluster_manager">>,
   {raw,"ssh://git@git.onedata.org:7999/vfs/cluster-manager.git",
-       {mod_ref,git,{ref,"fe6256834b73cf107dfa2e1dc4bc0adc60c0e11e"},[]}},
+       {mod_ref,git,{ref,"b8fbe6c9c4535b48e36f2027f397a0b914ea1ef3"},[]}},
   0},
  {<<"cluster_worker">>,
   {git,"ssh://git@git.onedata.org:7999/vfs/cluster-worker.git",
