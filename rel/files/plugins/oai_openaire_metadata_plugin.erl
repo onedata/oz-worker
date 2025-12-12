@@ -5,10 +5,18 @@
 %%% cited in 'LICENSE.txt'.
 %%% @doc
 %%% Implementation of the onezone_plugin_behaviour and the handle_metadata_plugin_behaviour
-%%% for handling DataCite metadata schema ("oai_datacite").
+%%% for handling OpenAIRE metadata schema ("oai_openaire").
 %%% @see handle_metadata_plugin_behaviour for general information about metadata plugins.
 %%%
-%%% fixme
+%%% Metadata revision step (the same as for @see oai_datacite_metadata_plugin):
+%%%   * remove preexisting identifier element(s) (to be overwritten in the next step)
+%%%   * add an alternateIdentifier element with the value equal to the public share URL
+%%%
+%%% Public handle insertion step (the same as for @see oai_datacite_metadata_plugin):
+%%%   * insert an identifier element (serving as primary) with the value equal to the public handle
+%%%
+%%% Adaptation for OAI-PMH step:
+%%%   * no changes needed, return the metadata in the "oaire:resource" tag
 %%% @end
 %%%-------------------------------------------------------------------
 -module(oai_openaire_metadata_plugin).
@@ -18,6 +26,10 @@
 -behaviour(handle_metadata_plugin_behaviour).
 
 -include("http/public_data/oai.hrl").
+
+
+%% @TODO VFS-13218 swagger updates for oai_openaire
+%% @TODO VFS-13218 improve swagger definitions to remove redundancy
 
 
 %% onezone_plugin_behaviour callbacks
@@ -74,13 +86,13 @@ supported_oai_pmh_metadata_prefixes() ->
 %% @doc {@link handle_metadata_plugin_behaviour} callback schema_URL/1
 -spec schema_URL(oai_metadata:prefix()) -> binary().
 schema_URL(?OAI_OPENAIRE_METADATA_PREFIX) ->
-    <<"http://schema.datacite.org/fixme">>.
+    <<"https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd">>.
 
 
 %% @doc {@link handle_metadata_plugin_behaviour} callback main_namespace/1
 -spec main_namespace(oai_metadata:prefix()) -> {atom(), binary()}.
 main_namespace(?OAI_OPENAIRE_METADATA_PREFIX) ->
-    {'xmlns', <<"http://schema.datacite.org/fixme">>}.
+    {'xmlns', <<"http://namespace.openaire.eu/schema/oaire/">>}.
 
 
 %% @doc {@link handle_metadata_plugin_behaviour} callback revise_for_publication/3
@@ -183,7 +195,13 @@ ensure_alternate_url_identifier(Value, #xmlElement{name = 'datacite:alternateIde
             AIXml;
         error ->
             AIXml#xmlElement{
-                content = oai_xml:prepend_element_with_indent(8, ?alternate_url_identifier_element(Value), Content)
+                content = lists:flatten([
+                    oai_xml:prepend_element_with_indent(8, ?alternate_url_identifier_element(Value), Content),
+                    case Content of
+                        [] -> #xmlText{value = "\n    "};
+                        _ -> []
+                    end
+                ])
             }
     end.
 
@@ -224,18 +242,73 @@ validation_examples() -> [
         input_qualifies_for_publication = false
     },
 
-    % fixme try to retain newlines between attributes like in EDM
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
-            "<oaire:resource",
-            " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n",
-            " xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n",
-            " xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n",
-            " xmlns:datacite=\"http://datacite.org/schema/kernel-4\"\n",
-            " xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\"\n",
-            " xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\"\n",
-            " xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
+            "<oaire:resource xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
+            "    <datacite:titles>\n",
+            "        <datacite:title>${title}</datacite:title>\n",
+            "    </datacite:titles>\n"
+            "</oaire:resource>"
+        >>,
+        input_qualifies_for_publication = true,
+        exp_revised_metadata_generator = fun(ShareId, _ShareRecord) ->
+            <<
+                "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
+                "<oaire:resource\n",
+                "    xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
+                "    <datacite:alternateIdentifiers>\n",
+                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
+                "    </datacite:alternateIdentifiers>\n",
+                "    <datacite:titles>\n",
+                "        <datacite:title>${title}</datacite:title>\n",
+                "    </datacite:titles>\n",
+                "</oaire:resource>"
+            >>
+        end,
+        exp_final_metadata_generator = fun(ShareId, _ShareRecord, PublicHandle) ->
+            <<
+                "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
+                "<oaire:resource\n",
+                "    xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
+                "    ", (exp_primary_identifier(PublicHandle))/binary, "\n",
+                "    <datacite:alternateIdentifiers>\n",
+                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
+                "    </datacite:alternateIdentifiers>\n",
+                "    <datacite:titles>\n",
+                "        <datacite:title>${title}</datacite:title>\n",
+                "    </datacite:titles>\n",
+                "</oaire:resource>"
+            >>
+        end,
+        exp_oai_pmh_metadata_generator = fun(?OAI_OPENAIRE_METADATA_PREFIX, ShareId, _ShareRecord, PublicHandle) ->
+            <<
+                "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
+                "<oaire:resource\n",
+                "    xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
+                "    ", (exp_primary_identifier(PublicHandle))/binary, "\n",
+                "    <datacite:alternateIdentifiers>\n",
+                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
+                "    </datacite:alternateIdentifiers>\n",
+                "    <datacite:titles>\n",
+                "        <datacite:title>${title}</datacite:title>\n",
+                "    </datacite:titles>\n",
+                "</oaire:resource>"
+            >>
+        end
+    },
+
+    #handle_metadata_plugin_validation_example{
+        input_raw_xml = <<
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
+            "<oaire:resource\n",
+            "    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n",
+            "    xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n",
+            "    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n",
+            "    xmlns:datacite=\"http://datacite.org/schema/kernel-4\"\n",
+            "    xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\"\n",
+            "    xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\"\n",
+            "    xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
             "    <datacite:identifier>preexisting-identifier-to-be-deleted</datacite:identifier>\n",
             "    <datacite:alternateIdentifiers>\n",
             "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n",
@@ -260,14 +333,14 @@ validation_examples() -> [
         exp_revised_metadata_generator = fun(ShareId, _ShareRecord) ->
             <<
                 "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-                "<oaire:resource",
-                " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"",
-                " xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"",
-                " xmlns:dc=\"http://purl.org/dc/elements/1.1/\"",
-                " xmlns:datacite=\"http://datacite.org/schema/kernel-4\"",
-                " xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\"",
-                " xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\"",
-                " xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
+                "<oaire:resource\n",
+                "    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n",
+                "    xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n",
+                "    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n",
+                "    xmlns:datacite=\"http://datacite.org/schema/kernel-4\"\n",
+                "    xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\"\n",
+                "    xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\"\n",
+                "    xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
                 "    <datacite:alternateIdentifiers>\n",
                 "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
                 "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n",
@@ -292,14 +365,14 @@ validation_examples() -> [
         exp_final_metadata_generator = fun(ShareId, _ShareRecord, PublicHandle) ->
             <<
                 "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-                "<oaire:resource",
-                " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"",
-                " xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"",
-                " xmlns:dc=\"http://purl.org/dc/elements/1.1/\"",
-                " xmlns:datacite=\"http://datacite.org/schema/kernel-4\"",
-                " xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\"",
-                " xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\"",
-                " xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
+                "<oaire:resource\n",
+                "    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n",
+                "    xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n",
+                "    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n",
+                "    xmlns:datacite=\"http://datacite.org/schema/kernel-4\"\n",
+                "    xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\"\n",
+                "    xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\"\n",
+                "    xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
                 "    ", (exp_primary_identifier(PublicHandle))/binary, "\n",
                 "    <datacite:alternateIdentifiers>\n",
                 "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
@@ -325,14 +398,14 @@ validation_examples() -> [
         exp_oai_pmh_metadata_generator = fun(?OAI_OPENAIRE_METADATA_PREFIX, ShareId, _ShareRecord, PublicHandle) ->
             <<
                 "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-                "<oaire:resource",
-                " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"",
-                " xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"",
-                " xmlns:dc=\"http://purl.org/dc/elements/1.1/\"",
-                " xmlns:datacite=\"http://datacite.org/schema/kernel-4\"",
-                " xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\"",
-                " xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\"",
-                " xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
+                "<oaire:resource\n",
+                "    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n",
+                "    xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n",
+                "    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n",
+                "    xmlns:datacite=\"http://datacite.org/schema/kernel-4\"\n",
+                "    xmlns:vc=\"http://www.w3.org/2007/XMLSchema-versioning\"\n",
+                "    xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\"\n",
+                "    xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
                 "    ", (exp_primary_identifier(PublicHandle))/binary, "\n",
                 "    <datacite:alternateIdentifiers>\n",
                 "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",

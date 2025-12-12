@@ -159,7 +159,9 @@ validation_examples() -> [
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-            "<metadata xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
+            "<metadata\n"
+            "    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n"
+            "    xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
             "    <dc:title>Test dataset</dc:title>\n",
             "    <dc:creator>John Johnson</dc:creator>\n",
             "    <dc:creator>Jane Doe</dc:creator>\n",
@@ -177,7 +179,9 @@ validation_examples() -> [
         input_qualifies_for_publication = true,
         exp_revised_metadata_generator = fun(ShareId, _ShareRecord) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-            "<metadata xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
+            "<metadata\n"
+            "    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n"
+            "    xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
             "    <dc:identifier>", (od_share:build_public_url(ShareId))/binary, "</dc:identifier>\n",
             "    <dc:title>Test dataset</dc:title>\n",
             "    <dc:creator>John Johnson</dc:creator>\n",
@@ -195,7 +199,9 @@ validation_examples() -> [
         >> end,
         exp_final_metadata_generator = fun(ShareId, _ShareRecord, PublicHandle) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-            "<metadata xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
+            "<metadata\n"
+            "    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n"
+            "    xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
             "    <dc:identifier>", PublicHandle/binary, "</dc:identifier>\n",
             "    <dc:identifier>", (od_share:build_public_url(ShareId))/binary, "</dc:identifier>\n",
             "    <dc:title>Test dataset</dc:title>\n",
@@ -214,12 +220,11 @@ validation_examples() -> [
         >> end,
         exp_oai_pmh_metadata_generator = fun(?OAI_DC_METADATA_PREFIX, ShareId, _ShareRecord, PublicHandle) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-            "<oai_dc:dc"
-            " xmlns:oai_dc=\"http://www.openarchives.org/OAI/2.0/oai_dc/\"",
-            " xmlns:dc=\"http://purl.org/dc/elements/1.1/\"",
-            " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"",
-            " xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd\"",
-            ">\n"
+            "<oai_dc:dc\n"
+            "    xmlns:oai_dc=\"http://www.openarchives.org/OAI/2.0/oai_dc/\"\n",
+            "    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n",
+            "    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n",
+            "    xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd\">\n"
             "    <dc:identifier>", PublicHandle/binary, "</dc:identifier>\n",
             "    <dc:identifier>", (od_share:build_public_url(ShareId))/binary, "</dc:identifier>\n",
             "    <dc:title>Test dataset</dc:title>\n",
@@ -263,12 +268,11 @@ validation_examples() -> [
         >> end,
         exp_oai_pmh_metadata_generator = fun(?OAI_DC_METADATA_PREFIX, ShareId, _ShareRecord, PublicHandle) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-            "<oai_dc:dc"
-            " xmlns:oai_dc=\"http://www.openarchives.org/OAI/2.0/oai_dc/\"",
-            " xmlns:dc=\"http://purl.org/dc/elements/1.1/\"",
-            " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"",
-            " xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd\"",
-            ">\n",
+            "<oai_dc:dc\n"
+            "    xmlns:oai_dc=\"http://www.openarchives.org/OAI/2.0/oai_dc/\"\n",
+            "    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n",
+            "    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n",
+            "    xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd\">\n",
             "    <dc:identifier>", PublicHandle/binary, "</dc:identifier>\n",
             "    <dc:identifier>", (od_share:build_public_url(ShareId))/binary, "</dc:identifier>\n",
             "    <dc:contributor>John Doe</dc:contributor>\n",

@@ -18,11 +18,11 @@
 %%% This plugin uses "oai_datacite" to denote the baseline metadata schema and supports
 %%% the two above-mentioned formats of its dissemination via OAI-PMH.
 %%%
-%%% Metadata revision step (the same as for @see datacite_metadata_plugin):
+%%% Metadata revision step:
 %%%   * remove preexisting identifier element(s) (to be overwritten in the next step)
 %%%   * add an alternateIdentifier element with the value equal to the public share URL
 %%%
-%%% Public handle insertion step (the same as for @see datacite_metadata_plugin):
+%%% Public handle insertion step:
 %%%   * insert an identifier element (serving as primary) with the value equal to the public handle
 %%%
 %%% Adaptation for OAI-PMH step:
@@ -298,7 +298,9 @@ validation_examples() -> [
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-            "<resource xmlns=\"http://datacite.org/schema/kernel-4\" xsi:schemaLocation=\"http://datacite.org/schema/kernel-4 http://schema.datacite.org/meta/kernel-4.3/metadata.xsd\">\n"
+            "<resource\n"
+            "    xmlns=\"http://datacite.org/schema/kernel-4\"\n"
+            "    xsi:schemaLocation=\"http://datacite.org/schema/kernel-4 http://schema.datacite.org/meta/kernel-4.3/metadata.xsd\">\n"
             "    <identifier>preexisting-identifier-to-be-deleted</identifier>\n"
             "    <alternateIdentifiers>\n"
             "        <alternateIdentifier alternateIdentifierType=\"oai\">oai:example.com:1234567</alternateIdentifier>\n"
@@ -330,7 +332,9 @@ validation_examples() -> [
         exp_revised_metadata_generator = fun(ShareId, _ShareRecord) ->
             <<
                 "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-                "<resource xmlns=\"http://datacite.org/schema/kernel-4\" xsi:schemaLocation=\"http://datacite.org/schema/kernel-4 http://schema.datacite.org/meta/kernel-4.3/metadata.xsd\">\n"
+                "<resource\n"
+                "    xmlns=\"http://datacite.org/schema/kernel-4\"\n"
+                "    xsi:schemaLocation=\"http://datacite.org/schema/kernel-4 http://schema.datacite.org/meta/kernel-4.3/metadata.xsd\">\n"
                 "    <alternateIdentifiers>\n"
                 "        <alternateIdentifier alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</alternateIdentifier>\n"
                 "        <alternateIdentifier alternateIdentifierType=\"oai\">oai:example.com:1234567</alternateIdentifier>\n"
@@ -361,7 +365,9 @@ validation_examples() -> [
         exp_final_metadata_generator = fun(ShareId, _ShareRecord, PublicHandle) ->
             <<
                 "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-                "<resource xmlns=\"http://datacite.org/schema/kernel-4\" xsi:schemaLocation=\"http://datacite.org/schema/kernel-4 http://schema.datacite.org/meta/kernel-4.3/metadata.xsd\">\n",
+                "<resource\n"
+                "    xmlns=\"http://datacite.org/schema/kernel-4\"\n"
+                "    xsi:schemaLocation=\"http://datacite.org/schema/kernel-4 http://schema.datacite.org/meta/kernel-4.3/metadata.xsd\">\n"
                 "    ", (exp_primary_identifier(PublicHandle))/binary, "\n"
                 "    <alternateIdentifiers>\n"
                 "        <alternateIdentifier alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</alternateIdentifier>\n"
@@ -396,18 +402,22 @@ validation_examples() -> [
                 [_PrologLine, ExpDataCiteMetadata] = binary:split(OaiPmhEntry, <<"\n">>),
                 <<
                     "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-                    "<oai_datacite xmlns=\"http://schema.datacite.org/oai/oai-1.1/\" xsi:schemaLocation=\"http://schema.datacite.org/oai/oai-1.1/ http://schema.datacite.org/oai/oai-1.1/oai.xsd\">\n"
-                    "    <schemaVersion>4</schemaVersion>\n"
-                    "    <datacentreSymbol>", (oz_worker:get_domain())/binary, "</datacentreSymbol>\n"
+                    "<oai_datacite\n",
+                    "    xmlns=\"http://schema.datacite.org/oai/oai-1.1/\"\n"
+                    "    xsi:schemaLocation=\"http://schema.datacite.org/oai/oai-1.1/ http://schema.datacite.org/oai/oai-1.1/oai.xsd\">\n",
+                    "    <schemaVersion>4</schemaVersion>\n",
+                    "    <datacentreSymbol>", (oz_worker:get_domain())/binary, "</datacentreSymbol>\n",
                     "    <payload>\n",
                     ExpDataCiteMetadata/binary, "\n",
-                    "    </payload>\n"
+                    "    </payload>\n",
                     "</oai_datacite>"
                 >>;
             F(?DATACITE_METADATA_PREFIX, ShareId, _ShareRecord, PublicHandle) ->
                 <<
                     "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-                    "<resource xmlns=\"http://datacite.org/schema/kernel-4\" xsi:schemaLocation=\"http://datacite.org/schema/kernel-4 http://schema.datacite.org/meta/kernel-4.3/metadata.xsd\">\n",
+                    "<resource\n"
+                    "    xmlns=\"http://datacite.org/schema/kernel-4\"\n"
+                    "    xsi:schemaLocation=\"http://datacite.org/schema/kernel-4 http://schema.datacite.org/meta/kernel-4.3/metadata.xsd\">\n",
                     "    ", (exp_primary_identifier(PublicHandle))/binary, "\n"
                     "    <alternateIdentifiers>\n"
                     "        <alternateIdentifier alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</alternateIdentifier>\n"

@@ -42,9 +42,13 @@ parse(Metadata) ->
 
 -spec encode(od_handle:parsed_metadata()) -> od_handle:raw_metadata().
 encode(Xml) ->
-    str_utils:unicode_list_to_binary(xmerl:export_simple([Xml], xmerl_xml, [
+    RawMetadata0 = str_utils:unicode_list_to_binary(xmerl:export_simple([Xml], xmerl_xml, [
         {prolog, ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n"]}
-    ])).
+    ])),
+    % format the namespace attributes nicely (each in a new, indented line)
+    RawMetadata1 = re:replace(RawMetadata0, <<" xmlns">>, <<"\n    xmlns">>, [global]),
+    RawMetadata2 = re:replace(RawMetadata1, <<" xsi">>, <<"\n    xsi">>, [global]),
+    iolist_to_binary(RawMetadata2).
 
 
 %%-------------------------------------------------------------------
