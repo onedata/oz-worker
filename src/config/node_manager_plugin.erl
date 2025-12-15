@@ -45,10 +45,10 @@
 % Human readable version is included to for logging purposes. It's the last version
 % where this cluster generation was the current one.
 -define(CLUSTER_GENERATIONS, [
-    {1, ?LINE_19_02},
-    {2, ?LINE_20_02},
-    {3, ?LINE_21_02(<<"4">>)},
-    {4, ?LINE_21_02(<<"7">>)},
+    {1, <<"19.02.5">>},
+    {2, <<"20.02.20">>},
+    {3, <<"21.02.4">>},
+    {4, <<"21.02.7">>},
     {5, oz_worker:get_release_version()}
 ]).
 -define(OLDEST_UPGRADABLE_CLUSTER_GENERATION, 2).
