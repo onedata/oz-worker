@@ -1530,6 +1530,16 @@ example_input_metadata(MetadataSchema) ->
                 },
                 Content
             )};
+        ?OAI_OPENAIRE_METADATA_PREFIX ->
+            #xmlElement{name = 'oaire:resource', content = Content} = ParsedXml,
+            ParsedXml#xmlElement{content = oai_xml:prepend_element_with_indent(
+                4, #xmlElement{
+                    name = 'datacite:identifier',
+                    attributes = [#xmlAttribute{name = 'datacite:identifierType', value = "URN"}],
+                    content = [#xmlText{value = binary_to_list(?RAND_UNICODE_STR())}]
+                },
+                Content
+            )};
         ?EDM_METADATA_PREFIX ->
             #xmlElement{name = 'rdf:RDF', content = Content} = ParsedXml,
             ParsedXml#xmlElement{content = oai_xml:prepend_element_with_indent(

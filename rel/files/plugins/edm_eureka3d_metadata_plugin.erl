@@ -175,9 +175,7 @@ adapt_for_oai_pmh(?EDM_METADATA_PREFIX, RdfXml) ->
 %% @doc {@link handle_metadata_plugin_behaviour} callback encode_xml/1
 -spec encode_xml(od_handle:parsed_metadata()) -> od_handle:raw_metadata().
 encode_xml(Metadata) ->
-    RawMetadata = oai_xml:encode(Metadata),
-    % format the namespace attributes nicely (each in a new, indented line)
-    iolist_to_binary(re:replace(RawMetadata, <<" xmlns:">>, <<"\n    xmlns:">>, [global])).
+    oai_xml:encode(Metadata).
 
 
 %% @doc {@link handle_metadata_plugin_behaviour} callback validation_examples/0
