@@ -6,6 +6,9 @@ CHANGELOG
 
 ### 25.0
 
+-   **VFS-13188** Added support for OpenAIRE metadata format in public
+    data records, including APIs and the OAI-PMH endpoint for
+    "oai\_openaire" metadata prefix.
 -   **VFS-13153** Web GUI: Fixed random lack of login methods on custom
     login page.
 -   **VFS-13104** Web GUI: Improved loading feedback on the Members
