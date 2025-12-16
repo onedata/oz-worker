@@ -211,7 +211,7 @@ choose_provider_for_request_handling_internal(#od_space{eff_providers = EffProvi
                 false;
             true ->
                 ProviderVsn = od_cluster:get_worker_release_version(ProviderId),
-                IsUpToDate = equal == onedata:compare_release_line(OnezoneVsn, ProviderVsn),
+                IsUpToDate = equal == onedata:compare_release_year(OnezoneVsn, ProviderVsn),
                 HasAnyReadwriteSupport = has_any_readwrite_support_from(Space, ProviderId),
                 Priority = case {IsUpToDate, HasAnyReadwriteSupport} of
                     {true, true} -> 1; % up-to-date providers with readwrite support are preferred
