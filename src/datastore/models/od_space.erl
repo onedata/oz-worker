@@ -203,15 +203,13 @@ choose_provider_for_request_handling_internal(SpaceId) when is_binary(SpaceId) -
     end;
 
 choose_provider_for_request_handling_internal(#od_space{eff_providers = EffProviders} = Space) ->
-    OnezoneVsn = oz_worker:get_release_version(),
-
     EligibleProvidersWithPriorities = lists:filtermap(fun(ProviderId) ->
         case provider_connections:is_online(ProviderId) of
             false ->
                 false;
             true ->
                 ProviderVsn = od_cluster:get_worker_release_version(ProviderId),
-                IsUpToDate = equal == onedata:compare_release_year(OnezoneVsn, ProviderVsn),
+                IsUpToDate = is_provider_up_to_date_with_onezone(ProviderVsn),
                 HasAnyReadwriteSupport = has_any_readwrite_support_from(Space, ProviderId),
                 Priority = case {IsUpToDate, HasAnyReadwriteSupport} of
                     {true, true} -> 1; % up-to-date providers with readwrite support are preferred
@@ -264,6 +262,25 @@ update_support_parameters_registry(SpaceId, Diff) ->
                 {ok, Space#od_space{support_parameters_registry = NewRegistry}}
         end
     end).
+
+
+%% @private
+-spec is_provider_up_to_date_with_onezone(onedata:release_version()) -> boolean().
+is_provider_up_to_date_with_onezone(ProviderVsn) ->
+    OnezoneVsn = oz_worker:get_release_version(),
+    case onedata:compare_release_year(OnezoneVsn, ProviderVsn) of
+        equal ->
+            true;
+        _ ->
+            % providers in vsn 21.02.* are considered up to date with Onezone in vsn 25.*
+            case onedata:compare_release_year(ProviderVsn, ?VSN_21_02_1) of
+                equal ->
+                    equal == onedata:compare_release_year(OnezoneVsn, ?VSN_25_0);
+                _ ->
+                    false
+            end
+    end.
+
 
 %%%===================================================================
 %%% datastore_model callbacks

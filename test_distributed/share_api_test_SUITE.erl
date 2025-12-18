@@ -679,21 +679,52 @@ choose_provider_for_public_share_handling_test(Config) ->
     OmegaUpToDate = ozt_providers:create(),
     TauUpToDateReadonly = ozt_providers:create(),
 
-    <<OzWorkerReleaseLine:5/binary, _/binary>> = ozt:rpc(oz_worker, get_release_version, []),
+    OnezoneVsn = ozt:rpc(oz_worker, get_release_version, []),
+    UpToDatePrefixes = case onedata:compare_release_year(OnezoneVsn, ?VSN_25_0) of
+        equal ->
+            % providers in vsn 21.02.* are considered up to date with Onezone in vsn 25.*
+            [<<"25">>, <<"25.0">>, <<"25.1">>, <<"25.7">>, <<"21.02">>];
+        _ ->
+            <<OzWorkerReleaseYear:2/binary, _/binary>> = OnezoneVsn,
+            lists:duplicate(5, OzWorkerReleaseYear)
+    end,
+
+    BuildVsn = fun(VsnPrefix, Minor, LabelSpec, LabelOrdinal) ->
+        BaseVsn = <<VsnPrefix/binary, ".", Minor/binary>>,
+        Label = case LabelSpec of
+            undefined ->
+                <<"">>;
+            _ ->
+                case onedata:compare_release_year(BaseVsn, ?VSN_21_02_1) of
+                    greater -> <<"-", LabelSpec/binary, ".", (integer_to_binary(LabelOrdinal))/binary>>;
+                    _ -> <<"-", LabelSpec/binary, (integer_to_binary(LabelOrdinal))/binary>>
+                end
+        end,
+        <<BaseVsn/binary, Label/binary>>
+    end,
 
     ProviderVersion = fun(PrId) ->
         case PrId of
-            AlphaOffline -> <<OzWorkerReleaseLine/binary, ".1">>;
-            BetaOffline -> <<"18.02.3">>;
-            EpsilonOfflineReadonly -> <<OzWorkerReleaseLine/binary, ".1">>;
+            AlphaOffline ->
+                BuildVsn(lists:nth(1, UpToDatePrefixes), <<"1">>, undefined, undefined);
+            BetaOffline ->
+                <<"18.02.3">>;
+            EpsilonOfflineReadonly ->
+                BuildVsn(lists:nth(2, UpToDatePrefixes), <<"1">>, <<"beta">>, 2);
 
-            GammaLegacy -> <<"19.02.1">>;
-            DeltaLegacy -> <<"20.02.1">>;
-            RhoLegacyReadonly -> <<"20.02.19">>;
+            GammaLegacy ->
+                <<"19.02.0-beta3">>;
+            DeltaLegacy ->
+                <<"20.02.0-rc6">>;
+            RhoLegacyReadonly ->
+                <<"20.02.19">>;
 
-            SigmaUpToDate -> <<OzWorkerReleaseLine/binary, ".0-rc1">>;
-            OmegaUpToDate -> <<OzWorkerReleaseLine/binary, ".2">>;
-            TauUpToDateReadonly -> <<OzWorkerReleaseLine/binary, ".0-alpha37">>
+            SigmaUpToDate ->
+                BuildVsn(lists:nth(3, UpToDatePrefixes), <<"0">>, <<"rc">>, 1);
+            OmegaUpToDate ->
+                BuildVsn(lists:nth(4, UpToDatePrefixes), <<"2">>, undefined, undefined);
+            TauUpToDateReadonly ->
+                BuildVsn(lists:nth(5, UpToDatePrefixes), <<"6">>, <<"alpha">>, 37)
         end
     end,
 
