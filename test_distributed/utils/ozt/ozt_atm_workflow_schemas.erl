@@ -96,7 +96,7 @@ get_atm_lambdas(AtmInventoryId) ->
     Lambdas.
 
 
--spec update(aai:auth(), od_atm_workflow_schema:id(), entity_logic:data()) -> ok | errors:error().
+-spec update(aai:auth(), od_atm_workflow_schema:id(), entity_logic:data()) -> ok.
 update(Auth, AtmWorkflowSchemaId, Data) ->
     ?assertMatch(ok, try_update(Auth, AtmWorkflowSchemaId, Data)).
 

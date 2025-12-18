@@ -38,7 +38,8 @@
     create_test/1,
     get_test/1,
     update_test/1,
-    delete_test/1
+    delete_test/1,
+    do_not_request_public_handle_test/1
 ]).
 
 all() ->
@@ -48,7 +49,8 @@ all() ->
         list_privileges_test,
         get_test,
         update_test,
-        delete_test
+        delete_test,
+        do_not_request_public_handle_test
     ]).
 
 
@@ -274,32 +276,7 @@ create_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, undefined)),
-
-    BuildPayload = fun(ShareId) -> #{
-        <<"handleServiceId">> => PidHService,
-        <<"resourceType">> => <<"Share">>,
-        <<"resourceId">> => ShareId,
-        <<"metadata">> => RawMetadata,
-        <<"metadataSchema">> => MetadataSchema
-    } end,
-
-    ShareAlpha = ozt_shares:create(S1),
-    ExpShareLinkAlpha = api_test_expect:expected_public_share_url(ShareAlpha),
-    HandleAlpha = ozt_handles:create(maps:merge(BuildPayload(ShareAlpha), #{
-        <<"requestPublicHandle">> => false
-    })),
-    ?assertEqual(ExpShareLinkAlpha, (ozt_handles:get(HandleAlpha))#od_handle.public_handle),
-    ?assert(nomatch /= string:find((ozt_handles:get(HandleAlpha))#od_handle.metadata, ExpShareLinkAlpha)),
-
-    ShareBeta = ozt_shares:create(S1),
-    PublicHandleToReuse = <<"https://example.com/12345">>,
-    HandleBeta = ozt_handles:create(maps:merge(BuildPayload(ShareBeta), #{
-        <<"requestPublicHandle">> => false,
-        <<"publicHandleToReuse">> => PublicHandleToReuse
-    })),
-    ?assertEqual(PublicHandleToReuse, (ozt_handles:get(HandleBeta))#od_handle.public_handle),
-    ?assert(nomatch /= string:find((ozt_handles:get(HandleBeta))#od_handle.metadata, PublicHandleToReuse)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, undefined)).
 
 
 get_test(Config) ->
@@ -642,6 +619,47 @@ delete_test(Config) ->
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
+
+
+do_not_request_public_handle_test(_Config) ->
+    Space = ozt_users:create_space_for(ozt_users:create()),
+    PidHService = ozt_handle_services:create(?RAND_STR(), ?PID_SERVICE),
+    MetadataSchema = ?RAND_ELEMENT(ozt_handles:supported_metadata_schemas()),
+    RawInitialMetadata = ozt_handles:example_input_metadata(MetadataSchema, 1),
+    RawMetadataForUpdate = ozt_handles:example_input_metadata(MetadataSchema, 2),
+
+    BuildPayload = fun(ShareId) -> #{
+        <<"handleServiceId">> => PidHService,
+        <<"resourceType">> => <<"Share">>,
+        <<"resourceId">> => ShareId,
+        <<"metadata">> => RawInitialMetadata,
+        <<"metadataSchema">> => MetadataSchema
+    } end,
+
+    ShareAlpha = ozt_shares:create(Space),
+    HandleAlpha = ozt_handles:create(maps:merge(BuildPayload(ShareAlpha), #{
+        <<"requestPublicHandle">> => false
+    })),
+    ExpShareLinkAlpha = api_test_expect:expected_public_share_url(ShareAlpha),
+    do_not_request_public_handle_test(HandleAlpha, ExpShareLinkAlpha, RawMetadataForUpdate),
+
+    ShareBeta = ozt_shares:create(Space),
+    PublicHandleToReuse = <<"https://example.com/12345">>,
+    HandleBeta = ozt_handles:create(maps:merge(BuildPayload(ShareBeta), #{
+        <<"requestPublicHandle">> => false,
+        <<"publicHandleToReuse">> => PublicHandleToReuse
+    })),
+    do_not_request_public_handle_test(HandleBeta, PublicHandleToReuse, RawMetadataForUpdate).
+
+
+do_not_request_public_handle_test(HandleAlpha, ExpShareLinkAlpha, RawMetadataForUpdate) ->
+    ?assertEqual(ExpShareLinkAlpha, (ozt_handles:get(HandleAlpha))#od_handle.public_handle),
+    ?assert(nomatch /= string:find((ozt_handles:get(HandleAlpha))#od_handle.metadata, ExpShareLinkAlpha)),
+    ozt_handles:update(HandleAlpha, #{<<"metadata">> => RawMetadataForUpdate}),
+    ?assertEqual(ExpShareLinkAlpha, (ozt_handles:get(HandleAlpha))#od_handle.public_handle),
+    ?assert(nomatch /= string:find((ozt_handles:get(HandleAlpha))#od_handle.metadata, ExpShareLinkAlpha)),
+    ozt_handles:delete(HandleAlpha),
+    ?assertMatch(?ERROR_NOT_FOUND, ozt_handles:try_get(HandleAlpha)).
 
 
 %%%===================================================================

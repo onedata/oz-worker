@@ -109,11 +109,17 @@ unregister_handle(HandleId) ->
             ?DOI_IDENTIFIER(DoiHandle) = PublicHandle,
             DoiHandle;
         _ -> % <<"PID">> and other types
-            % the public handle looks like this: "http://hdl.handle.net/21.T15999/abcd"
-            % the handle for the above is: "abcd"   (doesn't include prefix!)
             Prefix = maps:get(<<"prefix">>, ServiceProperties),
-            [_ServiceUrl, PidHandle] = binary:split(PublicHandle, <<Prefix/binary, "/">>),
-            PidHandle
+            case binary:split(PublicHandle, <<Prefix/binary, "/">>) of
+                [_ServiceUrl, PidHandle] ->
+                    % PID: the public handle looks like this: "http://hdl.handle.net/21.T15999/abcd"
+                    % the handle for the above is: "abcd"   (doesn't include prefix!)
+                    PidHandle;
+                [CustomHandle] ->
+                    % Others: it's possible to reuse external handles or just use the Share URL
+                    % as the public handle
+                    CustomHandle
+            end
     end,
     HandleEncoded = http_utils:url_encode(Handle),
     case handle_proxy_client:delete(
