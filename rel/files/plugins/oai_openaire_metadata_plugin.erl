@@ -44,13 +44,13 @@
 
 -define(identifier_element(Type, Value), #xmlElement{
     name = 'datacite:identifier',
-    attributes = [#xmlAttribute{name = 'datacite:identifierType', value = Type}],
+    attributes = [#xmlAttribute{name = 'identifierType', value = Type}],
     content = [#xmlText{value = Value}]
 }).
 
 -define(alternate_url_identifier_element(Value), #xmlElement{
     name = 'datacite:alternateIdentifier',
-    attributes = [#xmlAttribute{name = 'datacite:alternateIdentifierType', value = "URL"}],
+    attributes = [#xmlAttribute{name = 'alternateIdentifierType', value = "URL"}],
     content = [#xmlText{value = Value}]
 }).
 
@@ -258,7 +258,7 @@ validation_examples() -> [
                 "<oaire:resource\n",
                 "    xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
                 "    <datacite:alternateIdentifiers>\n",
-                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
+                "        <datacite:alternateIdentifier alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
                 "    </datacite:alternateIdentifiers>\n",
                 "    <datacite:titles>\n",
                 "        <datacite:title>${title}</datacite:title>\n",
@@ -273,7 +273,7 @@ validation_examples() -> [
                 "    xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
                 "    ", (exp_primary_identifier(PublicHandle))/binary, "\n",
                 "    <datacite:alternateIdentifiers>\n",
-                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
+                "        <datacite:alternateIdentifier alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
                 "    </datacite:alternateIdentifiers>\n",
                 "    <datacite:titles>\n",
                 "        <datacite:title>${title}</datacite:title>\n",
@@ -288,7 +288,7 @@ validation_examples() -> [
                 "    xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
                 "    ", (exp_primary_identifier(PublicHandle))/binary, "\n",
                 "    <datacite:alternateIdentifiers>\n",
-                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
+                "        <datacite:alternateIdentifier alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
                 "    </datacite:alternateIdentifiers>\n",
                 "    <datacite:titles>\n",
                 "        <datacite:title>${title}</datacite:title>\n",
@@ -311,7 +311,7 @@ validation_examples() -> [
             "    xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
             "    <datacite:identifier>preexisting-identifier-to-be-deleted</datacite:identifier>\n",
             "    <datacite:alternateIdentifiers>\n",
-            "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n",
+            "        <datacite:alternateIdentifier alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n",
             "    </datacite:alternateIdentifiers>\n",
             "    <datacite:titles>\n",
             "        <datacite:title>${title}</datacite:title>\n",
@@ -342,8 +342,8 @@ validation_examples() -> [
                 "    xmlns:oaire=\"http://namespace.openaire.eu/schema/oaire/\"\n",
                 "    xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
                 "    <datacite:alternateIdentifiers>\n",
-                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
-                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n",
+                "        <datacite:alternateIdentifier alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
+                "        <datacite:alternateIdentifier alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n",
                 "    </datacite:alternateIdentifiers>\n",
                 "    <datacite:titles>\n",
                 "        <datacite:title>${title}</datacite:title>\n",
@@ -375,8 +375,8 @@ validation_examples() -> [
                 "    xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
                 "    ", (exp_primary_identifier(PublicHandle))/binary, "\n",
                 "    <datacite:alternateIdentifiers>\n",
-                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
-                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n",
+                "        <datacite:alternateIdentifier alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
+                "        <datacite:alternateIdentifier alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n",
                 "    </datacite:alternateIdentifiers>\n",
                 "    <datacite:titles>\n",
                 "        <datacite:title>${title}</datacite:title>\n",
@@ -408,8 +408,8 @@ validation_examples() -> [
                 "    xsi:schemaLocation=\"http://namespace.openaire.eu/schema/oaire/ https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd\">\n",
                 "    ", (exp_primary_identifier(PublicHandle))/binary, "\n",
                 "    <datacite:alternateIdentifiers>\n",
-                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
-                "        <datacite:alternateIdentifier datacite:alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n",
+                "        <datacite:alternateIdentifier alternateIdentifierType=\"URL\">", (od_share:build_public_url(ShareId))/binary, "</datacite:alternateIdentifier>\n",
+                "        <datacite:alternateIdentifier alternateIdentifierType=\"oai\">oai:example.com:1234567</datacite:alternateIdentifier>\n",
                 "    </datacite:alternateIdentifiers>\n",
                 "    <datacite:titles>\n",
                 "        <datacite:title>${title}</datacite:title>\n",
@@ -435,8 +435,8 @@ validation_examples() -> [
 %% @private
 -spec exp_primary_identifier(od_handle:public_handle()) -> binary().
 exp_primary_identifier(<<"doi:", DoiHandle/binary>>) ->
-    <<"<datacite:identifier datacite:identifierType=\"DOI\">", DoiHandle/binary, "</datacite:identifier>">>;
+    <<"<datacite:identifier identifierType=\"DOI\">", DoiHandle/binary, "</datacite:identifier>">>;
 exp_primary_identifier(<<"http://hdl.handle.net/", _/binary>> = PublicHandle) ->
-    <<"<datacite:identifier datacite:identifierType=\"Handle\">", PublicHandle/binary, "</datacite:identifier>">>;
+    <<"<datacite:identifier identifierType=\"Handle\">", PublicHandle/binary, "</datacite:identifier>">>;
 exp_primary_identifier(PublicHandle) ->
-    <<"<datacite:identifier datacite:identifierType=\"URL\">", PublicHandle/binary, "</datacite:identifier>">>.
+    <<"<datacite:identifier identifierType=\"URL\">", PublicHandle/binary, "</datacite:identifier>">>.
