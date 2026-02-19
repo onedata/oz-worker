@@ -589,7 +589,7 @@ format_for_configuration(IdP, IdPConfig) ->
 %%--------------------------------------------------------------------
 -spec get_auth_config() -> config_v2_or_later().
 get_auth_config() ->
-    case idp_auth_test_mode:process_is_test_mode_enabled() of
+    case idp_auth_test_mode:is_test_mode_enabled_for_current_pid() of
         false ->
             {ok, Cfg} = node_cache:acquire(cached_auth_config, fun() ->
                 {ok, fetch_auth_config(), ?CONFIG_CACHE_TTL}
@@ -834,7 +834,7 @@ param_not_found(_Key, {default, Default}, _Trace) ->
     Default;
 param_not_found(Key, required, Trace) ->
     TraceBinaries = [str_utils:format_bin("~ts", [T]) || T <- Trace ++ [Key]],
-    ConfigFile = case idp_auth_test_mode:process_is_test_mode_enabled() of
+    ConfigFile = case idp_auth_test_mode:is_test_mode_enabled_for_current_pid() of
         false -> "auth.config";
         true -> "test.auth.config"
     end,

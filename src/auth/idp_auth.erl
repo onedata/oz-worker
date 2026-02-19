@@ -79,7 +79,7 @@
     RedirectAfterLogin :: binary(), TestMode :: boolean()) ->
     {ok, map()} | {error, term()}.
 get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
-    TestMode andalso idp_auth_test_mode:process_enable_test_mode(),
+    idp_auth_test_mode:set_up_for_current_pid(TestMode),
     try
         {ok, StateToken} = state_token:create(
             IdP, LinkAccount, RedirectAfterLogin, TestMode
@@ -218,7 +218,7 @@ refresh_idp_access_token(IdP, RefreshToken) ->
 -spec validate_login_by_state(Payload :: #{}, state_token:state_token(), state_token:state_info()) ->
     {ok, od_user:id()} | {error, term()}.
 validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode, link_account := LinkAccount}) ->
-    TestMode andalso idp_auth_test_mode:process_enable_test_mode(),
+    idp_auth_test_mode:set_up_for_current_pid(TestMode),
     TestMode andalso idp_auth_test_mode:store_state_token(StateToken),
     Handler = get_protocol_handler(IdP),
     ?auth_debug("Login attempt from IdP '~tp' (state: ~ts), payload:~n~tp", [
@@ -241,7 +241,7 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
         IdP, StateToken, json_utils:encode(LinkedAccountMap, [pretty])
     ]),
 
-    case {idp_auth_test_mode:process_is_test_mode_enabled(), LinkAccount} of
+    case {idp_auth_test_mode:is_test_mode_enabled_for_current_pid(), LinkAccount} of
         {true, _} ->
             validate_test_login_by_linked_account(LinkedAccount);
         {false, false} ->

@@ -17,8 +17,8 @@
 
 %% API
 -export([
-    process_enable_test_mode/0, process_disable_test_mode/0,
-    process_is_test_mode_enabled/0,
+    set_up_for_current_pid/1,
+    is_test_mode_enabled_for_current_pid/0,
     store_user_data/1, get_user_data/0,
     store_state_token/1, get_state_token/0,
     gather_log/3,
@@ -31,54 +31,34 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Enables test mode for the current process. If enabled, IdPs config will be
-%% acquired from test auth config file and the login process will be treated as
-%% a dry run, presenting collected attributes rather than logging the user in.
+%% Sets up the memory of the current process, enabling or disabling the test mode.
+%% If enabled, IdPs config will be acquired from test auth config file and the
+%% login process will be treated as a dry run, presenting collected attributes
+%% rather than logging the user in.
+%%
+%% NOTE: the setup must be run every time an IdP login-related process starts to
+%% make sure there are no remnants of previous executions in the process memory.
 %% @end
 %%--------------------------------------------------------------------
--spec process_enable_test_mode() -> ok.
-process_enable_test_mode() ->
-    put(auth_test_mode_enabled, true),
-    ok.
+-spec set_up_for_current_pid(boolean()) -> ok.
+set_up_for_current_pid(Flag) ->
+    put(auth_test_mode_enabled, Flag),
+    store_user_data(#{}),
+    store_state_token(<<"undefined">>),
+    clear_logs().
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Disables test mode for the current process.
-%% @end
-%%--------------------------------------------------------------------
--spec process_disable_test_mode() -> ok.
-process_disable_test_mode() ->
-    put(auth_test_mode_enabled, false),
-    ok.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Predicate saying if current process has the test mode enabled.
-%% @end
-%%--------------------------------------------------------------------
--spec process_is_test_mode_enabled() -> boolean().
-process_is_test_mode_enabled() ->
+-spec is_test_mode_enabled_for_current_pid() -> boolean().
+is_test_mode_enabled_for_current_pid() ->
     get(auth_test_mode_enabled) =:= true.
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Stores user data (in JSON compatible format) in process memory.
-%% @end
-%%--------------------------------------------------------------------
 -spec store_user_data(json_utils:json_term()) -> ok.
 store_user_data(UserData) ->
     put(auth_test_mode_user_data, UserData),
     ok.
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Return user data (in JSON compatible format) stored in process memory.
-%% @end
-%%--------------------------------------------------------------------
 -spec get_user_data() -> json_utils:json_term().
 get_user_data() ->
     get(auth_test_mode_user_data).
@@ -95,15 +75,9 @@ get_state_token() ->
     get(auth_test_mode_state_token).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Computes a log message based on given format and args and appends
-%% it to the logs stored in process memory.
-%% @end
-%%--------------------------------------------------------------------
 -spec gather_log(Loglevel :: atom(), Format :: string(), Args :: [term()]) -> ok.
 gather_log(Loglevel, Format, Args) ->
-    case process_is_test_mode_enabled() of
+    case is_test_mode_enabled_for_current_pid() of
         false ->
             ok;
         true ->
@@ -114,11 +88,6 @@ gather_log(Loglevel, Format, Args) ->
     end.
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns the logs accumulated in process memory.
-%% @end
-%%--------------------------------------------------------------------
 -spec get_logs() -> string().
 get_logs() ->
     case get(auth_test_mode_log) of
@@ -126,9 +95,17 @@ get_logs() ->
         Log -> Log
     end.
 
+
+-spec clear_logs() -> ok.
+clear_logs() ->
+    put(auth_test_mode_log, undefined),
+    ok.
+
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
 
 %% @private
 -spec append_to_log(string()) -> ok.
