@@ -132,10 +132,11 @@ setup(Type) ->
 
     case Type of
         production ->
-            oz_worker:set_env(auth_config_file, ?DUMMY_AUTH_CONFIG_PATH);
+            oz_worker:set_env(auth_config_file, ?DUMMY_AUTH_CONFIG_PATH),
+            idp_auth_test_mode:set_up_for_current_pid(false);
         test ->
             oz_worker:set_env(test_auth_config_file, ?DUMMY_AUTH_CONFIG_PATH),
-            idp_auth_test_mode:process_enable_test_mode()
+            idp_auth_test_mode:set_up_for_current_pid(true)
     end,
     oz_worker:set_env(auth_config_cache_ttl_seconds, -1),
     oz_worker:set_env(http_domain, ?DUMMY_ONEZONE_DOMAIN).
@@ -147,8 +148,7 @@ teardown(_) ->
     ?assert(meck:validate(filelib)),
     ok = meck:unload(filelib),
     ?assert(meck:validate(esaml_util)),
-    ok = meck:unload(esaml_util),
-    idp_auth_test_mode:process_disable_test_mode().
+    ok = meck:unload(esaml_util).
 
 %%%===================================================================
 %%% Test functions
