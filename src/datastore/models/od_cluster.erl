@@ -23,6 +23,8 @@
 -export([entity_logic_plugin/0]).
 -export([ensure_onezone_cluster/0]).
 
+-export([get_worker_version_info/1, get_worker_release_version/1]).
+
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
 
@@ -48,6 +50,8 @@
     sync_enabled => true,
     memory_copies => all
 }).
+
+-compile({no_auto_import, [get/1]}).
 
 %%%===================================================================
 %%% API
@@ -158,6 +162,18 @@ ensure_onezone_cluster() ->
         {ok, _} -> ok;
         {error, already_exists} -> ok
     end.
+
+
+-spec get_worker_version_info(od_cluster:id()) -> version_info().
+get_worker_version_info(ClusterId) ->
+    {ok, #document{value = #od_cluster{worker_version = VersionInfo}}} = get(ClusterId),
+    VersionInfo.
+
+
+-spec get_worker_release_version(od_cluster:id()) -> onedata:release_version().
+get_worker_release_version(ClusterId) ->
+    {ReleaseVersion, _, _} = get_worker_version_info(ClusterId),
+    ReleaseVersion.
 
 
 %%--------------------------------------------------------------------

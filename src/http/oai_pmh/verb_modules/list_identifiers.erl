@@ -12,7 +12,7 @@
 -author("Jakub Kudzia").
 
 -include("registered_names.hrl").
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
 -behaviour(oai_verb_behaviour).
@@ -77,6 +77,6 @@ optional_response_elements() -> [].
 %%%-------------------------------------------------------------------
 -spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"header">>, Args) ->
-    ListingOpts = oai_utils:request_arguments_to_handle_listing_opts(list_identifiers, Args),
-    oai_utils:harvest(ListingOpts, fun oai_utils:build_oai_header/1).
+    {MetadataPrefix, ListingOpts} = oai_utils:args_to_prefix_and_handle_listing_opts(list_identifiers, Args),
+    oai_utils:harvest(MetadataPrefix, ListingOpts, fun oai_utils:build_oai_header/1).
 

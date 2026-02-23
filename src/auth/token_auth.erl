@@ -292,7 +292,7 @@ authenticate_by_idp_access_token(Serialized) ->
     case openid_protocol:authenticate_by_idp_access_token(Serialized) of
         {true, {IdP, Attributes}} ->
             LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
-            case linked_accounts:acquire_user(LinkedAccount) of
+            case linked_accounts:acquire_user(LinkedAccount, access_token) of
                 {ok, #document{key = UserId}} ->
                     {true, ?USER(UserId)};
                 {error, _} = Error ->

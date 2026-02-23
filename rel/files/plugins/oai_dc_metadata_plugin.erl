@@ -5,7 +5,7 @@
 %%% cited in 'LICENSE.txt'.
 %%% @doc
 %%% Implementation of the onezone_plugin_behaviour and the handle_metadata_plugin_behaviour
-%%% for handling DC (Dublin Core) metadata format.
+%%% for handling Dublin Core metadata schema ("oai_dc").
 %%%
 %%% @see handle_metadata_plugin_behaviour for general information about metadata plugins.
 %%%
@@ -20,22 +20,22 @@
 %%%
 %%% @end
 %%%-------------------------------------------------------------------
--module(dublin_core_metadata_plugin).
+-module(oai_dc_metadata_plugin).
 -author("Jakub Kudzia").
 -author("Lukasz Opiola").
 
 -behavior(onezone_plugin_behaviour).
 -behaviour(handle_metadata_plugin_behaviour).
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 
 %% onezone_plugin_behaviour callbacks
 -export([type/0]).
 
 %% handle_metadata_plugin_behaviour callbacks
--export([metadata_prefix/0, schema_URL/0, main_namespace/0]).
--export([revise_for_publication/3, insert_public_handle/2, adapt_for_oai_pmh/1]).
+-export([metadata_schema/0, supported_oai_pmh_metadata_prefixes/0, schema_URL/1, main_namespace/1]).
+-export([revise_for_publication/3, insert_public_handle/2, adapt_for_oai_pmh/2]).
 -export([encode_xml/1]).
 -export([validation_examples/0]).
 
@@ -56,21 +56,27 @@ type() ->
 %%%===================================================================
 
 
-%% @doc {@link handle_metadata_plugin_behaviour} callback metadata_prefix/0
--spec metadata_prefix() -> binary().
-metadata_prefix() ->
+%% @doc {@link handle_metadata_plugin_behaviour} callback metadata_schema/0
+-spec metadata_schema() -> od_handle:metadata_schema().
+metadata_schema() ->
     ?OAI_DC_METADATA_PREFIX.
 
 
-%% @doc {@link handle_metadata_plugin_behaviour} callback schema_URL/0
--spec schema_URL() -> binary().
-schema_URL() ->
+%% @doc {@link handle_metadata_plugin_behaviour} callback supported_oai_pmh_metadata_prefixes/0
+-spec supported_oai_pmh_metadata_prefixes() -> od_handle:metadata_schema().
+supported_oai_pmh_metadata_prefixes() ->
+    [?OAI_DC_METADATA_PREFIX].
+
+
+%% @doc {@link handle_metadata_plugin_behaviour} callback schema_URL/1
+-spec schema_URL(oai_metadata:prefix()) -> binary().
+schema_URL(?OAI_DC_METADATA_PREFIX) ->
     <<"http://www.openarchives.org/OAI/2.0/oai_dc.xsd">>.
 
 
-%% @doc {@link handle_metadata_plugin_behaviour} callback main_namespace/0
--spec main_namespace() -> {atom(), binary()}.
-main_namespace() ->
+%% @doc {@link handle_metadata_plugin_behaviour} callback main_namespace/1
+-spec main_namespace(oai_metadata:prefix()) -> {atom(), binary()}.
+main_namespace(?OAI_DC_METADATA_PREFIX) ->
     {'xmlns:oai_dc', <<"http://www.openarchives.org/OAI/2.0/oai_dc/">>}.
 
 
@@ -107,11 +113,11 @@ ensure_dc_identifier(Value, #xmlElement{content = Content} = MetadataXml) ->
     end.
 
 
-%% @doc {@link handle_metadata_plugin_behaviour} callback adapt_for_oai_pmh/1
--spec adapt_for_oai_pmh(od_handle:parsed_metadata()) -> od_handle:parsed_metadata().
-adapt_for_oai_pmh(#xmlElement{name = metadata, content = Content}) ->
-    {MainNamespaceName, MainNamespaceValue} = main_namespace(),
-    SchemaLocation = str_utils:format("~ts ~ts", [MainNamespaceValue, schema_URL()]),
+%% @doc {@link handle_metadata_plugin_behaviour} callback adapt_for_oai_pmh/2
+-spec adapt_for_oai_pmh(oai_metadata:prefix(), od_handle:parsed_metadata()) -> od_handle:parsed_metadata().
+adapt_for_oai_pmh(?OAI_DC_METADATA_PREFIX, #xmlElement{name = metadata, content = Content}) ->
+    {MainNamespaceName, MainNamespaceValue} = main_namespace(?OAI_DC_METADATA_PREFIX),
+    SchemaLocation = str_utils:format("~ts ~ts", [MainNamespaceValue, schema_URL(?OAI_DC_METADATA_PREFIX)]),
     #xmlElement{
         name = 'oai_dc:dc',
         attributes = [
@@ -133,7 +139,7 @@ encode_xml(Metadata) ->
 %% @doc {@link handle_metadata_plugin_behaviour} callback validation_examples/0
 -spec validation_examples() -> [handle_metadata_plugin_behaviour:validation_example()].
 validation_examples() -> [
-    % TODO VFS-7454 add better validation of the DC XML; currently, any XML with metadata tag is accepted
+    % TODO VFS-7454 add better validation of the DC XML (schema)
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
@@ -153,7 +159,9 @@ validation_examples() -> [
     #handle_metadata_plugin_validation_example{
         input_raw_xml = <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-            "<metadata xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
+            "<metadata\n"
+            "    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n"
+            "    xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
             "    <dc:title>Test dataset</dc:title>\n",
             "    <dc:creator>John Johnson</dc:creator>\n",
             "    <dc:creator>Jane Doe</dc:creator>\n",
@@ -171,7 +179,9 @@ validation_examples() -> [
         input_qualifies_for_publication = true,
         exp_revised_metadata_generator = fun(ShareId, _ShareRecord) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-            "<metadata xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
+            "<metadata\n"
+            "    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n"
+            "    xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
             "    <dc:identifier>", (od_share:build_public_url(ShareId))/binary, "</dc:identifier>\n",
             "    <dc:title>Test dataset</dc:title>\n",
             "    <dc:creator>John Johnson</dc:creator>\n",
@@ -189,7 +199,9 @@ validation_examples() -> [
         >> end,
         exp_final_metadata_generator = fun(ShareId, _ShareRecord, PublicHandle) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-            "<metadata xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
+            "<metadata\n"
+            "    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n"
+            "    xmlns:dc=\"http://purl.org/dc/elements/1.1/\">\n"
             "    <dc:identifier>", PublicHandle/binary, "</dc:identifier>\n",
             "    <dc:identifier>", (od_share:build_public_url(ShareId))/binary, "</dc:identifier>\n",
             "    <dc:title>Test dataset</dc:title>\n",
@@ -206,14 +218,13 @@ validation_examples() -> [
             "    <dc:rights>CC-0</dc:rights>\n",
             "</metadata>"
         >> end,
-        exp_oai_pmh_metadata_generator = fun(ShareId, _ShareRecord, PublicHandle) -> <<
+        exp_oai_pmh_metadata_generator = fun(?OAI_DC_METADATA_PREFIX, ShareId, _ShareRecord, PublicHandle) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-            "<oai_dc:dc"
-            " xmlns:oai_dc=\"http://www.openarchives.org/OAI/2.0/oai_dc/\"",
-            " xmlns:dc=\"http://purl.org/dc/elements/1.1/\"",
-            " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"",
-            " xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd\"",
-            ">\n"
+            "<oai_dc:dc\n"
+            "    xmlns:oai_dc=\"http://www.openarchives.org/OAI/2.0/oai_dc/\"\n",
+            "    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n",
+            "    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n",
+            "    xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd\">\n"
             "    <dc:identifier>", PublicHandle/binary, "</dc:identifier>\n",
             "    <dc:identifier>", (od_share:build_public_url(ShareId))/binary, "</dc:identifier>\n",
             "    <dc:title>Test dataset</dc:title>\n",
@@ -255,14 +266,13 @@ validation_examples() -> [
             "    <dc:contributor>John Doe</dc:contributor>\n",
             "</metadata>"
         >> end,
-        exp_oai_pmh_metadata_generator = fun(ShareId, _ShareRecord, PublicHandle) -> <<
+        exp_oai_pmh_metadata_generator = fun(?OAI_DC_METADATA_PREFIX, ShareId, _ShareRecord, PublicHandle) -> <<
             "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
-            "<oai_dc:dc"
-            " xmlns:oai_dc=\"http://www.openarchives.org/OAI/2.0/oai_dc/\"",
-            " xmlns:dc=\"http://purl.org/dc/elements/1.1/\"",
-            " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"",
-            " xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd\"",
-            ">\n",
+            "<oai_dc:dc\n"
+            "    xmlns:oai_dc=\"http://www.openarchives.org/OAI/2.0/oai_dc/\"\n",
+            "    xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n",
+            "    xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n",
+            "    xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd\">\n",
             "    <dc:identifier>", PublicHandle/binary, "</dc:identifier>\n",
             "    <dc:identifier>", (od_share:build_public_url(ShareId))/binary, "</dc:identifier>\n",
             "    <dc:contributor>John Doe</dc:contributor>\n",

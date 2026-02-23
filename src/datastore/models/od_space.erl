@@ -22,6 +22,7 @@
 -export([insert_support_parameters/3, update_support_parameters/3, clear_support_parameters/2]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
+-export([choose_provider_for_request_handling/1]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -57,6 +58,11 @@
 }).
 
 -compile({no_auto_import, [get/1]}).
+
+
+% time for which a provider choice for request handling is cached
+-define(CHOSEN_PROVIDER_CACHE_TTL_SEC, 30).
+
 
 %%%===================================================================
 %%% API
@@ -149,10 +155,99 @@ to_string(SpaceId) ->
 entity_logic_plugin() ->
     space_logic_plugin.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Chooses a suitable provider to handle requests concerning a space.
+%% Providers are evaluated based on the following aspects:
+%%   1. Providers in the same major version as Onezone are preferred.
+%%   2. Providers with readwrite support are preferred over readonly ones.
+%% As this function is called frequently, the choice is cached for some time
+%% per space.
+%% @end
+%%--------------------------------------------------------------------
+-spec choose_provider_for_request_handling(od_space:id()) ->
+    {ok, {od_provider:id(), onedata:release_version()}} | od_error:error().
+choose_provider_for_request_handling(SpaceId) ->
+    {ok, Result} = node_cache:acquire({chosen_provider_for_request_handling, SpaceId}, fun() ->
+        {ok, choose_provider_for_request_handling_internal(SpaceId), ?CHOSEN_PROVIDER_CACHE_TTL_SEC}
+    end),
+    case Result of
+        {error, _} = Error ->
+            Error;
+        {ok, {ChosenProviderId, _}} ->
+            case provider_connections:is_online(ChosenProviderId) of
+                true ->
+                    Result;
+                false ->
+                    node_cache:clear({chosen_provider_for_request_handling, SpaceId}),
+                    choose_provider_for_request_handling(SpaceId)
+            end
+    end.
+
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
+
+%% @private
+-spec choose_provider_for_request_handling_internal(od_space:id() | od_space:record()) ->
+    {ok, {od_provider:id(), onedata:release_version()}} | od_error:error().
+choose_provider_for_request_handling_internal(SpaceId) when is_binary(SpaceId) ->
+    case get(SpaceId) of
+        {ok, #document{value = Space}} ->
+            choose_provider_for_request_handling_internal(Space);
+        {error, not_found} ->
+            ?ERROR_NOT_FOUND
+    end;
+
+choose_provider_for_request_handling_internal(#od_space{eff_providers = EffProviders} = Space) ->
+    EligibleProvidersWithPriorities = lists:filtermap(fun(ProviderId) ->
+        case provider_connections:is_online(ProviderId) of
+            false ->
+                false;
+            true ->
+                ProviderVsn = od_cluster:get_worker_release_version(ProviderId),
+                IsUpToDate = is_provider_up_to_date_with_onezone(ProviderVsn),
+                HasAnyReadwriteSupport = has_any_readwrite_support_from(Space, ProviderId),
+                Priority = case {IsUpToDate, HasAnyReadwriteSupport} of
+                    {true, true} -> 1; % up-to-date providers with readwrite support are preferred
+                    {true, false} -> 2;
+                    {_, true} -> 3;
+                    {_, false} -> 4  % legacy providers with readonly support are least preferred
+                end,
+                % the second element is randomized to ensure providers with
+                % the same priorities are shuffled, yielding a random choice
+                {true, {Priority, rand:uniform(999999), ProviderId, ProviderVsn}}
+        end
+    end, maps:keys(EffProviders)),
+
+    case lists:sort(EligibleProvidersWithPriorities) of
+        [] ->
+            ?ERR_SERVICE_UNAVAILABLE(?err_ctx());
+        [{_, _, ChosenProviderId, ChosenProviderVersion} | _] ->
+            {ok, {ChosenProviderId, ChosenProviderVersion}}
+    end.
+
+
+%% @private
+-spec has_any_readwrite_support_from(od_space:record(), od_provider:id()) -> boolean().
+has_any_readwrite_support_from(#od_space{storages = SpaceStoragesWithSupports}, ProviderId) ->
+    {ok, #document{value = #od_provider{
+        storages = ProviderStorages
+    }}} = od_provider:get(ProviderId),
+    SupportingStorages = lists_utils:intersect(maps:keys(SpaceStoragesWithSupports), ProviderStorages),
+
+    lists:any(fun(StorageId) ->
+        {ok, #document{value = #od_storage{
+            readonly = Readonly
+        }}} = od_storage:get(StorageId),
+        not Readonly
+    end, SupportingStorages).
+
+
+%% @private
 -spec update_support_parameters_registry(
     id(),
     fun((support_parameters_registry:record()) -> {ok, support_parameters_registry:record()} | errors:error())
@@ -167,6 +262,25 @@ update_support_parameters_registry(SpaceId, Diff) ->
                 {ok, Space#od_space{support_parameters_registry = NewRegistry}}
         end
     end).
+
+
+%% @private
+-spec is_provider_up_to_date_with_onezone(onedata:release_version()) -> boolean().
+is_provider_up_to_date_with_onezone(ProviderVsn) ->
+    OnezoneVsn = oz_worker:get_release_version(),
+    case onedata:compare_release_year(OnezoneVsn, ProviderVsn) of
+        equal ->
+            true;
+        _ ->
+            % providers in vsn 21.02.* are considered up to date with Onezone in vsn 25.*
+            case onedata:compare_release_year(ProviderVsn, ?VSN_21_02_1) of
+                equal ->
+                    equal == onedata:compare_release_year(OnezoneVsn, ?VSN_25_0);
+                _ ->
+                    false
+            end
+    end.
+
 
 %%%===================================================================
 %%% datastore_model callbacks

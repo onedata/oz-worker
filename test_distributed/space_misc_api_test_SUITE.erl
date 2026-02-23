@@ -338,7 +338,7 @@ get_test(Config) ->
     {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, SpaceId} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, SpaceId, SupportSize),
 
-    ozt_providers:simulate_version(P1, ?LINE_21_02),
+    ozt_providers:simulate_version(P1, ?VSN_21_02_1),
     ozt_spaces:set_support_parameters(SpaceId, P1, ozt_spaces:random_support_parameters()),
     ExpSupportParametersRegistry = #support_parameters_registry{
         registry = #{
@@ -1505,7 +1505,7 @@ update_support_parameters_test(Config) ->
     ozt_providers:support_space(SubjectProvider, SubjectSpace),
     ozt_providers:support_space(OtherProvider, SubjectSpace),
 
-    ozt_providers:simulate_version(SubjectProvider, ?LINE_21_02),
+    ozt_providers:simulate_version(SubjectProvider, ?VSN_21_02_1),
     ozt_spaces:set_support_parameters(SubjectSpace, SubjectProvider, ozt_spaces:random_support_parameters()),
 
     EnvSetUpFun = fun() ->
@@ -1679,7 +1679,7 @@ update_support_parameters_test(Config) ->
                 }
             }, EnvSetUpFun, undefined, VerifyEndFun))
         end, CorrectClients)
-    end, [?LINE_19_02, ?LINE_20_02, ?LINE_21_02]).
+    end, [?VSN_19_02_1, ?VSN_20_02_1, ?VSN_21_02_1]).
 
 % ----------------
 % sequential tests

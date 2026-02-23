@@ -11,7 +11,7 @@
 -module(oai_verb_behaviour).
 -author("Jakub Kudzia").
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 %%%-------------------------------------------------------------------
 %%% @doc

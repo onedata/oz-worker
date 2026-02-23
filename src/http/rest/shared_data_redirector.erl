@@ -46,21 +46,20 @@ handle(ObjectId, Req) ->
             ?ERR = Err1 ->
                 Err1;
             {ok, ShareId} ->
-                case share_logic:choose_provider_for_public_share_handling(ShareId) of
-                    ?ERROR_NOT_FOUND = NotFoundError -> NotFoundError;
+                case ?check(od_share:choose_provider_for_public_share_handling(ShareId)) of
                     % there is no suitable, online provider
-                    {ok, {undefined, _}} -> ?ERR_SERVICE_UNAVAILABLE(?err_ctx());
+                    {undefined, _} -> ?ERR_SERVICE_UNAVAILABLE(?err_ctx());
                     % only a legacy provider is available, but providers before 20.02 do
                     % not support public REST access to shared file/directory contents
-                    {ok, {_, <<"18.02", _/binary>>}} -> ?ERR_NOT_IMPLEMENTED(?err_ctx());
-                    {ok, {_, <<"19.02", _/binary>>}} -> ?ERR_NOT_IMPLEMENTED(?err_ctx());
-                    {ok, {ChosenProviderId, _}} -> {ok, ChosenProviderId}
+                    {_, <<"18.02", _/binary>>} -> ?ERR_NOT_IMPLEMENTED(?err_ctx());
+                    {_, <<"19.02", _/binary>>} -> ?ERR_NOT_IMPLEMENTED(?err_ctx());
+                    {ChosenProviderId, _} -> {ok, ChosenProviderId}
                 end
         end
     catch
         Class:Reason:Stacktrace ->
             ?debug_exception("Error while redirecting to public share", Class, Reason, Stacktrace),
-            ?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined)
+            ?examine_exception(Class, Reason, Stacktrace)
     end,
 
     case Result of

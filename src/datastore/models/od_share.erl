@@ -26,6 +26,7 @@
 -export([build_root_file/3]).
 -export([build_public_url/1]).
 -export([build_public_rest_url/1]).
+-export([choose_provider_for_public_share_handling/1]).
 -export([migrate_legacy_shares_21_02_8/0, migrate_legacy_share_21_02_8/2]).
 
 %% datastore_model callbacks
@@ -152,6 +153,26 @@ build_public_url(ShareId) ->
 -spec build_public_rest_url(od_share:id()) -> binary().
 build_public_rest_url(ShareId) ->
     oz_worker:get_rest_uri(?PUBLIC_SHARE_REST_PATH(ShareId)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Chooses a provider to handle requests concerning public share information
+%% and data (for all interfaces).
+%%
+%% @see od_space:choose_provider_for_request_handling/1 for details about the
+%% provider selection logic.
+%% @end
+%%--------------------------------------------------------------------
+-spec choose_provider_for_public_share_handling(od_share:id()) ->
+    {ok, {od_provider:id(), onedata:release_version()}} | od_error:error().
+choose_provider_for_public_share_handling(ShareId) ->
+    case get(ShareId) of
+        {ok, #document{value = #od_share{space = SpaceId}}} ->
+            od_space:choose_provider_for_request_handling(SpaceId);
+        {error, not_found} ->
+            ?ERROR_NOT_FOUND
+    end.
 
 
 %%--------------------------------------------------------------------

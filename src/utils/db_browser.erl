@@ -716,10 +716,7 @@ field_specs(shares) -> [
 field_specs(providers) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
     {last_activity, last_activity, 16, fun(Doc) -> provider_connections:get_last_activity(Doc#document.key) end},
-    {version, text, 15, fun(Doc) ->
-        {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, Doc#document.key),
-        Version
-    end},
+    {version, text, 15, fun(Doc) -> od_cluster:get_worker_release_version(Doc#document.key) end},
     {name, text, 28, fun(Doc) -> Doc#document.value#od_provider.name end},
     {domain, text, 40, fun(Doc) -> Doc#document.value#od_provider.domain end},
     {admin_email, text, 40, fun(Doc) -> Doc#document.value#od_provider.admin_email end},

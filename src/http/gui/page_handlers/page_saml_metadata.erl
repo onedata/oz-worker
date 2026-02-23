@@ -32,8 +32,7 @@
 -spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"GET">>, Req) ->
     QsVals = cowboy_req:parse_qs(Req),
-    Test = proplists:get_value(<<"test">>, QsVals, <<"false">>),
-    Test =:= <<"true">> andalso idp_auth_test_mode:process_enable_test_mode(),
+    idp_auth_test_mode:set_up_for_current_pid(<<"true">> =:= proplists:get_value(<<"test">>, QsVals, <<"false">>)),
     case auth_config:get_saml_sp_config() of
         {error, saml_disabled} ->
             cowboy_req:reply(?HTTP_404_NOT_FOUND, Req);

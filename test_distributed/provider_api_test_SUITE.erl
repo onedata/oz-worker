@@ -431,6 +431,7 @@ get_test(Config) ->
                 <<"latitude">> => ExpLatitude, <<"longitude">> => ExpLongitude,
                 <<"spaces">> => #{S1 => SupportSize},
                 <<"storages">> => [St1],
+                <<"storageBackends">> => [St1],
                 <<"subdomain">> => <<"undefined">>,
                 <<"subdomainDelegation">> => false,
                 <<"adminEmail">> => ExpAdminEmail,
