@@ -225,8 +225,7 @@ is_authorized(Auth, AuthHint, GRI, Operation, VersionedEntity) ->
     gs_protocol:rpc_function(), gs_protocol:rpc_args()) ->
     gs_protocol:rpc_result().
 handle_rpc(_, _, <<"getSupportedIdPs">>, Data) ->
-    TestMode = maps:get(<<"testMode">>, Data, false),
-    TestMode andalso idp_auth_test_mode:process_enable_test_mode(),
+    idp_auth_test_mode:set_up_for_current_pid(true =:= maps:get(<<"testMode">>, Data, false)),
     case oz_worker:get_env(dev_mode, false) of
         true ->
             % If dev mode is enabled, always return basic auth and just one
