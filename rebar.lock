@@ -73,7 +73,7 @@
   0},
  {<<"gui">>,
   {git,"ssh://git@git.onedata.org:7999/vfs/gui.git",
-       {ref,"924605b883e0bc5d3dda96fee660dda05cc5c308"}},
+       {ref,"bbd6b6935436f73a304fcdb1a790afed32956188"}},
   1},
  {<<"hackney">>,
   {git,"https://github.com/benoitc/hackney",
