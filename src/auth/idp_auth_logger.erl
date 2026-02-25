@@ -59,7 +59,7 @@ log_user_info_collection_to_file(IdP, FlowType, BodyOrFun) ->
 log_error(?ERROR_BAD_AUTH_CONFIG, _, _, _, Stacktrace) ->
     ?auth_debug(
         "Login request failed due to bad auth config: ~ts", [
-            iolist_to_binary(lager:pr_stacktrace(Stacktrace))
+            iolist_to_binary(onedata_logger:pr_stacktrace(Stacktrace))
         ]
     );
 log_error(?ERROR_INVALID_STATE, _, _, StateToken, _) ->
@@ -70,7 +70,7 @@ log_error(?ERROR_INVALID_STATE, _, _, StateToken, _) ->
 log_error(?ERROR_INVALID_AUTH_REQUEST, IdP, FlowType, StateToken, Stacktrace) ->
     ?auth_debug(
         "Cannot validate login request for IdP '~tp' (flow: ~ts, state: ~ts) - invalid auth request~n"
-        "Stacktrace: ~ts", [IdP, FlowType, StateToken, iolist_to_binary(lager:pr_stacktrace(Stacktrace))]
+        "Stacktrace: ~ts", [IdP, FlowType, StateToken, iolist_to_binary(onedata_logger:pr_stacktrace(Stacktrace))]
     );
 log_error(?ERR_USER_BLOCKED, IdP, FlowType, StateToken, _) ->
     ?auth_debug(
@@ -108,7 +108,7 @@ log_error(?ERROR_ATTRIBUTE_MAPPING_ERROR(Attribute, IdPAttributes, EType, EReaso
         "could not be mapped due to an error - ~tp:~tp~n"
         "IdP attributes: ~tp~n"
         "Stacktrace: ~ts",
-        [IdP, FlowType, StateToken, Attribute, EType, EReason, IdPAttributes, iolist_to_binary(lager:pr_stacktrace(Stacktrace))]
+        [IdP, FlowType, StateToken, Attribute, EType, EReason, IdPAttributes, iolist_to_binary(onedata_logger:pr_stacktrace(Stacktrace))]
     );
 log_error(?ERROR_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(UserId), IdP, FlowType, StateToken, _) ->
     ?auth_debug(
@@ -129,7 +129,7 @@ log_error(?ERR_INTERNAL_SERVER_ERROR(Ref), IdP, FlowType, StateToken, _) ->
 log_error(Error, IdP, FlowType, StateToken, Stacktrace) ->
     ?auth_error(
         "Cannot validate login request for IdP '~tp' (flow: ~ts, state: ~ts) - ~tp~n"
-        "Stacktrace: ~ts", [IdP, FlowType, StateToken, Error, iolist_to_binary(lager:pr_stacktrace(Stacktrace))]
+        "Stacktrace: ~ts", [IdP, FlowType, StateToken, Error, iolist_to_binary(onedata_logger:pr_stacktrace(Stacktrace))]
     ).
 
 

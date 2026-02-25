@@ -107,7 +107,7 @@ rpc(Node, Module, Function, Args) ->
         try
             erlang:apply(Module, Function, Args)
         catch Type:Reason:Stacktrace ->
-            {crash, Type, Reason, lager:pr_stacktrace(Stacktrace)}
+            {crash, Type, Reason, onedata_logger:pr_stacktrace(Stacktrace)}
         end
     end,
     case rpc:call(Node, erlang, apply, [FunWrapper, []]) of
