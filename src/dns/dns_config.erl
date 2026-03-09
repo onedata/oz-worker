@@ -13,7 +13,7 @@
 -author("Wojciech Geisler").
 
 -include("registered_names.hrl").
--include_lib("dns_erlang/include/dns.hrl").
+-include_lib("dns/include/dns.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([build_config/0, insert_config/1]).
