@@ -608,9 +608,9 @@ create_handle_unsafe(ShareId, Req = #el_req{gri = GRI, auth = Auth, data = Data}
     % TODO VFS-12975 temporary solution; add swaggers when a final approach is worked out
     PublicHandle = case maps:get(<<"requestPublicHandle">>, Data, true) of
         true ->
-            ?check(handle_proxy:register_handle(
+            handle_proxy:register_handle(
                 HandleServiceId, ResourceType, ShareId, oai_metadata:encode_xml(MetadataSchema, RevisedMetadata)
-            ));
+            );
         false ->
             % TODO VFS-12975 temporary solution; if the client decides not to request a public handle,
             % he can either provide a public handle to reuse explicitly, or not so that the share

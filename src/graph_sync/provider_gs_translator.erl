@@ -138,7 +138,9 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         <<"fullName">> => FullName,
         <<"username">> => utils:undefined_to_null(Username),
         <<"emails">> => Emails,
-        <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts, luma_payload),
+        <<"linkedAccounts">> => lists:map(fun(LinkedAccount) ->
+            linked_account:to_json(linked_account:apply_luma_info_mask(LinkedAccount))
+        end, LinkedAccounts),
 
         <<"blocked">> => Blocked,
         <<"spaceAliases">> => SpaceAliases,

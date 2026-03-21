@@ -818,10 +818,16 @@ legacy_user_ids_are_retained(Config) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     % Create a user with legacy id to simulate a situation after system upgrade
     #linked_account{idp = IdP, subject_id = SubjectId} = LinkedAccount = ?LINKED_ACC(?DUMMY_IDP, []),
-    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~ts", [IdP, SubjectId])),
+    LegacyUserId = datastore_key:gen_legacy_key(<<"">>, str_utils:format_bin("~ts:~ts", [IdP, SubjectId])),
     ModernUserId = datastore_key:new_from_digest([atom_to_binary(IdP, utf8), SubjectId]),
-    {ok, LegacyUserId} = oz_test_utils:call_oz(Config, user_logic, create, [?ROOT, LegacyUserId, #{}]),
-    oz_test_utils:call_oz(Config, linked_accounts, merge, [LegacyUserId, LinkedAccount]),
+    % NOTE: do not modify! this ensures that the key generation method is deterministic and repeatable
+    % between system version, which is crucial for upgradeability
+    ?assertEqual(<<"2bd194610e39cecb3691826d86877be1">>, LegacyUserId),
+    ?assertEqual(<<"6a72fa48747478774602962ba9d48e8ach7478">>, ModernUserId),
+    {ok, #document{key = LegacyUserId}} = oz_test_utils:call_oz(Config, user_account, create, [
+        LegacyUserId, #od_user{}, [], user_creation_api
+    ]),
+    oz_test_utils:call_oz(Config, user_account, link_account, [LegacyUserId, LinkedAccount]),
     put(test_data_user, LegacyUserId),
     simulate_consecutive_login(?DUMMY_IDP, []),
     ?assert(oz_test_utils:call_oz(Config, user_logic, exists, [LegacyUserId])),
@@ -842,9 +848,11 @@ legacy_user_ids_are_retained(Config) ->
 legacy_group_ids_are_retained_for_legacy_user(Config) ->
     % Create a user with legacy id to simulate a situation after system upgrade
     #linked_account{idp = IdP, subject_id = SubjectId} = LinkedAccount = ?LINKED_ACC(?THIRD_IDP, []),
-    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~ts", [IdP, SubjectId])),
-    {ok, LegacyUserId} = oz_test_utils:call_oz(Config, user_logic, create, [?ROOT, LegacyUserId, #{}]),
-    oz_test_utils:call_oz(Config, linked_accounts, merge, [LegacyUserId, LinkedAccount]),
+    LegacyUserId = datastore_key:gen_legacy_key(<<"">>, str_utils:format_bin("~ts:~ts", [IdP, SubjectId])),
+    {ok, #document{key = LegacyUserId}} = oz_test_utils:call_oz(Config, user_account, create, [
+        LegacyUserId, #od_user{}, [], user_creation_api
+    ]),
+    oz_test_utils:call_oz(Config, user_account, link_account, [LegacyUserId, LinkedAccount]),
     put(test_data_user, LegacyUserId),
     legacy_group_ids_are_retained_base(Config).
 
@@ -860,32 +868,38 @@ legacy_group_ids_are_retained_base(Config) ->
     ]),
     % A list of all expected groups after the system upgrade and a new user login -
     % some of them simulate groups retained after upgrade (legacy)
+    % NOTE: do not modify the group IDs! this ensures that the key generation method is deterministic and repeatable
+    % between system version, which is crucial for upgradeability
     Groups = [
-        {legacy, team, <<"Third-VO">>, [<<"vo:Third-VO">>]},
-        {legacy, team, <<"staff">>, [<<"vo:Third-VO">>, <<"tm:staff">>]},
-        {legacy, team, <<"privileged">>, [<<"vo:Third-VO">>, <<"tm:staff">>, <<"tm:admins">>, <<"tm:privileged">>]},
-        {legacy, team, <<"testGroup">>, [<<"vo:Third-VO">>, <<"tm:testGroup">>]},
-        {modern, team, <<"vm-operators">>, [<<"vo:Third-VO">>, <<"tm:staff">>, <<"tm:vm-operators">>]},
-        {modern, team, <<"admins">>, [<<"vo:Third-VO">>, <<"tm:staff">>, <<"tm:admins">>]},
-        {modern, team, <<"readonly">>, [<<"vo:Third-VO">>, <<"tm:staff">>, <<"tm:admins">>, <<"tm:readonly">>]},
-        {modern, team, <<"task4.1">>, [<<"vo:Third-VO">>, <<"tm:task4.1">>]}
+        {legacy, team, <<"Third-VO">>, [<<"vo:Third-VO">>], <<"b2086b43a46843b476db0ce86eca496b">>},
+        {legacy, team, <<"staff">>, [<<"vo:Third-VO">>, <<"tm:staff">>], <<"82ab7e2d6e05472abe250acf9c44ccf8">>},
+        {legacy, team, <<"privileged">>, [<<"vo:Third-VO">>, <<"tm:staff">>, <<"tm:admins">>, <<"tm:privileged">>], <<"961cc8fe05f39c570ecbfcdfdc6e9e7f">>},
+        {legacy, team, <<"testGroup">>, [<<"vo:Third-VO">>, <<"tm:testGroup">>], <<"7b57b36d1e379ad9e8819fb1a1bf2825">>},
+        {modern, team, <<"vm-operators">>, [<<"vo:Third-VO">>, <<"tm:staff">>, <<"tm:vm-operators">>], <<"04b85d43344f25b01c34d15589fb12e4ch4f25">>},
+        {modern, team, <<"admins">>, [<<"vo:Third-VO">>, <<"tm:staff">>, <<"tm:admins">>], <<"5a7c45cfeff0655c2b61aa7257895a24chf065">>},
+        {modern, team, <<"readonly">>, [<<"vo:Third-VO">>, <<"tm:staff">>, <<"tm:admins">>, <<"tm:readonly">>], <<"ce3a908973171d6c325c54092f4efc53ch171d">>},
+        {modern, team, <<"task4.1">>, [<<"vo:Third-VO">>, <<"tm:task4.1">>], <<"cdcd6dee4ff641bc5b3cd6288fc3a79achf641">>}
     ],
     lists:foreach(fun
-        ({legacy, Type, Name, EncodedGroupPath}) ->
+        ({legacy, Type, Name, EncodedGroupPath, _}) ->
             % Create the legacy groups to simulate a state after system upgrade
-            LegacyGroupId = datastore_key:build_adjacent(<<"">>, str_utils:join_binary(EncodedGroupPath, <<"/">>)),
+            LegacyGroupId = datastore_key:gen_legacy_key(<<"">>, str_utils:join_binary(EncodedGroupPath, <<"/">>)),
             oz_test_utils:call_oz(Config, group_logic, ensure_entitlement_group, [LegacyGroupId, Name, Type]);
         (_) ->
             % No need to create modern groups - they should be created upon login
             ok
     end, Groups),
     CheckGroupIds = fun() ->
-        lists:foreach(fun({LegacyOrModern, _, _, EncodedGroupPath}) ->
-            LegacyGroupId = datastore_key:build_adjacent(<<"">>, str_utils:join_binary(EncodedGroupPath, <<"/">>)),
+        lists:foreach(fun({LegacyOrModern, _, _, EncodedGroupPath, GroupId}) ->
+            LegacyGroupId = datastore_key:gen_legacy_key(<<"">>, str_utils:join_binary(EncodedGroupPath, <<"/">>)),
             ModernGroupId = datastore_key:new_from_digest(EncodedGroupPath),
             {ExpLegacyExists, ExpModernExists} = case LegacyOrModern of
-                legacy -> {true, false};
-                modern -> {false, true}
+                legacy ->
+                    ?assertEqual(GroupId, LegacyGroupId),
+                    {true, false};
+                modern ->
+                    ?assertEqual(GroupId, ModernGroupId),
+                    {false, true}
             end,
             ?assertEqual(ExpLegacyExists, oz_test_utils:call_oz(Config, group_logic, exists, [LegacyGroupId])),
             ?assertEqual(ExpModernExists, oz_test_utils:call_oz(Config, group_logic, exists, [ModernGroupId]))
@@ -924,9 +938,11 @@ legacy_user_and_group_relations_are_retained(Config) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     % Create a user with legacy id to simulate a situation after system upgrade
     #linked_account{idp = IdP, subject_id = SubjectId} = LinkedAccount = ?LINKED_ACC(?DUMMY_IDP, []),
-    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~ts", [IdP, SubjectId])),
-    {ok, LegacyUserId} = oz_test_utils:call_oz(Config, user_logic, create, [?ROOT, LegacyUserId, #{}]),
-    oz_test_utils:call_oz(Config, linked_accounts, merge, [LegacyUserId, LinkedAccount]),
+    LegacyUserId = datastore_key:gen_legacy_key(<<"">>, str_utils:format_bin("~ts:~ts", [IdP, SubjectId])),
+    {ok, #document{key = LegacyUserId}} = oz_test_utils:call_oz(Config, user_account, create, [
+        LegacyUserId, #od_user{}, [], user_creation_api
+    ]),
+    oz_test_utils:call_oz(Config, user_account, link_account, [LegacyUserId, LinkedAccount]),
     put(test_data_user, LegacyUserId),
     Groups = [
         {legacy, team, <<"firstGroup">>, [<<"tm:firstGroup">>]},
@@ -936,7 +952,7 @@ legacy_user_and_group_relations_are_retained(Config) ->
     lists:foreach(fun
         ({legacy, Type, Name, EncodedGroupPath}) ->
             % Create the legacy groups to simulate a state after system upgrade
-            LegacyGroupId = datastore_key:build_adjacent(<<"">>, str_utils:join_binary(EncodedGroupPath, <<"/">>)),
+            LegacyGroupId = datastore_key:gen_legacy_key(<<"">>, str_utils:join_binary(EncodedGroupPath, <<"/">>)),
             oz_test_utils:call_oz(Config, group_logic, ensure_entitlement_group, [LegacyGroupId, Name, Type]);
         (_) ->
             ok
@@ -980,7 +996,7 @@ simulate_first_login(IdP, Entitlements) ->
     LinkedAccount = ?LINKED_ACC(IdP, Entitlements),
     Config = get_test_config(),
     {ok, #document{key = UserId}} = oz_test_utils:call_oz(
-        Config, linked_accounts, acquire_user, [LinkedAccount, gui_login]
+        Config, user_account, acquire_user, [LinkedAccount, gui_login]
     ),
     put(test_data_user, UserId),
     ?assertHasLinkedAccount(LinkedAccount),
@@ -993,9 +1009,9 @@ simulate_consecutive_login(IdP, Entitlements) ->
     Config = get_test_config(),
     UserId = get_test_user(),
     LinkedAccountsCount = length(get_linked_accounts(Config, UserId)),
-    case oz_test_utils:call_oz(Config, linked_accounts, find_user, [LinkedAccount]) of
+    case oz_test_utils:call_oz(Config, od_user, get_by_linked_account, [LinkedAccount]) of
         {ok, #document{key = UserId}} ->
-            oz_test_utils:call_oz(Config, linked_accounts, merge, [UserId, LinkedAccount]),
+            oz_test_utils:call_oz(Config, user_account, link_account, [UserId, LinkedAccount]),
             ?assertHasLinkedAccount(LinkedAccount),
             ?assertLinkedAccountsCount(LinkedAccountsCount);
         _ ->
@@ -1009,9 +1025,9 @@ simulate_account_link(IdP, Entitlements) ->
     Config = get_test_config(),
     UserId = get_test_user(),
     LinkedAccountsCount = length(get_linked_accounts(Config, UserId)),
-    case oz_test_utils:call_oz(Config, linked_accounts, find_user, [LinkedAccount]) of
-        {error, not_found} ->
-            oz_test_utils:call_oz(Config, linked_accounts, merge, [UserId, LinkedAccount]),
+    case oz_test_utils:call_oz(Config, od_user, get_by_linked_account, [LinkedAccount]) of
+        ?ERROR_NOT_FOUND ->
+            oz_test_utils:call_oz(Config, user_account, link_account, [UserId, LinkedAccount]),
             ?assertHasLinkedAccount(LinkedAccount),
             ?assertLinkedAccountsCount(LinkedAccountsCount + 1);
         _ ->

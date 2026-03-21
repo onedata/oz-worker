@@ -397,7 +397,7 @@ enabled(IdP) ->
 %% they have changed in the IdP.
 %% @end
 %%--------------------------------------------------------------------
--spec coalesce_entitlements(od_user:id(), [od_user:linked_account()], od_user:entitlements()) ->
+-spec coalesce_entitlements(od_user:id(), [linked_account:t()], od_user:entitlements()) ->
     od_user:entitlements().
 coalesce_entitlements(UserId, LinkedAccounts, PreviousEntitlements) ->
     CurrentEntitlements = lists:flatmap(fun(LinkedAccount) ->
@@ -444,7 +444,7 @@ gen_group_id(Path) ->
     GroupNames = lists:map(fun(#idp_group{type = Type, name = Name}) ->
         <<(encode_type(Type))/binary, ":", Name/binary>>
     end, Path),
-    LegacyGroupId = datastore_key:build_adjacent(<<"">>, str_utils:join_binary(GroupNames, <<"/">>)),
+    LegacyGroupId = datastore_key:gen_legacy_key(<<"">>, str_utils:join_binary(GroupNames, <<"/">>)),
     case group_logic:exists(LegacyGroupId) of
         true -> LegacyGroupId;
         false -> datastore_key:new_from_digest(GroupNames)
@@ -493,7 +493,7 @@ map_entitlement(IdP, RawEntitlement) ->
 %% Ignores malformed entitlements.
 %% @end
 %%--------------------------------------------------------------------
--spec map_entitlements(od_user:linked_account()) -> [{od_group:id(), idp_entitlement()}].
+-spec map_entitlements(linked_account:t()) -> [{od_group:id(), idp_entitlement()}].
 map_entitlements(#linked_account{idp = IdP, entitlements = Entitlements}) ->
     map_entitlements(IdP, Entitlements).
 

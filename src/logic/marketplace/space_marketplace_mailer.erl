@@ -43,7 +43,7 @@
     od_user:email(),
     binary()
 ) ->
-    ok | od_error_internal_server_error:t().
+    ok.
 check_send_membership_request(SpaceId, RequesterUserId, RequestId, RequestClassification, RequesterEmail, Message) ->
     {SpaceName, MarketplaceContactEmail} = get_space_info(SpaceId),
     {RequesterFullName, RequesterUsername} = get_user_info(RequesterUserId),

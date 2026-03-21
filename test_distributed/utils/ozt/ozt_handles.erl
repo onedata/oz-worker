@@ -143,7 +143,7 @@ expected_final_metadata(#od_handle{
 -spec gen_legacy_handle_doc(od_handle_service:id(), od_share:id(), od_handle:raw_metadata()) ->
     datastore_doc:doc(od_handle:record()).
 gen_legacy_handle_doc(HServiceId, ShareId, Metadata) ->
-    {ok, PublicHandle} = ozt:rpc(handle_proxy, register_handle, [HServiceId, <<"Share">>, ShareId, Metadata]),
+    PublicHandle = ozt:rpc(handle_proxy, register_handle, [HServiceId, <<"Share">>, ShareId, Metadata]),
     #document{
         key = datastore_key:new(),
         value = #od_handle{

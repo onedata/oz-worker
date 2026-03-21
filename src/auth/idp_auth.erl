@@ -163,7 +163,7 @@ acquire_idp_access_token(#od_user{linked_accounts = LinkedAccounts}, IdP) ->
     end, ?ERROR_NOT_FOUND, LinkedAccounts).
 
 %% @private
--spec acquire_idp_access_token(od_user:linked_account()) ->
+-spec acquire_idp_access_token(linked_account:t()) ->
     {ok, {access_token(), access_token_ttl()}} | {error, term()}.
 acquire_idp_access_token(#linked_account{access_token = {undefined, 0}, refresh_token = _}) ->
     ?ERROR_NOT_FOUND;
@@ -193,7 +193,7 @@ refresh_idp_access_token(IdP, RefreshToken) ->
     try
         {ok, Attributes} = openid_protocol:refresh_idp_access_token(IdP, RefreshToken),
         LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
-        case linked_accounts:acquire_user(LinkedAccount, access_token) of
+        case user_account:acquire_user(LinkedAccount, access_token) of
             {error, _} = Error ->
                 idp_auth_logger:log_error(Error, IdP, refresh_token, <<"refresh_token_flow">>, []),
                 Error;
@@ -235,7 +235,7 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
     LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
     LinkedAccountMap = maps:without(
         [<<"name">>, <<"login">>, <<"alias">>, <<"emailList">>, <<"groups">>], % do not include deprecated fields
-        linked_accounts:to_map(LinkedAccount, all_fields)
+        linked_account:to_json(LinkedAccount)
     ),
     ?auth_debug("Attributes from IdP '~tp' (state: ~ts) sucessfully mapped:~n~ts", [
         IdP, StateToken, json_utils:encode(LinkedAccountMap, [pretty])
@@ -252,10 +252,10 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
 
 
 %% @private
--spec validate_login_by_linked_account(od_user:linked_account()) ->
+-spec validate_login_by_linked_account(linked_account:t()) ->
     {ok, od_user:id()} | errors:error().
 validate_login_by_linked_account(LinkedAccount) ->
-    case linked_accounts:acquire_user(LinkedAccount, gui_login) of
+    case user_account:acquire_user(LinkedAccount, gui_login) of
         {error, _} = Error ->
             Error;
         {ok, #document{key = UserId, value = #od_user{full_name = FullName}}} ->
@@ -265,31 +265,16 @@ validate_login_by_linked_account(LinkedAccount) ->
 
 
 %% @private
--spec validate_link_account_request(od_user:linked_account(), od_user:id()) ->
+-spec validate_link_account_request(linked_account:t(), od_user:id()) ->
     {ok, od_user:id()} | {error, term()}.
 validate_link_account_request(LinkedAccount, TargetUserId) ->
-    % Check if this account isn't connected to other profile
-    case linked_accounts:find_user(LinkedAccount) of
-        {ok, #document{key = FoundUserId}} ->
-            % Synchronize the information regardless of account linking success
-            linked_accounts:merge(FoundUserId, LinkedAccount),
-            case FoundUserId of
-                TargetUserId ->
-                    % The account is already linked to this user, report error
-                    ?ERROR_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(TargetUserId);
-                OtherUserId ->
-                    % The account is used on some other profile, cannot proceed
-                    ?ERROR_ACCOUNT_ALREADY_LINKED_TO_ANOTHER_USER(TargetUserId, OtherUserId)
-            end;
-        {error, not_found} ->
-            % ok, add new linked account to the user
-            {ok, #document{value = #od_user{
-                full_name = FullName
-            }}} = linked_accounts:merge(TargetUserId, LinkedAccount),
-            ?info("User ~ts (~ts) has linked his account from '~tp'", [
-                FullName, TargetUserId, LinkedAccount#linked_account.idp
-            ]),
-            {ok, TargetUserId}
+    case user_account:link_account(TargetUserId, LinkedAccount) of
+        ok ->
+            {ok, TargetUserId};
+        {error, already_linked_to_itself} ->
+            ?ERROR_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(TargetUserId);
+        {error, {already_linked_to_other, OtherUserId}} ->
+            ?ERROR_ACCOUNT_ALREADY_LINKED_TO_ANOTHER_USER(TargetUserId, OtherUserId)
     end.
 
 
@@ -300,10 +285,10 @@ validate_link_account_request(LinkedAccount, TargetUserId) ->
 %% in the test login process for later use by the page_consume_login module.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_test_login_by_linked_account(od_user:linked_account()) ->
+-spec validate_test_login_by_linked_account(linked_account:t()) ->
     {ok, od_user:id()}.
 validate_test_login_by_linked_account(LinkedAccount) ->
-    {UserId, UserData} = linked_accounts:build_test_user_info(LinkedAccount),
+    {UserId, UserData} = user_account:build_test_user_info(LinkedAccount),
     idp_auth_test_mode:store_user_data(UserData),
     {ok, UserId}.
 

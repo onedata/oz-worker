@@ -152,7 +152,7 @@ end).
     password_hash = undefined :: undefined | basic_auth:password_hash(),
     emails = [] :: [od_user:email()],
 
-    linked_accounts = [] :: [od_user:linked_account()],
+    linked_accounts = [] :: [linked_account:t()],
     entitlements = [] :: od_user:entitlements(),
 
     blocked = false :: boolean(),

@@ -280,7 +280,7 @@ create_legacy_share(SpaceId, {with_handle, HServiceId}) ->
     #document{key = ShareId} = create_legacy_share(SpaceId, without_handle),
     MetadataSchema = ?RAND_ELEMENT(ozt_handles:supported_metadata_schemas()),
     Metadata = ozt_handles:example_input_metadata(MetadataSchema),
-    {ok, PublicHandle} = ozt:rpc(handle_proxy, register_handle, [HServiceId, <<"Share">>, ShareId, Metadata]),
+    PublicHandle = ozt:rpc(handle_proxy, register_handle, [HServiceId, <<"Share">>, ShareId, Metadata]),
     HandleId = datastore_key:new(),
     {ok, _} = ozt:rpc(od_handle, create, [#document{
         key = HandleId,
