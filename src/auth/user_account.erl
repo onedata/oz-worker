@@ -98,9 +98,6 @@ create(ProposedUserId, InitialUserRecord, LinkedAccounts, CreationContext) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Providing 'undefined' values means that the attribute should not be changed.
-%%
-%% The OtherFieldsDiff allows updating other fields along with the username, but it should
-%% not modify the username itself; if it does, the provided NewUsername prevails.
 %%--------------------------------------------------------------------
 -spec update_attributes(od_user:id(), undefined | od_user:username(), undefined | od_user:full_name()) ->
     ok | {error, term()}.
