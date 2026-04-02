@@ -272,7 +272,8 @@ translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, sco
         name = Name,
         description = Description,
         handle = HandleId,
-        file_type = FileType
+        file_type = FileType,
+        visit_count = VisitCount
     } = ShareRecord,
     #{
         <<"spaceId">> => SpaceId,
@@ -287,7 +288,8 @@ translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, sco
             ?REGULAR_FILE_TYPE -> file;
             ?DIRECTORY_TYPE -> dir
         end,
-        <<"handleId">> => utils:undefined_to_null(HandleId)
+        <<"handleId">> => utils:undefined_to_null(HandleId),
+        <<"visitCount">> => VisitCount
     };
 
 translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = public}, ShareData) ->
@@ -297,7 +299,8 @@ translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, sco
         <<"description">> := Description,
         <<"rootFileObjectId">> := RootFileObjectId,
         <<"fileType">> := FileType,
-        <<"handleId">> := HandleId
+        <<"handleId">> := HandleId,
+        <<"visitCount">> := VisitCount
     } = ShareData,
     #{
         <<"spaceId">> => SpaceId,
@@ -312,7 +315,8 @@ translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, sco
             ?REGULAR_FILE_TYPE -> file;
             ?DIRECTORY_TYPE -> dir
         end,
-        <<"handleId">> => utils:undefined_to_null(HandleId)
+        <<"handleId">> => utils:undefined_to_null(HandleId),
+        <<"visitCount">> => VisitCount
     };
 
 

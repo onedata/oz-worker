@@ -16,6 +16,7 @@
 -behaviour(dynamic_page_behaviour).
 
 -include("http/gui_paths.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/http/codes.hrl").
 -include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -36,6 +37,9 @@ handle(<<"GET">>, Req) ->
     ShareId = cowboy_req:binding(?SHARE_ID_BINDING, Req),
     try
         Uri = oz_worker:get_uri(gui_static:oz_worker_gui_path(?PUBLIC_SHARE_GUI_PATH(ShareId))),
+        spawn(fun() ->
+            od_share:increment_visit_count(ShareId)
+        end),
         cowboy_req:reply(?HTTP_303_SEE_OTHER, #{?HDR_LOCATION => Uri}, Req)
     catch Class:Reason:Stacktrace ->
         ?debug_exception("Error while redirecting to public share", Class, Reason, Stacktrace),

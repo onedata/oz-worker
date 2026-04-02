@@ -17,8 +17,9 @@
 %%%     (to be added when public handle is known)
 %%%   * remove the edm:AggregatedCHO element
 %%%     (to be added when public handle is known)
-%%%   * insert (and overwrite if exists) edm:isShownBy element,
-%%%     pointing to a resource based on root FileId
+%%%   * make sure there is an edm:isShownBy element with a nonempty
+%%%     rdf:resource attr. If so, retain it. If not, insert one with
+%%%     the default EUreka3D viewer URL (see the ?default_is_shown_by_value/1 macro)
 %%%   * if there is a WebResource element without any specified rdf:about
 %%%     attribute, insert the attribute with the same value as the
 %%%     rdf:resource in edm:isShownBy; empty attribute is treated as no attribute
@@ -61,7 +62,7 @@
 -define(rdf_about_attr(Value), #xmlAttribute{name = 'rdf:about', value = Value}).
 -define(rdf_resource_attr(Value), #xmlAttribute{name = 'rdf:resource', value = Value}).
 
--define(is_shown_by_value(FileId), str_utils:format("https://eureka3d.vm.fedcloud.eu/3d/~ts", [FileId])).
+-define(default_is_shown_by_value(FileId), str_utils:format("https://eureka3d.vm.fedcloud.eu/3d/~ts", [FileId])).
 -define(IS_PART_OF_VALUE, "EUreka3D").
 
 -define(INDENT_SIZE, 4).  % per nesting level of an XML, for pretty-formatting
@@ -114,7 +115,7 @@ revise_for_publication(#xmlElement{
     name = 'rdf:RDF', content = MetadataElements
 } = RdfXml, ShareId, ShareRecord) ->
     ShareRootFileId = od_share:build_root_file(objectid, ShareId, ShareRecord),
-    IsShownByValue = ?is_shown_by_value(ShareRootFileId),
+    IsShownByValue = ?default_is_shown_by_value(ShareRootFileId),
 
     MetadataElementsWithPublicHandles = lists:map(fun
         (#xmlElement{name = 'edm:ProvidedCHO', content = PCHOContent0, attributes = CHOAttrs} = CHOElement) ->
@@ -124,7 +125,10 @@ revise_for_publication(#xmlElement{
             };
         (#xmlElement{name = 'ore:Aggregation', content = AggContent0, attributes = AggAttrs} = AggElement) ->
             AggContent1 = remove_rdf_resource_attr_from_aggregated_cho_element(AggContent0),
-            AggContent2 = insert_empty_element(AggContent1, 2, 'edm:isShownBy', [?rdf_resource_attr(IsShownByValue)]),
+            AggContent2 = insert_element(AggContent1, honour_existing, 2, #xmlElement{
+                name = 'edm:isShownBy',
+                attributes = [?rdf_resource_attr(IsShownByValue)]
+            }),
             AggElement#xmlElement{
                 attributes = remove_rdf_about_attr(AggAttrs),
                 content = AggContent2
@@ -157,7 +161,10 @@ insert_public_handle(#xmlElement{
         (#xmlElement{name = 'ore:Aggregation', content = AggContent, attributes = AggAttrs} = AggElement) ->
             AggElement#xmlElement{
                 attributes = insert_rdf_about_attr(AggAttrs, overwrite, <<PublicHandle/binary, <<"_AGG">>/binary>>),
-                content = insert_empty_element(AggContent, 2, 'edm:aggregatedCHO', [?rdf_resource_attr(PublicHandle)])
+                content = insert_element(AggContent, overwrite, 2, #xmlElement{
+                    name = 'edm:aggregatedCHO',
+                    attributes = [?rdf_resource_attr(PublicHandle)]
+                })
             };
         (Other) ->
             Other
@@ -221,16 +228,21 @@ ensure_text_element(Elements, XmlDepth, Name, Text) ->
 
 
 %% @private
-%% @doc existing attrs (if any) are always overwritten with the provided ones, the content is always empty
--spec insert_empty_element([#xmlElement{}], non_neg_integer(), atom(), [#xmlAttribute{}]) -> [#xmlElement{}].
-insert_empty_element(Elements, XmlDepth, Name, Attrs) ->
+-spec insert_element([#xmlElement{}], overwrite | honour_existing, non_neg_integer(), #xmlElement{}) ->
+    [#xmlElement{}].
+insert_element(Elements, Strategy, XmlDepth, #xmlElement{name = Name} = ElementToInsert) ->
     case ?find_matching_element(#xmlElement{name = Name}, Elements) of
-        {ok, Found} ->
-            lists_utils:replace(Found, Found#xmlElement{attributes = Attrs}, Elements);
+        {ok, #xmlElement{attributes = Attrs} = Found} ->
+            case ?find_matching_element(?rdf_resource_attr(_), Attrs) of
+                {ok, ?rdf_resource_attr(Res)} when Strategy == honour_existing, Res =/= "" ->
+                    Elements;
+                _ ->
+                    lists_utils:replace(Found, ElementToInsert, Elements)
+            end;
         error ->
             oai_xml:prepend_element_with_indent(
                 XmlDepth * ?INDENT_SIZE,
-                #xmlElement{name = Name, attributes = Attrs},
+                ElementToInsert,
                 Elements
             )
     end.
@@ -452,10 +464,14 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareId, ShareRecord, PublicHandle
     end,
 
     ShareRootFileId = od_share:build_root_file(objectid, ShareId, ShareRecord),
-    ExpIsShownByUrl = <<"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary>>,
+    EUreka3DViewerUrl = <<"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary>>,
+    ExpIsShownByUrl = case is_binary(IsShownByResourceAttr) of
+        true -> IsShownByResourceAttr;
+        false -> EUreka3DViewerUrl
+    end,
     ExpIsShownByLine = <<"        <edm:isShownBy rdf:resource=\"", ExpIsShownByUrl/binary, "\"/>\n">>,
     ExpAggChoLine = <<"        <edm:aggregatedCHO", ExpAggChoRdfResourceStr/binary, "/>\n">>,
-    ExpIsPartOfEureka3DElement =  <<"        <dcterms:isPartOf>EUreka3D</dcterms:isPartOf>\n">>,
+    ExpIsPartOfEureka3DElement = <<"        <dcterms:isPartOf>EUreka3D</dcterms:isPartOf>\n">>,
     <<
         "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
         OpeningRdfTag/binary, "\n",
@@ -472,13 +488,14 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareId, ShareRecord, PublicHandle
         "        <dc:identifier>some/internal/identifier/123456</dc:identifier>\n",
         (build_other_is_part_of_element(3, ValidationExampleBuilderCtx))/binary,
         "    </edm:ProvidedCHO>\n",
-        "    <edm:WebResource rdf:about=\"", (ExpIsShownByUrl)/binary, "\">\n",
+        "    <edm:WebResource rdf:about=\"", (EUreka3DViewerUrl)/binary, "\">\n",
         "        <dc:description>CHO representation</dc:description>\n",
         "        <dc:type>PMG</dc:type>\n",
         "        <edm:rights rdf:resource=\"http://creativecommons.org/licenses/by-nc-nd/4.0/\"/>\n",
         "    </edm:WebResource>\n",
         "    <ore:Aggregation", ExpOreAggRdfAboutStr/binary, ">\n",
-        (case MetadataType /= revised andalso AggChoResourceAttr == element_not_provided of true -> ExpAggChoLine; _ -> <<"">> end)/binary,
+        (case MetadataType /= revised andalso AggChoResourceAttr == element_not_provided of true -> ExpAggChoLine; _ ->
+            <<"">> end)/binary,
         (case IsShownByResourceAttr of element_not_provided -> ExpIsShownByLine; _ -> <<"">> end)/binary,
         (case {MetadataType, AggChoResourceAttr} of {_, element_not_provided} -> <<"">>; _ -> ExpAggChoLine end)/binary,
         "        <edm:dataProvider>Europeana Foundation</edm:dataProvider>\n",
@@ -492,7 +509,7 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareId, ShareRecord, PublicHandle
         "        <dc:type>JPG</dc:type>\n",
         "        <edm:rights rdf:resource=\"http://creativecommons.org/licenses/by-nc-sa/4.0/\"/>\n",
         "    </edm:WebResource>\n",
-        "    <edm:WebResource rdf:about=\"", (ExpIsShownByUrl)/binary, "\">\n",
+        "    <edm:WebResource rdf:about=\"", (EUreka3DViewerUrl)/binary, "\">\n",
         "        <dc:description>3D visualization of the CHO</dc:description>\n",
         "        <dc:type>3D</dc:type>\n",
         "        <edm:rights rdf:resource=\"http://creativecommons.org/licenses/by-nc-sa/4.0/\"/>\n",

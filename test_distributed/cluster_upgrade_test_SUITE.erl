@@ -22,12 +22,14 @@
 ]).
 -export([
     upgrade_from_21_02_4_handles/1,
-    upgrade_from_21_02_7_shares/1
+    upgrade_from_21_02_7_shares/1,
+    upgrade_from_25_0_shares/1
 ]).
 
 all() -> ?ALL([
     upgrade_from_21_02_4_handles,
-    upgrade_from_21_02_7_shares
+    upgrade_from_21_02_7_shares,
+    upgrade_from_25_0_shares
 ]).
 
 
@@ -248,6 +250,52 @@ upgrade_from_21_02_7_shares(_Config) ->
     end, PreexistingShareDocs).
 
 
+upgrade_from_25_0_shares(_Config) ->
+    % setting this value to 0 will force all shares to be stored in links,
+    % hence simulating the approach from vsn <= 25.0
+    ozt:set_env(max_inline_share_registry_size, 0),
+
+    SpacesAndShares = lists_utils:generate(fun(_) ->
+        SpaceId = ozt_spaces:create(),
+        Shares = lists_utils:generate(fun(_) ->
+            ozt_shares:create(SpaceId, datastore_key:new())
+        end, ?RAND_ELEMENT([0, 1, 10, 50, 100, 200, 300])),
+        {SpaceId, lists:sort(Shares)}
+    end, 100),
+    {Spaces, _} = lists:unzip(SpacesAndShares),
+
+    lists:foreach(fun({SpaceId, SortedShares}) ->
+        ?assertEqual(SortedShares, lists:sort(list_share_ids_completely(SpaceId)))
+    end, SpacesAndShares),
+
+    % simulate legacy od_space documents that did not have a properly initialized
+    % inline_share_registry (should be set to "requires_reorganization" state after
+    % doc upgrade on the DB level)
+    lists:foreach(fun(SpaceId) ->
+        ozt:rpc(od_space, update, [SpaceId, fun(SpaceRecord) ->
+            {ok, SpaceRecord#od_space{
+                inline_share_registry = inline_share_registry:post_upgrade_from_25_0()
+            }}
+        end])
+    end, Spaces),
+
+    % perform the upgrade
+
+    MaxInlineRegSize = 100,
+    ozt:set_env(max_inline_share_registry_size, MaxInlineRegSize),
+    ?assertEqual({ok, 6}, ozt:rpc(node_manager_plugin, upgrade_cluster, [5])),
+
+    lists:foreach(fun({SpaceId, SortedShares}) ->
+        ShareCount = length(SortedShares),
+        ?assertEqual(SortedShares, lists:sort(list_share_ids_completely(SpaceId))),
+        #od_space{inline_share_registry = InlineRegistry} = ozt_spaces:get(SpaceId),
+        ?assertEqual(ShareCount, inline_share_registry:get_share_count(ShareCount)),
+        ?assertEqual(ShareCount =< MaxInlineRegSize, inline_share_registry:is_utilized(InlineRegistry))
+    end, SpacesAndShares).
+
+    % fixme test idempotency
+
+
 %%%===================================================================
 %%% Helper functions
 %%%===================================================================
@@ -336,6 +384,11 @@ share_docs_to_exp_listing_entries(Docs) ->
 %% @private
 list_shares_completely(SpaceId) ->
     ozt:rpc(share_registry, list_entries, [SpaceId, #{limit => infinity}]).
+
+
+%% @private
+list_share_ids_completely(SpaceId) ->
+    ozt:rpc(share_registry, list_ids, [SpaceId, #{limit => infinity}]).
 
 
 %% @private

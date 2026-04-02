@@ -295,6 +295,7 @@ get_test(Config, FileType) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    ExpVisitCount = ?RAND_INT(0, 50),
     ShareId = datastore_key:new(),
     ShareData = #{
         <<"shareId">> => ShareId,
@@ -302,7 +303,8 @@ get_test(Config, FileType) ->
         <<"name">> => ?SHARE_NAME1,
         <<"description">> => str_utils:rand_hex(rand:uniform(1000) - 1),
         <<"rootFileId">> => ?GEN_ROOT_FILE_GUID(S1, ShareId),
-        <<"fileType">> => FileType
+        <<"fileType">> => FileType,
+        <<"visitCount">> => ExpVisitCount
     },
     {ok, ShareId} = oz_test_utils:create_share(Config, ?USER(Owner), ShareData#{
         % TODO VFS-VFS-12490 [file, dir] deprecated, left for BC, can be removed in 23.02.*
@@ -316,6 +318,10 @@ get_test(Config, FileType) ->
                 end
         end
     }),
+    lists_utils:pforeach(fun(_) ->
+        ozt_http:request(get, [<<"share">>, ShareId], #{})
+    end, lists:seq(1, ExpVisitCount)),
+    ?assertMatch(#od_share{visit_count = ExpVisitCount}, ozt_shares:get(ShareId), 60),
 
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{

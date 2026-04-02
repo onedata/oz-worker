@@ -293,7 +293,7 @@ is_provider_up_to_date_with_onezone(ProviderVsn) ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    15.
+    16.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -522,6 +522,39 @@ get_record_struct(15) ->
         {groups, #{string => [atom]}},
         {storages, #{string => integer}},
         {shares, [string]},
+        {harvesters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => {integer, [{atom, string}]}}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {support_parameters_registry, {custom, string, {persistent_record, to_string, from_string, support_parameters_registry}}},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(16) ->
+    % new field: inline_share_registry
+    {record, [
+        {name, string},
+        {description, string},
+        {organization_name, string},
+        {tags, [string]},
+
+        {advertised_in_marketplace, boolean},
+        {marketplace_contact_email, string},
+
+        {owners, [string]},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {storages, #{string => integer}},
+        {shares, [string]},
+        {inline_share_registry, {custom, string, {persistent_record, to_string, from_string, inline_share_registry}}},
         {harvesters, [string]},
 
         {eff_users, #{string => {[atom], [{atom, string}]}}},
@@ -1377,6 +1410,69 @@ upgrade_record(14, Space) ->
         Groups,
         Storages,
         Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        SupportParametersRegistry,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(15, Space) ->
+    {od_space,
+        Name,
+        <<"">>,
+        <<"">>,
+        [],
+
+        false,
+        <<"">>,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        SupportParametersRegistry,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Space,
+
+    {16, {od_space,
+        Name,
+        <<"">>,
+        <<"">>,
+        [],
+
+        false,
+        <<"">>,
+
+        Owners,
+
+        Users,
+        Groups,
+        Storages,
+        Shares,
+        inline_share_registry:post_upgrade_from_25_0(),
         Harvesters,
 
         EffUsers,

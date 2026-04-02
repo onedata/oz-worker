@@ -12,6 +12,8 @@
 -module(node_manager_plugin).
 -author("Michal Zmuda").
 
+% fixme Falling back to domain 'edge.data.spice-platform.eu' for connection to provider 'Edge' (ce07aafb6d886c9e9243346941790489ch0ad0) as IP addresses failed the connectivity check (172.201.123.137)
+
 -include("registered_names.hrl").
 -include_lib("cluster_worker/include/elements/node_manager/node_manager.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -49,7 +51,8 @@
     {2, <<"20.02.20">>},
     {3, <<"21.02.4">>},
     {4, <<"21.02.7">>},
-    {5, oz_worker:get_release_version()}
+    {5, <<"25.0">>},
+    {6, oz_worker:get_release_version()}
 ]).
 -define(OLDEST_UPGRADABLE_CLUSTER_GENERATION, 2).
 
@@ -166,7 +169,10 @@ upgrade_cluster(3) ->
     {ok, 4};
 upgrade_cluster(4) ->
     od_share:migrate_legacy_shares_21_02_8(),
-    {ok, 5}.
+    {ok, 5};
+upgrade_cluster(5) ->
+    od_share:reorganize_shares_to_inline_registries_25_1(),
+    {ok, 6}.
 
 %%--------------------------------------------------------------------
 %% @doc

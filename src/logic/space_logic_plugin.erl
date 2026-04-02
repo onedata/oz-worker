@@ -772,12 +772,12 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
         % remove all owners from the space to be deleted in order to avoid
         % potential errors when cleaning up user relations
         critical_section:run(?SPACE_CRITICAL_SECTION_KEY(SpaceId), fun() ->
-            {ok, #document{value = #od_space{name = SpaceName, tags = Tags}}} = od_space:update(
+            {ok, #document{value = #od_space{name = SpaceName, tags = Tags} = SpaceRecord}} = od_space:update(
                 SpaceId,
                 fun(Space) -> {ok, Space#od_space{owners = []}} end
             ),
             space_marketplace:delete(SpaceName, SpaceId, Tags),
-            share_registry:foreach(SpaceId, fun(ShareId) ->
+            share_registry:foreach(SpaceId, SpaceRecord, fun(ShareId) ->
                 % this will internally remove the share from the share registry
                 share_logic:delete(?ROOT, ShareId)
             end),

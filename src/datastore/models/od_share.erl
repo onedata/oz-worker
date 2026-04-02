@@ -27,7 +27,9 @@
 -export([build_public_url/1]).
 -export([build_public_rest_url/1]).
 -export([choose_provider_for_public_share_handling/1]).
+-export([increment_visit_count/1]).
 -export([migrate_legacy_shares_21_02_8/0, migrate_legacy_share_21_02_8/2]).
+-export([reorganize_shares_to_inline_registries_25_1/0]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -175,6 +177,13 @@ choose_provider_for_public_share_handling(ShareId) ->
     end.
 
 
+-spec increment_visit_count(od_share:id()) -> ok.
+increment_visit_count(ShareId) ->
+    ?check(od_share:update(ShareId, fun(ShareRecord = #od_share{visit_count = VC}) ->
+        {ok, ShareRecord#od_share{visit_count = VC + 1}}
+    end)).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Migrates all shares to the share registry - previously, they were stored as a
@@ -248,6 +257,34 @@ migrate_legacy_share_21_02_8(ShareId, ShareRecord = #od_share{handle = HandleId}
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% For space with a lower share count, migrates the shares from the
+%% share registry to the inline registry stored in the space doc.
+%% This is done for performance reasons - link listing is very expensive
+%% for spaces with a low share count (e.g. 1000x slower).
+%%
+%% The procedure is idempotent.
+%% Introduced in version 25.1.
+%% @end
+%%--------------------------------------------------------------------
+-spec reorganize_shares_to_inline_registries_25_1() -> ok.
+reorganize_shares_to_inline_registries_25_1() ->
+    ?notice("Reorganizing the share registries..."),
+    {ok, SpaceDocs} = od_space:list(),
+    lists:foreach(fun(#document{key = SpaceId, value = #od_space{name = SpaceName}}) ->
+        UpdatedInlineRegistry = share_registry:ensure_reorganized(SpaceId),
+        ShareCount = inline_share_registry:get_share_count(UpdatedInlineRegistry),
+        InlineRegistryInfo = case inline_share_registry:is_utilized(UpdatedInlineRegistry) of
+            true -> <<"inline registry">>;
+            false -> <<"link-based registry">>
+        end,
+        ?info("* ~ts\t~ts:\t~B share(s) - ~ts", [
+            SpaceId, SpaceName, ShareCount, InlineRegistryInfo
+        ])
+    end, SpaceDocs).
+
+
 %%%===================================================================
 %%% datastore_model callbacks
 %%%===================================================================
@@ -259,7 +296,7 @@ migrate_legacy_share_21_02_8(ShareId, ShareRecord = #od_share{handle = HandleId}
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    8.
+    9.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -378,6 +415,22 @@ get_record_struct(8) ->
 
         {creation_time, integer},
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
+    ]};
+get_record_struct(9) ->
+    % new field - visit_count
+    {record, [
+        {name, string},
+        {description, string},
+        {space, string},
+        {handle, string},
+
+        {root_file_uuid, string},
+        {file_type, atom},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {visit_count, integer}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -521,18 +574,18 @@ upgrade_record(6, Share) ->
         CreationTime,
         Creator
     } = Share,
-    {7, #od_share{
-        name = Name,
-        description = Description,
+    {7, {od_share,
+        Name,
+        Description,
 
-        space = SpaceId,
-        handle = HandleId,
+        SpaceId,
+        HandleId,
 
-        root_file_uuid = RootFileId,
-        file_type = FileType,
+        RootFileId,
+        FileType,
 
-        creation_time = CreationTime,
-        creator = Creator
+        CreationTime,
+        Creator
     }};
 upgrade_record(7, Share) ->
     {
@@ -569,7 +622,38 @@ upgrade_record(7, Share) ->
         ])),
         GeneratedDummyUuid
     end,
-    {8, #od_share{
+    {8, {od_share,
+        Name,
+        Description,
+
+        SpaceId,
+        HandleId,
+
+        RootFileUuid,
+        case OldFileType of
+            file -> ?REGULAR_FILE_TYPE;
+            dir -> ?DIRECTORY_TYPE
+        end,
+
+        CreationTime,
+        Creator
+    }};
+upgrade_record(8, Share) ->
+    {
+        od_share,
+        Name,
+        Description,
+
+        SpaceId,
+        HandleId,
+
+        RootFileUuid,
+        FileType,
+
+        CreationTime,
+        Creator
+    } = Share,
+    {9, #od_share{
         name = Name,
         description = Description,
 
@@ -577,11 +661,10 @@ upgrade_record(7, Share) ->
         handle = HandleId,
 
         root_file_uuid = RootFileUuid,
-        file_type = case OldFileType of
-            file -> ?REGULAR_FILE_TYPE;
-            dir -> ?DIRECTORY_TYPE
-        end,
+        file_type = FileType,
 
         creation_time = CreationTime,
-        creator = Creator
+        creator = Creator,
+
+        visit_count = 0
     }}.

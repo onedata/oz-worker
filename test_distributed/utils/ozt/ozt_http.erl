@@ -81,14 +81,23 @@ rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson) 
     end.
 
 
--spec request(http_client:method(), http_client:url(), http_client:headers()) ->
+-spec request(
+    http_client:method(),
+    http_client:url() | urn_tokens(),
+    http_client:headers()
+) ->
     {ok, json_utils:json_term()} | errors:error().
-request(Method, Url, Headers) ->
-    request(Method, Url, Headers, #{}).
+request(Method, UrlOrUrnTokens, Headers) ->
+    request(Method, UrlOrUrnTokens, Headers, #{}).
 
--spec request(http_client:method(), http_client:url(), http_client:headers(),
-    json_utils:json_term() | {multipart, proplists:proplist()}) -> {ok, json_utils:json_term()} | errors:error().
-request(Method, Url, Headers, Data) ->
+-spec request(
+    http_client:method(),
+    http_client:url() | urn_tokens(),
+    http_client:headers(),
+    json_utils:json_term() | {multipart, proplists:proplist()}
+) ->
+    {ok, json_utils:json_term()} | errors:error().
+request(Method, UrlOrUrnTokens, Headers, Data) ->
     Opts = [
         {ssl_options, ssl_opts()},
         {connect_timeout, timer:seconds(60)},
@@ -97,6 +106,10 @@ request(Method, Url, Headers, Data) ->
     EncodedData = case Data of
         {multipart, _} -> Data;
         DataJson -> json_utils:encode(DataJson)
+    end,
+    Url = case UrlOrUrnTokens of
+        <<"http", _/binary>> -> UrlOrUrnTokens;
+        _ -> build_url(UrlOrUrnTokens)
     end,
     case http_client:request(Method, Url, Headers, EncodedData, Opts) of
         {ok, OkCode, _, Body} when OkCode >= 200 andalso OkCode < 300 ->
@@ -124,7 +137,9 @@ build_url(UrnTokens) ->
 
 -spec build_url(http | https | wss, urn_tokens()) -> http_client:url().
 build_url(Scheme, Tokens) when is_list(Tokens) ->
-    build_url(Scheme, str_utils:join_binary(Tokens));
+    build_url(Scheme, lists:foldl(fun(Token, Acc) ->
+        <<Acc/binary, (str_utils:ensure_prefix(Token, <<"/">>))/binary>>
+    end, <<"">>, Tokens));
 build_url(Scheme, Urn) ->
     PortStr = case ozt:get_env(https_server_port) of
         443 -> <<"">>;
@@ -134,7 +149,7 @@ build_url(Scheme, Urn) ->
         Scheme,
         ozt:get_domain(),
         PortStr,
-        Urn
+        str_utils:ensure_prefix(Urn, <<"/">>)
     ]).
 
 

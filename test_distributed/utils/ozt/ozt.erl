@@ -31,6 +31,7 @@
 -export([onenv_init_per_suite/2, onenv_end_per_suite/0]).
 -export([rpc/3, rpc/4]).
 -export([rpc_multicall/3]).
+-export([insecure_erpc/3]).
 -export([timestamp_seconds/0]).
 -export([reconcile_entity_graph/0]).
 -export([overwrite_auth_config/1]).
@@ -145,6 +146,11 @@ rpc_multicall(Module, Function, Args) ->
     lists:foreach(fun(Node) ->
         rpc(Node, Module, Function, Args)
     end, get_nodes()).
+
+
+-spec insecure_erpc(module(), atom(), [term()]) -> term().
+insecure_erpc(Module, Function, Args) ->
+    erpc:call(?RAND_ELEMENT(get_nodes()), Module, Function, Args).
 
 
 -spec timestamp_seconds() -> time:seconds().

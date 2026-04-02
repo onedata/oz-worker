@@ -159,7 +159,8 @@ get(#el_req{gri = #gri{id = ShareId, aspect = instance, scope = public}}, ShareR
         description = Description,
         handle = HandleId,
         file_type = FileType,
-        creation_time = CreationTime
+        creation_time = CreationTime,
+        visit_count = VisitCount
     } = ShareRecord,
     {ok, #{
         <<"spaceId">> => SpaceId,
@@ -168,7 +169,8 @@ get(#el_req{gri = #gri{id = ShareId, aspect = instance, scope = public}}, ShareR
         <<"rootFileObjectId">> => od_share:build_root_file(objectid, ShareId, ShareRecord),
         <<"fileType">> => FileType,
         <<"handleId">> => HandleId,
-        <<"creationTime">> => CreationTime
+        <<"creationTime">> => CreationTime,
+        <<"visitCount">> => VisitCount
     }}.
 
 

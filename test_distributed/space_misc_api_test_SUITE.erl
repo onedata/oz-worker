@@ -880,11 +880,16 @@ delete_test(Config) ->
         {ok, Spaces} = oz_test_utils:list_spaces(Config),
         ?assertEqual(lists:member(SpaceId, Spaces), not ShouldSucceed),
         ?assertEqual(in_marketplace(SpaceId), AdvertisedInMarketplace andalso not ShouldSucceed),
-        ExpShareEntries = case ShouldSucceed of
-            false -> ShareEntries;
-            true -> []
-        end,
-        ?assertEqual(ExpShareEntries, ozt:rpc(share_registry, list_entries, [SpaceId, #{limit => infinity}]))
+        case ShouldSucceed of
+            false ->
+                ?assertEqual(ShareEntries, ozt:insecure_erpc(
+                    share_registry, list_entries, [SpaceId, #{limit => infinity}]
+                ));
+            true ->
+                ?assertThrow(?ERROR_NOT_FOUND, ozt:insecure_erpc(
+                    share_registry, list_entries, [SpaceId, #{limit => infinity}]
+                ))
+        end
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -928,7 +933,7 @@ delete_test(Config) ->
     utils:repeat(2222, fun() -> ozt_shares:create(SpaceWithManyShares) end),
     ?assertEqual(2222, length(ozt:rpc(share_registry, list_entries, [SpaceWithManyShares, #{limit => infinity}]))),
     ?assertMatch(ok, ozt:rpc(space_logic, delete, [aai:root_auth(), SpaceWithManyShares])),
-    ?assertEqual(0, length(ozt:rpc(share_registry, list_entries, [SpaceWithManyShares, #{limit => infinity}]))).
+    ?assertThrow(?ERROR_NOT_FOUND, ozt:insecure_erpc(share_registry, list_entries, [SpaceWithManyShares, #{limit => infinity}])).
 
 
 list_storages_test(Config) ->
