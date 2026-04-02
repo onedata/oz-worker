@@ -16,6 +16,7 @@
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include("auth/entitlement_mapping.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
@@ -33,7 +34,6 @@
     end_per_testcase/2
 ]).
 -export([
-    create_with_predefined_id_test/1,
     get_test/1,
     get_self_test/1,
     update_test/1,
@@ -45,24 +45,23 @@
     create_client_token_test/1,
     delete_client_token_test/1,
 
-    acquire_idp_access_token_test/1,
-
     get_spaces_in_eff_provider_test/1,
 
     % sequential
     create_test/1,
+    user_account_creation_test/1,
     list_test/1,
     toggle_access_block_test/1,
     get_space_membership_requests_test/1,
     get_space_membership_requests_error_marketplace_disabled_test/1,
     list_client_tokens_test/1,
     get_eff_provider_test/1,
-    list_eff_providers_test/1
+    list_eff_providers_test/1,
+    acquire_idp_access_token_test/1
 ]).
 
 groups() -> [
     {parallel_tests, [parallel], [
-        create_with_predefined_id_test,
         get_test,
         get_self_test,
         update_test,
@@ -74,21 +73,23 @@ groups() -> [
         create_client_token_test,
         delete_client_token_test,
 
-        acquire_idp_access_token_test,
 
         get_spaces_in_eff_provider_test
     ]},
     {sequential_tests, [sequential], [
         create_test,
+        user_account_creation_test,
         list_test,
         toggle_access_block_test,
         get_space_membership_requests_test,
         get_space_membership_requests_error_marketplace_disabled_test,
         list_client_tokens_test,
         get_eff_provider_test,
-        list_eff_providers_test
+        list_eff_providers_test,
+        acquire_idp_access_token_test
     ]}
 ].
+
 
 all() -> [
     {group, sequential_tests},
@@ -96,37 +97,17 @@ all() -> [
 ].
 
 
+-define(DUMMY_IDP_A, dummyIdPA).
+-define(DUMMY_IDP_B, dummyIdPB).
+-define(DUMMY_IDP_C, dummyIdPC).
+-define(RANDOM_CREATION_CONTEXT(), ?RAND_CHOICE(
+    onepanel_account_migration, user_creation_api, gui_login, access_token
+)).
+
+
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
-
-create_with_predefined_id_test(Config) ->
-    % Creating users with predefined ids is reserved for internal Onezone logic
-    % (?ROOT auth).
-    PredefinedUserId = <<"ausdhf87adsga87ht2q7hrw">>,
-    ExpFullName = ?USER_FULL_NAME1,
-    ExpUsername = ?UNIQUE_STRING,
-    UserData = #{<<"fullName">> => ExpFullName, <<"username">> => ExpUsername},
-    {ok, PredefinedUserId} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
-        Config, user_logic, create, [?ROOT, PredefinedUserId, UserData]
-    )),
-    {ok, User} = oz_test_utils:get_user(Config, PredefinedUserId),
-    ?assertEqual(ExpFullName, User#od_user.full_name),
-    ?assertEqual(ExpUsername, User#od_user.username),
-
-    % Second try should fail (such id exists)
-    ?assertMatch(?ERROR_ALREADY_EXISTS,
-        oz_test_utils:call_oz(
-            Config, user_logic, create, [?ROOT, PredefinedUserId, #{<<"fullName">> => ?UNIQUE_STRING}]
-        )
-    ),
-
-    % Reusing the already occupied username should fail
-    ?assertMatch(?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>),
-        oz_test_utils:call_oz(
-            Config, user_logic, create, [?ROOT, #{<<"username">> => ExpUsername}]
-        )
-    ).
 
 
 get_test(Config) ->
@@ -341,10 +322,10 @@ get_self_test(Config) ->
 
 
 update_test(Config) ->
-    OccupiedUsername = ?UNIQUE_STRING,
+    OccupiedUsername = ?RAND_STR(10),
     oz_test_utils:create_user(Config, #{<<"username">> => OccupiedUsername}),
 
-    CurrentUsername = ?UNIQUE_STRING,
+    CurrentUsername = ?RAND_STR(11),
     EnvSetUpFun = fun() ->
         {ok, UserId} = oz_test_utils:create_user(Config, #{
             <<"fullName">> => ?USER_FULL_NAME1, <<"username">> => CurrentUsername
@@ -879,139 +860,6 @@ delete_client_token_test(Config) ->
     )).
 
 
-acquire_idp_access_token_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
-    {ok, U2} = oz_test_utils:create_user(Config),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config),
-
-    % Offline access disabled in given IdP
-    oz_test_utils:overwrite_auth_config(Config, #{
-        openidConfig => #{
-            enabled => true
-        },
-        supportedIdps => [
-            {dummyIdP, #{
-                protocol => openid,
-                protocolConfig => #{
-                    plugin => default_oidc_plugin,
-                    offlineAccess => false
-                }
-            }}
-        ]
-    }),
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U1}
-            ]
-        },
-        rest_spec = RestSpec = #rest_spec{
-            method = post,
-            path = <<"/user/idp_access_token/dummyIdP">>,
-            expected_code = ?HTTP_400_BAD_REQUEST
-        },
-        logic_spec = LogicSpec = #logic_spec{
-            module = user_logic,
-            function = acquire_idp_access_token,
-            args = [auth, U1, dummyIdP],
-            expected_result = ?ERROR_REASON(?ERR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, []))
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-
-    % Inexistent IdP
-    oz_test_utils:overwrite_auth_config(Config, #{
-        openidConfig => #{
-            enabled => true
-        },
-        supportedIdps => [
-            {dummyIdP, #{
-                protocol => openid,
-                protocolConfig => #{
-                    plugin => default_oidc_plugin,
-                    offlineAccess => true
-                }
-            }}
-        ]
-    }),
-    ApiTestSpec2 = ApiTestSpec#api_test_spec{
-        rest_spec = RestSpec#rest_spec{
-            path = <<"/user/idp_access_token/inexistentIdP">>,
-            expected_code = ?HTTP_400_BAD_REQUEST
-        },
-        logic_spec = LogicSpec#logic_spec{
-            args = [auth, U1, inexistentIdP],
-            expected_result = ?ERROR_REASON(?ERR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, [dummyIdP]))
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-
-
-    % Newly created user should not have any IdP access tokens cached
-    ApiTestSpec3 = ApiTestSpec#api_test_spec{
-        rest_spec = RestSpec#rest_spec{
-            path = <<"/user/idp_access_token/dummyIdP">>,
-            expected_code = ?HTTP_404_NOT_FOUND
-        },
-        logic_spec = LogicSpec#logic_spec{
-            args = [auth, U1, dummyIdP],
-            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
-
-    % Simulate user login
-    DummyAccessToken = <<"abcdef">>,
-    Now = oz_test_utils:timestamp_seconds(Config),
-    oz_test_utils:call_oz(Config, linked_accounts, merge, [
-        U1, #linked_account{
-            idp = dummyIdP,
-            subject_id = <<"123">>,
-            access_token = {DummyAccessToken, Now + 3600}
-        }
-    ]),
-
-    VerifyFun = fun(Token, Ttl) ->
-        Token =:= DummyAccessToken andalso Ttl =< 3600
-    end,
-
-    ApiTestSpec4 = ApiTestSpec#api_test_spec{
-        rest_spec = RestSpec#rest_spec{
-            path = <<"/user/idp_access_token/dummyIdP">>,
-            expected_code = ?HTTP_200_OK,
-            expected_body = fun(#{<<"token">> := Token, <<"ttl">> := Ttl}) ->
-                VerifyFun(Token, Ttl)
-            end
-        },
-        logic_spec = LogicSpec#logic_spec{
-            args = [auth, U1, dummyIdP],
-            expected_result = ?OK_TERM(fun({Token, Ttl}) ->
-                VerifyFun(Token, Ttl)
-            end)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)),
-
-    % Check that regular client can't make request on behalf of other client
-    ApiTestSpec5 = ApiTestSpec4#api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U2},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = undefined
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec5)).
-
-
 get_spaces_in_eff_provider_test(Config) ->
     {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_DETAILS(?UNIQUE_STRING)),
     {ok, U1} = oz_test_utils:create_user(Config),
@@ -1190,6 +1038,116 @@ create_test(Config) ->
     end, TestCases).
 
 
+user_account_creation_test(_Config) ->
+    utils:repeat(20, fun user_account_creation_test_base/0).
+
+user_account_creation_test_base() ->
+    ozt:overwrite_auth_config(#{
+        openidConfig => #{
+            enabled => true
+        },
+        supportedIdps => lists:map(fun(IdP) ->
+            {IdP, #{
+                protocol => openid,
+                protocolConfig => #{
+                    plugin => default_oidc_plugin,
+                    entitlementMapping => #{
+                        enabled => true,
+                        parser => flat_entitlement_parser
+                    }
+                }
+            }}
+        end, [?DUMMY_IDP_A, ?DUMMY_IDP_B, ?DUMMY_IDP_C])
+    }),
+
+    RequestedUserId = ?RAND_CHOICE(undefined, datastore_key:new()),
+    RequestedFullName = ?RAND_CHOICE(?DEFAULT_FULL_NAME, ?RAND_STR(20)),
+    RequestedUsername = ?RAND_CHOICE(undefined, ?RAND_STR(10)),
+
+    LinkedAccounts = lists_utils:generate(fun() ->
+        #linked_account{
+            idp = ?RAND_CHOICE(?DUMMY_IDP_A, ?DUMMY_IDP_B, ?DUMMY_IDP_C),
+            subject_id = datastore_key:new(),
+            full_name = ?RAND_CHOICE(undefined, ?add_disallowed_chars_to_name(?RAND_STR(10), ?RAND_INT(0, 10))),
+            username = ?RAND_CHOICE(undefined, ?add_disallowed_chars_to_name(?RAND_STR(10), ?RAND_INT(0, 10))),
+            emails = lists_utils:generate(fun() -> <<(?RAND_STR(15))/binary, "@example.com">> end, ?RAND_INT(1, 3)),
+            entitlements = lists_utils:generate(fun datastore_key:new/0, ?RAND_INT(0, 5)),
+            custom = ?RAND_ELEMENT([
+                ?RAND_STR(),
+                ?RAND_INT(0, 123123),
+                #{<<"key">> => datastore_key:new()}
+            ])
+        }
+    end, ?RAND_INT(0, 5)),
+    InitialUserRecord = #od_user{
+        full_name = RequestedFullName,
+        username = RequestedUsername
+    },
+
+    {ok, #document{key = ActualUserId}} = ?assertMatch({ok, _}, ozt:rpc(user_account, create, [
+        RequestedUserId, InitialUserRecord, LinkedAccounts, ?RANDOM_CREATION_CONTEXT()
+    ])),
+    RequestedUserId /= undefined andalso ?assertEqual(ActualUserId, RequestedUserId),
+
+    %% @see user_account:resolve_full_name_for_new_account/2
+    ExpFullName = lists:foldl(fun
+        (#linked_account{full_name = undefined}, Acc) ->
+            Acc;
+        (#linked_account{full_name = FullName}, ?DEFAULT_FULL_NAME) ->
+            entity_logic_sanitizer:normalize_full_name(FullName);
+        (#linked_account{full_name = _}, Acc) ->
+            Acc
+    end, RequestedFullName, LinkedAccounts),
+
+    %% @see user_account:resolve_username_for_new_account/2
+    ExpUsername = lists:foldl(fun
+        (#linked_account{username = undefined}, Acc) ->
+            Acc;
+        (#linked_account{username = Username}, undefined) ->
+            entity_logic_sanitizer:normalize_username(Username);
+        (#linked_account{username = _}, Acc) ->
+            Acc
+    end, RequestedUsername, LinkedAccounts),
+
+    User = ozt_users:get(ActualUserId),
+    ?assertEqual(ExpFullName, User#od_user.full_name),
+    ?assertEqual(ExpUsername, User#od_user.username),
+    ?assertEqual(LinkedAccounts, User#od_user.linked_accounts),
+    ?assertEqual(
+        lists:sort(lists:flatten([LA#linked_account.emails || LA <- LinkedAccounts])),
+        User#od_user.emails
+    ),
+    ExpectedMappedEntitlements = lists:flatmap(fun(#linked_account{entitlements = Entitlements}) ->
+        [{ozt:rpc(entitlement_mapping, gen_group_id, [[#idp_group{name = E}]]), member} || E <- Entitlements]
+    end, LinkedAccounts),
+    ?assertEqual(
+        lists:sort(ExpectedMappedEntitlements),
+        lists:sort(User#od_user.entitlements)
+    ),
+
+    % second attempt should fail (such user id exists)
+    ?assertMatch(
+        ?ERROR_ALREADY_EXISTS,
+        ozt:rpc(user_account, create, [
+            ActualUserId,
+            InitialUserRecord#od_user{full_name = ?UNIQUE_STRING},
+            LinkedAccounts,
+            ?RANDOM_CREATION_CONTEXT()
+        ])
+    ),
+
+    % reusing the already occupied username should fail
+    RequestedUsername /= undefined andalso ?assertMatch(
+        ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>),
+        ozt:rpc(user_account, create, [
+            undefined,
+            InitialUserRecord#od_user{username = RequestedUsername},
+            LinkedAccounts,
+            ?RANDOM_CREATION_CONTEXT()
+        ])
+    ).
+
+
 list_test(Config) ->
     % Make sure that users created in other tests are deleted.
     oz_test_utils:delete_all_entities(Config),
@@ -1361,27 +1319,27 @@ get_space_membership_requests_test(Config) ->
         % the encoded JSON record
         ExpectedLogicResult = setelement(4, DecodedExpectedResult, LastPendingRequestPruningTime),
         #api_test_spec{
-        client_spec = #client_spec{
-            correct = [{user, UserId}]
-        },
-        logic_spec = #logic_spec{
-            module = user_logic,
-            function = get_space_membership_requests,
-            args = [auth, UserId],
-            expected_result = ?OK_TERM(ExpectedLogicResult)
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/user/space_membership_requests">>],
-            expected_code = ?HTTP_200_OK,
-            expected_body = ExpectedResult
-        },
-        gs_spec = #gs_spec{
-            operation = get,
-            gri = #gri{type = od_user, id = UserId, aspect = space_membership_requests},
-            expected_result_gui = ?OK_MAP_CONTAINS(ExpectedResult)
+            client_spec = #client_spec{
+                correct = [{user, UserId}]
+            },
+            logic_spec = #logic_spec{
+                module = user_logic,
+                function = get_space_membership_requests,
+                args = [auth, UserId],
+                expected_result = ?OK_TERM(ExpectedLogicResult)
+            },
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/user/space_membership_requests">>],
+                expected_code = ?HTTP_200_OK,
+                expected_body = ExpectedResult
+            },
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{type = od_user, id = UserId, aspect = space_membership_requests},
+                expected_result_gui = ?OK_MAP_CONTAINS(ExpectedResult)
+            }
         }
-    }
     end,
 
     ApiTestSpecForSubjectUser = GenApiTestSpec(SubjectUserId, ExpResultForSubjectUser, ExpLastPendingRequestPruningTime),
@@ -1594,6 +1552,140 @@ list_eff_providers_test(Config) ->
     ?assert(not oz_test_utils:call_oz(
         Config, user_logic, has_eff_provider, [U2, <<"asdiucyaie827346w">>])
     ).
+
+
+acquire_idp_access_token_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    % Offline access disabled in given IdP
+    oz_test_utils:overwrite_auth_config(Config, #{
+        openidConfig => #{
+            enabled => true
+        },
+        supportedIdps => [
+            {?DUMMY_IDP_A, #{
+                protocol => openid,
+                protocolConfig => #{
+                    plugin => default_oidc_plugin,
+                    offlineAccess => false
+                }
+            }}
+        ]
+    }),
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U1}
+            ]
+        },
+        rest_spec = RestSpec = #rest_spec{
+            method = post,
+            path = <<"/user/idp_access_token/", (atom_to_binary(?DUMMY_IDP_A))/binary>>,
+            expected_code = ?HTTP_400_BAD_REQUEST
+        },
+        logic_spec = LogicSpec = #logic_spec{
+            module = user_logic,
+            function = acquire_idp_access_token,
+            args = [auth, U1, ?DUMMY_IDP_A],
+            expected_result = ?ERROR_REASON(?ERR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, []))
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+
+    % Inexistent IdP
+    oz_test_utils:overwrite_auth_config(Config, #{
+        openidConfig => #{
+            enabled => true
+        },
+        supportedIdps => [
+            {?DUMMY_IDP_A, #{
+                protocol => openid,
+                protocolConfig => #{
+                    plugin => default_oidc_plugin,
+                    offlineAccess => true
+                }
+            }}
+        ]
+    }),
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            path = <<"/user/idp_access_token/inexistentIdP">>,
+            expected_code = ?HTTP_400_BAD_REQUEST
+        },
+        logic_spec = LogicSpec#logic_spec{
+            args = [auth, U1, inexistentIdP],
+            expected_result = ?ERROR_REASON(?ERR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, [?DUMMY_IDP_A]))
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+
+    % Newly created user should not have any IdP access tokens cached
+    ApiTestSpec3 = ApiTestSpec#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            path = <<"/user/idp_access_token/", (atom_to_binary(?DUMMY_IDP_A))/binary>>,
+            expected_code = ?HTTP_404_NOT_FOUND
+        },
+        logic_spec = LogicSpec#logic_spec{
+            args = [auth, U1, ?DUMMY_IDP_A],
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
+
+    % Simulate user login
+    DummyAccessToken = <<"abcdef">>,
+    Now = oz_test_utils:timestamp_seconds(Config),
+    oz_test_utils:call_oz(Config, user_account, link_account, [
+        U1, #linked_account{
+            idp = ?DUMMY_IDP_A,
+            subject_id = <<"123">>,
+            access_token = {DummyAccessToken, Now + 3600}
+        }
+    ]),
+
+    VerifyFun = fun(Token, Ttl) ->
+        Token =:= DummyAccessToken andalso Ttl =< 3600
+    end,
+
+    ApiTestSpec4 = ApiTestSpec#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            path = <<"/user/idp_access_token/", (atom_to_binary(?DUMMY_IDP_A))/binary>>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = fun(#{<<"token">> := Token, <<"ttl">> := Ttl}) ->
+                VerifyFun(Token, Ttl)
+            end
+        },
+        logic_spec = LogicSpec#logic_spec{
+            args = [auth, U1, ?DUMMY_IDP_A],
+            expected_result = ?OK_TERM(fun({Token, Ttl}) ->
+                VerifyFun(Token, Ttl)
+            end)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)),
+
+    % Check that regular client can't make request on behalf of other client
+    ApiTestSpec5 = ApiTestSpec4#api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U2},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = undefined
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec5)).
+
 
 %%%===================================================================
 %%% Setup/teardown functions

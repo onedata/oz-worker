@@ -1880,7 +1880,7 @@ map_user_test(Config) ->
     }),
 
     SubjectId = str_utils:rand_hex(20),
-    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~ts", [?DUMMY_IDP, SubjectId])),
+    LegacyUserId = datastore_key:gen_legacy_key(<<"">>, str_utils:format_bin("~ts:~ts", [?DUMMY_IDP, SubjectId])),
     ModernUserId = datastore_key:new_from_digest([atom_to_binary(?DUMMY_IDP, utf8), SubjectId]),
 
     RunTest = fun(ExpUserId) ->
@@ -1914,7 +1914,7 @@ map_user_test(Config) ->
     end,
     % If a legacy user exist, the idp account should map to legacy key, otherwise to a new one
     RunTest(ModernUserId),
-    oz_test_utils:call_oz(Config, user_logic, create, [?ROOT, LegacyUserId, #{}]),
+    oz_test_utils:call_oz(Config, user_account, create, [LegacyUserId, #od_user{}, [], user_creation_api]),
     RunTest(LegacyUserId),
     oz_test_utils:delete_user(Config, LegacyUserId),
     RunTest(ModernUserId).
@@ -1954,7 +1954,7 @@ map_group_test(Config) ->
 
     RawEntitlement = <<"my-unit/my-team/my-subteam">>,
     EncodedGroupPath = [<<"ut:my-unit">>, <<"tm:my-team">>, <<"tm:my-subteam">>],
-    LegacyGroupId = datastore_key:build_adjacent(<<"">>, str_utils:join_binary(EncodedGroupPath, <<"/">>)),
+    LegacyGroupId = datastore_key:gen_legacy_key(<<"">>, str_utils:join_binary(EncodedGroupPath, <<"/">>)),
     ModernGroupId = datastore_key:new_from_digest(EncodedGroupPath),
 
     RunTest = fun(ExpGroupId) ->

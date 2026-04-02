@@ -31,7 +31,7 @@
 ]).
 
 -export([
-    create/1, create/2, create/3,
+    create/1, create/2,
     create_client_token/2
 ]).
 -export([
@@ -121,8 +121,6 @@
     has_eff_atm_inventory/2
 ]).
 -export([
-    validate_full_name/1, normalize_full_name/1,
-    validate_username/1, normalize_username/1,
     reset_entitlements/1
 ]).
 
@@ -150,22 +148,10 @@ create(Auth) ->
 -spec create(Auth :: aai:auth(), Data :: map()) ->
     {ok, od_user:id()} | errors:error().
 create(Auth, Data) ->
-    create(Auth, undefined, Data).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates a new user document in database with proposed UserId.
-%% full_name, username and password can be provided in a proper Data object.
-%% @end
-%%--------------------------------------------------------------------
--spec create(Auth :: aai:auth(), ProposedUserId :: undefined | od_user:id(), Data :: map()) ->
-    {ok, od_user:id()} | errors:error().
-create(Auth, ProposedUserId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
         auth = Auth,
-        gri = #gri{type = od_user, id = ProposedUserId, aspect = instance},
+        gri = #gri{type = od_user, id = undefined, aspect = instance},
         data = Data
     })).
 
@@ -1590,68 +1576,6 @@ has_eff_atm_inventory(UserId, AtmInventoryId) when is_binary(UserId) ->
     entity_graph:has_relation(effective, top_down, od_atm_inventory, AtmInventoryId, od_user, UserId);
 has_eff_atm_inventory(User, AtmInventoryId) ->
     entity_graph:has_relation(effective, top_down, od_atm_inventory, AtmInventoryId, User).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Validates user full_name against allowed format.
-%% @end
-%%--------------------------------------------------------------------
--spec validate_full_name(binary()) -> boolean().
-validate_full_name(FullName) ->
-    str_utils:validate_name(
-        FullName, ?FULL_NAME_FIRST_CHARS_ALLOWED, ?FULL_NAME_MIDDLE_CHARS_ALLOWED,
-        ?FULL_NAME_LAST_CHARS_ALLOWED, ?FULL_NAME_MAXIMUM_LENGTH
-    ).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% @see entity_logic_sanitizer:normalize_name/9.
-%% Normalizes user full_name to fit the allowed format.
-%% @end
-%%--------------------------------------------------------------------
--spec normalize_full_name(undefined | od_user:full_name()) -> od_user:full_name().
-normalize_full_name(undefined) ->
-    ?DEFAULT_FULL_NAME;
-normalize_full_name(FullName) ->
-    entity_logic_sanitizer:normalize_name(FullName,
-        ?FULL_NAME_FIRST_CHARS_ALLOWED, <<"">>,
-        ?FULL_NAME_MIDDLE_CHARS_ALLOWED, <<"-">>,
-        ?FULL_NAME_LAST_CHARS_ALLOWED, <<"">>,
-        ?FULL_NAME_MAXIMUM_LENGTH, ?DEFAULT_FULL_NAME
-    ).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Validates username against allowed format.
-%% @end
-%%--------------------------------------------------------------------
--spec validate_username(od_user:username()) -> boolean().
-validate_username(Username) ->
-    str_utils:validate_name(
-        Username, ?USERNAME_FIRST_CHARS_ALLOWED, ?USERNAME_MIDDLE_CHARS_ALLOWED,
-        ?USERNAME_LAST_CHARS_ALLOWED, ?USERNAME_MAXIMUM_LENGTH
-    ).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% @see entity_logic_sanitizer:normalize_name/9.
-%% Normalizes username to fit the allowed format.
-%% @end
-%%--------------------------------------------------------------------
--spec normalize_username(od_user:username()) -> od_user:username().
-normalize_username(undefined) ->
-    undefined;
-normalize_username(Username) ->
-    entity_logic_sanitizer:normalize_name(Username,
-        ?USERNAME_FIRST_CHARS_ALLOWED, <<"">>,
-        ?USERNAME_MIDDLE_CHARS_ALLOWED, <<"-">>,
-        ?USERNAME_LAST_CHARS_ALLOWED, <<"">>,
-        ?USERNAME_MAXIMUM_LENGTH, undefined
-    ).
 
 
 %%--------------------------------------------------------------------

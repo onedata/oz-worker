@@ -232,8 +232,8 @@ destroy_test_entities(Users, Groups, Spaces) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_user_with_uuid(User :: #od_user{}, UserId :: binary()) -> {ok, UserId :: binary()}.
-create_user_with_uuid(User, UserId) ->
-    {ok, _} = od_user:create(#document{key = UserId, value = User}),
+create_user_with_uuid(UserRecord, UserId) ->
+    {ok, _} = user_account:create(UserId, UserRecord, [], user_creation_api),
     {ok, UserId}.
 
 

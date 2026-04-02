@@ -175,14 +175,14 @@ migrate_onepanel_user_to_onezone(OnepanelUserId, OnepanelUsername, PasswordHash,
             ok
     end,
 
-    DefaultDoc = #document{key = UserId, value = #od_user{
-        full_name = user_logic:normalize_full_name(OnepanelUsername),
-        username = OnepanelUsername,
+    UserRecord = #od_user{
+        full_name = entity_logic_sanitizer:normalize_full_name(OnepanelUsername),
+        username = entity_logic_sanitizer:normalize_username(OnepanelUsername),
         basic_auth_enabled = true,
         password_hash = PasswordHash
-    }},
-    case od_user:create(DefaultDoc) of
-        {error, already_exists} ->
+    },
+    case user_account:create(UserId, UserRecord, [], onepanel_account_migration) of
+        ?ERROR_ALREADY_EXISTS ->
             {ok, _} = od_user:update(UserId, fun(User) ->
                 {ok, User#od_user{
                     username = OnepanelUsername,
@@ -208,7 +208,7 @@ migrate_onepanel_user_to_onezone(OnepanelUserId, OnepanelUsername, PasswordHash,
 %%--------------------------------------------------------------------
 -spec onepanel_uid_to_system_uid(OnepanelUserId :: binary()) -> od_user:id().
 onepanel_uid_to_system_uid(OnepanelUserId) ->
-    linked_accounts:gen_user_id(?ONEZONE_IDP_ID, OnepanelUserId).
+    user_account:gen_user_id(?ONEZONE_IDP_ID, OnepanelUserId).
 
 
 %%%===================================================================

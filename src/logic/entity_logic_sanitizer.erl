@@ -17,6 +17,8 @@
 -include_lib("ctool/include/errors.hrl").
 
 -export([validate_name/1, validate_name/5, normalize_name/2, normalize_name/9]).
+-export([validate_full_name/1, normalize_full_name/1]).
+-export([validate_username/1, normalize_username/1]).
 -export([validate_domain/1]).
 -export([ensure_valid/3]).
 
@@ -148,6 +150,46 @@ normalize_name(Name, FirstRgx, FirstReplace, MiddleRgx, MiddleReplace, LastRgx, 
         false -> DefaultName;
         true -> TrimmedRight
     end.
+
+
+-spec validate_full_name(binary()) -> boolean().
+validate_full_name(FullName) ->
+    str_utils:validate_name(
+        FullName, ?FULL_NAME_FIRST_CHARS_ALLOWED, ?FULL_NAME_MIDDLE_CHARS_ALLOWED,
+        ?FULL_NAME_LAST_CHARS_ALLOWED, ?FULL_NAME_MAXIMUM_LENGTH
+    ).
+
+
+-spec normalize_full_name(undefined | od_user:full_name()) -> od_user:full_name().
+normalize_full_name(undefined) ->
+    ?DEFAULT_FULL_NAME;
+normalize_full_name(FullName) ->
+    normalize_name(FullName,
+        ?FULL_NAME_FIRST_CHARS_ALLOWED, <<"">>,
+        ?FULL_NAME_MIDDLE_CHARS_ALLOWED, <<"-">>,
+        ?FULL_NAME_LAST_CHARS_ALLOWED, <<"">>,
+        ?FULL_NAME_MAXIMUM_LENGTH, ?DEFAULT_FULL_NAME
+    ).
+
+
+-spec validate_username(od_user:username()) -> boolean().
+validate_username(Username) ->
+    str_utils:validate_name(
+        Username, ?USERNAME_FIRST_CHARS_ALLOWED, ?USERNAME_MIDDLE_CHARS_ALLOWED,
+        ?USERNAME_LAST_CHARS_ALLOWED, ?USERNAME_MAXIMUM_LENGTH
+    ).
+
+
+-spec normalize_username(od_user:username()) -> undefined | od_user:username().
+normalize_username(undefined) ->
+    undefined;
+normalize_username(Username) ->
+    normalize_name(Username,
+        ?USERNAME_FIRST_CHARS_ALLOWED, <<"">>,
+        ?USERNAME_MIDDLE_CHARS_ALLOWED, <<"-">>,
+        ?USERNAME_LAST_CHARS_ALLOWED, <<"">>,
+        ?USERNAME_MAXIMUM_LENGTH, undefined
+    ).
 
 
 -spec validate_domain(binary()) -> binary() | no_return().
@@ -668,12 +710,12 @@ sanitize_value(invite_token, ExpectedType, Key, Token = #token{type = ReceivedTy
         false -> throw(?ERR_BAD_VALUE_TOKEN(?err_ctx(), Key, ?ERR_NOT_AN_INVITE_TOKEN(?err_ctx(), ExpectedType, ReceivedType)))
     end;
 sanitize_value(binary, username, _Key, Value) ->
-    case user_logic:validate_username(Value) of
+    case validate_username(Value) of
         true -> Value;
         false -> throw(?ERR_BAD_VALUE_USERNAME(?err_ctx()))
     end;
 sanitize_value(binary, full_name, _Key, Value) ->
-    case user_logic:validate_full_name(Value) of
+    case validate_full_name(Value) of
         true -> Value;
         false -> throw(?ERR_BAD_VALUE_FULL_NAME(?err_ctx()))
     end;
