@@ -64,17 +64,22 @@ gen_user_id(IdP, SubjectId) ->
 
 -spec create(od_user:id() | undefined, od_user:record(), [linked_account:t()], creation_context()) ->
     {ok, od_user:doc()} | errors:error().
-create(ProposedUserId, InitialUserRecord, LinkedAccounts, CreationContext) ->
-    UserId = utils:ensure_defined(ProposedUserId, datastore_key:new()),
+create(undefined, InitialUserRecord, [], CreationContext) ->
+    create(datastore_key:new(), InitialUserRecord, [], CreationContext);
 
-    Result = ?catch_exceptions(od_user:critical_section(UserId, fun() ->
-        ?check(od_user:exists(UserId)) andalso throw(?ERROR_ALREADY_EXISTS),
+create(undefined, InitialUserRecord, [First | _] = LinkedAccounts, CreationContext) ->
+    MappedUserId = gen_user_id(First),
+    create(MappedUserId, InitialUserRecord, LinkedAccounts, CreationContext);
+
+create(ProposedUserId, InitialUserRecord, LinkedAccounts, CreationContext) ->
+    Result = ?catch_exceptions(od_user:critical_section(ProposedUserId, fun() ->
+        ?check(od_user:exists(ProposedUserId)) andalso throw(?ERROR_ALREADY_EXISTS),
 
         Username = resolve_username_for_new_account(InitialUserRecord, LinkedAccounts),
 
         {ok, od_user:critical_section(Username, fun() ->
             create_unsafe(
-                UserId,
+                ProposedUserId,
                 InitialUserRecord#od_user{
                     username = Username,
                     full_name = resolve_full_name_for_new_account(InitialUserRecord, LinkedAccounts)
@@ -87,7 +92,7 @@ create(ProposedUserId, InitialUserRecord, LinkedAccounts, CreationContext) ->
 
     case Result of
         {ok, UserDoc} ->
-            set_up_new_account(UserId),
+            set_up_new_account(ProposedUserId),
             entity_graph:ensure_up_to_date(),
             {ok, UserDoc};
         {error, _} = Error ->
