@@ -180,9 +180,9 @@ create(#el_req{gri = GRI = #gri{aspect = instance}, data = Data}) ->
             UserRecord3
     end,
 
-    {ok, #document{key = CreatedUserId}} = user_account:create(
+    #document{key = CreatedUserId} = ?check(user_account:create(
         undefined, UserRecord, LinkedAccounts, user_creation_api
-    ),
+    )),
 
     {true, {User, Rev}} = fetch_entity(#gri{aspect = instance, id = CreatedUserId}),
     {ok, resource, {GRI#gri{id = CreatedUserId}, {User, Rev}}};

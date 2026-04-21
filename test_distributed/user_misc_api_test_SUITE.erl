@@ -104,6 +104,16 @@ all() -> [
     onepanel_account_migration, user_creation_api, gui_login, access_token
 )).
 
+-define(BAD_VALUES_USERNAME, [
+    {<<"username">>, <<"">>, ?ERR_BAD_VALUE_USERNAME},
+    {<<"username">>, <<"_asd">>, ?ERR_BAD_VALUE_USERNAME},
+    {<<"username">>, <<"-asd">>, ?ERR_BAD_VALUE_USERNAME},
+    {<<"username">>, <<"asd_">>, ?ERR_BAD_VALUE_USERNAME},
+    {<<"username">>, null, ?ERR_BAD_VALUE_USERNAME},
+    {<<"username">>, <<"verylongusernamewithatleast20chars">>, ?ERR_BAD_VALUE_USERNAME},
+    {<<"username">>, 1234, ?ERR_BAD_VALUE_STRING(<<"username">>)}
+]).
+
 
 %%%===================================================================
 %%% Test functions
@@ -374,21 +384,14 @@ update_test(Config) ->
                 % Trying to set current username again should not raise any error
                 <<"username">> => [CurrentUsername, fun() -> ?UNIQUE_STRING end]
             },
-            bad_values = [
-                {<<"username">>, <<"">>, ?ERR_BAD_VALUE_USERNAME},
-                {<<"username">>, <<"_asd">>, ?ERR_BAD_VALUE_USERNAME},
-                {<<"username">>, <<"-asd">>, ?ERR_BAD_VALUE_USERNAME},
-                {<<"username">>, <<"asd_">>, ?ERR_BAD_VALUE_USERNAME},
-                {<<"username">>, null, ?ERR_BAD_VALUE_USERNAME},
-                {<<"username">>, <<"verylongusernamewithatleast20chars">>, ?ERR_BAD_VALUE_USERNAME},
-                {<<"username">>, 1234, ?ERR_BAD_VALUE_STRING(<<"username">>)},
-                {<<"username">>, OccupiedUsername,
-                    ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>)},
+            bad_values = lists:flatten([
+                {<<"username">>, OccupiedUsername, ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>)},
+                ?BAD_VALUES_USERNAME,
                 {<<"fullName">>, <<"a_d">>, ?ERR_BAD_VALUE_FULL_NAME},
                 {<<"fullName">>, <<"_ad">>, ?ERR_BAD_VALUE_FULL_NAME},
-                {<<"fullName">>, <<"ad_">>, ?ERR_BAD_VALUE_FULL_NAME}
-                | ?BAD_VALUES_FULL_NAME(?ERR_BAD_VALUE_FULL_NAME)
-            ]
+                {<<"fullName">>, <<"ad_">>, ?ERR_BAD_VALUE_FULL_NAME},
+                ?BAD_VALUES_FULL_NAME(?ERR_BAD_VALUE_FULL_NAME)
+            ])
         }
     },
     ?assert(api_test_utils:run_tests(
@@ -931,6 +934,9 @@ get_spaces_in_eff_provider_test(Config) ->
 % sequential_tests
 
 create_test(Config) ->
+    OccupiedUsername = ?RAND_STR(15),
+    ozt_users:create(#{<<"username">> => OccupiedUsername}),
+
     TestCases = [
         %   fullName        username       password
         {default_value, default_value, default_value},
@@ -1031,7 +1037,11 @@ create_test(Config) ->
                     case Username of default_value -> #{}; Val -> #{<<"username">> => [Val]} end,
                     case Password of default_value -> #{}; Val -> #{<<"password">> => [Val]} end
                 ]),
-                bad_values = ?BAD_VALUES_FULL_NAME(?ERR_BAD_VALUE_FULL_NAME)
+                bad_values = lists:flatten([
+                    ?BAD_VALUES_USERNAME,
+                    {<<"username">>, OccupiedUsername, ?ERR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>)},
+                    ?BAD_VALUES_FULL_NAME(?ERR_BAD_VALUE_FULL_NAME)
+                ])
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUp, EnvTearDown, undefined))
