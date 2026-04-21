@@ -935,7 +935,6 @@ get_spaces_in_eff_provider_test(Config) ->
 
 create_test(Config) ->
     OccupiedUsername = ?RAND_STR(15),
-    ozt_users:create(#{<<"username">> => OccupiedUsername}),
 
     TestCases = [
         %   fullName        username       password
@@ -967,6 +966,7 @@ create_test(Config) ->
         end,
 
         EnvSetUp = fun() ->
+            ozt_users:create(#{<<"username">> => OccupiedUsername}),
             {ok, NonAdmin} = oz_test_utils:create_user(Config),
             #{non_admin => NonAdmin}
         end,
