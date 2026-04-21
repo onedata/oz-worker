@@ -73,6 +73,10 @@ init_per_testcase(_, Config) ->
     Config.
 
 
+end_per_testcase(upgrade_from_25_0_shares, Config) ->
+    ozt_mocks:mock_unload(datastore_model),
+    end_per_testcase(default, Config);
+
 end_per_testcase(_, _Config) ->
     ozt_mocks:unfreeze_time(),
     ozt_mocks:unmock_handle_proxy(),
@@ -251,6 +255,8 @@ upgrade_from_21_02_7_shares(_Config) ->
 
 
 upgrade_from_25_0_shares(_Config) ->
+    MaxInlineRegSize = 100,
+
     % setting this value to 0 will force all shares to be stored in links,
     % hence simulating the approach from vsn <= 25.0
     ozt:set_env(max_inline_share_registry_size, 0),
@@ -259,7 +265,15 @@ upgrade_from_25_0_shares(_Config) ->
         SpaceId = ozt_spaces:create(),
         Shares = lists_utils:generate(fun(_) ->
             ozt_shares:create(SpaceId, datastore_key:new())
-        end, ?RAND_ELEMENT([0, 1, 10, 50, 100, 200, 300])),
+        end, ?RAND_ELEMENT([
+            0,
+            1,
+            10,
+            MaxInlineRegSize div 2,
+            MaxInlineRegSize,
+            MaxInlineRegSize * 2,
+            MaxInlineRegSize * 3
+        ])),
         {SpaceId, lists:sort(Shares)}
     end, 100),
     {Spaces, _} = lists:unzip(SpacesAndShares),
@@ -279,21 +293,61 @@ upgrade_from_25_0_shares(_Config) ->
         end])
     end, Spaces),
 
-    % perform the upgrade
-
-    MaxInlineRegSize = 100,
+    % setup done, simulate an upgrade
     ozt:set_env(max_inline_share_registry_size, MaxInlineRegSize),
+
+    % perform the upgrade, but mock datastore operations to randomly fail.
+    % Retry the upgrade until it's successful (all shares have been reorganized).
+    % This tests idempotency (shares that are already reorganized are not changed)
+    % and error resilience (retries should lead to a coherent state despite errors).
+    ozt_mocks:mock_new(datastore_model),
+    ozt_mocks:mock_expect(datastore_model, add_links, fun(Ctx, Forest, Tree, Links) ->
+        case ?RAND_INT(10) < 3 of
+            true ->
+                BadLinks = ?RAND_SUBLIST(Links),
+                GoodResults = meck:passthrough([Ctx, Forest, Tree, Links -- BadLinks]),
+                ?SHUFFLED(GoodResults ++ lists:map(fun(_) ->
+                    {error, something_went_wrong}
+                end, Links));
+            false ->
+                meck:passthrough([Ctx, Forest, Tree, Links])
+        end
+    end),
+    ozt_mocks:mock_expect(datastore_model, delete_links, fun(Ctx, Forest, Tree, Links) ->
+        case ?RAND_INT(10) < 3 of
+            true ->
+                BadLinks = ?RAND_SUBLIST(Links),
+                GoodResults = meck:passthrough([Ctx, Forest, Tree, Links -- BadLinks]),
+                ?SHUFFLED(GoodResults ++ lists:map(fun(_) ->
+                    {error, something_went_wrong}
+                end, Links));
+            false ->
+                meck:passthrough([Ctx, Forest, Tree, Links])
+        end
+    end),
+
+    ?assertEqual({ok, 6}, lists_utils:foldl_while(fun(_, _) ->
+        try
+            {halt, ozt:insecure_erpc(node_manager_plugin, upgrade_cluster, [5])}
+        catch _:{exception, share_reorganization_failed, _} ->
+            {cont, error}
+        end
+    end, ok, lists:seq(1, 99999))),
+
+    Verify = fun() ->
+        lists:foreach(fun({SpaceId, SortedShares}) ->
+            ShareCount = length(SortedShares),
+            ?assertEqual(SortedShares, lists:sort(list_share_ids_completely(SpaceId))),
+            #od_space{inline_share_registry = InlineRegistry} = ozt_spaces:get(SpaceId),
+            ?assertEqual(ShareCount, inline_share_registry:get_share_count(InlineRegistry)),
+            ?assertEqual(ShareCount =< MaxInlineRegSize, inline_share_registry:is_active(InlineRegistry))
+        end, SpacesAndShares)
+    end,
+    Verify(),
+
+    % test idempotency once again when all the shares are already reorganized
     ?assertEqual({ok, 6}, ozt:rpc(node_manager_plugin, upgrade_cluster, [5])),
-
-    lists:foreach(fun({SpaceId, SortedShares}) ->
-        ShareCount = length(SortedShares),
-        ?assertEqual(SortedShares, lists:sort(list_share_ids_completely(SpaceId))),
-        #od_space{inline_share_registry = InlineRegistry} = ozt_spaces:get(SpaceId),
-        ?assertEqual(ShareCount, inline_share_registry:get_share_count(ShareCount)),
-        ?assertEqual(ShareCount =< MaxInlineRegSize, inline_share_registry:is_utilized(InlineRegistry))
-    end, SpacesAndShares).
-
-    % fixme test idempotency
+    Verify().
 
 
 %%%===================================================================

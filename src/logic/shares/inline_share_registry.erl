@@ -26,9 +26,9 @@
 
 
 -export([empty/0, post_upgrade_from_25_0/0]).
--export([should_utilize/1, is_utilized/1]).
+-export([can_fit/1, is_active/1, requires_reorganization/1]).
 -export([get_share_count/1, adjust_share_count/2]).
--export([initialize_with/2, clear_entries/1]).
+-export([initialize_with/2, mark_migrated_to_db_links/2]).
 -export([add_link/3, delete_link/2]).
 -export([list_links/2]).
 
@@ -44,13 +44,14 @@
 
 
 -record(inline_share_registry, {
-    % indicates if the registry has been properly initialized - an empty one created
-    % for a new space - or has been added to an existing space which needs reorganization
+    % indicates if the registry has been properly initialized:
+    %   * empty registry created for a new space is considered initialized
+    %   * a registry that has been added to an existing space (during upgrade) requires reorganization
     state = requires_reorganization :: initialized | requires_reorganization,
     % always tracks the share count for the space, even if entries are held in datastore links
     count = 0 :: non_neg_integer(),
     % empty if the share count exceeds ?MAX_INLINE_REGISTRY_SIZE
-    entries = #{} :: #{link_value() => link_value()}
+    entries = #{} :: #{link_key() => link_value()}
 }).
 -type record() :: #inline_share_registry{}.
 -export_type([record/0]).
@@ -81,20 +82,27 @@ post_upgrade_from_25_0() ->
     }.
 
 
--spec should_utilize(record() | non_neg_integer()) -> boolean().
-should_utilize(#inline_share_registry{count = Count}) ->
-    Count =< ?MAX_INLINE_REGISTRY_SIZE;
-should_utilize(Count) ->
+-spec can_fit(non_neg_integer()) -> boolean().
+can_fit(Count) ->
     Count =< ?MAX_INLINE_REGISTRY_SIZE.
 
 
--spec is_utilized(record()) -> boolean().
-is_utilized(#inline_share_registry{state = requires_reorganization}) ->
+%% @doc Says if this inline registry is used to store shares; if the
+%% share count exceeds the limit, all the links are migrated to DB link docs.
+-spec is_active(record()) -> boolean().
+is_active(#inline_share_registry{state = requires_reorganization}) ->
     false;
-is_utilized(#inline_share_registry{count = 0}) ->
+is_active(#inline_share_registry{count = 0}) ->
     true;
-is_utilized(#inline_share_registry{entries = Entries}) ->
+is_active(#inline_share_registry{entries = Entries}) ->
     maps:size(Entries) > 0.
+
+
+-spec requires_reorganization(record()) -> boolean().
+requires_reorganization(#inline_share_registry{state = requires_reorganization}) ->
+    true;
+requires_reorganization(_) ->
+    false.
 
 
 % NOTE: always holds the actual value, even if the space is using DB links
@@ -103,8 +111,9 @@ get_share_count(#inline_share_registry{count = Count}) ->
     Count.
 
 
-% NOTE: should be used ONLY to track shares stored outside the inline registry;
-%       the count is updated automatically if the inline registry is utilized
+% NOTE: should be used ONLY to track changes in shares stored outside the
+%       inline registry (DB links);
+%       the count is updated automatically if the inline registry is active
 -spec adjust_share_count(record(), integer()) -> record().
 adjust_share_count(Registry = #inline_share_registry{count = Count}, Adjustment) ->
     Registry#inline_share_registry{
@@ -124,11 +133,11 @@ initialize_with(Registry, Links) ->
     end, InitializedEmptyRegistry, Links).
 
 
-% The count is retained; used when migrating the entries to datastore links
--spec clear_entries(record()) -> record().
-clear_entries(Registry) ->
+-spec mark_migrated_to_db_links(record(), non_neg_integer()) -> record().
+mark_migrated_to_db_links(Registry, CurrentCount) ->
     Registry#inline_share_registry{
-        entries = #{}
+        entries = #{},
+        count = CurrentCount
     }.
 
 
@@ -137,6 +146,7 @@ add_link(#inline_share_registry{state = requires_reorganization}, _LinkKey, _Lin
     error(requires_reorganization);
 
 add_link(#inline_share_registry{entries = Entries} = Registry, LinkKey, LinkValue) ->
+    maps:is_key(LinkKey, Entries) andalso throw(?ERROR_ALREADY_EXISTS),
     NewEntries = maps:put(LinkKey, LinkValue, Entries),
     Registry#inline_share_registry{
         entries = NewEntries,
@@ -180,11 +190,6 @@ list_links(#inline_share_registry{entries = Entries}, ListingOpts) ->
 
     StartPos = max(1, AnchorIndex + Offset),
 
-%%    NonNegLimit = case Offset < 0 of
-%%        true -> min(Limit, max(0, AnchorIndex + Offset + Limit - 1));
-%%        false -> Limit
-%%    end, just round up to the first element of the list if negative
-
     SliceLength = min(Limit, max(0, LinkCount - StartPos + 1)),
     SlicedKeys = lists:sublist(LinkKeys, StartPos, SliceLength),
 
@@ -225,7 +230,7 @@ from_json(EncodedJson) ->
     #inline_share_registry{
         entries = Entries,
         count = Count,
-        state = binary_to_atom(State)
+        state = binary_to_existing_atom(State)
     }.
 
 

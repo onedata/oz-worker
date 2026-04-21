@@ -177,6 +177,7 @@ protected_space(logic, _Id, SpaceData, Creator) ->
         <<"supportParametersRegistry">> => maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"areEffPrivilegesRecalculated">> => true,
+        <<"shareCount">> => maps:get(<<"shareCount">>, SpaceData, 0),
         <<"creator">> => Creator
     });
 protected_space(rest, Id, SpaceData, Creator) ->
@@ -193,6 +194,7 @@ protected_space(rest, Id, SpaceData, Creator) ->
             maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),
             support_parameters_registry
         ),
+        <<"shareCount">> => maps:get(<<"shareCount">>, SpaceData, 0),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     };

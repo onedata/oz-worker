@@ -273,15 +273,27 @@ reorganize_shares_to_inline_registries_25_1() ->
     ?notice("Reorganizing the share registries..."),
     {ok, SpaceDocs} = od_space:list(),
     lists:foreach(fun(#document{key = SpaceId, value = #od_space{name = SpaceName}}) ->
-        UpdatedInlineRegistry = share_registry:ensure_reorganized(SpaceId),
-        ShareCount = inline_share_registry:get_share_count(UpdatedInlineRegistry),
-        InlineRegistryInfo = case inline_share_registry:is_utilized(UpdatedInlineRegistry) of
-            true -> <<"inline registry">>;
-            false -> <<"link-based registry">>
-        end,
-        ?info("* ~ts\t~ts:\t~B share(s) - ~ts", [
-            SpaceId, SpaceName, ShareCount, InlineRegistryInfo
-        ])
+        try
+            UpdatedInlineRegistry = share_registry:ensure_reorganized(SpaceId),
+            ShareCount = inline_share_registry:get_share_count(UpdatedInlineRegistry),
+            InlineRegistryInfo = case inline_share_registry:is_active(UpdatedInlineRegistry) of
+                true -> <<"inline registry">>;
+                false -> <<"link-based registry">>
+            end,
+            ?info("* ~ts\t~ts:\t~B share(s) - ~ts", [
+                SpaceId, SpaceName, ShareCount, InlineRegistryInfo
+            ])
+        catch Class:Reason:Stacktrace ->
+            ?critical_exception(
+                ?autoformat_with_msg(
+                    "Unexpected error - failed to reorganize shares, cannot recover. "
+                    "Consider retrying the upgrade procedure by restarting the service.",
+                    [SpaceId, SpaceName]
+                ),
+                Class, Reason, Stacktrace
+            ),
+            error(share_reorganization_failed)
+        end
     end, SpaceDocs).
 
 

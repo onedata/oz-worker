@@ -1428,12 +1428,12 @@ upgrade_record(14, Space) ->
 upgrade_record(15, Space) ->
     {od_space,
         Name,
-        <<"">>,
-        <<"">>,
-        [],
+        Description,
+        OrganizationName,
+        Tags,
 
-        false,
-        <<"">>,
+        AdvertisedInMarketplace,
+        MarketplaceContactEmail,
 
         Owners,
 
@@ -1459,12 +1459,12 @@ upgrade_record(15, Space) ->
 
     {16, {od_space,
         Name,
-        <<"">>,
-        <<"">>,
-        [],
+        Description,
+        OrganizationName,
+        Tags,
 
-        false,
-        <<"">>,
+        AdvertisedInMarketplace,
+        MarketplaceContactEmail,
 
         Owners,
 

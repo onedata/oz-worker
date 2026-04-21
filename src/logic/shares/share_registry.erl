@@ -13,7 +13,13 @@
 %%% the od_share record, but allows to list shares with required details
 %%% without fetching any od_share record.
 %%%
-%%% For spaces with low share count, @see inline_share_registry is used.
+%%% This module handles the decisions where to store the shares:
+%%%   * For spaces with low share count, @see inline_share_registry is used
+%%%     (stored directly in the space doc).
+%%%   * When the inline share registry limit is reached, all the links are
+%%%     migrated to DB link documents, and new ones are added there.
+%%%   * Similarly, when the share count decreases so they can fit into the
+%%%     inline registry, the links are migrated back there.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(share_registry).
@@ -72,14 +78,13 @@
 -define(FOREST, <<"share-forest">>).
 -define(TREE_FOR_SPACE(SpaceId), <<"shares-of-", SpaceId/binary>>).
 
--define(MAX_INLINE_REGISTRY_SIZE, oz_worker:get_env(max_inline_share_registry_size, 1000)).
+-define(FOREACH_BATCH_SIZE, oz_worker:get_env(share_registry_foreach_batch_size, 1000)).
 
 -define(critical_section(SpaceId, Fun), critical_section:run(SpaceId, Fun)).
 
--define(FOREACH_BATCH_SIZE, 1000).
-
 % Uses NULL char for separator to ensure alphabetical sorting
 -define(SEP, 0).
+
 
 %%%===================================================================
 %%% API
@@ -89,8 +94,8 @@
 -spec get_share_count(od_space:id() | od_space:record()) -> non_neg_integer().
 get_share_count(SpaceId) when is_binary(SpaceId) ->
     get_share_count(get_space_record(SpaceId));
-get_share_count(#od_space{inline_share_registry = ISR}) ->
-    inline_share_registry:get_share_count(ISR).
+get_share_count(#od_space{inline_share_registry = InlineRegistry}) ->
+    inline_share_registry:get_share_count(InlineRegistry).
 
 
 -spec report_created(od_share:id(), od_share:record()) -> ok.
@@ -100,10 +105,10 @@ report_created(ShareId, ShareRecord = #od_share{handle = undefined}) ->
 
 %% @doc NOTE: non-thread-safe, must not be run in parallel with itself or other non-thread-safe functions!
 -spec report_name_updated(od_share:id(), od_share:record(), od_share:name()) -> ok.
-report_name_updated(ShareId, PreviousShareRecord = #od_share{space = SpaceId}, NewShareName) ->
-    EntryIndex = pack_link_key(ShareId, PreviousShareRecord),
+report_name_updated(ShareId, PrevShareRecord = #od_share{space = SpaceId}, NewShareName) ->
+    EntryIndex = pack_link_key(ShareId, PrevShareRecord),
 
-    [PreviousPublicHandle] = list_internal(
+    [PrevPublicHandle] = list_internal(
         SpaceId,
         get_space_record(SpaceId),
         #{start_index => EntryIndex, limit => 1},
@@ -113,8 +118,7 @@ report_name_updated(ShareId, PreviousShareRecord = #od_share{space = SpaceId}, N
         end
     ),
 
-    delete_entry(ShareId, PreviousShareRecord),
-    add_entry(ShareId, PreviousShareRecord#od_share{name = NewShareName}, PreviousPublicHandle).
+    replace_entry(ShareId, PrevShareRecord, PrevShareRecord#od_share{name = NewShareName}, PrevPublicHandle).
 
 
 %% @doc NOTE: non-thread-safe, must not be run in parallel with itself or other non-thread-safe functions!
@@ -127,19 +131,17 @@ report_deleted(ShareId, ShareRecord = #od_share{handle = undefined}) ->
 -spec report_handle_created_for(od_share:id(), od_share:record(), od_handle:id(), od_handle:public_handle()) -> ok.
 report_handle_created_for(
     ShareId,
-    PreviousShareRecord = #od_share{handle = undefined},
+    PrevShareRecord = #od_share{handle = undefined},
     HandleId,
     PublicHandle
 ) ->
-    delete_entry(ShareId, PreviousShareRecord),
-    add_entry(ShareId, PreviousShareRecord#od_share{handle = HandleId}, PublicHandle).
+    replace_entry(ShareId, PrevShareRecord, PrevShareRecord#od_share{handle = HandleId}, PublicHandle).
 
 
 %% @doc NOTE: non-thread-safe, must not be run in parallel with itself or other non-thread-safe functions!
 -spec report_handle_deleted_for(od_share:id(), od_share:record()) -> ok.
-report_handle_deleted_for(ShareId, PreviousShareRecord) when PreviousShareRecord#od_share.handle /= undefined ->
-    delete_entry(ShareId, PreviousShareRecord),
-    add_entry(ShareId, PreviousShareRecord#od_share{handle = undefined}, undefined).
+report_handle_deleted_for(ShareId, PrevShareRecord) when PrevShareRecord#od_share.handle /= undefined ->
+    replace_entry(ShareId, PrevShareRecord, PrevShareRecord#od_share{handle = undefined}, undefined).
 
 
 -spec index_of(od_share:id(), od_share:record()) -> link_key().
@@ -193,25 +195,25 @@ ensure_reorganized(SpaceId) ->
         AllLinks = list_all_links(SpaceId, SpaceRecord),
         ShareCount = length(AllLinks),
         case {
-            inline_share_registry:should_utilize(ShareCount),
-            inline_share_registry:is_utilized(InlineRegistry)
+            inline_share_registry:requires_reorganization(InlineRegistry),
+            inline_share_registry:can_fit(ShareCount)
         } of
-            {true, false} ->
-                % fixme test na to
+            {false, _} ->
+                InlineRegistry;
+
+            {true, true} ->
                 UpdatedRegistry = update_inline_registry(SpaceId, fun(IR) ->
                     inline_share_registry:initialize_with(IR, AllLinks)
                 end),
                 delete_datastore_links(SpaceId, AllLinks),
                 UpdatedRegistry;
-            {false, true} ->
-                ok = add_datastore_links(SpaceId, AllLinks),
+
+            {true, false} ->
+                add_datastore_links(SpaceId, AllLinks, tolerate_existing),
                 update_inline_registry(SpaceId, fun(IR) ->
-                    % fixme test na to
                     UpdatedRegistry = inline_share_registry:initialize_with(IR, []),
                     inline_share_registry:adjust_share_count(UpdatedRegistry, ShareCount)
-                end);
-            {_, _} ->
-                InlineRegistry
+                end)
         end
     end).
 
@@ -224,11 +226,12 @@ ensure_reorganized(SpaceId) ->
 %% @private
 -spec foreach_internal(od_space:id(), od_space:record(), fun((od_share:id()) -> ok), link_key()) -> ok.
 foreach_internal(SpaceId, SpaceRecord, ForeachFun, StartAfterIndex) ->
-    ShareIds = list_ids(SpaceId, SpaceRecord, #{
+    Entries = list_entries(SpaceId, SpaceRecord, #{
         limit => ?FOREACH_BATCH_SIZE,
         start_index => StartAfterIndex,
         inclusive => false
     }),
+    ShareIds = [ShareId || #{<<"shareId">> := ShareId} <- Entries],
 
     lists:foreach(ForeachFun, ShareIds),
 
@@ -236,7 +239,8 @@ foreach_internal(SpaceId, SpaceRecord, ForeachFun, StartAfterIndex) ->
         true ->
             ok;
         false ->
-            foreach_internal(SpaceId, SpaceRecord, ForeachFun, lists:last(ShareIds))
+            NewStartAfterIndex = maps:get(<<"index">>, lists:last(Entries)),
+            foreach_internal(SpaceId, SpaceRecord, ForeachFun, NewStartAfterIndex)
     end.
 
 
@@ -251,7 +255,7 @@ foreach_internal(SpaceId, SpaceRecord, ForeachFun, StartAfterIndex) ->
 list_internal(SpaceId, SpaceRecord, ListingOpts, MapLinkFun) ->
     InlineRegistry = SpaceRecord#od_space.inline_share_registry,
 
-    case inline_share_registry:is_utilized(InlineRegistry) of
+    case inline_share_registry:is_active(InlineRegistry) of
         true ->
             Links = inline_share_registry:list_links(InlineRegistry, ListingOpts),
             lists:map(MapLinkFun, Links);
@@ -300,36 +304,49 @@ add_entry(ShareId, #od_share{space = SpaceId} = ShareRecord, PublicHandle) ->
         #od_space{inline_share_registry = InlineRegistry} = SpaceRecord = get_space_record(SpaceId),
         ShareCount = inline_share_registry:get_share_count(InlineRegistry),
 
-        case {
-            inline_share_registry:is_utilized(InlineRegistry),
-            inline_share_registry:should_utilize(ShareCount + 1)
-        } of
-            {true, true} ->
+        IsActive = inline_share_registry:is_active(InlineRegistry),
+        CanFitBefore = inline_share_registry:can_fit(ShareCount),
+        CanFitAfter = inline_share_registry:can_fit(ShareCount + 1),
+
+        case {IsActive, CanFitBefore, CanFitAfter} of
+            {true, true, true} ->
                 update_inline_registry(SpaceId, fun(IR) ->
                     inline_share_registry:add_link(IR, LinkKey, LinkValue)
                 end);
 
-            {false, false} ->
-                ?check(add_datastore_links(SpaceId, [{LinkKey, LinkValue}])),
+            {false, _, false} ->
+                add_datastore_links(SpaceId, [{LinkKey, LinkValue}], ensure_unique),
                 update_inline_registry(SpaceId, fun(IR) ->
                     inline_share_registry:adjust_share_count(IR, 1)
                 end);
 
-            {true, false} ->
-                AllLinks = list_all_links(SpaceId, SpaceRecord),
-                % fixme test
-                proplists:is_defined(LinkKey, AllLinks) andalso throw(?ERROR_ALREADY_EXISTS),
-                NewLinks = [{LinkKey, LinkValue} | AllLinks],
-                ok = add_datastore_links(SpaceId, NewLinks),
-                update_inline_registry(SpaceId, fun(IR1) ->
-                    IR2 = inline_share_registry:clear_entries(IR1),
-                    inline_share_registry:adjust_share_count(IR2, 1)
+            {false, true, true} ->
+                ?info(
+                    "The max inline share registry size appears to have been increased, "
+                    "migrating shares for space ~ts into the inline registry",
+                    [SpaceId]
+                ),
+                migrate_to_inline_registry_and_apply(SpaceId, SpaceRecord, fun(IR) ->
+                    inline_share_registry:add_link(IR, LinkKey, LinkValue)
                 end);
 
-            {false, true} ->
+            {true, CanFitBefore, false} ->
+                CanFitBefore orelse ?info(
+                    "The max inline share registry size appears to have been decreased, "
+                    "migrating shares for space ~ts into DB links",
+                    [SpaceId]
+                ),
+                AllLinks = list_all_links(SpaceId, SpaceRecord),
+                proplists:is_defined(LinkKey, AllLinks) andalso throw(?ERROR_ALREADY_EXISTS),
+                migrate_to_db_links(SpaceId, [{LinkKey, LinkValue} | AllLinks]);
+
+            {_, _, _} ->
                 throw(?report_internal_server_error(
                     ?autoformat_with_msg("Unexpected share registry state", [
                         SpaceId,
+                        IsActive,
+                        CanFitAfter,
+                        CanFitBefore,
                         InlineRegistry
                     ])
                 ))
@@ -345,36 +362,49 @@ delete_entry(ShareId, #od_share{space = SpaceId} = ShareRecord) ->
     ?critical_section(SpaceId, fun() ->
         #od_space{inline_share_registry = InlineRegistry} = SpaceRecord = get_space_record(SpaceId),
         ShareCount = inline_share_registry:get_share_count(InlineRegistry),
+        IsActive = inline_share_registry:is_active(InlineRegistry),
+        CanFitBefore = inline_share_registry:can_fit(ShareCount),
+        CanFitAfter = inline_share_registry:can_fit(ShareCount - 1),
 
-        case {
-            inline_share_registry:is_utilized(InlineRegistry),
-            inline_share_registry:should_utilize(ShareCount),
-            inline_share_registry:should_utilize(ShareCount - 1)
-        } of
+        case {IsActive, CanFitBefore, CanFitAfter} of
             {true, true, true} ->
                 update_inline_registry(SpaceId, fun(IR) ->
                     inline_share_registry:delete_link(IR, LinkKey)
                 end);
 
             {false, false, false} ->
-                delete_datastore_links(SpaceId, [LinkKey]),
+                1 = delete_datastore_links(SpaceId, [LinkKey]),
                 update_inline_registry(SpaceId, fun(IR) ->
                     inline_share_registry:adjust_share_count(IR, -1)
                 end);
 
-            {false, true, false} ->
+            {true, _, false} ->
+                ?info(
+                    "The max inline share registry size appears to have been decreased, "
+                    "reorganizing shares for space ~ts into DB links",
+                    [SpaceId]
+                ),
                 AllLinks = list_all_links(SpaceId, SpaceRecord),
-                NewLinks = proplists:delete(LinkKey, AllLinks),
-                update_inline_registry(SpaceId, fun(IR) ->
-                    inline_share_registry:initialize_with(IR, NewLinks)
-                end),
-                % fixme test
-                delete_datastore_links(SpaceId, proplists:get_keys(AllLinks));
+                proplists:is_defined(LinkKey, AllLinks) orelse throw(?ERROR_NOT_FOUND),
+                migrate_to_db_links(SpaceId, proplists:delete(LinkKey, AllLinks));
+
+            {false, CanFitBefore, true} ->
+                CanFitBefore andalso ?info(
+                    "The max inline share registry size appears to have been increased, "
+                    "reorganizing shares for space ~ts into the inline registry",
+                    [SpaceId]
+                ),
+                migrate_to_inline_registry_and_apply(SpaceId, SpaceRecord, fun(IR) ->
+                    inline_share_registry:delete_link(IR, LinkKey)
+                end);
 
             {_, _, _} ->
                 throw(?report_internal_server_error(
                     ?autoformat_with_msg("Unexpected share registry state", [
                         SpaceId,
+                        IsActive,
+                        CanFitBefore,
+                        CanFitAfter,
                         InlineRegistry
                     ])
                 ))
@@ -384,18 +414,43 @@ delete_entry(ShareId, #od_share{space = SpaceId} = ShareRecord) ->
 
 
 %% @private
+-spec replace_entry(od_share:id(), od_share:record(), od_share:record(), od_handle:public_handle() | undefined) -> ok.
+replace_entry(ShareId, #od_share{space = SpaceId} = PrevShareRecord, NewShareRecord, PublicHandle) ->
+    PrevLinkKey = pack_link_key(ShareId, PrevShareRecord),
+    NewLinkKey = pack_link_key(ShareId, NewShareRecord),
+    NewLinkValue = pack_link_value(NewShareRecord, PublicHandle),
+    ?critical_section(SpaceId, fun() ->
+        #od_space{inline_share_registry = InlineRegistry} = get_space_record(SpaceId),
+
+        case inline_share_registry:is_active(InlineRegistry) of
+            true ->
+                update_inline_registry(SpaceId, fun(IR0) ->
+                    IR1 = inline_share_registry:delete_link(IR0, PrevLinkKey),
+                    inline_share_registry:add_link(IR1, NewLinkKey, NewLinkValue)
+                end);
+
+            false ->
+                1 = delete_datastore_links(SpaceId, [PrevLinkKey]),
+                add_datastore_links(SpaceId, [{NewLinkKey, NewLinkValue}], ensure_unique)
+        end
+    end),
+    ok.
+
+
+%% @private
 -spec update_inline_registry(
     od_space:id(),
-    fun(({#{link_key() => link_value()}, non_neg_integer()}) -> {#{link_key() => link_value()}, non_neg_integer()})
+    fun((inline_share_registry:record()) -> inline_share_registry:record())
 ) ->
     inline_share_registry:record().
 update_inline_registry(SpaceId, UpdateFun) ->
-    Diff = fun(SpaceRecord = #od_space{
-        inline_share_registry = InlineRegistry
-    }) ->
-        {ok, SpaceRecord#od_space{
-            inline_share_registry = UpdateFun(InlineRegistry)
-        }}
+    Diff = fun(SpaceRecord = #od_space{inline_share_registry = InlineRegistry}) ->
+        case ?catch_exceptions(UpdateFun(InlineRegistry)) of
+            {error, _} = Error ->
+                Error;
+            UpdatedRegistry ->
+                {ok, SpaceRecord#od_space{inline_share_registry = UpdatedRegistry}}
+        end
     end,
     case od_space:update(SpaceId, Diff) of
         {ok, #document{value = #od_space{inline_share_registry = UpdatedRegistry}}} ->
@@ -514,37 +569,54 @@ get_space_record(SpaceId) ->
 
 
 %% @private
--spec add_datastore_links(od_space:id(), [{link_key(), link_value()}]) -> ok | errors:error().
-add_datastore_links(SpaceId, Links) ->
-    case datastore_model:add_links(?CTX, ?FOREST, ?TREE_FOR_SPACE(SpaceId), Links) of
-        {ok, _} ->
-            ok;
-        {error, already_exists} ->
-            ?ERROR_ALREADY_EXISTS;
-        Results ->
-            lists:foreach(fun
-                ({ok, _}) ->
-                    ok;
-                (Error) ->
-                    throw(?report_internal_server_error(?autoformat_with_msg(
-                        "Failed to add at least one datastore link",
-                        Error
-                    )))
-            end, Results)
-    end.
+-spec migrate_to_inline_registry_and_apply(
+    od_space:id(),
+    od_space:record(),
+    fun((inline_share_registry:record()) -> inline_share_registry:record())
+) ->
+    ok.
+migrate_to_inline_registry_and_apply(SpaceId, SpaceRecord, WhatToApplyOnIR) ->
+    AllLinks = list_all_links(SpaceId, SpaceRecord),
+    update_inline_registry(SpaceId, fun(IR) ->
+        WhatToApplyOnIR(inline_share_registry:initialize_with(IR, AllLinks))
+    end),
+    delete_datastore_links(SpaceId, proplists:get_keys(AllLinks)).
 
 
 %% @private
--spec delete_datastore_links(od_space:id(), [link_key()]) -> ok.
+-spec migrate_to_db_links(od_space:id(), [{link_key(), link_value()}]) -> ok.
+migrate_to_db_links(SpaceId, AllLinks) ->
+    add_datastore_links(SpaceId, AllLinks, ensure_unique),
+    update_inline_registry(SpaceId, fun(IR1) ->
+        inline_share_registry:mark_migrated_to_db_links(IR1, length(AllLinks))
+    end).
+
+
+%% @private
+-spec add_datastore_links(od_space:id(), [{link_key(), link_value()}], ensure_unique | tolerate_existing) ->
+    ok.
+add_datastore_links(SpaceId, Links, Strategy) ->
+    Results = datastore_model:add_links(?CTX, ?FOREST, ?TREE_FOR_SPACE(SpaceId), Links),
+    lists:foreach(fun
+        ({ok, _}) ->
+            ok;
+        ({error, already_exists}) when Strategy == ensure_unique ->
+            throw(?ERROR_ALREADY_EXISTS);
+        ({error, already_exists}) when Strategy == tolerate_existing ->
+            ok;
+        (Error) ->
+            throw(?report_internal_server_error(?autoformat_with_msg(
+                "Failed to add at least one datastore link",
+                Error
+            )))
+    end, Results).
+
+
+%% @private
+-spec delete_datastore_links(od_space:id(), [link_key()]) -> non_neg_integer().
 delete_datastore_links(SpaceId, Links) ->
-    case datastore_model:delete_links(?CTX, ?FOREST, ?TREE_FOR_SPACE(SpaceId), Links) of
-        ok ->
-            ok;
-        {error, not_found} ->
-            ok;
-        Results ->
-            lists:foreach(fun
-                (ok) -> ok;
-                ({error, not_found}) -> ok
-            end, Results)
-    end.
+    Results = datastore_model:delete_links(?CTX, ?FOREST, ?TREE_FOR_SPACE(SpaceId), Links),
+    lists:foldl(fun
+        (ok, Acc) -> Acc + 1;
+        ({error, not_found}, Acc) -> Acc
+    end, 0, Results).

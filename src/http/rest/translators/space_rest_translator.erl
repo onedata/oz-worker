@@ -117,6 +117,7 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
         <<"marketplaceContactEmail">> := MarketplaceContactEmail,
         <<"providers">> := Providers,
         <<"supportParametersRegistry">> := SupportParametersRegistry,
+        <<"shareCount">> := ShareCount,
         <<"creator">> := Creator,
         <<"creationTime">> := CreationTime
     } = SpaceData,
@@ -130,6 +131,7 @@ get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData
         <<"marketplaceContactEmail">> => MarketplaceContactEmail,
         <<"providers">> => Providers,
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry),
+        <<"shareCount">> => ShareCount,
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
         <<"creationTime">> => CreationTime
     });

@@ -586,6 +586,7 @@ get(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"supportParametersRegistry">> => SupportParametersRegistry,
         <<"areEffPrivilegesRecalculated">> => not BottomUpDirty,
+        <<"shareCount">> => share_registry:get_share_count(Space),
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
     }};

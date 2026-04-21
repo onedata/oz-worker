@@ -335,4 +335,9 @@ end).
 
 -define(CORRECT_USER_NAME, <<"πœęßパル-µńćźżąśð日本を- 旅す. d'Arras, Jr."/utf8>>).
 
+-define(rpc(Expression), erpc:call(?RAND_ELEMENT(ozt:get_nodes()), fun() ->
+    Expression
+end)).
+
+
 -endif.

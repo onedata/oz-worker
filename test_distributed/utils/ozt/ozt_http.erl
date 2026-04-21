@@ -138,7 +138,11 @@ build_url(UrnTokens) ->
 -spec build_url(http | https | wss, urn_tokens()) -> http_client:url().
 build_url(Scheme, Tokens) when is_list(Tokens) ->
     build_url(Scheme, lists:foldl(fun(Token, Acc) ->
-        <<Acc/binary, (str_utils:ensure_prefix(Token, <<"/">>))/binary>>
+        StrippedAcc = case str_utils:binary_ends_with(Acc, <<"/">>) of
+            true -> binary:part(Acc, 0, byte_size(Acc) - 1);
+            false -> Acc
+        end,
+        <<StrippedAcc/binary, (str_utils:ensure_prefix(Token, <<"/">>))/binary>>
     end, <<"">>, Tokens));
 build_url(Scheme, Urn) ->
     PortStr = case ozt:get_env(https_server_port) of

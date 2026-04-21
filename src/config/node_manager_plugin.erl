@@ -12,8 +12,6 @@
 -module(node_manager_plugin).
 -author("Michal Zmuda").
 
-% fixme Falling back to domain 'edge.data.spice-platform.eu' for connection to provider 'Edge' (ce07aafb6d886c9e9243346941790489ch0ad0) as IP addresses failed the connectivity check (172.201.123.137)
-
 -include("registered_names.hrl").
 -include_lib("cluster_worker/include/elements/node_manager/node_manager.hrl").
 -include_lib("ctool/include/logging.hrl").

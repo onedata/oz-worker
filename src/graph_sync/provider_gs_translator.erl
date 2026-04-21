@@ -245,11 +245,7 @@ translate_resource(_, #gri{type = od_space, id = SpaceId, aspect = instance, sco
         <<"storages">> => Storages,  %% @TODO VFS-13082 Deprecated, included for backward compatibility
         <<"storageBackends">> => Storages,
 
-        % TODO VFS-12760 because this field is emulated, we don't get GS updates if it changes!
-        %                probably we must trigger od_space doc update every time a share is created
-        % TODO VFS-12760 double-check all other emulated fields for the same problem
-        <<"shares">> => share_registry:list_ids(SpaceId, #{limit => infinity}),
-        % TODO VFS-12760 remove the hack in op_worker: space_logic
+        <<"shares">> => share_registry:list_ids(SpaceId, Space, #{limit => infinity}),
         <<"harvesters">> => Harvesters,
 
         <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry)
@@ -344,6 +340,8 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
 
     #{
         <<"name">> => Name,
+        % TODO VFS-13454 should be reworked: this is an emulated field; when it changes, no GS update
+        % will be triggered as it lives outside of the provider doc
         <<"version">> => od_cluster:get_worker_release_version(ClusterId),
 
         <<"subdomainDelegation">> => SubdomainDelegation,
@@ -357,6 +355,8 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
 
+        % TODO VFS-13454 should be reworked: this is an emulated field; when it changes, no GS update
+        % will be triggered as it lives outside of the provider doc
         <<"online">> => provider_connections:is_online(Id),
 
         %% @TODO VFS-13082 Deprecated, included for backward compatibility
@@ -381,6 +381,8 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
     #{
         <<"name">> => Name,
         <<"domain">> => Domain,
+        % TODO VFS-13454 should be reworked: this is an emulated field; when it changes, no GS update
+        % will be triggered as it lives outside of the provider doc
         <<"version">> => od_cluster:get_worker_release_version(ClusterId),
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
