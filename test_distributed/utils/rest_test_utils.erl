@@ -303,10 +303,8 @@ check_rest_call(Config, ArgsMap) ->
                 {response, {Code, Headers, BodyMap}}
             };
         % Unexpected error
-        Type:Message:Stacktrace ->
-            ?ct_pal_exception(?autoformat_with_msg(
-                "check_rest_call failed with unexpected result", ?MODULE
-            ), Type, Message, Stacktrace),
+        Class:Reason:Stacktrace ->
+            ?ct_pal_exception("check_rest_call failed with unexpected result", Class, Reason, Stacktrace),
             false
     end.
 
