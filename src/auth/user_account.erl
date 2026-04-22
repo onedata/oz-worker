@@ -110,7 +110,7 @@ update_attributes(UserId, NewUsername, NewFullName) ->
             _ ->
                 % no other user occupies the username or it's already held by this user
                 od_user:update_unsafe(UserId, fun(UserRecord) ->
-                    {ok, #od_user{
+                    {ok, UserRecord#od_user{
                         username = utils:ensure_defined(NewUsername, UserRecord#od_user.username),
                         full_name = utils:ensure_defined(NewFullName, UserRecord#od_user.full_name)
                     }}

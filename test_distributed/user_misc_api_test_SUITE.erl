@@ -337,15 +337,21 @@ update_test(Config) ->
 
     CurrentUsername = ?RAND_STR(11),
     EnvSetUpFun = fun() ->
-        {ok, UserId} = oz_test_utils:create_user(Config, #{
-            <<"fullName">> => ?USER_FULL_NAME1, <<"username">> => CurrentUsername
+        BasicAuthEnabled = ?RAND_BOOL(),
+        BasicAuthOpts = case BasicAuthEnabled of
+            true -> #{<<"password">> => ?RAND_STR(10)};
+            false -> #{}
+        end,
+        {ok, UserId} = oz_test_utils:create_user(Config, BasicAuthOpts#{
+            <<"fullName">> => ?USER_FULL_NAME1,
+            <<"username">> => CurrentUsername
         }),
-        #{userId => UserId}
+        #{user_id => UserId, basic_auth_enabled => BasicAuthEnabled}
     end,
-    EnvTeardownFun = fun(#{userId := UserId} = _Env) ->
+    EnvTeardownFun = fun(#{user_id := UserId} = _Env) ->
         oz_test_utils:delete_user(Config, UserId)
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{userId := UserId} = _Env, Data) ->
+    VerifyEndFun = fun(ShouldSucceed, #{user_id := UserId, basic_auth_enabled := ExpBasicAuthEnabled} = _Env, Data) ->
         {ok, UserRecord} = oz_test_utils:get_user(Config, UserId),
         {ExpFullName, ExpUsername} = case ShouldSucceed of
             false ->
@@ -357,14 +363,16 @@ update_test(Config) ->
                 }
         end,
         ?assertEqual(ExpFullName, UserRecord#od_user.full_name),
-        ?assertEqual(ExpUsername, UserRecord#od_user.username)
+        ?assertEqual(ExpUsername, UserRecord#od_user.username),
+        % modification of the basic data should not impact the basic auth settings
+        ?assertEqual(ExpBasicAuthEnabled, UserRecord#od_user.basic_auth_enabled)
     end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = ClientSpec = #client_spec{
             correct = [
                 root,
-                {user, userId}
+                {user, user_id}
             ]
         },
         rest_spec = #rest_spec{
@@ -410,11 +418,11 @@ update_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = update,
-            args = [auth, userId, data],
+            args = [auth, user_id, data],
             expected_result = ?OK_RES
         },
         gs_spec = GsSpec#gs_spec{
-            gri = #gri{type = od_user, id = userId, aspect = instance}
+            gri = #gri{type = od_user, id = user_id, aspect = instance}
         },
         data_spec = DataSpec#data_spec{
             correct_values = #{
@@ -444,14 +452,14 @@ change_password_test(Config) ->
             end,
             {ok, UserId} = oz_test_utils:create_user(Config, UserData),
             oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, UserId, WasBasicAuthEnabled]),
-            #{userId => UserId}
+            #{user_id => UserId}
         end,
 
         ApiTestSpec = #api_test_spec{
             client_spec = ClientSpec = #client_spec{
                 correct = [
                     root,
-                    {user, userId}
+                    {user, user_id}
                 ]
             },
             rest_spec = #rest_spec{
@@ -498,11 +506,11 @@ change_password_test(Config) ->
             logic_spec = #logic_spec{
                 module = user_logic,
                 function = change_password,
-                args = [auth, userId, data],
+                args = [auth, user_id, data],
                 expected_result = ExpResult
             },
             gs_spec = GsSpec#gs_spec{
-                gri = #gri{type = od_user, id = userId, aspect = password}
+                gri = #gri{type = od_user, id = user_id, aspect = password}
             }
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec2, EnvSetUpFun, undefined, undefined))
@@ -609,10 +617,10 @@ update_basic_auth_config_test(Config) ->
             {ok, UserId} = oz_test_utils:create_user(Config, UserData),
             oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, UserId, WasBasicAuthEnabled]),
 
-            #{userId => UserId}
+            #{user_id => UserId}
         end,
 
-        VerifyEndFun = fun(WasDataCorrect, #{userId := UserId}, RequestData) ->
+        VerifyEndFun = fun(WasDataCorrect, #{user_id := UserId}, RequestData) ->
             % Success depends if the test case generator picked correct data and
             % we expected the whole operation to be successful (it might fail
             % due to different reasons than request Data).
@@ -649,19 +657,19 @@ update_basic_auth_config_test(Config) ->
                 ],
                 unauthorized = [nobody],
                 forbidden = [
-                    {user, userId},
+                    {user, user_id},
                     {user, NonAdmin}
                 ]
             },
             rest_spec = #rest_spec{
                 method = patch,
-                path = [<<"/users/">>, userId, <<"/basic_auth">>],
+                path = [<<"/users/">>, user_id, <<"/basic_auth">>],
                 expected_code = ExpHttpCode
             },
             logic_spec = #logic_spec{
                 module = user_logic,
                 function = update_basic_auth_config,
-                args = [auth, userId, data],
+                args = [auth, user_id, data],
                 expected_result = ExpResult
             },
             data_spec = #data_spec{
@@ -688,12 +696,12 @@ delete_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, UserId} = oz_test_utils:create_user(Config),
-        #{userId => UserId}
+        #{user_id => UserId}
     end,
-    DeleteEntityFun = fun(#{userId := UserId} = _Env) ->
+    DeleteEntityFun = fun(#{user_id := UserId} = _Env) ->
         oz_test_utils:delete_user(Config, UserId)
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{userId := UserId} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{user_id := UserId} = _Env, _) ->
         {ok, Users} = oz_test_utils:list_users(Config),
         ?assertEqual(lists:member(UserId, Users), not ShouldSucceed)
     end,
@@ -711,18 +719,18 @@ delete_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = delete,
-            path = [<<"/users/">>, userId],
+            path = [<<"/users/">>, user_id],
             expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = user_logic,
             function = delete,
-            args = [auth, userId],
+            args = [auth, user_id],
             expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
-            gri = #gri{type = od_user, id = userId, aspect = instance},
+            gri = #gri{type = od_user, id = user_id, aspect = instance},
             expected_result_op = ?OK_RES
         }
     },
@@ -732,7 +740,7 @@ delete_test(Config) ->
 
     % Also check that user can delete himself
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
-        client_spec = #client_spec{correct = [{user, userId}]}
+        client_spec = #client_spec{correct = [{user, user_id}]}
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
@@ -742,15 +750,15 @@ delete_test(Config) ->
 delete_self_test(Config) ->
     EnvSetUpFun = fun() ->
         {ok, UserId} = oz_test_utils:create_user(Config),
-        #{userId => UserId}
+        #{user_id => UserId}
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{userId := UserId} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{user_id := UserId} = _Env, _) ->
         {ok, Users} = oz_test_utils:list_users(Config),
         ?assertEqual(lists:member(UserId, Users), not ShouldSucceed)
     end,
 
     ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{correct = [{user, userId}]},
+        client_spec = #client_spec{correct = [{user, user_id}]},
         rest_spec = #rest_spec{
             method = delete,
             path = <<"/user">>,
