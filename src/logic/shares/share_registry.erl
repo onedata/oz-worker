@@ -222,8 +222,7 @@ ensure_reorganized(SpaceId) ->
             {true, false} ->
                 add_datastore_links(SpaceId, AllLinks, tolerate_existing),
                 update_inline_registry(SpaceId, fun(IR) ->
-                    UpdatedRegistry = inline_share_registry:initialize_with(IR, []),
-                    inline_share_registry:adjust_share_count(UpdatedRegistry, ShareCount)
+                    inline_share_registry:mark_migrated_to_db_links(IR, ShareCount)
                 end)
         end
     end).
