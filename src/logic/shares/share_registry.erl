@@ -32,7 +32,7 @@
 -export([get_share_count/1]).
 -export([report_created/2, report_name_updated/3, report_deleted/2]).
 -export([report_handle_created_for/4, report_handle_deleted_for/2]).
--export([index_of/2]).
+-export([index_of/2, find_entry/2]).
 -export([list_ids/2, list_ids/3]).
 -export([list_entries/2, list_entries/3]).
 -export([foreach/3]).
@@ -147,6 +147,17 @@ report_handle_deleted_for(ShareId, PrevShareRecord) when PrevShareRecord#od_shar
 -spec index_of(od_share:id(), od_share:record()) -> link_key().
 index_of(ShareId, ShareRecord) ->
     pack_link_key(ShareId, ShareRecord).
+
+
+-spec find_entry(od_share:id(), od_share:record()) -> error | {ok, share_entry()}.
+find_entry(ShareId, ShareRecord = #od_share{space = SpaceId}) ->
+    Index = index_of(ShareId, ShareRecord) ,
+    case list_entries(SpaceId, #{start_index => Index, limit => 1}) of
+        [#{<<"index">> := Index} = ShareEntry] ->
+            {ok, ShareEntry};
+        _ ->
+            error
+    end.
 
 
 -spec list_ids(od_space:id(), listing_opts()) -> [od_share:id()].
@@ -580,13 +591,22 @@ migrate_to_inline_registry_and_apply(SpaceId, SpaceRecord, WhatToApplyOnIR) ->
     update_inline_registry(SpaceId, fun(IR) ->
         WhatToApplyOnIR(inline_share_registry:initialize_with(IR, AllLinks))
     end),
-    delete_datastore_links(SpaceId, proplists:get_keys(AllLinks)).
+    delete_datastore_links(SpaceId, proplists:get_keys(AllLinks)),
+    ok.
 
 
 %% @private
--spec migrate_to_db_links(od_space:id(), [{link_key(), link_value()}]) -> ok.
+-spec migrate_to_db_links(od_space:id(), [{link_key(), link_value()}]) -> inline_share_registry:record().
 migrate_to_db_links(SpaceId, AllLinks) ->
-    add_datastore_links(SpaceId, AllLinks, ensure_unique),
+    case catch add_datastore_links(SpaceId, AllLinks, ensure_unique) of
+        ok ->
+            ok;
+        ?ERROR_ALREADY_EXISTS ->
+            throw(?report_internal_server_error(
+                "Unexpected link conflicts during migration of shares to DB links, space ~ts",
+                [SpaceId]
+            ))
+    end,
     update_inline_registry(SpaceId, fun(IR1) ->
         inline_share_registry:mark_migrated_to_db_links(IR1, length(AllLinks))
     end).

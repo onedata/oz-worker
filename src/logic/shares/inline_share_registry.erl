@@ -44,10 +44,11 @@
 
 
 -record(inline_share_registry, {
-    % indicates if the registry has been properly initialized:
-    %   * empty registry created for a new space is considered initialized
-    %   * a registry that has been added to an existing space (during upgrade) requires reorganization
-    state = requires_reorganization :: initialized | requires_reorganization,
+    % active - the inline registry is used to store the space shares
+    % inactive - the shares are stored in DB links (applied when count > ?MAX_INLINE_REGISTRY_SIZE)
+    % requires_reorganization - the registry has been added to an existing space (during upgrade)
+    %                           and requires reorganization
+    state :: active | inactive | requires_reorganization,
     % always tracks the share count for the space, even if entries are held in datastore links
     count = 0 :: non_neg_integer(),
     % empty if the share count exceeds ?MAX_INLINE_REGISTRY_SIZE
@@ -70,7 +71,7 @@
 -spec empty() -> record().
 empty() ->
     #inline_share_registry{
-        state = initialized
+        state = active
     }.
 
 
@@ -90,19 +91,13 @@ can_fit(Count) ->
 %% @doc Says if this inline registry is used to store shares; if the
 %% share count exceeds the limit, all the links are migrated to DB link docs.
 -spec is_active(record()) -> boolean().
-is_active(#inline_share_registry{state = requires_reorganization}) ->
-    false;
-is_active(#inline_share_registry{count = 0}) ->
-    true;
-is_active(#inline_share_registry{entries = Entries}) ->
-    maps:size(Entries) > 0.
+is_active(#inline_share_registry{state = State}) ->
+    State =:= active.
 
 
 -spec requires_reorganization(record()) -> boolean().
-requires_reorganization(#inline_share_registry{state = requires_reorganization}) ->
-    true;
-requires_reorganization(_) ->
-    false.
+requires_reorganization(#inline_share_registry{state = State}) ->
+    State =:= requires_reorganization.
 
 
 % NOTE: always holds the actual value, even if the space is using DB links
@@ -124,7 +119,7 @@ adjust_share_count(Registry = #inline_share_registry{count = Count}, Adjustment)
 -spec initialize_with(record(), [{link_key(), link_value()}]) -> record().
 initialize_with(Registry, Links) ->
     InitializedEmptyRegistry = Registry#inline_share_registry{
-        state = initialized,
+        state = active,
         entries = #{},
         count = 0
     },
@@ -136,6 +131,7 @@ initialize_with(Registry, Links) ->
 -spec mark_migrated_to_db_links(record(), non_neg_integer()) -> record().
 mark_migrated_to_db_links(Registry, CurrentCount) ->
     Registry#inline_share_registry{
+        state = inactive,
         entries = #{},
         count = CurrentCount
     }.
@@ -143,7 +139,10 @@ mark_migrated_to_db_links(Registry, CurrentCount) ->
 
 -spec add_link(record(), link_key(), link_value()) -> record().
 add_link(#inline_share_registry{state = requires_reorganization}, _LinkKey, _LinkValue) ->
-    error(requires_reorganization);
+    error({bad_state, requires_reorganization});
+
+add_link(#inline_share_registry{state = inactive}, _LinkKey, _LinkValue) ->
+    error({bad_state, inactive});
 
 add_link(#inline_share_registry{entries = Entries} = Registry, LinkKey, LinkValue) ->
     maps:is_key(LinkKey, Entries) andalso throw(?ERROR_ALREADY_EXISTS),
@@ -156,7 +155,10 @@ add_link(#inline_share_registry{entries = Entries} = Registry, LinkKey, LinkValu
 
 -spec delete_link(record(), link_key()) -> record().
 delete_link(#inline_share_registry{state = requires_reorganization}, _LinkKey) ->
-    error(requires_reorganization);
+    error({bad_state, requires_reorganization});
+
+delete_link(#inline_share_registry{state = inactive}, _LinkKey) ->
+    error({bad_state, inactive});
 
 delete_link(#inline_share_registry{entries = Entries} = Registry, LinkKey) ->
     NewEntries = maps:remove(LinkKey, Entries),

@@ -195,29 +195,61 @@ increment_visit_count(ShareId) ->
 migrate_legacy_shares_21_02_8() ->
     lists:foreach(fun
         (#document{key = SpaceId, value = #od_space{name = SpaceName, shares = []}}) ->
-            ?info("No migration needed for '~ts' (~ts) - zero shares", [SpaceName, SpaceId]);
+            ?info("No migration needed for space '~ts' (~ts) - no shares found", [SpaceName, SpaceId]);
         (#document{key = SpaceId, value = #od_space{name = SpaceName, shares = Shares}}) ->
-            ?info("Migrating ~B legacy shares from '~ts' (~ts)...", [length(Shares), SpaceName, SpaceId]),
-            lists:foreach(fun(ShareId) -> migrate_legacy_share_21_02_8(ShareId) end, Shares),
+            ?info("Found ~B legacy share(s) in space '~ts' (~ts), migrating...", [length(Shares), SpaceName, SpaceId]),
+
+            {Ok, AlreadyMigrated, ShareMissing, HandleMissing} = lists:foldl(
+                fun(ShareId, {AccOk, AccAM, AccSM, AccHM}) ->
+                case migrate_legacy_share_21_02_8(ShareId) of
+                    ok -> {AccOk + 1, AccAM, AccSM, AccHM};
+                    already_migrated -> {AccOk, AccAM + 1, AccSM, AccHM};
+                    share_missing -> {AccOk, AccAM, AccSM + 1, AccHM};
+                    handle_missing -> {AccOk, AccAM, AccSM, AccHM + 1}
+                end
+            end,
+                {0, 0, 0, 0},
+                Shares
+            ),
+
             ok = ?extract_ok(od_space:update(SpaceId, fun(SpaceRecord) ->
                 {ok, SpaceRecord#od_space{shares = []}}
             end)),
-            ?info("Successfully migrated legacy handles from '~ts' (~ts)", [SpaceName, SpaceId])
+
+            ?info(
+                "Finished migration of legacy share(s) from space '~ts' (~ts):~n"
+                "> successful: ~4B~n"
+                "> not needed: ~4B  (already migrated during previous runs)~n"
+                "> partial:    ~4B  (the corresponding handle could not be found and was discarded)~n"
+                "> discarded:  ~4B  (could not be found in the database and cannot be recovered)", [
+                    SpaceName, SpaceId,
+                    Ok,
+                    AlreadyMigrated,
+                    HandleMissing,
+                    ShareMissing
+                ])
     end, ?check(od_space:list())).
 
 
 % exported for tests
--spec migrate_legacy_share_21_02_8(id()) -> ok.
+-spec migrate_legacy_share_21_02_8(id()) -> ok | already_migrated | share_missing | handle_missing.
 migrate_legacy_share_21_02_8(ShareId) ->
     case get(ShareId) of
         {error, not_found} ->
-            ?error("The share ~ts was not found in DB - skipping its migration", [ShareId]);
+            ?error("The share ~ts was not found in DB - skipping its migration", [ShareId]),
+            share_missing;
         {ok, #document{value = ShareRecord}} ->
-            migrate_legacy_share_21_02_8(ShareId, ShareRecord)
+            case share_registry:find_entry(ShareId, ShareRecord) of
+                {ok, _} ->
+                    % must be a consecutive run of the upgrade procedure
+                    already_migrated;
+                error ->
+                    migrate_legacy_share_21_02_8(ShareId, ShareRecord)
+            end
     end.
 
 %% @private
--spec migrate_legacy_share_21_02_8(id(), record()) -> ok.
+-spec migrate_legacy_share_21_02_8(id(), record()) -> ok | handle_missing.
 migrate_legacy_share_21_02_8(ShareId, ShareRecord = #od_share{handle = HandleId}) ->
     % The share registry assumes that each handle goes through a lifecycle
     % (created -> name/handle updated -> deleted) and it's not possible
@@ -243,7 +275,7 @@ migrate_legacy_share_21_02_8(ShareId, ShareRecord = #od_share{handle = HandleId}
                         [ShareId, HandleId]
                     )),
                     {ok, _} = od_share:update(ShareId, fun(S) -> {ok, S#od_share{handle = undefined}} end),
-                    ok;
+                    handle_missing;
                 {ok, #document{value = #od_handle{public_handle = PublicHandle}}} ->
                     try
                         % ensure idempotency in case of multiple re-runs

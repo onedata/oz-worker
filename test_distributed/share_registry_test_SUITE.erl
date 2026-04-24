@@ -171,17 +171,17 @@ rename_test_base(HasHandle) ->
     create_shares(SpaceId, ?RAND_INT(?MAX_INLINE_SHARE_REGISTRY_SIZE div 2, ?MAX_INLINE_SHARE_REGISTRY_SIZE * 2)),
 
     #share_info{id = ShareId, record = ShareRecord} = create_share(SpaceId, <<"old">>, HasHandle),
-    PreviousShareData = retrieve_share_entry(SpaceId, ShareId, ShareRecord),
+    PreviousShareData = ?check(?rpc(share_registry:find_entry(ShareId, ShareRecord))),
 
     ok = ?rpc(share_registry:report_name_updated(ShareId, ShareRecord, <<"new">>)),
 
     ?assertMatch(
         #{<<"name">> := <<"new">>},
-        retrieve_share_entry(SpaceId, ShareId, ShareRecord#od_share{name = <<"new">>})
+        ?check(?rpc(share_registry:find_entry(ShareId, ShareRecord#od_share{name = <<"new">>})))
     ),
     ?assertEqual(
         maps:without([<<"name">>, <<"index">>], PreviousShareData),
-        maps:without([<<"name">>, <<"index">>], retrieve_share_entry(SpaceId, ShareId, ShareRecord#od_share{name = <<"new">>}))
+        maps:without([<<"name">>, <<"index">>], ?check(?rpc(share_registry:find_entry(ShareId, ShareRecord#od_share{name = <<"new">>}))))
     ).
 
 
@@ -190,31 +190,31 @@ handle_attach_detach_test(_) ->
     create_shares(SpaceId, ?RAND_INT(?MAX_INLINE_SHARE_REGISTRY_SIZE div 2, ?MAX_INLINE_SHARE_REGISTRY_SIZE * 2)),
 
     #share_info{id = ShareId, record = ShareRecord} = create_share(SpaceId, <<"x">>, false),
-    PreviousShareData = retrieve_share_entry(SpaceId, ShareId, ShareRecord),
+    PreviousShareData = ?check(?rpc(share_registry:find_entry(ShareId, ShareRecord))),
 
     HandleId = datastore_key:new(),
     ok = ?rpc(share_registry:report_handle_created_for(ShareId, ShareRecord, HandleId, <<"url">>)),
     ?assertMatch(
         #{<<"handleId">> := HandleId},
-        retrieve_share_entry(SpaceId, ShareId, ShareRecord#od_share{handle = HandleId})
+        ?check(?rpc(share_registry:find_entry(ShareId, ShareRecord#od_share{handle = HandleId})))
     ),
     ?assertEqual(
         maps:without([<<"handleId">>, <<"handlePublicUrl">>, <<"index">>],
             PreviousShareData
         ),
         maps:without([<<"handleId">>, <<"handlePublicUrl">>, <<"index">>],
-            retrieve_share_entry(SpaceId, ShareId, ShareRecord#od_share{handle = HandleId})
+            ?check(?rpc(share_registry:find_entry(ShareId, ShareRecord#od_share{handle = HandleId})))
         )
     ),
 
     ok = ?rpc(share_registry:report_handle_deleted_for(ShareId, ShareRecord#od_share{handle = HandleId})),
     ?assertMatch(
         #{<<"handleId">> := null},
-        retrieve_share_entry(SpaceId, ShareId, ShareRecord#od_share{handle = undefined})
+        ?check(?rpc(share_registry:find_entry(ShareId, ShareRecord#od_share{handle = undefined})))
     ),
     ?assertEqual(
         PreviousShareData,
-        retrieve_share_entry(SpaceId, ShareId, ShareRecord#od_share{handle = undefined})
+        ?check(?rpc(share_registry:find_entry(ShareId, ShareRecord#od_share{handle = undefined})))
     ).
 
 
@@ -440,14 +440,6 @@ list_all_ids(SpaceId) ->
 
 list_all_entries(SpaceId) ->
     ?rpc(share_registry:list_entries(SpaceId, #{limit => infinity})).
-
-
-retrieve_share_entry(SpaceId, ShareId, ShareRecord) ->
-    Index = ?rpc(share_registry:index_of(ShareId, ShareRecord)),
-    hd(?rpc(share_registry:list_entries(SpaceId, #{
-        start_index => Index,
-        limit => 1
-    }))).
 
 
 check_share_storage_type(SpaceId) ->

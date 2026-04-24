@@ -46,23 +46,28 @@ should_utilize_test() ->
     ?assertNot(inline_share_registry:can_fit(Max + 1000000)).
 
 
-is_utilized_edge_cases_test() ->
+is_active_edge_cases_test() ->
     % empty initialized -> utilized
     Reg0 = inline_share_registry:empty(),
     ?assert(inline_share_registry:is_active(Reg0)),
 
     % no entries but count > 0 -> NOT utilized (links held in the DB)
     Max = oz_worker:get_env(max_inline_share_registry_size, 1000),
-    RegExternal = inline_share_registry:adjust_share_count(Reg0, Max + 3),
+    RegExternal = inline_share_registry:mark_migrated_to_db_links(Reg0, Max + 3),
     ?assertNot(inline_share_registry:is_active(RegExternal)),
+
+    % attempt to add/delete links when the registry is inactive
+    ?assertError({bad_state, inactive}, inline_share_registry:add_link(RegExternal, <<"a">>, <<"A">>)),
+    ?assertError({bad_state, inactive}, inline_share_registry:delete_link(RegExternal, <<"a">>)),
+
 
     % requires reorganization -> not utilized
     Reg1 = inline_share_registry:post_upgrade_from_25_0(),
     ?assertNot(inline_share_registry:is_active(Reg1)),
 
     % attempt to add/delete links without initialization -> error
-    ?assertError(requires_reorganization, inline_share_registry:add_link(Reg1, <<"a">>, <<"A">>)),
-    ?assertError(requires_reorganization, inline_share_registry:delete_link(Reg1, <<"a">>)),
+    ?assertError({bad_state, requires_reorganization}, inline_share_registry:add_link(Reg1, <<"a">>, <<"A">>)),
+    ?assertError({bad_state, requires_reorganization}, inline_share_registry:delete_link(Reg1, <<"a">>)),
 
     % properly initialized -> utilized
     Reg2 = inline_share_registry:initialize_with(Reg1, generate_links(10)),
@@ -115,10 +120,10 @@ delete_link_test() ->
     ?assertEqual(1, inline_share_registry:get_share_count(Reg1)).
 
 
-clear_entries_test() ->
+mark_migrated_to_db_links_test() ->
     Reg0 = make_registry(1000),
     CountBefore = inline_share_registry:get_share_count(Reg0),
-    Reg1 = inline_share_registry:clear_entries(Reg0),
+    Reg1 = inline_share_registry:mark_migrated_to_db_links(Reg0, CountBefore),
     ?assertEqual(CountBefore, inline_share_registry:get_share_count(Reg1)),
     ?assertNot(inline_share_registry:is_active(Reg1)).
 
@@ -330,7 +335,7 @@ encode_decode_test() ->
         inline_share_registry:post_upgrade_from_25_0(),
         make_registry(1),
         make_registry(999),
-        inline_share_registry:clear_entries(make_registry(50)),
+        inline_share_registry:mark_migrated_to_db_links(make_registry(50), 50),
         inline_share_registry:adjust_share_count(make_registry(50), 6),
         inline_share_registry:adjust_share_count(make_registry(14), -14)
     ]).

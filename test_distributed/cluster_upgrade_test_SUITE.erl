@@ -22,13 +22,13 @@
 ]).
 -export([
     upgrade_from_21_02_4_handles/1,
-    upgrade_from_21_02_7_shares/1,
+    upgrade_from_21_02_8_shares/1,
     upgrade_from_25_0_shares/1
 ]).
 
 all() -> ?ALL([
     upgrade_from_21_02_4_handles,
-    upgrade_from_21_02_7_shares,
+    upgrade_from_21_02_8_shares,
     upgrade_from_25_0_shares
 ]).
 
@@ -183,7 +183,7 @@ upgrade_from_21_02_4_handles(_Config) ->
     end, Spaces).
 
 
-upgrade_from_21_02_7_shares(_Config) ->
+upgrade_from_21_02_8_shares(_Config) ->
     SpaceAlpha = ozt_spaces:create(),
     SpaceBeta = ozt_spaces:create(),
     SpaceGamma = ozt_spaces:create(),
@@ -235,6 +235,7 @@ upgrade_from_21_02_7_shares(_Config) ->
 
     lists:foreach(fun(SpaceId) ->
         ?assertMatch(#od_space{shares = []}, ozt_spaces:get(SpaceId)),
+
         ?assertEqual(
             share_docs_to_exp_listing_entries(
                 [D || D <- PreexistingShareDocs, D#document.value#od_share.space == SpaceId]
