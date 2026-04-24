@@ -116,6 +116,7 @@ stages:
         - rest_auth
         - session
         - share_api
+        - share_registry
         - space_groups_api
         - space_harvesters_api
         - space_lifecycle
@@ -759,6 +760,13 @@ share_api:
     - <<: *ct_logs
       name: ct_logs_share_api.tar.gz
 
+share_registry:
+  <<: *ct-job
+  key: SHAREREGISTRY
+  artifacts:
+    - <<: *ct_logs
+      name: ct_logs_share_registry.tar.gz
+
 space_groups_api:
   <<: *ct-job
   key: SPGROUPS
@@ -1020,6 +1028,7 @@ Coverage report:
     - artifact: ct_logs_rest_auth.tar.gz
     - artifact: ct_logs_session.tar.gz
     - artifact: ct_logs_share_api.tar.gz
+    - artifact: ct_logs_share_registry.tar.gz
     - artifact: ct_logs_space_groups_api.tar.gz
     - artifact: ct_logs_space_harvesters_api.tar.gz
     - artifact: ct_logs_space_lifecycle.tar.gz

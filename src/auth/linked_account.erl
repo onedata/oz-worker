@@ -96,12 +96,12 @@ merge_into_user_record(
                 "> username:  ~ts~n"
                 "> IdP:       ~ts~n"
                 "> subjectId: ~ts", [
-                UserId,
-                FullName,
-                Username,
-                LinkedAccount#linked_account.idp,
-                LinkedAccount#linked_account.subject_id
-            ]),
+                    UserId,
+                    FullName,
+                    Username,
+                    LinkedAccount#linked_account.idp,
+                    LinkedAccount#linked_account.subject_id
+                ]),
             LinkedAccounts ++ [LinkedAccount];
 
         {ok, #linked_account{access_token = OldAccessT, refresh_token = OldRefreshT} = OldLinkedAcc} ->
@@ -178,8 +178,13 @@ from_json(#{
     <<"idp">> := IdP,
     <<"subjectId">> := SubjectId
 } = Data) ->
+    IdPAtom = try
+        binary_to_existing_atom(IdP, utf8)
+    catch _:_ ->
+        throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"idp">>))
+    end,
     #linked_account{
-        idp = binary_to_existing_atom(IdP, utf8),
+        idp = IdPAtom,
         subject_id = SubjectId,
         full_name = utils:null_to_undefined(maps:get(<<"fullName">>, Data, undefined)),
         username = utils:null_to_undefined(maps:get(<<"username">>, Data, undefined)),

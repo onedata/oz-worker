@@ -27,7 +27,9 @@
 -export([build_public_url/1]).
 -export([build_public_rest_url/1]).
 -export([choose_provider_for_public_share_handling/1]).
+-export([increment_visit_count/1]).
 -export([migrate_legacy_shares_21_02_8/0, migrate_legacy_share_21_02_8/2]).
+-export([reorganize_shares_to_inline_registries_25_1/0]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -175,6 +177,13 @@ choose_provider_for_public_share_handling(ShareId) ->
     end.
 
 
+-spec increment_visit_count(od_share:id()) -> ok.
+increment_visit_count(ShareId) ->
+    ?check(od_share:update(ShareId, fun(ShareRecord = #od_share{visit_count = VC}) ->
+        {ok, ShareRecord#od_share{visit_count = VC + 1}}
+    end)).
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Migrates all shares to the share registry - previously, they were stored as a
@@ -186,29 +195,61 @@ choose_provider_for_public_share_handling(ShareId) ->
 migrate_legacy_shares_21_02_8() ->
     lists:foreach(fun
         (#document{key = SpaceId, value = #od_space{name = SpaceName, shares = []}}) ->
-            ?info("No migration needed for '~ts' (~ts) - zero shares", [SpaceName, SpaceId]);
+            ?info("No migration needed for space '~ts' (~ts) - no shares found", [SpaceName, SpaceId]);
         (#document{key = SpaceId, value = #od_space{name = SpaceName, shares = Shares}}) ->
-            ?info("Migrating ~B legacy shares from '~ts' (~ts)...", [length(Shares), SpaceName, SpaceId]),
-            lists:foreach(fun(ShareId) -> migrate_legacy_share_21_02_8(ShareId) end, Shares),
+            ?info("Found ~B legacy share(s) in space '~ts' (~ts), migrating...", [length(Shares), SpaceName, SpaceId]),
+
+            {Ok, AlreadyMigrated, ShareMissing, HandleMissing} = lists:foldl(
+                fun(ShareId, {AccOk, AccAM, AccSM, AccHM}) ->
+                case migrate_legacy_share_21_02_8(ShareId) of
+                    ok -> {AccOk + 1, AccAM, AccSM, AccHM};
+                    already_migrated -> {AccOk, AccAM + 1, AccSM, AccHM};
+                    share_missing -> {AccOk, AccAM, AccSM + 1, AccHM};
+                    handle_missing -> {AccOk, AccAM, AccSM, AccHM + 1}
+                end
+            end,
+                {0, 0, 0, 0},
+                Shares
+            ),
+
             ok = ?extract_ok(od_space:update(SpaceId, fun(SpaceRecord) ->
                 {ok, SpaceRecord#od_space{shares = []}}
             end)),
-            ?info("Successfully migrated legacy handles from '~ts' (~ts)", [SpaceName, SpaceId])
+
+            ?info(
+                "Finished migration of legacy share(s) from space '~ts' (~ts):~n"
+                "> successful: ~4B~n"
+                "> not needed: ~4B  (already migrated during previous runs)~n"
+                "> partial:    ~4B  (the corresponding handle could not be found and was discarded)~n"
+                "> discarded:  ~4B  (could not be found in the database and cannot be recovered)", [
+                    SpaceName, SpaceId,
+                    Ok,
+                    AlreadyMigrated,
+                    HandleMissing,
+                    ShareMissing
+                ])
     end, ?check(od_space:list())).
 
 
 % exported for tests
--spec migrate_legacy_share_21_02_8(id()) -> ok.
+-spec migrate_legacy_share_21_02_8(id()) -> ok | already_migrated | share_missing | handle_missing.
 migrate_legacy_share_21_02_8(ShareId) ->
     case get(ShareId) of
         {error, not_found} ->
-            ?error("The share ~ts was not found in DB - skipping its migration", [ShareId]);
+            ?error("The share ~ts was not found in DB - skipping its migration", [ShareId]),
+            share_missing;
         {ok, #document{value = ShareRecord}} ->
-            migrate_legacy_share_21_02_8(ShareId, ShareRecord)
+            case share_registry:find_entry(ShareId, ShareRecord) of
+                {ok, _} ->
+                    % must be a consecutive run of the upgrade procedure
+                    already_migrated;
+                error ->
+                    migrate_legacy_share_21_02_8(ShareId, ShareRecord)
+            end
     end.
 
 %% @private
--spec migrate_legacy_share_21_02_8(id(), record()) -> ok.
+-spec migrate_legacy_share_21_02_8(id(), record()) -> ok | handle_missing.
 migrate_legacy_share_21_02_8(ShareId, ShareRecord = #od_share{handle = HandleId}) ->
     % The share registry assumes that each handle goes through a lifecycle
     % (created -> name/handle updated -> deleted) and it's not possible
@@ -234,7 +275,7 @@ migrate_legacy_share_21_02_8(ShareId, ShareRecord = #od_share{handle = HandleId}
                         [ShareId, HandleId]
                     )),
                     {ok, _} = od_share:update(ShareId, fun(S) -> {ok, S#od_share{handle = undefined}} end),
-                    ok;
+                    handle_missing;
                 {ok, #document{value = #od_handle{public_handle = PublicHandle}}} ->
                     try
                         % ensure idempotency in case of multiple re-runs
@@ -248,6 +289,46 @@ migrate_legacy_share_21_02_8(ShareId, ShareRecord = #od_share{handle = HandleId}
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% For space with a lower share count, migrates the shares from the
+%% share registry to the inline registry stored in the space doc.
+%% This is done for performance reasons - link listing is very expensive
+%% for spaces with a low share count (e.g. 1000x slower).
+%%
+%% The procedure is idempotent.
+%% Introduced in version 25.1.
+%% @end
+%%--------------------------------------------------------------------
+-spec reorganize_shares_to_inline_registries_25_1() -> ok.
+reorganize_shares_to_inline_registries_25_1() ->
+    ?notice("Reorganizing the share registries..."),
+    {ok, SpaceDocs} = od_space:list(),
+    lists:foreach(fun(#document{key = SpaceId, value = #od_space{name = SpaceName}}) ->
+        try
+            UpdatedInlineRegistry = share_registry:ensure_reorganized(SpaceId),
+            ShareCount = inline_share_registry:get_share_count(UpdatedInlineRegistry),
+            InlineRegistryInfo = case inline_share_registry:is_active(UpdatedInlineRegistry) of
+                true -> <<"inline registry">>;
+                false -> <<"link-based registry">>
+            end,
+            ?info("* ~ts\t~ts:\t~B share(s) - ~ts", [
+                SpaceId, SpaceName, ShareCount, InlineRegistryInfo
+            ])
+        catch Class:Reason:Stacktrace ->
+            ?critical_exception(
+                ?autoformat_with_msg(
+                    "Unexpected error - failed to reorganize shares, cannot recover. "
+                    "Consider retrying the upgrade procedure by restarting the service.",
+                    [SpaceId, SpaceName]
+                ),
+                Class, Reason, Stacktrace
+            ),
+            error(share_reorganization_failed)
+        end
+    end, SpaceDocs).
+
+
 %%%===================================================================
 %%% datastore_model callbacks
 %%%===================================================================
@@ -259,7 +340,7 @@ migrate_legacy_share_21_02_8(ShareId, ShareRecord = #od_share{handle = HandleId}
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    8.
+    9.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -378,6 +459,22 @@ get_record_struct(8) ->
 
         {creation_time, integer},
         {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
+    ]};
+get_record_struct(9) ->
+    % new field - visit_count
+    {record, [
+        {name, string},
+        {description, string},
+        {space, string},
+        {handle, string},
+
+        {root_file_uuid, string},
+        {file_type, atom},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {visit_count, integer}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -521,18 +618,18 @@ upgrade_record(6, Share) ->
         CreationTime,
         Creator
     } = Share,
-    {7, #od_share{
-        name = Name,
-        description = Description,
+    {7, {od_share,
+        Name,
+        Description,
 
-        space = SpaceId,
-        handle = HandleId,
+        SpaceId,
+        HandleId,
 
-        root_file_uuid = RootFileId,
-        file_type = FileType,
+        RootFileId,
+        FileType,
 
-        creation_time = CreationTime,
-        creator = Creator
+        CreationTime,
+        Creator
     }};
 upgrade_record(7, Share) ->
     {
@@ -569,7 +666,38 @@ upgrade_record(7, Share) ->
         ])),
         GeneratedDummyUuid
     end,
-    {8, #od_share{
+    {8, {od_share,
+        Name,
+        Description,
+
+        SpaceId,
+        HandleId,
+
+        RootFileUuid,
+        case OldFileType of
+            file -> ?REGULAR_FILE_TYPE;
+            dir -> ?DIRECTORY_TYPE
+        end,
+
+        CreationTime,
+        Creator
+    }};
+upgrade_record(8, Share) ->
+    {
+        od_share,
+        Name,
+        Description,
+
+        SpaceId,
+        HandleId,
+
+        RootFileUuid,
+        FileType,
+
+        CreationTime,
+        Creator
+    } = Share,
+    {9, #od_share{
         name = Name,
         description = Description,
 
@@ -577,11 +705,10 @@ upgrade_record(7, Share) ->
         handle = HandleId,
 
         root_file_uuid = RootFileUuid,
-        file_type = case OldFileType of
-            file -> ?REGULAR_FILE_TYPE;
-            dir -> ?DIRECTORY_TYPE
-        end,
+        file_type = FileType,
 
         creation_time = CreationTime,
-        creator = Creator
+        creator = Creator,
+
+        visit_count = 0
     }}.

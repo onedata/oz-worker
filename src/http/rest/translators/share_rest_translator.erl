@@ -50,7 +50,8 @@ get_response(#gri{id = ShareId, aspect = instance, scope = private}, ShareRecord
         description = Description,
         file_type = FileType,
         handle = HandleId,
-        creator = Creator, creation_time = CreationTime
+        creator = Creator, creation_time = CreationTime,
+        visit_count = VisitCount
     } = ShareRecord,
     rest_translator:ok_body_reply(#{
         <<"shareId">> => ShareId,
@@ -63,7 +64,8 @@ get_response(#gri{id = ShareId, aspect = instance, scope = private}, ShareRecord
         <<"fileType">> => FileType,
         <<"handleId">> => utils:undefined_to_null(HandleId),
         <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
-        <<"creationTime">> => CreationTime
+        <<"creationTime">> => CreationTime,
+        <<"visitCount">> => VisitCount
     });
 
 get_response(#gri{id = ShareId, aspect = instance, scope = public}, ShareData) ->
@@ -74,7 +76,8 @@ get_response(#gri{id = ShareId, aspect = instance, scope = public}, ShareData) -
         <<"handleId">> := HandleId,
         <<"rootFileObjectId">> := RootFileObjectId,
         <<"fileType">> := FileType,
-        <<"creationTime">> := CreationTime
+        <<"creationTime">> := CreationTime,
+        <<"visitCount">> := VisitCount
     } = ShareData,
     rest_translator:ok_body_reply(#{
         <<"shareId">> => ShareId,
@@ -86,5 +89,6 @@ get_response(#gri{id = ShareId, aspect = instance, scope = public}, ShareData) -
         <<"rootFileId">> => RootFileObjectId,
         <<"fileType">> => FileType,
         <<"handleId">> => utils:undefined_to_null(HandleId),
-        <<"creationTime">> => CreationTime
+        <<"creationTime">> => CreationTime,
+        <<"visitCount">> => VisitCount
     }).

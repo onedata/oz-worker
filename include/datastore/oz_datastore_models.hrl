@@ -267,6 +267,9 @@ end).
     % it should never be used, but is needed to perform the cluster upgrade
     % (then, the field is always empty)
     shares = [] :: entity_graph:relations(od_share:id()),
+    % Holds the space shares if their number is low; delegates this job
+    % to database links if it grows - @see share_registry.erl
+    inline_share_registry = inline_share_registry:empty() :: inline_share_registry:record(),
     harvesters = [] :: entity_graph:relations(od_harvester:id()),
 
     % Effective relations to other entities
@@ -304,7 +307,9 @@ end).
     file_type = ?DIRECTORY_TYPE :: od_share:file_type(),
 
     creation_time = global_clock:timestamp_seconds() :: entity_logic:creation_time(),
-    creator = undefined :: undefined | aai:subject()
+    creator = undefined :: undefined | aai:subject(),
+
+    visit_count = 0 :: non_neg_integer()
 }).
 
 %% This record defines a provider who supports spaces and can be reached via url

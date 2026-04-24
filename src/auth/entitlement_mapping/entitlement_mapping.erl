@@ -420,7 +420,11 @@ coalesce_entitlements(UserId, LinkedAccounts, PreviousEntitlements) ->
     % remove the user from the groups he no longer is entitled to
     lists:foreach(fun({GroupId, _}) ->
         proplists:is_defined(GroupId, CurrentEntitlements) orelse
-            ?check(group_logic:remove_user(?ROOT, GroupId, UserId))
+            group_logic:remove_user(?ROOT, GroupId, UserId)
+            % TODO VFS-13491 memberships should be deleted on the entity graph level when a user is deleted from a group
+%%            ?check(group_logic:remove_user(?ROOT, GroupId, UserId))
+            % TODO VFS-13491 uncomment and test below case
+%%            ?check_tolerating(?ERROR_NOT_FOUND, group_logic:remove_user(?ROOT, GroupId, UserId))
     end, PreviousEntitlements),
 
     % Return the new entitlements list in proper format

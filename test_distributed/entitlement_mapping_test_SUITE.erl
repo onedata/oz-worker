@@ -60,6 +60,7 @@
     admin_group_resulting_in_invalid_onedata_group_name_or_type_are_ignored/1,
     entitlements_are_coalesced_correctly_in_a_mixed_scenario/1,
     entitlement_groups_are_protected/1,
+    entitlement_coalescing_does_not_fail_if_a_group_or_relation_is_deleted/1,
     legacy_user_ids_are_retained/1,
     legacy_group_ids_are_retained_for_legacy_user/1,
     legacy_group_ids_are_retained_for_new_user/1,
@@ -101,6 +102,8 @@ all() ->
         admin_group_resulting_in_invalid_onedata_group_name_or_type_are_ignored,
         entitlements_are_coalesced_correctly_in_a_mixed_scenario,
         entitlement_groups_are_protected,
+%%        TODO VFS-13491
+%%        entitlement_coalescing_does_not_fail_if_a_group_or_relation_is_deleted,
         legacy_user_ids_are_retained,
         legacy_group_ids_are_retained_for_legacy_user,
         legacy_group_ids_are_retained_for_new_user,
@@ -812,6 +815,42 @@ entitlement_groups_are_protected(_) ->
     ?assertGroupProtected(?THIRD_IDP, <<"staff:member/admins:member/readonly:member/user:member">>),
     ?assertGroupProtected(?THIRD_IDP, <<"task4.1:manager/user:member">>),
     ?assertGroupProtected(?THIRD_IDP, <<"testGroup:admin/user:admin">>).
+
+
+entitlement_coalescing_does_not_fail_if_a_group_or_relation_is_deleted(Config) ->
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    create_non_idp_user(),
+    simulate_account_link(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>, <<"thirdGroup">>]),
+    simulate_consecutive_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>, <<"thirdGroup">>]),
+    ?assertUserGroupsCount(3, 3),
+    ?assertTotalGroupsCount(3),
+    AnotherGroupId = raw_entitlement_to_group_id(Config, ?DUMMY_IDP, <<"anotherGroup">>),
+    oz_test_utils:call_oz(Config, od_group, update, [
+        AnotherGroupId,
+        fun(GroupRecord) -> {ok, GroupRecord#od_group{protected = false}} end
+    ]),
+    oz_test_utils:delete_group(Config, AnotherGroupId),
+    simulate_consecutive_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"thirdGroup">>]),
+    ?assertUserGroupsCount(2, 2),
+    ?assertTotalGroupsCount(2),
+
+    SubGroupId = raw_entitlement_to_group_id(Config, ?DUMMY_IDP, <<"group/subgroup">>),
+    % this generally should not happen, but we safeguard anyway for a missing relation
+    oz_test_utils:call_oz(Config, od_group, update, [
+        SubGroupId,
+        fun(GroupRecord = #od_group{users = Users}) ->
+            {ok, GroupRecord#od_group{users = maps:remove(get_test_user(), Users)}}
+        end
+    ]),
+    oz_test_utils:call_oz(Config, od_user, update, [
+        get_test_user(),
+        fun(GroupRecord = #od_user{groups = Groups}) ->
+            {ok, GroupRecord#od_user{groups = maps:remove(SubGroupId, Groups)}}
+        end
+    ]),
+    simulate_consecutive_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"thirdGroup">>]),
+    ?assertUserGroupsCount(1, 1),
+    ?assertTotalGroupsCount(2).
 
 
 legacy_user_ids_are_retained(Config) ->

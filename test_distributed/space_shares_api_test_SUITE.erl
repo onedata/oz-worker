@@ -173,9 +173,9 @@ list_shares_test(Config) ->
     ozt_spaces:delete(SpaceAlpha),
     ozt_spaces:delete(SpaceBeta),
     ozt_spaces:delete(SpaceZeroShares),
-    ?assertEqual([], ozt:rpc(share_registry, list_entries, [SpaceAlpha, #{limit => infinity}])),
-    ?assertEqual([], ozt:rpc(share_registry, list_entries, [SpaceBeta, #{limit => infinity}])),
-    ?assertEqual([], ozt:rpc(share_registry, list_entries, [SpaceZeroShares, #{limit => infinity}])).
+    ?assertThrow(?ERROR_NOT_FOUND, ozt:insecure_erpc(share_registry, list_entries, [SpaceAlpha, #{limit => infinity}])),
+    ?assertThrow(?ERROR_NOT_FOUND, ozt:insecure_erpc(share_registry, list_entries, [SpaceBeta, #{limit => infinity}])),
+    ?assertThrow(?ERROR_NOT_FOUND, ozt:insecure_erpc(share_registry, list_entries, [SpaceZeroShares, #{limit => infinity}])).
 
 list_shares_test_base(Config, Owner, SpaceId, ExpAllShareEntries) ->
     PrivilegedMember = ozt_users:create(),

@@ -593,14 +593,16 @@ translate_share(#gri{id = ShareId, aspect = instance, scope = private}, ShareRec
     name = Name,
     file_type = FileType,
     space = SpaceId,
-    handle = Handle
+    handle = Handle,
+    visit_count = VisitCount
 }) ->
     #{
         <<"index">> => share_registry:index_of(ShareId, ShareRecord),
         <<"name">> => Name,
         <<"space">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto}),
         <<"fileType">> => FileType,
-        <<"hasHandle">> => Handle /= undefined
+        <<"hasHandle">> => Handle /= undefined,
+        <<"visitCount">> => VisitCount
     };
 translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name">> := Name}) ->
     {ChosenProviderId, ChosenProviderVersion} = ?check(od_share:choose_provider_for_public_share_handling(ShareId)),

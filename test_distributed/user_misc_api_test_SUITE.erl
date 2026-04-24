@@ -1105,7 +1105,21 @@ user_account_creation_test_base() ->
     {ok, #document{key = ActualUserId}} = ?assertMatch({ok, _}, ozt:rpc(user_account, create, [
         RequestedUserId, InitialUserRecord, LinkedAccounts, ?RANDOM_CREATION_CONTEXT()
     ])),
-    RequestedUserId /= undefined andalso ?assertEqual(ActualUserId, RequestedUserId),
+    ExpectedUserId = case RequestedUserId of
+        undefined ->
+            case LinkedAccounts of
+                [] ->
+                    undefined;
+                [#linked_account{idp = IdP, subject_id = SubjectId} | _] ->
+                    ExpMappedUserId = datastore_key:new_from_digest([atom_to_binary(IdP, utf8), SubjectId]),
+                    % make sure the IdP user mapping endpoint gives coherent results
+                    ?assertEqual({ok, ExpMappedUserId}, ozt:rpc(provider_logic, map_idp_user, [IdP, SubjectId])),
+                    ExpMappedUserId
+            end;
+        _ ->
+            RequestedUserId
+    end,
+    ExpectedUserId /= undefined andalso ?assertEqual(ActualUserId, ExpectedUserId),
 
     %% @see user_account:resolve_full_name_for_new_account/2
     ExpFullName = lists:foldl(fun
@@ -1148,11 +1162,24 @@ user_account_creation_test_base() ->
         ?ERROR_ALREADY_EXISTS,
         ozt:rpc(user_account, create, [
             ActualUserId,
-            InitialUserRecord#od_user{full_name = ?UNIQUE_STRING},
+            InitialUserRecord,
             LinkedAccounts,
             ?RANDOM_CREATION_CONTEXT()
         ])
     ),
+
+    % if the user was created based on linked accounts, second attempt should fail too
+    % (their subject ID maps to the same user ID)
+    RequestedUserId == undefined andalso LinkedAccounts /= [] andalso
+        ?assertMatch(
+            ?ERROR_ALREADY_EXISTS,
+            ozt:rpc(user_account, create, [
+                RequestedUserId,
+                InitialUserRecord,
+                LinkedAccounts,
+                ?RANDOM_CREATION_CONTEXT()
+            ])
+        ),
 
     % reusing the already occupied username should fail
     RequestedUsername /= undefined andalso ?assertMatch(
@@ -1160,7 +1187,7 @@ user_account_creation_test_base() ->
         ozt:rpc(user_account, create, [
             undefined,
             InitialUserRecord#od_user{username = RequestedUsername},
-            LinkedAccounts,
+            [],
             ?RANDOM_CREATION_CONTEXT()
         ])
     ).

@@ -177,6 +177,7 @@ protected_space(logic, _Id, SpaceData, Creator) ->
         <<"supportParametersRegistry">> => maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"areEffPrivilegesRecalculated">> => true,
+        <<"shareCount">> => maps:get(<<"shareCount">>, SpaceData, 0),
         <<"creator">> => Creator
     });
 protected_space(rest, Id, SpaceData, Creator) ->
@@ -193,6 +194,7 @@ protected_space(rest, Id, SpaceData, Creator) ->
             maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),
             support_parameters_registry
         ),
+        <<"shareCount">> => maps:get(<<"shareCount">>, SpaceData, 0),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     };
@@ -222,7 +224,8 @@ private_share(logic, _Id, ShareData, Creator) ->
             file_type = maps:get(<<"fileType">>, ShareData),
 
             creation_time = ozt_mocks:get_frozen_time_seconds(),
-            creator = Creator
+            creator = Creator,
+            visit_count = maps:get(<<"visitCount">>, ShareData, 0)
         })
     end);
 private_share(rest, Id, ShareData, Creator) ->
@@ -237,7 +240,8 @@ private_share(rest, Id, ShareData, Creator) ->
         <<"publicUrl">> => expected_public_share_url(Id),
         <<"publicRestUrl">> => expected_public_share_rest_url(Id),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
-        <<"creator">> => aai:subject_to_json(Creator)
+        <<"creator">> => aai:subject_to_json(Creator),
+        <<"visitCount">> => maps:get(<<"visitCount">>, ShareData, 0)
     };
 private_share(gs, Id, ShareData, _Creator) ->
     ?OK_MAP(#{
@@ -253,7 +257,8 @@ private_share(gs, Id, ShareData, _Creator) ->
         end,
         <<"handleId">> => utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
-        <<"publicRestUrl">> => expected_public_share_rest_url(Id)
+        <<"publicRestUrl">> => expected_public_share_rest_url(Id),
+        <<"visitCount">> => maps:get(<<"visitCount">>, ShareData, 0)
     }).
 
 
@@ -266,7 +271,8 @@ public_share(logic, _Id, ShareData) ->
         <<"rootFileObjectId">> => ?check(file_id:guid_to_objectid(maps:get(<<"rootFileId">>, ShareData))),
         <<"fileType">> => maps:get(<<"fileType">>, ShareData),
         <<"handleId">> => maps:get(<<"handleId">>, ShareData, undefined),
-        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
+        <<"visitCount">> => maps:get(<<"visitCount">>, ShareData, 0)
     });
 public_share(rest, Id, ShareData) ->
     #{
@@ -279,7 +285,8 @@ public_share(rest, Id, ShareData) ->
         <<"handleId">> => utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
         <<"publicRestUrl">> => expected_public_share_rest_url(Id),
-        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
+        <<"visitCount">> => maps:get(<<"visitCount">>, ShareData, 0)
     };
 public_share(gs, Id, ShareData) ->
     ?OK_MAP(#{
@@ -295,7 +302,8 @@ public_share(gs, Id, ShareData) ->
         end,
         <<"handleId">> => utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
-        <<"publicRestUrl">> => expected_public_share_rest_url(Id)
+        <<"publicRestUrl">> => expected_public_share_rest_url(Id),
+        <<"visitCount">> => maps:get(<<"visitCount">>, ShareData, 0)
     }).
 
 

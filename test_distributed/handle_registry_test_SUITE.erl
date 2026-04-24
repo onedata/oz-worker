@@ -79,7 +79,6 @@ groups() -> [
 
 -define(INITIAL_TOTAL_HANDLE_COUNT, 3300).
 -define(INITIAL_HANDLE_COUNT_IN_SMALL_HSERVICE, 600).
--define(RAND_NAME(), ?RAND_UNICODE_STR(200)).
 -define(RAND_ID(), str_utils:rand_hex(16)).
 -define(HANDLE_LIST_LIMIT_FOR_TESTS, 1000).
 
