@@ -1,8 +1,23 @@
-Release notes for project oz-worker
-===================================
+# Release notes for project oz-worker
 
-CHANGELOG
----------
+## CHANGELOG
+
+### 25.1
+
+-   **VFS-13314** Web GUI: Using the main custom frontpage template in
+    login test mode if the testing template is not available.
+-   **VFS-13307** Implemented an improved process pool for handling
+    GraphSync requests. Now, a single client can't flood the Onezone
+    server with requests, as it can occupy only some of the pool.
+-   **VFS-13176** Web GUI: Added replacing file data feature, which
+    allows to upload new content to the existing file (overriding the
+    current data), keeping the File ID and its path unchanged.
+-   **VFS-13155** Web GUI: Fixed display of long membership paths when
+    the display limit is reached.
+-   **VFS-13143** Web GUI: Remembering the last visited tab and
+    directory in share's URL.
+-   **VFS-12760** Optimized the performance of shares and public data
+    records in spaces with a low number of items.
 
 ### 25.0
 
