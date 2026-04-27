@@ -4,6 +4,10 @@
 
 ### 25.1
 
+-   **VFS-13419** Extended the user creation endpoint with the linked
+    accounts parameter. It is now possible to pre-create IdP users
+    before their login; requires having access to their OIDC userinfo
+    attributes.
 -   **VFS-13314** Web GUI: Using the main custom frontpage template in
     login test mode if the testing template is not available.
 -   **VFS-13307** Implemented an improved process pool for handling
