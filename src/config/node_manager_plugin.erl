@@ -133,6 +133,7 @@ db_nodes() ->
 before_init() ->
     try
         oz_worker_sup:start_link(),
+        ok = logger:set_handler_config(ssl_handler, level, error),
         ok
     catch
         Class:Reason:Stacktrace ->
