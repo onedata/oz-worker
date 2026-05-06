@@ -1036,7 +1036,7 @@ authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
 
 authorize(#el_req{operation = get, gri = #gri{aspect = api_samples}, auth = ?USER(UserId)}, Space) ->
-    entity_graph:has_relation(direct, bottom_up, od_user, UserId, Space);
+    space_logic:has_eff_user(Space, UserId);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = marketplace_data}, auth = ?USER}, #od_space{
     advertised_in_marketplace = AdvertisedInMarketplace
