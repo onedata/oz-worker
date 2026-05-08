@@ -51,7 +51,7 @@
   2},
  {<<"erldns">>,
   {git,"https://github.com/mistanisz/erldns.git",
-       {ref,"cdcef368614f8f66fdfb0da3a31559aa7cb13015"}},
+       {ref,"86e2a37d01c1707b5e78b9e36a38f15c95cae468"}},
   0},
  {<<"esaml">>,
   {git,"https://github.com/onedata/esaml.git",
