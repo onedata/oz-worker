@@ -22,7 +22,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/errors.hrl").
 
--type method() :: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'.
+-type method() :: http_utils:method().
 -type binding() :: {binding, atom()} | client_id | client_ip.
 -type bound_gri() :: #b_gri{}.
 -type bound_auth_hint() :: undefined | {
@@ -287,6 +287,7 @@ process_request(Req, State) ->
         {Data, Req2} = case Operation of
             create -> get_data(Req);
             get -> {#{}, Req};
+            head -> {#{}, Req};
             update -> get_data(Req);
             delete -> {#{}, Req}
         end,
@@ -394,7 +395,10 @@ resolve_bindings(Other, _Client, _Req) ->
 
 %% @private
 -spec route_to_proper_handler(#el_req{}, cowboy_req:req()) -> rest_resp().
-route_to_proper_handler(#el_req{operation = get, gri = #gri{type = od_share, aspect = {shared_data, ObjectId}}}, Req) ->
+route_to_proper_handler(#el_req{operation = Op, gri = #gri{type = od_share, aspect = {shared_data, ObjectId}}}, Req) when
+    Op =:= get;
+    Op =:= head
+->
     shared_data_redirector:handle(ObjectId, Req);
 route_to_proper_handler(ElReq, _Req) ->
     call_entity_logic_and_translate_response(ElReq).
@@ -457,6 +461,7 @@ get_data(Req) ->
 binary_to_method(<<"POST">>) -> 'POST';
 binary_to_method(<<"PUT">>) -> 'PUT';
 binary_to_method(<<"GET">>) -> 'GET';
+binary_to_method(<<"HEAD">>) -> 'HEAD';
 binary_to_method(<<"PATCH">>) -> 'PATCH';
 binary_to_method(<<"DELETE">>) -> 'DELETE'.
 
@@ -472,6 +477,7 @@ binary_to_method(<<"DELETE">>) -> 'DELETE'.
 method_to_binary('POST') -> <<"POST">>;
 method_to_binary('PUT') -> <<"PUT">>;
 method_to_binary('GET') -> <<"GET">>;
+method_to_binary('HEAD') -> <<"HEAD">>;
 method_to_binary('PATCH') -> <<"PATCH">>;
 method_to_binary('DELETE') -> <<"DELETE">>.
 
@@ -487,5 +493,6 @@ method_to_binary('DELETE') -> <<"DELETE">>.
 method_to_operation('POST') -> create;
 method_to_operation('PUT') -> create;
 method_to_operation('GET') -> get;
+method_to_operation('HEAD') -> head;
 method_to_operation('PATCH') -> update;
 method_to_operation('DELETE') -> delete.
