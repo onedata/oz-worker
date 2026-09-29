@@ -5,7 +5,7 @@
 %%% cited in 'LICENSE.txt'.
 %%% @doc
 %%% Implementation of the onezone_plugin_behaviour and the handle_metadata_plugin_behaviour
-%%% for handling EDM (Europeana Data Model) metadata format in the scope of the Eureka3D project.
+%%% for handling EDM (Europeana Data Model) metadata schema in the scope of the Eureka3D project.
 %%%
 %%% @see handle_metadata_plugin_behaviour for general information about metadata plugins.
 %%%
@@ -17,8 +17,9 @@
 %%%     (to be added when public handle is known)
 %%%   * remove the edm:AggregatedCHO element
 %%%     (to be added when public handle is known)
-%%%   * insert (and overwrite if exists) edm:isShownBy element,
-%%%     pointing to a resource based on root FileId
+%%%   * make sure there is an edm:isShownBy element with a nonempty
+%%%     rdf:resource attr. If so, retain it. If not, insert one with
+%%%     the default EUreka3D viewer URL (see the ?default_is_shown_by_value/1 macro)
 %%%   * if there is a WebResource element without any specified rdf:about
 %%%     attribute, insert the attribute with the same value as the
 %%%     rdf:resource in edm:isShownBy; empty attribute is treated as no attribute
@@ -45,15 +46,15 @@
 -behavior(onezone_plugin_behaviour).
 -behaviour(handle_metadata_plugin_behaviour).
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 
 %% onezone_plugin_behaviour callbacks
 -export([type/0]).
 
 %% handle_metadata_plugin_behaviour callbacks
--export([metadata_prefix/0, schema_URL/0, main_namespace/0]).
--export([revise_for_publication/3, insert_public_handle/2, adapt_for_oai_pmh/1]).
+-export([metadata_schema/0, supported_oai_pmh_metadata_prefixes/0, schema_URL/1, main_namespace/1]).
+-export([revise_for_publication/3, insert_public_handle/2, adapt_for_oai_pmh/2]).
 -export([encode_xml/1]).
 -export([validation_examples/0]).
 
@@ -61,7 +62,7 @@
 -define(rdf_about_attr(Value), #xmlAttribute{name = 'rdf:about', value = Value}).
 -define(rdf_resource_attr(Value), #xmlAttribute{name = 'rdf:resource', value = Value}).
 
--define(is_shown_by_value(FileId), str_utils:format("https://eureka3d.vm.fedcloud.eu/3d/~ts", [FileId])).
+-define(default_is_shown_by_value(FileId), str_utils:format("https://eureka3d.vm.fedcloud.eu/3d/~ts", [FileId])).
 -define(IS_PART_OF_VALUE, "EUreka3D").
 
 -define(INDENT_SIZE, 4).  % per nesting level of an XML, for pretty-formatting
@@ -82,21 +83,27 @@ type() ->
 %%%===================================================================
 
 
-%% @doc {@link metadata_format_behaviour} callback metadata_prefix/0
--spec metadata_prefix() -> binary().
-metadata_prefix() ->
+%% @doc {@link handle_metadata_plugin_behaviour} callback metadata_schema/0
+-spec metadata_schema() -> od_handle:metadata_schema().
+metadata_schema() ->
     ?EDM_METADATA_PREFIX.
 
 
-%% @doc {@link metadata_format_behaviour} callback schema_URL/0
--spec schema_URL() -> binary().
-schema_URL() ->
+%% @doc {@link handle_metadata_plugin_behaviour} callback supported_oai_pmh_metadata_prefixes/0
+-spec supported_oai_pmh_metadata_prefixes() -> od_handle:metadata_schema().
+supported_oai_pmh_metadata_prefixes() ->
+    [?EDM_METADATA_PREFIX].
+
+
+%% @doc {@link handle_metadata_plugin_behaviour} callback schema_URL/1
+-spec schema_URL(oai_metadata:prefix()) -> binary().
+schema_URL(?EDM_METADATA_PREFIX) ->
     <<"https://www.europeana.eu/schemas/edm/EDM.xsd">>.
 
 
-%% @doc {@link metadata_format_behaviour} callback main_namespace/0
--spec main_namespace() -> {atom(), binary()}.
-main_namespace() ->
+%% @doc {@link handle_metadata_plugin_behaviour} callback main_namespace/1
+-spec main_namespace(oai_metadata:prefix()) -> {atom(), binary()}.
+main_namespace(?EDM_METADATA_PREFIX) ->
     {'xmlns:edm', <<"http://www.europeana.eu/schemas/edm/">>}.
 
 
@@ -108,7 +115,7 @@ revise_for_publication(#xmlElement{
     name = 'rdf:RDF', content = MetadataElements
 } = RdfXml, ShareId, ShareRecord) ->
     ShareRootFileId = od_share:build_root_file(objectid, ShareId, ShareRecord),
-    IsShownByValue = ?is_shown_by_value(ShareRootFileId),
+    IsShownByValue = ?default_is_shown_by_value(ShareRootFileId),
 
     MetadataElementsWithPublicHandles = lists:map(fun
         (#xmlElement{name = 'edm:ProvidedCHO', content = PCHOContent0, attributes = CHOAttrs} = CHOElement) ->
@@ -118,7 +125,10 @@ revise_for_publication(#xmlElement{
             };
         (#xmlElement{name = 'ore:Aggregation', content = AggContent0, attributes = AggAttrs} = AggElement) ->
             AggContent1 = remove_rdf_resource_attr_from_aggregated_cho_element(AggContent0),
-            AggContent2 = insert_empty_element(AggContent1, 2, 'edm:isShownBy', [?rdf_resource_attr(IsShownByValue)]),
+            AggContent2 = insert_element(AggContent1, honour_existing, 2, #xmlElement{
+                name = 'edm:isShownBy',
+                attributes = [?rdf_resource_attr(IsShownByValue)]
+            }),
             AggElement#xmlElement{
                 attributes = remove_rdf_about_attr(AggAttrs),
                 content = AggContent2
@@ -151,7 +161,10 @@ insert_public_handle(#xmlElement{
         (#xmlElement{name = 'ore:Aggregation', content = AggContent, attributes = AggAttrs} = AggElement) ->
             AggElement#xmlElement{
                 attributes = insert_rdf_about_attr(AggAttrs, overwrite, <<PublicHandle/binary, <<"_AGG">>/binary>>),
-                content = insert_empty_element(AggContent, 2, 'edm:aggregatedCHO', [?rdf_resource_attr(PublicHandle)])
+                content = insert_element(AggContent, overwrite, 2, #xmlElement{
+                    name = 'edm:aggregatedCHO',
+                    attributes = [?rdf_resource_attr(PublicHandle)]
+                })
             };
         (Other) ->
             Other
@@ -160,18 +173,16 @@ insert_public_handle(#xmlElement{
     RdfXml#xmlElement{content = MetadataElementsWithPublicHandles}.
 
 
-%% @doc {@link handle_metadata_plugin_behaviour} callback adapt_for_oai_pmh/1
--spec adapt_for_oai_pmh(od_handle:parsed_metadata()) -> od_handle:parsed_metadata().
-adapt_for_oai_pmh(RdfXml) ->
+%% @doc {@link handle_metadata_plugin_behaviour} callback adapt_for_oai_pmh/2
+-spec adapt_for_oai_pmh(oai_metadata:prefix(), od_handle:parsed_metadata()) -> od_handle:parsed_metadata().
+adapt_for_oai_pmh(?EDM_METADATA_PREFIX, RdfXml) ->
     RdfXml.
 
 
 %% @doc {@link handle_metadata_plugin_behaviour} callback encode_xml/1
 -spec encode_xml(od_handle:parsed_metadata()) -> od_handle:raw_metadata().
 encode_xml(Metadata) ->
-    RawMetadata = oai_xml:encode(Metadata),
-    % format the namespace attributes nicely (each in a new, indented line)
-    iolist_to_binary(re:replace(RawMetadata, <<" xmlns:">>, <<"\n    xmlns:">>, [global])).
+    oai_xml:encode(Metadata).
 
 
 %% @doc {@link handle_metadata_plugin_behaviour} callback validation_examples/0
@@ -217,16 +228,21 @@ ensure_text_element(Elements, XmlDepth, Name, Text) ->
 
 
 %% @private
-%% @doc existing attrs (if any) are always overwritten with the provided ones, the content is always empty
--spec insert_empty_element([#xmlElement{}], non_neg_integer(), atom(), [#xmlAttribute{}]) -> [#xmlElement{}].
-insert_empty_element(Elements, XmlDepth, Name, Attrs) ->
+-spec insert_element([#xmlElement{}], overwrite | honour_existing, non_neg_integer(), #xmlElement{}) ->
+    [#xmlElement{}].
+insert_element(Elements, Strategy, XmlDepth, #xmlElement{name = Name} = ElementToInsert) ->
     case ?find_matching_element(#xmlElement{name = Name}, Elements) of
-        {ok, Found} ->
-            lists_utils:replace(Found, Found#xmlElement{attributes = Attrs}, Elements);
+        {ok, #xmlElement{attributes = Attrs} = Found} ->
+            case ?find_matching_element(?rdf_resource_attr(_), Attrs) of
+                {ok, ?rdf_resource_attr(Res)} when Strategy == honour_existing, Res =/= "" ->
+                    Elements;
+                _ ->
+                    lists_utils:replace(Found, ElementToInsert, Elements)
+            end;
         error ->
             oai_xml:prepend_element_with_indent(
                 XmlDepth * ?INDENT_SIZE,
-                #xmlElement{name = Name, attributes = Attrs},
+                ElementToInsert,
                 Elements
             )
     end.
@@ -343,7 +359,7 @@ gen_validation_example(Ctx) ->
         exp_final_metadata_generator = fun(ShareId, ShareRecord, PublicHandle) ->
             gen_exp_metadata(final, OpeningRdfTag, ShareId, ShareRecord, PublicHandle, Ctx)
         end,
-        exp_oai_pmh_metadata_generator = fun(ShareId, ShareRecord, PublicHandle) ->
+        exp_oai_pmh_metadata_generator = fun(?EDM_METADATA_PREFIX, ShareId, ShareRecord, PublicHandle) ->
             gen_exp_metadata(oai_pmh, OpeningRdfTag, ShareId, ShareRecord, PublicHandle, Ctx)
         end
     }.
@@ -448,10 +464,14 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareId, ShareRecord, PublicHandle
     end,
 
     ShareRootFileId = od_share:build_root_file(objectid, ShareId, ShareRecord),
-    ExpIsShownByUrl = <<"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary>>,
+    EUreka3DViewerUrl = <<"https://eureka3d.vm.fedcloud.eu/3d/", ShareRootFileId/binary>>,
+    ExpIsShownByUrl = case is_binary(IsShownByResourceAttr) of
+        true -> IsShownByResourceAttr;
+        false -> EUreka3DViewerUrl
+    end,
     ExpIsShownByLine = <<"        <edm:isShownBy rdf:resource=\"", ExpIsShownByUrl/binary, "\"/>\n">>,
     ExpAggChoLine = <<"        <edm:aggregatedCHO", ExpAggChoRdfResourceStr/binary, "/>\n">>,
-    ExpIsPartOfEureka3DElement =  <<"        <dcterms:isPartOf>EUreka3D</dcterms:isPartOf>\n">>,
+    ExpIsPartOfEureka3DElement = <<"        <dcterms:isPartOf>EUreka3D</dcterms:isPartOf>\n">>,
     <<
         "<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n",
         OpeningRdfTag/binary, "\n",
@@ -468,13 +488,14 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareId, ShareRecord, PublicHandle
         "        <dc:identifier>some/internal/identifier/123456</dc:identifier>\n",
         (build_other_is_part_of_element(3, ValidationExampleBuilderCtx))/binary,
         "    </edm:ProvidedCHO>\n",
-        "    <edm:WebResource rdf:about=\"", (ExpIsShownByUrl)/binary, "\">\n",
+        "    <edm:WebResource rdf:about=\"", (EUreka3DViewerUrl)/binary, "\">\n",
         "        <dc:description>CHO representation</dc:description>\n",
         "        <dc:type>PMG</dc:type>\n",
         "        <edm:rights rdf:resource=\"http://creativecommons.org/licenses/by-nc-nd/4.0/\"/>\n",
         "    </edm:WebResource>\n",
         "    <ore:Aggregation", ExpOreAggRdfAboutStr/binary, ">\n",
-        (case MetadataType /= revised andalso AggChoResourceAttr == element_not_provided of true -> ExpAggChoLine; _ -> <<"">> end)/binary,
+        (case MetadataType /= revised andalso AggChoResourceAttr == element_not_provided of true -> ExpAggChoLine; _ ->
+            <<"">> end)/binary,
         (case IsShownByResourceAttr of element_not_provided -> ExpIsShownByLine; _ -> <<"">> end)/binary,
         (case {MetadataType, AggChoResourceAttr} of {_, element_not_provided} -> <<"">>; _ -> ExpAggChoLine end)/binary,
         "        <edm:dataProvider>Europeana Foundation</edm:dataProvider>\n",
@@ -488,7 +509,7 @@ gen_exp_metadata(MetadataType, OpeningRdfTag, ShareId, ShareRecord, PublicHandle
         "        <dc:type>JPG</dc:type>\n",
         "        <edm:rights rdf:resource=\"http://creativecommons.org/licenses/by-nc-sa/4.0/\"/>\n",
         "    </edm:WebResource>\n",
-        "    <edm:WebResource rdf:about=\"", (ExpIsShownByUrl)/binary, "\">\n",
+        "    <edm:WebResource rdf:about=\"", (EUreka3DViewerUrl)/binary, "\">\n",
         "        <dc:description>3D visualization of the CHO</dc:description>\n",
         "        <dc:type>3D</dc:type>\n",
         "        <edm:rights rdf:resource=\"http://creativecommons.org/licenses/by-nc-sa/4.0/\"/>\n",

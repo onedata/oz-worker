@@ -18,9 +18,10 @@
 -include_lib("onenv_ct/include/oct_background.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 -define(OZ_NAME, "dev-onezone").
+
 
 %% API
 -export([all/0, init_per_suite/1, init_per_testcase/2, end_per_testcase/2, end_per_suite/1]).
@@ -247,7 +248,7 @@ all() -> ?ALL([
     #{?HDR_CONTENT_TYPE => <<"text/xml">>}).
 
 %% Example test data
--define(RAND_METADATA_PREFIX(), ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes())).
+-define(RAND_METADATA_SCHEMA(), ?RAND_ELEMENT(ozt_handles:supported_metadata_schemas())).
 -define(NOW(), ozt_mocks:get_frozen_time_seconds()).
 
 -define(TESTED_LIST_BATCH_SIZE, 10).
@@ -616,16 +617,17 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
 
 
 get_record_test_base(Config, Method) ->
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    HandleEntry = create_handle(MetadataPrefix),
+    MetadataSchema = ?RAND_METADATA_SCHEMA(),
+    HandleEntry = create_handle(MetadataSchema),
+    MetadataPrefix = metadata_schema_to_prefix(MetadataSchema),
     Args = [
         {<<"identifier">>, oai_identifier(HandleEntry)},
         {<<"metadataPrefix">>, MetadataPrefix}
     ],
-    ?assert(check_get_record(200, Args, Method, [expected_oai_record_xml(HandleEntry)], Config)),
+    ?assert(check_get_record(200, Args, Method, [expected_oai_record_xml(MetadataPrefix, HandleEntry)], Config)),
 
     ModifiedHandleEntry = modify_handle_with_mocked_timestamp(HandleEntry, ?NOW() + 123456),
-    ?assert(check_get_record(200, Args, Method, [expected_oai_record_xml(ModifiedHandleEntry)], Config)).
+    ?assert(check_get_record(200, Args, Method, [expected_oai_record_xml(MetadataPrefix, ModifiedHandleEntry)], Config)).
 
 
 % Simulate a DC record that preexisted since the previous version of Onezone
@@ -700,18 +702,19 @@ get_dc_record_with_bad_metadata_test_base(Config, Method) ->
 get_deleted_record_test_base(Config, Method) ->
     Timestamp = ?NOW(),
     Timestamp2 = increase_timestamp(Timestamp, 1),
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    HandleEntry = create_handle_with_mocked_timestamp(MetadataPrefix, Timestamp),
+    MetadataSchema = ?RAND_METADATA_SCHEMA(),
+    MetadataPrefix = metadata_schema_to_prefix(MetadataSchema),
+    HandleEntry = create_handle_with_mocked_timestamp(MetadataSchema, Timestamp),
 
     Args = [
         {<<"identifier">>, oai_identifier(HandleEntry)},
         {<<"metadataPrefix">>, MetadataPrefix}
     ],
-    ExpResponseContent = [expected_oai_record_xml(HandleEntry)],
+    ExpResponseContent = [expected_oai_record_xml(MetadataPrefix, HandleEntry)],
     ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config)),
 
     delete_handle_with_mocked_timestamp(HandleEntry, Timestamp2),
-    ExpResponseContent2 = [expected_oai_record_xml(HandleEntry#handle_listing_entry{
+    ExpResponseContent2 = [expected_oai_record_xml(MetadataPrefix, HandleEntry#handle_listing_entry{
         timestamp = Timestamp2, status = deleted
     })],
     ?assert(check_get_record(200, Args, Method, ExpResponseContent2, Config)).
@@ -742,32 +745,36 @@ list_metadata_formats_test_base(Config, Method) ->
     end,
     % when no identifier is provided, returns all formats supported by the repository
     ?assert(check_list_metadata_formats(
-        200, [], Method, BuildExpResponseContent(ozt_handles:supported_metadata_prefixes()), Config
+        200, [], Method, BuildExpResponseContent(ozt_handles:all_supported_oai_pmh_prefixes()), Config
     )),
 
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    HandleEntry = create_handle(MetadataPrefix),
+    MetadataSchema = ?RAND_METADATA_SCHEMA(),
+    HandleEntry = create_handle(MetadataSchema),
     Args = [{<<"identifier">>, oai_identifier(HandleEntry)}],
     ?assert(check_list_metadata_formats(
-        200, Args, Method, BuildExpResponseContent([MetadataPrefix]), Config
+        200,
+        Args,
+        Method,
+        BuildExpResponseContent(ozt_handles:supported_oai_pmh_prefixes_by_schema(MetadataSchema)),
+        Config
     )).
 
 
 list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
     BeginTime = ?NOW(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    HandleEntries = setup_test_for_harvesting(MetadataPrefix, BeginTime, TimeOffsets),
+    MetadataSchema = ?RAND_METADATA_SCHEMA(),
+    HandleEntries = setup_test_for_harvesting(MetadataSchema, BeginTime, TimeOffsets),
     list_with_time_offsets_test_base(Config, Method, <<"ListIdentifiers">>, HandleEntries,
-        BeginTime, FromOffset, UntilOffset, MetadataPrefix).
+        BeginTime, FromOffset, UntilOffset, MetadataSchema).
 
 
 list_resumption_token_test_base(Config, Method, Verb, IdentifiersNum) ->
     BeginTime = ?NOW(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    HandleEntries = setup_test_for_harvesting(MetadataPrefix, BeginTime, TimeOffsets),
-    Args = prepare_harvesting_args(MetadataPrefix, undefined, undefined),
+    MetadataSchema = ?RAND_METADATA_SCHEMA(),
+    HandleEntries = setup_test_for_harvesting(MetadataSchema, BeginTime, TimeOffsets),
+    Args = prepare_harvesting_args(MetadataSchema, undefined, undefined),
     ?assert(check_list_entries_continuously_with_resumption_token(Config, Method, Verb, HandleEntries, Args)).
 
 
@@ -778,11 +785,11 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     %% so that their timestamps will be set to Until + 1 (if Until is undefined
     BeginTime = ?NOW(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
+    MetadataSchema = ?RAND_METADATA_SCHEMA(),
 
-    HandleEntries = setup_test_for_harvesting(MetadataPrefix, BeginTime, TimeOffsets, no_deleted_handles),
+    HandleEntries = setup_test_for_harvesting(MetadataSchema, BeginTime, TimeOffsets, no_deleted_handles),
     list_with_time_offsets_test_base(Config, Method, <<"ListIdentifiers">>, HandleEntries,
-        BeginTime, FromOffset, UntilOffset, MetadataPrefix),
+        BeginTime, FromOffset, UntilOffset, MetadataSchema),
 
     TimeOffsets2 = lists:map(fun({T, N}) ->
         case N =< IdentifiersToBeModified of
@@ -792,16 +799,16 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     end, lists:zip(TimeOffsets, lists:seq(1, length(TimeOffsets)))),
     ModifiedHandleEntries = modify_handles_with_mocked_timestamp(HandleEntries, BeginTime, TimeOffsets2),
     list_with_time_offsets_test_base(Config, Method, <<"ListIdentifiers">>, ModifiedHandleEntries,
-        BeginTime, FromOffset, UntilOffset, MetadataPrefix).
+        BeginTime, FromOffset, UntilOffset, MetadataSchema).
 
 
 list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
     BeginTime = ?NOW(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    HandleEntries = setup_test_for_harvesting(MetadataPrefix, BeginTime, TimeOffsets),
+    MetadataSchema = ?RAND_METADATA_SCHEMA(),
+    HandleEntries = setup_test_for_harvesting(MetadataSchema, BeginTime, TimeOffsets),
     list_with_time_offsets_test_base(Config, Method, <<"ListRecords">>, HandleEntries,
-        BeginTime, FromOffset, UntilOffset, MetadataPrefix).
+        BeginTime, FromOffset, UntilOffset, MetadataSchema).
 
 
 list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
@@ -812,10 +819,10 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
 
     BeginTime = ?NOW(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    HandleEntries = setup_test_for_harvesting(MetadataPrefix, BeginTime, TimeOffsets, no_deleted_handles),
+    MetadataSchema = ?RAND_METADATA_SCHEMA(),
+    HandleEntries = setup_test_for_harvesting(MetadataSchema, BeginTime, TimeOffsets, no_deleted_handles),
     list_with_time_offsets_test_base(Config, Method, <<"ListRecords">>, HandleEntries,
-        BeginTime, FromOffset, UntilOffset, MetadataPrefix),
+        BeginTime, FromOffset, UntilOffset, MetadataSchema),
 
     TimeOffsets2 = lists:map(fun({T, N}) ->
         case N =< IdentifiersToBeModified of
@@ -825,15 +832,15 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     end, lists:zip(TimeOffsets, lists:seq(1, length(TimeOffsets)))),
     ModifiedHandleEntries = modify_handles_with_mocked_timestamp(HandleEntries, BeginTime, TimeOffsets2),
     list_with_time_offsets_test_base(Config, Method, <<"ListRecords">>, ModifiedHandleEntries,
-        BeginTime, FromOffset, UntilOffset, MetadataPrefix).
+        BeginTime, FromOffset, UntilOffset, MetadataSchema).
 
 
 list_with_time_offsets_test_base(
-    Config, Method, Verb, HandleEntries, BeginTime, FromOffset, UntilOffset, MetadataPrefix
+    Config, Method, Verb, HandleEntries, BeginTime, FromOffset, UntilOffset, MetadataSchema
 ) ->
     From = increase_timestamp(BeginTime, FromOffset),
     Until = increase_timestamp(BeginTime, UntilOffset),
-    Args = prepare_harvesting_args(MetadataPrefix, to_datestamp(From), to_datestamp(Until)),
+    Args = prepare_harvesting_args(MetadataSchema, to_datestamp(From), to_datestamp(Until)),
 
     FilteredHandleEntries = filter_handles_from_until(HandleEntries, From, Until),
     ?assert(check_list_entries(Verb, Args, Method, FilteredHandleEntries, Config)),
@@ -905,14 +912,14 @@ missing_arg_test_base(Config, Method) ->
 id_not_existing_test_base(Config, Method) ->
     Args = [
         {<<"identifier">>, <<"some-identifier">>},
-        {<<"metadataPrefix">>, ?RAND_METADATA_PREFIX()}
+        {<<"metadataPrefix">>, metadata_schema_to_prefix(?RAND_METADATA_SCHEMA())}
     ],
     ?assert(check_id_not_existing_error(200, Args, Method, [], Config)).
 
 
 cannot_disseminate_format_test_base(Config, Method) ->
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    HandleEntry = create_handle(MetadataPrefix),
+    MetadataSchema = ?RAND_METADATA_SCHEMA(),
+    HandleEntry = create_handle(MetadataSchema),
 
     Args = [
         {<<"identifier">>, oai_identifier(HandleEntry)},
@@ -920,17 +927,17 @@ cannot_disseminate_format_test_base(Config, Method) ->
     ],
     ?assert(check_cannot_disseminate_format_error(200, Args, Method, [], Config)),
 
-    AnotherMetadataPrefix = ?RAND_ELEMENT(lists:delete(MetadataPrefix, ozt_handles:supported_metadata_prefixes())),
+    AnotherMetadataSchema = ?RAND_ELEMENT(lists:delete(MetadataSchema, ozt_handles:supported_metadata_schemas())),
     Args2 = [
         {<<"identifier">>, oai_identifier(HandleEntry)},
-        {<<"metadataPrefix">>, AnotherMetadataPrefix}
+        {<<"metadataPrefix">>, metadata_schema_to_prefix(AnotherMetadataSchema)}
     ],
     ?assert(check_cannot_disseminate_format_error(200, Args2, Method, [], Config)).
 
 
 exclusive_resumption_token_required_error(Config, Method) ->
     Args = [
-        {<<"metadataPrefix">>, ?RAND_METADATA_PREFIX()},
+        {<<"metadataPrefix">>, metadata_schema_to_prefix(?RAND_METADATA_SCHEMA())},
         {<<"resumptionToken">>, <<"example_token">>}
     ],
     ?assert(check_exclusive_resumption_token_required_error(200, Args, Method, [], Config)).
@@ -954,26 +961,26 @@ list_metadata_formats_error_test_base(Config, Method) ->
 
 
 list_identifiers_empty_repository_error_test_base(Config, Method) ->
-    Args = [{<<"metadataPrefix">>, ?RAND_METADATA_PREFIX()}],
+    Args = [{<<"metadataPrefix">>, metadata_schema_to_prefix(?RAND_METADATA_SCHEMA())}],
     ?assert(check_list_entries_no_records_match_error(200, <<"ListIdentifiers">>, Args, Method, Config)).
 
 
 list_identifiers_no_records_match_error_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
     BeginTime = ?NOW(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    setup_test_for_harvesting(MetadataPrefix, BeginTime, TimeOffsets),
+    MetadataSchema = ?RAND_METADATA_SCHEMA(),
+    setup_test_for_harvesting(MetadataSchema, BeginTime, TimeOffsets),
 
     From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
     Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
-    Args = prepare_harvesting_args(?RAND_METADATA_PREFIX(), From, Until),
+    Args = prepare_harvesting_args(?RAND_METADATA_SCHEMA(), From, Until),
 
     ?assert(check_list_entries_no_records_match_error(200, <<"ListIdentifiers">>, Args, Method, Config)).
 
 
 list_identifiers_granularity_mismatch_error_test_base(Config, Method) ->
     Args = [
-        {<<"metadataPrefix">>, ?RAND_METADATA_PREFIX()},
+        {<<"metadataPrefix">>, metadata_schema_to_prefix(?RAND_METADATA_SCHEMA())},
         {<<"from">>, <<"1111-12-01">>},
         {<<"until">>, <<"1111-12-01T00:00:00Z">>}
     ],
@@ -981,28 +988,28 @@ list_identifiers_granularity_mismatch_error_test_base(Config, Method) ->
 
 
 list_identifiers_wrong_date_format_error_test_base(Config, Method, From, Until, DateFormat) ->
-    Args = prepare_harvesting_args(?RAND_METADATA_PREFIX(), From, Until),
+    Args = prepare_harvesting_args(?RAND_METADATA_SCHEMA(), From, Until),
     ?assert(check_list_identifiers_bad_argument_invalid_date_format_error(200, Args, Method, [], DateFormat, Config)).
 
 
 list_records_no_records_match_error_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) ->
     BeginTime = ?NOW(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
-    setup_test_for_harvesting(MetadataPrefix, BeginTime, TimeOffsets),
+    MetadataSchema = ?RAND_METADATA_SCHEMA(),
+    setup_test_for_harvesting(MetadataSchema, BeginTime, TimeOffsets),
 
     From = to_datestamp(increase_timestamp(BeginTime, FromOffset)),
     Until = to_datestamp(increase_timestamp(BeginTime, UntilOffset)),
-    Args = prepare_harvesting_args(?RAND_METADATA_PREFIX(), From, Until),
+    Args = prepare_harvesting_args(?RAND_METADATA_SCHEMA(), From, Until),
 
     ?assert(check_list_entries_no_records_match_error(200, <<"ListRecords">>, Args, Method, Config)).
 
 
 timestamp_evolution_and_harvesting_test_base(Config, Method) ->
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
+    MetadataSchema = ?RAND_METADATA_SCHEMA(),
 
     CheckListing = fun(From, Until, ExpHandleEntries) ->
-        Args = prepare_harvesting_args(MetadataPrefix, to_datestamp(From), to_datestamp(Until)),
+        Args = prepare_harvesting_args(MetadataSchema, to_datestamp(From), to_datestamp(Until)),
         Verb = ?RAND_ELEMENT([<<"ListIdentifiers">>, <<"ListRecords">>]),
         check_list_entries(Verb, Args, Method, ExpHandleEntries, Config)
     end,
@@ -1012,21 +1019,21 @@ timestamp_evolution_and_harvesting_test_base(Config, Method) ->
     end, 7),
 
     % the timestamp of a record should be the time of its last change (creation, modification, deletion)
-    AlphaFromThursday0 = create_handle_with_mocked_timestamp(MetadataPrefix, Monday),
+    AlphaFromThursday0 = create_handle_with_mocked_timestamp(MetadataSchema, Monday),
     AlphaFromThursday = modify_handle_with_mocked_timestamp(AlphaFromThursday0, Thursday),
 
-    BetaFromFriday0 = create_handle_with_mocked_timestamp(MetadataPrefix, Monday),
+    BetaFromFriday0 = create_handle_with_mocked_timestamp(MetadataSchema, Monday),
     BetaFromFriday1 = modify_handle_with_mocked_timestamp(BetaFromFriday0, Tuesday),
     BetaFromFriday = delete_handle_with_mocked_timestamp(BetaFromFriday1, Friday),
 
-    GammaFromSaturday0 = create_handle_with_mocked_timestamp(MetadataPrefix, Tuesday),
+    GammaFromSaturday0 = create_handle_with_mocked_timestamp(MetadataSchema, Tuesday),
     GammaFromSaturday1 = modify_handle_with_mocked_timestamp(GammaFromSaturday0, Wednesday),
     GammaFromSaturday2 = modify_handle_with_mocked_timestamp(GammaFromSaturday1, Thursday),
     GammaFromSaturday = delete_handle_with_mocked_timestamp(GammaFromSaturday2, Saturday),
 
-    DeltaFromWednesday = create_handle_with_mocked_timestamp(MetadataPrefix, Wednesday),
+    DeltaFromWednesday = create_handle_with_mocked_timestamp(MetadataSchema, Wednesday),
 
-    OmegaFromSunday0 = create_handle_with_mocked_timestamp(MetadataPrefix, Monday),
+    OmegaFromSunday0 = create_handle_with_mocked_timestamp(MetadataSchema, Monday),
     OmegaFromSunday = delete_handle_with_mocked_timestamp(OmegaFromSunday0, Sunday),
 
     ?assert(CheckListing(Monday, Sunday, [DeltaFromWednesday, AlphaFromThursday, BetaFromFriday, GammaFromSaturday, OmegaFromSunday])),
@@ -1043,11 +1050,11 @@ timestamp_evolution_and_harvesting_test_base(Config, Method) ->
 % normally this should not happen but if for any reason a handle registered as present
 % is missing from the DB, we expect it to be filtered out from the ListRecords results
 filtering_of_broken_records_test_base(Config, Method) ->
-    MetadataPrefix = ?RAND_METADATA_PREFIX(),
+    MetadataSchema = ?RAND_METADATA_SCHEMA(),
 
     % Beta and Omega handles are not created, but only entries are added to the registry
 
-    Alpha = create_handle_with_mocked_timestamp(MetadataPrefix, ?NOW() + 1),
+    Alpha = create_handle_with_mocked_timestamp(MetadataSchema, ?NOW() + 1),
 
     Beta = #handle_listing_entry{
         timestamp = ?NOW() + 2,
@@ -1055,15 +1062,15 @@ filtering_of_broken_records_test_base(Config, Method) ->
         service_id = ?RAND_ELEMENT(ozt_handle_services:list())
     },
     ozt:rpc(handle_registry, report_created, [
-        MetadataPrefix,
+        MetadataSchema,
         Beta#handle_listing_entry.service_id,
         Beta#handle_listing_entry.handle_id,
         Beta#handle_listing_entry.timestamp
     ]),
 
-    Gamma = create_handle_with_mocked_timestamp(MetadataPrefix, ?NOW() + 3),
+    Gamma = create_handle_with_mocked_timestamp(MetadataSchema, ?NOW() + 3),
 
-    Delta = create_handle_with_mocked_timestamp(MetadataPrefix, ?NOW() + 4),
+    Delta = create_handle_with_mocked_timestamp(MetadataSchema, ?NOW() + 4),
 
     Omega = #handle_listing_entry{
         timestamp = ?NOW() + 5,
@@ -1071,13 +1078,13 @@ filtering_of_broken_records_test_base(Config, Method) ->
         service_id = ?RAND_ELEMENT(ozt_handle_services:list())
     },
     ozt:rpc(handle_registry, report_created, [
-        MetadataPrefix,
+        MetadataSchema,
         Omega#handle_listing_entry.service_id,
         Omega#handle_listing_entry.handle_id,
         Omega#handle_listing_entry.timestamp
     ]),
 
-    Args = prepare_harvesting_args(MetadataPrefix, undefined, undefined),
+    Args = prepare_harvesting_args(MetadataSchema, undefined, undefined),
     ?assert(check_list_entries(<<"ListRecords">>, Args, Method, [
         Alpha,
         Beta#handle_listing_entry{status = deleted},
@@ -1115,12 +1122,12 @@ init_per_testcase(_, Config) ->
         end
     end, AllHandles),
 
-    lists:foreach(fun(MetadataPrefix) ->
+    lists:foreach(fun(MetadataSchema) ->
         lists:foreach(fun(#handle_listing_entry{timestamp = Timestamp, handle_id = HandleId, service_id = HServiceId}) ->
-            ozt:rpc(handle_registry, report_deleted, [MetadataPrefix, HServiceId, HandleId, Timestamp, Timestamp]),
+            ozt:rpc(handle_registry, report_deleted, [MetadataSchema, HServiceId, HandleId, Timestamp, Timestamp]),
             ozt:rpc(handle_registry, purge_deleted_entry, [HandleId])
-        end, ozt:rpc(handle_registry, list_completely, [#{metadata_prefix => MetadataPrefix}]))
-    end, ozt_handles:supported_metadata_prefixes()),
+        end, ozt:rpc(handle_registry, list_completely, [#{metadata_schema => MetadataSchema}]))
+    end, ozt_handles:supported_metadata_schemas()),
 
     ozt:delete_all_entities(),
     Config.
@@ -1236,8 +1243,11 @@ check_list_entries_no_records_match_error(Code, <<"ListRecords">>, Args, Method,
 check_list_entries(Verb, Args, Method, ExpHandleEntries, Config) ->
     BuildExpectedObject = fun(HandleEntry) ->
         case Verb of
-            <<"ListIdentifiers">> -> expected_oai_header_xml(HandleEntry);
-            <<"ListRecords">> -> expected_oai_record_xml(HandleEntry)
+            <<"ListIdentifiers">> ->
+                expected_oai_header_xml(HandleEntry);
+            <<"ListRecords">> ->
+                {MetadataPrefix, _} = args_to_prefix_and_handle_listing_opts(Verb, Args),
+                expected_oai_record_xml(MetadataPrefix, HandleEntry)
         end
     end,
     case ExpHandleEntries of
@@ -1249,11 +1259,13 @@ check_list_entries(Verb, Args, Method, ExpHandleEntries, Config) ->
 
 
 check_list_entries(Code, Verb, Args, Method, BuildExpectedObject, ExpectedHandleEntries, Config) ->
-    ListingOpts = request_arguments_to_handle_listing_opts(Verb, Args),
+    {MetadataPrefix, ListingOpts} = args_to_prefix_and_handle_listing_opts(Verb, Args),
     {_, ExpResumptionToken} = ozt:rpc(handle_registry, list_portion, [ListingOpts]),
 
     ExpectedBase = lists:map(fun(HandleEntry) -> BuildExpectedObject(HandleEntry) end, ExpectedHandleEntries),
-    ExpResponseContent = ExpectedBase ++ expected_response_body_wrt_resumption_token(ExpResumptionToken, ListingOpts),
+    ExpResponseContent = ExpectedBase ++ expected_response_body_wrt_resumption_token(
+        MetadataPrefix, ExpResumptionToken, ListingOpts
+    ),
     check_oai_request(Code, Verb, Args, Method, ExpResponseContent, binary_to_atom(Verb), Config).
 
 
@@ -1261,16 +1273,21 @@ check_list_entries_continuously_with_resumption_token(_Config, _Method, _Verb, _
     true;
 check_list_entries_continuously_with_resumption_token(Config, Method, Verb, RemainingExpEntries, Args) ->
     ExpListedEntries = lists:sublist(RemainingExpEntries, ?TESTED_LIST_BATCH_SIZE),
-    ListingOpts = request_arguments_to_handle_listing_opts(Verb, Args),
+    {MetadataPrefix, ListingOpts} = args_to_prefix_and_handle_listing_opts(Verb, Args),
     {_, ExpResumptionToken} = ozt:rpc(handle_registry, list_portion, [ListingOpts]),
 
     case check_list_entries(Verb, Args, Method, ExpListedEntries, Config) of
         true ->
-            ArgsWithToken = add_to_args_if_defined(<<"resumptionToken">>, ExpResumptionToken, []),
+            ArgsWithToken = add_to_args_if_defined(
+                <<"resumptionToken">>,
+                handle_registry_resumption_token_to_oai(MetadataPrefix, ExpResumptionToken),
+                []
+            ),
             check_list_entries_continuously_with_resumption_token(
                 Config, Method, Verb, lists:subtract(RemainingExpEntries, ExpListedEntries), ArgsWithToken
             );
-        false -> false
+        false ->
+            false
     end.
 
 
@@ -1417,32 +1434,32 @@ ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
 
 
 create_handle() ->
-    create_handle(?RAND_METADATA_PREFIX()).
+    create_handle(?RAND_METADATA_SCHEMA()).
 
-create_handle(MetadataPrefix) ->
-    create_handle_with_mocked_timestamp(MetadataPrefix, ?NOW()).
+create_handle(MetadataSchema) ->
+    create_handle_with_mocked_timestamp(MetadataSchema, ?NOW()).
 
 
 create_handle_with_mocked_timestamp(MockedTimestamp) ->
-    create_handle_with_mocked_timestamp(?RAND_METADATA_PREFIX(), MockedTimestamp).
+    create_handle_with_mocked_timestamp(?RAND_METADATA_SCHEMA(), MockedTimestamp).
 
-create_handle_with_mocked_timestamp(MetadataPrefix, MockedTimestamp) ->
-    Metadata = example_input_metadata(MetadataPrefix),
-    create_handle_with_mocked_timestamp(MetadataPrefix, Metadata, MockedTimestamp).
+create_handle_with_mocked_timestamp(MetadataSchema, MockedTimestamp) ->
+    Metadata = example_input_metadata(MetadataSchema),
+    create_handle_with_mocked_timestamp(MetadataSchema, Metadata, MockedTimestamp).
 
-create_handle_with_mocked_timestamp(MetadataPrefix, Metadata, MockedTimestamp) ->
+create_handle_with_mocked_timestamp(MetadataSchema, Metadata, MockedTimestamp) ->
     ozt_handle_services:list() == [] andalso lists_utils:generate(fun ozt_handle_services:create/0, 10),
     ozt_spaces:list() == [] andalso lists_utils:generate(fun ozt_spaces:create/0, 10),
     HServiceId = ?RAND_ELEMENT(ozt_handle_services:list()),
     SpaceId = ?RAND_ELEMENT(ozt_spaces:list()),
     ShareId = ozt_shares:create(SpaceId),
-    create_handle_with_mocked_timestamp(HServiceId, ShareId, MetadataPrefix, Metadata, MockedTimestamp).
+    create_handle_with_mocked_timestamp(HServiceId, ShareId, MetadataSchema, Metadata, MockedTimestamp).
 
-create_handle_with_mocked_timestamp(HServiceId, ShareId, MetadataPrefix, Metadata, MockedTimestamp) ->
+create_handle_with_mocked_timestamp(HServiceId, ShareId, MetadataSchema, Metadata, MockedTimestamp) ->
     ozt_mocks:set_frozen_time_seconds(MockedTimestamp),
     #handle_listing_entry{
         timestamp = MockedTimestamp,
-        handle_id = ozt_handles:create(HServiceId, ShareId, MetadataPrefix, Metadata),
+        handle_id = ozt_handles:create(HServiceId, ShareId, MetadataSchema, Metadata),
         service_id = HServiceId,
         status = present
     }.
@@ -1456,7 +1473,7 @@ modify_handles_with_mocked_timestamp(HandleEntries, BeginTime, TimeOffsets) ->
 
 modify_handle_with_mocked_timestamp(HandleEntry, MockedTimestamp) ->
     HandleRecord = ozt_handles:get(HandleEntry#handle_listing_entry.handle_id),
-    NewMetadata = example_input_metadata(HandleRecord#od_handle.metadata_prefix),
+    NewMetadata = example_input_metadata(HandleRecord#od_handle.metadata_schema),
     modify_handle_with_mocked_timestamp(HandleEntry, NewMetadata, MockedTimestamp).
 
 modify_handle_with_mocked_timestamp(HandleEntry, Metadata, MockedTimestamp) ->
@@ -1471,13 +1488,13 @@ delete_handle_with_mocked_timestamp(HandleEntry, MockedTimestamp) ->
     HandleEntry#handle_listing_entry{timestamp = MockedTimestamp, status = deleted}.
 
 
-setup_test_for_harvesting(MetadataPrefix, BeginTime, TimeOffsets) ->
-    setup_test_for_harvesting(MetadataPrefix, BeginTime, TimeOffsets, randomly_deleted_handles).
+setup_test_for_harvesting(MetadataSchema, BeginTime, TimeOffsets) ->
+    setup_test_for_harvesting(MetadataSchema, BeginTime, TimeOffsets, randomly_deleted_handles).
 
-setup_test_for_harvesting(MetadataPrefix, BeginTime, TimeOffsets, DeletionStrategy) ->
+setup_test_for_harvesting(MetadataSchema, BeginTime, TimeOffsets, DeletionStrategy) ->
     lists:map(fun(TimeOffset) ->
         Timestamp = increase_timestamp(BeginTime, TimeOffset),
-        HandleEntry = create_handle_with_mocked_timestamp(MetadataPrefix, Timestamp),
+        HandleEntry = create_handle_with_mocked_timestamp(MetadataSchema, Timestamp),
         case {?RAND_BOOL(), DeletionStrategy} of
             {false, randomly_deleted_handles} ->
                 delete_handle_with_mocked_timestamp(HandleEntry, Timestamp);
@@ -1490,15 +1507,35 @@ setup_test_for_harvesting(MetadataPrefix, BeginTime, TimeOffsets, DeletionStrate
 % examples generated by ozt_handles are constant and based on the static examples in the plugins
 % here we would like a bit more diversity in the metadata, so they are modified and the
 % expected final metadata has to be calculated every time
-example_input_metadata(MetadataPrefix) ->
-    BasicExample = ozt_handles:example_input_metadata(MetadataPrefix),
+example_input_metadata(MetadataSchema) ->
+    BasicExample = ozt_handles:example_input_metadata(MetadataSchema),
     ParsedXml = ?check(oai_xml:parse(BasicExample)),
-    EnrichedMetadata = case MetadataPrefix of
+    EnrichedMetadata = case MetadataSchema of
         ?OAI_DC_METADATA_PREFIX ->
             #xmlElement{name = metadata, content = Content} = ParsedXml,
             ParsedXml#xmlElement{content = oai_xml:prepend_element_with_indent(
                 4, #xmlElement{
                     name = 'dc:identifier',
+                    content = [#xmlText{value = binary_to_list(?RAND_UNICODE_STR())}]
+                },
+                Content
+            )};
+        ?OAI_DATACITE_METADATA_PREFIX ->
+            #xmlElement{name = resource, content = Content} = ParsedXml,
+            ParsedXml#xmlElement{content = oai_xml:prepend_element_with_indent(
+                4, #xmlElement{
+                    name = 'identifier',
+                    attributes = [#xmlAttribute{name = identifierType, value = "URN"}],
+                    content = [#xmlText{value = binary_to_list(?RAND_UNICODE_STR())}]
+                },
+                Content
+            )};
+        ?OAI_OPENAIRE_METADATA_PREFIX ->
+            #xmlElement{name = 'oaire:resource', content = Content} = ParsedXml,
+            ParsedXml#xmlElement{content = oai_xml:prepend_element_with_indent(
+                4, #xmlElement{
+                    name = 'datacite:identifier',
+                    attributes = [#xmlAttribute{name = 'datacite:identifierType', value = "URN"}],
                     content = [#xmlText{value = binary_to_list(?RAND_UNICODE_STR())}]
                 },
                 Content
@@ -1520,27 +1557,25 @@ example_input_metadata(MetadataPrefix) ->
                 Content
             )}
     end,
-    ozt:rpc(oai_metadata, encode_xml, [MetadataPrefix, EnrichedMetadata]).
+    ozt:rpc(oai_metadata, encode_xml, [MetadataSchema, EnrichedMetadata]).
 
 
+prepare_harvesting_args(MetadataSchema, From, Until) ->
+    prepare_harvesting_args(MetadataSchema, From, Until, undefined).
 
-
-prepare_harvesting_args(MetadataPrefix, From, Until) ->
-    prepare_harvesting_args(MetadataPrefix, From, Until, undefined).
-
-prepare_harvesting_args(MetadataPrefix, From, Until, Set) ->
-    Args = add_to_args_if_defined(<<"metadataPrefix">>, MetadataPrefix, []),
+prepare_harvesting_args(MetadataSchema, From, Until, Set) ->
+    Args = add_to_args_if_defined(<<"metadataPrefix">>, metadata_schema_to_prefix(MetadataSchema), []),
     Args2 = add_to_args_if_defined(<<"from">>, From, Args),
     Args3 = add_to_args_if_defined(<<"until">>, Until, Args2),
     add_to_args_if_defined(<<"set">>, Set, Args3).
 
 
-request_arguments_to_handle_listing_opts(Verb, Args) ->
+args_to_prefix_and_handle_listing_opts(Verb, Args) ->
     VerbAtom = case Verb of
         <<"ListIdentifiers">> -> list_identifiers;
         <<"ListRecords">> -> list_records
     end,
-    ozt:rpc(oai_utils, request_arguments_to_handle_listing_opts, [VerbAtom, Args]).
+    ozt:rpc(oai_utils, args_to_prefix_and_handle_listing_opts, [VerbAtom, Args]).
 
 
 filter_handles_from_until(HandleEntries, From, Until) ->
@@ -1601,16 +1636,15 @@ expected_admin_emails() ->
     ozt:get_env(admin_emails).
 
 
-expected_oai_record_xml(#handle_listing_entry{status = deleted} = HandleEntry) ->
+expected_oai_record_xml(_, #handle_listing_entry{status = deleted} = HandleEntry) ->
     #xmlElement{name = record, content = [
         expected_oai_header_xml(HandleEntry)
     ]};
-expected_oai_record_xml(#handle_listing_entry{status = present} = HandleEntry) ->
+expected_oai_record_xml(MetadataPrefix, #handle_listing_entry{status = present} = HandleEntry) ->
     HandleRecord = ozt_handles:get(HandleEntry#handle_listing_entry.handle_id),
     ParsedXml = ?check(oai_xml:parse(HandleRecord#od_handle.metadata)),
-    ExpectedMetadata = ozt:rpc(oai_metadata, adapt_for_oai_pmh, [HandleRecord#od_handle.metadata_prefix, ParsedXml]),
-    expected_oai_record_xml(HandleEntry, ExpectedMetadata).
-
+    ExpectedMetadata = ozt:rpc(oai_metadata, adapt_for_oai_pmh, [MetadataPrefix, ParsedXml]),
+    expected_oai_record_xml(HandleEntry, ExpectedMetadata);
 expected_oai_record_xml(HandleEntry, ExpectedMetadata) ->
     #xmlElement{name = record, content = [
         expected_oai_header_xml(HandleEntry),
@@ -1661,18 +1695,36 @@ expected_oai_header_xml(#handle_listing_entry{
 %%% However, if the whole list is returned in one response, there should be no resumption token element at all.
 %%% @end
 %%%-------------------------------------------------------------------
--spec expected_response_body_wrt_resumption_token(handle_registry:resumption_token(), handle_registry:listing_opts()) ->
+-spec expected_response_body_wrt_resumption_token(
+    oai_metadata:prefix(),
+    handle_registry:resumption_token(),
+    handle_registry:listing_opts()
+) ->
     [#xmlElement{}].
-expected_response_body_wrt_resumption_token(undefined, ListingOpts) when not is_map_key(resumption_token, ListingOpts) ->
+expected_response_body_wrt_resumption_token(_, undefined, ListingOpts) when not is_map_key(resumption_token, ListingOpts) ->
     [];
-expected_response_body_wrt_resumption_token(ExpResumptionToken, _) ->
+expected_response_body_wrt_resumption_token(MetadataPrefix, ExpResumptionToken, _) ->
     [
         #xmlElement{
             name = resumptionToken,
             content = case ExpResumptionToken of
                 undefined -> [];
-                _ -> [#xmlText{value = binary_to_list(ExpResumptionToken)}]
+                _ -> [#xmlText{
+                    value = binary_to_list(handle_registry_resumption_token_to_oai(MetadataPrefix, ExpResumptionToken))
+                }]
             end
         }
     ].
 
+
+-spec handle_registry_resumption_token_to_oai(oai_metadata:prefix(), undefined | handle_registry:resumption_token()) ->
+    undefined | binary().
+handle_registry_resumption_token_to_oai(_MetadataPrefix, undefined) ->
+    undefined;
+handle_registry_resumption_token_to_oai(MetadataPrefix, ExpResumptionToken) ->
+    <<MetadataPrefix/binary, ",", ExpResumptionToken/binary>>.
+
+
+-spec metadata_schema_to_prefix(od_handle:metadata_schema()) -> oai_metadata:prefix().
+metadata_schema_to_prefix(MetadataSchema) ->
+    ?RAND_ELEMENT(ozt_handles:supported_oai_pmh_prefixes_by_schema(MetadataSchema)).

@@ -31,8 +31,10 @@
 -export([onenv_init_per_suite/2, onenv_end_per_suite/0]).
 -export([rpc/3, rpc/4]).
 -export([rpc_multicall/3]).
+-export([insecure_erpc/3]).
 -export([timestamp_seconds/0]).
 -export([reconcile_entity_graph/0]).
+-export([overwrite_auth_config/1]).
 -export([delete_all_entities/0]).
 -export([get_env/1, get_env/2, set_env/2, set_app_env/3]).
 -export([get_domain/0, get_nodes/0]).
@@ -107,7 +109,7 @@ rpc(Node, Module, Function, Args) ->
         try
             erlang:apply(Module, Function, Args)
         catch Type:Reason:Stacktrace ->
-            {crash, Type, Reason, lager:pr_stacktrace(Stacktrace)}
+            {crash, Type, Reason, onedata_logger:pr_stacktrace(Stacktrace)}
         end
     end,
     case rpc:call(Node, erlang, apply, [FunWrapper, []]) of
@@ -146,6 +148,11 @@ rpc_multicall(Module, Function, Args) ->
     end, get_nodes()).
 
 
+-spec insecure_erpc(module(), atom(), [term()]) -> term().
+insecure_erpc(Module, Function, Args) ->
+    erpc:call(?RAND_ELEMENT(get_nodes()), Module, Function, Args).
+
+
 -spec timestamp_seconds() -> time:seconds().
 timestamp_seconds() ->
     rpc(global_clock, timestamp_seconds, []).
@@ -154,6 +161,11 @@ timestamp_seconds() ->
 -spec reconcile_entity_graph() -> true.
 reconcile_entity_graph() ->
     ?assertMatch(true, rpc(entity_graph, ensure_up_to_date, []), 60).
+
+
+-spec overwrite_auth_config(auth_config:config_v2_or_later()) -> ok.
+overwrite_auth_config(AuthConfigData) ->
+    oz_test_utils:overwrite_auth_config(get_test_config(), AuthConfigData).
 
 
 -spec delete_all_entities() -> ok.

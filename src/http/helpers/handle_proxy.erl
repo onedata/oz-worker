@@ -14,6 +14,7 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
+-include("http/public_data/oai.hrl").
 -include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/errors.hrl").
@@ -21,7 +22,6 @@
 -type public_url() :: binary().
 
 -define(RANDOM_ID(), base62:from_base64(base64url:encode(crypto:strong_rand_bytes(6)))).
--define(DOI_DC_IDENTIFIER(Handle), <<"doi:", Handle/binary>>).
 
 %% API
 -export([register_handle/4, unregister_handle/1, modify_handle/2]).
@@ -35,8 +35,13 @@
 %% Register handle in external handle service
 %% @end
 %%--------------------------------------------------------------------
--spec register_handle(od_handle_service:id(), od_handle:resource_type(),
-    od_handle:resource_id(), od_handle:raw_metadata()) -> {ok, od_handle:public_handle()}.
+-spec register_handle(
+    od_handle_service:id(),
+    od_handle:resource_type(),
+    od_handle:resource_id(),
+    od_handle:raw_metadata()
+) ->
+    od_handle:public_handle().
 register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
     {ok, #document{value = #od_handle_service{
         name = HandleServiceName,
@@ -58,7 +63,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
             DoiHandleEncoded = http_utils:url_encode(DoiHandle),
             case handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", DoiHandleEncoded/binary>>, Headers, Body) of
                 {ok, 201, _, _} ->
-                    {ok, ?DOI_DC_IDENTIFIER(DoiHandle)};
+                    ?DOI_IDENTIFIER(DoiHandle);
                 HttpCallResult ->
                     ?error(?autoformat_with_msg("Error registering a handle", [
                         Type, HandleServiceName, ProxyEndpoint, HttpCallResult
@@ -69,8 +74,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
             PidHandle = ?RANDOM_ID(),
             case handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", PidHandle/binary>>, Headers, Body) of
                 {ok, 201, _, RespJSON} ->
-                    PublicHandle = maps:get(<<"handle">>, json_utils:decode(RespJSON)),
-                    {ok, PublicHandle};
+                    maps:get(<<"handle">>, json_utils:decode(RespJSON));
                 HttpCallResult ->
                     ?error(?autoformat_with_msg("Error registering a handle", [
                         Type, HandleServiceName, ProxyEndpoint, HttpCallResult
@@ -106,14 +110,20 @@ unregister_handle(HandleId) ->
         <<"DOI">> ->
             % the public handle looks like this: "oai:21.T15999/abcd"
             % the handle for the above is: "21.T15999/abcd"   (includes prefix!)
-            ?DOI_DC_IDENTIFIER(DoiHandle) = PublicHandle,
+            ?DOI_IDENTIFIER(DoiHandle) = PublicHandle,
             DoiHandle;
         _ -> % <<"PID">> and other types
-            % the public handle looks like this: "http://hdl.handle.net/21.T15999/abcd"
-            % the handle for the above is: "abcd"   (doesn't include prefix!)
             Prefix = maps:get(<<"prefix">>, ServiceProperties),
-            [_ServiceUrl, PidHandle] = binary:split(PublicHandle, <<Prefix/binary, "/">>),
-            PidHandle
+            case binary:split(PublicHandle, <<Prefix/binary, "/">>) of
+                [_ServiceUrl, PidHandle] ->
+                    % PID: the public handle looks like this: "http://hdl.handle.net/21.T15999/abcd"
+                    % the handle for the above is: "abcd"   (doesn't include prefix!)
+                    PidHandle;
+                [CustomHandle] ->
+                    % Others: it's possible to reuse external handles or just use the Share URL
+                    % as the public handle
+                    CustomHandle
+            end
     end,
     HandleEncoded = http_utils:url_encode(Handle),
     case handle_proxy_client:delete(
@@ -133,8 +143,7 @@ unregister_handle(HandleId) ->
 %% Modify handle in external handle service
 %% @end
 %%--------------------------------------------------------------------
--spec modify_handle(od_handle:id(), od_handle:raw_metadata()) ->
-    ok.
+-spec modify_handle(od_handle:id(), od_handle:raw_metadata()) -> ok.
 modify_handle(HandleId, NewMetadata) ->
     {ok, #document{value = #od_handle{
         handle_service = HandleServiceId, public_handle = PublicHandle,

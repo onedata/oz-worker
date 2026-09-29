@@ -1126,9 +1126,7 @@ run_invite_token_tests(Testcase) ->
         check_subject_or_target_entity_deleted_scenarios(Testcase),
         true
     catch Type:Reason:Stacktrace ->
-        ct:pal("Invite token tests failed due to ~tp:~tp~nStacktrace: ~ts", [
-            Type, Reason, lager:pr_stacktrace(Stacktrace)
-        ]),
+        ?ct_pal_exception("Invite token tests failed due to", Type, Reason, Stacktrace),
         false
     end.
 

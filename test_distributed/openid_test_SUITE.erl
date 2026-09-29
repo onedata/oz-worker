@@ -388,7 +388,6 @@ validate_login_base(Config, TestMode) ->
     end.
 
 
-
 authority_delegation(Config) ->
     SubjectId = <<"1233456734534">>,
     OidcSpec = ?CORRECT_OIDC_SPEC,
@@ -548,12 +547,12 @@ offline_access_internals(Config) ->
     }}]),
     % Simulate a user with some already cached tokens
     {ok, #document{key = UserId}} = oz_test_utils:call_oz(
-        Config, linked_accounts, acquire_user, [#linked_account{
+        Config, user_account, acquire_user, [#linked_account{
             idp = ?DUMMY_IDP,
             subject_id = SubjectId,
             access_token = {<<"at1">>, oz_test_utils:get_frozen_time_seconds() + 1000},
             refresh_token = <<"rt1">>
-        }]
+        }, access_token]
     ),
     ?assertMatch(UserId, gen_user_id(Config, ?DUMMY_IDP, SubjectId)),
     ?assertMatch({ok, {<<"at1">>, 1000}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
@@ -614,13 +613,13 @@ offline_access_internals(Config) ->
     % Refreshing the token should also fetch user data and refresh it
     ?assertMatch(
         {ok, _},
-        oz_test_utils:call_oz(Config, linked_accounts, merge, [UserId, #linked_account{
+        oz_test_utils:call_oz(Config, user_account, acquire_user, [#linked_account{
             idp = ?DUMMY_IDP,
             subject_id = SubjectId,
             full_name = <<"Old Name">>,
             access_token = {<<"at5">>, oz_test_utils:get_frozen_time_seconds() + 1000},
             refresh_token = <<"rt5">>
-        }])
+        }, gui_login])
     ),
     ?assertMatch(
         {ok, #od_user{linked_accounts = [#linked_account{
@@ -997,7 +996,7 @@ bad_custom_data(Config, TestMode) ->
 %%%===================================================================
 
 gen_user_id(Config, IdP, SubjectId) ->
-    oz_test_utils:call_oz(Config, linked_accounts, gen_user_id, [IdP, SubjectId]).
+    oz_test_utils:call_oz(Config, user_account, gen_user_id, [IdP, SubjectId]).
 
 
 gen_group_id(Config, IdPEntitlement) ->

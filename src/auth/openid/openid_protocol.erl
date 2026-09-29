@@ -88,23 +88,14 @@ authenticate_by_idp_access_token(AccessTokenWithPrefix) ->
             try
                 Len = byte_size(TokenPrefix),
                 <<TokenPrefix:Len/binary, AccessToken/binary>> = AccessTokenWithPrefix,
-                {ok, Attributes} = call_plugin(IdP, get_user_info, [IdP, AccessToken]),
+                {ok, Attributes} = call_plugin(IdP, get_user_info, [IdP, access_token, AccessToken]),
                 {true, {IdP, Attributes}}
             catch
-                throw:?ERROR_BAD_IDP_RESPONSE(_, 401, _, _) ->
-                    ErrorCtx = ?err_ctx(),
-                    ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_BAD_IDP_ACCESS_TOKEN(ErrorCtx, IdP));
-                throw:?ERROR_BAD_IDP_RESPONSE(_, 403, _, _) ->
-                    ErrorCtx = ?err_ctx(),
-                    ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_BAD_IDP_ACCESS_TOKEN(ErrorCtx, IdP));
-                Type:Reason:Stacktrace ->
-                    ?error_stacktrace(
-                        "Unexpected error during authentication by IdP access token - ~tp:~tp",
-                        [Type, Reason],
-                        Stacktrace
-                    ),
-                    ErrorCtx = ?err_ctx(),
-                    ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_INTERNAL_SERVER_ERROR(ErrorCtx, undefined))
+                throw:?ERROR_BAD_IDP_RESPONSE(_, Code, _, _) = Err:Stacktrace when Code == 401; Code == 403 ->
+                    idp_auth_logger:log_error(Err, IdP, access_token, <<"none">>, Stacktrace),
+                    ?ERR_UNAUTHORIZED(?err_ctx(), ?ERR_BAD_IDP_ACCESS_TOKEN(?err_ctx(), IdP));
+                Class:Reason:Stacktrace ->
+                    ?ERR_UNAUTHORIZED(?err_ctx(), ?examine_exception(Class, Reason, Stacktrace))
             end
     end.
 

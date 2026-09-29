@@ -11,7 +11,7 @@
 -module(identify).
 -author("Jakub Kudzia").
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 

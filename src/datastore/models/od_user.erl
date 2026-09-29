@@ -17,8 +17,9 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, get/1, get_full_name/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create_unsafe/1, get/1, get_full_name/1, exists/1, update/2, update_unsafe/2, force_delete/1, list/0]).
 -export([get_by_username/1, get_by_linked_account/1]).
+-export([critical_section/2]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([get_ctx/0]).
@@ -32,16 +33,15 @@
 -type record() :: #od_user{}.
 -type doc() :: datastore_doc:doc(record()).
 -type diff() :: datastore_doc:diff(record()).
--export_type([id/0, record/0, doc/0]).
+-export_type([id/0, record/0, doc/0, diff/0]).
 
 -type full_name() :: binary().
 -type username() :: binary().
 -type email() :: binary().
--type linked_account() :: #linked_account{}.
 % A list of pairs; Onedata group id of an entitlement and set of privileges in
 % the group. The privileges are persisted to be able to detect later changes.
 -type entitlements() :: [{od_group:id(), entitlement_mapping:privileges()}].
--export_type([full_name/0, username/0, email/0, linked_account/0, entitlements/0]).
+-export_type([full_name/0, username/0, email/0, entitlements/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -52,54 +52,61 @@
 
 -compile({no_auto_import, [get/1]}).
 
+
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates user.
-%% @end
-%%--------------------------------------------------------------------
--spec create(doc()) -> {ok, doc()} | {error, term()}.
-create(Doc) ->
-    datastore_model:create(?CTX, Doc).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns user by ID.
+%% NOTE: MUST be called within @see critical_section/2
+%% NOTE: MUST NOT be called from other modules than the @see user_account.erl module!
 %% @end
 %%--------------------------------------------------------------------
--spec get(id()) -> {ok, doc()} | {error, term()}.
+-spec create_unsafe(doc()) -> doc().
+create_unsafe(UserDoc) ->
+    ?check(datastore_model:create(?CTX, UserDoc)).
+
+
+-spec get(id()) -> {ok, doc()} | errors:error().
 get(UserId) ->
-    datastore_model:get(?CTX, UserId).
+    case datastore_model:get(?CTX, UserId) of
+        {ok, Doc} -> {ok, Doc};
+        {error, not_found} -> ?ERROR_NOT_FOUND;
+        {error, _} = Error -> ?ensure_od_error(Error)
+    end.
 
 
 -spec get_full_name(id()) -> {ok, full_name()} | errors:error().
 get_full_name(UserId) ->
-    case datastore_model:get(?CTX, UserId) of
+    case get(UserId) of
         {ok, #document{value = #od_user{full_name = FullName}}} -> {ok, FullName};
-        {error, _} = Error -> Error
+        ?ERROR_NOT_FOUND = Error -> Error
     end.
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks whether user given by ID exists.
-%% @end
-%%--------------------------------------------------------------------
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(UserId) ->
     datastore_model:exists(?CTX, UserId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates user by ID.
-%% @end
-%%--------------------------------------------------------------------
--spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
+
+-spec update(id(), diff()) -> {ok, doc()} | errors:error().
 update(UserId, Diff) ->
-    datastore_model:update(?CTX, UserId, Diff).
+    critical_section(UserId, fun() ->
+        update_unsafe(UserId, Diff)
+    end).
+
+
+%% @doc NOTE: MUST be called within @see critical_section/2
+-spec update_unsafe(id(), diff()) -> {ok, doc()} | errors:error().
+update_unsafe(UserId, Diff) ->
+    case datastore_model:update(?CTX, UserId, Diff) of
+        {ok, Doc} -> {ok, Doc};
+        {error, not_found} -> ?ERROR_NOT_FOUND;
+        {error, _} = Error -> ?ensure_od_error(Error)
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -111,56 +118,60 @@ update(UserId, Diff) ->
 %%--------------------------------------------------------------------
 -spec force_delete(id()) -> ok | {error, term()}.
 force_delete(UserId) ->
-    datastore_model:delete(?CTX, UserId).
+    critical_section(UserId, fun() ->
+        datastore_model:delete(?CTX, UserId)
+    end).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all users.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns the first user matching given Username.
-%% @end
-%%--------------------------------------------------------------------
--spec get_by_username(username()) -> {ok, doc()} | {error, not_found}.
+
+%% @doc returns the first user matching given Username.
+-spec get_by_username(username()) -> {ok, doc()} | errors:error().
+get_by_username(undefined) ->
+    ?ERROR_NOT_FOUND;
 get_by_username(Username) ->
-    Fun = fun(Doc, _) ->
-        case Doc of
-            #document{value = #od_user{username = Username}} -> {stop, Doc};
-            _ -> {ok, undefined}
+    FoldFun = fun
+        (#document{value = #od_user{username = U}} = UserDoc, _) when U == Username ->
+            {stop, {ok, UserDoc}};
+        (_, Acc) ->
+            {ok, Acc}
+    end,
+    {ok, Result} = datastore_model:fold(?CTX, FoldFun, ?ERROR_NOT_FOUND),
+    Result.
+
+
+%% @doc returns the first user matching given linked account.
+-spec get_by_linked_account(linked_account:t()) -> {ok, doc()} | errors:error().
+get_by_linked_account(#linked_account{idp = IdP, subject_id = SubjectId}) ->
+    FoldFun = fun(#document{value = UserRecord} = UserDoc, Acc) ->
+        case linked_account:find(UserRecord#od_user.linked_accounts, IdP, SubjectId) of
+            {ok, _} -> {stop, {ok, UserDoc}};
+            error -> {ok, Acc}
         end
     end,
-    case datastore_model:fold(?CTX, Fun, undefined) of
-        {ok, undefined} -> {error, not_found};
-        {ok, Doc} -> {ok, Doc}
-    end.
+    {ok, Result} = datastore_model:fold(?CTX, FoldFun, ?ERROR_NOT_FOUND),
+    Result.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the first user matching given linked account.
+%% NOTE: MUST be used whenever a user doc is created/modified/deleted.
+%% It's up to the calling process to decide if it should lock on the user id or username.
+%% In cases where the user id is not defined (creation of a new user without
+%% a predefined id) or username is not defined (users may have it unspecified),
+%% the critical section is omitted.
 %% @end
 %%--------------------------------------------------------------------
--spec get_by_linked_account(linked_account()) -> {ok, doc()} | {error, not_found}.
-get_by_linked_account(#linked_account{idp = IdP, subject_id = SubjId}) ->
-    Fun = fun(Doc = #document{value = #od_user{linked_accounts = Accounts}}, _) ->
-        Found = lists:any(fun(L) ->
-            L#linked_account.idp == IdP andalso L#linked_account.subject_id == SubjId
-        end, Accounts),
-        case Found of
-            true -> {stop, Doc};
-            _ -> {ok, undefined}
-        end
-    end,
-    case datastore_model:fold(?CTX, Fun, undefined) of
-        {ok, undefined} -> {error, not_found};
-        {ok, Doc} -> {ok, Doc}
-    end.
+%% @doc
+-spec critical_section(undefined | id() | username(), fun(() -> Term)) -> Term.
+critical_section(undefined, Fun) ->
+    Fun();
+critical_section(UserIdrUsername, Fun) ->
+    critical_section:run({?MODULE, UserIdrUsername}, Fun).
+
 
 %%--------------------------------------------------------------------
 %% @doc

@@ -45,11 +45,12 @@
 % Human readable version is included to for logging purposes. It's the last version
 % where this cluster generation was the current one.
 -define(CLUSTER_GENERATIONS, [
-    {1, ?LINE_19_02},
-    {2, ?LINE_20_02},
-    {3, ?LINE_21_02(<<"4">>)},
-    {4, ?LINE_21_02(<<"7">>)},
-    {5, oz_worker:get_release_version()}
+    {1, <<"19.02.5">>},
+    {2, <<"20.02.20">>},
+    {3, <<"21.02.4">>},
+    {4, <<"21.02.7">>},
+    {5, <<"25.0">>},
+    {6, oz_worker:get_release_version()}
 ]).
 -define(OLDEST_UPGRADABLE_CLUSTER_GENERATION, 2).
 
@@ -166,7 +167,10 @@ upgrade_cluster(3) ->
     {ok, 4};
 upgrade_cluster(4) ->
     od_share:migrate_legacy_shares_21_02_8(),
-    {ok, 5}.
+    {ok, 5};
+upgrade_cluster(5) ->
+    od_share:reorganize_shares_to_inline_registries_25_1(),
+    {ok, 6}.
 
 %%--------------------------------------------------------------------
 %% @doc

@@ -57,7 +57,8 @@
 ]).
 -export([
     get_current_time/1,
-    verify_provider_identity/2, verify_provider_identity/3
+    verify_provider_identity/2, verify_provider_identity/3,
+    map_idp_user/2
 ]).
 -export([
     exists/1,
@@ -573,6 +574,19 @@ verify_provider_identity(Auth, ProviderId, Token) ->
         <<"providerId">> => ProviderId,
         <<"token">> => Token
     }).
+
+
+-spec map_idp_user(auth_config:idp(), binary()) -> {ok, od_user:id()} | errors:error().
+map_idp_user(IdP, SubjectId) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        auth = ?NOBODY,
+        gri = #gri{type = od_provider, id = undefined, aspect = map_idp_user},
+        data = #{
+            <<"idp">> => IdP,
+            <<"userId">> => SubjectId
+        }
+    })).
 
 
 %%--------------------------------------------------------------------

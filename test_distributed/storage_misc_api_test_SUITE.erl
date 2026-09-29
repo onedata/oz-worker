@@ -494,7 +494,7 @@ support_space_test(Config) ->
         dir_stats_service_status = disabled
     }),
 
-    ozt_providers:simulate_version(SupportingProviderId, ?LINE_21_02),
+    ozt_providers:simulate_version(SupportingProviderId, ?VSN_21_02_1),
 
     % Reused in all specs
     BadValues = lists:flatten([

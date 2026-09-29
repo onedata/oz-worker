@@ -10,12 +10,19 @@
 -module(oai_arg_parser).
 -author("Jakub Kudzia").
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 -include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([process_and_validate_args/1]).
+
+
+% The resumption token is used to continue listing when an incomplete list (batch) is returned.
+% Builds over the abstraction of handle_registry:resumption_token() (add more information).
+-type resumption_token() :: binary().
+-export_type([resumption_token/0]).
+
 
 %%%-------------------------------------------------------------------
 %%% @doc
@@ -143,7 +150,7 @@ parse_harvesting_arguments(ArgsList) ->
 -spec parse_harvesting_metadata_prefix([proplists:property()]) -> ok.
 parse_harvesting_metadata_prefix(ArgsList) ->
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, ArgsList),
-    case lists:member(MetadataPrefix, oai_metadata:supported_formats()) of
+    case lists:member(MetadataPrefix, oai_metadata:all_supported_oai_pmh_prefixes()) of
         false -> throw({cannotDisseminateFormat, MetadataPrefix});
         _ -> ok
     end.

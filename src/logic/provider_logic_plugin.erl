@@ -157,7 +157,7 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
 create(#el_req{gri = #gri{aspect = map_idp_user}, data = Data}) ->
     IdP = maps:get(<<"idp">>, Data),
     UserId = maps:get(<<"userId">>, Data),
-    {ok, value, linked_accounts:gen_user_id(IdP, UserId)};
+    {ok, value, user_account:gen_user_id(IdP, UserId)};
 
 create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
     IdP = maps:get(<<"idp">>, Data),

@@ -397,7 +397,7 @@ enabled(IdP) ->
 %% they have changed in the IdP.
 %% @end
 %%--------------------------------------------------------------------
--spec coalesce_entitlements(od_user:id(), [od_user:linked_account()], od_user:entitlements()) ->
+-spec coalesce_entitlements(od_user:id(), [linked_account:t()], od_user:entitlements()) ->
     od_user:entitlements().
 coalesce_entitlements(UserId, LinkedAccounts, PreviousEntitlements) ->
     CurrentEntitlements = lists:flatmap(fun(LinkedAccount) ->
@@ -420,7 +420,11 @@ coalesce_entitlements(UserId, LinkedAccounts, PreviousEntitlements) ->
     % remove the user from the groups he no longer is entitled to
     lists:foreach(fun({GroupId, _}) ->
         proplists:is_defined(GroupId, CurrentEntitlements) orelse
-            ?check(group_logic:remove_user(?ROOT, GroupId, UserId))
+            group_logic:remove_user(?ROOT, GroupId, UserId)
+            % TODO VFS-13491 memberships should be deleted on the entity graph level when a user is deleted from a group
+%%            ?check(group_logic:remove_user(?ROOT, GroupId, UserId))
+            % TODO VFS-13491 uncomment and test below case
+%%            ?check_tolerating(?ERROR_NOT_FOUND, group_logic:remove_user(?ROOT, GroupId, UserId))
     end, PreviousEntitlements),
 
     % Return the new entitlements list in proper format
@@ -444,7 +448,7 @@ gen_group_id(Path) ->
     GroupNames = lists:map(fun(#idp_group{type = Type, name = Name}) ->
         <<(encode_type(Type))/binary, ":", Name/binary>>
     end, Path),
-    LegacyGroupId = datastore_key:build_adjacent(<<"">>, str_utils:join_binary(GroupNames, <<"/">>)),
+    LegacyGroupId = datastore_key:gen_legacy_key(<<"">>, str_utils:join_binary(GroupNames, <<"/">>)),
     case group_logic:exists(LegacyGroupId) of
         true -> LegacyGroupId;
         false -> datastore_key:new_from_digest(GroupNames)
@@ -493,7 +497,7 @@ map_entitlement(IdP, RawEntitlement) ->
 %% Ignores malformed entitlements.
 %% @end
 %%--------------------------------------------------------------------
--spec map_entitlements(od_user:linked_account()) -> [{od_group:id(), idp_entitlement()}].
+-spec map_entitlements(linked_account:t()) -> [{od_group:id(), idp_entitlement()}].
 map_entitlements(#linked_account{idp = IdP, entitlements = Entitlements}) ->
     map_entitlements(IdP, Entitlements).
 

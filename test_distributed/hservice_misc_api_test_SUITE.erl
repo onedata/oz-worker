@@ -652,13 +652,13 @@ get_handle_test(Config) ->
         Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
-    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
-    RawMetadata = ozt_handles:example_input_metadata(MetadataPrefix),
+    MetadataSchema = ?RAND_ELEMENT(ozt_handles:supported_metadata_schemas()),
+    RawMetadata = ozt_handles:example_input_metadata(MetadataSchema),
     HandleData = #{
         <<"handleServiceId">> => HService,
         <<"resourceType">> => <<"Share">>,
         <<"resourceId">> => ShareId,
-        <<"metadataPrefix">> => MetadataPrefix,
+        <<"metadataSchema">> => MetadataSchema,
         <<"metadata">> => RawMetadata
     },
     {ok, HandleId} = oz_test_utils:create_handle(Config, ?ROOT, HandleData),

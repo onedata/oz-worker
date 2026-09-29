@@ -39,7 +39,7 @@
 -spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(Method, Req) ->
     ValidateResult = idp_auth:validate_login(Method, Req),
-    case idp_auth_test_mode:process_is_test_mode_enabled() of
+    case idp_auth_test_mode:is_test_mode_enabled_for_current_pid() of
         true ->
             TestLoginResults = render_test_login_results(ValidateResult),
             dump_test_login_results_to_log(TestLoginResults),

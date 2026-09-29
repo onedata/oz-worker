@@ -32,7 +32,7 @@
     get_login_endpoint/3,
     validate_login/3,
     refresh_access_token/2,
-    get_user_info/2
+    get_user_info/3
 ]).
 
 
@@ -107,6 +107,8 @@ validate_login(IdP, QueryParams, _RedirectUri) ->
         ?HDR_CONTENT_TYPE => <<"application/x-www-form-urlencoded">>
     }, Params),
 
+    idp_auth_logger:log_user_info_collection_to_file(IdP, gui_login, SignedAttrsBin),
+
     % Return signed attributes
     {ok, lists:foldl(fun
         (<<"openid.ext1.value.teams">> = TeamsAttr, Acc) ->
@@ -131,12 +133,12 @@ refresh_access_token(_IdP, _RefreshToken) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link openid_plugin_behaviour} callback get_user_info/2.
+%% {@link openid_plugin_behaviour} callback get_user_info/3.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(auth_config:idp(), idp_auth:access_token()) ->
+-spec get_user_info(auth_config:idp(), idp_auth:flow_type(), idp_auth:access_token()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
-get_user_info(_IdP, _AccessToken) ->
+get_user_info(_IdP, _FlowType, _AccessToken) ->
     ?ERR_NOT_IMPLEMENTED(?err_ctx()).
 
 %%%===================================================================

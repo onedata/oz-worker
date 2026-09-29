@@ -15,7 +15,7 @@
 
 -include_lib("ctool/include/http/codes.hrl").
 -include_lib("ctool/include/http/headers.hrl").
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %%% API
@@ -65,7 +65,7 @@ allowed_methods(Req, State) ->
     Params :: '*' | [{binary(), binary()}],
     ProvideResource :: atom().
 content_types_provided(Req, State) ->
-    {[{<<"text/xml">>, provide_resource}], Req, State}.
+    {[{{<<"text">>, <<"xml">>, '*'}, provide_resource}], Req, State}.
 
 
 %%%--------------------------------------------------------------------

@@ -2,6 +2,101 @@
 
 ## CHANGELOG
 
+### 25.1
+
+-   **VFS-13419** Extended the user creation endpoint with the linked
+    accounts parameter. It is now possible to pre-create IdP users
+    before their login; requires having access to their OIDC userinfo
+    attributes.
+-   **VFS-13324** Web GUI: Added experimental support for customizing
+    style of the sidebar using static files without rebuilding the
+    software.
+-   **VFS-13314** Web GUI: Using the main custom frontpage template in
+    login test mode if the testing template is not available.
+-   **VFS-13307** Implemented an improved process pool for handling
+    GraphSync requests. Now, a single client can't flood the Onezone
+    server with requests, as it can occupy only some of the pool.
+-   **VFS-13176** Web GUI: Added replacing file data feature, which
+    allows to upload new content to the existing file (overriding the
+    current data), keeping the File ID and its path unchanged.
+-   **VFS-13155** Web GUI: Fixed display of long membership paths when
+    the display limit is reached.
+-   **VFS-13143** Web GUI: Remembering the last visited tab and
+    directory in share's URL.
+-   **VFS-12760** Optimized the performance of shares and public data
+    records in spaces with a low number of items.
+
+### 25.0
+
+-   **VFS-13222** Switched to the Calendar Versioning model. Version
+    25.0 is equivalent to 21.02.9 in the previous model, and it's
+    cross-compatible with the 21.02 line.
+-   **VFS-13188** Added support for OpenAIRE metadata format in public
+    data records, including APIs and the OAI-PMH endpoint for
+    "oai\_openaire" metadata prefix.
+-   **VFS-13153** Web GUI: Fixed random lack of login methods on custom
+    login page.
+-   **VFS-13104** Web GUI: Improved loading feedback on the Members
+    views for large number of membership paths.
+-   **VFS-12985** Web GUI: Fixed crashed shares sidebar loader when user
+    does not have view privileges for some space.
+-   **VFS-12984** Web GUI: Optimized time of removing and leaving
+    spaces/groups when there is a large number of spaces/groups.
+-   **VFS-12982** Web GUI: Fixed lack of privileges to view parents and
+    children after adding a parent or child to group on the hierarchy
+    view. Minor groups hierarchy view fixes.
+-   **VFS-12935** Disabled SSL/TLS ciphers that have been recently
+    deemed unsafe. Added a config option to the ctool library to add
+    extra ciphers or blacklist selected ones for more flexibility.
+-   **VFS-12934** Web GUI: Optimized the time of creating and joining a
+    space/group/harvester when the user is a member of a large number of
+    spaces/groups/harvesters.
+-   **VFS-12932** Web GUI: Added infinite scroll to some dropdowns
+    making them load faster when there are large number of items.
+-   **VFS-12896** Web GUI: Added loaders with progress on group
+    hierarchy view.
+-   **VFS-12892** Web GUI: Added support for DataCite metadata of public
+    share.
+-   **VFS-12891** Added support for DataCite metadata format in public
+    data records, including APIs and the OAI-PMH endpoint for both
+    "datacite" and "oai\_datacite" metadata prefixes.
+-   **VFS-12888** Web GUI: Fixed insufficient privileges to modify
+    privileges as a space owner.
+-   **VFS-12839** Web GUI: Added loading progress in relation-add modals
+    for spaces/groups etc.
+-   **VFS-12771** Web GUI: Added progress loaders to members list.
+-   **VFS-12765** Web GUI: Improved performance of global providers map
+    with large number of supported spaces by using batch requesting and
+    infinite scroll for spaces lists.
+-   **VFS-12759** Web GUI: Improved performance of token views when
+    using large number of spaces, groups and other entities.
+-   **VFS-12703** Implemented backpressure mechanisms on the GraphSync
+    channel between Oneprovider and Onezone. Up to this point, in
+    certain pathological situations, the Oneprovider could flood Onezone
+    with requests and effectively DoS the server. Added configurable
+    parallelism of request processing based on a process pool and fair
+    balancing of processing capacity between clients.
+-   **VFS-12674** Web GUI: Improved support for large lists in sidebar
+    by making batch requests to backend and showing loading progress.
+-   **VFS-12673** Web GUI: Improved performance of shares sidebar when
+    there is a large number of spaces with shares by using list caching.
+-   **VFS-12581** Added rich context information to errors across the
+    whole system (expressed in JSON) to improve error reporting and
+    diagnostics.
+-   **VFS-12554** Web GUI: Improved performance of spaces/groups/tokens,
+    etc. sidebar when there are numerous items by using infinite scroll
+    lists.
+-   **VFS-12475** Onedata components can now be started behind a reverse
+    proxy or k8s ingress, and the GUI will function properly. However,
+    it's not yet possible to change the default ports or turn off SSL
+    (this is TBD in the near future).
+-   **VFS-12461** Web GUI: Changed "Open Data" naming to "Public Data".
+-   **VFS-12267** Web GUI: Improved handling of the "service
+    unavailable" error.
+-   **VFS-11284** The OneS3 service can now be deployed by Onepanel in
+    an integrated manner (Oneprovider cluster). Both visual (GUI) and
+    batch modes are supported.
+
 ### 21.02.8
 
 -   **VFS-12477** Greatly optimized the listing of Shares in GUI; both

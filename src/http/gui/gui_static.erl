@@ -59,6 +59,7 @@
 -export([maybe_add_cache_control_headers/1]).
 -export([oz_worker_gui_path/1]).
 -export([mimetype/1]).
+-export([static_root/2]).
 
 -define(GUI_TYPES, [?OZ_WORKER_GUI, ?OP_WORKER_GUI, ?ONEPANEL_GUI, ?HARVESTER_GUI]).
 % Only packages older than that will be cleaned (in seconds)
