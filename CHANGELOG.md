@@ -2,6 +2,34 @@
 
 ## CHANGELOG
 
+### 25.2
+
+-   **VFS-13822** Web GUI: Added access key ID and secret access key for
+    S3 tokens.
+-   **VFS-13773** Removed newline character when copying text from
+    clipboard line in some web browsers.
+-   **VFS-13628** Web GUI: Added experimental support for customizing
+    button styles using static files without rebuilding the software.
+-   **VFS-13513** Web GUI: Fixed wrong color of "Files" item in space
+    sidebar when user has no privileges.
+-   **VFS-13511** Web GUI: Updated docs/API links to the new paths used
+    on onedata.org. Links are now pointing to the API docs version
+    matching version of software.
+-   **VFS-13461** Web GUI: Refreshed design of provider information on
+    providers map, added version info.
+-   **VFS-13395** Web GUI: Added support for searching a space by ID
+    triggered after entering at least 2 characters in the sidebar.
+-   **VFS-13371** Added support for HEAD requests to the file content
+    download REST endpoints (by file ID and by path). They return the
+    `Content-Length` and `Accept-Ranges` headers without the file
+    content; directories are not supported. This allows publicly shared
+    files to be registered on an HTTP storage by their public URL
+    (including the Onezone share URL), with the file size detected
+    automatically.
+-   **VFS-13271** Web GUI: fixed broken selection of a space as an
+    Invite Target in the tokens sidebar filter when there is a token for
+    a non-existing space.
+
 ### 25.1
 
 -   **VFS-13419** Extended the user creation endpoint with the linked
