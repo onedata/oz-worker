@@ -147,7 +147,7 @@ external_access_token_test(Config) ->
     PrefixFun = ?config(prefix_fun, Config),
 
     UserIdFun = fun(IdP) ->
-        oz_test_utils:call_oz(Config, linked_accounts, gen_user_id, [IdP, UserSubjectIdFun(IdP)])
+        oz_test_utils:call_oz(Config, user_account, gen_user_id, [IdP, UserSubjectIdFun(IdP)])
     end,
 
     XAuthTokenFun = fun(IdP) ->
@@ -472,7 +472,7 @@ init_per_testcase(external_access_token_test, Config) ->
     }),
 
     ok = test_utils:mock_new(Nodes, default_oidc_plugin, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, default_oidc_plugin, get_user_info, fun(IdP, AccessToken) ->
+    ok = test_utils:mock_expect(Nodes, default_oidc_plugin, get_user_info, fun(IdP, _FlowType, AccessToken) ->
         case AccessToken =:= CorrectAccessTokenFun(IdP) of
             true ->
                 {ok, #{<<"id">> => UserSubjectIdFun(IdP), <<"name">> => UserFullNameFun(IdP)}};

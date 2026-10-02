@@ -13,7 +13,7 @@
 -author("Tomasz Lichon").
 
 -include("datastore/oz_datastore_models.hrl").
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 %% API
 -export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
@@ -34,9 +34,11 @@
 -type resource_type() :: binary().
 -type resource_id() :: binary().
 -type public_handle() :: binary().
-% short literal (e.g. <<"oai_dc">>) that identifies a metadata format, allowed values depend on
-% loaded handle_metadata_plugins
--type metadata_prefix() :: binary().
+% Short literal (e.g. <<"oai_dc">>) that identifies a metadata schema;
+% currently the values for oai_metadata:prefix() are reused to denote corresponding schemas.
+% Each handle metadata schema can be disseminated using one or more OAI-PMH metadata prefixes, but
+% each OAI-PMH metadata prefix has only one corresponding handle metadata schema.
+-type metadata_schema() :: binary().
 % metadata encoded to XML - used in the APIs and stored like this in the DB
 -type raw_metadata() :: binary().
 % parsed metadata expressed as nested xmerl records
@@ -45,7 +47,7 @@
 
 -export_type([id/0, record/0]).
 -export_type([resource_type/0, resource_id/0, public_handle/0,
-    metadata_prefix/0, raw_metadata/0, parsed_metadata/0, timestamp_seconds/0]).
+    metadata_schema/0, raw_metadata/0, parsed_metadata/0, timestamp_seconds/0]).
 
 -define(CTX, #{
     model => od_handle,
@@ -54,9 +56,9 @@
     memory_copies => all
 }).
 
-% the value for metadata_prefix field of handles that have been upgraded on the DB level,
+% the value for metadata_schema field of handles that have been upgraded on the DB level,
 % but not yet migrated to the new handle registry (@see migrate_legacy_handles/0)
--define(LEGACY_METADATA_PREFIX_INDICATOR, <<"legacy">>).
+-define(LEGACY_METADATA_SCHEMA_INDICATOR, <<"legacy">>).
 
 -compile([{no_auto_import, [get/1]}]).
 
@@ -207,13 +209,13 @@ migrate_legacy_handle_21_02_5(HServiceId, HandleId, #od_handle{
     FinalMetadata = oai_metadata:insert_public_handle(?OAI_DC_METADATA_PREFIX, RevisedMetadata, PublicHandle),
     FinalRawMetadata = oai_metadata:encode_xml(?OAI_DC_METADATA_PREFIX, FinalMetadata),
     ok = ?extract_ok(update(HandleId, fun
-        (#od_handle{metadata_prefix = ?OAI_DC_METADATA_PREFIX} = Handle) ->
-            % updated metadata prefix indicates that this handle has already been upgraded
+        (#od_handle{metadata_schema = ?OAI_DC_METADATA_PREFIX} = Handle) ->
+            % updated metadata schema indicates that this handle has already been upgraded
             % (this procedure must be idempotent; it might have crashed mid-way before)
             ?info("The handle ~ts appears to already be migrated (during a previous run?)", [HandleId]),
             {ok, Handle};
-        (#od_handle{metadata_prefix = ?LEGACY_METADATA_PREFIX_INDICATOR} = Handle) ->
-            {ok, Handle#od_handle{metadata_prefix = ?OAI_DC_METADATA_PREFIX, metadata = FinalRawMetadata}}
+        (#od_handle{metadata_schema = ?LEGACY_METADATA_SCHEMA_INDICATOR} = Handle) ->
+            {ok, Handle#od_handle{metadata_schema = ?OAI_DC_METADATA_PREFIX, metadata = FinalRawMetadata}}
     end)).
 
 %%%===================================================================
@@ -227,7 +229,7 @@ migrate_legacy_handle_21_02_5(HServiceId, HandleId, #od_handle{
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    8.
+    9.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -367,6 +369,27 @@ get_record_struct(8) ->
         {public_handle, string},
         {resource_type, string},
         {metadata_prefix, string}, % new field
+        {metadata, string},
+        {timestamp, integer},
+        {resource_id, string},
+
+        {handle_service, string},
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(9) ->
+    {record, [
+        {public_handle, string},
+        {resource_type, string},
+        {metadata_schema, string}, % renamed from metadata_prefix
         {metadata, string},
         {timestamp, integer},
         {resource_id, string},
@@ -640,10 +663,53 @@ upgrade_record(7, Handle) ->
 
         BottomUpDirty
     } = Handle,
-    {8, #od_handle{
+    {8, {
+        od_handle,
+        PublicHandle,
+        ResourceType,
+        ?LEGACY_METADATA_SCHEMA_INDICATOR,
+        Metadata,
+        Timestamp,
+
+        ResourceId,
+        HandleService,
+        Users,
+        Groups,
+
+        EffUsers,
+        EffGroups,
+
+        CreationTime,
+        Creator,
+
+        BottomUpDirty
+    }};
+upgrade_record(8, Handle) ->
+    {
+        od_handle,
+        PublicHandle,
+        ResourceType,
+        MetadataSchema,
+        Metadata,
+        Timestamp,
+
+        ResourceId,
+        HandleService,
+        Users,
+        Groups,
+
+        EffUsers,
+        EffGroups,
+
+        CreationTime,
+        Creator,
+
+        BottomUpDirty
+    } = Handle,
+    {9, #od_handle{
         public_handle = PublicHandle,
         resource_type = ResourceType,
-        metadata_prefix = ?LEGACY_METADATA_PREFIX_INDICATOR,
+        metadata_schema = MetadataSchema,
         metadata = Metadata,
         timestamp = Timestamp,
 

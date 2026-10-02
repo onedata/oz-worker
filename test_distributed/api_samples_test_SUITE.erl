@@ -63,9 +63,11 @@ space_api_samples_test(Config) ->
     SpaceId = ozt_users:create_space_for(Creator),
 
     AnotherMember = ozt_users:create(),
+    EffectiveMember = ozt_users:create(),
     TestedUser = ozt_users:create(),
     ozt_spaces:add_user(SpaceId, AnotherMember, []),
     ozt_spaces:add_user(SpaceId, TestedUser, lists_utils:random_sublist(privileges:space_privileges())),
+    ozt_spaces:add_group(SpaceId, ozt_users:create_group_for(EffectiveMember)),
 
     TestedGroup = ozt_groups:create(),
     ozt_spaces:add_group(SpaceId, TestedGroup, lists_utils:random_sublist(privileges:space_privileges())),
@@ -78,7 +80,8 @@ space_api_samples_test(Config) ->
                 root,
                 {admin, [?OZ_SPACES_VIEW]},
                 {user, Creator},
-                {user, AnotherMember}
+                {user, AnotherMember},
+                {user, EffectiveMember}
             ],
             unauthorized = [nobody],
             forbidden = [

@@ -127,6 +127,8 @@ gui_config() ->
         {?PROVIDER_GRAPH_SYNC_WS_PATH, gs_ws_handler, [provider_gs_translator]}, % blocked when no DB space
         {?GUI_GRAPH_SYNC_WS_PATH, gs_ws_handler, [gui_gs_translator]}, % blocked when no DB space
         {?COMPATIBILITY_REG_PATH, cowboy_static, {file, CompatRegPath, [{mimetypes, {<<"application">>, <<"json">>, []}}]}},
+        % TODO VFS-13183 add swaggers for this endpoint
+        {"/api/v3/onezone/data/:file_id/[...]", private_data_redirector, []},
         rest_handler:rest_routes(), % blocked when no DB space
         gui_static:routes()
     ]),
@@ -137,7 +139,7 @@ gui_config() ->
         {?GUI_CONTEXT_PATH, [<<"GET">>], page_gui_context},
         {?GUI_PREAUTHORIZE_PATH, [<<"POST">>], page_gui_preauthorize},
         {?CONFIGURATION_PATH, [<<"GET">>], page_configuration},
-        {?PUBLIC_SHARE_COWBOY_ROUTE, [<<"GET">>], page_public_share},
+        {?PUBLIC_SHARE_COWBOY_ROUTE, [<<"GET">>, <<"HEAD">>], page_public_share},
         {?LOGIN_PATH, [<<"POST">>], page_basic_auth_login},
         {?LOGOUT_PATH, [<<"POST">>], page_logout},
         {?OIDC_CONSUME_PATH_DEPRECATED, [<<"GET">>], page_consume_login},

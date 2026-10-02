@@ -22,12 +22,14 @@
 ]).
 -export([
     upgrade_from_21_02_4_handles/1,
-    upgrade_from_21_02_7_shares/1
+    upgrade_from_21_02_8_shares/1,
+    upgrade_from_25_0_shares/1
 ]).
 
 all() -> ?ALL([
     upgrade_from_21_02_4_handles,
-    upgrade_from_21_02_7_shares
+    upgrade_from_21_02_8_shares,
+    upgrade_from_25_0_shares
 ]).
 
 
@@ -64,12 +66,16 @@ init_per_testcase(_, Config) ->
 
     oz_test_utils:delete_all_entities(Config),
     % if the suite fails midway, there may be some remnants in the handle registry - clean it up
-    % (delete_all_entities won't do it because some of the handles may still have the "legacy" metadata prefix set)
+    % (delete_all_entities won't do it because some of the handles may still have the "legacy" metadata schema set)
     lists:foreach(fun(#handle_listing_entry{timestamp = Timestamp, handle_id = HandleId, service_id = HServiceId}) ->
         ozt:rpc(handle_registry, report_deleted, [?OAI_DC_METADATA_PREFIX, HServiceId, HandleId, Timestamp, Timestamp])
-    end, list_handles_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})),
+    end, list_handles_completely(#{metadata_schema => ?OAI_DC_METADATA_PREFIX})),
     Config.
 
+
+end_per_testcase(upgrade_from_25_0_shares, Config) ->
+    ozt_mocks:mock_unload(datastore_model),
+    end_per_testcase(default, Config);
 
 end_per_testcase(_, _Config) ->
     ozt_mocks:unfreeze_time(),
@@ -87,7 +93,7 @@ upgrade_from_21_02_4_handles(_Config) ->
 
     Spaces = lists_utils:generate(fun ozt_spaces:create/0, 50),
 
-    ?assertEqual([], list_handles_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})),
+    ?assertEqual([], list_handles_completely(#{metadata_schema => ?OAI_DC_METADATA_PREFIX})),
     ?assertEqual([], gather_handles_by_all_prefixes()),
 
     PreexistingHandleDocs = lists:sort(lists:flatmap(fun(HServiceId) ->
@@ -134,7 +140,7 @@ upgrade_from_21_02_4_handles(_Config) ->
 
     ?assertEqual(
         handle_docs_to_exp_listing_entries(PreexistingHandleDocs),
-        list_handles_completely(#{metadata_prefix => ?OAI_DC_METADATA_PREFIX})
+        list_handles_completely(#{metadata_schema => ?OAI_DC_METADATA_PREFIX})
     ),
     ?assertEqual(
         handle_docs_to_exp_listing_entries(PreexistingHandleDocs),
@@ -145,7 +151,7 @@ upgrade_from_21_02_4_handles(_Config) ->
         MigratedHandleRecord = ozt_handles:get(HandleId),
         ?assertEqual(MigratedHandleRecord#od_handle.public_handle, PreexistingHandleRecord#od_handle.public_handle),
         ?assertEqual(MigratedHandleRecord#od_handle.resource_type, PreexistingHandleRecord#od_handle.resource_type),
-        ?assertEqual(MigratedHandleRecord#od_handle.metadata_prefix, ?OAI_DC_METADATA_PREFIX),
+        ?assertEqual(MigratedHandleRecord#od_handle.metadata_schema, ?OAI_DC_METADATA_PREFIX),
         ?assertEqual(MigratedHandleRecord#od_handle.metadata, exp_handle_metadata(PreexistingHandleRecord)),
         ?assertEqual(MigratedHandleRecord#od_handle.timestamp, PreexistingHandleRecord#od_handle.timestamp),
         ?assertEqual(MigratedHandleRecord#od_handle.resource_id, PreexistingHandleRecord#od_handle.resource_id),
@@ -177,7 +183,7 @@ upgrade_from_21_02_4_handles(_Config) ->
     end, Spaces).
 
 
-upgrade_from_21_02_7_shares(_Config) ->
+upgrade_from_21_02_8_shares(_Config) ->
     SpaceAlpha = ozt_spaces:create(),
     SpaceBeta = ozt_spaces:create(),
     SpaceGamma = ozt_spaces:create(),
@@ -229,6 +235,7 @@ upgrade_from_21_02_7_shares(_Config) ->
 
     lists:foreach(fun(SpaceId) ->
         ?assertMatch(#od_space{shares = []}, ozt_spaces:get(SpaceId)),
+
         ?assertEqual(
             share_docs_to_exp_listing_entries(
                 [D || D <- PreexistingShareDocs, D#document.value#od_share.space == SpaceId]
@@ -246,6 +253,102 @@ upgrade_from_21_02_7_shares(_Config) ->
         end,
         ?assertEqual(MigratedShareRecord, ExpShareRecord)
     end, PreexistingShareDocs).
+
+
+upgrade_from_25_0_shares(_Config) ->
+    MaxInlineRegSize = 100,
+
+    % setting this value to 0 will force all shares to be stored in links,
+    % hence simulating the approach from vsn <= 25.0
+    ozt:set_env(max_inline_share_registry_size, 0),
+
+    SpacesAndShares = lists_utils:generate(fun(_) ->
+        SpaceId = ozt_spaces:create(),
+        Shares = lists_utils:generate(fun(_) ->
+            ozt_shares:create(SpaceId, datastore_key:new())
+        end, ?RAND_ELEMENT([
+            0,
+            1,
+            10,
+            MaxInlineRegSize div 2,
+            MaxInlineRegSize,
+            MaxInlineRegSize * 2,
+            MaxInlineRegSize * 3
+        ])),
+        {SpaceId, lists:sort(Shares)}
+    end, 100),
+    {Spaces, _} = lists:unzip(SpacesAndShares),
+
+    lists:foreach(fun({SpaceId, SortedShares}) ->
+        ?assertEqual(SortedShares, lists:sort(list_share_ids_completely(SpaceId)))
+    end, SpacesAndShares),
+
+    % simulate legacy od_space documents that did not have a properly initialized
+    % inline_share_registry (should be set to "requires_reorganization" state after
+    % doc upgrade on the DB level)
+    lists:foreach(fun(SpaceId) ->
+        ozt:rpc(od_space, update, [SpaceId, fun(SpaceRecord) ->
+            {ok, SpaceRecord#od_space{
+                inline_share_registry = inline_share_registry:post_upgrade_from_25_0()
+            }}
+        end])
+    end, Spaces),
+
+    % setup done, simulate an upgrade
+    ozt:set_env(max_inline_share_registry_size, MaxInlineRegSize),
+
+    % perform the upgrade, but mock datastore operations to randomly fail.
+    % Retry the upgrade until it's successful (all shares have been reorganized).
+    % This tests idempotency (shares that are already reorganized are not changed)
+    % and error resilience (retries should lead to a coherent state despite errors).
+    ozt_mocks:mock_new(datastore_model),
+    ozt_mocks:mock_expect(datastore_model, add_links, fun(Ctx, Forest, Tree, Links) ->
+        case ?RAND_INT(10) < 3 of
+            true ->
+                BadLinks = ?RAND_SUBLIST(Links),
+                GoodResults = meck:passthrough([Ctx, Forest, Tree, Links -- BadLinks]),
+                ?SHUFFLED(GoodResults ++ lists:map(fun(_) ->
+                    {error, something_went_wrong}
+                end, Links));
+            false ->
+                meck:passthrough([Ctx, Forest, Tree, Links])
+        end
+    end),
+    ozt_mocks:mock_expect(datastore_model, delete_links, fun(Ctx, Forest, Tree, Links) ->
+        case ?RAND_INT(10) < 3 of
+            true ->
+                BadLinks = ?RAND_SUBLIST(Links),
+                GoodResults = meck:passthrough([Ctx, Forest, Tree, Links -- BadLinks]),
+                ?SHUFFLED(GoodResults ++ lists:map(fun(_) ->
+                    {error, something_went_wrong}
+                end, Links));
+            false ->
+                meck:passthrough([Ctx, Forest, Tree, Links])
+        end
+    end),
+
+    ?assertEqual({ok, 6}, lists_utils:foldl_while(fun(_, _) ->
+        try
+            {halt, ozt:insecure_erpc(node_manager_plugin, upgrade_cluster, [5])}
+        catch _:{exception, share_reorganization_failed, _} ->
+            {cont, error}
+        end
+    end, ok, lists:seq(1, 99999))),
+
+    Verify = fun() ->
+        lists:foreach(fun({SpaceId, SortedShares}) ->
+            ShareCount = length(SortedShares),
+            ?assertEqual(SortedShares, lists:sort(list_share_ids_completely(SpaceId))),
+            #od_space{inline_share_registry = InlineRegistry} = ozt_spaces:get(SpaceId),
+            ?assertEqual(ShareCount, inline_share_registry:get_share_count(InlineRegistry)),
+            ?assertEqual(ShareCount =< MaxInlineRegSize, inline_share_registry:is_active(InlineRegistry))
+        end, SpacesAndShares)
+    end,
+    Verify(),
+
+    % test idempotency once again when all the shares are already reorganized
+    ?assertEqual({ok, 6}, ozt:rpc(node_manager_plugin, upgrade_cluster, [5])),
+    Verify().
 
 
 %%%===================================================================
@@ -278,9 +381,9 @@ create_legacy_share(SpaceId, without_handle) ->
 %% @private
 create_legacy_share(SpaceId, {with_handle, HServiceId}) ->
     #document{key = ShareId} = create_legacy_share(SpaceId, without_handle),
-    MetadataPrefix = ?RAND_ELEMENT(ozt_handles:supported_metadata_prefixes()),
-    Metadata = ozt_handles:example_input_metadata(MetadataPrefix),
-    {ok, PublicHandle} = ozt:rpc(handle_proxy, register_handle, [HServiceId, <<"Share">>, ShareId, Metadata]),
+    MetadataSchema = ?RAND_ELEMENT(ozt_handles:supported_metadata_schemas()),
+    Metadata = ozt_handles:example_input_metadata(MetadataSchema),
+    PublicHandle = ozt:rpc(handle_proxy, register_handle, [HServiceId, <<"Share">>, ShareId, Metadata]),
     HandleId = datastore_key:new(),
     {ok, _} = ozt:rpc(od_handle, create, [#document{
         key = HandleId,
@@ -289,7 +392,7 @@ create_legacy_share(SpaceId, {with_handle, HServiceId}) ->
             resource_type = <<"Share">>,
             resource_id = ShareId,
             public_handle = PublicHandle,
-            metadata_prefix = <<"legacy">>,
+            metadata_schema = <<"legacy">>,
             metadata = Metadata,
             timestamp = ozt:timestamp_seconds()
         }
@@ -339,6 +442,11 @@ list_shares_completely(SpaceId) ->
 
 
 %% @private
+list_share_ids_completely(SpaceId) ->
+    ozt:rpc(share_registry, list_ids, [SpaceId, #{limit => infinity}]).
+
+
+%% @private
 create_legacy_handle(SpaceId, HServiceId) ->
     #document{key = ShareId} = create_legacy_share(SpaceId, without_handle),
     ozt_mocks:simulate_seconds_passing(?RAND_INT(3600)),
@@ -370,7 +478,7 @@ list_handles_completely(Opts) ->
 
 %% @private
 gather_handles_by_all_prefixes() ->
-    ozt:rpc(handle_registry, gather_by_all_prefixes, []).
+    ozt:rpc(handle_registry, gather_by_all_schemas, []).
 
 
 %% @private

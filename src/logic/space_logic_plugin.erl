@@ -586,6 +586,7 @@ get(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"supportParametersRegistry">> => SupportParametersRegistry,
         <<"areEffPrivilegesRecalculated">> => not BottomUpDirty,
+        <<"shareCount">> => share_registry:get_share_count(Space),
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
     }};
@@ -748,8 +749,8 @@ update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {group_privileges, GroupI
     );
 
 update(#el_req{gri = #gri{id = SpaceId, aspect = {support_parameters, ProviderId}}, data = Data}) ->
-    {ok, ProviderVersion} = cluster_logic:get_worker_release_version(?ROOT, ProviderId),
-    onedata:compare_release_line(ProviderVersion, ?LINE_21_02) =:= lower andalso throw(?ERROR_NOT_SUPPORTED),
+    ProviderVersion = od_cluster:get_worker_release_version(ProviderId),
+    onedata:compare_release_version(ProviderVersion, ?VSN_21_02_1) == lower andalso throw(?ERROR_NOT_SUPPORTED),
 
     SupportParametersOverlay = jsonable_record:from_json(Data, support_parameters),
     ?extract_ok(od_space:update_support_parameters(SpaceId, ProviderId, SupportParametersOverlay)).
@@ -772,12 +773,12 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
         % remove all owners from the space to be deleted in order to avoid
         % potential errors when cleaning up user relations
         critical_section:run(?SPACE_CRITICAL_SECTION_KEY(SpaceId), fun() ->
-            {ok, #document{value = #od_space{name = SpaceName, tags = Tags}}} = od_space:update(
+            {ok, #document{value = #od_space{name = SpaceName, tags = Tags} = SpaceRecord}} = od_space:update(
                 SpaceId,
                 fun(Space) -> {ok, Space#od_space{owners = []}} end
             ),
             space_marketplace:delete(SpaceName, SpaceId, Tags),
-            share_registry:foreach(SpaceId, fun(ShareId) ->
+            share_registry:foreach(SpaceId, SpaceRecord, fun(ShareId) ->
                 % this will internally remove the share from the share registry
                 share_logic:delete(?ROOT, ShareId)
             end),
@@ -1035,7 +1036,7 @@ authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
 
 authorize(#el_req{operation = get, gri = #gri{aspect = api_samples}, auth = ?USER(UserId)}, Space) ->
-    entity_graph:has_relation(direct, bottom_up, od_user, UserId, Space);
+    space_logic:has_eff_user(Space, UserId);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = marketplace_data}, auth = ?USER}, #od_space{
     advertised_in_marketplace = AdvertisedInMarketplace

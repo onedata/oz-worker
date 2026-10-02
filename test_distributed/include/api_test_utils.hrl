@@ -15,7 +15,7 @@
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("gui/include/gui_session.hrl").
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 %% @formatter:off
 -type auth() :: nobody | root | {user, UserId :: binary()} |
@@ -334,5 +334,10 @@ end).
 -define(CORRECT_NAME, <<"_πœę ßþą_śðæŋ-əłżź.ćńµジ(ャパル)パスで 日本を- 旅す.る()"/utf8>>).
 
 -define(CORRECT_USER_NAME, <<"πœęßパル-µńćźżąśð日本を- 旅す. d'Arras, Jr."/utf8>>).
+
+-define(rpc(Expression), erpc:call(?RAND_ELEMENT(ozt:get_nodes()), fun() ->
+    Expression
+end)).
+
 
 -endif.

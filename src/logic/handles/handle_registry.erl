@@ -14,14 +14,14 @@
 -author("Katarzyna Such").
 
 -include("datastore/oz_datastore_models.hrl").
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([report_created/4, report_updated/5, report_deleted/5]).
 -export([lookup_deleted/1]).
 -export([purge_deleted_entry/1, purge_deleted_entry/4, purge_deleted_entries_for_service/1]).
 -export([get_earliest_timestamp/0]).
--export([list_portion/1, list_completely/1, gather_by_all_prefixes/0, gather_by_all_prefixes/1]).
+-export([list_portion/1, list_completely/1, gather_by_all_schemas/0, gather_by_all_schemas/1]).
 -export([service_has_any_entries/1]).
 
 % link_key() consists of 2 parts:
@@ -48,7 +48,7 @@
 %% @formatter:off
 -type listing_opts() :: #{
     resumption_token => resumption_token(),   % exclusive argument; if present, all other argument must not be provided
-    metadata_prefix => od_handle:metadata_prefix(),   % required unless resumption_token is provided
+    metadata_schema => od_handle:metadata_schema(),   % required unless resumption_token is provided
     service_id => od_handle_service:id(),
     limit => limit(),
     from => undefined | od_handle:timestamp_seconds(),  % inclusive
@@ -73,10 +73,10 @@
 -define(CTX, (od_handle:get_ctx())).
 
 -define(FOREST, <<"handle-forest">>).
--define(TREE_FOR_METADATA_PREFIX(Prefix),
-    <<Prefix/binary, "-records-all">>).
--define(TREE_FOR_METADATA_PREFIX_AND_HSERVICE(Prefix, HServiceId),
-    <<Prefix/binary, "-records-of-service-", HServiceId/binary>>).
+-define(TREE_FOR_METADATA_SCHEMA(Schema),
+    <<(Schema)/binary, "-records-all">>).
+-define(TREE_FOR_METADATA_SCHEMA_AND_HSERVICE(Schema, HServiceId),
+    <<(Schema)/binary, "-records-of-service-", HServiceId/binary>>).
 
 
 -define(DEFAULT_LIST_LIMIT, oz_worker:get_env(default_handle_list_limit, 1000)).
@@ -92,35 +92,36 @@
 %%% API
 %%%===================================================================
 
--spec report_created(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
+
+-spec report_created(od_handle:metadata_schema(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds()) -> ok.
-report_created(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
-    add_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp, present).
+report_created(MetadataSchema, HandleServiceId, HandleId, Timestamp) ->
+    add_entry(MetadataSchema, HandleServiceId, HandleId, Timestamp, present).
 
 
 %% @doc NOTE: not thread-safe, must not be run in parallel with itself or report_deleted/5!
--spec report_updated(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
+-spec report_updated(od_handle:metadata_schema(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> ok.
-report_updated(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp, UpdateTimestamp) ->
+report_updated(MetadataSchema, HandleServiceId, HandleId, PreviousTimestamp, UpdateTimestamp) ->
     case UpdateTimestamp == PreviousTimestamp of
         true ->
             ok;
         false ->
-            delete_entry(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp),
-            add_entry(MetadataPrefix, HandleServiceId, HandleId, UpdateTimestamp, present)
+            delete_entry(MetadataSchema, HandleServiceId, HandleId, PreviousTimestamp),
+            add_entry(MetadataSchema, HandleServiceId, HandleId, UpdateTimestamp, present)
     end.
 
 
 %% @doc NOTE: not thread-safe, must not be run in parallel with itself or report_updated/5!
--spec report_deleted(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
+-spec report_deleted(od_handle:metadata_schema(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds(), od_handle:timestamp_seconds()) -> ok.
-report_deleted(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp, DeletionTimestamp) ->
-    delete_entry(MetadataPrefix, HandleServiceId, HandleId, PreviousTimestamp),
-    add_entry(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp, deleted),
-    deleted_handle_registry:insert(MetadataPrefix, HandleServiceId, HandleId, DeletionTimestamp).
+report_deleted(MetadataSchema, HandleServiceId, HandleId, PreviousTimestamp, DeletionTimestamp) ->
+    delete_entry(MetadataSchema, HandleServiceId, HandleId, PreviousTimestamp),
+    add_entry(MetadataSchema, HandleServiceId, HandleId, DeletionTimestamp, deleted),
+    deleted_handle_registry:insert(MetadataSchema, HandleServiceId, HandleId, DeletionTimestamp).
 
 
--spec lookup_deleted(od_handle:id()) -> error | {ok, {od_handle:metadata_prefix(), handle_listing_entry()}}.
+-spec lookup_deleted(od_handle:id()) -> error | {ok, {od_handle:metadata_schema(), handle_listing_entry()}}.
 lookup_deleted(HandleId) ->
     deleted_handle_registry:lookup(HandleId).
 
@@ -130,30 +131,30 @@ purge_deleted_entry(HandleId) ->
     case deleted_handle_registry:lookup(HandleId) of
         error ->
             ?ERROR_NOT_FOUND;
-        {ok, {MetadataPrefix, #handle_listing_entry{
+        {ok, {MetadataSchema, #handle_listing_entry{
             timestamp = Timestamp,
             handle_id = HandleId,
             service_id = HServiceId,
             status = deleted
         }}} ->
-            purge_deleted_entry(MetadataPrefix, HServiceId, HandleId, Timestamp)
+            purge_deleted_entry(MetadataSchema, HServiceId, HandleId, Timestamp)
     end.
 
 -spec purge_deleted_entry(
-    od_handle:metadata_prefix(),
+    od_handle:metadata_schema(),
     od_handle_service:id(),
     od_handle:id(),
     od_handle:timestamp_seconds()
 ) ->
     ok.
-purge_deleted_entry(MetadataPrefix, HServiceId, HandleId, Timestamp) ->
+purge_deleted_entry(MetadataSchema, HServiceId, HandleId, Timestamp) ->
     deleted_handle_registry:remove(HandleId),
-    delete_entry(MetadataPrefix, HServiceId, HandleId, Timestamp).
+    delete_entry(MetadataSchema, HServiceId, HandleId, Timestamp).
 
 
 -spec purge_deleted_entries_for_service(od_handle_service:id()) -> ok.
 purge_deleted_entries_for_service(SubjectHServiceId) ->
-    deleted_handle_registry:foreach(fun({MetadataPrefix, #handle_listing_entry{
+    deleted_handle_registry:foreach(fun({MetadataSchema, #handle_listing_entry{
         timestamp = Timestamp,
         handle_id = HandleId,
         service_id = HServiceId,
@@ -161,7 +162,7 @@ purge_deleted_entries_for_service(SubjectHServiceId) ->
     }}) ->
         case SubjectHServiceId of
             HServiceId ->
-                purge_deleted_entry(MetadataPrefix, HServiceId, HandleId, Timestamp);
+                purge_deleted_entry(MetadataSchema, HServiceId, HandleId, Timestamp);
             _ ->
                 ok
         end
@@ -170,11 +171,11 @@ purge_deleted_entries_for_service(SubjectHServiceId) ->
 
 -spec get_earliest_timestamp() -> undefined | od_handle:timestamp_seconds().
 get_earliest_timestamp() ->
-    EntriesWithEarliestTimestamps = lists:flatmap(fun(MetadataPrefix) ->
-        ListingOpts = #{limit => 1, metadata_prefix => MetadataPrefix},
+    EntriesWithEarliestTimestamps = lists:flatmap(fun(MetadataSchema) ->
+        ListingOpts = #{limit => 1, metadata_schema => MetadataSchema},
         {List, _} = list_portion(ListingOpts),
         List
-    end, oai_metadata:supported_formats()),
+    end, oai_metadata:supported_schemas()),
 
     case EntriesWithEarliestTimestamps of
         [] -> undefined;
@@ -195,23 +196,27 @@ list_completely(ListingOpts) ->
     end.
 
 
--spec gather_by_all_prefixes() -> [handle_listing_entry()].
-gather_by_all_prefixes() ->
-    gather_by_all_prefixes(undefined).
+-spec gather_by_all_schemas() -> [handle_listing_entry()].
+gather_by_all_schemas() ->
+    gather_by_all_schemas(undefined).
 
--spec gather_by_all_prefixes(undefined | od_handle_service:id()) -> [handle_listing_entry()].
-gather_by_all_prefixes(HServiceId) ->
-    lists:umerge(lists:map(fun(MetadataPrefix) ->
-        list_completely(#{metadata_prefix => MetadataPrefix, service_id => HServiceId})
-    end, oai_metadata:supported_formats())).
+-spec gather_by_all_schemas(undefined | od_handle_service:id()) -> [handle_listing_entry()].
+gather_by_all_schemas(HServiceId) ->
+    lists:umerge(lists:map(fun(MetadataSchema) ->
+        list_completely(#{metadata_schema => MetadataSchema, service_id => HServiceId})
+    end, oai_metadata:supported_schemas())).
 
 
 -spec service_has_any_entries(od_handle_service:id()) -> boolean().
 service_has_any_entries(HServiceId) ->
-    lists:any(fun(MetadataPrefix) ->
-        {Entries, _} = list_portion(#{metadata_prefix => MetadataPrefix, service_id => HServiceId, limit => 1}),
+    lists:any(fun(MetadataSchema) ->
+        {Entries, _} = list_portion(#{
+            metadata_schema => MetadataSchema,
+            service_id => HServiceId,
+            limit => 1
+        }),
         not lists_utils:is_empty(Entries)
-    end, oai_metadata:supported_formats()).
+    end, oai_metadata:supported_schemas()).
 
 %%%===================================================================
 %%% Internal functions
@@ -273,11 +278,11 @@ list_internal(#internal_listing_opts{
 -spec build_internal_listing_opts(listing_opts()) -> internal_listing_opts().
 build_internal_listing_opts(#{resumption_token := ResumptionToken}) ->
     unpack_resumption_token(ResumptionToken);
-build_internal_listing_opts(#{metadata_prefix := MetadataPrefix} = ListingOpts) ->
+build_internal_listing_opts(#{metadata_schema := MetadataSchema} = ListingOpts) ->
     #internal_listing_opts{
         tree_id = case maps:get(service_id, ListingOpts, undefined) of
-            undefined -> ?TREE_FOR_METADATA_PREFIX(MetadataPrefix);
-            HServiceId -> ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HServiceId)
+            undefined -> ?TREE_FOR_METADATA_SCHEMA(MetadataSchema);
+            HServiceId -> ?TREE_FOR_METADATA_SCHEMA_AND_HSERVICE(MetadataSchema, HServiceId)
         end,
         limit = utils:ensure_defined(maps:get(limit, ListingOpts, undefined), ?DEFAULT_LIST_LIMIT),
         start_after_key = encode_link_key(utils:ensure_defined(maps:get(from, ListingOpts, undefined), 0), first),
@@ -369,9 +374,9 @@ binary_to_status(<<"0">>) -> deleted.
 
 
 %% @private
--spec add_entry(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
+-spec add_entry(od_handle:metadata_schema(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds(), status()) -> ok.
-add_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp, Status) ->
+add_entry(MetadataSchema, HandleServiceId, HandleId, Timestamp, Status) ->
     Link = {encode_link_key(Timestamp, HandleId), encode_link_value(HandleServiceId, Status)},
 
     lists:foreach(fun(TreeId) ->
@@ -380,15 +385,15 @@ add_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp, Status) ->
             {error, already_exists} -> throw(?ERROR_ALREADY_EXISTS)
         end
     end, [
-        ?TREE_FOR_METADATA_PREFIX(MetadataPrefix),
-        ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HandleServiceId)
+        ?TREE_FOR_METADATA_SCHEMA(MetadataSchema),
+        ?TREE_FOR_METADATA_SCHEMA_AND_HSERVICE(MetadataSchema, HandleServiceId)
     ]).
 
 
 %% @private
--spec delete_entry(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
+-spec delete_entry(od_handle:metadata_schema(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds()) -> ok.
-delete_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
+delete_entry(MetadataSchema, HandleServiceId, HandleId, Timestamp) ->
     Key = encode_link_key(Timestamp, HandleId),
     lists:foreach(fun(TreeId) ->
         case datastore_model:delete_links(?CTX, ?FOREST, TreeId, Key) of
@@ -396,6 +401,6 @@ delete_entry(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
             {error, not_found} -> ok
         end
     end, [
-        ?TREE_FOR_METADATA_PREFIX(MetadataPrefix),
-        ?TREE_FOR_METADATA_PREFIX_AND_HSERVICE(MetadataPrefix, HandleServiceId)
+        ?TREE_FOR_METADATA_SCHEMA(MetadataSchema),
+        ?TREE_FOR_METADATA_SCHEMA_AND_HSERVICE(MetadataSchema, HandleServiceId)
     ]).

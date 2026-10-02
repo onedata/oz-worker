@@ -88,7 +88,7 @@ validate_example(Module, {IdP, Attribute, IdPAttributes, ExpectedOutput}) ->
             "Error: ~tp~n"
             "Stacktrace: ~ts~n", [
                 IdP, Attribute, IdPAttributes, ExpectedOutput, {EType, EReason},
-                iolist_to_binary(lager:pr_stacktrace(EStacktrace))
+                iolist_to_binary(onedata_logger:pr_stacktrace(EStacktrace))
             ]),
             throw(validation_failed);
         {_, Got} ->

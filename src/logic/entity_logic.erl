@@ -29,7 +29,9 @@
 % for better readability of logic modules.
 -type req() :: #el_req{}.
 -type el_plugin() :: module().
--type operation() :: gs_protocol:operation().
+% 'head' is an oz-worker specific extension of the graph sync operations, used
+% solely by the REST layer to handle HTTP HEAD requests (see rest_handler).
+-type operation() :: gs_protocol:operation() | head.
 -type entity_id() :: undefined | od_user:id() | od_group:id() | od_space:id()
 | od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id()
 | od_cluster:id() | od_storage:id()

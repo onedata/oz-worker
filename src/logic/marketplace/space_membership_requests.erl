@@ -235,9 +235,9 @@ submit_internal(SpaceId, UserId, ContactEmail, Message, InitialRecord) ->
                 last_activity = ?NOW_SECONDS()
             }}
     end,
-    ?check(space_marketplace_mailer:check_send_membership_request(
+    space_marketplace_mailer:check_send_membership_request(
         SpaceId, UserId, Request#request.id, RequestClassification, ContactEmail, Message
-    )),
+    ),
     UpdatedRecord#space_membership_requests{
         pending = maps:put(SpaceId, Request, UpdatedRecord#space_membership_requests.pending)
     }.

@@ -12,18 +12,18 @@
 -module(deleted_handle_registry).
 -author("Katarzyna Such").
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 
 %% API
 -export([insert/4, lookup/1, remove/1, foreach/1]).
 
 % link value() encodes 3 pieces of information:
-%  1) metadata prefix - specification of metadata format of deleted handle.
+%  1) metadata schema - specification of metadata schema of the deleted handle.
 %  2) handle service_id - id of the handle service in which the handle has been registered.
 %  3) timestamp - contains information about time of handle deletion.
 -type link_value() :: binary().
 
--type entry() :: {od_handle:metadata_prefix(), handle_registry:handle_listing_entry()}.
+-type entry() :: {od_handle:metadata_schema(), handle_registry:handle_listing_entry()}.
 
 -define(CTX, (od_handle:get_ctx())).
 
@@ -38,10 +38,10 @@
 %%%===================================================================
 
 
--spec insert(od_handle:metadata_prefix(), od_handle_service:id(), od_handle:id(),
+-spec insert(od_handle:metadata_schema(), od_handle_service:id(), od_handle:id(),
     od_handle:timestamp_seconds()) -> ok.
-insert(MetadataPrefix, HandleServiceId, HandleId, Timestamp) ->
-    Link = {HandleId, encode_link_value(MetadataPrefix, HandleServiceId, Timestamp)},
+insert(MetadataSchema, HandleServiceId, HandleId, Timestamp) ->
+    Link = {HandleId, encode_link_value(MetadataSchema, HandleServiceId, Timestamp)},
     case datastore_model:add_links(?CTX, ?FOREST, ?TREE_FOR_DELETED_HANDLES, Link) of
         {ok, _} -> ok;
         {error, already_exists} -> throw(?ERROR_ALREADY_EXISTS)
@@ -101,8 +101,8 @@ foreach(ForeachFun, StartAfterHandleId) ->
 %% @private
 -spec decode_link(datastore:link()) -> entry().
 decode_link(#link{name = HandleId, target = LinkValue}) ->
-    {MetadataPrefix, HandleServiceId, Timestamp} = decode_link_value(LinkValue),
-    {MetadataPrefix, #handle_listing_entry{
+    {MetadataSchema, HandleServiceId, Timestamp} = decode_link_value(LinkValue),
+    {MetadataSchema, #handle_listing_entry{
         timestamp = Timestamp,
         handle_id = HandleId,
         service_id = HandleServiceId,
@@ -111,15 +111,15 @@ decode_link(#link{name = HandleId, target = LinkValue}) ->
 
 
 %% @private
--spec encode_link_value(od_handle:metadata_prefix(), od_handle_service:id(),
+-spec encode_link_value(od_handle:metadata_schema(), od_handle_service:id(),
     od_handle:timestamp_seconds()) -> link_value().
-encode_link_value(MetadataPrefix, HandleServiceId, Timestamp) ->
-    str_utils:join_binary([MetadataPrefix, HandleServiceId, integer_to_binary(Timestamp)], ?LINK_VALUE_SEPARATOR).
+encode_link_value(MetadataSchema, HandleServiceId, Timestamp) ->
+    str_utils:join_binary([MetadataSchema, HandleServiceId, integer_to_binary(Timestamp)], ?LINK_VALUE_SEPARATOR).
 
 
 %% @private
--spec decode_link_value(link_value()) -> {od_handle:metadata_prefix(), od_handle_service:id(),
+-spec decode_link_value(link_value()) -> {od_handle:metadata_schema(), od_handle_service:id(),
     od_handle:timestamp_seconds()}.
 decode_link_value(Value) ->
-    [MetadataPrefix, HandleServiceId, TimestampBin] = binary:split(Value, [?LINK_VALUE_SEPARATOR], [global]),
-    {MetadataPrefix, HandleServiceId, binary_to_integer(TimestampBin)}.
+    [MetadataSchema, HandleServiceId, TimestampBin] = binary:split(Value, [?LINK_VALUE_SEPARATOR], [global]),
+    {MetadataSchema, HandleServiceId, binary_to_integer(TimestampBin)}.

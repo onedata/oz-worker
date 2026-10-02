@@ -177,6 +177,7 @@ protected_space(logic, _Id, SpaceData, Creator) ->
         <<"supportParametersRegistry">> => maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"areEffPrivilegesRecalculated">> => true,
+        <<"shareCount">> => maps:get(<<"shareCount">>, SpaceData, 0),
         <<"creator">> => Creator
     });
 protected_space(rest, Id, SpaceData, Creator) ->
@@ -193,6 +194,7 @@ protected_space(rest, Id, SpaceData, Creator) ->
             maps:get(<<"supportParametersRegistry">>, SpaceData, #support_parameters_registry{}),
             support_parameters_registry
         ),
+        <<"shareCount">> => maps:get(<<"shareCount">>, SpaceData, 0),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creator">> => aai:subject_to_json(Creator)
     };
@@ -222,7 +224,8 @@ private_share(logic, _Id, ShareData, Creator) ->
             file_type = maps:get(<<"fileType">>, ShareData),
 
             creation_time = ozt_mocks:get_frozen_time_seconds(),
-            creator = Creator
+            creator = Creator,
+            visit_count = maps:get(<<"visitCount">>, ShareData, 0)
         })
     end);
 private_share(rest, Id, ShareData, Creator) ->
@@ -237,7 +240,8 @@ private_share(rest, Id, ShareData, Creator) ->
         <<"publicUrl">> => expected_public_share_url(Id),
         <<"publicRestUrl">> => expected_public_share_rest_url(Id),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
-        <<"creator">> => aai:subject_to_json(Creator)
+        <<"creator">> => aai:subject_to_json(Creator),
+        <<"visitCount">> => maps:get(<<"visitCount">>, ShareData, 0)
     };
 private_share(gs, Id, ShareData, _Creator) ->
     ?OK_MAP(#{
@@ -253,7 +257,8 @@ private_share(gs, Id, ShareData, _Creator) ->
         end,
         <<"handleId">> => utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
-        <<"publicRestUrl">> => expected_public_share_rest_url(Id)
+        <<"publicRestUrl">> => expected_public_share_rest_url(Id),
+        <<"visitCount">> => maps:get(<<"visitCount">>, ShareData, 0)
     }).
 
 
@@ -266,11 +271,13 @@ public_share(logic, _Id, ShareData) ->
         <<"rootFileObjectId">> => ?check(file_id:guid_to_objectid(maps:get(<<"rootFileId">>, ShareData))),
         <<"fileType">> => maps:get(<<"fileType">>, ShareData),
         <<"handleId">> => maps:get(<<"handleId">>, ShareData, undefined),
-        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
+        <<"visitCount">> => maps:get(<<"visitCount">>, ShareData, 0)
     });
 public_share(rest, Id, ShareData) ->
     #{
         <<"shareId">> => Id,
+        <<"spaceId">> => maps:get(<<"spaceId">>, ShareData),
         <<"name">> => maps:get(<<"name">>, ShareData),
         <<"description">> => maps:get(<<"description">>, ShareData),
         <<"rootFileId">> => ?check(file_id:guid_to_objectid(maps:get(<<"rootFileId">>, ShareData))),
@@ -278,7 +285,8 @@ public_share(rest, Id, ShareData) ->
         <<"handleId">> => utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
         <<"publicRestUrl">> => expected_public_share_rest_url(Id),
-        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
+        <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
+        <<"visitCount">> => maps:get(<<"visitCount">>, ShareData, 0)
     };
 public_share(gs, Id, ShareData) ->
     ?OK_MAP(#{
@@ -294,7 +302,8 @@ public_share(gs, Id, ShareData) ->
         end,
         <<"handleId">> => utils:undefined_to_null(maps:get(<<"handleId">>, ShareData, undefined)),
         <<"publicUrl">> => expected_public_share_url(Id),
-        <<"publicRestUrl">> => expected_public_share_rest_url(Id)
+        <<"publicRestUrl">> => expected_public_share_rest_url(Id),
+        <<"visitCount">> => maps:get(<<"visitCount">>, ShareData, 0)
     }).
 
 
@@ -407,7 +416,7 @@ protected_handle(logic, Id, HandleData, Creator) ->
         <<"publicHandle">> => ExpPublicHandle,
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
-        <<"metadataPrefix">> => maps:get(<<"metadataPrefix">>, HandleData),
+        <<"metadataSchema">> => maps:get(<<"metadataSchema">>, HandleData),
         <<"metadata">> => expected_final_handle_metadata(HandleData, ExpPublicHandle),
         <<"timestamp">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
@@ -421,7 +430,8 @@ protected_handle(rest, Id, HandleData, Creator) ->
         <<"publicHandle">> => ExpPublicHandle,
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
-        <<"metadataPrefix">> => maps:get(<<"metadataPrefix">>, HandleData),
+        <<"metadataPrefix">> => maps:get(<<"metadataSchema">>, HandleData),  % deprecated, to be removed in 23.02
+        <<"metadataSchema">> => maps:get(<<"metadataSchema">>, HandleData),
         <<"metadata">> => expected_final_handle_metadata(HandleData, ExpPublicHandle),
         <<"timestamp">> => time:seconds_to_iso8601(ozt_mocks:get_frozen_time_seconds()),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds(),
@@ -437,7 +447,7 @@ public_handle(logic, Id, HandleData) ->
         <<"publicHandle">> => ExpPublicHandle,
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
-        <<"metadataPrefix">> => maps:get(<<"metadataPrefix">>, HandleData),
+        <<"metadataSchema">> => maps:get(<<"metadataSchema">>, HandleData),
         <<"metadata">> => expected_final_handle_metadata(HandleData, ExpPublicHandle),
         <<"timestamp">> => ozt_mocks:get_frozen_time_seconds(),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
@@ -450,7 +460,8 @@ public_handle(rest, Id, HandleData) ->
         <<"publicHandle">> => ExpPublicHandle,
         <<"resourceType">> => maps:get(<<"resourceType">>, HandleData, <<"Share">>),
         <<"resourceId">> => maps:get(<<"resourceId">>, HandleData),
-        <<"metadataPrefix">> => maps:get(<<"metadataPrefix">>, HandleData),
+        <<"metadataPrefix">> => maps:get(<<"metadataSchema">>, HandleData),  % deprecated, to be removed in 23.02
+        <<"metadataSchema">> => maps:get(<<"metadataSchema">>, HandleData),
         <<"metadata">> => expected_final_handle_metadata(HandleData, ExpPublicHandle),
         <<"timestamp">> => time:seconds_to_iso8601(ozt_mocks:get_frozen_time_seconds()),
         <<"creationTime">> => ozt_mocks:get_frozen_time_seconds()
@@ -461,7 +472,8 @@ public_handle(gs, Id, HandleData) ->
         <<"gri">> => gri:serialize(?GRI(od_handle, Id, instance, public)),
         <<"handleServiceId">> => maps:get(<<"handleServiceId">>, HandleData),
         <<"publicHandle">> => ExpPublicHandle,
-        <<"metadataPrefix">> => maps:get(<<"metadataPrefix">>, HandleData),
+        <<"metadataPrefix">> => maps:get(<<"metadataSchema">>, HandleData),  % deprecated, to be removed in 23.02
+        <<"metadataSchema">> => maps:get(<<"metadataSchema">>, HandleData),
         <<"metadata">> => expected_final_handle_metadata(HandleData, ExpPublicHandle),
         <<"timestamp">> => time:seconds_to_iso8601(ozt_mocks:get_frozen_time_seconds())
     }).
@@ -771,17 +783,17 @@ expected_cluster_creation_time(?ONEPROVIDER) ->
 
 %% @private
 expected_final_handle_metadata(#{
-    <<"metadataPrefix">> := MetadataPrefix,
+    <<"metadataSchema">> := MetadataSchema,
     <<"metadata">> := RawMetadata,
     <<"resourceId">> := ShareId
 }, PublicHandle) ->
     ShareRecord = ?check(ozt:rpc(share_logic, get, [?ROOT, ShareId])),
     {ok, ParsedMetadata} = ozt:rpc(oai_xml, parse, [RawMetadata]),
     {ok, RevisedMetadata} = ozt:rpc(oai_metadata, revise_for_publication, [
-        MetadataPrefix, ParsedMetadata, ShareId, ShareRecord
+        MetadataSchema, ParsedMetadata, ShareId, ShareRecord
     ]),
-    FinalMetadata = ozt:rpc(oai_metadata, insert_public_handle, [MetadataPrefix, RevisedMetadata, PublicHandle]),
-    ozt:rpc(oai_metadata, encode_xml, [MetadataPrefix, FinalMetadata]).
+    FinalMetadata = ozt:rpc(oai_metadata, insert_public_handle, [MetadataSchema, RevisedMetadata, PublicHandle]),
+    ozt:rpc(oai_metadata, encode_xml, [MetadataSchema, FinalMetadata]).
 
 
 %% @private

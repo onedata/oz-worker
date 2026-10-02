@@ -13,7 +13,7 @@
 -author("Jakub Kudzia").
 
 -include("registered_names.hrl").
--include("http/handlers/oai_errors.hrl").
+-include("http/public_data/oai_errors.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
 -behaviour(oai_verb_behaviour).

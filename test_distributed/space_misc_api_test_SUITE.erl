@@ -338,7 +338,7 @@ get_test(Config) ->
     {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, SpaceId} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, SpaceId, SupportSize),
 
-    ozt_providers:simulate_version(P1, ?LINE_21_02),
+    ozt_providers:simulate_version(P1, ?VSN_21_02_1),
     ozt_spaces:set_support_parameters(SpaceId, P1, ozt_spaces:random_support_parameters()),
     ExpSupportParametersRegistry = #support_parameters_registry{
         registry = #{
@@ -880,11 +880,16 @@ delete_test(Config) ->
         {ok, Spaces} = oz_test_utils:list_spaces(Config),
         ?assertEqual(lists:member(SpaceId, Spaces), not ShouldSucceed),
         ?assertEqual(in_marketplace(SpaceId), AdvertisedInMarketplace andalso not ShouldSucceed),
-        ExpShareEntries = case ShouldSucceed of
-            false -> ShareEntries;
-            true -> []
-        end,
-        ?assertEqual(ExpShareEntries, ozt:rpc(share_registry, list_entries, [SpaceId, #{limit => infinity}]))
+        case ShouldSucceed of
+            false ->
+                ?assertEqual(ShareEntries, ozt:insecure_erpc(
+                    share_registry, list_entries, [SpaceId, #{limit => infinity}]
+                ));
+            true ->
+                ?assertThrow(?ERROR_NOT_FOUND, ozt:insecure_erpc(
+                    share_registry, list_entries, [SpaceId, #{limit => infinity}]
+                ))
+        end
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -928,7 +933,7 @@ delete_test(Config) ->
     utils:repeat(2222, fun() -> ozt_shares:create(SpaceWithManyShares) end),
     ?assertEqual(2222, length(ozt:rpc(share_registry, list_entries, [SpaceWithManyShares, #{limit => infinity}]))),
     ?assertMatch(ok, ozt:rpc(space_logic, delete, [aai:root_auth(), SpaceWithManyShares])),
-    ?assertEqual(0, length(ozt:rpc(share_registry, list_entries, [SpaceWithManyShares, #{limit => infinity}]))).
+    ?assertThrow(?ERROR_NOT_FOUND, ozt:insecure_erpc(share_registry, list_entries, [SpaceWithManyShares, #{limit => infinity}])).
 
 
 list_storages_test(Config) ->
@@ -1505,7 +1510,7 @@ update_support_parameters_test(Config) ->
     ozt_providers:support_space(SubjectProvider, SubjectSpace),
     ozt_providers:support_space(OtherProvider, SubjectSpace),
 
-    ozt_providers:simulate_version(SubjectProvider, ?LINE_21_02),
+    ozt_providers:simulate_version(SubjectProvider, ?VSN_21_02_1),
     ozt_spaces:set_support_parameters(SubjectSpace, SubjectProvider, ozt_spaces:random_support_parameters()),
 
     EnvSetUpFun = fun() ->
@@ -1679,7 +1684,7 @@ update_support_parameters_test(Config) ->
                 }
             }, EnvSetUpFun, undefined, VerifyEndFun))
         end, CorrectClients)
-    end, [?LINE_19_02, ?LINE_20_02, ?LINE_21_02]).
+    end, [?VSN_19_02_1, ?VSN_20_02_1, ?VSN_21_02_1]).
 
 % ----------------
 % sequential tests
