@@ -9,6 +9,9 @@
 %%% This module implements harvesting_backend_behaviour and is called 
 %%% by harvester_logic_plugin to handle operations on Elasticsearch.
 %%% This harvesting backend is compatible with Elasticsearch 7.
+%%% Credentials for an endpoint can be set via the
+%%% `elasticsearch_harvesting_backend_credentials` env (see app.config),
+%%% and without them requests are sent unauthenticated.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(elasticsearch_harvesting_backend).
@@ -68,6 +71,7 @@
 
 -define(ENTRY_PATH(Path), <<"/_doc/", Path/binary>>).
 -define(REQUEST_TIMEOUT, oz_worker:get_env(harvesting_backend_request_timeout, timer:minutes(2))).
+-define(CREDENTIALS, oz_worker:get_env(elasticsearch_harvesting_backend_credentials, #{})).
 
 -define(EXTRACT_OK(Response),
     case Response of
@@ -350,7 +354,8 @@ do_request(Method, Endpoint, IndexId, Path, Data, ExpectedCodes) ->
     ExpectedCodes :: [integer() | {integer(), integer()}] | undefined) -> http_client:response().
 do_request(Method, Endpoint, IndexId, Path, Data, Headers, ExpectedCodes) ->
     Url = <<Endpoint/binary, "/", IndexId/binary, Path/binary>>,
-    case http_client:request(Method, Url, Headers, Data, [{recv_timeout, ?REQUEST_TIMEOUT}]) of
+    AllHeaders = maps:merge(Headers, build_auth_headers(Endpoint)),
+    case http_client:request(Method, Url, AllHeaders, Data, [{recv_timeout, ?REQUEST_TIMEOUT}]) of
         {ok, Code, RespHeaders, Body} = Response when is_list(ExpectedCodes) ->
             case is_code_expected(Code, ExpectedCodes) of
                 true ->
@@ -894,3 +899,73 @@ atoms_to_binaries(ListOfAtoms) ->
     lists:map(fun(Atom) ->
         atom_to_binary(Atom, utf8)
     end, ListOfAtoms).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Builds authorization header for given Endpoint basing on credentials
+%% from app config. Returns empty map when there are no (valid) credentials.
+%% NOTE: credentials must never be logged.
+%% @end
+%%--------------------------------------------------------------------
+-spec build_auth_headers(od_harvester:endpoint()) -> http_client:headers().
+build_auth_headers(Endpoint) ->
+    case find_credentials(Endpoint) of
+        error ->
+            #{};
+        {ok, Entry} ->
+            try
+                case Entry of
+                    #{api_key := ApiKey} ->
+                        ApiKeyBin = credential_to_binary(ApiKey),
+                        #{?HDR_AUTHORIZATION => <<"ApiKey ", ApiKeyBin/binary>>};
+                    #{username := Username, password := Password} ->
+                        UsernameBin = credential_to_binary(Username),
+                        PasswordBin = credential_to_binary(Password),
+                        Encoded = base64:encode(<<UsernameBin/binary, ":", PasswordBin/binary>>),
+                        #{?HDR_AUTHORIZATION => <<"Basic ", Encoded/binary>>}
+                end
+            catch _:_ ->
+                % NOTE: the exception is deliberately not logged as it may contain secrets
+                ?error(?prepare_log("Invalid credentials config for endpoint ~ts - connecting without credentials",
+                    [Endpoint])),
+                #{}
+            end
+    end.
+
+
+%% @private
+-spec find_credentials(od_harvester:endpoint()) -> {ok, map()} | error.
+find_credentials(Endpoint) ->
+    case ?CREDENTIALS of
+        CredentialsMap when is_map(CredentialsMap) ->
+            NormalizedEndpoint = normalize_endpoint(Endpoint),
+            Matching = [Entry || {Key, Entry} <- maps:to_list(CredentialsMap),
+                (catch normalize_endpoint(Key)) =:= NormalizedEndpoint],
+            case Matching of
+                [Entry | _] -> {ok, Entry};
+                [] -> error
+            end;
+        _ ->
+            error
+    end.
+
+
+%% @private
+-spec normalize_endpoint(od_harvester:endpoint() | string()) -> binary().
+normalize_endpoint(Endpoint) ->
+    WithoutScheme = re:replace(str_utils:to_binary(Endpoint), <<"^https?://">>, <<>>,
+        [caseless, {return, binary}]),
+    re:replace(WithoutScheme, <<"/+$">>, <<>>, [{return, binary}]).
+
+
+%% @private
+-spec credential_to_binary(binary() | string()) -> binary() | no_return().
+credential_to_binary(Binary) when is_binary(Binary) ->
+    Binary;
+credential_to_binary(String) when is_list(String) ->
+    case unicode:characters_to_binary(String) of
+        Binary when is_binary(Binary) -> Binary;
+        _ -> error(invalid_credential)
+    end.
