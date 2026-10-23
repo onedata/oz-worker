@@ -22,6 +22,33 @@
 %%% Tests functions
 %%%===================================================================
 
+connection_opts_matching_test() ->
+    Es7 = #{username => <<"u7">>, password => <<"p7">>},
+    Es8 = #{username => <<"u8">>, password => <<"p8">>},
+    Other = #{api_key => <<"key">>},
+    meck:new(oz_worker, [passthrough, non_strict]),
+    meck:expect(oz_worker, get_env, fun
+        (elasticsearch_harvesting_backend_connection_opts, _Default) -> #{
+            <<"example.com/es7">> => Es7,
+            <<"https://example.com/es8/">> => Es8,
+            <<"other.com:9200">> => Other
+        };
+        (_, Default) -> Default
+    end),
+    try
+        ?assertEqual({ok, Es7}, elasticsearch_harvesting_backend:find_connection_opts(<<"example.com/es7">>)),
+        ?assertEqual({ok, Es7}, elasticsearch_harvesting_backend:find_connection_opts(<<"http://example.com/es7/">>)),
+        ?assertEqual({ok, Es8}, elasticsearch_harvesting_backend:find_connection_opts(<<"example.com/es8">>)),
+        ?assertEqual({ok, Es8}, elasticsearch_harvesting_backend:find_connection_opts(<<"https://example.com/es8">>)),
+        ?assertEqual(error, elasticsearch_harvesting_backend:find_connection_opts(<<"example.com">>)),
+        ?assertEqual(error, elasticsearch_harvesting_backend:find_connection_opts(<<"example.com/es9">>)),
+        ?assertEqual({ok, Other}, elasticsearch_harvesting_backend:find_connection_opts(<<"https://other.com:9200">>)),
+        ?assertEqual(error, elasticsearch_harvesting_backend:find_connection_opts(<<"other.com:9201">>))
+    after
+        meck:unload(oz_worker)
+    end.
+
+
 remove_field_test() ->
     ?assertEqual(#{}, elasticsearch_harvesting_backend:remove_field([a], #{a => b})),
     ?assertEqual([#{}], elasticsearch_harvesting_backend:remove_field([a], [#{a => b}])),
