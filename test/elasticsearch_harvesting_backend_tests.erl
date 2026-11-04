@@ -22,6 +22,33 @@
 %%% Tests functions
 %%%===================================================================
 
+connection_opts_matching_test() ->
+    Es7 = #{username => <<"u7">>, password => <<"p7">>},
+    Es8 = #{username => <<"u8">>, password => <<"p8">>},
+    Other = #{api_key => <<"key">>},
+    meck:new(oz_worker, [passthrough, non_strict]),
+    meck:expect(oz_worker, get_env, fun
+        (elasticsearch_harvesting_backend_connection_opts, _Default) -> #{
+            <<"example.com/es7">> => Es7,
+            <<"https://example.com/es8/">> => Es8,
+            <<"other.com:9200">> => Other
+        };
+        (_, Default) -> Default
+    end),
+    try
+        ?assertEqual({ok, Es7}, elasticsearch_harvesting_backend:find_connection_opts(<<"example.com/es7">>)),
+        ?assertEqual({ok, Es7}, elasticsearch_harvesting_backend:find_connection_opts(<<"http://example.com/es7/">>)),
+        ?assertEqual({ok, Es8}, elasticsearch_harvesting_backend:find_connection_opts(<<"example.com/es8">>)),
+        ?assertEqual({ok, Es8}, elasticsearch_harvesting_backend:find_connection_opts(<<"https://example.com/es8">>)),
+        ?assertEqual(error, elasticsearch_harvesting_backend:find_connection_opts(<<"example.com">>)),
+        ?assertEqual(error, elasticsearch_harvesting_backend:find_connection_opts(<<"example.com/es9">>)),
+        ?assertEqual({ok, Other}, elasticsearch_harvesting_backend:find_connection_opts(<<"https://other.com:9200">>)),
+        ?assertEqual(error, elasticsearch_harvesting_backend:find_connection_opts(<<"other.com:9201">>))
+    after
+        meck:unload(oz_worker)
+    end.
+
+
 remove_field_test() ->
     ?assertEqual(#{}, elasticsearch_harvesting_backend:remove_field([a], #{a => b})),
     ?assertEqual([#{}], elasticsearch_harvesting_backend:remove_field([a], [#{a => b}])),
@@ -390,6 +417,24 @@ retrieve_rejected_field_test() ->
     ?assertEqual(<<"a.b.c.d">>, elasticsearch_harvesting_backend:retrieve_rejected_field(<<"... failed to parse field [a.b.c.d] of type ...">>)),
     ?assertEqual(<<"a.b.c.d">>, elasticsearch_harvesting_backend:retrieve_rejected_field(<<".. object mapping for [a.b.c.d] tried to parse ...">>)),
     ?assertEqual(<<"a.b.c.d">>, elasticsearch_harvesting_backend:retrieve_rejected_field(<<"... mapper [a.b.c.d] of different type ...">>)),
+    ?assertEqual(<<"a.b.c.d">>, elasticsearch_harvesting_backend:retrieve_rejected_field(<<"... mapper [a.b.c.d] cannot be changed from type [keyword] to [long]">>)),
+    % messages returned by Elasticsearch 9
+    ?assertEqual(<<"a.b">>, elasticsearch_harvesting_backend:retrieve_rejected_field(
+        <<"[1:11] failed to parse field [a.b] of type [long] in document with id 'f1'. Preview of field's value: 'abc'">>)),
+    ?assertEqual(<<"m.n">>, elasticsearch_harvesting_backend:retrieve_rejected_field(
+        <<"[1:11] failed to parse field [m.n] of type [long] in document with id 'f2'. Preview of field's value: 'abc'">>)),
+    ?assertEqual(<<"a.b">>, elasticsearch_harvesting_backend:retrieve_rejected_field(
+        <<"[1:6] object mapping for [a.b] tried to parse field [a.b] as object, but found a concrete value">>)),
+    ?assertEqual(<<"o">>, elasticsearch_harvesting_backend:retrieve_rejected_field(
+        <<"[1:6] object mapping for [o] tried to parse field [o] as object, but found a concrete value">>)),
+    ?assertEqual(<<"k">>, elasticsearch_harvesting_backend:retrieve_rejected_field(
+        <<"mapper [k] cannot be changed from type [keyword] to [long]">>)),
+    ?assertEqual(<<"b">>, elasticsearch_harvesting_backend:retrieve_rejected_field(
+        <<"[1:6] mapping set to strict, dynamic introduction of [b] within [_doc] is not allowed">>)),
+    ?assertEqual(<<"o.p.b">>, elasticsearch_harvesting_backend:retrieve_rejected_field(
+        <<"[1:16] mapping set to strict, dynamic introduction of [b] within [o.p] is not allowed">>)),
+    ?assertEqual(all, elasticsearch_harvesting_backend:retrieve_rejected_field(
+        <<"[1:18] failed to parse: Limit of total fields [2] has been exceeded while adding new fields [3]">>)),
     ?assertEqual(all, elasticsearch_harvesting_backend:retrieve_rejected_field(<<"some not recognized error">>)),
     ok.
 
@@ -437,6 +482,13 @@ parse_batch_result_test() ->
         {rejected, <<"a.b.c.d">>, Reason},
         #{<<"items">> => [
             #{<<"index">> => ErrorResponse(<<"mapper_parsing_exception">>, Reason)}
+        ]}
+    ),
+    parse_batch_result_test_base(
+        ok,
+        {rejected, <<"a.b.c.d">>, Reason},
+        #{<<"items">> => [
+            #{<<"index">> => ErrorResponse(<<"document_parsing_exception">>, Reason)}
         ]}
     ),
     parse_batch_result_test_base(
