@@ -8,7 +8,11 @@
 %%% @doc
 %%% This module implements harvesting_backend_behaviour and is called 
 %%% by harvester_logic_plugin to handle operations on Elasticsearch.
-%%% This harvesting backend is compatible with Elasticsearch 7.
+%%% This harvesting backend is compatible with Elasticsearch 7, 8 and 9.
+%%% Connection options (credentials and a trusted CA certificate) for an endpoint
+%%% can be set via the `elasticsearch_harvesting_backend_connection_opts` env
+%%% (see app.config); without them requests are sent unauthenticated and
+%%% the server certificate is verified against the default CAs.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(elasticsearch_harvesting_backend).
@@ -66,8 +70,8 @@
 -type internal_params() :: #{binary() => binary() | rejected_fields() | boolean() | normalized_xattrs()}.
 
 
--define(ENTRY_PATH(Path), <<"/_doc/", Path/binary>>).
 -define(REQUEST_TIMEOUT, oz_worker:get_env(harvesting_backend_request_timeout, timer:minutes(2))).
+-define(CONNECTION_OPTS, oz_worker:get_env(elasticsearch_harvesting_backend_connection_opts, #{})).
 
 -define(EXTRACT_OK(Response),
     case Response of
@@ -301,7 +305,7 @@ check_submission_result(Result, IndexInfo, RejectedFields) ->
 do_submit_request(_Endpoint, _IndexId, empty) ->
     {ok, #{}};
 do_submit_request(Endpoint, IndexId, PreparedBatch) ->
-    case do_request(post, Endpoint, IndexId, ?ENTRY_PATH(<<"_bulk">>), PreparedBatch,
+    case do_request(post, Endpoint, IndexId, <<"/_bulk">>, PreparedBatch,
         #{?HDR_CONTENT_TYPE => <<"application/x-ndjson">>}, [{200, 300}]) of
         {ok, _, _, Body} -> {ok, json_utils:decode(Body)};
         {error, _} = Error ->
@@ -350,7 +354,9 @@ do_request(Method, Endpoint, IndexId, Path, Data, ExpectedCodes) ->
     ExpectedCodes :: [integer() | {integer(), integer()}] | undefined) -> http_client:response().
 do_request(Method, Endpoint, IndexId, Path, Data, Headers, ExpectedCodes) ->
     Url = <<Endpoint/binary, "/", IndexId/binary, Path/binary>>,
-    case http_client:request(Method, Url, Headers, Data, [{recv_timeout, ?REQUEST_TIMEOUT}]) of
+    AllHeaders = maps:merge(Headers, build_auth_headers(Endpoint)),
+    Opts = [{recv_timeout, ?REQUEST_TIMEOUT} | build_ssl_opts(Endpoint)],
+    case http_client:request(Method, Url, AllHeaders, Data, Opts) of
         {ok, Code, RespHeaders, Body} = Response when is_list(ExpectedCodes) ->
             case is_code_expected(Code, ExpectedCodes) of
                 true ->
@@ -737,6 +743,8 @@ get_entry_response_error(EntryResponse) ->
 %% @private
 -spec is_es_schema_error(Error :: binary()) -> boolean().
 is_es_schema_error(<<"mapper_parsing_exception">>) -> true;
+% replaced mapper_parsing_exception for document parsing errors since Elasticsearch 8.x
+is_es_schema_error(<<"document_parsing_exception">>) -> true;
 is_es_schema_error(<<"strict_dynamic_mapping_exception">>) -> true;
 is_es_schema_error(<<"illegal_argument_exception">>) -> true;
 is_es_schema_error(_) -> false.
@@ -747,14 +755,20 @@ is_es_schema_error(_) -> false.
 retrieve_rejected_field(ErrorReason) ->
     ?debug(?prepare_log("~ts", [ErrorReason])),
     ReToRun = [
-        <<"Existing mapping for \\[(.*)\\] must">>,
-        <<"failed to parse field \\[(.*)\\] of type">>,
-        <<"object mapping for \\[(.*)\\] tried to parse">>,
-        <<"mapper \\[(.*)\\] of different type">>
+        <<"Existing mapping for \\[(.*?)\\] must">>,
+        <<"failed to parse field \\[(.*?)\\] of type">>,
+        <<"object mapping for \\[(.*?)\\] tried to parse">>,
+        <<"mapper \\[(.*?)\\] of different type">>,
+        <<"mapper \\[(.*?)\\] cannot be changed from type">>,
+        % strict dynamic mapping reports the field name and its parent object
+        % separately, e.g. "dynamic introduction of [b] within [o.p]"
+        <<"dynamic introduction of \\[(.*?)\\] within \\[(.*?)\\]">>
     ],
     Res = lists:filtermap(fun(Re) ->
         case re:run(ErrorReason, Re, [{capture, all_but_first, binary}]) of
-            {match, [Field | _]} -> {true, Field};
+            {match, [Field]} -> {true, Field};
+            {match, [Field, <<"_doc">>]} -> {true, Field};
+            {match, [Field, Parent]} -> {true, <<Parent/binary, ".", Field/binary>>};
             _ -> false
         end
     end, ReToRun),
@@ -894,3 +908,79 @@ atoms_to_binaries(ListOfAtoms) ->
     lists:map(fun(Atom) ->
         atom_to_binary(Atom, utf8)
     end, ListOfAtoms).
+
+
+-spec build_auth_headers(od_harvester:endpoint()) -> http_client:headers().
+build_auth_headers(Endpoint) ->
+    case find_connection_opts(Endpoint) of
+        error ->
+            #{};
+        {ok, Entry} ->
+            try
+                case Entry of
+                    #{api_key := ApiKey} ->
+                        #{?HDR_AUTHORIZATION => <<"ApiKey ", ApiKey/binary>>};
+                    #{username := Username, password := Password} ->
+                        Encoded = base64:encode(<<Username/binary, ":", Password/binary>>),
+                        #{?HDR_AUTHORIZATION => <<"Basic ", Encoded/binary>>};
+                    _ when not is_map_key(username, Entry), not is_map_key(password, Entry) ->
+                        % entry without auth (e.g. only cacert_file)
+                        #{}
+                end
+            catch _:_ ->
+                % NOTE: the exception is deliberately not logged as it may contain secrets
+                ?error(?prepare_log("Invalid credentials config for endpoint ~ts - connecting without credentials",
+                    [Endpoint])),
+                #{}
+            end
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Builds ssl options for given Endpoint basing on `cacert_file` from app config,
+%% so that endpoints using certificates signed by a custom CA (e.g. the self-signed
+%% one generated by default since Elasticsearch 8) can be verified.
+%% The CA is trusted in addition to the default ones.
+%% @end
+%%--------------------------------------------------------------------
+-spec build_ssl_opts(od_harvester:endpoint()) -> [http_client:opt()].
+build_ssl_opts(Endpoint) ->
+    case find_connection_opts(Endpoint) of
+        {ok, #{cacert_file := CaCertFile}} ->
+            try
+                [{ssl_options, [{cacerts, cert_utils:load_ders(CaCertFile)}]}]
+            catch Class:Reason ->
+                ?error(?prepare_log("Cannot load cacert_file ~tp for endpoint ~ts - using default CAs: ~tp",
+                    [CaCertFile, Endpoint, {Class, Reason}])),
+                []
+            end;
+        _ ->
+            []
+    end.
+
+
+%% @private
+-spec find_connection_opts(od_harvester:endpoint()) -> {ok, map()} | error.
+find_connection_opts(Endpoint) ->
+    case ?CONNECTION_OPTS of
+        ConnectionOptsMap when is_map(ConnectionOptsMap) ->
+            NormalizedEndpoint = normalize_endpoint(Endpoint),
+            Matching = [Entry || {Key, Entry} <- maps:to_list(ConnectionOptsMap),
+                (catch normalize_endpoint(Key)) =:= NormalizedEndpoint],
+            case Matching of
+                [Entry | _] -> {ok, Entry};
+                [] -> error
+            end;
+        _ ->
+            error
+    end.
+
+
+%% @private
+-spec normalize_endpoint(od_harvester:endpoint() | string()) -> binary().
+normalize_endpoint(Endpoint) ->
+    WithoutScheme = re:replace(str_utils:to_binary(Endpoint), <<"^https?://">>, <<>>,
+        [caseless, {return, binary}]),
+    re:replace(WithoutScheme, <<"/+$">>, <<>>, [{return, binary}]).
