@@ -12,17 +12,19 @@
 
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([run_scenario/2]).
 -export([delete_entity/5]).
 -export([get_relations/4]).
 -export([get_privileges/7]).
+-export([get_privileges/8]).
+-export([get_privileges/9]).
 -export([update_privileges/7]).
 -export([delete_privileges/7]).
 
@@ -33,7 +35,10 @@
     create_basic_group_env/2,
     create_basic_space_env/2,
     create_basic_doi_hservice_env/2,
-    create_basic_handle_env/2
+    create_basic_handle_env/2,
+    create_basic_harvester_env/2,
+    create_basic_cluster_env/2,
+    create_basic_atm_inventory_env/1
 ]).
 -export([
     create_eff_parent_groups_env/1,
@@ -42,16 +47,24 @@
     create_provider_eff_users_env/1,
     create_hservice_eff_users_env/1,
     create_handle_eff_users_env/1,
+    create_harvester_eff_users_env/1,
+    create_cluster_eff_users_env/1,
+    create_atm_inventory_eff_users_env/1,
     create_eff_spaces_env/1,
     create_eff_providers_env/1,
+    create_harvester_eff_providers_env/1,
     create_eff_handle_services_env/1,
-    create_eff_handles_env/1
+    create_eff_handles_env/1,
+    create_eff_harvesters_env/1,
+    create_eff_atm_inventories_env/1
 ]).
 
 
 % Due to asynchronous entity graph recomputation, privileges converge after a while
 -define(PRIVILEGES_CHECK_RETRIES, 600).
 -define(PRIVILEGES_CHECK_INTERVAL, 100). % Interval * retries = 1 minute
+
+-define(PRIVILEGES_RANDOMIZATION_REPEATS, 25).
 
 -define(compare_privileges(__PrivsA, __PrivsB), begin
     __SortedPrivsA = lists:sort(__PrivsA),
@@ -70,14 +83,10 @@ run_scenario(Function, Args) ->
     catch
         throw:fail ->
             false;
-        Type:Message ->
-            ct:pal(
-                "Unexpected error in ~p:run_scenario - ~p:~p~nStacktrace: ~s",
-                [
-                    ?MODULE, Type, Message,
-                    lager:pr_stacktrace(erlang:get_stacktrace())
-                ]
-            ),
+        Type:Message:Stacktrace ->
+            ?ct_pal_exception(?autoformat_with_msg(
+                "Unexpected error in: ", ?MODULE
+            ), Type, Message, Stacktrace),
             false
     end.
 
@@ -96,7 +105,6 @@ delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteFun) ->
         logic_spec = LogicSpec,
         gs_spec = GsSpec
     } = ApiTestSpec,
-
     assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )),
@@ -115,9 +123,11 @@ delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteFun) ->
 
     Env = EnvSetUpFun(),
     DeleteFun(Env),
+
     assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, fun() -> Env end, undefined, undefined
     )).
+
 
 
 prepare_entity_not_found_rest_spec(undefined) ->
@@ -140,7 +150,7 @@ prepare_entity_not_found_gs_spec(undefined) ->
     undefined;
 prepare_entity_not_found_gs_spec(GsSpec) ->
     GsSpec#gs_spec{
-        expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        expected_result_op = ?ERROR_REASON(?ERROR_NOT_FOUND)
     }.
 
 
@@ -149,17 +159,22 @@ prepare_entity_not_found_gs_spec(GsSpec) ->
 % should not be listed in client spec but provided additionally.
 % Exception to this is when entity directly tries to get it's privileges,
 % then it should be listed as only correct client and provided as argument
-get_privileges(
-    Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv
-) ->
+% SubjectUser is the one for whom privileges are being checked.
+get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv) ->
+    get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, false, undefined).
+
+get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SkipEntity) ->
+    get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SkipEntity, undefined).
+
+get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SkipEntity, SubjectUser) ->
     % Run original spec
     assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % In case of getting privileges for Entity (mainly in user api), skip this
     % step because eff privileges of entity are affected during test run and
     % it will be able to sometimes get privileges and sometimes not
-    case ApiTestSpec#api_test_spec.client_spec#client_spec.correct of
-        [Entity] ->
+    case SkipEntity of
+        true ->
             ok;
         _ ->
             run_get_privs_tests(
@@ -169,7 +184,7 @@ get_privileges(
 
     % Replace clients with entity and check if it can get privileges
     % when view priv is set
-    SetPrivsFun(set, lists:usort(ConstPrivs ++ [ViewPriv])),
+    SetPrivsFun(lists:usort(ConstPrivs ++ [ViewPriv]), AllPrivs),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     EntityTestSpec = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{correct = [Entity]}
@@ -179,12 +194,23 @@ get_privileges(
         AllPrivs, lists:usort(ConstPrivs ++ [ViewPriv])
     ),
 
-    % Replace clients with entity and check if it can not get privileges
-    % when all privileges but view one is set
-    SetPrivsFun(set, AllPrivs -- [ViewPriv]),
+    % Replace clients with entity and set all privileges but view one.
+    SetPrivsFun(AllPrivs -- [ViewPriv], [ViewPriv]),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    ForbiddenApiTestSpec = create_forbidden_test_spec(ApiTestSpec, Entity),
-    assert(api_test_utils:run_tests(Config, ForbiddenApiTestSpec)).
+
+    % If entity is the same as subject user then it should be possible to
+    % get privileges even without view privilege. Otherwise entity should not
+    % be able to get privileges.
+    case Entity of
+        {user, SubjectUser} ->
+            run_get_privs_tests(
+                Config, EntityTestSpec, SetPrivsFun, AllPrivs,
+                lists:usort(ConstPrivs ++ [ViewPriv])
+            );
+        _ ->
+            ForbiddenApiTestSpec = create_forbidden_test_spec(ApiTestSpec, Entity),
+            assert(api_test_utils:run_tests(Config, ForbiddenApiTestSpec))
+    end.
 
 
 run_get_privs_tests(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs) ->
@@ -192,16 +218,14 @@ run_get_privs_tests(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs) ->
         fun(PrivsSublist) ->
             Privs = lists:usort(PrivsSublist ++ ConstPrivs),
             EnvSetUpFun = fun() ->
-                SetPrivsFun(set, Privs),
+                SetPrivsFun(Privs, AllPrivs -- Privs),
                 #{privs => Privs}
             end,
             assert(api_test_utils:run_tests(
                 Config, prepare_get_privs_api_spec(ApiTestSpec, Privs),
                 EnvSetUpFun, undefined, undefined
             ))
-        end, [
-            lists:sublist(AllPrivs, I) || I <- lists:seq(0, length(AllPrivs))
-        ]
+        end, generate_random_sublists_of_privs(AllPrivs)
     ).
 
 
@@ -242,7 +266,7 @@ prepare_get_privs_gs_spec(undefined, _Privs) ->
     undefined;
 prepare_get_privs_gs_spec(GsSpec, Privs) ->
     GsSpec#gs_spec{
-        expected_result = ?OK_LIST(Privs)
+        expected_result_op = ?OK_LIST(Privs)
     }.
 
 
@@ -252,7 +276,7 @@ update_privileges(
         client_spec = #client_spec{correct = [Entity]}
     } = ApiTestSpec, SetPrivsFun, GetPrivsFun, AllPrivs, Entity, UpdatePriv
 ) ->
-    SetPrivsFun(set, [UpdatePriv]),
+    SetPrivsFun([UpdatePriv], AllPrivs -- [UpdatePriv]),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     % Run tests giving entity always update priv
@@ -263,7 +287,7 @@ update_privileges(
     ),
 
     % Run tests with entity without update privilege
-    SetPrivsFun(set, []),
+    SetPrivsFun([], AllPrivs),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     ForbiddenVerifyEndFun = fun(_, #{privs := InitialPrivs} = _Env, _Data) ->
         ?compare_privileges(InitialPrivs, GetPrivsFun())
@@ -297,17 +321,13 @@ update_privileges(
 update_privs_verify_fun(GetPrivsFun) ->
     fun
         (true = _ShouldSucceed, #{privs := InitialPrivs} = _Env, Data) ->
-            DataPrivs = maps:get(<<"privileges">>, Data),
-            Operation = maps:get(<<"operation">>, Data, set),
+            PrivsToGrant = maps:get(<<"grant">>, Data, []),
+            PrivsToRevoke = maps:get(<<"revoke">>, Data, []),
             ActualPrivs = GetPrivsFun(),
-            case Operation of
-                set ->
-                    ?compare_privileges(DataPrivs, ActualPrivs);
-                grant ->
-                    ?compare_privileges(lists:usort(InitialPrivs ++ DataPrivs), ActualPrivs);
-                revoke ->
-                    ?compare_privileges(DataPrivs -- ActualPrivs, DataPrivs)
-            end;
+            ?compare_privileges(
+                privileges:union(PrivsToGrant, privileges:subtract(InitialPrivs, PrivsToRevoke)),
+                ActualPrivs
+            );
         (false = _ShouldSucceed, #{privs := InitialPrivs} = _Env, _) ->
             ActualPrivs = GetPrivsFun(),
             ?compare_privileges(InitialPrivs, ActualPrivs)
@@ -317,102 +337,35 @@ update_privs_verify_fun(GetPrivsFun) ->
 run_update_privs_tests(
     Config, ApiTestSpec, SetPrivsFun, VerifyEndFun, AllPrivs, ConstPrivs
 ) ->
-    run_set_privs_tests(
-        Config, ApiTestSpec, SetPrivsFun, VerifyEndFun, AllPrivs, ConstPrivs
-    ),
-    run_grant_privs_tests(
-        Config, ApiTestSpec, SetPrivsFun, VerifyEndFun, AllPrivs, ConstPrivs
-    ),
-    run_revoke_privs_tests(
-        Config, ApiTestSpec, SetPrivsFun, VerifyEndFun, AllPrivs, ConstPrivs
-    ).
-
-
-run_set_privs_tests(
-    Config, ApiTestSpec, SetPrivsFun, VerifyEndFun, AllPrivs, ConstPrivs
-) ->
-    SetPrivsEnvSetUpFun = fun() ->
-        SetPrivsFun(set, ConstPrivs),
-        #{privs => ConstPrivs}
-    end,
-    lists:foreach(
-        fun(PrivsSublist) ->
-            NewApiTestSpec = ApiTestSpec#api_test_spec{
-                data_spec = #data_spec{
-                    required = [<<"privileges">>],
-                    optional = [<<"operation">>],
-                    correct_values = #{
-                        <<"privileges">> => [PrivsSublist],
-                        <<"operation">> => [set]
-                    }
-                }
-            },
-            assert(api_test_utils:run_tests(
-                Config, NewApiTestSpec, SetPrivsEnvSetUpFun,
-                undefined, VerifyEndFun
-            ))
-        end, [
-            lists:sublist(AllPrivs, I) || I <- lists:seq(0, length(AllPrivs))
-        ]
-    ).
-
-
-run_grant_privs_tests(
-    Config, ApiTestSpec, SetPrivsFun, VerifyEndFun, AllPrivs, ConstPrivs
-) ->
-    GrantPrivsEnvSetUpFun = fun() ->
+    EnvSetUpFun = fun() ->
         RandPrivs = lists:sublist(AllPrivs, rand:uniform(length(AllPrivs))),
         InitialPrivs = lists:usort(ConstPrivs ++ RandPrivs),
-        SetPrivsFun(set, InitialPrivs),
+        SetPrivsFun(InitialPrivs, AllPrivs -- InitialPrivs),
         #{privs => InitialPrivs}
     end,
-    lists:foreach(
-        fun(PrivsSublist) ->
-            NewApiTestSpec = ApiTestSpec#api_test_spec{
-                data_spec = #data_spec{
-                    required = [<<"privileges">>, <<"operation">>],
-                    correct_values = #{
-                        <<"privileges">> => [PrivsSublist],
-                        <<"operation">> => [grant]
-                    }
+    lists:foreach(fun(PrivsSublist) ->
+        {PrivsToGrant, PrivsToRevoke} = case PrivsSublist of
+            [] -> {[], []};
+            L -> lists:split(rand:uniform(length(L)), L)
+        end,
+        NewApiTestSpec = ApiTestSpec#api_test_spec{
+            data_spec = #data_spec{
+                at_least_one = [<<"grant">>, <<"revoke">>],
+                correct_values = #{
+                    <<"grant">> => [PrivsToGrant],
+                    <<"revoke">> => [PrivsToRevoke]
                 }
-            },
-            assert(api_test_utils:run_tests(
-                Config, NewApiTestSpec, GrantPrivsEnvSetUpFun,
-                undefined, VerifyEndFun
-            ))
-        end, [
-            lists:sublist(AllPrivs, I) || I <- lists:seq(0, length(AllPrivs))
-        ]
-    ).
+            }
+        },
+        assert(api_test_utils:run_tests(
+            Config, NewApiTestSpec, EnvSetUpFun,
+            undefined, VerifyEndFun
+        ))
+    end, generate_random_sublists_of_privs(AllPrivs)).
 
 
-run_revoke_privs_tests(
-    Config, ApiTestSpec, SetPrivsFun, VerifyEndFun, AllPrivs, _ConstPrivs
-) ->
-    RevokePrivsEnvSetUpFun = fun() ->
-        SetPrivsFun(set, AllPrivs),
-        #{privs => AllPrivs}
-    end,
-    lists:foreach(
-        fun(PrivsSublist) ->
-            NewApiTestSpec = ApiTestSpec#api_test_spec{
-                data_spec = #data_spec{
-                    required = [<<"privileges">>, <<"operation">>],
-                    correct_values = #{
-                        <<"privileges">> => [PrivsSublist],
-                        <<"operation">> => [revoke]
-                    }
-                }
-            },
-            assert(api_test_utils:run_tests(
-                Config, NewApiTestSpec, RevokePrivsEnvSetUpFun,
-                undefined, VerifyEndFun
-            ))
-        end, [
-            lists:sublist(AllPrivs, I) || I <- lists:seq(0, length(AllPrivs))
-        ]
-    ).
+generate_random_sublists_of_privs(AllPrivs) ->
+    [lists_utils:random_sublist(AllPrivs) || _ <- lists:seq(1, ?PRIVILEGES_RANDOMIZATION_REPEATS)].
 
 % Grant all oz privileges and check that correct clients can delete them but
 % forbidden and unauthorized cannot.
@@ -423,7 +376,7 @@ delete_privileges(
     Config, ApiTestSpec, SetPrivsFun, GetPrivsFun, AllPrivs, Entity, DeletePriv
 ) ->
     EnvSetUpFun = fun() ->
-        SetPrivsFun(set, AllPrivs),
+        SetPrivsFun(AllPrivs, []),
         #{privs => AllPrivs}
     end,
     VerifyEndFun = fun(ShouldSucceed, _Env, _Data) ->
@@ -437,14 +390,13 @@ delete_privileges(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )),
 
-    SetPrivsFun(set, AllPrivs -- [DeletePriv]),
+    SetPrivsFun(AllPrivs -- [DeletePriv], [DeletePriv]),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ApiTestSpec2 = create_forbidden_test_spec(ApiTestSpec, Entity),
     EnvSetUpFun2 = fun() ->
-        Privs = AllPrivs -- [DeletePriv],
-        SetPrivsFun(set, Privs),
-        #{privs => Privs}
+        SetPrivsFun(AllPrivs -- [DeletePriv], [DeletePriv]),
+        #{privs => AllPrivs -- [DeletePriv]}
     end,
     VerifyEndFun2 = fun(_, #{privs := InitialPrivs} = _Env, _Data) ->
         ActualPrivs = GetPrivsFun(),
@@ -487,7 +439,7 @@ create_forbidden_logic_spec(undefined) ->
     undefined;
 create_forbidden_logic_spec(LogicSpec) ->
     LogicSpec#logic_spec{
-        expected_result = ?ERROR_REASON(?ERROR_FORBIDDEN)
+        expected_result = ?ERROR_REASON(?ERR_FORBIDDEN)
     }.
 
 
@@ -495,7 +447,7 @@ create_forbidden_gs_spec(undefined) ->
     undefined;
 create_forbidden_gs_spec(GsSpec) ->
     GsSpec#gs_spec{
-        expected_result = ?ERROR_REASON(?ERROR_FORBIDDEN)
+        expected_result_op = ?ERROR_REASON(?ERR_FORBIDDEN)
     }.
 
 
@@ -605,24 +557,25 @@ collect_unique_tokens_fun() ->
 create_basic_group_env(Config, Privs) when not is_list(Privs) ->
     create_basic_group_env(Config, [Privs]);
 create_basic_group_env(Config, Privs) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                  Group
     %%                 /     \
     %%                /       \
-    %%       [~privileges]  [privileges]
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
     %%              /           \
     %%           User1         User2
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
 
+    AllGroupPrivs = privileges:group_privileges(),
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(
-        Config, Group, U1, revoke, Privs
+        Config, Group, U1, AllGroupPrivs -- Privs, Privs
     ),
     {ok, U2} = oz_test_utils:group_add_user(Config, Group, U2),
-    oz_test_utils:group_set_user_privileges(Config, Group, U2, set, Privs),
+    oz_test_utils:group_set_user_privileges(Config, Group, U2, Privs, AllGroupPrivs -- Privs),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -632,57 +585,67 @@ create_basic_group_env(Config, Privs) ->
 create_basic_space_env(Config, Privs) when not is_list(Privs) ->
     create_basic_space_env(Config, [Privs]);
 create_basic_space_env(Config, Privs) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                  Space
-    %%                 /     \
-    %%                /       \
-    %%       [~privileges]  [privileges]
-    %%              /           \
-    %%           User1         User2
+    %%                 /  |  \
+    %%                /   |   \
+    %%    [~privileges]   |   [privileges]      @codetag-tracker-ignore
+    %%              /     |     \
+    %%          User1   Owner   User2
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Owner} = oz_test_utils:create_user(Config),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    AllSpacePrivs = privileges:space_privileges(),
 
-    {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(
-        Config, Space, U1, revoke, Privs
-    ),
+    % create a space with the Owner, but revoke some (randomly chosen) privileges
+    % of the user - regardless of what they are, the owner should effectively have
+    % all the privileges, and the tests using this env depend on that assumption
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(Owner), ?SPACE_NAME1),
+    RandomPrivs = lists_utils:random_sublist(AllSpacePrivs),
+    oz_test_utils:space_set_user_privileges(Config, Space, Owner, RandomPrivs, AllSpacePrivs -- RandomPrivs),
+
+    {ok, U1} = oz_test_utils:space_add_user(Config, Space, U1),
+    oz_test_utils:space_set_user_privileges(Config, Space, U1, AllSpacePrivs -- Privs, Privs),
+
     {ok, U2} = oz_test_utils:space_add_user(Config, Space, U2),
-    oz_test_utils:space_set_user_privileges(Config, Space, U2, set, Privs),
+    oz_test_utils:space_set_user_privileges(Config, Space, U2, Privs, AllSpacePrivs -- Privs),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {Space, U1, U2}.
+    {Space, Owner, U1, U2}.
 
 
 create_basic_doi_hservice_env(Config, Privs) when not is_list(Privs) ->
     create_basic_doi_hservice_env(Config, [Privs]);
 create_basic_doi_hservice_env(Config, Privs) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%              HandleService
     %%                 /      \
     %%                /        \
-    %%       [~privileges]  [privileges]
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
     %%              /            \
     %%           User1         User2
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    ], []),
+    {ok, U2} = oz_test_utils:create_user(Config),
 
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?USER(U1), ?DOI_SERVICE
     ),
+
+    AllHServicePrivs = privileges:handle_service_privileges(),
     oz_test_utils:handle_service_set_user_privileges(
-        Config, HService, U1, revoke, Privs
+        Config, HService, U1, [], Privs
     ),
     {ok, U2} = oz_test_utils:handle_service_add_user(Config, HService, U2),
     oz_test_utils:handle_service_set_user_privileges(
-        Config, HService, U2, set, Privs
+        Config, HService, U2, Privs, AllHServicePrivs -- Privs
     ),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -693,39 +656,37 @@ create_basic_doi_hservice_env(Config, Privs) ->
 create_basic_handle_env(Config, Privs) when not is_list(Privs) ->
     create_basic_handle_env(Config, [Privs]);
 create_basic_handle_env(Config, Privs) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                  Handle
     %%                 /      \
     %%                /        \
-    %%       [~privileges]  [privileges]
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
     %%              /            \
     %%           User1         User2
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    ], []),
+    {ok, U2} = oz_test_utils:create_user(Config),
 
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?USER(U1), ?DOI_SERVICE
     ),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
-    HandleDetails = ?HANDLE(HService, ShareId),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
-    ),
+    AllHandlePrivs = privileges:handle_privileges(),
+    HandleId = ozt_users:create_handle_for(U1, HService, ShareId),
     oz_test_utils:handle_set_user_privileges(
-        Config, HandleId, U1, revoke, Privs
+        Config, HandleId, U1, [], Privs
     ),
     {ok, U2} = oz_test_utils:handle_add_user(Config, HandleId, U2),
     oz_test_utils:handle_set_user_privileges(
-        Config, HandleId, U2, set, Privs
+        Config, HandleId, U2, Privs, AllHandlePrivs -- Privs
     ),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -733,8 +694,95 @@ create_basic_handle_env(Config, Privs) ->
     {HandleId, U1, U2}.
 
 
+create_basic_harvester_env(Config, Privs) when not is_list(Privs) ->
+    create_basic_harvester_env(Config, [Privs]);
+create_basic_harvester_env(Config, Privs) ->
+    %% Create environment with the following relations:
+    %%
+    %%                Harvester
+    %%                 /     \
+    %%                /       \
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
+    %%              /           \
+    %%           User1         User2
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+
+    AllHarvesterPrivs = privileges:harvester_privileges(),
+    {ok, Harvester} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
+    {ok, _} = oz_test_utils:harvester_add_user(Config, Harvester, U1),
+
+    oz_test_utils:harvester_set_user_privileges(
+        Config, Harvester, U1, [], Privs
+    ),
+    {ok, U2} = oz_test_utils:harvester_add_user(Config, Harvester, U2),
+    oz_test_utils:harvester_set_user_privileges(Config, Harvester, U2, Privs, AllHarvesterPrivs -- Privs),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {Harvester, U1, U2}.
+
+
+create_basic_cluster_env(Config, Privs) when not is_list(Privs) ->
+    create_basic_cluster_env(Config, [Privs]);
+create_basic_cluster_env(Config, Privs) ->
+    %% Create environment with the following relations:
+    %%
+    %%                  Cluster
+    %%                 /     \
+    %%                /       \
+    %%       [~privileges]  [privileges]        @codetag-tracker-ignore
+    %%              /           \
+    %%           User1         User2
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+
+    AllClusterPrivs = privileges:cluster_privileges(),
+
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(
+        Config, U1, ?PROVIDER_NAME1
+    ),
+    ClusterId = ProviderId,
+
+    oz_test_utils:cluster_set_user_privileges(
+        Config, ClusterId, U1, [], Privs
+    ),
+    {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U2, Privs, AllClusterPrivs -- Privs),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {ClusterId, U1, U2, {ProviderId, ProviderToken}}.
+
+
+create_basic_atm_inventory_env(Privs) when not is_list(Privs) ->
+    create_basic_atm_inventory_env([Privs]);
+create_basic_atm_inventory_env(Privs) ->
+    %% Create environment with the following relations:
+    %%
+    %%                  AtmInventory
+    %%                    /     \
+    %%                   /       \
+    %%          [~privileges]  [privileges]     @codetag-tracker-ignore
+    %%                 /           \
+    %% UserWithoutPrivileges  UserWithPrivileges
+
+    UserWithoutPrivileges = ozt_users:create(),
+    UserWithPrivileges = ozt_users:create(),
+
+    AllAtmInventoryPrivs = privileges:atm_inventory_privileges(),
+    AtmInventory = ozt_atm_inventories:create(),
+    ozt_atm_inventories:add_user(AtmInventory, UserWithoutPrivileges, AllAtmInventoryPrivs -- Privs),
+    ozt_atm_inventories:add_user(AtmInventory, UserWithPrivileges, Privs),
+    ozt:reconcile_entity_graph(),
+
+    {AtmInventory, UserWithoutPrivileges, UserWithPrivileges}.
+
+
 create_eff_parent_groups_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%      Group5
     %%         \
@@ -769,17 +817,18 @@ create_eff_parent_groups_env(Config) ->
     {ok, G1} = oz_test_utils:group_add_group(Config, G3, G1),
     {ok, G1} = oz_test_utils:group_add_group(Config, G2, G1),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    AllGroupPrivs = privileges:group_privileges(),
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1, set, [
-        ?GROUP_VIEW
-    ]),
+    oz_test_utils:group_set_user_privileges(Config, G1, U1,
+        [?GROUP_VIEW], AllGroupPrivs -- [?GROUP_VIEW]
+    ),
     {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, set,
-        oz_test_utils:all_group_privileges(Config) -- [?GROUP_VIEW]
+    oz_test_utils:group_set_user_privileges(Config, G1, U2,
+        AllGroupPrivs -- [?GROUP_VIEW], [?GROUP_VIEW]
     ),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -788,7 +837,7 @@ create_eff_parent_groups_env(Config) ->
 
 
 create_eff_child_groups_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                  Group1
     %%                 /      \
@@ -805,13 +854,14 @@ create_eff_child_groups_env(Config) ->
 
     Users = [{U1, _}, {U2, _}, {U3, _}, {U4, _}] = lists:map(
         fun(_) ->
-            Alias = Name = ?UNIQUE_STRING,
+            Username = ?RAND_STR(),
+            FullName = ?RAND_STR(),
             UserDetails = #{
-                <<"alias">> => Alias,
-                <<"name">> => Name
+                <<"username">> => Username,
+                <<"fullName">> => FullName
             },
-            {ok, UserId} = oz_test_utils:create_user(Config, #od_user{
-                name = Name, alias = Alias
+            {ok, UserId} = oz_test_utils:create_user(Config, #{
+                <<"fullName">> => FullName, <<"username">> => Username
             }),
             {UserId, UserDetails}
         end, lists:seq(1, 4)
@@ -820,7 +870,7 @@ create_eff_child_groups_env(Config) ->
     Groups = [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}, {G6, _}] =
         lists:map(
             fun(_) ->
-                GroupDetails = ?GROUP_DETAILS(?UNIQUE_STRING),
+                GroupDetails = ?GROUP_DETAILS(?RAND_STR()),
                 {ok, GroupId} = oz_test_utils:create_group(
                     Config, ?ROOT, GroupDetails
                 ),
@@ -845,12 +895,12 @@ create_eff_child_groups_env(Config) ->
 
 
 create_space_eff_users_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                  Space
     %%                 /  |  \
     %%                /   |   \
-    %%     [~space_view]  |  [space_view]
+    %%     [~space_view]  |  [space_view]       @codetag-tracker-ignore
     %%           /        |        \
     %%        User1     Group1    User2
     %%                 /      \
@@ -872,34 +922,37 @@ create_space_eff_users_env(Config) ->
         [{G1, _} | _] = Groups, Users
     } = create_eff_child_groups_env(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Owner} = oz_test_utils:create_user(Config),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
-        ?SPACE_VIEW
-    ]),
+    AllSpacePrivs = privileges:space_privileges(),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(Owner), ?SPACE_NAME1),
+    {ok, U1} = oz_test_utils:space_add_user(Config, S1, U1),
+    oz_test_utils:space_set_user_privileges(Config, S1, U1, [],
+        [?SPACE_VIEW]
+    ),
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
-    oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
-        ?SPACE_VIEW
-    ]),
+    oz_test_utils:space_set_user_privileges(Config, S1, U2,
+        [?SPACE_VIEW], AllSpacePrivs -- [?SPACE_VIEW]
+    ),
     {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {S1, Groups, Users, {U1, U2, NonAdmin}}.
+    {S1, Groups, Users, {Owner, U1, U2, NonAdmin}}.
 
 
 create_provider_eff_users_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                Provider
     %%                    |
     %%                  Space
     %%                 /  |  \
     %%                /   |   \
-    %%     [~space_view]  |  [space_view]
+    %%     [~space_view]  |  [space_view]       @codetag-tracker-ignore
     %%           /        |        \
     %%        User1     Group1    User2
     %%                 /      \
@@ -918,23 +971,21 @@ create_provider_eff_users_env(Config) ->
     %%      NonAdmin
 
     {
-        S1, Groups, Users, {U1, U2, NonAdmin}
+        S1, Groups, Users, {Owner, U1, U2, NonAdmin}
     } = create_space_eff_users_env(Config),
 
-    {ok, {P1, Macaroon}} = oz_test_utils:create_provider(
+    {ok, {P1, ProviderToken}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
-    ),
+    {ok, S1} = oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {{P1, Macaroon}, S1, Groups, Users, {U1, U2, NonAdmin}}.
+    {{P1, ProviderToken}, S1, Groups, Users, {Owner, U1, U2, NonAdmin}}.
 
 
 create_hservice_eff_users_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%              HandleService
     %%                 /  |  \
@@ -961,22 +1012,23 @@ create_hservice_eff_users_env(Config) ->
         [{G1, _} | _] = Groups, Users
     } = api_test_scenarios:create_eff_child_groups_env(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ], []),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    AllHServicePrivileges = privileges:handle_service_privileges(),
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?USER(U1), ?DOI_SERVICE
     ),
     oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-        revoke, [?HANDLE_SERVICE_VIEW]
+        [], [?HANDLE_SERVICE_VIEW]
     ),
     {ok, U2} = oz_test_utils:handle_service_add_user(Config, HService, U2),
     oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-        set, [?HANDLE_SERVICE_VIEW]
+        [?HANDLE_SERVICE_VIEW], AllHServicePrivileges -- [?HANDLE_SERVICE_VIEW]
     ),
     {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
 
@@ -986,7 +1038,7 @@ create_hservice_eff_users_env(Config) ->
 
 
 create_handle_eff_users_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                  Handle
     %%                 /  |   \
@@ -1013,32 +1065,30 @@ create_handle_eff_users_env(Config) ->
         [{G1, _} | _] = Groups, Users
     } = api_test_scenarios:create_eff_child_groups_env(Config),
 
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    ], []),
+    {ok, U2} = oz_test_utils:create_user(Config),
 
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?USER(U1), ?DOI_SERVICE
     ),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
-    HandleDetails = ?HANDLE(HService, ShareId),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
+    AllHandlePrivs = privileges:handle_privileges(),
+    HandleId = ozt_users:create_handle_for(U1, HService, ShareId),
+    oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, [],
+        [?HANDLE_VIEW]
     ),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, revoke, [
-        ?HANDLE_VIEW
-    ]),
     {ok, U2} = oz_test_utils:handle_add_user(Config, HandleId, U2),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U2, set, [
-        ?HANDLE_VIEW
-    ]),
+    oz_test_utils:handle_set_user_privileges(Config, HandleId, U2,
+        [?HANDLE_VIEW], AllHandlePrivs -- [?HANDLE_VIEW]
+    ),
     {ok, G1} = oz_test_utils:handle_add_group(Config, HandleId, G1),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -1046,8 +1096,155 @@ create_handle_eff_users_env(Config) ->
     {HandleId, Groups, Users, {U1, U2, NonAdmin}}.
 
 
+create_harvester_eff_users_env(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%                Harvester
+    %%                 /  |  \
+    %%                /   |   \
+    %%     [~space_view]  |  [space_view]       @codetag-tracker-ignore
+    %%           /        |        \
+    %%        User1     Group1    User2
+    %%                 /      \
+    %%                /        \
+    %%             Group6     Group2
+    %%              /         /    \
+    %%           User6       /     User3
+    %%                    Group3
+    %%                    /    \
+    %%                   /      \
+    %%                Group4  Group5
+    %%                 /          \
+    %%               User4      User5
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {
+        [{G1, _} | _] = Groups, Users
+    } = create_eff_child_groups_env(Config),
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    AllHarvesterPrivs = privileges:harvester_privileges(),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
+    {ok, _} = oz_test_utils:harvester_add_user(Config, H1, U1),
+    oz_test_utils:harvester_set_user_privileges(Config, H1, U1, [],
+        [?HARVESTER_VIEW]
+    ),
+    {ok, U2} = oz_test_utils:harvester_add_user(Config, H1, U2),
+    oz_test_utils:harvester_set_user_privileges(Config, H1, U2,
+        [?HARVESTER_VIEW], AllHarvesterPrivs -- [?HARVESTER_VIEW]
+    ),
+    {ok, G1} = oz_test_utils:harvester_add_group(Config, H1, G1),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {H1, Groups, Users, {U1, U2, NonAdmin}}.
+
+
+create_cluster_eff_users_env(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%                  Cluster
+    %%                 /  |  \
+    %%                /   |   \
+    %%     [~cluster_view]  |  [cluster_view]
+    %%           /        |        \
+    %%        User1     Group1    User2
+    %%                 /      \
+    %%                /        \
+    %%             Group6     Group2
+    %%              /         /    \
+    %%           User6       /     User3
+    %%                    Group3
+    %%                    /    \
+    %%                   /      \
+    %%                Group4  Group5
+    %%                 /          \
+    %%               User4      User5
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {
+        [{G1, _} | _] = Groups, Users
+    } = create_eff_child_groups_env(Config),
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    AllClusterPrivs = privileges:cluster_privileges(),
+
+
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(
+        Config, U1, ?PROVIDER_NAME1
+    ),
+    ClusterId = ProviderId,
+
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U1, [],
+        [?CLUSTER_VIEW]
+    ),
+    {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U2,
+        [?CLUSTER_VIEW], AllClusterPrivs -- [?CLUSTER_VIEW]
+    ),
+    {ok, G1} = oz_test_utils:cluster_add_group(Config, ClusterId, G1),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {ClusterId, Groups, Users, {U1, U2, NonAdmin}, {ProviderId, ProviderToken}}.
+
+
+create_atm_inventory_eff_users_env(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%                AtmInventory
+    %%                 /  |  \
+    %%                /   |   \
+    %%   [~atm_inv_view]  |  [atm_inv_view]
+    %%           /        |        \
+    %%        User1     Group1    User2
+    %%                 /      \
+    %%                /        \
+    %%             Group6     Group2
+    %%              /         /    \
+    %%           User6       /     User3
+    %%                    Group3
+    %%                    /    \
+    %%                   /      \
+    %%                Group4  Group5
+    %%                 /          \
+    %%               User4      User5
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {
+        [{FirstGroup, _} | _] = Groups, Users
+    } = create_eff_child_groups_env(Config),
+
+    UserWithoutView = ozt_users:create(),
+    UserWithView = ozt_users:create(),
+    NonAdmin = ozt_users:create(),
+
+    AllAtmInventoryPrivs = privileges:atm_inventory_privileges(),
+    AtmInventory = ozt_atm_inventories:create(),
+    ozt_atm_inventories:add_user(AtmInventory, UserWithoutView, AllAtmInventoryPrivs -- [?ATM_INVENTORY_VIEW]),
+    ozt_atm_inventories:add_user(AtmInventory, UserWithView, [?ATM_INVENTORY_VIEW]),
+
+    ozt_atm_inventories:add_group(AtmInventory, FirstGroup),
+
+    ozt:reconcile_entity_graph(),
+
+    {AtmInventory, Groups, Users, {UserWithoutView, UserWithView, NonAdmin}}.
+
+
 create_eff_spaces_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%  Space4   Space5
     %%      \     /
@@ -1090,7 +1287,7 @@ create_eff_spaces_env(Config) ->
 
 
 create_eff_providers_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%  Provider3   Provider4
     %%    |          /
@@ -1098,7 +1295,7 @@ create_eff_providers_env(Config) ->
     %%  Space4   Space5
     %%      \     /
     %%       \   /
-    %%      Group5    Space3 ----- Prov2
+    %%      Group5    Space3 ----- Provider2
     %%          \      /             |
     %%           \    /              |
     %%           Group4           Space2
@@ -1117,18 +1314,16 @@ create_eff_providers_env(Config) ->
     %%      NonAdmin
 
     {
-        [{S1, _}, {S2, _}, {S3, _}, {S4, _}, {S5, _}] = Spaces, Groups, Users
+        [{S1, _}, {S2, _}, {S3, _}, {S4, _}, {S5, _}] = Spaces,
+        Groups,
+        {U1, _, _} = Users
     } = create_eff_spaces_env(Config),
 
     Providers = [{P1, _}, {P2, _}, {P3, _}, {P4, _}] = lists:map(
         fun(_) ->
-            ProviderName = ?UNIQUE_STRING,
-            ProvDetails = ?PROVIDER_DETAILS(ProviderName),
-            {ok, {ProvId, _}} = oz_test_utils:create_provider(
-                Config, ProvDetails#{<<"subdomainDelegation">> => false}
-            ),
-            {ProvId, maps:remove(<<"adminEmail">>, ProvDetails#{
-                <<"name">> => ProviderName,
+            ProviderData = ?PROVIDER_DETAILS(?UNIQUE_STRING),
+            {ok, {ProvId, _}} = oz_test_utils:create_provider(Config, U1, ProviderData),
+            {ProvId, maps:remove(<<"adminEmail">>, ProviderData#{
                 <<"online">> => false
             })}
         end, lists:seq(1, 4)
@@ -1136,14 +1331,7 @@ create_eff_providers_env(Config) ->
 
     lists:foreach(
         fun({ProvId, SpaceId}) ->
-            {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
-                Config, ?ROOT, SpaceId
-            ),
-            {ok, Token} = onedata_macaroons:serialize(Macaroon),
-            {ok, SpaceId} = oz_test_utils:support_space(
-                Config, ?ROOT, ProvId, Token,
-                oz_test_utils:minimum_support_size(Config)
-            )
+            {ok, SpaceId} = oz_test_utils:support_space_by_provider(Config, ProvId, SpaceId)
         end, [{P1, S1}, {P2, S2}, {P2, S3}, {P3, S4}, {P4, S5}]
     ),
 
@@ -1152,8 +1340,55 @@ create_eff_providers_env(Config) ->
     {Providers, Spaces, Groups, Users}.
 
 
+create_harvester_eff_providers_env(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%  Provider1   Provider2  Provider3
+    %%          \    /    \    /
+    %%           \  /      \  /
+    %%           Space1   Space2
+    %%               \    /
+    %%                \  /
+    %%             Harvester1
+    %%                 |
+    %%               User1
+    %%      <<user>>
+    %%      NonAdmin
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    Providers = [{P1, _}, {P2, _}, {P3, _}] = lists:map(fun(_) ->
+
+        ProviderData = ?PROVIDER_DETAILS(?UNIQUE_STRING),
+        {ok, {ProvId, PToken}} = oz_test_utils:create_provider(Config, U1, ProviderData),
+        {ProvId, maps:remove(<<"adminEmail">>, ProviderData#{
+            <<"online">> => false,
+            <<"providerRootToken">> => PToken
+        })}
+    end, lists:seq(1, 3)),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P2, S1),
+    oz_test_utils:support_space_by_provider(Config, P2, S2),
+    oz_test_utils:support_space_by_provider(Config, P3, S2),
+
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+
+    oz_test_utils:harvester_add_space(Config, H1, S1),
+    oz_test_utils:harvester_add_space(Config, H1, S2),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {H1, Providers, [S1, S2], {U1, NonAdmin}}.
+
+
 create_eff_handle_services_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %% HService4  HService5
     %%      \     /
@@ -1207,7 +1442,7 @@ create_eff_handle_services_env(Config) ->
 
 
 create_eff_handles_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %% Handle4  Handle5
     %%      \     /
@@ -1246,19 +1481,111 @@ create_eff_handles_env(Config) ->
             ),
             ShareId = ?UNIQUE_STRING,
             {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
             ),
-            HandleDetails = ?HANDLE(HService, ShareId),
+            MetadataSchema = ?RAND_ELEMENT(ozt_handles:supported_metadata_schemas()),
+            RawMetadata = ozt_handles:example_input_metadata(MetadataSchema, ?RAND_INT(1, 10)),
+            HandleData = #{
+                <<"handleServiceId">> => HService,
+                <<"resourceType">> => <<"Share">>,
+                <<"resourceId">> => ShareId,
+                <<"metadataSchema">> => MetadataSchema,
+                <<"metadata">> => RawMetadata
+            },
             {ok, HandleId} = oz_test_utils:create_handle(
-                Config, ?ROOT, HandleDetails
+                Config, ?ROOT, HandleData
             ),
             {ok, GroupId} = oz_test_utils:handle_add_group(
                 Config, HandleId, GroupId
             ),
-            {HandleId, HandleDetails}
+            {HandleId, HandleData}
         end, [G1, G2, G3, G4, G5]
     ),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {Handles, Groups, Users}.
+
+
+create_eff_harvesters_env(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%  Harvester4   Harvester5
+    %%          \     /
+    %%           \   /
+    %%          Group5    Harvester3
+    %%              \      /
+    %%               \    /
+    %%               Group4        Harvester2
+    %%                   \            /
+    %%                    \          /
+    %%                   Group3    Group2
+    %%                      \      /      Harvester1
+    %%                       \    /         /
+    %%                       Group1 --------
+    %%                      /      \
+    %%              [group_view]  [~group_view]
+    %%                   /            \
+    %%                User1          User2
+    %%
+    %%          <<user>>
+    %%          NonAdmin
+
+    {
+        [{G1, _}, {G2, _}, _, {G4, _}, {G5, _}] = Groups, Users
+    } = create_eff_parent_groups_env(Config),
+
+    Harvesters = lists:map(
+        fun(GroupId) ->
+            Name = ?UNIQUE_STRING,
+            {ok, HarvesterId} = oz_test_utils:group_create_harvester(
+                Config, GroupId, ?HARVESTER_CREATE_DATA(Name)
+            ),
+            {HarvesterId, ?HARVESTER_CREATE_DATA(Name)}
+        end, [G1, G2, G4, G5, G5]
+    ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {Harvesters, Groups, Users}.
+
+
+create_eff_atm_inventories_env(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%  AtmInventory4 AtmInventory5
+    %%          \     /
+    %%           \   /
+    %%          Group5   AtmInventory3
+    %%              \      /
+    %%               \    /
+    %%               Group4        AtmInventory2
+    %%                   \            /
+    %%                    \          /
+    %%                   Group3    Group2
+    %%                      \      /      AtmInventory1
+    %%                       \    /         /
+    %%                       Group1 --------
+    %%                      /      \
+    %%              [group_view]  [~group_view]
+    %%                   /            \
+    %%                User1          User2
+    %%
+    %%          <<user>>
+    %%          NonAdmin
+
+    {
+        [{G1, _}, {G2, _}, _, {G4, _}, {G5, _}] = Groups, Users
+    } = create_eff_parent_groups_env(Config),
+
+    AtmInventories = lists:map(
+        fun(GroupId) ->
+            AtmInventoryData = #{<<"name">> => ?UNIQUE_STRING},
+            AtmInventoryId = ozt_groups:create_atm_inventory_for(GroupId, AtmInventoryData),
+            {AtmInventoryId, AtmInventoryData}
+        end, [G1, G2, G4, G5, G5]
+    ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {AtmInventories, Groups, Users}.

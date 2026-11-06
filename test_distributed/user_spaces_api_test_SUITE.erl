@@ -12,7 +12,7 @@
 -module(user_spaces_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -21,14 +21,15 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
 
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     list_spaces_test/1,
@@ -37,9 +38,6 @@
     get_space_test/1,
     leave_space_test/1,
 
-    set_default_space_test/1,
-    get_default_space_test/1,
-    unset_default_space_test/1,
     set_space_alias_test/1,
     get_space_alias_test/1,
     delete_space_alias_test/1,
@@ -56,9 +54,6 @@ all() ->
         get_space_test,
         leave_space_test,
 
-        set_default_space_test,
-        get_default_space_test,
-        unset_default_space_test,
         set_space_alias_test,
         get_space_alias_test,
         delete_space_alias_test,
@@ -74,9 +69,9 @@ all() ->
 
 
 list_spaces_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ExpSpaces = lists:map(
         fun(_) ->
@@ -109,7 +104,8 @@ list_spaces_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -121,20 +117,20 @@ list_spaces_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_spaces,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK_LIST(ExpSpaces)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 create_space_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
 
     ExpName = ?SPACE_NAME1,
-    AllPrivs = oz_test_utils:all_space_privileges(Config),
+    AllPrivs = privileges:space_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(SpaceId) ->
@@ -155,14 +151,15 @@ create_space_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 {user, U1},
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_USERS_ADD_RELATIONSHIPS, ?OZ_SPACES_ADD_RELATIONSHIPS]}
             ]
         },
         rest_spec = #rest_spec{
             method = post,
             path = <<"/user/spaces">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 BaseURL = ?URL(Config, [<<"/user/spaces/">>]),
                 [SpaceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(SpaceId)
@@ -173,7 +170,7 @@ create_space_test(Config) ->
             correct_values = #{
                 <<"name">> => [ExpName]
             },
-            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+            bad_values = ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -192,23 +189,21 @@ create_space_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = create_space,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?OK_TERM(VerifyFun)
         },
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_space, aspect = instance},
             auth_hint = ?AS_USER(U1),
-            expected_result = ?OK_MAP_CONTAINS(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"groups">> => #{},
                 <<"name">> => ExpName,
                 <<"providers">> => #{},
                 <<"shares">> => [],
                 <<"users">> => #{U1 => AllPrivsBin},
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     VerifyFun(Id)
                 end
             })
@@ -218,27 +213,28 @@ create_space_test(Config) ->
 
 
 join_space_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, SpaceId} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
-        {ok, Macaroon} = oz_test_utils:space_invite_user_token(
-            Config, ?ROOT, SpaceId
+        {ok, Creator} = oz_test_utils:create_user(Config),
+        {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(Creator), ?SPACE_NAME1),
+        {ok, Token} = oz_test_utils:space_invite_user_token(
+            Config, ?USER(Creator), SpaceId
         ),
-        {ok, Token} = onedata_macaroons:serialize(Macaroon),
+        {ok, Serialized} = tokens:serialize(Token),
         #{
-            spaceId => SpaceId, 
-            token => Token,
-            macaroonId => macaroon:identifier(Macaroon)
+            spaceId => SpaceId,
+            token => Serialized,
+            tokenNonce => Token#token.id
         }
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId, macaroonId := MacaroonId} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId, tokenNonce := TokenId} = _Env, _) ->
         {ok, Spaces} = oz_test_utils:user_get_spaces(Config, U1),
         ?assertEqual(lists:member(SpaceId, Spaces), ShouldSucceed),
         case ShouldSucceed of
             true ->
-                oz_test_utils:assert_token_not_exists(Config, MacaroonId);
+                oz_test_utils:assert_invite_token_usage_limit_reached(Config, true, TokenId);
             false -> ok
         end
     end,
@@ -250,7 +246,7 @@ join_space_test(Config) ->
             path = <<"/user/spaces/join">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{spaceId := SpaceId} = _Env, _) ->
-                fun(#{<<"Location">> := Location} = _Headers) ->
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
                     ExpLocation = ?URL(Config, [<<"/user/spaces/">>, SpaceId]),
                     ?assertEqual(ExpLocation, Location),
                     true
@@ -265,10 +261,9 @@ join_space_test(Config) ->
                 end]
             },
             bad_values = [
-                {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
-                {<<"token">>, <<"123qwe">>,
-                    ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}
+                {<<"token">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"token">>, 1234, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)},
+                {<<"token">>, <<"123qwe">>, ?ERR_BAD_VALUE_TOKEN(<<"token">>, ?ERR_BAD_TOKEN)}
             ]
         }
     },
@@ -280,7 +275,7 @@ join_space_test(Config) ->
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
+                {admin, [?OZ_USERS_ADD_RELATIONSHIPS]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -290,51 +285,51 @@ join_space_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = join_space,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?OK_ENV(fun(#{spaceId := SpaceId} = _Env, _) ->
                 ?OK_BINARY(SpaceId)
             end)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
     )),
-    
+
     % Check that token is not consumed upon failed operation
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1),
         #{<<"name">> => ?SPACE_NAME1}
     ),
-    {ok, Macaroon} = oz_test_utils:space_invite_user_token(
-        Config, ?ROOT, Space
+    {ok, Token2} = oz_test_utils:space_invite_user_token(
+        Config, ?USER(U1), Space
     ),
-    {ok, Token} = onedata_macaroons:serialize(Macaroon),
-    
+    {ok, Serialized2} = tokens:serialize(Token2),
+
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root
+                {user, U1}
             ]
         },
         rest_spec = #rest_spec{
             method = post,
             path = <<"/user/spaces/join">>,
-            expected_code = ?HTTP_400_BAD_REQUEST
+            expected_code = ?HTTP_409_CONFLICT
         },
         logic_spec = #logic_spec{
             module = user_logic,
             function = join_space,
-            args = [client, U1, data],
-            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_user, U1, od_space, Space))
+            args = [auth, U1, data],
+            expected_result = ?ERROR_REASON(?ERR_RELATION_ALREADY_EXISTS(od_user, U1, od_space, Space))
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"token">>],
-            correct_values = #{<<"token">> => [Token]}
+            correct_values = #{<<"token">> => [Serialized2]}
         }
     },
-    VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
-            oz_test_utils:assert_token_exists(Config, macaroon:identifier(Macaroon))
+    VerifyEndFun1 = fun(_ShouldSucceed, _Env, _) ->
+        oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token2#token.id)
     end,
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1
@@ -342,13 +337,13 @@ join_space_test(Config) ->
 
 
 get_space_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    SpaceData = #{<<"name">> => ?SPACE_NAME1},
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), SpaceData),
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
-    ExpDetails = #{<<"name">> => ?SPACE_NAME1, <<"providers">> => #{}},
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -361,7 +356,7 @@ get_space_test(Config) ->
             method = get,
             path = [<<"/user/spaces/">>, S1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpDetails#{<<"spaceId">> => S1}
+            expected_body = api_test_expect:protected_space(rest, S1, SpaceData, ?SUB(user, U1))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -371,6 +366,7 @@ get_space_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SPACES_VIEW]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -383,8 +379,8 @@ get_space_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_space,
-            args = [client, U1, S1],
-            expected_result = ?OK_MAP(ExpDetails)
+            args = [auth, U1, S1],
+            expected_result = api_test_expect:protected_space(logic, S1, SpaceData, ?SUB(user, U1))
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -392,26 +388,21 @@ get_space_test(Config) ->
                 type = od_space, id = S1, aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_USER(U1),
-            expected_result = ?OK_MAP(ExpDetails#{
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    ?assertEqual(Id, S1)
-                end
-            })
+            expected_result_op = api_test_expect:protected_space(gs, S1, SpaceData, ?SUB(user, U1))
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 leave_space_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Owner} = oz_test_utils:create_user(Config),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+        {ok, S1} = oz_test_utils:create_space(Config, ?USER(Owner), ?SPACE_NAME1),
+        {ok, U1} = oz_test_utils:space_add_user(Config, S1, U1),
         {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
         #{spaceId => S1}
     end,
@@ -440,7 +431,8 @@ leave_space_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_SPACES_REMOVE_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -451,220 +443,10 @@ leave_space_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = leave_space,
-            args = [client, U1, spaceId],
-            expected_result = ?OK
+            args = [auth, U1, spaceId],
+            expected_result = ?OK_RES
         }
-        % TODO gs
-    },
-    ?assert(api_test_scenarios:run_scenario(delete_entity, [
-        Config, ApiTestSpec2, EnvSetUpFun, VerifyEndFun, DeleteEntityFun
-    ])).
-
-
-set_default_space_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
-
-    EnvSetUpFun = fun() ->
-        {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME2),
-        {ok, U2} = oz_test_utils:space_add_user(Config, S2, U2),
-        #{spaceId => S2}
-    end,
-    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _) ->
-        Result = oz_test_utils:call_oz(
-            Config, user_logic, get_default_space, [?ROOT, U1]
-        ),
-        case ShouldSucceed of
-            true -> ?assertMatch({ok, SpaceId}, Result);
-            false -> ?assertNotMatch({ok, SpaceId}, Result)
-        end
-    end,
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{correct = [{user, U1}]},
-        rest_spec = #rest_spec{
-            method = put,
-            path = <<"/user/default_space">>,
-            expected_code = ?HTTP_204_NO_CONTENT
-        },
-        data_spec = #data_spec{
-            required = [<<"spaceId">>],
-            correct_values = #{
-                <<"spaceId">> => [spaceId]
-            },
-            bad_values = [
-                {<<"spaceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"spaceId">>)},
-                {<<"spaceId">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"spaceId">>)},
-                {<<"spaceId">>, S1,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"spaceId">>)}
-            ]
-        }
-    },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
-    )),
-
-    % Check that regular client can't make request on behalf of other client
-    ApiTestSpec2 = ApiTestSpec#api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U2},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = undefined,
-        logic_spec = #logic_spec{
-            module = user_logic,
-            function = set_default_space,
-            args = [client, U1, data],
-            expected_result = ?OK
-        }
-        % TODO gs
-    },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
-    )).
-
-
-get_default_space_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    % Newly created user should not have a default space
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U1}
-            ]
-        },
-        rest_spec = RestSpec = #rest_spec{
-            method = get,
-            path = <<"/user/default_space">>,
-            expected_code = ?HTTP_404_NOT_FOUND
-        },
-        logic_spec = LogicSpec = #logic_spec{
-            operation = get,
-            module = user_logic,
-            function = get_default_space,
-            args = [client, U1],
-            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
-        }
-        % TODO gs
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % Set a default space for user
-    {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:user_set_default_space(Config, U1, Space),
-    ApiTestSpec2 = ApiTestSpec#api_test_spec{
-        rest_spec = RestSpec#rest_spec{
-            expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"spaceId">> => Space}
-        },
-        logic_spec = LogicSpec#logic_spec{
-            expected_result = ?OK_BINARY(Space)
-        }
-        % TODO gs
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-
-    % Check that regular client can't make request on behalf of other client
-    ApiTestSpec3 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U2},
-                {user, NonAdmin}
-            ]
-        },
-        logic_spec = #logic_spec{
-            operation = get,
-            module = user_logic,
-            function = get_default_space,
-            args = [client, U1],
-            expected_result = ?OK_BINARY(Space)
-        }
-        % TODO gs
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
-
-    % Unset the default space and check if it's not present again
-    oz_test_utils:user_unset_default_space(Config, U1),
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-
-unset_default_space_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-
-    EnvSetUpFun = fun() ->
-        ok = oz_test_utils:user_set_default_space(Config, U1, S1),
-        #{}
-    end,
-    DeleteEntityFun = fun(_Env) ->
-        oz_test_utils:user_unset_default_space(Config, U1)
-    end,
-    VerifyEndFun = fun(ShouldSucceed, _, _) ->
-        Result = oz_test_utils:call_oz(
-            Config, user_logic, get_default_space, [?ROOT, U1]
-        ),
-        case ShouldSucceed of
-            true -> ?assertMatch(?ERROR_NOT_FOUND, Result);
-            false -> ?assertMatch({ok, S1}, Result)
-        end
-    end,
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{correct = [{user, U1}]},
-        rest_spec = #rest_spec{
-            method = delete,
-            path = <<"/user/default_space">>,
-            expected_code = ?HTTP_204_NO_CONTENT
-        }
-    },
-    ?assert(api_test_scenarios:run_scenario(delete_entity, [
-        Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun
-    ])),
-
-    % Check that regular client can't make request on behalf of other client
-    ApiTestSpec2 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U2},
-                {user, NonAdmin}
-            ]
-        },
-        logic_spec = #logic_spec{
-            module = user_logic,
-            function = unset_default_space,
-            args = [client, U1],
-            expected_result = ?OK
-        }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity, [
         Config, ApiTestSpec2, EnvSetUpFun, VerifyEndFun, DeleteEntityFun
@@ -672,9 +454,9 @@ unset_default_space_test(Config) ->
 
 
 set_space_alias_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
@@ -702,8 +484,8 @@ set_space_alias_test(Config) ->
                 <<"alias">> => [fun() -> ?UNIQUE_STRING end]
             },
             bad_values = [
-                {<<"alias">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"alias">>)},
-                {<<"alias">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"alias">>)}
+                {<<"alias">>, <<"">>, ?ERR_BAD_VALUE_EMPTY(<<"alias">>)},
+                {<<"alias">>, 1234, ?ERR_BAD_VALUE_STRING(<<"alias">>)}
             ]
         }
     },
@@ -728,10 +510,10 @@ set_space_alias_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = set_space_alias,
-            args = [client, U1, S1, data],
-            expected_result = ?OK
+            args = [auth, U1, S1, data],
+            expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, undefined, undefined, VerifyEndFun
@@ -739,9 +521,9 @@ set_space_alias_test(Config) ->
 
 
 get_space_alias_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
@@ -762,10 +544,10 @@ get_space_alias_test(Config) ->
         logic_spec = LogicSpec = #logic_spec{
             module = user_logic,
             function = get_space_alias,
-            args = [client, U1, S1],
+            args = [auth, U1, S1],
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -781,7 +563,7 @@ get_space_alias_test(Config) ->
         logic_spec = LogicSpec#logic_spec{
             expected_result = ?OK_BINARY(ExpAlias)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
@@ -801,10 +583,10 @@ get_space_alias_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_space_alias,
-            args = [client, U1, S1],
+            args = [auth, U1, S1],
             expected_result = ?OK_BINARY(ExpAlias)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
 
@@ -814,9 +596,9 @@ get_space_alias_test(Config) ->
 
 
 delete_space_alias_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
@@ -867,10 +649,10 @@ delete_space_alias_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = delete_space_alias,
-            args = [client, U1, S1],
-            expected_result = ?OK
+            args = [auth, U1, S1],
+            expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity, [
         Config, ApiTestSpec2, EnvSetUpFun, VerifyEndFun, DeleteEntityFun
@@ -908,7 +690,8 @@ list_eff_spaces_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -919,10 +702,10 @@ list_eff_spaces_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_eff_spaces,
-            args = [client, U2],
+            args = [auth, U2],
             expected_result = ?OK_LIST(ExpSpaces)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
@@ -936,7 +719,18 @@ list_eff_spaces_test(Config) ->
     ),
     ?assert(not oz_test_utils:call_oz(
         Config, user_logic, has_eff_space, [U2, <<"asdiucyaie827346w">>])
-    ).
+    ),
+
+    % after adding a user to a space, the spaces should immediately show up among his eff spaces
+    % (although the entity graph may not yet be recalculated) - thanks to the direct+eff relations
+    % merging logic in entity_graph
+    OwnerUserId = ozt_users:create(),
+    utils:repeat(100, fun() ->
+        SpaceId = ozt_users:create_space_for(OwnerUserId),
+        AddedUserId = ozt_users:create(),
+        ozt_spaces:add_user(SpaceId, AddedUserId),
+        ?assertEqual({ok, [SpaceId]}, ozt:rpc(user_logic, get_eff_spaces, [?ROOT, AddedUserId]))
+    end).
 
 
 get_eff_space_test(Config) ->
@@ -949,78 +743,79 @@ get_eff_space_test(Config) ->
     {ok, U1} = oz_test_utils:space_add_user(Config, S6, U1),
 
     NewEffSpacesList = [{S6, S6Details} | EffSpacesList],
-    lists:foreach(
-        fun({SpaceId, SpaceDetails}) ->
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        {user, U1},
-                        {user, U2}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [<<"/user/effective_spaces/">>, SpaceId],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = SpaceDetails#{<<"spaceId">> => SpaceId}
-                }
+    lists:foreach(fun({SpaceId, SpaceData}) ->
+        Creator = case SpaceId of
+            S6 -> ?SUB(user, U2);
+            _ -> ?SUB(nobody)
+        end,
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    {user, U1},
+                    {user, U2}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/user/effective_spaces/">>, SpaceId],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:protected_space(rest, SpaceId, SpaceData, Creator)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-            % Check that regular client can't make request
-            % on behalf of other client
-            ApiTestSpec2 = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {user, U1}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, U2},
-                        {user, NonAdmin}
-                    ]
-                },
-                logic_spec = #logic_spec{
-                    module = user_logic,
-                    function = get_eff_space,
-                    args = [client, U1, SpaceId],
-                    expected_result = ?OK_MAP(SpaceDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_space, id = SpaceId,
-                        aspect = instance, scope = protected
-                    },
-                    auth_hint = ?THROUGH_USER(U1),
-                    expected_result = ?OK_MAP(SpaceDetails#{
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
-                            ?assertEqual(Id, SpaceId)
-                        end
-                    })
-                }
+        % Check that regular client can't make request
+        % on behalf of other client
+        ApiTestSpec2 = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_SPACES_VIEW]},
+                    {user, U1}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, U2},
+                    {user, NonAdmin}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
+            logic_spec = #logic_spec{
+                module = user_logic,
+                function = get_eff_space,
+                args = [auth, U1, SpaceId],
+                expected_result = api_test_expect:protected_space(logic, SpaceId, SpaceData, Creator)
+            },
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{
+                    type = od_space, id = SpaceId,
+                    aspect = instance, scope = protected
+                },
+                auth_hint = ?THROUGH_USER(U1),
+                expected_result_op = api_test_expect:protected_space(gs, SpaceId, SpaceData, Creator)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
 
-        end, NewEffSpacesList
-    ).
+    end, NewEffSpacesList).
 
 
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    application:ensure_all_started(hackney),
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:freeze_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unfreeze_time().

@@ -16,11 +16,12 @@
 -include("auth/auth_errors.hrl").
 -include("auth/entitlement_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include_lib("ctool/include/api_errors.hrl").
--include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/global_definitions.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/global_definitions.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
 
 -define(DUMMY_IDP, dummyIdP).
 -define(FIRST_IDP, firstIdP).
@@ -64,8 +65,8 @@
 %% Tests
 -export([
     get_login_endpoint/1,
-    validate_correct_login/1,
-    validate_correct_login_test_mode/1,
+    validate_login/1,
+    validate_login_test_mode/1,
     authority_delegation/1,
     offline_access/1,
     offline_access_internals/1,
@@ -79,8 +80,8 @@
 
 all() -> ?ALL([
     get_login_endpoint,
-    validate_correct_login,
-    validate_correct_login_test_mode,
+    validate_login,
+    validate_login_test_mode,
     authority_delegation,
     offline_access,
     offline_access_internals,
@@ -96,45 +97,38 @@ all() -> ?ALL([
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     [{?LOAD_MODULES, [oz_test_utils, rest_test_utils, oidc_server_mock]} | Config].
 
 
-init_per_testcase(offline_access_internals, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, openid_protocol, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, openid_protocol, refresh_idp_access_token,
-        fun call_mocked_refresh_endpoint/2
-    ),
-    init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
     oz_test_utils:delete_all_entities(Config),
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:set_env(Nodes, ?APP_NAME, openid_xrds_cache_ttl, -1),
-    oz_test_utils:mock_time(Config),
+    oz_test_utils:set_env(Config, openid_xrds_cache_ttl_seconds, -1),
+    oz_test_utils:freeze_time(Config),
     Config.
 
-end_per_testcase(offline_access_internals, Config) ->
-    end_per_testcase(default, Config);
+
 end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_time(Config),
+    % the mock is set up in test cases separately
+    oidc_server_mock:unmock(Config),
+    oz_test_utils:unfreeze_time(Config),
     ok.
 
+
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
 
 % This code is evaluated on a Onezone node when the mocked refresh function is called
 call_mocked_refresh_endpoint(IdP, RefreshToken) ->
-    {ok, Fun} = application:get_env(oz_worker, mocked_refresh_endpoint),
+    Fun = oz_worker:get_env(mocked_refresh_endpoint),
     Fun(IdP, RefreshToken).
 
 
 % This code is evaluated on the testmaster node (called in test code)
 mock_refresh_endpoint_response(Config, Fun) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:set_env(Nodes, oz_worker, mocked_refresh_endpoint, Fun).
+    oz_test_utils:set_env(Config, mocked_refresh_endpoint, Fun).
 
 
 %%%===================================================================
@@ -154,34 +148,34 @@ get_login_endpoint(Config) ->
             <<"method">> := <<"get">>,
             <<"url">> := <<ExpAuthorizeEndpoint:Len/binary, _/binary>>
         }},
-        oz_test_utils:call_oz(Config, auth_logic, get_login_endpoint, [
+        oz_test_utils:call_oz(Config, idp_auth, get_login_endpoint, [
             ?DUMMY_IDP, false, <<"">>, false
         ])
     ).
 
 
-validate_correct_login(Config) ->
-    validate_correct_login_base(Config, false).
+validate_login(Config) ->
+    validate_login_base(Config, false).
 
-validate_correct_login_test_mode(Config) ->
-    validate_correct_login_base(Config, true).
+validate_login_test_mode(Config) ->
+    validate_login_base(Config, true).
 
-validate_correct_login_base(Config, TestMode) ->
+validate_login_base(Config, TestMode) ->
     RedirectAfterLogin = <<"https://example.com/after-login-path">>,
     OidcSpec = ?CORRECT_OIDC_SPEC,
     oidc_server_mock:mock(Config, OidcSpec),
     overwrite_auth_config(Config, TestMode, [{?DUMMY_IDP, OidcSpec, #{
         attributeMapping => #{
             subjectId => {required, {replace, "c", "x", "id"}},
-            name => {optional, {any, ["fullName", {join, " ", "nameTokens"}]}},
-            alias => {optional, {nested, ["alias", "value"]}},
+            fullName => {optional, {any, ["fullName", {join, " ", "nameTokens"}]}},
+            username => {optional, {nested, ["username", "value"]}},
             emails => {required, {filter, ".*@my.org", {split, ",", "emails"}}},
             entitlements => {optional, {concat, [
                 {str_list, ["a", "b", "c", "d"]},
                 {str, ":"},
                 "groups",
                 {str, "/"},
-                {str_list, ["1", "2", "3", "4"]}
+                {str_list, ["01", "02", "03", "04"]}
             ]}},
             custom => {optional, {append, [
                 "customAttrs",
@@ -192,7 +186,7 @@ validate_correct_login_base(Config, TestMode) ->
         entitlementMapping => #{
             enabled => true,
             voGroupName => "My-VO",
-            adminGroup => "d:admins/4",
+            adminGroup => "d:admins/04",
             parser => nested_entitlement_parser,
             parserConfig => #{
                 splitWith => "/",
@@ -206,50 +200,52 @@ validate_correct_login_base(Config, TestMode) ->
     }}]),
 
     {ok, #{<<"url">> := Url}} = oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, RedirectAfterLogin, TestMode]
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, RedirectAfterLogin, TestMode]
     ),
 
+    UserInfo = #{
+        <<"id">> => <<"abcdef1c2c3c4c">>,
+        <<"nameTokens">> => [<<"John">>, <<"Doe">>, <<"Jr">>],
+        <<"username">> => #{
+            <<"value">> => <<"jodoe">>
+        },
+        <<"groups">> => [
+            <<"some">>,
+            <<"entitlements">>,
+            <<"idk">>,
+            <<"admins">>
+        ],
+        <<"emails">> => <<"joedoe@example.com,john.doe@my.org">>,
+        <<"organization">> => <<"My Organization">>,
+        <<"customAttrs">> => #{
+            <<"firstAttr">> => <<"firstValue">>,
+            <<"secondAttr">> => [<<"second">>, <<"value">>],
+            <<"thirdAttr">> => #{
+                <<"nested">> => <<"json">>
+            },
+            <<"fourthAttr">> => 17
+        },
+        <<"roles">> => [
+            #{<<"role">> => #{<<"displayName">> => <<"role1">>}},
+            #{<<"role">> => #{<<"displayName">> => <<"role2">>}},
+            #{<<"role">> => #{<<"displayName">> => <<"role3">>}}
+        ]
+    },
+
     {ok, MockedCowboyReq, _} = ?assertMatch({ok, _, _}, oidc_server_mock:simulate_user_login(
-        Config, OidcSpec, Url, #{
-            <<"id">> => <<"abcdef1c2c3c4c">>,
-            <<"nameTokens">> => [<<"John">>, <<"Doe">>, <<"Jr">>],
-            <<"alias">> => #{
-                <<"value">> => <<"jodoe">>
-            },
-            <<"groups">> => [
-                <<"some">>,
-                <<"entitlements">>,
-                <<"idk">>,
-                <<"admins">>
-            ],
-            <<"emails">> => <<"joedoe@example.com,john.doe@my.org">>,
-            <<"organization">> => <<"My Organization">>,
-            <<"customAttrs">> => #{
-                <<"firstAttr">> => <<"firstValue">>,
-                <<"secondAttr">> => [<<"second">>, <<"value">>],
-                <<"thirdAttr">> => #{
-                    <<"nested">> => <<"json">>
-                },
-                <<"fourthAttr">> => 17
-            },
-            <<"roles">> => [
-                #{<<"role">> => #{<<"displayName">> => <<"role1">>}},
-                #{<<"role">> => #{<<"displayName">> => <<"role2">>}},
-                #{<<"role">> => #{<<"displayName">> => <<"role3">>}}
-            ]
-        }
+        Config, OidcSpec, Url, UserInfo
     )),
 
     ExpSubjectId = <<"abxdef1x2x3x4x">>,  % {replace, "c", "x", "id"}
-    ExpUserId = user_logic:idp_uid_to_system_uid(?DUMMY_IDP, ExpSubjectId),
-    ExpName = <<"John Doe Jr">>,
-    ExpAlias = <<"jodoe">>,
+    ExpUserId = gen_user_id(Config, ?DUMMY_IDP, ExpSubjectId),
+    ExpFullName = <<"John Doe Jr">>,
+    ExpUsername = <<"jodoe">>,
     ExpEmails = [<<"john.doe@my.org">>],
     ExpEntitlements = [
-        <<"a:some/1">>,
-        <<"b:entitlements/2">>,
-        <<"c:idk/3">>,
-        <<"d:admins/4">>
+        <<"a:some/01">>,
+        <<"b:entitlements/02">>,
+        <<"c:idk/03">>,
+        <<"d:admins/04">>
     ],
     ExpCustom = #{
         <<"firstAttr">> => <<"firstValue">>,
@@ -262,52 +258,55 @@ validate_correct_login_base(Config, TestMode) ->
         <<"roles">> => [<<"role1">>, <<"role2">>, <<"role3">>]
     },
 
-    Group1 = entitlement_mapping:gen_group_id(#idp_entitlement{idp = ?DUMMY_IDP, path = [
+    Group1 = gen_group_id(Config, #idp_entitlement{idp = ?DUMMY_IDP, path = [
         #idp_group{name = <<"My-VO">>, type = organization},
         #idp_group{name = <<"a:some">>, type = unit},
-        #idp_group{name = <<"1">>, type = team}
+        #idp_group{name = <<"01">>, type = team}
     ]}),
-    Group2 = entitlement_mapping:gen_group_id(#idp_entitlement{idp = ?DUMMY_IDP, path = [
+    Group2 = gen_group_id(Config, #idp_entitlement{idp = ?DUMMY_IDP, path = [
         #idp_group{name = <<"My-VO">>, type = organization},
         #idp_group{name = <<"b:entitlements">>, type = unit},
-        #idp_group{name = <<"2">>, type = team}
+        #idp_group{name = <<"02">>, type = team}
     ]}),
-    Group3 = entitlement_mapping:gen_group_id(#idp_entitlement{idp = ?DUMMY_IDP, path = [
+    Group3 = gen_group_id(Config, #idp_entitlement{idp = ?DUMMY_IDP, path = [
         #idp_group{name = <<"My-VO">>, type = organization},
         #idp_group{name = <<"c:idk">>, type = unit},
-        #idp_group{name = <<"3">>, type = team}
+        #idp_group{name = <<"03">>, type = team}
     ]}),
-    Group4 = entitlement_mapping:gen_group_id(#idp_entitlement{idp = ?DUMMY_IDP, path = [
+    Group4 = gen_group_id(Config, #idp_entitlement{idp = ?DUMMY_IDP, path = [
         #idp_group{name = <<"My-VO">>, type = organization},
         #idp_group{name = <<"d:admins">>, type = unit},
-        #idp_group{name = <<"4">>, type = team}
+        #idp_group{name = <<"04">>, type = team}
     ]}),
 
     case TestMode of
         false ->
             {ok, UserId, _} = ?assertMatch(
                 {ok, ExpUserId, RedirectAfterLogin},
-                oz_test_utils:call_oz(Config, auth_logic, validate_login, [
+                oz_test_utils:call_oz(Config, idp_auth, validate_login, [
                     <<"GET">>, MockedCowboyReq
                 ])
             ),
 
-            ?assertMatch(
+            {ok, #od_user{entitlements = ActualEntitlements}} = ?assertMatch(
                 {ok, #od_user{
-                    name = ExpName,
-                    alias = ExpAlias,
+                    full_name = ExpFullName,
+                    username = ExpUsername,
                     emails = ExpEmails,
                     linked_accounts = [#linked_account{
                         subject_id = ExpSubjectId,
-                        name = ExpName,
-                        alias = ExpAlias,
+                        full_name = ExpFullName,
+                        username = ExpUsername,
                         emails = ExpEmails,
                         entitlements = ExpEntitlements,
                         custom = ExpCustom
-                    }],
-                    entitlements = [Group1, Group2, Group3, Group4]
+                    }]
                 }},
                 oz_test_utils:get_user(Config, UserId)
+            ),
+            ?assertEqual(
+                lists:sort(ActualEntitlements),
+                lists:sort([{Group1, member}, {Group2, member}, {Group3, member}, {Group4, member}])
             ),
 
             % As a member of the admin group, the user should have effective admin rights
@@ -327,21 +326,25 @@ validate_correct_login_base(Config, TestMode) ->
 
             ?assertMatch(
                 #{
-                    <<"name">> := ExpName,
-                    <<"alias">> := ExpAlias,
+                    <<"fullName">> := ExpFullName,
+                    <<"username">> := ExpUsername,
                     <<"emails">> := ExpEmails,
                     <<"linkedAccounts">> := [#{
                         <<"subjectId">> := ExpSubjectId,
-                        <<"name">> := ExpName,
-                        <<"alias">> := ExpAlias,
+                        <<"fullName">> := ExpFullName,
+                        <<"username">> := ExpUsername,
                         <<"emails">> := ExpEmails,
                         <<"entitlements">> := ExpEntitlements,
                         <<"custom">> := ExpCustom
                     }],
-                    <<"groups">> := [Group1, Group2, Group3, Group4]
+                    <<"groups">> := #{
+                        Group1 := member,
+                        Group2 := member,
+                        Group3 := member,
+                        Group4 := member
+                    }
                 },
                 UserData
-
             ),
 
             % No users or groups should be created in the process
@@ -350,6 +353,38 @@ validate_correct_login_base(Config, TestMode) ->
             ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, od_group, get, [Group2])),
             ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, od_group, get, [Group3])),
             ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, od_group, get, [Group4]))
+    end,
+
+    % check if user blocking works as expected
+    case TestMode of
+        true ->
+            % the test mode does not perform actual authentication and it is not affected by user access blocking
+            ok;
+        false ->
+            {ok, #{<<"url">> := Url2}} = oz_test_utils:call_oz(
+                Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, RedirectAfterLogin, TestMode]
+            ),
+            {ok, MockedCowboyReq2, _} = ?assertMatch({ok, _, _}, oidc_server_mock:simulate_user_login(
+                Config, OidcSpec, Url2, UserInfo
+            )),
+            oz_test_utils:toggle_user_access_block(Config, ExpUserId, true),
+            ?assertMatch(
+                {auth_error, ?ERR_USER_BLOCKED, _, RedirectAfterLogin},
+                oz_test_utils:call_oz(Config, idp_auth, validate_login, [<<"GET">>, MockedCowboyReq2])
+            ),
+
+            % after unblocking, login should work again
+            {ok, #{<<"url">> := Url3}} = oz_test_utils:call_oz(
+                Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, RedirectAfterLogin, TestMode]
+            ),
+            {ok, MockedCowboyReq3, _} = ?assertMatch({ok, _, _}, oidc_server_mock:simulate_user_login(
+                Config, OidcSpec, Url3, UserInfo
+            )),
+            oz_test_utils:toggle_user_access_block(Config, ExpUserId, false),
+            ?assertMatch(
+                {ok, ExpUserId, RedirectAfterLogin},
+                oz_test_utils:call_oz(Config, idp_auth, validate_login, [<<"GET">>, MockedCowboyReq3])
+            )
     end.
 
 
@@ -368,21 +403,21 @@ authority_delegation(Config) ->
     }}]),
 
     {ok, #{<<"url">> := Url}} = oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, false]
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, false]
     ),
     {ok, _, AccessToken} = ?assertMatch({ok, _, _}, oidc_server_mock:simulate_user_login(
         Config, OidcSpec, Url, #{<<"sub">> => SubjectId}
     )),
 
-    ExpUserId = user_logic:idp_uid_to_system_uid(?DUMMY_IDP, SubjectId),
+    ExpUserId = gen_user_id(Config, ?DUMMY_IDP, SubjectId),
 
     DelegationWorksSpec = fun(Success, AuthType) -> #{
         request => #{
             method => get,
             path => <<"/user">>,
             headers => case AuthType of
-                bearer -> #{<<"Authorization">> => <<"Bearer dummy/", AccessToken/binary>>};
-                xAuthToken -> #{<<"X-Auth-Token">> => <<"dummy/", AccessToken/binary>>}
+                bearer -> #{?HDR_AUTHORIZATION => <<"Bearer dummy/", AccessToken/binary>>};
+                xAuthToken -> #{?HDR_X_AUTH_TOKEN => <<"dummy/", AccessToken/binary>>}
             end
         },
         expect => case Success of
@@ -396,6 +431,16 @@ authority_delegation(Config) ->
         end
     } end,
 
+    ?assert(rest_test_utils:check_rest_call(Config, DelegationWorksSpec(true, xAuthToken))),
+    ?assert(rest_test_utils:check_rest_call(Config, DelegationWorksSpec(true, bearer))),
+
+    % check if user blocking works as expected
+    oz_test_utils:toggle_user_access_block(Config, ExpUserId, true),
+    ?assert(rest_test_utils:check_rest_call(Config, DelegationWorksSpec(false, xAuthToken))),
+    ?assert(rest_test_utils:check_rest_call(Config, DelegationWorksSpec(false, bearer))),
+
+    % after unblocking, authority delegation should work again
+    oz_test_utils:toggle_user_access_block(Config, ExpUserId, false),
     ?assert(rest_test_utils:check_rest_call(Config, DelegationWorksSpec(true, xAuthToken))),
     ?assert(rest_test_utils:check_rest_call(Config, DelegationWorksSpec(true, bearer))),
 
@@ -418,7 +463,6 @@ authority_delegation(Config) ->
     Config, user_logic, acquire_idp_access_token, [?USER(UserId), UserId, IdP]
 )).
 offline_access(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
     SubjectId = <<"1233456734534">>,
     OidcSpec = ?CORRECT_OIDC_SPEC,
     oidc_server_mock:mock(Config, OidcSpec),
@@ -431,8 +475,8 @@ offline_access(Config) ->
         offlineAccess => false
     }}]),
     simulate_login_flow(Config, ?DUMMY_IDP, false, false, OidcSpec, #{<<"sub">> => SubjectId}),
-    UserId = user_logic:idp_uid_to_system_uid(?DUMMY_IDP, SubjectId),
-    ?assertMatch(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, []), ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+    UserId = gen_user_id(Config, ?DUMMY_IDP, SubjectId),
+    ?assertMatch(?ERR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, []), ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % The user does not have any access/refresh token cached -> not found
     overwrite_auth_config(Config, false, [{?DUMMY_IDP, OidcSpec, #{
@@ -454,54 +498,74 @@ offline_access(Config) ->
     ]}} = oz_test_utils:get_user(Config, UserId),
 
     % The same access token should be reused if possible (unless it reaches refresh threshold)
-    {ok, RefreshThreshold} = test_utils:get_env(hd(Nodes), oz_worker, idp_access_token_refresh_threshold),
-    oz_test_utils:simulate_time_passing(Config, ?MOCK_ACCESS_TOKEN_TTL - RefreshThreshold - 1),
+    RefreshThreshold = oz_test_utils:get_env(Config, idp_access_token_refresh_threshold),
+    oz_test_utils:simulate_seconds_passing(?MOCK_ACCESS_TOKEN_TTL - RefreshThreshold - 1),
     NewTtl = RefreshThreshold + 1,
     ?assertMatch({ok, {AccessToken, NewTtl}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % expired access token should be refreshed when refresh threshold is reached
-    oz_test_utils:simulate_time_passing(Config, 2),
+    oz_test_utils:simulate_seconds_passing(2),
+
+    % but first, check if user blocking works as expected when the token is to be refreshed
+    oz_test_utils:toggle_user_access_block(Config, UserId, true),
+    ?assertMatch(?ERR_USER_BLOCKED, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+
+    % after unblocking, offline access should work again
+    oz_test_utils:toggle_user_access_block(Config, UserId, false),
     {ok, {NewAccessToken, _}} =
         ?assertMatch({ok, {_, ?MOCK_ACCESS_TOKEN_TTL}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
     ?assertNotMatch(NewAccessToken, AccessToken),
     {ok, #od_user{linked_accounts = [
         #linked_account{refresh_token = RefreshToken2}
     ]}} = oz_test_utils:get_user(Config, UserId),
-    ?assertNotMatch(RefreshToken2, RefreshToken1).
+    ?assertNotMatch(RefreshToken2, RefreshToken1),
+
+    % check if user blocking works as expected when a token is cached (no refresh is needed)
+    oz_test_utils:toggle_user_access_block(Config, UserId, true),
+    ?assertMatch(?ERR_USER_BLOCKED, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+
+    oz_test_utils:toggle_user_access_block(Config, UserId, false),
+    ?assertMatch({ok, {_, ?MOCK_ACCESS_TOKEN_TTL}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)).
+
 
 
 offline_access_internals(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_new(Nodes, openid_protocol, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, openid_protocol, refresh_idp_access_token,
+        fun call_mocked_refresh_endpoint/2
+    ),
+
     SubjectId = <<"offline_access_internals-abcdewq">>,
-    {ok, RefreshThreshold} = test_utils:get_env(hd(Nodes), oz_worker, idp_access_token_refresh_threshold),
+    RefreshThreshold = oz_test_utils:get_env(Config, idp_access_token_refresh_threshold),
     overwrite_auth_config(Config, false, [{?DUMMY_IDP, ?CORRECT_OIDC_SPEC, #{
         attributeMapping => #{
             subjectId => {required, "sub"},
-            name => {optional, "name"}
+            fullName => {optional, "name"}
         },
         offlineAccess => true
     }}]),
     % Simulate a user with some already cached tokens
     {ok, #document{key = UserId}} = oz_test_utils:call_oz(
-        Config, user_logic, create_user_by_linked_account, [#linked_account{
+        Config, user_account, acquire_user, [#linked_account{
             idp = ?DUMMY_IDP,
             subject_id = SubjectId,
-            access_token = {<<"at1">>, oz_test_utils:get_mocked_time(Config) + 1000},
+            access_token = {<<"at1">>, oz_test_utils:get_frozen_time_seconds() + 1000},
             refresh_token = <<"rt1">>
-        }]
+        }, access_token]
     ),
-    ?assertMatch(UserId, user_logic:idp_uid_to_system_uid(?DUMMY_IDP, SubjectId)),
+    ?assertMatch(UserId, gen_user_id(Config, ?DUMMY_IDP, SubjectId)),
     ?assertMatch({ok, {<<"at1">>, 1000}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % Access token should be refreshed only when the RefreshThreshold is reached
     Ttl1 = RefreshThreshold + 1,
-    oz_test_utils:simulate_time_passing(Config, 1000 - Ttl1),
+    oz_test_utils:simulate_seconds_passing(1000 - Ttl1),
     ?assertMatch({ok, {<<"at1">>, Ttl1}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
-    oz_test_utils:simulate_time_passing(Config, 2),
+    oz_test_utils:simulate_seconds_passing(2),
     mock_refresh_endpoint_response(Config, fun(?DUMMY_IDP, <<"rt1">>) ->
         {ok, #{
             <<"sub">> => SubjectId,
-            <<"access_token">> => {<<"at2">>, oz_test_utils:get_mocked_time(Config) + 1200},
+            <<"access_token">> => {<<"at2">>, oz_test_utils:get_frozen_time_seconds() + 1200},
             <<"refresh_token">> => <<"rt2">>
         }}
     end),
@@ -512,11 +576,11 @@ offline_access_internals(Config) ->
     ),
 
     % Refresh token should not be overwritten if a new one does not come in the refresh response
-    oz_test_utils:simulate_time_passing(Config, 1200),
+    oz_test_utils:simulate_seconds_passing(1200),
     mock_refresh_endpoint_response(Config, fun(?DUMMY_IDP, <<"rt2">>) ->
         {ok, #{
             <<"sub">> => SubjectId,
-            <<"access_token">> => {<<"at3">>, oz_test_utils:get_mocked_time(Config) + 800}
+            <<"access_token">> => {<<"at3">>, oz_test_utils:get_frozen_time_seconds() + 800}
         }}
     end),
     ?assertMatch({ok, {<<"at3">>, 800}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
@@ -533,50 +597,50 @@ offline_access_internals(Config) ->
             {ok, User#od_user{linked_accounts = [#linked_account{
                 idp = ?DUMMY_IDP,
                 subject_id = SubjectId,
-                access_token = {<<"at4">>, oz_test_utils:get_mocked_time(Config) + 1000},
+                access_token = {<<"at4">>, oz_test_utils:get_frozen_time_seconds() + 1000},
                 refresh_token = undefined
             }]}}
         end
         ])
     ),
     Ttl4 = RefreshThreshold - 100,
-    oz_test_utils:simulate_time_passing(Config, 1000 - Ttl4),
+    oz_test_utils:simulate_seconds_passing(1000 - Ttl4),
     ?assertMatch({ok, {<<"at4">>, Ttl4}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
     % Though when the expiration time is reached, the token should no longer be served
-    oz_test_utils:simulate_time_passing(Config, Ttl4 + 1),
+    oz_test_utils:simulate_seconds_passing(Ttl4 + 1),
     ?assertMatch(?ERROR_NOT_FOUND, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % Refreshing the token should also fetch user data and refresh it
     ?assertMatch(
         {ok, _},
-        oz_test_utils:call_oz(Config, user_logic, merge_linked_account, [UserId, #linked_account{
+        oz_test_utils:call_oz(Config, user_account, acquire_user, [#linked_account{
             idp = ?DUMMY_IDP,
             subject_id = SubjectId,
-            name = <<"Old Name">>,
-            access_token = {<<"at5">>, oz_test_utils:get_mocked_time(Config) + 1000},
+            full_name = <<"Old Name">>,
+            access_token = {<<"at5">>, oz_test_utils:get_frozen_time_seconds() + 1000},
             refresh_token = <<"rt5">>
-        }])
+        }, gui_login])
     ),
     ?assertMatch(
         {ok, #od_user{linked_accounts = [#linked_account{
-            name = <<"Old Name">>,
+            full_name = <<"Old Name">>,
             refresh_token = <<"rt5">>
         }]}},
         oz_test_utils:get_user(Config, UserId)
     ),
-    oz_test_utils:simulate_time_passing(Config, 1001),
+    oz_test_utils:simulate_seconds_passing(1001),
     mock_refresh_endpoint_response(Config, fun(?DUMMY_IDP, <<"rt5">>) ->
         {ok, #{
             <<"sub">> => SubjectId,
             <<"name">> => <<"New Name">>,
-            <<"access_token">> => {<<"at6">>, oz_test_utils:get_mocked_time(Config) + 1600},
+            <<"access_token">> => {<<"at6">>, oz_test_utils:get_frozen_time_seconds() + 1600},
             <<"refresh_token">> => <<"rt6">>
         }}
     end),
     ?assertMatch({ok, {<<"at6">>, 1600}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
     ?assertMatch(
         {ok, #od_user{linked_accounts = [#linked_account{
-            name = <<"New Name">>,
+            full_name = <<"New Name">>,
             refresh_token = <<"rt6">>
         }]}},
         oz_test_utils:get_user(Config, UserId)
@@ -610,7 +674,7 @@ link_account(Config) ->
     ]),
 
     % Log in using the first IdP
-    ExpFirstUserId = user_logic:idp_uid_to_system_uid(?FIRST_IDP, FirstSubjectId),
+    ExpFirstUserId = gen_user_id(Config, ?FIRST_IDP, FirstSubjectId),
     ?assertMatch(
         {ok, ExpFirstUserId, _},
         simulate_login_flow(Config, ?FIRST_IDP, false, false, OidcSpec, #{
@@ -708,8 +772,8 @@ bad_xrds_endpoint(Config, TestMode) ->
             }
         }
     end),
-    ?assertEqual(?ERROR_INTERNAL_SERVER_ERROR, oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
+    ?assertEqual(?ERR_INTERNAL_SERVER_ERROR(undefined), oz_test_utils:call_oz(
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
     )).
 
 
@@ -721,8 +785,8 @@ bad_authorize_endpoint(Config, TestMode) ->
             }
         }
     end),
-    ?assertEqual(?ERROR_INTERNAL_SERVER_ERROR, oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
+    ?assertEqual(?ERR_INTERNAL_SERVER_ERROR(undefined), oz_test_utils:call_oz(
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
     )).
 
 
@@ -769,7 +833,7 @@ bad_userinfo_endpoint_in_authority_delegation(Config, TestMode) ->
         end
     ),
     {ok, #{<<"url">> := Url}} = oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
     ),
 
     {ok, _, AccessToken} = ?assertMatch({ok, _, _}, oidc_server_mock:simulate_user_login(
@@ -779,7 +843,7 @@ bad_userinfo_endpoint_in_authority_delegation(Config, TestMode) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"Authorization">> => <<"Bearer dummy/", AccessToken/binary>>}
+            headers => #{?HDR_AUTHORIZATION => <<"Bearer dummy/", AccessToken/binary>>}
         },
         expect => #{
             code => 500
@@ -795,7 +859,7 @@ bad_scope(Config, TestMode) ->
         }
     end),
     {ok, #{<<"url">> := Url}} = oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
     ),
 
     ?assertMatch(error, oidc_server_mock:simulate_user_login(
@@ -810,7 +874,7 @@ bad_client_id(Config, TestMode) ->
         }
     end),
     {ok, #{<<"url">> := Url}} = oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
     ),
 
     ?assertMatch(error, oidc_server_mock:simulate_user_login(
@@ -879,7 +943,7 @@ bad_access_token_pass_method_in_authority_delegation(Config, TestMode) ->
         end
     ),
     {ok, #{<<"url">> := Url}} = oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
     ),
 
     {ok, _, AccessToken} = ?assertMatch({ok, _, _}, oidc_server_mock:simulate_user_login(
@@ -889,7 +953,7 @@ bad_access_token_pass_method_in_authority_delegation(Config, TestMode) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"Authorization">> => <<"Bearer dummy/", AccessToken/binary>>}
+            headers => #{?HDR_AUTHORIZATION => <<"Bearer dummy/", AccessToken/binary>>}
         },
         expect => #{
             code => 500
@@ -931,6 +995,14 @@ bad_custom_data(Config, TestMode) ->
 %%% Auxiliary functions
 %%%===================================================================
 
+gen_user_id(Config, IdP, SubjectId) ->
+    oz_test_utils:call_oz(Config, user_account, gen_user_id, [IdP, SubjectId]).
+
+
+gen_group_id(Config, IdPEntitlement) ->
+    oz_test_utils:call_oz(Config, entitlement_mapping, gen_group_id, [IdPEntitlement]).
+
+
 % Sets up DUMMY_IDP with default config, but overwrites auth.config with a modified
 % version to introduce differences - ScrewingUpFun is used to spoil the config.
 screw_up_config(Config, TestMode, ProtocolConfig, ScrewingUpFun) ->
@@ -943,20 +1015,20 @@ screw_up_config(Config, TestMode, ProtocolConfig, ScrewingUpFun) ->
 
 simulate_login_flow(Config, IdP, LinkAccount, TestMode, OidcSpec, UserAttributes) ->
     {ok, #{<<"url">> := Url}} = oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [IdP, LinkAccount, <<"">>, TestMode]
+        Config, idp_auth, get_login_endpoint, [IdP, LinkAccount, <<"">>, TestMode]
     ),
 
     {ok, MockedCowboyReq, _} = oidc_server_mock:simulate_user_login(
         Config, OidcSpec, Url, UserAttributes
     ),
-    oz_test_utils:call_oz(Config, auth_logic, validate_login, [
+    oz_test_utils:call_oz(Config, idp_auth, validate_login, [
         <<"GET">>, MockedCowboyReq
     ]).
 
 
 validate_login_in_test_mode(MockedCowboyReq) ->
-    {ok, UserId, _} = auth_logic:validate_login(<<"GET">>, MockedCowboyReq),
-    UserData = auth_test_mode:get_user_data(),
+    {ok, UserId, _} = idp_auth:validate_login(<<"GET">>, MockedCowboyReq),
+    UserData = idp_auth_test_mode:get_user_data(),
     {ok, UserId, UserData}.
 
 

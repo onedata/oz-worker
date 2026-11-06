@@ -14,44 +14,40 @@
 
 -include("registered_names.hrl").
 -include("entity_logic.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([get_env/1, get_env/2, set_env/2]).
 -export([get_name/0]).
 -export([get_domain/0, get_url/0, get_uri/1]).
--export([get_version/0, get_build_version/0]).
--export([get_config/0]).
+-export([get_rest_api_path/1, get_rest_uri/1]).
+-export([get_release_version/0, get_build_version/0]).
 -export([entity_logic_plugin/0]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Wrapper function to get oz_worker env variable.
-%% @end
-%%--------------------------------------------------------------------
--spec get_env(Key :: atom()) -> undefined | {ok, term()}.
+-spec get_env(Key :: atom()) -> term() | no_return().
 get_env(Key) ->
-    application:get_env(?APP_NAME, Key).
+    case get_env(Key, undefined) of
+        undefined ->
+            ?alert("Could not find required env variable for ~w: ~w", [?APP_NAME, Key]),
+            error({missing_env_variable, Key});
+        Value ->
+            Value
+    end.
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Wrapper function to get oz_worker env variable or default.
-%% @end
-%%--------------------------------------------------------------------
 -spec get_env(Key :: atom(), Default :: term()) -> term().
 get_env(Key, Default) ->
-    application:get_env(?APP_NAME, Key, Default).
+    % undefined values are treated as if there was no env set at all
+    case application:get_env(?APP_NAME, Key, Default) of
+        undefined -> Default;
+        Other -> Other
+    end.
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Wrapper function to set oz_worker env variable.
-%% @end
-%%--------------------------------------------------------------------
 -spec set_env(Key :: atom(), Value :: term()) -> ok.
 set_env(Key, Value) ->
     application:set_env(?APP_NAME, Key, Value).
@@ -62,10 +58,12 @@ set_env(Key, Value) ->
 %% Returns Onezone name.
 %% @end
 %%--------------------------------------------------------------------
--spec get_name() -> binary().
+-spec get_name() -> undefined | binary().
 get_name() ->
-    {ok, Name} = get_env(oz_name),
-    list_to_binary(Name).
+    case get_env(oz_name, undefined) of
+        undefined -> undefined;
+        Str when is_list(Str) -> list_to_binary(Str)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -75,8 +73,7 @@ get_name() ->
 %%--------------------------------------------------------------------
 -spec get_domain() -> binary().
 get_domain() ->
-    {ok, Domain} = get_env(http_domain),
-    list_to_binary(Domain).
+    list_to_binary(get_env(http_domain)).
 
 
 %%--------------------------------------------------------------------
@@ -104,11 +101,35 @@ get_uri(PathWithSlash) when is_list(PathWithSlash) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns Onezone version.
+%% Returns given path preceded with REST API prefix (the path must start with a slash).
 %% @end
 %%--------------------------------------------------------------------
--spec get_version() -> binary().
-get_version() ->
+get_rest_api_path(PathWithSlash) when is_binary(PathWithSlash)->
+    ApiPrefix = str_utils:to_binary(oz_worker:get_env(rest_api_prefix)),
+   <<ApiPrefix/binary, PathWithSlash/binary>>;
+get_rest_api_path(PathWithSlash) when is_list(PathWithSlash)->
+    get_rest_api_path(str_utils:to_binary(PathWithSlash)).
+    
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns Onezone URI (with HTTPS scheme), REST API prefix and given 
+%% path appended (the path must start with a slash).
+%% @end
+%%--------------------------------------------------------------------
+get_rest_uri(PathWithSlash) when is_binary(PathWithSlash) ->
+    get_uri(get_rest_api_path(PathWithSlash));
+get_rest_uri(PathWithSlash) when is_list(PathWithSlash) ->
+    get_rest_uri(list_to_binary(PathWithSlash)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns Onezone release version.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_release_version() -> binary().
+get_release_version() ->
     {_AppId, _AppName, AppVersion} = lists:keyfind(
         ?APP_NAME, 1, application:loaded_applications()
     ),
@@ -117,12 +138,16 @@ get_version() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns Onezone build_version.
+%% Returns Onezone build version.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_build_version() -> binary().
 get_build_version() ->
-    str_utils:to_binary(get_env(build_version, <<"unknown">>)).
+    case ctool:get_env(onedata_service_build_version, undefined) of
+        undefined -> <<"unknown">>;
+        <<>> -> <<"unknown">>;
+        Version -> Version
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -135,18 +160,3 @@ get_build_version() ->
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     zone_logic_plugin.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns Onezone configuration details, as needed by the configuration
-%% endpoint.
-%% @end
-%%--------------------------------------------------------------------
--spec get_config() -> {ok, #{atom() := term()}} | {error, Reason :: term()}.
-get_config() ->
-    entity_logic:handle(#el_req{
-        operation = get,
-        client = ?NOBODY,
-        gri = #gri{type = oz_worker, id = undefined, aspect = configuration}
-    }).

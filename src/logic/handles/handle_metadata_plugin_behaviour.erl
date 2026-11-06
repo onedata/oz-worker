@@ -1,0 +1,298 @@
+%%%-------------------------------------------------------------------
+%%% @author Jakub Kudzia, Lukasz Opiola
+%%% @copyright (C) 2016-2024 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @doc
+%%% Behaviour for onezone plugins that handle specific types of metadata
+%%% for Public Data handles (e.g. Dublin Core).
+%%%
+%%% The process of publishing Public Data from the PoV of metadata is as follows:
+%%%
+%%%   1) A user submits a request to create a new Public Data handle, providing
+%%%      some metadata (in XML format) along with it.
+%%%   2) The metadata is revised (see revise_for_publication/3):
+%%%      * sanitized as far as format (XML) and schema is concerned
+%%%      * modified by adding/modifying properties in an automatic way (if needed)
+%%%   3) The Public Data record with revised metadata is published in a handle service,
+%%%      the handle service assigns a public handle (PID, DOI) for the record.
+%%%   4) The metadata is enriched with the public handle (see insert_public_handle/2)
+%%%      and in this "final" version saved to Onezone's DB - whenever the record
+%%%      is viewed through the UI or REST API, this version is served.
+%%%   5) The Public Data record is advertised through the OAI-PMH protocol along with
+%%%      the "final" metadata. OAI-PMH is based on XML; when responses are formed, the
+%%%      metadata has to be slightly adopted (see adapt_for_oai_pmh/1), but this does
+%%%      not impact the carried information, just the surrounding structure of the XML.
+%%% @end
+%%%-------------------------------------------------------------------
+-module(handle_metadata_plugin_behaviour).
+-author("Jakub Kudzia").
+-author("Lukasz Opiola").
+
+-include("plugins/onezone_plugins.hrl").
+-include("http/public_data/oai.hrl").
+-include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/logging.hrl").
+
+
+-export([validate_example/2]).
+
+
+-type validation_example() :: #handle_metadata_plugin_validation_example{}.
+-export_type([validation_example/0]).
+
+
+%%-------------------------------------------------------------------
+%% @doc
+%% Returns the handle metadata schema implemented by the plugin.
+%% @end
+%%-------------------------------------------------------------------
+-callback metadata_schema() -> od_handle:metadata_schema().
+
+
+%%-------------------------------------------------------------------
+%% @doc
+%% A single metadata schema represented by a plugin can be disseminated
+%% in more than one metadata prefix via OAI-PMH.
+%% @end
+%%-------------------------------------------------------------------
+-callback supported_oai_pmh_metadata_prefixes() -> [od_handle:metadata_schema()].
+
+
+%%-------------------------------------------------------------------
+%% @doc
+%% Returns URL of XML schema for given metadata prefix supported by the plugin.
+%% @end
+%%-------------------------------------------------------------------
+-callback schema_URL(oai_metadata:prefix()) -> binary().
+
+
+%%-------------------------------------------------------------------
+%% @doc
+%% Returns main XML namespace for given metadata prefix supported by the plugin.
+%% @end
+%%-------------------------------------------------------------------
+-callback main_namespace(oai_metadata:prefix()) -> {atom(), binary()}.
+
+
+%%-------------------------------------------------------------------
+%% @doc
+%% Sanitizes and transforms (if needed) the provided metadata for publication in
+%% a handle service. This can include adding auto-generated information to the metadata.
+%% If the input metadata is not suitable for publication, should return an error.
+%%
+%% This operation MUST be idempotent - calling it on already revised metadata should
+%% return it without changes.
+%% @end
+%%-------------------------------------------------------------------
+-callback revise_for_publication(od_handle:parsed_metadata(), od_share:id(), od_share:record()) ->
+    {ok, od_handle:parsed_metadata()} | error.
+
+
+%%-------------------------------------------------------------------
+%% @doc
+%% Inserts the public handle (if applicable) into the metadata content.
+%%
+%% This operation MUST be idempotent - calling it on metadata with already inserted handles
+%% should return it without changes.
+%% @end
+%%-------------------------------------------------------------------
+-callback insert_public_handle(od_handle:parsed_metadata(), od_handle:public_handle()) ->
+    od_handle:parsed_metadata().
+
+
+%%-------------------------------------------------------------------
+%% @doc
+%% Transforms (if needed) the metadata to the OAI-PMH metadata schema.
+%% Can work differently for different prefixes (must handle all of the
+%% ones returned by supported_oai_pmh_metadata_prefixes()).
+%% @end
+%%-------------------------------------------------------------------
+-callback adapt_for_oai_pmh(oai_metadata:prefix(), od_handle:parsed_metadata()) ->
+    od_handle:parsed_metadata().
+
+
+%%-------------------------------------------------------------------
+%% @doc
+%% Encodes the metadata in XML format. May apply reformatting if needed
+%% (xmerl is limited and it must be done post-export, and every plugin
+%% may need different transformations).
+%% @end
+%%-------------------------------------------------------------------
+-callback encode_xml(od_handle:parsed_metadata()) -> od_handle:raw_metadata().
+
+
+%%-------------------------------------------------------------------
+%% @doc
+%% Returns validation examples that will be tested when the plugin is loaded.
+%% They serve as unit tests for the plugin.
+%% @end
+%%-------------------------------------------------------------------
+-callback validation_examples() -> [validation_example()].
+
+
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+
+-spec validate_example(module(), validation_example()) -> ok | no_return().
+validate_example(Module, ValidationExample) ->
+    try
+        validate_handle_metadata_plugin_example_unsafe(Module, ValidationExample)
+    catch Class:Reason:Stacktrace ->
+        ?error_exception("Validation of an example for ~ts crashed", [Module], Class, Reason, Stacktrace),
+        throw(validation_failed)
+    end.
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+
+%% @private
+-spec validate_handle_metadata_plugin_example_unsafe(module(), validation_example()) ->
+    ok | no_return().
+validate_handle_metadata_plugin_example_unsafe(Module, ValidationExample) ->
+    DummyPidPublicHandle = str_utils:format_bin("http://hdl.handle.net/~ts/~ts", [
+        datastore_key:new(), datastore_key:new()
+    ]),
+    validate_handle_metadata_plugin_example_unsafe(Module, DummyPidPublicHandle, ValidationExample),
+
+    DummyDoiPublicHandle = ?DOI_IDENTIFIER(str_utils:format_bin("~ts/~ts", [datastore_key:new(), datastore_key:new()])),
+    validate_handle_metadata_plugin_example_unsafe(Module, DummyDoiPublicHandle, ValidationExample),
+
+    DummyURLPublicHandle = str_utils:format_bin("https://example.com/~ts", [datastore_key:new()]),
+    validate_handle_metadata_plugin_example_unsafe(Module, DummyURLPublicHandle, ValidationExample).
+
+
+%% @private
+-spec validate_handle_metadata_plugin_example_unsafe(module(), od_handle:public_handle(), validation_example()) ->
+    ok | no_return().
+validate_handle_metadata_plugin_example_unsafe(Module, PublicHandle, #handle_metadata_plugin_validation_example{
+    input_raw_xml = InputRawXml,
+    input_qualifies_for_publication = InputQualifiesForPublication,
+    exp_revised_metadata_generator = ExpRevisedMetadataGenerator,
+    exp_final_metadata_generator = ExpFinalMetadataGenerator,
+    exp_oai_pmh_metadata_generator = ExpOaiPmhMetadataGenerator
+}) ->
+    DummyShareId = datastore_key:new(),
+    DummyShareRecord = #od_share{
+        name = str_utils:rand_hex(5),
+        description = str_utils:rand_hex(50),
+        space = datastore_key:new(),
+        handle = datastore_key:new(),
+        root_file_uuid = datastore_key:new(),
+        file_type = case rand:uniform(2) of 1 -> ?REGULAR_FILE_TYPE; 2 -> ?DIRECTORY_TYPE end,
+        creation_time = global_clock:timestamp_seconds(),
+        creator = ?SUB(user, datastore_key:new())
+    },
+
+    {ok, ParsedMetadata} = oai_xml:parse(InputRawXml),
+
+    case Module:revise_for_publication(ParsedMetadata, DummyShareId, DummyShareRecord) of
+        error when InputQualifiesForPublication == false ->
+            ok;
+
+        {ok, RevisedMetadata} when InputQualifiesForPublication == true ->
+            ExpRawRevisedMetadata = ExpRevisedMetadataGenerator(DummyShareId, DummyShareRecord),
+            assert_result_equals_expectation(
+                Module,
+                InputRawXml,
+                RevisedMetadata,
+                ExpRawRevisedMetadata,
+                "Unmet expectation: obtained revised metadata different than expected"
+            ),
+            assert_result_equals_expectation(
+                Module,
+                InputRawXml,
+                ?check(Module:revise_for_publication(RevisedMetadata, DummyShareId, DummyShareRecord)),
+                ExpRawRevisedMetadata,
+                "Unmet expectation: revise_for_publication is not idempotent"
+            ),
+
+            FinalMetadata = Module:insert_public_handle(RevisedMetadata, PublicHandle),
+            ExpRawFinalMetadata = ExpFinalMetadataGenerator(DummyShareId, DummyShareRecord, PublicHandle),
+            assert_result_equals_expectation(
+                Module,
+                InputRawXml,
+                FinalMetadata,
+                ExpRawFinalMetadata,
+                "Unmet expectation: obtained final metadata different than expected"
+            ),
+            assert_result_equals_expectation(
+                Module,
+                InputRawXml,
+                Module:insert_public_handle(FinalMetadata, PublicHandle),
+                ExpRawFinalMetadata,
+                "Unmet expectation: insert_public_handle is not idempotent"
+            ),
+
+            assert_result_equals_expectation(
+                Module,
+                InputRawXml,
+                Module:insert_public_handle(
+                    ?check(Module:revise_for_publication(FinalMetadata, DummyShareId, DummyShareRecord)),
+                    PublicHandle
+                ),
+                ExpRawFinalMetadata,
+                "Unmet expectation: revise_for_publication + insert_public_handle on final metadata is not idempotent"
+            ),
+
+            lists:foreach(fun(MetadataPrefix) ->
+                OaiPmhMetadata = Module:adapt_for_oai_pmh(MetadataPrefix, FinalMetadata),
+                ExpOaiPmhMetadata = ExpOaiPmhMetadataGenerator(MetadataPrefix, DummyShareId, DummyShareRecord, PublicHandle),
+                assert_result_equals_expectation(
+                    Module,
+                    InputRawXml,
+                    OaiPmhMetadata,
+                    ExpOaiPmhMetadata,
+                    "Unmet expectation: obtained oai_pmh metadata different than expected"
+                )
+            end, Module:supported_oai_pmh_metadata_prefixes());
+
+        RevisionResult ->
+            ?error(?autoformat_with_msg("Unmet expectation", [InputQualifiesForPublication, RevisionResult])),
+            error(unmet_expectation)
+    end.
+
+
+%% @private
+-spec assert_result_equals_expectation(
+    module(),
+    od_handle:raw_metadata(),
+    od_handle:parsed_metadata(),
+    od_handle:raw_metadata(),
+    string()
+) -> ok | no_return().
+assert_result_equals_expectation(Module, RawInput, ParsedResult, RawExpectation, ErrorMsg) ->
+    RawResult = Module:encode_xml(ParsedResult),
+    case RawResult of
+        RawExpectation ->
+            ok;
+        _ ->
+            ?error(ErrorMsg),
+            ?error(
+                "Raw input:~n"
+                "--------------------------------~n"
+                "~ts~n"
+                "--------------------------------",
+                [RawInput]
+            ),
+            ?error(
+                "Got:~n"
+                "--------------------------------~n"
+                "~ts~n"
+                "--------------------------------",
+                [RawResult]
+            ),
+            ?error(
+                "Expected:~n"
+                "--------------------------------~n"
+                "~ts~n"
+                "--------------------------------",
+                [RawExpectation]
+            ),
+            error(unmet_expectation)
+    end.

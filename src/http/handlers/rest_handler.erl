@@ -14,31 +14,36 @@
 
 -behaviour(cowboy_rest).
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
--type method() :: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'.
+-type method() :: http_utils:method().
 -type binding() :: {binding, atom()} | client_id | client_ip.
 -type bound_gri() :: #b_gri{}.
 -type bound_auth_hint() :: undefined | {
     throughUser | throughGroup | throughSpace | throughProvider |
-    throughHandleService | throughHandle | asUser | asGroup,
+    throughHandleService | throughHandle | throughHarvester |
+    throughCluster | throughInventory |
+    asUser | asGroup | asSpace | asHarvester,
     binding()
 }.
 
--export_type([method/0, binding/0, bound_gri/0, bound_auth_hint/0]).
-
 % State of REST handler
 -record(state, {
-    client = #client{} :: entity_logic:client(),
+    auth = #auth{} :: aai:auth(),
     rest_req = undefined :: #rest_req{} | undefined,
     allowed_methods :: [method()]
 }).
 -type opts() :: #{method() => #rest_req{}}.
+
+-type rest_resp() :: #rest_resp{}.
+
+-export_type([method/0, binding/0, bound_gri/0, bound_auth_hint/0, opts/0, rest_resp/0]).
 
 %% cowboy rest handler API
 -export([
@@ -67,7 +72,10 @@
 %%--------------------------------------------------------------------
 -spec init(Req :: cowboy_req:req(), Opts :: opts()) ->
     {cowboy_rest, cowboy_req:req(), #state{}}.
-init(#{method := MethodBin} = Req, Opts) ->
+init(#{method := MethodBin} = InitialReq, Opts) ->
+    % The REST API accepts only tokens (rather than session cookies) so
+    % it's safe to allow it to be called from other origins.
+    Req = http_cors:allow_origin(<<"*">>, InitialReq),
     Method = binary_to_method(MethodBin),
     % If given method is not allowed, it is not in the map. Such request
     % will stop execution on allowed_methods/2 callback. Use undefined if
@@ -120,8 +128,8 @@ content_types_accepted(Req, State) ->
     SubType :: binary(),
     Params :: '*' | [{binary(), binary()}],
     ProvideResource :: atom().
-content_types_provided(Req, State) ->
-    {[{<<"application/json">>, provide_resource}], Req, State}.
+content_types_provided(Req, #state{rest_req = #rest_req{produces = Produces}} = State) ->
+    {lists:map(fun(ContentType) -> {ContentType, provide_resource} end, Produces), Req, State}.
 
 
 %%--------------------------------------------------------------------
@@ -131,36 +139,49 @@ content_types_provided(Req, State) ->
 %% 401 Unauthorized is returned when there's been an *authentication* error,
 %% and 403 Forbidden is returned when the already-authenticated client
 %% is unauthorized to perform an operation.
+%%
+%% This function checks authentication, authorization is checked
+%% by entity_logic later.
 %% @end
 %%--------------------------------------------------------------------
 -spec is_authorized(Req :: cowboy_req:req(), State :: #state{}) ->
-    {true | {false, binary()}, cowboy_req:req(), #state{}}.
+    {true | {false, binary()} | stop, cowboy_req:req(), #state{}}.
 is_authorized(Req, State) ->
-    % Check if the request carries any authorization
     Result = try
-        % Try to authorize the client using several methods.
-        authorize(Req, [
-            fun auth_logic:authorize_by_basic_auth/1,
-            fun auth_logic:authorize_by_macaroons/1,
-            fun auth_logic:authorize_by_access_token/1
-        ])
+        case token_auth:authenticate_for_rest_interface(Req) of
+            {true, TokenAuth} ->
+                {ok, TokenAuth};
+            {error, _} = Error1 ->
+                Error1;
+            false ->
+                {PeerIp, _} = cowboy_req:peer(Req),
+                case basic_auth:authenticate(Req) of
+                    {true, BasicAuth} ->
+                        {ok, BasicAuth#auth{peer_ip = PeerIp}};
+                    {error, _} = Error2 ->
+                        Error2;
+                    false ->
+                        {ok, #auth{subject = ?SUB(nobody), peer_ip = PeerIp}}
+                end
+        end
     catch
-        throw:Err ->
-            Err;
-        Type:Message ->
-            ?error_stacktrace("Unexpected error in ~p:is_authorized - ~p:~p", [
-                ?MODULE, Type, Message
-            ]),
-            ?ERROR_INTERNAL_SERVER_ERROR
+        throw:Error3 ->
+            ?ERR_UNAUTHORIZED(?err_ctx(), Error3);
+        Type:Message:Stacktrace ->
+            ?error_stacktrace(
+                "Unexpected error in ~tp:is_authorized - ~tp:~tp",
+                [?MODULE, Type, Message],
+                Stacktrace
+            ),
+            ErrorCtx = ?err_ctx(),
+            ?ERR_UNAUTHORIZED(ErrorCtx, ?ERR_INTERNAL_SERVER_ERROR(ErrorCtx, undefined))
     end,
 
     case Result of
-        {true, Client} ->
-            % Always return true - authorization is checked by entity_logic later.
-            {true, Req, State#state{client = Client}};
-        {error, _} = Error ->
-            RestResp = error_rest_translator:response(Error),
-            {stop, send_response(RestResp, Req), State}
+        {ok, Auth} ->
+            {true, Req, State#state{auth = Auth}};
+        {error, _} = Err4 ->
+            {stop, send_error_response(Err4, Req), State}
     end.
 
 
@@ -202,16 +223,23 @@ delete_resource(Req, State) ->
 %% Returns all REST routes in the cowboy router format.
 %% @end
 %%--------------------------------------------------------------------
--spec rest_routes() -> [{binary(), module(), maps:map()}].
+-spec rest_routes() -> [{binary(), module(), rest_handler:opts()}].
 rest_routes() ->
     AllRoutes = lists:flatten([
+        dev_utils:dev_provider_registration_route(),
         user_routes:routes(),
         group_routes:routes(),
         space_routes:routes(),
         share_routes:routes(),
         provider_routes:routes(),
+        token_routes:routes(),
         handle_service_routes:routes(),
         handle_routes:routes(),
+        harvester_routes:routes(),
+        cluster_routes:routes(),
+        atm_inventory_routes:routes(),
+        atm_lambda_routes:routes(),
+        atm_workflow_schema_routes:routes(),
         zone_routes:routes()
     ]),
     % Aggregate routes that share the same path
@@ -227,10 +255,8 @@ rest_routes() ->
     % - prepend REST prefix to every route
     % - rest handler module must be added as second element to the tuples
     % - RoutesForPath will serve as Opts to rest handler init.
-    {ok, PrefixStr} = oz_worker:get_env(rest_api_prefix),
-    Prefix = str_utils:to_binary(PrefixStr),
     lists:map(fun({Path, RoutesForPath}) ->
-        {<<Prefix/binary, Path/binary>>, ?REST_HANDLER_MODULE, RoutesForPath}
+        {oz_worker:get_rest_api_path(Path), ?REST_HANDLER_MODULE, RoutesForPath}
     end, AggregatedRoutes).
 
 
@@ -249,7 +275,8 @@ rest_routes() ->
     {stop, NewReq :: cowboy_req:req(), NewState :: #state{}}.
 process_request(Req, State) ->
     try
-        #state{client = Client, rest_req = #rest_req{
+        oz_worker_circuit_breaker:assert_closed(),
+        #state{auth = Client, rest_req = #rest_req{
             method = Method,
             b_gri = GriWithBindings,
             b_auth_hint = AuthHintWithBindings
@@ -260,26 +287,28 @@ process_request(Req, State) ->
         {Data, Req2} = case Operation of
             create -> get_data(Req);
             get -> {#{}, Req};
+            head -> {#{}, Req};
             update -> get_data(Req);
             delete -> {#{}, Req}
         end,
         ElReq = #el_req{
             operation = Operation,
-            client = Client,
+            auth = Client,
             gri = GRI,
             auth_hint = AuthHint,
             data = Data
         },
-        RestResp = call_entity_logic_and_translate_response(ElReq),
+        RestResp = route_to_proper_handler(ElReq, Req2),
         {stop, send_response(RestResp, Req2), State}
     catch
         throw:Error ->
-            ErrorResp = error_rest_translator:response(Error),
-            {stop, send_response(ErrorResp, Req), State};
-        Type:Message ->
-            ?error_stacktrace("Unexpected error in ~p:process_request - ~p:~p", [
-                ?MODULE, Type, Message
-            ]),
+            {stop, send_error_response(Error, Req), State};
+        Type:Message:Stacktrace ->
+            ?error_stacktrace(
+                "Unexpected error in ~tp:process_request - ~tp:~tp",
+                [?MODULE, Type, Message],
+                Stacktrace
+            ),
             NewReq = cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req),
             {stop, NewReq, State}
     end.
@@ -287,10 +316,10 @@ process_request(Req, State) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Sends given response (#rest_resp{}) and returns modified cowboy_req record.
+%% Sends given response and returns modified cowboy_req record.
 %% @end
 %%--------------------------------------------------------------------
--spec send_response(RestResp :: #rest_resp{}, Req :: cowboy_req:req()) ->
+-spec send_response(rest_resp(), Req :: cowboy_req:req()) ->
     NewReq :: cowboy_req:req().
 send_response(#rest_resp{code = Code, headers = Headers, body = Body}, Req) ->
     RespBody = case Body of
@@ -302,6 +331,14 @@ send_response(#rest_resp{code = Code, headers = Headers, body = Body}, Req) ->
     cowboy_req:reply(Code, Headers, RespBody, Req).
 
 
+-spec send_error_response(errors:error(), cowboy_req:req()) -> cowboy_req:req().
+send_error_response(Error = {error, _}, Req) ->
+    send_response(#rest_resp{
+        code = errors:to_http_code(Error),
+        body = #{<<"error">> => errors:to_json(Error)}
+    }, Req).
+
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -309,7 +346,7 @@ send_response(#rest_resp{code = Code, headers = Headers, body = Body}, Req) ->
 %% sent with the request.
 %% @end
 %%--------------------------------------------------------------------
--spec resolve_gri_bindings(bound_gri(), entity_logic:client(),
+-spec resolve_gri_bindings(bound_gri(), aai:auth(),
     cowboy_req:req()) -> entity_logic:gri().
 resolve_gri_bindings(#b_gri{type = Tp, id = Id, aspect = As, scope = Sc}, Client, Req) ->
     IdBinding = resolve_bindings(Id, Client, Req),
@@ -327,7 +364,7 @@ resolve_gri_bindings(#b_gri{type = Tp, id = Id, aspect = As, scope = Sc}, Client
 %% was sent with the request.
 %% @end
 %%--------------------------------------------------------------------
--spec resolve_auth_hint_bindings(bound_auth_hint(), entity_logic:client(),
+-spec resolve_auth_hint_bindings(bound_auth_hint(), aai:auth(),
     cowboy_req:req()) -> entity_logic:auth_hint().
 resolve_auth_hint_bindings({Key, Value}, Client, Req) ->
     {Key, resolve_bindings(Value, Client, Req)};
@@ -343,10 +380,10 @@ resolve_auth_hint_bindings(undefined, _Client, _Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec resolve_bindings(binding() | {atom(), binding()} | term(),
-    entity_logic:client(), cowboy_req:req()) -> binary() | {atom(), binary()}.
+    aai:auth(), cowboy_req:req()) -> binary() | {atom(), binary()}.
 resolve_bindings(?BINDING(Key), _Client, Req) ->
     cowboy_req:binding(Key, Req);
-resolve_bindings(?CLIENT_ID, #client{id = Id}, _Req) ->
+resolve_bindings(?CLIENT_ID, #auth{subject = #subject{id = Id}}, _Req) ->
     Id;
 resolve_bindings(?CLIENT_IP, _Client, #{peer := {Ip, _Port}} = _Req) ->
     list_to_binary(inet_parse:ntoa(Ip));
@@ -356,53 +393,38 @@ resolve_bindings(Other, _Client, _Req) ->
     Other.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates entity logic response into REST response using TranslatorModule.
-%% @end
-%%--------------------------------------------------------------------
--spec call_entity_logic_and_translate_response(#el_req{}) -> #rest_resp{}.
+-spec route_to_proper_handler(#el_req{}, cowboy_req:req()) -> rest_resp().
+route_to_proper_handler(#el_req{operation = Op, gri = #gri{type = od_share, aspect = {shared_data, ObjectId}}}, Req) when
+    Op =:= get;
+    Op =:= head
+->
+    shared_data_redirector:handle(ObjectId, Req);
+route_to_proper_handler(ElReq, _Req) ->
+    call_entity_logic_and_translate_response(ElReq).
+
+
+%% @private
+-spec call_entity_logic_and_translate_response(#el_req{}) -> rest_resp().
 call_entity_logic_and_translate_response(ElReq) ->
     Result = entity_logic:handle(ElReq),
     try
         rest_translator:response(ElReq, Result)
     catch
-        Type:Message ->
+        Type:Message:Stacktrace ->
             #el_req{operation = Operation, gri = GRI, auth_hint = AuthHint} = ElReq,
-            ?error_stacktrace("Cannot translate REST result for:~n"
-            "Operation: ~p~n"
-            "GRI: ~p~n"
-            "AuthHint: ~p~n"
-            "Result: ~p~n"
-            "---------~n"
-            "Error was: ~p:~p", [
-                Operation, GRI, AuthHint, Result, Type, Message
-            ]),
-            rest_translator:response(ElReq, ?ERROR_INTERNAL_SERVER_ERROR)
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tries to authorize REST client using provided auth methods expressed
-%% as functions to use.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize(Req :: cowboy_req:req(),
-    [fun((cowboy_req:req()) -> {true, #client{}} | {error, term()})]) ->
-    {true, #client{}} | {error, term()}.
-authorize(_Req, []) ->
-    {true, ?NOBODY};
-authorize(Req, [AuthMethod | Rest]) ->
-    case AuthMethod(Req) of
-        false ->
-            authorize(Req, Rest);
-        {true, Client} ->
-            {true, Client};
-        {error, Error} ->
-            {error, Error}
+            ?error_stacktrace(
+                "Cannot translate REST result for:~n"
+                "Operation: ~tp~n"
+                "GRI: ~tp~n"
+                "AuthHint: ~tp~n"
+                "Result: ~tp~n"
+                "---------~n"
+                "Error was: ~tp:~tp",
+                [Operation, GRI, AuthHint, Result, Type, Message],
+                Stacktrace
+            ),
+            rest_translator:response(ElReq, ?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined))
     end.
 
 
@@ -423,7 +445,7 @@ get_data(Req) ->
             _ -> json_utils:decode(Body)
         end
     catch _:_ ->
-        throw(?ERROR_MALFORMED_DATA)
+        throw(?ERR_MALFORMED_DATA(?err_ctx()))
     end,
     {Data, Req2}.
 
@@ -439,6 +461,7 @@ get_data(Req) ->
 binary_to_method(<<"POST">>) -> 'POST';
 binary_to_method(<<"PUT">>) -> 'PUT';
 binary_to_method(<<"GET">>) -> 'GET';
+binary_to_method(<<"HEAD">>) -> 'HEAD';
 binary_to_method(<<"PATCH">>) -> 'PATCH';
 binary_to_method(<<"DELETE">>) -> 'DELETE'.
 
@@ -454,6 +477,7 @@ binary_to_method(<<"DELETE">>) -> 'DELETE'.
 method_to_binary('POST') -> <<"POST">>;
 method_to_binary('PUT') -> <<"PUT">>;
 method_to_binary('GET') -> <<"GET">>;
+method_to_binary('HEAD') -> <<"HEAD">>;
 method_to_binary('PATCH') -> <<"PATCH">>;
 method_to_binary('DELETE') -> <<"DELETE">>.
 
@@ -469,5 +493,6 @@ method_to_binary('DELETE') -> <<"DELETE">>.
 method_to_operation('POST') -> create;
 method_to_operation('PUT') -> create;
 method_to_operation('GET') -> get;
+method_to_operation('HEAD') -> head;
 method_to_operation('PATCH') -> update;
 method_to_operation('DELETE') -> delete.

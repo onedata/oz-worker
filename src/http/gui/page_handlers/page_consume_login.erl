@@ -15,14 +15,17 @@
 
 -behaviour(dynamic_page_behaviour).
 
--include("entity_logic.hrl").
 -include("http/gui_paths.hrl").
--include("registered_names.hrl").
+-include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include("auth/auth_errors.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([handle/2]).
+
+-define(LOGIN_DIAGNOSTICS_LOG_DIR, oz_worker:get_env(test_mode_logins_log_dir)).
 
 %%%===================================================================
 %%% API
@@ -33,37 +36,37 @@
 %% {@link dynamic_page_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
--spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
+-spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(Method, Req) ->
-    ValidateResult = auth_logic:validate_login(Method, Req),
-    case auth_test_mode:process_is_test_mode_enabled() of
+    ValidateResult = idp_auth:validate_login(Method, Req),
+    case idp_auth_test_mode:is_test_mode_enabled_for_current_pid() of
         true ->
-            cowboy_req:reply(200, #{
-                <<"content-type">> => <<"text/html">>
-            }, render_test_login_results(ValidateResult), Req);
+            TestLoginResults = render_test_login_results(ValidateResult),
+            dump_test_login_results_to_log(TestLoginResults),
+            cowboy_req:reply(?HTTP_200_OK, #{?HDR_CONTENT_TYPE => <<"text/html">>}, TestLoginResults, Req);
         false ->
             {NewReq, RedirectURL} = case ValidateResult of
                 {ok, UserId, RedirectAfterLogin} ->
-                    Req2 = oz_gui_session:log_in(UserId, Req),
+                    Req2 = gui_session:log_in(UserId, Req),
                     {Req2, RedirectAfterLogin};
                 {auth_error, Error, State, RedirectAfterLogin} ->
-                    Req2 = new_gui:set_cookie(
-                        <<"authentication_error_reason">>, format_error_reason(Error),
-                        #{path => <<"/">>}, Req
+                    Req2 = cowboy_req:set_resp_cookie(
+                        <<"authentication_error_reason">>, format_error_reason(Error), Req,
+                        #{path => <<"/">>}
                     ),
-                    Req3 = new_gui:set_cookie(
-                        <<"authentication_error_state">>, State,
-                        #{path => <<"/">>}, Req2
+                    Req3 = cowboy_req:set_resp_cookie(
+                        <<"authentication_error_state">>, State, Req2,
+                        #{path => <<"/">>}
                     ),
                     {Req3, RedirectAfterLogin}
             end,
             % This page is visited with a POST request, so use a 303 redirect in
             % response so that web browser switches to GET.
-            cowboy_req:reply(303, #{
-                <<"location">> => RedirectURL,
+            cowboy_req:reply(?HTTP_303_SEE_OTHER, #{
+                ?HDR_LOCATION => RedirectURL,
                 % Connection close is required, otherwise chrome/safari can get stuck
                 % stalled waiting for data.
-                <<"connection">> => <<"close">>
+                ?HDR_CONNECTION => <<"close">>
             }, NewReq)
     end.
 
@@ -76,6 +79,8 @@ format_error_reason(?ERROR_INVALID_STATE) ->
     <<"invalid_state:", (integer_to_binary(state_token:ttl()))/binary>>;
 format_error_reason(?ERROR_INVALID_AUTH_REQUEST) ->
     <<"invalid_auth_request">>;
+format_error_reason(?ERR_USER_BLOCKED) ->
+    <<"user_blocked">>;
 format_error_reason(?ERROR_IDP_UNREACHABLE(_)) ->
     <<"idp_unreachable">>;
 format_error_reason(?ERROR_BAD_IDP_RESPONSE(_, _, _, _)) ->
@@ -90,17 +95,17 @@ format_error_reason(?ERROR_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(_)) ->
     <<"account_already_linked_to_current_user">>;
 format_error_reason(?ERROR_ACCOUNT_ALREADY_LINKED_TO_ANOTHER_USER(_, _)) ->
     <<"account_already_linked_to_another_user">>;
-format_error_reason(?ERROR_INTERNAL_SERVER_ERROR) ->
+format_error_reason(?ERR_INTERNAL_SERVER_ERROR(_)) ->
     <<"internal_server_error">>.
 
 
 %% @private
 -spec render_test_login_results({ok, od_user:id(), RedirectPage :: binary()} |
-{auth_error, {error, term()}, state_token:id(), RedirectPage :: binary()}) -> binary().
+    {auth_error, {error, term()}, state_token:state_token(), RedirectPage :: binary()}) -> binary().
 render_test_login_results(ValidateResult) ->
     StatusHeaders = case ValidateResult of
         {ok, _, _} ->
-            UserData = auth_test_mode:get_user_data(),
+            UserData = idp_auth_test_mode:get_user_data(),
             str_utils:unicode_list_to_binary(str_utils:format(
                 "<h3 style='color: #1c8e23;'>Login successful, gathered user data:</h3>~n"
                 "<pre><code>~ts</code></pre>",
@@ -113,7 +118,7 @@ render_test_login_results(ValidateResult) ->
                 [Error]
             ))
     end,
-    test_login_page_html(StatusHeaders, str_utils:unicode_list_to_binary(auth_test_mode:get_logs())).
+    test_login_page_html(StatusHeaders, str_utils:unicode_list_to_binary(idp_auth_test_mode:get_logs())).
 
 
 %% @private
@@ -146,3 +151,21 @@ in the test mode. Use only for diagnostics.</i>
 </body>
 </html>
 ">>.
+
+
+%% @private
+-spec dump_test_login_results_to_log(binary()) -> ok.
+dump_test_login_results_to_log(TestLoginResults) ->
+    StateToken = idp_auth_test_mode:get_state_token(),
+    {{Year, Month, Day}, {Hour, Minute, Second}} = time:seconds_to_datetime(global_clock:timestamp_seconds()),
+    FileName = str_utils:format_bin("~4..0B-~2..0B-~2..0B_~2..0B-~2..0B-~2..0B.~ts.html", [
+        Year, Month, Day, Hour, Minute, Second, StateToken
+    ]),
+    FilePath = filename:join(?LOGIN_DIAGNOSTICS_LOG_DIR, FileName),
+    Result = case {filelib:ensure_dir(FilePath), file:write_file(FilePath, TestLoginResults)} of
+        {ok, ok} -> ok;
+        {{error, _} = Error, _} -> Error;
+        {_, {error, _} = Error} -> Error
+    end,
+    Result == ok orelse ?warning("Cannot log test login attempt results due to ~w", [Result]),
+    Result.

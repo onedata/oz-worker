@@ -18,6 +18,11 @@
 %% API
 -export([put/4, patch/4, delete/4]).
 
+-define(CONNECT_OPTS, [
+    {connect_timeout, 60000},
+    {recv_timeout, 60000}
+]).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -31,7 +36,7 @@
     Headers :: http_client:headers(), Body :: http_client:body()) ->
     {ok, http_client:code(), http_client:headers(), http_client:body()} | {error, term()}.
 put(ProxyEndpoint, Path, Headers, Body) ->
-    http_client:put(<<ProxyEndpoint/binary, Path/binary>>, Headers, Body).
+    http_client:put(<<ProxyEndpoint/binary, Path/binary>>, Headers, Body, ?CONNECT_OPTS).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -42,7 +47,7 @@ put(ProxyEndpoint, Path, Headers, Body) ->
     Headers :: http_client:headers(), Body :: http_client:body()) ->
     {ok, http_client:code(), http_client:headers(), http_client:body()} | {error, term()}.
 patch(ProxyEndpoint, Path, Headers, Body) ->
-    http_client:patch(<<ProxyEndpoint/binary, Path/binary>>, Headers, Body).
+    http_client:patch(<<ProxyEndpoint/binary, Path/binary>>, Headers, Body, ?CONNECT_OPTS).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -53,4 +58,4 @@ patch(ProxyEndpoint, Path, Headers, Body) ->
     Headers :: http_client:headers(), Body :: http_client:body()) ->
     {ok, http_client:code(), http_client:headers(), http_client:body()} | {error, term()}.
 delete(ProxyEndpoint, Path, Headers, Body) ->
-    http_client:delete(<<ProxyEndpoint/binary, Path/binary>>, Headers, Body).
+    http_client:delete(<<ProxyEndpoint/binary, Path/binary>>, Headers, Body, ?CONNECT_OPTS).

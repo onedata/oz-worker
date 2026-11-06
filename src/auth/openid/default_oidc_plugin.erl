@@ -16,7 +16,8 @@
 -author("Lukasz Opiola").
 
 -include("auth/auth_common.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 % Default configuration of the handler
 -define(DEFAULT_SCOPE, "openid email profile").
@@ -74,7 +75,7 @@ end).
     get_login_endpoint/3,
     validate_login/3,
     refresh_access_token/2,
-    get_user_info/2
+    get_user_info/3
 ]).
 
 
@@ -87,9 +88,9 @@ end).
 %% {@link openid_plugin_behaviour} callback get_login_endpoint/3.
 %% @end
 %%--------------------------------------------------------------------
--spec get_login_endpoint(auth_config:idp(), state_token:id(),
-    auth_logic:redirect_uri()) ->
-    auth_logic:login_endpoint().
+-spec get_login_endpoint(auth_config:idp(), state_token:state_token(),
+    idp_auth:redirect_uri()) ->
+    idp_auth:login_endpoint().
 get_login_endpoint(IdP, State, RedirectUri) ->
     Params1 = #{
         <<"client_id">> => ?CFG_CLIENT_ID(IdP),
@@ -116,8 +117,8 @@ get_login_endpoint(IdP, State, RedirectUri) ->
 %% {@link openid_plugin_behaviour} callback validate_login/3.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login(auth_config:idp(), auth_logic:query_params(),
-    auth_logic:redirect_uri()) ->
+-spec validate_login(auth_config:idp(), idp_auth:query_params(),
+    idp_auth:redirect_uri()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 validate_login(IdP, #{<<"code">> := Code}, RedirectUri) ->
     {AccessToken, Expires, RefreshToken} = acquire_access_token(IdP, #{
@@ -125,7 +126,7 @@ validate_login(IdP, #{<<"code">> := Code}, RedirectUri) ->
         <<"redirect_uri">> => RedirectUri,
         <<"grant_type">> => <<"authorization_code">>
     }),
-    {ok, Attributes} = get_user_info(IdP, AccessToken),
+    {ok, Attributes} = get_user_info(IdP, gui_login, AccessToken),
     case auth_config:has_offline_access_enabled(IdP) of
         false ->
             {ok, Attributes};
@@ -142,7 +143,7 @@ validate_login(IdP, #{<<"code">> := Code}, RedirectUri) ->
 %% {@link openid_plugin_behaviour} callback refresh_access_token/2.
 %% @end
 %%--------------------------------------------------------------------
--spec refresh_access_token(auth_config:idp(), auth_logic:refresh_token()) ->
+-spec refresh_access_token(auth_config:idp(), idp_auth:refresh_token()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 refresh_access_token(IdP, RefreshToken) ->
     case auth_config:has_offline_access_enabled(IdP) of
@@ -154,7 +155,7 @@ refresh_access_token(IdP, RefreshToken) ->
                 <<"refresh_token">> => RefreshToken,
                 <<"scope">> => ?CFG_SCOPE(IdP)
             }),
-            {ok, Attributes} = get_user_info(IdP, NewAccessToken),
+            {ok, Attributes} = get_user_info(IdP, refresh_token, NewAccessToken),
             {ok, Attributes#{
                 <<"access_token">> => {NewAccessToken, Expires},
                 <<"refresh_token">> => NewRefreshToken
@@ -164,18 +165,18 @@ refresh_access_token(IdP, RefreshToken) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link openid_plugin_behaviour} callback get_user_info/2.
+%% {@link openid_plugin_behaviour} callback get_user_info/3.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(auth_config:idp(), auth_logic:access_token()) ->
+-spec get_user_info(auth_config:idp(), idp_auth:flow_type(), idp_auth:access_token()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
-get_user_info(IdP, AccessToken) ->
+get_user_info(IdP, FlowType, AccessToken) ->
     Parameters1 = parameters_append_access_token(#{}, IdP, AccessToken),
     Parameters2 = parameters_append_custom(Parameters1, IdP, userInfo),
 
     Headers1 = case Parameters2 of
         Map when map_size(Map) == 0 -> #{};
-        _ -> #{<<"Content-Type">> => <<"application/x-www-form-urlencoded">>}
+        _ -> #{?HDR_CONTENT_TYPE => <<"application/x-www-form-urlencoded">>}
     end,
     Headers2 = headers_append_access_token(Headers1, IdP, AccessToken),
     Headers3 = headers_append_custom(Headers2, IdP, userInfo),
@@ -190,9 +191,9 @@ get_user_info(IdP, AccessToken) ->
     {ok, lists:foldl(fun(Endpoint, AccAttributes) ->
         Attributes = case Endpoint of
             {AttrKey, Url} ->
-                #{AttrKey => request_user_info(Url, Parameters2, Headers3)};
+                #{AttrKey => request_user_info(IdP, FlowType, Url, Parameters2, Headers3)};
             Url ->
-                request_user_info(Url, Parameters2, Headers3)
+                request_user_info(IdP, FlowType, Url, Parameters2, Headers3)
         end,
         maps:merge(AccAttributes, Attributes)
     end, #{}, UserInfoEndpoints)}.
@@ -202,48 +203,66 @@ get_user_info(IdP, AccessToken) ->
 %%%===================================================================
 
 %% @private
--spec acquire_access_token(auth_config:idp(), auth_logic:query_params()) ->
-    auth_config:access_token().
+-spec acquire_access_token(auth_config:idp(), idp_auth:query_params()) ->
+    {idp_auth:access_token(), idp_auth:access_token_ttl(), idp_auth:refresh_token()}.
 acquire_access_token(IdP, Parameters) ->
     Parameters2 = parameters_append_auth(Parameters, IdP),
     Parameters3 = parameters_append_custom(Parameters2, IdP, accessToken),
 
     Headers1 = #{
-        <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
+        ?HDR_CONTENT_TYPE => <<"application/x-www-form-urlencoded">>
     },
     Headers2 = headers_append_auth(Headers1, IdP),
     Headers3 = headers_append_custom(Headers2, IdP, accessToken),
 
     AccessTokenEndpoint = idp_endpoint(IdP, accessToken),
     Method = ?CFG_ACCESS_TOKEN_ACQUIRE_METHOD(IdP),
-    {ResponseHeaders, ResponseBinary} = openid_protocol:request_idp(
+    {RespHeaders, RespBinary} = openid_protocol:request_idp(
         Method, 200, AccessTokenEndpoint, Headers3, Parameters3
     ),
+    % find out the content type - the response headers letter case might vary
+    % depending on the remote server
+    CasefoldedContentTypeHeader = string:casefold(?HDR_CONTENT_TYPE),
+    ContentType = maps:fold(fun
+        (Header, Value, undefined) ->
+            case string:casefold(Header) of
+                CasefoldedContentTypeHeader -> Value;
+                _ -> undefined
+            end;
+        (_, _, Acc) ->
+            Acc
+    end, undefined, RespHeaders),
 
-    case maps:get(<<"Content-Type">>, ResponseHeaders, undefined) of
-        <<"application/x-www-form-urlencoded", _/binary>> ->
-            Response = cow_qs:parse_qs(ResponseBinary),
+    case ContentType of
+        <<"application/json", _/binary>> ->
+            Response = json_utils:decode(RespBinary),
+            AccessToken = maps:get(<<"access_token">>, Response, undefined),
+            ExpiresIn = maps:get(<<"expires_in">>, Response, ?ASSUMED_TOKEN_LIFESPAN),
+            RefreshToken = maps:get(<<"refresh_token">>, Response, undefined),
+            {AccessToken, global_clock:timestamp_seconds() + ExpiresIn, RefreshToken};
+        _ ->
+            Response = cow_qs:parse_qs(RespBinary),
             AccessToken = proplists:get_value(<<"access_token">>, Response, undefined),
             ExpiresIn = case proplists:get_value(<<"expires_in">>, Response, undefined) of
                 undefined -> ?ASSUMED_TOKEN_LIFESPAN;
                 ValueBin -> binary_to_integer(ValueBin)
             end,
             RefreshToken = proplists:get_value(<<"refresh_token">>, Response, undefined),
-            {AccessToken, time_utils:cluster_time_seconds() + ExpiresIn, RefreshToken};
-        _ ->
-            Response = json_utils:decode(ResponseBinary),
-            AccessToken = maps:get(<<"access_token">>, Response, undefined),
-            ExpiresIn = maps:get(<<"expires_in">>, Response, ?ASSUMED_TOKEN_LIFESPAN),
-            RefreshToken = maps:get(<<"refresh_token">>, Response, undefined),
-            {AccessToken, time_utils:cluster_time_seconds() + ExpiresIn, RefreshToken}
+            {AccessToken, global_clock:timestamp_seconds() + ExpiresIn, RefreshToken}
     end.
 
 
 %% @private
--spec request_user_info(http_client:url(), auth_logic:query_params(),
-    http_client:headers()) -> ParsedJson :: #{}.
-request_user_info(URL, Parameters, Headers) ->
+-spec request_user_info(
+    auth_config:idp(),
+    idp_auth:flow_type(),
+    http_client:url(),
+    idp_auth:query_params(),
+    http_client:headers()
+) -> ParsedJson :: #{}.
+request_user_info(IdP, FlowType, URL, Parameters, Headers) ->
     {_, ResponseBody} = openid_protocol:request_idp(get, 200, URL, Headers, Parameters),
+    idp_auth_logger:log_user_info_collection_to_file(IdP, FlowType, ResponseBody),
     json_utils:decode(ResponseBody).
 
 
@@ -302,16 +321,16 @@ resolve_endpoint(_IdP, Url) ->
 
 
 %% @private
--spec get_xrds(auth_config:idp()) -> maps:map().
+-spec get_xrds(auth_config:idp()) -> map().
 get_xrds(IdP) ->
-    {ok, Xrds} = simple_cache:get({cached_xrds, IdP}, fun() ->
-        {true, fetch_xrds(IdP), ?XRDS_CACHE_TTL}
+    {ok, Xrds} = node_cache:acquire({cached_xrds, IdP}, fun() ->
+        {ok, fetch_xrds(IdP), ?XRDS_CACHE_TTL}
     end),
     Xrds.
 
 
 %% @private
--spec fetch_xrds(auth_config:idp()) -> maps:map().
+-spec fetch_xrds(auth_config:idp()) -> map().
 fetch_xrds(IdP) ->
     XrdsEndpoint = ?CFG_XRDS_ENDPOINT(IdP),
     Params = parameters_append_custom(#{}, IdP, xrds),
@@ -331,7 +350,7 @@ headers_append_auth(Headers, IdP) ->
             ClientId = ?CFG_CLIENT_ID(IdP),
             ClientSecret = ?CFG_CLIENT_SECRET(IdP),
             B64 = base64:encode(<<ClientId/binary, ":", ClientSecret/binary>>),
-            Headers#{<<"Authorization">> => <<"Basic ", B64/binary>>};
+            Headers#{?HDR_AUTHORIZATION => <<"Basic ", B64/binary>>};
         urlencoded ->
             Headers
     end.
@@ -339,11 +358,11 @@ headers_append_auth(Headers, IdP) ->
 
 %% @private
 -spec headers_append_access_token(http_client:headers(), auth_config:idp(),
-    auth_logic:access_token()) -> http_client:headers().
+    idp_auth:access_token()) -> http_client:headers().
 headers_append_access_token(Headers, IdP, AccessToken) ->
     case ?CFG_ACCESS_TOKEN_PASS_METHOD(IdP) of
         inAuthHeader ->
-            Headers#{<<"Authorization">> => <<"Bearer ", AccessToken/binary>>};
+            Headers#{?HDR_AUTHORIZATION => <<"Bearer ", AccessToken/binary>>};
         urlencoded ->
             Headers
     end.
@@ -364,8 +383,8 @@ headers_append_custom(Headers, IdP, EndpointType) ->
 
 
 %% @private
--spec parameters_append_auth(auth_logic:query_params(), auth_config:idp()) ->
-    auth_logic:query_params().
+-spec parameters_append_auth(idp_auth:query_params(), auth_config:idp()) ->
+    idp_auth:query_params().
 parameters_append_auth(Parameters, IdP) ->
     case ?CFG_CLIENT_SECRET_PASS_METHOD(IdP) of
         urlencoded ->
@@ -379,8 +398,8 @@ parameters_append_auth(Parameters, IdP) ->
 
 
 %% @private
--spec parameters_append_access_token(auth_logic:query_params(), auth_config:idp(),
-    auth_logic:access_token()) -> auth_logic:query_params().
+-spec parameters_append_access_token(idp_auth:query_params(), auth_config:idp(),
+    idp_auth:access_token()) -> idp_auth:query_params().
 parameters_append_access_token(Parameters, IdP, AccessToken) ->
     case ?CFG_ACCESS_TOKEN_PASS_METHOD(IdP) of
         urlencoded -> Parameters#{<<"access_token">> => AccessToken};
@@ -389,8 +408,8 @@ parameters_append_access_token(Parameters, IdP, AccessToken) ->
 
 
 %% @private
--spec parameters_append_custom(auth_logic:query_params(), auth_config:idp(),
-    openid_protocol:endpoint_type()) -> auth_logic:query_params().
+-spec parameters_append_custom(idp_auth:query_params(), auth_config:idp(),
+    openid_protocol:endpoint_type()) -> idp_auth:query_params().
 parameters_append_custom(Parameters, IdP, EndpointType) ->
     case ?CFG_CUSTOM_PARAMETERS(IdP, EndpointType) of
         undefined ->

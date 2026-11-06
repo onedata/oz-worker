@@ -15,17 +15,14 @@
 
 -behaviour(dynamic_page_behaviour).
 
--include("registered_names.hrl").
+-include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 %% API
 -export([handle/2]).
-
-% Session cookie id
--define(SESSION_COOKIE_KEY, <<"session_id">>).
-% Value of cookie when there is no session
--define(NO_SESSION_COOKIE, <<"no_session">>).
 
 %%%===================================================================
 %%% API
@@ -36,29 +33,29 @@
 %% {@link dynamic_page_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
--spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
+-spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"POST">>, Req) ->
-    try
-        <<"Basic ", UserAndPassword/binary>> =
-            cowboy_req:header(<<"authorization">>, Req),
-        [User, Passwd] = binary:split(base64:decode(UserAndPassword), <<":">>),
-        case user_logic:authenticate_by_basic_credentials(User, Passwd) of
-            {ok, #document{key = UserId}} ->
-                ?info("User ~s logged in", [UserId]),
-                Req2 = oz_gui_session:log_in(UserId, Req),
-                JSONHeader = #{<<"content-type">> => <<"application/json">>},
-                Body = json_utils:encode(#{<<"url">> => <<"/">>}),
-                cowboy_req:reply(200, JSONHeader, Body, Req2);
-            {error, Binary} when is_binary(Binary) ->
-                cowboy_req:reply(401, #{}, Binary, Req);
-            {error, onepanel_auth_disabled} ->
-                cowboy_req:reply(400, #{}, <<"Onepanel login disabled">>, Req);
-            _ ->
-                cowboy_req:reply(401, Req)
+    Result = try
+        case basic_auth:authenticate(Req) of
+            {true, ?USER(UserId)} ->
+                {ok, FullName} = user_logic:get_full_name(?ROOT, UserId),
+                ?info("User '~ts' has logged in (~ts)", [FullName, UserId]),
+                {ok, gui_session:log_in(UserId, Req)};
+            false ->
+                ?ERR_UNAUTHORIZED(?err_ctx(), undefined);
+            {error, _} = AuthenticationError ->
+                AuthenticationError
         end
-    catch T:M ->
-        ?error_stacktrace("Login by credentials failed - ~p:~p", [T, M]),
-        cowboy_req:reply(401, Req)
+    catch Type:Reason:Stacktrace ->
+        ?error_stacktrace("Login by basic credentials failed - ~w:~tp", [Type, Reason], Stacktrace),
+        ?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined)
+    end,
+    case Result of
+        {ok, NewReq} ->
+            Body = json_utils:encode(#{<<"url">> => <<"/">>}),
+            cowboy_req:reply(?HTTP_200_OK, #{?HDR_CONTENT_TYPE => <<"application/json">>}, Body, NewReq);
+        {error, _} = Error ->
+            Code = errors:to_http_code(Error),
+            Body = json_utils:encode(#{<<"error">> => errors:to_json(Error)}),
+            cowboy_req:reply(Code, #{?HDR_CONTENT_TYPE => <<"application/json">>}, Body, Req)
     end.
-
-

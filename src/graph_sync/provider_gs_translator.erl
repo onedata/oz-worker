@@ -16,8 +16,9 @@
 -behaviour(gs_translator_behaviour).
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/onedata_file.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 %% API
@@ -33,7 +34,7 @@
 %% {@link gs_translator_behaviour} callback handshake_attributes/1.
 %% @end
 %%--------------------------------------------------------------------
--spec handshake_attributes(gs_protocol:client()) ->
+-spec handshake_attributes(aai:auth()) ->
     gs_protocol:handshake_attributes().
 handshake_attributes(_) ->
     undefined.
@@ -41,21 +42,12 @@ handshake_attributes(_) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @doc
 %% {@link gs_translator_behaviour} callback translate_value/3.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_value(gs_protocol:protocol_version(), gs_protocol:gri(),
-    Data :: term()) -> gs_protocol:data() | gs_protocol:error().
-translate_value(ProtoVersion, #gri{aspect = invite_group_token}, Macaroon) ->
-    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
-translate_value(ProtoVersion, #gri{aspect = invite_provider_token}, Macaroon) ->
-    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
-translate_value(ProtoVersion, #gri{aspect = provider_registration_token}, Macaroon) ->
-    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
-translate_value(_, #gri{aspect = invite_user_token}, Macaroon) ->
-    {ok, Token} = onedata_macaroons:serialize(Macaroon),
-    Token;
+-spec translate_value(gs_protocol:protocol_version(), gri:gri(),
+    Value :: term()) -> Result | fun((aai:auth()) -> Result) when
+    Result :: gs_protocol:data() | errors:error().
 translate_value(_, #gri{type = od_provider, aspect = map_idp_group}, Id) ->
     Id;
 translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {AccessToken, Expires}) ->
@@ -63,15 +55,63 @@ translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {Access
         <<"token">> => AccessToken,
         <<"ttl">> => Expires
     };
+translate_value(_, #gri{type = od_space, aspect = infer_accessible_eff_groups}, GroupIds) ->
+    #{<<"list">> => GroupIds};
+translate_value(_, #gri{type = od_space, aspect = harvest_metadata}, Result) ->
+    case Result of
+        {error, _} = Error ->
+            Error;
+        _ ->
+            maps:fold(fun
+                (HarvesterId, #{<<"error">> := Error}, Acc) ->
+                    Acc#{HarvesterId => #{<<"error">> => errors:to_json(Error)}};
+                (HarvesterId, Indices, Acc) ->
+                    Acc#{HarvesterId => Indices}
+            end, #{}, Result)
+    end;
+
+translate_value(_, #gri{type = od_harvester, aspect = {submit_entry, _}}, FailedIndices) ->
+    FailedIndices;
+translate_value(_, #gri{type = od_harvester, aspect = {delete_entry, _}}, FailedIndices) ->
+    FailedIndices;
+
+translate_value(_, #gri{type = od_token, aspect = verify_access_token}, #{<<"subject">> := Sub, <<"ttl">> := TTL}) ->
+    #{
+        <<"subject">> => aai:serialize_subject(Sub),
+        <<"ttl">> => utils:undefined_to_null(TTL)
+    };
+translate_value(_, #gri{type = od_token, aspect = verify_identity_token}, #{<<"subject">> := Sub, <<"ttl">> := TTL}) ->
+    #{
+        <<"subject">> => aai:serialize_subject(Sub),
+        <<"ttl">> => utils:undefined_to_null(TTL)
+    };
+translate_value(_, #gri{type = od_token, id = undefined, aspect = {provider_temporary_token, _}}, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    Serialized;
+translate_value(_, #gri{type = od_token, id = undefined, aspect = {offline_user_access_token, _}}, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    Serialized;
+
+translate_value(_, #gri{type = od_atm_lambda, aspect = dump}, JsonMap) ->
+    JsonMap;
+
+translate_value(_, #gri{type = od_atm_lambda, aspect = {dump_revision, _}}, JsonMap) ->
+    JsonMap;
+
+translate_value(_, #gri{type = od_atm_workflow_schema, aspect = dump}, JsonMap) ->
+    JsonMap;
+
+translate_value(_, #gri{type = od_atm_workflow_schema, aspect = {dump_revision, _}}, JsonMap) ->
+    JsonMap;
 
 translate_value(ProtocolVersion, GRI, Data) ->
-    ?error("Cannot translate graph sync create result for:~n
-    ProtocolVersion: ~p~n
-    GRI: ~p~n
-    Data: ~p~n", [
+    ?error("Cannot translate graph sync create result for:~n"
+    "ProtocolVersion: ~tp~n"
+    "GRI: ~tp~n"
+    "Data: ~tp~n", [
         ProtocolVersion, GRI, Data
     ]),
-    throw(?ERROR_INTERNAL_SERVER_ERROR).
+    throw(?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined)).
 
 
 %%--------------------------------------------------------------------
@@ -79,235 +119,470 @@ translate_value(ProtocolVersion, GRI, Data) ->
 %% {@link gs_translator_behaviour} callback translate_resource/3.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_resource(gs_protocol:protocol_version(), gs_protocol:gri(),
-    Data :: term()) ->
-    gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()} |
-    gs_protocol:error().
+-spec translate_resource(gs_protocol:protocol_version(), gri:gri(),
+    ResourceData :: term()) -> Result | fun((aai:auth()) -> Result) when
+    Result :: gs_protocol:data() | errors:error().
 translate_resource(_, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->
     #{<<"timeMillis">> => TimeMillis};
 
 translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, User) ->
     #od_user{
-        name = Name,
-        alias = Alias,
+        full_name = FullName,
+        username = Username,
         emails = Emails,
         linked_accounts = LinkedAccounts,
-        default_space = DefaultSpace,
-        space_aliases = SpaceAliases
+        space_aliases = SpaceAliases,
+        blocked = Blocked
     } = User,
     #{
-        <<"name">> => Name,
-        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+        <<"fullName">> => FullName,
+        <<"username">> => utils:undefined_to_null(Username),
         <<"emails">> => Emails,
-        <<"linkedAccounts">> => user_logic:linked_accounts_to_maps(LinkedAccounts),
-        <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
+        <<"linkedAccounts">> => lists:map(fun(LinkedAccount) ->
+            linked_account:to_json(linked_account:apply_luma_info_mask(LinkedAccount))
+        end, LinkedAccounts),
+
+        <<"blocked">> => Blocked,
         <<"spaceAliases">> => SpaceAliases,
 
         <<"effectiveGroups">> => entity_graph:get_relations(effective, top_down, od_group, User),
         <<"effectiveSpaces">> => entity_graph:get_relations(effective, top_down, od_space, User),
         <<"effectiveHandles">> => entity_graph:get_relations(effective, top_down, od_handle, User),
         <<"effectiveHandleServices">> => entity_graph:get_relations(effective, top_down, od_handle_service, User),
+        <<"effectiveAtmInventories">> => entity_graph:get_relations(effective, top_down, od_atm_inventory, User),
 
         % TODO VFS-4506 deprecated fields, included for backward compatibility
-        <<"login">> => gs_protocol:undefined_to_null(Alias),
+        <<"defaultSpaceId">> => null,
+        <<"name">> => FullName,
+        <<"login">> => utils:undefined_to_null(Username),
+        <<"alias">> => utils:undefined_to_null(Username),
         <<"emailList">> => Emails
     };
 
 translate_resource(_, #gri{type = od_user, aspect = instance, scope = protected}, User) ->
     #{
-        <<"name">> := Name,
-        <<"alias">> := Alias,
+        <<"fullName">> := FullName,
+        <<"username">> := Username,
         <<"emails">> := Emails,
-        <<"linkedAccounts">> := LinkedAccountMaps
+        <<"linkedAccounts">> := LinkedAccountMaps,
+        <<"blocked">> := Blocked
     } = User,
-    User#{
-        <<"name">> => Name,
-        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+    #{
+        <<"fullName">> => FullName,
+        <<"username">> => utils:undefined_to_null(Username),
         <<"emails">> => Emails,
         <<"linkedAccounts">> => LinkedAccountMaps,
 
-        % TODO VFS-4506 deprecated fields, included for backward compatibility
-        <<"login">> => gs_protocol:undefined_to_null(Alias),
+        <<"blocked">> => Blocked,
+
+        %% @TODO VFS-4506 deprecated fields, included for backward compatibility
+        <<"name">> => FullName,
+        <<"login">> => utils:undefined_to_null(Username),
+        <<"alias">> => utils:undefined_to_null(Username),
         <<"emailList">> => Emails
     };
 
 translate_resource(_, #gri{type = od_user, aspect = instance, scope = shared}, User) ->
     #{
-        <<"name">> := Name,
-        <<"alias">> := Alias
+        <<"fullName">> := FullName,
+        <<"username">> := Username
     } = User,
     #{
-        <<"name">> => Name,
-        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+        <<"fullName">> => FullName,
+        <<"username">> => utils:undefined_to_null(Username),
 
-        % TODO VFS-4506 deprecated field, included for backward compatibility
-        <<"login">> => gs_protocol:undefined_to_null(Alias)
+        %% @TODO VFS-4506 deprecated field, included for backward compatibility
+        <<"name">> => FullName,
+        <<"login">> => utils:undefined_to_null(Username),
+        <<"alias">> => utils:undefined_to_null(Username)
     };
 
 translate_resource(_, #gri{type = od_group, aspect = instance, scope = private}, Group) ->
     #od_group{
         name = Name,
-        type = Type,
-
-        children = Children,
-        parents = Parents,
-
-        users = Users,
-
-        eff_spaces = EffSpaces
+        type = Type
     } = Group,
     #{
         <<"name">> => Name,
         <<"type">> => Type,
-
-        <<"children">> => Children,
-        <<"effectiveChildren">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Group),
-        <<"parents">> => Parents,
-
-        <<"users">> => Users,
-        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, Group),
-
-        <<"spaces">> => maps:keys(EffSpaces)
+        <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Group)
     };
 
 % shared and protected scopes carry the same data
 translate_resource(ProtoVersion, GRI = #gri{type = od_group, aspect = instance, scope = shared}, Group) ->
     translate_resource(ProtoVersion, GRI#gri{scope = protected}, Group);
 translate_resource(_, #gri{type = od_group, aspect = instance, scope = protected}, GroupData) ->
-    GroupData;
+    #{<<"name">> := Name, <<"type">> := Type} = GroupData,
+    #{<<"name">> => Name, <<"type">> => Type};
 
-translate_resource(_, #gri{type = od_space, aspect = instance, scope = private}, Space) ->
+translate_resource(_, #gri{type = od_space, id = SpaceId, aspect = instance, scope = private}, Space) ->
     #od_space{
         name = Name,
+
+        owners = Owners,
 
         users = Users,
 
         groups = Groups,
 
-        providers = Providers,
-        shares = Shares
+        storages = Storages,
+        harvesters = Harvesters,
+
+        support_parameters_registry = SupportParametersRegistry
     } = Space,
     #{
         <<"name">> => Name,
 
+        <<"owners">> => Owners,
+
         <<"users">> => Users,
-        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, Space),
+        <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Space),
 
         <<"groups">> => Groups,
-        <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Space),
+        <<"effectiveGroups">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_group, Space),
 
-        <<"providers">> => Providers,
-        <<"shares">> => Shares
+        <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
+        <<"storages">> => Storages,  %% @TODO VFS-13082 Deprecated, included for backward compatibility
+        <<"storageBackends">> => Storages,
+
+        <<"shares">> => share_registry:list_ids(SpaceId, Space, #{limit => infinity}),
+        <<"harvesters">> => Harvesters,
+
+        <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry)
     };
 translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected}, SpaceData) ->
-    SpaceData;
-
-translate_resource(_, #gri{type = od_share, aspect = instance, scope = private}, Share) ->
-    #od_share{
-        name = Name,
-        public_url = PublicUrl,
-        space = SpaceId,
-        handle = HandleId,
-        root_file = RootFileId
-    } = Share,
+    #{
+        <<"name">> := Name,
+        <<"providers">> := Providers,
+        <<"supportParametersRegistry">> := SupportParametersRegistry
+    } = SpaceData,
     #{
         <<"name">> => Name,
-        <<"publicUrl">> => PublicUrl,
-        <<"spaceId">> => SpaceId,
-        <<"handleId">> => gs_protocol:undefined_to_null(HandleId),
-        <<"rootFileId">> => RootFileId
+        <<"providers">> => Providers,
+        <<"supportParametersRegistry">> => jsonable_record:to_json(SupportParametersRegistry, support_parameters_registry)
     };
 
-translate_resource(_, #gri{type = od_share, aspect = instance, scope = protected}, ShareData) ->
-    ShareData;
+translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = private}, ShareRecord) ->
+    #od_share{
+        space = SpaceId,
+        name = Name,
+        description = Description,
+        handle = HandleId,
+        file_type = FileType,
+        visit_count = VisitCount
+    } = ShareRecord,
+    #{
+        <<"spaceId">> => SpaceId,
+        <<"name">> => Name,
+        <<"description">> => Description,
+        <<"publicUrl">> => od_share:build_public_url(ShareId),
+        <<"publicRestUrl">> => od_share:build_public_rest_url(ShareId),
+        <<"rootFileId">> => od_share:build_root_file(guid, ShareId, ShareRecord),
+        % TODO VFS-VFS-12490 [file, dir] deprecated, left for BC, conversion can be removed in 23.02.*
+        % (providers in 22.02 understand both formats)
+        <<"fileType">> => case FileType of
+            ?REGULAR_FILE_TYPE -> file;
+            ?DIRECTORY_TYPE -> dir
+        end,
+        <<"handleId">> => utils:undefined_to_null(HandleId),
+        <<"visitCount">> => VisitCount
+    };
 
-translate_resource(_, #gri{type = od_share, aspect = instance, scope = public}, ShareData) ->
-    ShareData;
+translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = public}, ShareData) ->
+    #{
+        <<"spaceId">> := SpaceId,
+        <<"name">> := Name,
+        <<"description">> := Description,
+        <<"rootFileObjectId">> := RootFileObjectId,
+        <<"fileType">> := FileType,
+        <<"handleId">> := HandleId,
+        <<"visitCount">> := VisitCount
+    } = ShareData,
+    #{
+        <<"spaceId">> => SpaceId,
+        <<"name">> => Name,
+        <<"description">> => Description,
+        <<"publicUrl">> => od_share:build_public_url(ShareId),
+        <<"publicRestUrl">> => od_share:build_public_rest_url(ShareId),
+        <<"rootFileId">> => ?check(file_id:objectid_to_guid(RootFileObjectId)),
+        % TODO VFS-VFS-12490 [file, dir] deprecated, left for BC, conversion can be removed in 23.02.*
+        % (providers in 22.02 understand both formats)
+        <<"fileType">> => case FileType of
+            ?REGULAR_FILE_TYPE -> file;
+            ?DIRECTORY_TYPE -> dir
+        end,
+        <<"handleId">> => utils:undefined_to_null(HandleId),
+        <<"visitCount">> => VisitCount
+    };
 
+
+translate_resource(_, #gri{type = od_provider, aspect = instance, scope = private}, {_Provider, RootToken}) ->
+    % This covers provider creation via Graph Sync, in contrast to the get
+    % request that does not return the root token
+    {ok, Serialized} = tokens:serialize(RootToken),
+    #{
+        <<"providerRootToken">> => Serialized
+    };
 translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope = private}, Provider) ->
     #od_provider{
         name = Name,
         subdomain_delegation = SubdomainDelegation,
         domain = Domain,
         subdomain = Subdomain,
+        op_worker_port = OpWorkerPort,
+        ones3_port = OneS3Port,
         admin_email = AdminEmail,
         latitude = Latitude,
-        longitude = Longitude,
-
-        spaces = Spaces
+        longitude = Longitude
     } = Provider,
+
+    ClusterId = Id,
+
     #{
         <<"name">> => Name,
+        % TODO VFS-13454 should be reworked: this is an emulated field; when it changes, no GS update
+        % will be triggered as it lives outside of the provider doc
+        <<"version">> => od_cluster:get_worker_release_version(ClusterId),
+
         <<"subdomainDelegation">> => SubdomainDelegation,
         <<"domain">> => Domain,
         <<"subdomain">> => Subdomain,
+        <<"opWorkerPort">> => OpWorkerPort,
+        <<"oneS3Port">> => utils:undefined_to_null(OneS3Port),
 
         <<"adminEmail">> => AdminEmail,
 
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
 
-        <<"online">> => provider_connection:is_online(Id),
+        % TODO VFS-13454 should be reworked: this is an emulated field; when it changes, no GS update
+        % will be triggered as it lives outside of the provider doc
+        <<"online">> => provider_connections:is_online(Id),
 
-        <<"spaces">> => Spaces,
+        %% @TODO VFS-13082 Deprecated, included for backward compatibility
+        <<"storages">> => entity_graph:get_relations(direct, bottom_up, od_storage, Provider),
+        <<"storageBackends">> => entity_graph:get_relations(direct, bottom_up, od_storage, Provider),
+        %% @TODO VFS-5554 Deprecated, included for backward compatibility
+        <<"spaces">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_space, Provider),
+        <<"effectiveSpaces">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_space, Provider),
         <<"effectiveUsers">> => entity_graph:get_relations(effective, bottom_up, od_user, Provider),
         <<"effectiveGroups">> => entity_graph:get_relations(effective, bottom_up, od_group, Provider)
-
     };
 
+translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope = protected}, ProviderData) ->
+    #{
+        <<"name">> := Name, <<"domain">> := Domain,
+        <<"latitude">> := Latitude, <<"longitude">> := Longitude,
+        <<"online">> := Online
+    } = ProviderData,
 
-translate_resource(_, #gri{type = od_provider, aspect = instance, scope = protected}, ProviderData) ->
-    ProviderData;
+    ClusterId = Id,
 
-translate_resource(_, #gri{type = od_provider, aspect = domain_config}, Data) ->
-    case maps:find(<<"ipList">>, Data) of
-        {ok, IPList} ->
-            IPBinaries = [list_to_binary(inet:ntoa(IP)) || IP <- IPList],
-            Data#{<<"ipList">> := IPBinaries};
-        error ->
-            Data
-    end;
+    #{
+        <<"name">> => Name,
+        <<"domain">> => Domain,
+        % TODO VFS-13454 should be reworked: this is an emulated field; when it changes, no GS update
+        % will be triggered as it lives outside of the provider doc
+        <<"version">> => od_cluster:get_worker_release_version(ClusterId),
+        <<"latitude">> => Latitude,
+        <<"longitude">> => Longitude,
+        <<"online">> => Online
+    };
+
+translate_resource(_, #gri{type = od_provider, aspect = domain_config}, Data = #{
+    <<"ipList">> := OpWorkerIPs,
+    <<"oneS3IpAddresses">> := OneS3Ips
+}) ->
+    T = fun(IPList) -> [?check(ip_utils:to_binary(IP)) || IP <- IPList] end,
+    TranslatedOpWorkerIps = T(OpWorkerIPs),
+
+    Data#{
+        <<"ipList">> := TranslatedOpWorkerIps,
+        <<"opWorkerIpAddresses">> := TranslatedOpWorkerIps,
+        <<"oneS3IpAddresses">> := T(OneS3Ips)
+    };
 
 translate_resource(_, #gri{type = od_handle_service, aspect = instance, scope = private}, HService) ->
     #{
         <<"name">> => HService#od_handle_service.name,
 
-        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, HService),
-        <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, HService)
+        <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, HService),
+        <<"effectiveGroups">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_group, HService)
     };
+
+translate_resource(_, #gri{type = od_handle_service, aspect = instance, scope = public}, HServiceData) ->
+    HServiceData;
 
 translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}, Handle) ->
     #od_handle{
         public_handle = PublicHandle,
         resource_type = ResourceType,
         resource_id = ResourceId,
+        metadata_schema = MetadataSchema,
         metadata = Metadata,
         timestamp = Timestamp,
         handle_service = HandleServiceId
     } = Handle,
     #{
+        <<"handleServiceId">> => HandleServiceId,
         <<"publicHandle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
+        <<"metadataPrefix">> => MetadataSchema,  % deprecated, to be removed in 23.02
+        <<"metadataSchema">> => MetadataSchema,
         <<"metadata">> => Metadata,
-        <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp),
-        <<"handleServiceId">> => HandleServiceId,
+        <<"timestamp">> => time:seconds_to_iso8601(Timestamp),  % @TODO VFS-6309 to be removed in 21.02
 
-        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, Handle),
-        <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Handle)
+        <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Handle),
+        <<"effectiveGroups">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_group, Handle)
     };
 
 translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public}, HandleData) ->
-    HandleData#{
-        <<"timestamp">> => time_utils:datetime_to_datestamp(maps:get(<<"timestamp">>, HandleData))
+    #{
+        <<"handleServiceId">> := HandleServiceId,
+        <<"publicHandle">> := PublicHandle,
+        <<"metadataSchema">> := MetadataSchema,
+        <<"metadata">> := Metadata,
+        <<"timestamp">> := Timestamp
+    } = HandleData,
+    #{
+        <<"handleServiceId">> => HandleServiceId,
+        <<"publicHandle">> => PublicHandle,
+        <<"metadataPrefix">> => MetadataSchema,  % deprecated, to be removed in 23.02
+        <<"metadataSchema">> => MetadataSchema,
+        <<"metadata">> => Metadata,
+        <<"timestamp">> => time:seconds_to_iso8601(Timestamp)  % @TODO VFS-6309 to be removed in 21.02
+    };
+
+translate_resource(_, #gri{type = od_harvester, aspect = instance, scope = private}, Harvester) ->
+    #od_harvester{indices = Indices} = Harvester,
+    #{
+        <<"indices">> => maps:keys(Indices),
+        <<"spaces">> => entity_graph:get_relations(direct, top_down, od_space, Harvester)
+    };
+
+translate_resource(_, #gri{type = od_storage, aspect = instance, scope = private}, Storage) ->
+    #od_storage{
+        name = Name,
+        provider = Provider,
+        spaces = Spaces,
+        qos_parameters = QosParams,
+        imported = ImportedStorage,
+        readonly = Readonly
+    } = Storage,
+    #{
+        <<"name">> => Name,
+        <<"provider">> => Provider,
+        <<"spaces">> => maps:keys(Spaces),
+        <<"qosParameters">> => QosParams,
+        %% @TODO VFS-5856 deprecated, included for compatibility with 20.02.0-beta3
+        <<"qos_parameters">> => QosParams,
+        <<"imported">> => ImportedStorage,
+        <<"readonly">> => Readonly
+    };
+
+translate_resource(_, #gri{type = od_storage, aspect = instance, scope = shared}, StorageDetails) ->
+    #{
+        <<"provider">> := Provider,
+        <<"name">> := Name,
+        <<"qosParameters">> := QosParams,
+        <<"readonly">> := Readonly
+    } = StorageDetails,
+    #{
+        <<"provider">> => Provider,
+        <<"name">> => Name,
+        <<"qosParameters">> => QosParams,
+        <<"readonly">> => Readonly,
+        %% @TODO VFS-5856 deprecated, included for compatibility with 20.02.0-beta3
+        <<"qos_parameters">> => QosParams
+    };
+
+translate_resource(_, #gri{type = od_token, aspect = instance, scope = shared}, #{<<"revoked">> := Revoked}) ->
+    #{<<"revoked">> => Revoked};
+
+translate_resource(_, #gri{type = temporary_token_secret, scope = shared}, Generation) ->
+    #{<<"generation">> => Generation};
+
+translate_resource(_, #gri{type = od_atm_inventory, aspect = instance, scope = private}, AtmInventory) ->
+    fun(?USER = #auth{caveats = Caveats}) ->
+        % Since op_worker uses auth overrides on the GS channel, this is the only
+        % way to "guess" (without 100% confidence) that it is actually a provider
+        % service trying to learn user's lambdas and workflow schemas (GUI tokens
+        % include such a service caveat)
+        AtmAvailable = case service_caveats:filter(Caveats) of
+            [#cv_service{whitelist = [?SERVICE(?OP_WORKER, ProviderId)]}] ->
+                is_automation_available_for_provider(ProviderId);
+            _ ->
+                true
+        end,
+        #{
+            <<"name">> => AtmInventory#od_atm_inventory.name,
+            <<"atmLambdas">> => case AtmAvailable of
+                true -> AtmInventory#od_atm_inventory.atm_lambdas;
+                false -> []
+            end,
+            <<"atmWorkflowSchemas">> => case AtmAvailable of
+                true -> AtmInventory#od_atm_inventory.atm_workflow_schemas;
+                false -> []
+            end
+        }
+    end;
+
+translate_resource(_, #gri{type = od_atm_lambda, aspect = instance, scope = private}, AtmLambda) ->
+    #od_atm_lambda{
+        revision_registry = RevisionRegistry,
+
+        atm_inventories = AtmInventories
+    } = AtmLambda,
+    #{
+        <<"revisionRegistry">> => jsonable_record:to_json(RevisionRegistry, atm_lambda_revision_registry),
+
+        <<"atmInventories">> => AtmInventories
+    };
+
+translate_resource(_, #gri{type = od_atm_workflow_schema, aspect = instance, scope = private}, AtmWorkflowSchema) ->
+    #od_atm_workflow_schema{
+        name = Name,
+        summary = Summary,
+
+        revision_registry = RevisionRegistry,
+
+        atm_inventory = AtmInventoryId
+    } = AtmWorkflowSchema,
+    #{
+        <<"name">> => Name,
+        <<"summary">> => Summary,
+
+        <<"revisionRegistry">> => jsonable_record:to_json(RevisionRegistry, atm_workflow_schema_revision_registry),
+
+        <<"atmInventoryId">> => AtmInventoryId
+    };
+
+translate_resource(_, #gri{type = od_cluster, aspect = instance, scope = private}, Cluster) ->
+    #od_cluster{worker_version = {WorkerReleaseVersion, WorkerBuildVersion, WorkerGuiHashVersion}} = Cluster,
+    #{
+        <<"workerReleaseVersion">> => WorkerReleaseVersion,
+        <<"workerBuildVersion">> => WorkerBuildVersion,
+        <<"workerGuiHash">> => WorkerGuiHashVersion
     };
 
 translate_resource(ProtocolVersion, GRI, Data) ->
-    ?error("Cannot translate graph sync get result for:~n
-    ProtocolVersion: ~p~n
-    GRI: ~p~n
-    Data: ~p~n", [
+    ?error("Cannot translate Oneprovider graph sync get result for:~n
+    ProtocolVersion: ~tp~n
+    GRI: ~tp~n
+    Data: ~tp~n", [
         ProtocolVersion, GRI, Data
     ]),
-    throw(?ERROR_INTERNAL_SERVER_ERROR).
+    throw(?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined)).
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%% @private
+%% @doc providers with version lower than 21.02.5 must not run automation jobs due to
+%% incompatibilities introduced in subsequent minor versions (automation has experimental status)
+-spec is_automation_available_for_provider(od_provider:id()) -> boolean().
+is_automation_available_for_provider(ProviderId) ->
+    ProviderVersion = od_cluster:get_worker_release_version(ProviderId),
+    onedata:compare_release_version(ProviderVersion, <<"21.02.5">>) /= lower.

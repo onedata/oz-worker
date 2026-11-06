@@ -19,13 +19,27 @@
 % Endpoint for nagios healthcheck
 -define(NAGIOS_PATH, "/nagios").
 
+% Endpoint to get the current compatibility registry
+-define(COMPATIBILITY_REG_PATH, "/compatibility.json").
+
 % Endpoint for viewing public shares
 -define(SHARE_ID_BINDING, share_id).
 -define(PUBLIC_SHARE_COWBOY_ROUTE, "/share/:share_id").
--define(PUBLIC_SHARE_PATH(__ShareId), <<"/share/", __ShareId/binary>>).
+-define(PUBLIC_SHARE_URN(ShareId), <<"/share/", ShareId/binary>>).
+% GUI page where the clients are redirected after visiting the public share URL
+-define(PUBLIC_SHARE_GUI_PATH(ShareId), <<"/i#/public/shares/", ShareId/binary>>).
+% path to the publicly available endpoint for fetching public share info
+-define(PUBLIC_SHARE_REST_PATH(ShareId), <<"/shares/", ShareId/binary, "/public">>).
 
 % Endpoint serving custom, user defined static files
--define(CUSTOM_STATIC_FILES_PATH, "/custom/[...]").
+-define(CUSTOM_STATIC_GUI_PATH, "/custom/[...]").
+
+% Endpoint for GUI upload (used tu upload OP_WORKER, ONEPANEL or harvester GUI)
+-define(GUI_UPLOAD_PATH, "/:gui_prefix/:gui_id/gui-upload").
+
+% Endpoints for GUI scripts to discover and preauthorize GUIs of different services
+-define(GUI_CONTEXT_PATH, "/:gui_prefix/:gui_id/gui-context").
+-define(GUI_PREAUTHORIZE_PATH, "/:gui_prefix/:gui_id/gui-preauthorize").
 
 % Endpoint to perform basic auth login
 -define(LOGIN_PATH, "/login").
@@ -56,13 +70,13 @@
 -define(PROVIDER_LOGIN_CONSUME_PATH, "/onezone-login/consume").
 -define(PROVIDER_LOGIN_CONSUME_PATH_DEPRECATED, "/validate_login.html").
 
-% Endpoint in Oneprovider consuming login requests
--define(PROVIDER_PUBLIC_SHARE_PATH(__ShareId), "/#/public/shares/" ++ __ShareId).
-
 % URL (relative) pointing to login page.
 -define(LOGIN_PAGE_PATH, "/#/home/login").
 
 % URL (relative) to redirect to after login.
 -define(AFTER_LOGIN_PAGE_PATH, "/#/onezone").
+
+%% All requests to this endpoint will be proxied to onepanel.
+-define(PANEL_REST_PROXY_PATH, "/api/v3/onepanel/").
 
 -endif.

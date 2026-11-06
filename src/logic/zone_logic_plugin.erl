@@ -16,13 +16,14 @@
 
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
--export([fetch_entity/1, operation_supported/3]).
+-export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
--export([exists/2, authorize/2, validate/1]).
+-export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
 %%%===================================================================
 %%% API
@@ -30,14 +31,20 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity from datastore based on its EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | entity_logic:error().
+-spec fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
 fetch_entity(_) ->
-    ?ERROR_NOT_SUPPORTED.
+    false.
 
 
 %%--------------------------------------------------------------------
@@ -49,8 +56,24 @@ fetch_entity(_) ->
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
 operation_supported(get, configuration, _) -> true;
+operation_supported(get, test_image, _) -> true;
+operation_supported(get, privileges, _) -> true;
+operation_supported(get, health, _) -> true;
+operation_supported(get, {gui_message, _}, _) -> true;
+operation_supported(update, {gui_message, _}, _) -> true;
 
 operation_supported(_, _, _) -> false.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Determines if given {Aspect, Scope} pair is subscribable, i.e. clients can
+%% subscribe to receive updates concerning the aspect of entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
+    boolean().
+is_subscribable(_, _) -> false.
 
 
 %%--------------------------------------------------------------------
@@ -72,18 +95,69 @@ create(_Req) ->
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = configuration}}, _) ->
-    CompatibleOpVersions = oz_worker:get_env(compatible_op_versions, []),
-    CompatibleOpVersionsBin = [list_to_binary(V) || V <- CompatibleOpVersions],
-    SubdomainDelegationEnabled = oz_worker:get_env(subdomain_delegation_enabled, true),
+    Version = oz_worker:get_release_version(),
+    Resolver = compatibility:build_resolver(consistent_hashing:get_all_nodes(), []),
+    SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
+    CompatibilityRegistryRevision = query_compatibility_registry(peek_current_registry_revision, [Resolver]),
+    CompatibleOpVersions = query_compatibility_registry(get_compatible_versions, [Resolver, ?ONEZONE, Version, ?ONEPROVIDER]),
+    PublicDataXrootdServerDomain = case oz_worker:get_env(public_data_xrootd_server_domain, undefined) of
+        undefined -> null;
+        Domain -> str_utils:to_binary(Domain)
+    end,
+    BagitUploaderWorkflowSchemaId = case oz_worker:get_env(bagit_uploader_workflow_schema_id, undefined) of
+        undefined ->
+            null;
+        IdStr ->
+            Id = str_utils:to_binary(IdStr),
+            case atm_workflow_schema_logic:exists(Id) of
+                true -> Id;
+                false -> null
+            end
+
+    end,
     {ok, #{
-        name => oz_worker:get_name(),
-        version => oz_worker:get_version(),
-        build => oz_worker:get_build_version(),
-        domain => oz_worker:get_domain(),
-        compatibleOneproviderVersions => CompatibleOpVersionsBin,
-        subdomainDelegationSupported => SubdomainDelegationEnabled,
-        supportedIdPs => auth_config:get_supported_idps_in_configuration_format()
-    }}.
+        <<"name">> => utils:undefined_to_null(oz_worker:get_name()),
+        <<"version">> => Version,
+        <<"build">> => oz_worker:get_build_version(),
+        <<"domain">> => oz_worker:get_domain(),
+        <<"subdomainDelegationSupported">> => SubdomainDelegationSupported,
+        <<"supportedIdPs">> => auth_config:get_supported_idps_in_configuration_format(),
+        <<"compatibilityRegistryRevision">> => CompatibilityRegistryRevision,
+        <<"compatibleOneproviderVersions">> => CompatibleOpVersions,
+        <<"openDataXrootdServerDomain">> => PublicDataXrootdServerDomain,  % deprecated in 21.02.8, left for backward compatibility
+        <<"publicDataXrootdServerDomain">> => PublicDataXrootdServerDomain,
+        <<"bagitUploaderWorkflowSchemaId">> => BagitUploaderWorkflowSchemaId,
+        <<"availableSpaceTags">> => oz_worker:get_env(available_space_tags)
+    }};
+
+get(#el_req{gri = #gri{aspect = test_image}}, _) ->
+    % Dummy image in png format. Used by gui to check connectivity.
+    {ok, {binary, <<
+        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0,
+        0, 1, 0, 0, 0, 1, 1, 3, 0, 0, 0, 37, 219, 86, 202, 0, 0, 0, 6, 80,
+        76, 84, 69, 0, 0, 0, 255, 255, 255, 165, 217, 159, 221, 0, 0, 0, 9,
+        112, 72, 89, 115, 0, 0, 14, 196, 0, 0, 14, 196, 1, 149, 43, 14, 27,
+        0, 0, 0, 10, 73, 68, 65, 84, 8, 153, 99, 96, 0, 0, 0, 2, 0, 1, 244,
+        113, 100, 166, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130
+    >>}};
+
+get(#el_req{gri = #gri{aspect = privileges}}, _) ->
+    {ok, #{
+        <<"viewer">> => privileges:oz_viewer(),
+        <<"admin">> => privileges:oz_admin()
+    }};
+
+get(#el_req{gri = #gri{aspect = {gui_message, MessageId}}}, _) ->
+    case gui_message:get(MessageId) of
+        {ok, #document{value = Message}} -> {ok, Message};
+        {error, not_found} -> throw(?ERROR_NOT_FOUND)
+    end;
+
+get(#el_req{gri = #gri{aspect = health}}, _) ->
+    case node_manager:is_cluster_healthy() of
+        true -> {ok, #{<<"status">> => <<"healthy">>}};
+        false -> throw(?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined))
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -92,8 +166,17 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
-update(_GRI) ->
-    ?ERROR_NOT_SUPPORTED.
+update(#el_req{gri = #gri{aspect = {gui_message, MessageId}}, data = Data}) ->
+    UpdateFun = fun(Message) ->
+        {ok, Message#gui_message{
+            enabled = maps:get(<<"enabled">>, Data, Message#gui_message.enabled),
+            body = maps:get(<<"body">>, Data, Message#gui_message.body)
+        }}
+    end,
+    case gui_message:update(MessageId, UpdateFun) of
+        {ok, _} -> ok;
+        {error, not_found} -> throw(?ERROR_NOT_FOUND)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -113,10 +196,8 @@ delete(_GRI) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
-exists(#el_req{gri = #gri{aspect = configuration}}, _) ->
-    true;
-
-exists(_Req, _) ->
+exists(#el_req{gri = #gri{aspect = _}}, _) ->
+    % this function is never called when gri.id = undefined
     false.
 
 
@@ -130,8 +211,33 @@ exists(_Req, _) ->
 authorize(#el_req{operation = get, gri = #gri{aspect = configuration}}, _) ->
     true;
 
+authorize(#el_req{operation = get, gri = #gri{aspect = test_image}}, _) ->
+    true;
+
+authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
+    true;
+
+authorize(#el_req{operation = get, gri = #gri{aspect = {gui_message, _}}}, _) ->
+    true;
+
+authorize(#el_req{operation = get, gri = #gri{aspect = health}}, _) ->
+    true;
+
+authorize(#el_req{operation = update, gri = #gri{aspect = {gui_message, _}}}, _) ->
+    % only root (onepanel) can perform this operation
+    false;
+
 authorize(_Req = #el_req{}, _) ->
     false.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns list of admin privileges needed to perform given operation.
+%% @end
+%%--------------------------------------------------------------------
+-spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
+required_admin_privileges(_) -> forbidden.
 
 
 %%--------------------------------------------------------------------
@@ -143,5 +249,27 @@ authorize(_Req = #el_req{}, _) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-validate(_Req) -> #{}.
+-spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
+validate(#el_req{operation = update, gri = #gri{aspect = {gui_message, _}}}) ->
+    #{
+        optional => #{
+            <<"enabled">> => {boolean, any},
+            <<"body">> => {binary, any}
+        }
+    }.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%% @private
+-spec query_compatibility_registry(Fun :: atom(), Args :: [term()]) -> term().
+query_compatibility_registry(Fun, Args) ->
+    Module = compatibility,
+    case apply(Module, Fun, Args) of
+        {ok, SuccessfulResult} ->
+            SuccessfulResult;
+        {error, _} = Error ->
+            ?debug("Error querying registry - ~w:~w(~w)~nError was: ~tp", [Module, Fun, Args, Error]),
+            <<"unknown">>
+    end.

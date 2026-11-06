@@ -12,27 +12,27 @@
 -author("Jakub Kudzia").
 
 -include("entity_logic.hrl").
--include("http/handlers/oai.hrl").
--include("http/handlers/oai_errors.hrl").
+-include("http/public_data/oai.hrl").
+-include("http/public_data/oai_errors.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
--export([datetime_to_oai_datestamp/1, oai_datestamp_to_datetime/1,
-    is_harvesting/1, verb_to_module/1, is_earlier_or_equal/2,
-    dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/4,
-    oai_identifier_encode/1, oai_identifier_decode/1, build_oai_record/3]).
--export([list_handles/0, get_handle/1]).
+-export([serialize_datestamp/1, deserialize_datestamp/1, is_harvesting/1,
+    verb_to_module/1, is_earlier_or_equal/2, dates_have_the_same_granularity/2,
+    to_xml/1, ensure_list/1,
+    args_to_prefix_and_handle_listing_opts/2, harvest/3, oai_identifier_decode/1,
+    build_oai_header/1, build_oai_record/2, build_oai_record/3
+]).
 
-%%%--------------------------------------------------------------------
-%%% @doc
-%%% Encode handle id to oai identifier supported by oz-worker.
-%%% oai identifier is in form:
-%%%     oai:<onezone-domain>:<handle_id>
-%%% @end
-%%%--------------------------------------------------------------------
--spec oai_identifier_encode(od_handle:id()) -> oai_id().
-oai_identifier_encode(Id) ->
-    <<?OAI_IDENTIFIER_PREFIX/binary, Id/binary>>.
+-define(LIST_IDENTIFIERS_BATCH_SIZE, oz_worker:get_env(oai_pmh_list_identifiers_batch_size, 1000)).
+-define(LIST_RECORDS_BATCH_SIZE, oz_worker:get_env(oai_pmh_list_records_batch_size, 100)).
+
+-define(RESUMPTION_TOKEN_SEP, ",").
+
+%%%===================================================================
+%%% API
+%%%===================================================================
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -52,43 +52,115 @@ oai_identifier_decode(OAIId) ->
             throw({illegalId, OAIId})
     end.
 
-%%%--------------------------------------------------------------------
-%%% @doc
-%%% Builds an #oai_record{} based on metadata prefix, OAI identifier and
-%%% provided handle.
-%%% @end
-%%%--------------------------------------------------------------------
--spec build_oai_record(MetadataPrefix :: binary(), oai_id(), od_handle:record()) ->
+-spec build_oai_header(handle_registry:handle_listing_entry()) -> #oai_header{}.
+build_oai_header(#handle_listing_entry{
+    timestamp = TimeSeconds,
+    handle_id = HandleId,
+    service_id = HandleServiceId,
+    status = Status
+}) ->
+    OaiId = oai_identifier_encode(HandleId),
+    #oai_header{
+        identifier = OaiId,
+        datestamp = serialize_datestamp(time:seconds_to_datetime(TimeSeconds)),
+        set_spec = HandleServiceId,
+        status = Status
+    }.
+
+-spec build_oai_record(oai_metadata:prefix(), handle_registry:handle_listing_entry()) ->
     #oai_record{}.
-build_oai_record(MetadataPrefix, OaiId, Handle) ->
+build_oai_record(MetadataPrefix, #handle_listing_entry{status = present, handle_id = HandleId} = ListingEntry) ->
+    case od_handle:get(HandleId) of
+        {ok, #document{value = HandleRecord}} ->
+            build_oai_record(MetadataPrefix, ListingEntry, HandleRecord);
+        {error, not_found} ->
+            ?error("Handle ~ts that is registered as present was not found in the DB, ignoring", [HandleId]),
+            build_oai_record(MetadataPrefix, ListingEntry#handle_listing_entry{status = deleted})
+    end;
+build_oai_record(_MetadataPrefix, #handle_listing_entry{status = deleted} = ListingEntry) ->
     #oai_record{
-        header = #oai_header{
-            identifier = OaiId,
-            datestamp = oai_utils:datetime_to_oai_datestamp(Handle#od_handle.timestamp)
-        },
+        header = build_oai_header(ListingEntry)
+    }.
+
+-spec build_oai_record(oai_metadata:prefix(), handle_registry:handle_listing_entry(), od_handle:record()) ->
+    #oai_record{}.
+build_oai_record(MetadataPrefix, ListingEntry, Handle) ->
+    #oai_record{
+        header = build_oai_header(ListingEntry),
         metadata = #oai_metadata{
-            metadata_format = #oai_metadata_format{metadataPrefix = MetadataPrefix},
-            additional_identifiers = [
-                Handle#od_handle.public_handle,
-                share_logic:share_id_to_public_url(Handle#od_handle.resource_id)
-            ],
-            value = Handle#od_handle.metadata
+            metadata_prefix = MetadataPrefix,
+            raw_value = Handle#od_handle.metadata
         }
     }.
 
 %%%--------------------------------------------------------------------
-%%% @equiv time_utils:datetime_to_datestamp(DateTime).
+%%% @equiv time:datetime_to_iso8601(DateTime).
 %%%--------------------------------------------------------------------
--spec datetime_to_oai_datestamp(DateTime :: erlang:datetime()) -> binary().
-datetime_to_oai_datestamp(DateTime) ->
-    time_utils:datetime_to_datestamp(DateTime).
+-spec serialize_datestamp(calendar:datetime()) -> binary().
+serialize_datestamp(DateTime) ->
+    time:datetime_to_iso8601(DateTime).
 
 %%%--------------------------------------------------------------------
-%%% @equiv time_utils:datestamp_to_datetime(Datestamp).
+%%% @doc
+%%% Parses a datestamp into erlang's calendar:datetime() or calendar:date()
+%%% format, depending on the input granularity.
+%%%
+%%% Excerpt from the OAI PMH specification:
+%%% These arguments support the "Complete date" and the "Complete date plus hours,
+%%% minutes and seconds" granularities defined in ISO8601. The legitimate formats
+%%% are YYYY-MM-DD and YYYY-MM-DDThh:mm:ssZ. Both arguments must have the same
+%%% granularity.
+%%% @end
 %%%--------------------------------------------------------------------
--spec oai_datestamp_to_datetime(undefined | binary()) -> maybe_invalid_datestamp().
-oai_datestamp_to_datetime(Datestamp) ->
-    time_utils:datestamp_to_datetime(Datestamp).
+-spec deserialize_datestamp(undefined | binary()) ->
+    undefined | maybe_invalid_datestamp() | {error, invalid_date_format}.
+deserialize_datestamp(undefined) ->
+    undefined;
+deserialize_datestamp(Datestamp) ->
+    try
+        case byte_size(Datestamp) of
+            10 ->
+                {Date, _Time} = time:iso8601_to_datetime(Datestamp),
+                Date;
+            20 ->
+                time:iso8601_to_datetime(Datestamp);
+            _ ->
+                {error, invalid_date_format}
+        end
+    catch _:_ ->
+        {error, invalid_date_format}
+    end.
+
+
+-spec args_to_prefix_and_handle_listing_opts(list_identifiers | list_records, [proplists:property()]) ->
+    {oai_metadata:prefix(), handle_registry:listing_opts()}.
+args_to_prefix_and_handle_listing_opts(Verb, Args) ->
+    case proplists:get_value(<<"resumptionToken">>, Args) of
+        undefined ->
+            MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
+            {MetadataPrefix, #{
+                metadata_schema => oai_metadata:prefix_to_schema(MetadataPrefix),
+                service_id => proplists:get_value(<<"set">>, Args, undefined),
+                from => utils:convert_defined(
+                    deserialize_datestamp(proplists:get_value(<<"from">>, Args, undefined)),
+                    fun time:datetime_to_seconds/1
+                ),
+                until => utils:convert_defined(
+                    deserialize_datestamp(proplists:get_value(<<"until">>, Args, undefined)),
+                    fun time:datetime_to_seconds/1
+                ),
+                limit => case Verb of
+                    list_identifiers -> ?LIST_IDENTIFIERS_BATCH_SIZE;
+                    list_records -> ?LIST_RECORDS_BATCH_SIZE
+                end,
+                include_deleted => true
+            }};
+        ResumptionToken ->
+            {MetadataPrefix, HandleRegistryResumptionToken} = unpack_oai_resumption_token(ResumptionToken),
+            {MetadataPrefix, #{
+                resumption_token => HandleRegistryResumptionToken
+            }}
+    end.
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -100,51 +172,46 @@ oai_datestamp_to_datetime(Datestamp) ->
 %%% Throws with noRecordsMatch if nothing is harvested.
 %%% @end
 %%%--------------------------------------------------------------------
--spec harvest(binary(), binary(), binary(), function()) -> [term()].
-harvest(MetadataPrefix, FromDatestamp, UntilDatestamp, HarvestingFun) ->
-    From = oai_datestamp_to_datetime(FromDatestamp),
-    Until = oai_datestamp_to_datetime(UntilDatestamp),
-    Identifiers = list_handles(),
-    HarvestedMetadata = lists:flatmap(fun(Identifier) ->
-        Handle = get_handle(Identifier),
-        case should_be_harvested(From, Until, MetadataPrefix, Handle) of
-            false -> [];
-            true ->
-                [HarvestingFun(Identifier, Handle)]
-        end
-    end, Identifiers),
+-spec harvest(
+    oai_metadata:prefix(),
+    handle_registry:listing_opts(),
+    fun((handle_registry:handle_listing_entry()) -> #oai_record{} | #oai_header{})
+) -> oai_response().
+harvest(MetadataPrefix, ListingOpts, HarvestingFun) ->
+    {HandleListingEntries, NewResumptionToken} = handle_registry:list_portion(ListingOpts),
+    HarvestedMetadata = lists:map(HarvestingFun, HandleListingEntries),
+
     case HarvestedMetadata of
         [] ->
-            throw({noRecordsMatch, FromDatestamp, UntilDatestamp, MetadataPrefix});
-        _ -> HarvestedMetadata
+            SetSpec = maps:get(service_id, ListingOpts),
+            FromDatestamp = case maps:get(from, ListingOpts) of
+                undefined -> undefined;
+                From -> serialize_datestamp(time:seconds_to_datetime(From))
+            end,
+            UntilDatestamp = case maps:get(until, ListingOpts) of
+                undefined -> undefined;
+                Until -> serialize_datestamp(time:seconds_to_datetime(Until))
+            end,
+            throw({noRecordsMatch, FromDatestamp, UntilDatestamp, SetSpec, MetadataPrefix});
+        _ ->
+            #oai_listing_result{
+                batch = HarvestedMetadata,
+                % According to OAI-PMH spec, the token MUST be present in the response
+                % if an incomplete list is returned, and MUST be present and MUST be empty (<<>>)
+                % when the last batch that completes the list is returned.
+                % However, if the whole list is returned in one response,
+                % there should be no resumption token element at all (undefined).
+                resumption_token = case {NewResumptionToken, ListingOpts} of
+                    {undefined, #{resumption_token := _}} ->
+                        <<>>;
+                    {undefined, _} ->
+                        undefined;
+                    {HandleRegistryResumptionToken, _} when is_binary(HandleRegistryResumptionToken) ->
+                        pack_oai_resumption_token(MetadataPrefix, HandleRegistryResumptionToken)
+                end
+            }
     end.
 
-%%%--------------------------------------------------------------------
-%%% @doc
-%%% Function returns true if metadata of record identified by Identifier
-%%% should be harvested with given harvesting conditions (From, Until,
-%%% MetadataPrefix).
-%%% @end
-%%%--------------------------------------------------------------------
--spec should_be_harvested(supported_datestamp(), supported_datestamp(),
-    binary(), #od_handle{}) -> boolean().
-should_be_harvested(_From, _Until, _MetadataPrefix, #od_handle{metadata = undefined}) ->
-    false;
-should_be_harvested(From, Until, MetadataPrefix, #od_handle{timestamp = Datestamp}) ->
-    MetadataFormats = metadata_formats:supported_formats(),
-    is_in_time_range(From, Until, Datestamp) and
-        lists:member(MetadataPrefix, MetadataFormats).
-
-%%%--------------------------------------------------------------------
-%%% @doc
-%%% Function returns true if Datestamp is in range [From, Until].
-%%% @end
-%%%--------------------------------------------------------------------
--spec is_in_time_range(
-    supported_datestamp(), supported_datestamp(), supported_datestamp()) -> boolean().
-is_in_time_range(From, Until, Datestamp) ->
-    is_earlier_or_equal(From, Datestamp)
-        and is_earlier_or_equal(Datestamp, Until).
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -157,8 +224,7 @@ is_earlier_or_equal(_Date, undefined) -> true;
 is_earlier_or_equal(Date1, Date2) ->
     D1 = granularity_days_to_seconds({min, Date1}),
     D2 = granularity_days_to_seconds({max, Date2}),
-    calendar:datetime_to_gregorian_seconds(D1) =<
-        calendar:datetime_to_gregorian_seconds(D2).
+    time:datetime_to_seconds(D1) =< time:datetime_to_seconds(D2).
 
 %%%--------------------------------------------------------------------
 %%% @doc
@@ -203,12 +269,13 @@ is_harvesting(_) -> false.
 %%%-------------------------------------------------------------------
 -spec to_xml(term()) -> #xmlElement{}.
 to_xml(undefined) -> [];
+to_xml([]) -> [];
 to_xml({_Name, undefined}) -> [];
 to_xml(#xmlElement{} = XML) -> XML;
 to_xml({_Name, Record = #oai_record{}}) -> to_xml(Record);
 to_xml({_Name, Header = #oai_header{}}) -> to_xml(Header);
-to_xml({_Name, MetadataFormat = #oai_metadata_format{}}) ->
-    to_xml(MetadataFormat);
+to_xml({_Name, MetadataFormat = #oai_metadata_format{}}) -> to_xml(MetadataFormat);
+to_xml({_Name, Set = #oai_set{}}) -> to_xml(Set);
 to_xml(#oai_error{code = Code, description = Description}) ->
     #xmlElement{
         name = error,
@@ -222,21 +289,38 @@ to_xml(#oai_record{header = Header, metadata = Metadata, about = About}) ->
             ensure_list(to_xml(Metadata)) ++
             ensure_list(to_xml(About))
     };
-to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp}) ->
+to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp, set_spec = SetSpec, status = Status}) ->
     #xmlElement{
         name = header,
-        content = ensure_list(to_xml({identifier, Identifier})) ++
-        ensure_list(to_xml({datestamp, Datestamp}))};
-to_xml(#oai_metadata{} = OaiMetadata) ->
-    #oai_metadata{
-        metadata_format = Format, value = Value,
-        additional_identifiers = AdditionalIdentifiers
-    } = OaiMetadata,
-    MetadataPrefix = Format#oai_metadata_format.metadataPrefix,
-    Mod = metadata_formats:module(MetadataPrefix),
-    #xmlElement{
-        name = metadata,
-        content = ensure_list(to_xml(Mod:encode(Value, AdditionalIdentifiers)))};
+        attributes = case Status of
+            deleted -> [#xmlAttribute{name = status, value = "deleted"}];
+            present -> []
+        end,
+        content = lists:flatten([
+            ensure_list(to_xml({identifier, Identifier})),
+            ensure_list(to_xml({datestamp, Datestamp})),
+            ensure_list(to_xml({setSpec, SetSpec}))
+        ])
+    };
+to_xml(#oai_metadata{metadata_prefix = MetadataPrefix, raw_value = RawValue}) ->
+    case oai_xml:parse(RawValue) of
+        {ok, ParsedMetadata} ->
+            #xmlElement{
+                name = metadata,
+                content = ensure_list(oai_metadata:adapt_for_oai_pmh(MetadataPrefix, ParsedMetadata))
+            };
+        error ->
+            % this should theoretically never happen as the metadata is sanitized before
+            % being written to the DB, so let it crash in case of unforeseen errors
+            ?error(
+                "Cannot parse handle metadata:~n"
+                "-----------------------------~n"
+                "~ts~n"
+                "-----------------------------",
+                [RawValue]
+            ),
+            error(bad_handle_metadata)
+    end;
 to_xml(#oai_metadata_format{metadataPrefix = MetadataPrefix, schema = Schema,
     metadataNamespace = Namespace}) ->
     #xmlElement{
@@ -244,6 +328,14 @@ to_xml(#oai_metadata_format{metadataPrefix = MetadataPrefix, schema = Schema,
         content = ensure_list(to_xml({metadataPrefix, MetadataPrefix})) ++
             ensure_list(to_xml({schema, Schema})) ++
             ensure_list(to_xml({metadataNamespace, Namespace}))
+    };
+to_xml(#oai_set{set_spec = SetSpec, set_name = SetName}) ->
+    #xmlElement{
+        name = set,
+        content = lists:flatten([
+            ensure_list(to_xml({setSpec, SetSpec})),
+            ensure_list(to_xml({setName, SetName}))
+        ])
     };
 to_xml(#oai_about{value = Value}) ->
     #xmlElement{
@@ -267,12 +359,13 @@ to_xml({Name, ContentList = [{_, _} | _], Attributes}) ->
 to_xml({Name, Content, Attributes}) ->
     #xmlElement{
         name = ensure_atom(Name),
-        content = [to_xml(Content)],
+        content = ensure_list(to_xml(Content)),
         attributes = lists:map(fun({N, V}) ->
             #xmlAttribute{name = ensure_atom(N), value = str_utils:to_list(V)}
         end, Attributes)
     };
-to_xml(Content) -> #xmlText{value = str_utils:to_list(Content)}.
+to_xml(Content) when is_binary(Content) ->
+    #xmlText{value = str_utils:to_list(Content)}.
 
 
 %%%-------------------------------------------------------------------
@@ -286,31 +379,10 @@ ensure_list(Arg) when is_list(Arg) -> Arg;
 ensure_list(Arg) -> [Arg].
 
 
-%%%-------------------------------------------------------------------
-%%% @doc
-%%% Returns the list of all handles in the system.
-%%% @end
-%%%-------------------------------------------------------------------
--spec list_handles() -> [od_handle:id()].
-list_handles() ->
-    {ok, HandlesList} = handle_logic:list(?ROOT),
-    HandlesList.
-
-
-%%%-------------------------------------------------------------------
-%%% @doc
-%%% Retrieves specified handle record.
-%%% @end
-%%%-------------------------------------------------------------------
--spec get_handle(HandleId :: od_handle:id()) -> #od_handle{}.
-get_handle(HandleId) ->
-    {ok, Handle} = handle_logic:get(?ROOT, HandleId),
-    Handle.
-
-
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
 
 %%%-------------------------------------------------------------------
 %%% @private
@@ -331,7 +403,7 @@ granularity({{_, _, _}, {_, _, _}}) -> seconds_granularity.
 %%% @end
 %%%-------------------------------------------------------------------
 -spec granularity_days_to_seconds({Direction :: max | min, supported_datestamp()})
-        -> undefined | erlang:datetime().
+        -> undefined | calendar:datetime().
 granularity_days_to_seconds({_, undefined}) -> undefined;
 granularity_days_to_seconds({min, {Y, M, D}}) -> {{Y, M, D}, {0, 0, 0}};
 granularity_days_to_seconds({max, {Y, M, D}}) -> {{Y, M, D}, {23, 59, 59}};
@@ -350,3 +422,28 @@ granularity_days_to_seconds({max, {{Y, M, D}, {H, Min, S}}}) ->
 ensure_atom(Arg) when is_atom(Arg) -> Arg;
 ensure_atom(Arg) when is_binary(Arg) -> binary_to_atom(Arg, latin1);
 ensure_atom(Arg) when is_list(Arg) -> list_to_atom(Arg).
+
+%%%--------------------------------------------------------------------
+%%% @private
+%%% @doc
+%%% Encode handle id to oai identifier supported by oz-worker.
+%%% oai identifier is in form:
+%%%     oai:<onezone-domain>:<handle_id>
+%%% @end
+%%%--------------------------------------------------------------------
+-spec oai_identifier_encode(od_handle:id()) -> oai_id().
+oai_identifier_encode(Id) ->
+    <<?OAI_IDENTIFIER_PREFIX/binary, Id/binary>>.
+
+
+-spec pack_oai_resumption_token(oai_metadata:prefix(), handle_registry:resumption_token()) ->
+    oai_arg_parser:resumption_token().
+pack_oai_resumption_token(MetadataPrefix, HandleRegistryResumptionToken) ->
+    str_utils:join_binary([MetadataPrefix, HandleRegistryResumptionToken], <<?RESUMPTION_TOKEN_SEP>>).
+
+
+-spec unpack_oai_resumption_token(oai_arg_parser:resumption_token()) ->
+    {oai_metadata:prefix(), handle_registry:resumption_token()}.
+unpack_oai_resumption_token(ResumptionToken) ->
+    [MetadataPrefix, HandleRegistryResumptionToken] = binary:split(ResumptionToken, <<?RESUMPTION_TOKEN_SEP>>),
+    {MetadataPrefix, HandleRegistryResumptionToken}.

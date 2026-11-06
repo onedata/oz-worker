@@ -11,7 +11,7 @@
 -module(identify).
 -author("Jakub Kudzia").
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
@@ -79,54 +79,35 @@ optional_response_elements() ->
 %%%-------------------------------------------------------------------
 -spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"repositoryName">>, _Args) ->
-    oz_worker:get_name();
+    str_utils:to_binary(oz_worker:get_name());
 get_response(<<"baseURL">>, _Args) ->
     Domain = oz_worker:get_domain(),
-    {ok, OAIPrefix} = oz_worker:get_env(oai_pmh_api_prefix),
-    str_utils:format_bin("~s~s", [Domain, OAIPrefix]);
+    OAIPrefix = oz_worker:get_env(oai_pmh_api_prefix),
+    str_utils:format_bin("~ts~ts", [Domain, OAIPrefix]);
 get_response(<<"protocolVersion">>, _Args) ->
     ?PROTOCOL_VERSION;
 get_response(<<"earliestDatestamp">>, _Args) ->
-    case get_earliest_datestamp() of
-        none -> <<"Repository is empty">>;
-        Datestamp -> oai_utils:datetime_to_oai_datestamp(Datestamp)
-    end;
+    Timestamp = case handle_registry:get_earliest_timestamp() of
+        undefined ->
+            % return the current time as the lower bound for OAI-PMH queries,
+            % but subtract a bit to avoid race conditions when a handle has just been created
+            od_handle:current_timestamp() - 3600;
+        TimeSeconds ->
+            TimeSeconds
+    end,
+    oai_utils:serialize_datestamp(time:seconds_to_datetime(Timestamp));
 get_response(<<"deletedRecord">>, _Args) ->
-    <<"no">>;
+    <<"persistent">>;
 get_response(<<"granularity">>, _Args) ->
     <<"YYYY-MM-DDThh:mm:ssZ">>;
 get_response(<<"adminEmail">>, _Args) ->
-    {ok, AdminEmails} = oz_worker:get_env(admin_emails),
+    AdminEmails = oz_worker:get_env(admin_emails),
     lists:map(fun(AdminEmail) ->
         list_to_binary(AdminEmail)
     end, AdminEmails);
 get_response(<<"compression">>, _Args) -> <<"">>;
-%%% TODO by default 'Identity' compressions is supported.
-%%% TODO optionally we can add support for other types of compression
-%%% TODO compressions other than 'Identity' must be enumerated in Identify request
+%%% TODO VFS-7454: by default 'Identity' compressions is supported.
+%%% Optionally we can add support for other types of compression
+%%% compressions other than 'Identity' must be enumerated in Identify request
 get_response(<<"description">>, _Args) -> [].
-%%% TODO add repository description
-
-
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-%%%-------------------------------------------------------------------
-%%% @private
-%%% @doc
-%%% Returns earliest metadata datestamp.
-%%% @end
-%%%-------------------------------------------------------------------
--spec get_earliest_datestamp() -> erlang:datetime().
-get_earliest_datestamp() ->
-    Ids = oai_utils:list_handles(),
-    Datestamps = lists:map(fun(Id) ->
-        #od_handle{timestamp = Timestamp} = oai_utils:get_handle(Id),
-        Timestamp
-    end, Ids),
-    case Datestamps of
-        [] -> none;
-        _ -> hd(lists:sort(fun oai_utils:is_earlier_or_equal/2, Datestamps))
-    end.
+%%% TODO VFS-7454  add repository description

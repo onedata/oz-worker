@@ -17,39 +17,17 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([build_config/0, insert_config/1]).
--export([build_domain/2, build_fqdn_from_subdomain/1]).
 -export([get_ns_hosts/0]).
 
--type domain() :: binary().
--type domain_entry() :: {domain(), [inet:ip4_address()]}.
--type dns_config() :: {Name :: domain(), _Version :: <<>>, Records :: [#dns_rr{}]}.
--export_type([domain/0, dns_config/0]).
+-type domain_entry() :: {dns_utils:domain_name(), [inet:ip4_address()]}.
+-type dns_config() :: {Name :: dns_utils:domain_name(), _Version :: <<>>, Records :: [#dns_rr{}]}.
+-type serial() :: -2147483648..2147483647.
+-export_type([dns_config/0]).
 
 
 %%%===================================================================
 %%% API
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Joins subdomain with domain to build fully qualified domain.
-%% @end
-%%--------------------------------------------------------------------
--spec build_domain(Subdomain :: domain(), Domain :: domain()) -> domain().
-build_domain(<<>>, Domain) ->
-    Domain;
-build_domain(Subdomain, Domain) ->
-    <<Subdomain/binary, ".", Domain/binary>>.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Joins provided subdomain with onezone domain.
-%% @end
-%%--------------------------------------------------------------------
--spec build_fqdn_from_subdomain(Subdomain :: domain()) -> domain().
-build_fqdn_from_subdomain(Subdomain) ->
-    build_domain(Subdomain, oz_worker:get_domain()).
 
 
 %%--------------------------------------------------------------------
@@ -73,11 +51,13 @@ build_config() ->
     OneZoneIPs = node_manager:get_cluster_ips(),
     OneZoneDomain = oz_worker:get_domain(),
     AdminEmail = get_soa_admin(OneZoneDomain),
+    DnsZoneSerial = generate_zone_serial(),
 
     OnezoneNS = build_onezone_ns_entries(OneZoneIPs),
 
     {PrimaryNS, _IPs} = hd(OnezoneNS),
-    SOARecord = build_record_soa(OneZoneDomain, PrimaryNS, AdminEmail),
+    SOARecord = build_record_soa(OneZoneDomain, PrimaryNS,
+        AdminEmail, DnsZoneSerial),
 
     {OneZoneDomain, <<>>, [
         SOARecord |
@@ -114,10 +94,35 @@ get_ns_hosts() ->
 %%--------------------------------------------------------------------
 -spec get_soa_admin(OneZoneDomain :: binary()) -> binary().
 get_soa_admin(OneZoneDomain) ->
-    case oz_worker:get_env(dns_soa_admin_mailbox) of
-        {ok, Admin} -> str_utils:to_binary(Admin);
-        undefined -> <<"admin.", OneZoneDomain/binary>>
+    case oz_worker:get_env(dns_soa_admin_mailbox, undefined) of
+        undefined -> <<"admin.", OneZoneDomain/binary>>;
+        Admin -> str_utils:to_binary(Admin)
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Generates serial number for the SOA record. The number must change
+%% every time the zone contents change, which is why it is set
+%% to current unix timestamp every time the zone is generated.
+%% The serial is ensured to be representable as a 32 bit signed integer
+%% (negative SOA serials may be treated as larger in cases defined
+%% by "serial number arithmetic", avoiding the Year 2038 Problem).
+%% @end
+%%--------------------------------------------------------------------
+-spec generate_zone_serial() -> serial().
+generate_zone_serial() ->
+    wrap_like_signed_32bit(global_clock:timestamp_seconds()).
+
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Wraps an integer like a signed 32bit arithmetic would.
+%% @end
+%%--------------------------------------------------------------------
+-spec wrap_like_signed_32bit(integer()) -> serial().
+wrap_like_signed_32bit(Integer) when Integer < (1 bsl 31) -> Integer;
+wrap_like_signed_32bit(Integer) -> wrap_like_signed_32bit(Integer - (1 bsl 32)).
 
 
 %%--------------------------------------------------------------------
@@ -131,15 +136,17 @@ get_soa_admin(OneZoneDomain) ->
 build_a_records(NSDomains, OneZoneIPs) ->
     OneZoneDomain = oz_worker:get_domain(),
 
-    ProviderSubdomains = maps:to_list(dns_state:get_subdomains_to_ips()),
+    ProviderRelativeDomainNamesToIps = dns_state:get_provider_relative_domain_names_to_ips(),
 
     % check if there are any overlapping records
-    StaticSubdomains = filter_shadowed_entries(oz_worker:get_env(dns_static_a_records, [])),
+    StaticSubdomainsToIps = filter_shadowed_entries(oz_worker:get_env(dns_static_a_records, [])),
 
-    ProviderDomains = [{build_domain(Sub, OneZoneDomain), IPs}
-        || {Sub, IPs} <- ProviderSubdomains ++ StaticSubdomains],
+    ProviderDomainsToIps = [
+        {dns_utils:build_domain(Sub, OneZoneDomain), IPs}
+        || {Sub, IPs} <- StaticSubdomainsToIps ++ maps:to_list(ProviderRelativeDomainNamesToIps)
+    ],
 
-    Entries = [{OneZoneDomain, OneZoneIPs} | ProviderDomains ++ NSDomains],
+    Entries = [{OneZoneDomain, OneZoneIPs} | ProviderDomainsToIps ++ NSDomains],
 
     lists:flatmap(fun({Domain, IPs}) ->
         [build_record_a(Domain, IP) || IP <- IPs]
@@ -167,7 +174,7 @@ build_ns_records(OneZoneNS) ->
             _ -> [Nameservers]
         end,
 
-        Domain = build_domain(Subdomain, OneZoneDomain),
+        Domain = dns_utils:build_domain(Subdomain, OneZoneDomain),
         [build_record_ns(Domain, NS) || NS <- NSs]
     end, StaticEntries),
 
@@ -199,8 +206,11 @@ build_onezone_ns_entries(OneZoneIPs) ->
 
     {NSDomainsIPs, _} = lists:foldl(fun(IP, {DomainsIPs, Count}) ->
         Index = integer_to_binary(Count),
-        Domain = build_domain(<<"ns", Index/binary>>, OneZoneDomain),
-        {[{Domain, [IP]} | DomainsIPs], Count + 1}
+        Domain = dns_utils:build_domain(<<"ns", Index/binary>>, OneZoneDomain),
+        {
+            [{Domain, [IP]} | DomainsIPs],
+            Count + 1
+        }
     end, {[], 1}, NSIPsRepeated),
 
     % preserve ascending order
@@ -221,13 +231,13 @@ build_txt_records() ->
 
     lists:map(fun
         ({Name, {Content, undefined}}) ->
-            Domain = build_domain(Name, OneZoneDomain),
+            Domain = dns_utils:build_domain(Name, OneZoneDomain),
             build_record_txt(Domain, Content);
         ({Name, {Value, TTL}}) ->
-            Domain = build_domain(Name, OneZoneDomain),
+            Domain = dns_utils:build_domain(Name, OneZoneDomain),
             build_record_txt(Domain, Value, TTL);
         ({Name, Value}) ->
-            Domain = build_domain(Name, OneZoneDomain),
+            Domain = dns_utils:build_domain(Name, OneZoneDomain),
             build_record_txt(Domain, Value)
     end, ProviderEntries ++ StaticEntries).
 
@@ -244,7 +254,7 @@ build_mx_records() ->
     StaticEntries = oz_worker:get_env(dns_static_mx_records, []),
 
     lists:map(fun({Subdomain, Mailserver, Preference}) ->
-        Domain = build_domain(Subdomain, OneZoneDomain),
+        Domain = dns_utils:build_domain(Subdomain, OneZoneDomain),
         build_record_mx(Domain, Mailserver, Preference)
     end, StaticEntries).
 
@@ -261,7 +271,7 @@ build_cname_records() ->
     StaticEntries = filter_shadowed_entries(oz_worker:get_env(dns_static_cname_records, [])),
 
     lists:map(fun({Subdomain, Target}) ->
-        Domain = build_domain(Subdomain, OneZoneDomain),
+        Domain = dns_utils:build_domain(Subdomain, OneZoneDomain),
         build_record_cname(Domain, Target)
     end, StaticEntries).
 
@@ -273,16 +283,22 @@ build_cname_records() ->
 %% by a provider, logging the fact.
 %% @end
 %%--------------------------------------------------------------------
+-spec filter_shadowed_entries([T]) -> [T] when T :: tuple().
 filter_shadowed_entries(StaticEntries) ->
-    ProviderEntries = maps:to_list(dns_state:get_subdomains_to_ips()),
+    ProviderSubdomainLabels = dns_state:get_provider_subdomain_labels(),
+
     % check if there are any overlapping records
     lists:filter(fun(Entry) ->
-        Subdomain = element(1, Entry), % not all tuples are 2-element, eg. MX entries
-        case proplists:is_defined(Subdomain, ProviderEntries) of
-            false -> true;
+        SubdomainLabel = element(1, Entry), % not all tuples are 2-element, eg. MX entries
+        NormalizedSubdomainLabel = string:lowercase(SubdomainLabel),
+        IsSubdomain = fun(Domain) -> dns_utils:is_equal_or_subdomain(NormalizedSubdomainLabel, Domain) end,
+
+        case lists:any(IsSubdomain, ProviderSubdomainLabels) of
+            false ->
+                true;
             _ ->
-                ?warning("Ignoring static entry for subdomain \"~s\" "
-                "as the subdomain is already used by a provider.", [Subdomain]),
+                ?warning("Ignoring static entry for subdomain \"~ts\" "
+                "as the domain is already used by a provider.", [SubdomainLabel]),
                 false
         end
     end, StaticEntries).
@@ -294,7 +310,7 @@ filter_shadowed_entries(StaticEntries) ->
 %% Builds a dns A record for erldns.
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_a(domain(), inet:ip4_address()) -> #dns_rr{}.
+-spec build_record_a(dns_utils:domain_name(), inet:ip4_address()) -> #dns_rr{}.
 build_record_a(Domain, IP) ->
     #dns_rr{
         name = Domain,
@@ -310,9 +326,9 @@ build_record_a(Domain, IP) ->
 %% Builds a dns SOA record for erldns.
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_soa(Name :: domain(), MainName :: domain(),
-    Admin :: binary()) -> #dns_rr{}.
-build_record_soa(Name, MainName, Admin) ->
+-spec build_record_soa(Name :: dns_utils:domain_name(), MainName :: dns_utils:domain_name(),
+    Admin :: binary(), serial()) -> #dns_rr{}.
+build_record_soa(Name, MainName, Admin, Serial) ->
     #dns_rr{
         name = Name,
         type = ?DNS_TYPE_SOA,
@@ -320,7 +336,7 @@ build_record_soa(Name, MainName, Admin) ->
         data = #dns_rrdata_soa{
             mname = MainName,
             rname = Admin,
-            serial = oz_worker:get_env(dns_soa_serial, 2017090401),
+            serial = Serial,
             refresh = oz_worker:get_env(dns_soa_refresh, 7200),
             retry = oz_worker:get_env(dns_soa_retry, 1800),
             expire = oz_worker:get_env(dns_soa_expire, 1209600),
@@ -335,7 +351,7 @@ build_record_soa(Name, MainName, Admin) ->
 %% Builds a NS record for erldns.
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_ns(Name :: domain(), Nameserver :: domain()) -> #dns_rr{}.
+-spec build_record_ns(Name :: dns_utils:domain_name(), Nameserver :: dns_utils:domain_name()) -> #dns_rr{}.
 build_record_ns(Name, Nameserver) ->
     #dns_rr{
         name = Name,
@@ -352,7 +368,7 @@ build_record_ns(Name, Nameserver) ->
 %% to string (list).
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_txt(domain(), binary() | string()) -> #dns_rr{}.
+-spec build_record_txt(dns_utils:domain_name(), binary() | string()) -> #dns_rr{}.
 build_record_txt(Domain, Value) ->
     build_record_txt(Domain, Value, oz_worker:get_env(dns_txt_ttl, 120)).
 
@@ -364,8 +380,8 @@ build_record_txt(Domain, Value) ->
 %% by erl_dns.
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_txt(Domain :: domain(), Value :: binary() | string(),
-    TTL :: non_neg_integer()) -> #dns_rr{}.
+-spec build_record_txt(Domain :: dns_utils:domain_name(), Value :: binary() | string(),
+    TTL :: time:seconds()) -> #dns_rr{}.
 build_record_txt(Domain, Value, TTL) when is_binary(Value) ->
     build_record_txt(Domain, binary:bin_to_list(Value), TTL);
 build_record_txt(Domain, Value, TTL) ->
@@ -383,7 +399,7 @@ build_record_txt(Domain, Value, TTL) ->
 %% Builds a MX record for erldns.
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_mx(domain(), domain(), integer()) -> #dns_rr{}.
+-spec build_record_mx(dns_utils:domain_name(), dns_utils:domain_name(), integer()) -> #dns_rr{}.
 build_record_mx(Domain, Address, Preference) ->
     #dns_rr{
         name = Domain,
@@ -399,7 +415,7 @@ build_record_mx(Domain, Address, Preference) ->
 %% Builds a CNAME record for erldns.
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_cname(domain(), domain()) -> #dns_rr{}.
+-spec build_record_cname(dns_utils:domain_name(), dns_utils:domain_name()) -> #dns_rr{}.
 build_record_cname(Name, Target) ->
     #dns_rr{
         name = Name,

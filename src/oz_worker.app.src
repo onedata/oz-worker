@@ -5,13 +5,14 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc This file contains the application description.
+%% @doc This file contains the oz-worker application description.
 %% @end
 %% ===================================================================
 
 {application, oz_worker, [
-    {description, "OneZone worker node."},
-    {vsn, "18.02.1"},
+    {description, "Onezone worker node."},
+    %% Beware - this version is parsed and used in Makefile
+    {vsn, "25.2"},
     {registered, [oz_worker_sup]},
     {applications, [
         kernel,
@@ -25,12 +26,12 @@
         meck,
         esaml,
         gui,
+        gen_smtp,
         erldns,
         ctool,
         %% ctool already requires those apps below, but they are here
         %% for awareness of them being used in the project and
         %% to make sure they are started before the application.
-        lager,
         hackney,
         cowboy
     ]},

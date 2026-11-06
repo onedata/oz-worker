@@ -13,9 +13,10 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, update/3, force_delete/1]).
+-export([create/1, get/1, exists/1, update/2, force_delete/1]).
 -export([list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
@@ -35,8 +36,9 @@
 
 -define(CTX, #{
     model => ?MODULE,
-    fold_enabled => true,
-    sync_enabled => true
+    secure_fold_enabled => true,
+    sync_enabled => true,
+    memory_copies => all
 }).
 
 %%%===================================================================
@@ -51,15 +53,6 @@
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Saves group.
-%% @end
-%%--------------------------------------------------------------------
--spec save(doc()) -> {ok, doc()} | {error, term()}.
-save(Doc) ->
-    datastore_model:save(?CTX, Doc).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -87,15 +80,6 @@ exists(GroupId) ->
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(GroupId, Diff) ->
     datastore_model:update(?CTX, GroupId, Diff).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates group by ID or creates default one.
-%% @end
-%%--------------------------------------------------------------------
--spec update(id(), diff(), record()) -> {ok, doc()} | {error, term()}.
-update(GroupId, Diff, Default) ->
-    datastore_model:update(?CTX, GroupId, Diff, Default).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -147,7 +131,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    5.
+    9.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -185,19 +169,23 @@ get_record_struct(2) ->
         {type, atom},
         {oz_privileges, [atom]},
         {eff_oz_privileges, [atom]},
+
         {parents, [string]},
         {children, #{string => [atom]}},
         {eff_parents, #{string => [{atom, string}]}},
         {eff_children, #{string => {[atom], [{atom, string}]}}},
+
         {users, #{string => [atom]}},
         {spaces, [string]},
         {handle_services, [string]},
         {handles, [string]},
+
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_spaces, #{string => [{atom, string}]}},
         {eff_providers, #{string => [{atom, string}]}},
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},
+
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
     ]};
@@ -210,7 +198,167 @@ get_record_struct(4) ->
     get_record_struct(3);
 get_record_struct(5) ->
     % The 'role' type is changed to 'role_holders', the structure does not change
-    get_record_struct(4).
+    get_record_struct(4);
+get_record_struct(6) ->
+    % Changes:
+    %   * new field - protected group flag
+    %   * new field - creation_time
+    %   * new field - creator
+    %   * new field - harvesters
+    %   * new field - eff_harvesters
+    %   * new field - clusters
+    %   * new field - eff_clusters
+    %   * privileges are translated
+    {record, [
+        {name, string},
+        {type, atom},
+        {protected, boolean}, % New field
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {parents, [string]},
+        {children, #{string => [atom]}},
+        {eff_parents, #{string => [{atom, string}]}},
+        {eff_children, #{string => {[atom], [{atom, string}]}}},
+
+        {users, #{string => [atom]}},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer}, % New field
+        {creator, {record, [ % New field
+            {type, atom},
+            {id, string}
+        ]}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(7) ->
+    % creator field - nested record changed from #client{} to #subject{}
+    {record, [
+        {name, string},
+        {type, atom},
+        {protected, boolean},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {parents, [string]},
+        {children, #{string => [atom]}},
+        {eff_parents, #{string => [{atom, string}]}},
+        {eff_children, #{string => {[atom], [{atom, string}]}}},
+
+        {users, #{string => [atom]}},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {creator, {record, [ % nested record changed from #client{} to #subject{}
+            {type, atom},
+            {id, string}
+        ]}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(8) ->
+    % creator field - nested record changed from #client{} to #subject{}
+    {record, [
+        {name, string},
+        {type, atom},
+        {protected, boolean},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {parents, [string]},
+        {children, #{string => [atom]}},
+        {eff_parents, #{string => [{atom, string}]}},
+        {eff_children, #{string => {[atom], [{atom, string}]}}},
+
+        {users, #{string => [atom]}},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(9) ->
+    % Changes:
+    %   * new field - atm_inventories
+    %   * new field - eff_atm_inventories
+    {record, [
+        {name, string},
+        {type, atom},
+        {protected, boolean},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {parents, [string]},
+        {children, #{string => [atom]}},
+        {eff_parents, #{string => [{atom, string}]}},
+        {eff_children, #{string => {[atom], [{atom, string}]}}},
+
+        {users, #{string => [atom]}},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+        {atm_inventories, [string]}, % new field
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+        {eff_atm_inventories, #{string => [{atom, string}]}}, % new field
+
+        {creation_time, integer},
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -220,8 +368,7 @@ get_record_struct(5) ->
 -spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
     {datastore_model:record_version(), datastore_model:record()}.
 upgrade_record(1, Group) ->
-    {
-        od_group,
+    {od_group,
         Name,
         Type,
         OzPrivileges,
@@ -247,8 +394,7 @@ upgrade_record(1, Group) ->
         _TopDownDirty,
         _BottomUpDirty
     } = Group,
-    {2, {
-        od_group,
+    {2, {od_group,
         Name,
         Type,
         OzPrivileges,
@@ -274,8 +420,7 @@ upgrade_record(1, Group) ->
         true
     }};
 upgrade_record(2, Group) ->
-    {
-        od_group,
+    {od_group,
         Name,
         Type,
         OzPrivileges,
@@ -302,7 +447,7 @@ upgrade_record(2, Group) ->
     } = Group,
 
     {3, {od_group,
-        entity_logic:normalize_name(Name),
+        entity_logic_sanitizer:normalize_name(Name, ?UNKNOWN_ENTITY_NAME),
         Type,
 
         OzPrivileges,
@@ -328,8 +473,7 @@ upgrade_record(2, Group) ->
         true
     }};
 upgrade_record(3, Group) ->
-    {
-        od_group,
+    {od_group,
         Name,
         Type,
         OzPrivileges,
@@ -356,7 +500,7 @@ upgrade_record(3, Group) ->
     } = Group,
 
     {4, {od_group,
-        entity_logic:normalize_name(Name),
+        entity_logic_sanitizer:normalize_name(Name, ?UNKNOWN_ENTITY_NAME),
         Type,
 
         OzPrivileges,
@@ -382,8 +526,7 @@ upgrade_record(3, Group) ->
         true
     }};
 upgrade_record(4, Group) ->
-    {
-        od_group,
+    {od_group,
         Name,
         Type,
 
@@ -410,12 +553,312 @@ upgrade_record(4, Group) ->
         BottomUpDirty
     } = Group,
 
-    {5, #od_group{
-        name = Name,
-        type = case Type of
+    {5, {od_group,
+        Name,
+        case Type of
             role -> role_holders;
             Other -> Other
         end,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(5, Group) ->
+    {od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Group,
+
+    TranslatePrivileges = fun(Privileges) ->
+        privileges:from_list(lists:flatten(lists:map(fun
+            (group_invite_group) -> ?GROUP_ADD_CHILD;
+            (group_remove_group) -> ?GROUP_REMOVE_CHILD;
+            (group_join_group) -> ?GROUP_ADD_PARENT;
+            (group_leave_group) -> ?GROUP_LEAVE_PARENT;
+            (group_invite_user) -> ?GROUP_ADD_USER;
+            (group_create_space) -> ?GROUP_ADD_SPACE;
+            (group_join_space) -> ?GROUP_ADD_SPACE;
+            (group_view) -> [?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES];
+
+            (oz_users_list) -> [?OZ_USERS_LIST, ?OZ_USERS_VIEW];
+
+            (oz_groups_list) -> [?OZ_GROUPS_LIST, ?OZ_GROUPS_VIEW];
+            (oz_groups_list_users) -> ?OZ_GROUPS_LIST_RELATIONSHIPS;
+            (oz_groups_list_groups) -> ?OZ_GROUPS_LIST_RELATIONSHIPS;
+            (oz_groups_add_members) -> ?OZ_GROUPS_ADD_RELATIONSHIPS;
+            (oz_groups_remove_members) -> ?OZ_GROUPS_REMOVE_RELATIONSHIPS;
+
+            (oz_spaces_list) -> [?OZ_SPACES_LIST, ?OZ_SPACES_VIEW];
+            (oz_spaces_list_users) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_list_groups) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_list_providers) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_add_members) -> ?OZ_SPACES_ADD_RELATIONSHIPS;
+            (oz_spaces_remove_members) -> ?OZ_SPACES_REMOVE_RELATIONSHIPS;
+
+            (oz_providers_list) -> [?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_VIEW];
+            (oz_providers_list_users) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+            (oz_providers_list_groups) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+            (oz_providers_list_spaces) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+
+            (Other) -> Other
+        end, Privileges)))
+    end,
+
+    TranslateField = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Intermediaries}) -> {TranslatePrivileges(Privs), Intermediaries};
+            (_, Privs) -> TranslatePrivileges(Privs)
+        end, Field)
+    end,
+
+    {6, {od_group,
+        Name,
+        Type,
+        false,
+        TranslatePrivileges(OzPrivileges),
+        TranslatePrivileges(EffOzPrivileges),
+
+        Parents,
+        TranslateField(Children),
+        EffParents,
+        TranslateField(EffChildren),
+
+        TranslateField(Users),
+        Spaces,
+        HandleServices,
+        Handles,
+        [],
+        [],
+
+        TranslateField(EffUsers),
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        #{},
+        #{},
+
+        global_clock:timestamp_seconds(),
+        undefined,
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(6, Group) ->
+    {od_group,
+        Name,
+        Type,
+        Protected,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Group,
+
+    {7, {od_group,
+        Name,
+        Type,
+        Protected,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        upgrade_common:client_to_subject(Creator),
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(7, Group) ->
+    {od_group,
+        Name,
+        Type,
+        Protected,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Group,
+
+    {8, {od_group,
+        Name,
+        Type,
+        Protected,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        upgrade_common:upgrade_subject_record(Creator),
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(8, Group) ->
+    {od_group,
+        Name,
+        Type,
+        Protected,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Group,
+
+    {9, #od_group{
+        name = Name,
+        type = Type,
+        protected = Protected,
 
         oz_privileges = OzPrivileges,
         eff_oz_privileges = EffOzPrivileges,
@@ -429,12 +872,21 @@ upgrade_record(4, Group) ->
         spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
+        harvesters = Harvesters,
+        clusters = Clusters,
+        atm_inventories = [],
 
         eff_users = EffUsers,
         eff_spaces = EffSpaces,
         eff_providers = EffProviders,
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles,
+        eff_harvesters = EffHarvesters,
+        eff_clusters = EffClusters,
+        eff_atm_inventories = #{},
+
+        creation_time = CreationTime,
+        creator = Creator,
 
         top_down_dirty = TopDownDirty,
         bottom_up_dirty = BottomUpDirty

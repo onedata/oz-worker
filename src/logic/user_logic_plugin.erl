@@ -14,18 +14,18 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("tokens.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/utils/utils.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
--export([fetch_entity/1, operation_supported/3]).
+-export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
--export([exists/2, authorize/2, validate/1]).
+-export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 -export([auth_by_oz_privilege/2]).
+
+-define(LOCK_ON_USERNAME(Username, Fun), critical_section:run({username, Username}, Fun)).
 
 %%%===================================================================
 %%% API
@@ -33,16 +33,23 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity from datastore based on its EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | entity_logic:error().
-fetch_entity(UserId) ->
+-spec fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
+fetch_entity(#gri{id = UserId}) ->
     case od_user:get(UserId) of
-        {ok, #document{value = Group}} ->
-            {ok, Group};
+        {ok, #document{value = User, revs = [DbRev | _]}} ->
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
+            {true, {User, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -56,12 +63,12 @@ fetch_entity(UserId) ->
 %%--------------------------------------------------------------------
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
-operation_supported(create, authorize, private) -> true;
+operation_supported(create, instance, private) -> true;
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
 operation_supported(create, client_tokens, private) -> true;
-operation_supported(create, default_space, private) -> true;
 operation_supported(create, {space_alias, _}, private) -> true;
-operation_supported(create, default_provider, private) -> true;
 operation_supported(create, {idp_access_token, _}, private) -> true;
+operation_supported(create, provider_registration_token, private) -> true;
 
 operation_supported(get, list, private) -> true;
 
@@ -72,19 +79,22 @@ operation_supported(get, instance, shared) -> true;
 operation_supported(get, oz_privileges, private) -> true;
 operation_supported(get, eff_oz_privileges, private) -> true;
 
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
 operation_supported(get, client_tokens, private) -> true;
 operation_supported(get, {client_token, _}, private) -> true;
 operation_supported(get, linked_accounts, private) -> true;
 operation_supported(get, {linked_account, _}, private) -> true;
-operation_supported(get, default_space, private) -> true;
 operation_supported(get, {space_alias, _}, private) -> true;
-operation_supported(get, default_provider, private) -> true;
+operation_supported(get, space_membership_requests, private) -> space_marketplace:assert_enabled();
 
 operation_supported(get, groups, private) -> true;
 operation_supported(get, eff_groups, private) -> true;
 
 operation_supported(get, spaces, private) -> true;
 operation_supported(get, eff_spaces, private) -> true;
+
+operation_supported(get, harvesters, private) -> true;
+operation_supported(get, eff_harvesters, private) -> true;
 
 operation_supported(get, eff_providers, private) -> true;
 
@@ -94,24 +104,58 @@ operation_supported(get, eff_handle_services, private) -> true;
 operation_supported(get, handles, private) -> true;
 operation_supported(get, eff_handles, private) -> true;
 
+operation_supported(get, clusters, private) -> true;
+operation_supported(get, eff_clusters, private) -> true;
+
+operation_supported(get, atm_inventories, private) -> true;
+operation_supported(get, eff_atm_inventories, private) -> true;
+
 operation_supported(update, instance, private) -> true;
+operation_supported(update, password, private) -> true;
+operation_supported(update, basic_auth, private) -> true;
+operation_supported(update, access_block, private) -> true;
 operation_supported(update, oz_privileges, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, oz_privileges, private) -> true;
 
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
 operation_supported(delete, {client_token, _}, private) -> true;
-operation_supported(delete, default_space, private) -> true;
 operation_supported(delete, {space_alias, _}, private) -> true;
-operation_supported(delete, default_provider, private) -> true;
 
 operation_supported(delete, {group, _}, private) -> true;
 operation_supported(delete, {space, _}, private) -> true;
 operation_supported(delete, {handle_service, _}, private) -> true;
 operation_supported(delete, {handle, _}, private) -> true;
+operation_supported(delete, {harvester, _}, private) -> true;
+operation_supported(delete, {cluster, _}, private) -> true;
+operation_supported(delete, {atm_inventory, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Determines if given {Aspect, Scope} pair is subscribable, i.e. clients can
+%% subscribe to receive updates concerning the aspect of entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
+    boolean().
+is_subscribable(instance, _) -> true;
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
+is_subscribable(client_tokens, private) -> true;
+is_subscribable({client_token, _}, private) -> true;
+is_subscribable(linked_accounts, private) -> true;
+is_subscribable({linked_account, _}, private) -> true;
+is_subscribable(space_membership_requests, private) -> true;
+is_subscribable(eff_groups, private) -> true;
+is_subscribable(eff_spaces, private) -> true;
+is_subscribable(eff_providers, private) -> true;
+is_subscribable(eff_harvesters, private) -> true;
+is_subscribable(eff_clusters, private) -> true;
+is_subscribable(eff_atm_inventories, private) -> true;
+is_subscribable(_, _) -> false.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -119,30 +163,41 @@ operation_supported(_, _, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(#el_req{gri = #gri{aspect = authorize}, data = Data}) ->
-    Identifier = maps:get(<<"identifier">>, Data),
-    case auth_tokens:authenticate_user(Identifier) of
-        {ok, DischargeMacaroonToken} ->
-            % TODO VFS-3835 the macaroon should be serialized in translator
-            % rather than here
-            {ok, value, DischargeMacaroonToken};
-        _ ->
-            ?ERROR_BAD_VALUE_IDENTIFIER(<<"identifier">>)
-    end;
+create(#el_req{gri = GRI = #gri{aspect = instance}, data = Data}) ->
+    LinkedAccounts = maps:get(<<"linkedAccounts">>, Data, []),
+
+    BaselineUserRecord = #od_user{
+        full_name = maps:get(<<"fullName">>, Data, ?DEFAULT_FULL_NAME),
+        username = maps:get(<<"username">>, Data, undefined)
+    },
+
+    UserRecord = case maps:find(<<"password">>, Data) of
+        error ->
+            BaselineUserRecord;
+        {ok, Password} ->
+            {ok, UserRecord2} = basic_auth:toggle_basic_auth(BaselineUserRecord, true),
+            {ok, UserRecord3} = basic_auth:set_password(UserRecord2, Password),
+            UserRecord3
+    end,
+
+    #document{key = CreatedUserId} = ?check(user_account:create(
+        undefined, UserRecord, LinkedAccounts, user_creation_api
+    )),
+
+    {true, {User, Rev}} = fetch_entity(#gri{aspect = instance, id = CreatedUserId}),
+    {ok, resource, {GRI#gri{id = CreatedUserId}, {User, Rev}}};
+
 
 create(#el_req{gri = #gri{id = UserId, aspect = client_tokens} = GRI}) ->
-    Token = auth_tokens:gen_token(UserId),
-    {ok, _} = od_user:update(UserId, fun(#od_user{client_tokens = Tokens} = User) ->
-        {ok, User#od_user{client_tokens = [Token | Tokens]}}
-    end),
-    {ok, resource, {GRI#gri{aspect = {client_token, Token}}, Token}};
+    %% @TODO VFS-5846 old client tokens API kept for backward compatibility
+    case token_logic:create_legacy_client_token(?USER(UserId)) of
+        {ok, Token} ->
+            {ok, Serialized} = tokens:serialize(Token),
+            {ok, resource, {GRI#gri{aspect = {client_token, Serialized}}, {Serialized, inherit_rev}}};
+        {error, _} = Error ->
+            Error
+    end;
 
-create(Req = #el_req{gri = #gri{id = UserId, aspect = default_space}}) ->
-    SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
-    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
-        {ok, User#od_user{default_space = SpaceId}}
-    end),
-    ok;
 
 create(Req = #el_req{gri = #gri{id = UserId, aspect = {space_alias, SpaceId}}}) ->
     Alias = maps:get(<<"alias">>, Req#el_req.data),
@@ -151,22 +206,19 @@ create(Req = #el_req{gri = #gri{id = UserId, aspect = {space_alias, SpaceId}}}) 
     end),
     ok;
 
-create(#el_req{gri = #gri{id = UserId, aspect = default_provider}, data = Data}) ->
-    ProviderId = maps:get(<<"providerId">>, Data),
-    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
-        {ok, User#od_user{default_provider = ProviderId}}
-    end),
-    ok;
-
 create(Req = #el_req{gri = GRI = #gri{aspect = {idp_access_token, IdPBin}}}) when is_binary(IdPBin) ->
     create(Req#el_req{gri = GRI#gri{aspect = {idp_access_token, binary_to_existing_atom(IdPBin, utf8)}}});
 create(#el_req{gri = #gri{aspect = {idp_access_token, IdP}}}) ->
     fun(User) ->
-        case auth_logic:acquire_idp_access_token(User#od_user.linked_accounts, IdP) of
+        case idp_auth:acquire_idp_access_token(User, IdP) of
             {ok, {AccessToken, Expires}} -> {ok, value, {AccessToken, Expires}};
             {error, _} = Error -> Error
         end
-    end.
+    end;
+
+create(#el_req{auth = Auth, gri = #gri{id = UserId, aspect = provider_registration_token}}) ->
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 20.02.*
+    token_logic:create_legacy_invite_token(Auth, ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, UserId)).
 
 
 %%--------------------------------------------------------------------
@@ -185,40 +237,65 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, User) ->
     {ok, User};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
     #od_user{
-        name = Name, alias = Alias, emails = Emails,
-        linked_accounts = LinkedAccounts
+        basic_auth_enabled = BasicAuthEnabled, blocked = Blocked,
+        full_name = FullName, username = Username, emails = Emails,
+        linked_accounts = LinkedAccounts, creation_time = CreationTime
     } = User,
     {ok, #{
-        <<"name">> => Name, <<"alias">> => Alias,
+        <<"basicAuthEnabled">> => BasicAuthEnabled, <<"blocked">> => Blocked,
+        <<"fullName">> => FullName, <<"username">> => Username,
         <<"emails">> => Emails,
-        <<"linkedAccounts">> => user_logic:linked_accounts_to_maps(LinkedAccounts)
+        <<"linkedAccounts">> => lists:map(fun linked_account:to_json/1, LinkedAccounts),
+        <<"creationTime">> => CreationTime
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
-    #od_user{name = Name, alias = Alias} = User,
-    {ok, #{<<"name">> => Name, <<"alias">> => Alias}};
+    #od_user{full_name = FullName, username = Username, creation_time = CreationTime} = User,
+    {ok, #{
+        <<"fullName">> => FullName,
+        <<"username">> => Username,
+        <<"creationTime">> => CreationTime
+    }};
 
 get(#el_req{gri = #gri{aspect = oz_privileges}}, User) ->
     {ok, entity_graph:get_oz_privileges(direct, User)};
 get(#el_req{gri = #gri{aspect = eff_oz_privileges}}, User) ->
     {ok, entity_graph:get_oz_privileges(effective, User)};
 
-get(#el_req{gri = #gri{aspect = client_tokens}}, User) ->
-    {ok, User#od_user.client_tokens};
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
+get(#el_req{auth = Auth, gri = #gri{id = UserId, aspect = client_tokens}}, _User) ->
+    case token_logic:list_user_named_tokens(Auth, UserId) of
+        {error, _} = Error ->
+            Error;
+        {ok, UserTokens} ->
+            {ok, lists:filtermap(fun(TokenId) ->
+                case od_token:get(TokenId) of
+                    {ok, #document{value = #od_token{type = ?ACCESS_TOKEN} = NamedToken}} ->
+                        Token = od_token:named_token_to_token(TokenId, NamedToken),
+                        {ok, Serialized} = tokens:serialize(Token),
+                        {true, Serialized};
+                    _ ->
+                        false
+                end
+            end, UserTokens)}
+    end;
 
-get(#el_req{gri = #gri{aspect = {client_token, Id}}}, _User) ->
-    {ok, Id};
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
+get(#el_req{gri = #gri{aspect = {client_token, Serialized}}}, _User) ->
+    {ok, Serialized};
 
 get(#el_req{gri = #gri{aspect = linked_accounts}}, User) ->
-    {ok, User#od_user.linked_accounts};
-get(#el_req{gri = #gri{aspect = {linked_account, SubId}}}, User) ->
-    {ok, find_linked_account(SubId, User#od_user.linked_accounts)};
+    {ok, lists:map(fun linked_account:digest_based_id/1, User#od_user.linked_accounts)};
+get(#el_req{gri = #gri{aspect = {linked_account, DigestBasedId}}}, User) ->
+    case linked_account:find(User#od_user.linked_accounts, DigestBasedId) of
+        error -> ?ERROR_NOT_FOUND;
+        {ok, LinkedAccount} -> {ok, LinkedAccount}
+    end;
 
-get(#el_req{gri = #gri{aspect = default_space}}, User) ->
-    {ok, User#od_user.default_space};
 get(#el_req{gri = #gri{aspect = {space_alias, SpaceId}}}, User) ->
     {ok, maps:get(SpaceId, User#od_user.space_aliases)};
-get(#el_req{gri = #gri{aspect = default_provider}}, User) ->
-    {ok, User#od_user.default_provider};
+
+get(#el_req{gri = #gri{aspect = space_membership_requests}}, User) ->
+    {ok, User#od_user.space_membership_requests};
 
 get(#el_req{gri = #gri{aspect = groups}}, User) ->
     {ok, entity_graph:get_relations(direct, top_down, od_group, User)};
@@ -241,7 +318,22 @@ get(#el_req{gri = #gri{aspect = eff_handle_services}}, User) ->
 get(#el_req{gri = #gri{aspect = handles}}, User) ->
     {ok, entity_graph:get_relations(direct, top_down, od_handle, User)};
 get(#el_req{gri = #gri{aspect = eff_handles}}, User) ->
-    {ok, entity_graph:get_relations(effective, top_down, od_handle, User)}.
+    {ok, entity_graph:get_relations(effective, top_down, od_handle, User)};
+
+get(#el_req{gri = #gri{aspect = harvesters}}, User) ->
+    {ok, entity_graph:get_relations(direct, top_down, od_harvester, User)};
+get(#el_req{gri = #gri{aspect = eff_harvesters}}, User) ->
+    {ok, entity_graph:get_relations(effective, top_down, od_harvester, User)};
+
+get(#el_req{gri = #gri{aspect = clusters}}, User) ->
+    {ok, entity_graph:get_relations(direct, top_down, od_cluster, User)};
+get(#el_req{gri = #gri{aspect = eff_clusters}}, User) ->
+    {ok, entity_graph:get_relations(effective, top_down, od_cluster, User)};
+
+get(#el_req{gri = #gri{aspect = atm_inventories}}, User) ->
+    {ok, entity_graph:get_relations(direct, top_down, od_atm_inventory, User)};
+get(#el_req{gri = #gri{aspect = eff_atm_inventories}}, User) ->
+    {ok, entity_graph:get_relations(effective, top_down, od_atm_inventory, User)}.
 
 
 %%--------------------------------------------------------------------
@@ -251,43 +343,48 @@ get(#el_req{gri = #gri{aspect = eff_handles}}, User) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = UserId, aspect = instance}, data = Data}) ->
-    UserUpdateFun = fun(#od_user{name = OldName, alias = OldAlias} = User) ->
+    user_account:update_attributes(
+        UserId,
+        maps:get(<<"username">>, Data, undefined),
+        maps:get(<<"fullName">>, Data, undefined)
+    );
+
+update(#el_req{gri = #gri{id = UserId, aspect = password}, data = Data}) ->
+    OldPassword = maps:get(<<"oldPassword">>, Data),
+    NewPassword = maps:get(<<"newPassword">>, Data),
+
+    ?extract_ok(od_user:update(UserId, fun(User) ->
+        basic_auth:change_password(User, OldPassword, NewPassword)
+    end));
+
+update(#el_req{gri = #gri{id = UserId, aspect = basic_auth}, data = Data}) ->
+    ?extract_ok(od_user:update(UserId, fun(User) ->
+        {ok, User2} = case maps:find(<<"basicAuthEnabled">>, Data) of
+            {ok, Flag} -> basic_auth:toggle_basic_auth(User, Flag);
+            error -> {ok, User}
+        end,
+        case maps:find(<<"newPassword">>, Data) of
+            {ok, NewPassword} -> basic_auth:set_password(User2, NewPassword);
+            error -> {ok, User2}
+        end
+    end));
+
+update(#el_req{gri = #gri{id = UserId, aspect = access_block}, data = #{<<"blocked">> := Blocked}}) ->
+    Result = ?extract_ok(od_user:update(UserId, fun(User) ->
         {ok, User#od_user{
-            name = maps:get(<<"name">>, Data, OldName),
-            alias = maps:get(<<"alias">>, Data, OldAlias)
+            blocked = Blocked
         }}
+    end)),
+    case {Result, Blocked} of
+        {ok, true} -> session:delete_all_user_sessions(UserId);
+        _ -> ok
     end,
-    % If alias is specified and is not undefined (which is valid in case of
-    % removing alias), run update in synchronized block so no two
-    % identical aliases can be set
-    case maps:get(<<"alias">>, Data, undefined) of
-        undefined ->
-            {ok, _} = od_user:update(UserId, UserUpdateFun),
-            ok;
-        Alias ->
-            critical_section:run({alias, Alias}, fun() ->
-                % Check if this alias is occupied
-                case od_user:get_by_criterion({alias, Alias}) of
-                    {ok, #document{key = UserId}} ->
-                        % DB returned the same user, so the alias was modified
-                        % but is identical, don't report errors.
-                        {ok, _} = od_user:update(UserId, UserUpdateFun),
-                        ok;
-                    {ok, #document{}} ->
-                        % Alias is occupied by another user
-                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>);
-                    _ ->
-                        % Alias is not occupied, update user doc
-                        {ok, _} = od_user:update(UserId, UserUpdateFun),
-                        ok
-                end
-            end)
-    end;
+    Result;
 
 update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data),
-    Operation = maps:get(<<"operation">>, Data, set),
-    entity_graph:update_oz_privileges(od_user, UserId, Operation, Privileges).
+    PrivsToGrant = maps:get(<<"grant">>, Data, []),
+    PrivsToRevoke = maps:get(<<"revoke">>, Data, []),
+    entity_graph:update_oz_privileges(od_user, UserId, PrivsToGrant, PrivsToRevoke).
 
 
 %%--------------------------------------------------------------------
@@ -297,51 +394,32 @@ update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = Data}) ->
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = UserId, aspect = instance}}) ->
-    % Invalidate auth tokens
-    auth_tokens:invalidate_user_tokens(UserId),
-    % Invalidate basic auth cache and client tokens
-    {ok, #document{
-        value = #od_user{
-            alias = Alias,
-            client_tokens = Tokens
-        }}} = od_user:get(UserId),
-    basic_auth_cache:delete(Alias),
-    lists:foreach(
-        fun(Token) ->
-            {ok, Macaroon} = token_logic:deserialize(Token),
-            ok = token_logic:delete(Macaroon)
-        end, Tokens),
-    entity_graph:delete_with_relations(od_user, UserId);
+    fun(#od_user{full_name = FullName, username = Username}) ->
+        session:delete_all_user_sessions(UserId),
+        % Invalidate client tokens
+        temporary_token_secret:delete_for_subject(?SUB(user, UserId)),
+        token_logic:delete_all_user_named_tokens(?USER(UserId), UserId),
+        entity_graph:delete_with_relations(od_user, UserId),
+        ?info("User account '~ts' ('~ts') has been deleted (~ts)", [
+            FullName,
+            utils:ensure_defined(Username, <<"no username">>),
+            UserId
+        ])
+    end;
 
 delete(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}}) ->
     update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = #{
-        <<"operation">> => set, <<"privileges">> => []
+        <<"grant">> => [], <<"revoke">> => privileges:oz_privileges()
     }});
 
-delete(#el_req{gri = #gri{id = UserId, aspect = {client_token, TokenId}}}) ->
-    {ok, Macaroon} = onedata_macaroons:deserialize(TokenId),
-    Identifier = macaroon:identifier(Macaroon),
-    onedata_auth:delete(Identifier),
-    {ok, _} = od_user:update(UserId, fun(User = #od_user{client_tokens = Tokens}) ->
-        {ok, User#od_user{client_tokens = Tokens -- [TokenId]}}
-    end),
-    ok;
-
-delete(#el_req{gri = #gri{id = UserId, aspect = default_space}}) ->
-    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
-        {ok, User#od_user{default_space = undefined}}
-    end),
-    ok;
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
+delete(#el_req{gri = #gri{id = UserId, aspect = {client_token, Serialized}}}) ->
+    {ok, #token{id = TokenId}} = tokens:deserialize(Serialized),
+    token_logic:delete_named_token(?USER(UserId), TokenId);
 
 delete(#el_req{gri = #gri{id = UserId, aspect = {space_alias, SpaceId}}}) ->
     {ok, _} = od_user:update(UserId, fun(#od_user{space_aliases = Aliases} = User) ->
         {ok, User#od_user{space_aliases = maps:remove(SpaceId, Aliases)}}
-    end),
-    ok;
-
-delete(#el_req{gri = #gri{id = UserId, aspect = default_provider}}) ->
-    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
-        {ok, User#od_user{default_provider = undefined}}
     end),
     ok;
 
@@ -367,6 +445,24 @@ delete(#el_req{gri = #gri{id = UserId, aspect = {handle, HandleId}}}) ->
     entity_graph:remove_relation(
         od_user, UserId,
         od_handle, HandleId
+    );
+
+delete(#el_req{gri = #gri{id = UserId, aspect = {harvester, HarvesterId}}}) ->
+    entity_graph:remove_relation(
+        od_user, UserId,
+        od_harvester, HarvesterId
+    );
+
+delete(#el_req{gri = #gri{id = UserId, aspect = {cluster, ClusterId}}}) ->
+    entity_graph:remove_relation(
+        od_user, UserId,
+        od_cluster, ClusterId
+    );
+
+delete(#el_req{gri = #gri{id = UserId, aspect = {atm_inventory, AtmInventoryId}}}) ->
+    entity_graph:remove_relation(
+        od_user, UserId,
+        od_atm_inventory, AtmInventoryId
     ).
 
 
@@ -385,46 +481,78 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
             true
     end;
 
-exists(Req = #el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
+exists(Req = #el_req{gri = GRI = #gri{id = UserId, aspect = instance, scope = shared}}, User) ->
     case Req#el_req.auth_hint of
         ?THROUGH_GROUP(GroupId) ->
-            user_logic:has_eff_group(User, GroupId);
+            user_logic:has_eff_group(User, GroupId) orelse begin
+                {true, {Group, _}} = group_logic_plugin:fetch_entity(#gri{id = GroupId}),
+                Group#od_group.creator =:= ?SUB(user, UserId)
+            end;
         ?THROUGH_SPACE(SpaceId) ->
-            user_logic:has_eff_space(User, SpaceId);
+            user_logic:has_eff_space(User, SpaceId) orelse begin
+                {true, {Space, _}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
+                Space#od_space.creator =:= ?SUB(user, UserId)
+            end;
         ?THROUGH_HANDLE_SERVICE(HServiceId) ->
-            user_logic:has_eff_handle_service(User, HServiceId);
+            user_logic:has_eff_handle_service(User, HServiceId) orelse begin
+                {true, {HService, _}} = handle_service_logic_plugin:fetch_entity(#gri{id = HServiceId}),
+                HService#od_handle_service.creator =:= ?SUB(user, UserId)
+            end;
         ?THROUGH_HANDLE(HandleId) ->
-            user_logic:has_eff_handle(User, HandleId);
-        undefined ->
-            true
+            user_logic:has_eff_handle(User, HandleId) orelse begin
+                {true, {Handle, _}} = handle_logic_plugin:fetch_entity(#gri{id = HandleId}),
+                Handle#od_handle.creator =:= ?SUB(user, UserId)
+            end;
+        ?THROUGH_HARVESTER(HarvesterId) ->
+            user_logic:has_eff_harvester(User, HarvesterId) orelse begin
+                {true, {Harvester, _}} = harvester_logic_plugin:fetch_entity(#gri{id = HarvesterId}),
+                Harvester#od_harvester.creator =:= ?SUB(user, UserId)
+            end;
+        ?THROUGH_CLUSTER(ClusterId) ->
+            user_logic:has_eff_cluster(User, ClusterId) orelse begin
+                {true, {Cluster, _}} = cluster_logic_plugin:fetch_entity(#gri{id = ClusterId}),
+                Cluster#od_cluster.creator =:= ?SUB(user, UserId)
+            end;
+        ?THROUGH_ATM_INVENTORY(AtmInventoryId) ->
+            user_logic:has_eff_atm_inventory(User, AtmInventoryId) orelse begin
+                {true, {AtmInventory, _}} = atm_inventory_logic_plugin:fetch_entity(#gri{id = AtmInventoryId}),
+                AtmInventory#od_atm_inventory.creator =:= ?SUB(user, UserId)
+            end;
+        _ ->
+            exists(Req#el_req{gri = GRI#gri{scope = protected}}, User)
     end;
 
-exists(#el_req{gri = #gri{aspect = {client_token, TokenId}}}, User) ->
-    lists:member(TokenId, User#od_user.client_tokens);
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
+exists(#el_req{gri = #gri{aspect = {client_token, Serialized}}}, _User) ->
+    {ok, #token{id = TokenId}} = tokens:deserialize(Serialized),
+    token_logic:exists(TokenId);
 
-exists(#el_req{gri = #gri{aspect = {linked_account, SubId}}}, User) ->
-    find_linked_account(SubId, User#od_user.linked_accounts) /= undefined;
-
-exists(#el_req{gri = #gri{aspect = default_space}}, User) ->
-    undefined =/= User#od_user.default_space;
+exists(#el_req{gri = #gri{aspect = {linked_account, DigestBasedId}}}, User) ->
+    linked_account:find(User#od_user.linked_accounts, DigestBasedId) /= error;
 
 exists(#el_req{gri = #gri{aspect = {space_alias, SpaceId}}}, User) ->
     maps:is_key(SpaceId, User#od_user.space_aliases);
 
-exists(#el_req{gri = #gri{aspect = default_provider}}, User) ->
-    undefined =/= User#od_user.default_provider;
-
 exists(#el_req{gri = #gri{aspect = {group, GroupId}}}, User) ->
-    lists:member(GroupId, User#od_user.groups);
+    entity_graph:has_relation(direct, top_down, od_group, GroupId, User);
 
 exists(#el_req{gri = #gri{aspect = {space, SpaceId}}}, User) ->
-    lists:member(SpaceId, User#od_user.spaces);
+    entity_graph:has_relation(direct, top_down, od_space, SpaceId, User);
 
 exists(#el_req{gri = #gri{aspect = {handle_service, HServiceId}}}, User) ->
-    lists:member(HServiceId, User#od_user.handle_services);
+    entity_graph:has_relation(direct, top_down, od_handle_service, HServiceId, User);
 
 exists(#el_req{gri = #gri{aspect = {handle, HandleId}}}, User) ->
-    lists:member(HandleId, User#od_user.handles);
+    entity_graph:has_relation(direct, top_down, od_handle, HandleId, User);
+
+exists(#el_req{gri = #gri{aspect = {harvester, HarvesterId}}}, User) ->
+    entity_graph:has_relation(direct, top_down, od_harvester, HarvesterId, User);
+
+exists(#el_req{gri = #gri{aspect = {cluster, ClusterId}}}, User) ->
+    entity_graph:has_relation(direct, top_down, od_cluster, ClusterId, User);
+
+exists(#el_req{gri = #gri{aspect = {atm_inventory, AtmInventoryId}}}, User) ->
+    entity_graph:has_relation(direct, top_down, od_atm_inventory, AtmInventoryId, User);
 
 % All other aspects exist if user record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_user{}) ->
@@ -438,73 +566,223 @@ exists(#el_req{gri = #gri{id = Id}}, #od_user{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = list}}, User) ->
-    auth_by_oz_privilege(Req, User, ?OZ_USERS_LIST);
+%% Operations reserved for admins or available to users in certain circumstances
+authorize(Req = #el_req{operation = create, gri = #gri{id = UserId, aspect = provider_registration_token}}, _) ->
+    case Req#el_req.auth of
+        ?USER(UserId) ->
+            % Issuing provider registration token for self. In case of 'restricted'
+            % policy, the admin rights will be checked in required_admin_privileges/1
+            open =:= oz_worker:get_env(provider_registration_policy, open);
+        _ ->
+            false
+    end;
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = oz_privileges}}, User) ->
-    auth_by_oz_privilege(Req, User, ?OZ_VIEW_PRIVILEGES);
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_oz_privileges}}, User) ->
-    auth_by_oz_privilege(Req, User, ?OZ_VIEW_PRIVILEGES);
-authorize(Req = #el_req{operation = update, gri = #gri{aspect = oz_privileges}}, User) ->
-    auth_by_oz_privilege(Req, User, ?OZ_SET_PRIVILEGES);
-authorize(Req = #el_req{operation = delete, gri = #gri{aspect = oz_privileges}}, User) ->
-    auth_by_oz_privilege(Req, User, ?OZ_SET_PRIVILEGES);
+authorize(#el_req{auth = ?USER(UserId), operation = Operation, gri = #gri{id = UserId, aspect = oz_privileges}}, _) ->
+    % Regular users are allowed only to view their own OZ privileges
+    % (other operations are checked in required_admin_privileges/1)
+    Operation =:= get;
 
-authorize(#el_req{operation = create, gri = #gri{aspect = authorize}}, _) ->
+authorize(#el_req{operation = update, gri = #gri{aspect = basic_auth}}, _) ->
+    % basic_auth settings modification is restricted to admins only
+    false;
+
+authorize(#el_req{operation = update, gri = #gri{aspect = access_block}}, _) ->
+    % blocking access for users is restricted to admins only
+    false;
+
+%% User can perform all operations on his record except the restricted ones handled above
+authorize(#el_req{auth = ?USER(UserId), gri = #gri{id = UserId}}, _) ->
     true;
 
-% Beside oz_privileges, user can perform all operations on his record
-authorize(#el_req{client = ?USER(UserId), gri = #gri{id = UserId}}, _) ->
-    true;
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}, User) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+%% Operations available to other subjects
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, User) ->
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?PROVIDER(ProviderId), ?THROUGH_PROVIDER(ProviderId)} ->
             % User's membership in provider is checked in 'exists'
             true;
 
-        {?USER(ClientUserId), ?THROUGH_PROVIDER(_ProviderId)} ->
+        {?USER(ClientUserId), ?THROUGH_PROVIDER(ProviderId)} ->
             % User's membership in provider is checked in 'exists'
-            auth_by_oz_privilege(ClientUserId, ?OZ_PROVIDERS_LIST_USERS);
-
-        {?USER(ClientUserId), _} ->
-            auth_by_oz_privilege(ClientUserId, ?OZ_USERS_LIST);
+            ClusterId = ProviderId,
+            cluster_logic:has_eff_privilege(ClusterId, ClientUserId, ?CLUSTER_VIEW);
 
         _ ->
             % Access to private data also allows access to protected data
-            authorize(Req#el_req{gri = #gri{scope = private}}, User)
+            authorize(Req#el_req{gri = GRI#gri{scope = private}}, User)
     end;
 
-authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = shared}}, User) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = instance, scope = shared}}, User) ->
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(ClientUserId), ?THROUGH_GROUP(GroupId)} ->
-            % User's membership in group is checked in 'exists'
-            group_logic:has_eff_privilege(GroupId, ClientUserId, ?GROUP_VIEW) orelse
-                user_logic:has_eff_oz_privilege(ClientUserId, ?OZ_GROUPS_LIST_USERS);
+            {true, {Group, _}} = group_logic_plugin:fetch_entity(#gri{id = GroupId}),
+            % UserId's membership in group is checked in 'exists'
+            group_logic:has_eff_privilege(Group, ClientUserId, ?GROUP_VIEW) orelse begin
+            % Members of a group can see the shared data of its creator
+                group_logic:has_eff_user(Group, ClientUserId) andalso
+                    Group#od_group.creator =:= ?SUB(user, UserId)
+            end;
 
         {?USER(ClientUserId), ?THROUGH_SPACE(SpaceId)} ->
-            % User's membership in space is checked in 'exists'
-            space_logic:has_eff_privilege(SpaceId, ClientUserId, ?SPACE_VIEW) orelse
-                user_logic:has_eff_oz_privilege(ClientUserId, ?OZ_SPACES_LIST_USERS);
+            {true, {Space, _}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
+            % UserId's membership in space is checked in 'exists'
+            space_logic:has_eff_privilege(Space, ClientUserId, ?SPACE_VIEW) orelse begin
+            % Members of a space can see the shared data of its creator
+                space_logic:has_eff_user(Space, ClientUserId) andalso
+                    Space#od_space.creator =:= ?SUB(user, UserId)
+            end;
+
+        {?PROVIDER(ProviderId), ?THROUGH_SPACE(SpaceId)} ->
+            % UserId's membership in space is checked in 'exists'
+            space_logic:is_supported_by_provider(SpaceId, ProviderId);
 
         {?USER(ClientUserId), ?THROUGH_HANDLE_SERVICE(HServiceId)} ->
-            % User's membership in handle_service is checked in 'exists'
-            handle_service_logic:has_eff_privilege(HServiceId, ClientUserId, ?HANDLE_SERVICE_VIEW);
+            {true, {HService, _}} = handle_service_logic_plugin:fetch_entity(#gri{id = HServiceId}),
+            % UserId's membership in handle_service is checked in 'exists'
+            handle_service_logic:has_eff_privilege(HService, ClientUserId, ?HANDLE_SERVICE_VIEW) orelse begin
+            % Members of a handle service can see the shared data of its creator
+                handle_service_logic:has_eff_user(HService, ClientUserId) andalso
+                    HService#od_handle_service.creator =:= ?SUB(user, UserId)
+            end;
 
         {?USER(ClientUserId), ?THROUGH_HANDLE(HandleId)} ->
-            % User's membership in handle is checked in 'exists'
-            handle_logic:has_eff_privilege(HandleId, ClientUserId, ?HANDLE_VIEW);
+            {true, {Handle, _}} = handle_logic_plugin:fetch_entity(#gri{id = HandleId}),
+            % UserId's membership in handle is checked in 'exists'
+            handle_logic:has_eff_privilege(Handle, ClientUserId, ?HANDLE_VIEW) orelse begin
+            % Members of a handle can see the shared data of its creator
+                handle_logic:has_eff_user(Handle, ClientUserId) andalso
+                    Handle#od_handle.creator =:= ?SUB(user, UserId)
+            end;
+
+        {?USER(ClientUserId), ?THROUGH_HARVESTER(HarvesterId)} ->
+            {true, {Harvester, _}} = harvester_logic_plugin:fetch_entity(#gri{id = HarvesterId}),
+            % UserId's membership in harvester is checked in 'exists'
+            harvester_logic:has_eff_privilege(Harvester, ClientUserId, ?HARVESTER_VIEW) orelse begin
+            % Members of a harvester can see the shared data of its creator
+                harvester_logic:has_eff_user(Harvester, ClientUserId) andalso
+                    Harvester#od_harvester.creator =:= ?SUB(user, UserId)
+            end;
+
+        {?USER(ClientUserId), ?THROUGH_CLUSTER(ClusterId)} ->
+            {true, {Cluster, _}} = cluster_logic_plugin:fetch_entity(#gri{id = ClusterId}),
+            % UserId's membership in cluster is checked in 'exists'
+            cluster_logic:has_eff_privilege(Cluster, ClientUserId, ?CLUSTER_VIEW) orelse begin
+            % Members of a cluster can see the shared data of its creator
+                cluster_logic:has_eff_user(Cluster, ClientUserId) andalso
+                    Cluster#od_cluster.creator =:= ?SUB(user, UserId)
+            end;
+
+        {?USER(ClientUserId), ?THROUGH_ATM_INVENTORY(AtmInventoryId)} ->
+            {true, {AtmInventory, _}} = atm_inventory_logic_plugin:fetch_entity(#gri{id = AtmInventoryId}),
+            % UserId's membership in inventory is checked in 'exists'
+            atm_inventory_logic:has_eff_privilege(AtmInventory, ClientUserId, ?ATM_INVENTORY_VIEW) orelse begin
+            % Members of a inventory can see the shared data of its creator
+                atm_inventory_logic:has_eff_user(AtmInventory, ClientUserId) andalso
+                    AtmInventory#od_atm_inventory.creator =:= ?SUB(user, UserId)
+            end;
+
+        {?PROVIDER(ProviderId), ?THROUGH_CLUSTER(ClusterId)} ->
+            cluster_logic:is_provider_cluster(ClusterId, ProviderId);
 
         _ ->
             % Access to protected data also allows access to shared data
             authorize(Req#el_req{gri = GRI#gri{scope = protected}}, User)
     end;
 
-authorize(#el_req{client = ?USER(UserId), operation = delete, gri = #gri{aspect = instance}}, _) ->
-    auth_by_oz_privilege(UserId, ?OZ_USERS_DELETE);
-
 authorize(_, _) ->
     false.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns list of admin privileges needed to perform given operation.
+%% @end
+%%--------------------------------------------------------------------
+-spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
+required_admin_privileges(#el_req{operation = create, gri = #gri{id = undefined, aspect = instance}}) ->
+    % Creating users with predefined UserId is reserved for Onezone logic (?ROOT auth).
+    % Users with ?OZ_USERS_CREATE privilege can create new users but the UserIds are
+    % assigned automatically.
+    [?OZ_USERS_CREATE];
+
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = provider_registration_token}}) ->
+    [?OZ_PROVIDERS_INVITE];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
+    [?OZ_USERS_LIST];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = oz_privileges}}) ->
+    [?OZ_VIEW_PRIVILEGES];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_oz_privileges}}) ->
+    [?OZ_VIEW_PRIVILEGES];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = shared}}) ->
+    [?OZ_USERS_VIEW];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}) ->
+    [?OZ_USERS_VIEW];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = groups}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_groups}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = spaces}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_spaces}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_providers}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = handle_services}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_handle_services}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = handles}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_handles}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = harvesters}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_harvesters}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = clusters}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_clusters}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = atm_inventories}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_atm_inventories}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
+    [?OZ_USERS_UPDATE];
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = basic_auth}}) ->
+    [?OZ_USERS_MANAGE_PASSWORDS];
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = access_block}}) ->
+    [?OZ_USERS_UPDATE];
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = oz_privileges}}) ->
+    [?OZ_SET_PRIVILEGES];
+
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance}}) ->
+    [?OZ_USERS_DELETE];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = oz_privileges}}) ->
+    [?OZ_SET_PRIVILEGES];
+
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {group, _}}}) ->
+    [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {space, _}}}) ->
+    [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_SPACES_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {handle_service, _}}}) ->
+    [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_HANDLE_SERVICES_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {handle, _}}}) ->
+    [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_HANDLES_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {harvester, _}}}) ->
+    [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_HARVESTERS_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {cluster, _}}}) ->
+    [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_CLUSTERS_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {atm_inventory, _}}}) ->
+    [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_ATM_INVENTORIES_REMOVE_RELATIONSHIPS];
+
+required_admin_privileges(_) ->
+    forbidden.
 
 
 %%--------------------------------------------------------------------
@@ -516,24 +794,31 @@ authorize(_, _) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-validate(#el_req{operation = create, gri = #gri{aspect = authorize}}) -> #{
-    required => #{
-        <<"identifier">> => {binary, non_empty}
-    }
-};
+-spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
+validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}) ->
+    case maps:is_key(<<"password">>, Data) of
+        true -> #{
+            required => #{
+                <<"username">> => {binary, username},
+                <<"password">> => {binary, password}
+            },
+            optional => #{
+                <<"fullName">> => {binary, full_name},
+                <<"linkedAccounts">> => {{jsonable_record, list, linked_account}, any}
+            }
+        };
+        false -> #{
+            optional => #{
+                <<"fullName">> => {binary, full_name},
+                <<"username">> => {binary, username},
+                <<"linkedAccounts">> => {{jsonable_record, list, linked_account}, any}
+            }
+        }
+    end;
 
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
 validate(#el_req{operation = create, gri = #gri{aspect = client_tokens}}) -> #{
 };
-
-validate(#el_req{operation = create, gri = #gri{id = UserId, aspect = default_space}}) ->
-    #{
-        required => #{
-            <<"spaceId">> => {binary, {exists, fun(SpaceId) ->
-                space_logic:has_eff_user(SpaceId, UserId)
-            end}}
-        }
-    };
 
 validate(#el_req{operation = create, gri = #gri{id = UserId, aspect = {space_alias, SpaceId}}}) ->
     #{
@@ -546,34 +831,46 @@ validate(#el_req{operation = create, gri = #gri{id = UserId, aspect = {space_ali
         }
     };
 
-validate(#el_req{operation = create, gri = #gri{id = UserId, aspect = default_provider}}) ->
-    #{
-        required => #{
-            <<"providerId">> => {binary, {exists, fun(ProviderId) ->
-                provider_logic:has_eff_user(ProviderId, UserId)
-            end}}
-        }
-    };
-
 validate(#el_req{operation = create, gri = #gri{aspect = {idp_access_token, _}}}) -> #{
     required => #{
         {aspect, <<"idp">>} => {atom, auth_config:get_idps_with_offline_access()}
     }
 };
 
+validate(#el_req{operation = create, gri = #gri{aspect = provider_registration_token}}) -> #{
+};
+
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
-        <<"name">> => {binary, user_name},
-        <<"alias">> => {alias, alias}
+        <<"fullName">> => {binary, full_name},
+        <<"username">> => {binary, username}
+    }
+};
+
+validate(#el_req{operation = update, gri = #gri{aspect = password}}) -> #{
+    required => #{
+        <<"oldPassword">> => {binary, any},
+        <<"newPassword">> => {binary, password}
+    }
+};
+
+validate(#el_req{operation = update, gri = #gri{aspect = basic_auth}}) -> #{
+    at_least_one => #{
+        <<"basicAuthEnabled">> => {boolean, any},
+        <<"newPassword">> => {binary, password}
+    }
+};
+
+validate(#el_req{operation = update, gri = #gri{aspect = access_block}}) -> #{
+    required => #{
+        <<"blocked">> => {boolean, any}
     }
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = oz_privileges}}) -> #{
-    required => #{
-        <<"privileges">> => {list_of_atoms, privileges:oz_privileges()}
-    },
-    optional => #{
-        <<"operation">> => {atom, [set, grant, revoke]}
+    at_least_one => #{
+        <<"grant">> => {list_of_atoms, privileges:oz_privileges()},
+        <<"revoke">> => {list_of_atoms, privileges:oz_privileges()}
     }
 }.
 
@@ -588,50 +885,11 @@ validate(#el_req{operation = update, gri = #gri{aspect = oz_privileges}}) -> #{
 %% on user id, user record or entity logic request client.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_oz_privilege(entity_logic:req() | od_user:id() | od_user:info(),
+-spec auth_by_oz_privilege(entity_logic:req() | od_user:id() | od_user:record(),
     privileges:oz_privilege()) -> boolean().
-auth_by_oz_privilege(#el_req{client = ?USER(UserId)}, Privilege) ->
+auth_by_oz_privilege(#el_req{auth = ?USER(UserId)}, Privilege) ->
     auth_by_oz_privilege(UserId, Privilege);
-auth_by_oz_privilege(#el_req{client = _OtherClient}, _Privilege) ->
+auth_by_oz_privilege(#el_req{auth = _OtherAuth}, _Privilege) ->
     false;
 auth_by_oz_privilege(UserOrId, Privilege) ->
     user_logic:has_eff_oz_privilege(UserOrId, Privilege).
-
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Predicate checking if given client has specified effective oz privilege based
-%% on entity logic request. If the client is the same as GRI subject, the
-%% privileges can be checked using USEr record.
-%% @end
-%%--------------------------------------------------------------------
--spec auth_by_oz_privilege(entity_logic:req(), od_user:info(),
-    privileges:oz_privilege()) -> boolean().
-auth_by_oz_privilege(ElReq, User, Privilege) ->
-    case ElReq of
-        #el_req{client = ?USER(UserId), gri = #gri{id = UserId}} ->
-            auth_by_oz_privilege(User, Privilege);
-        #el_req{client = ?USER(OtherUser)} ->
-            auth_by_oz_privilege(OtherUser, Privilege)
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Finds a linked account in given list based on subject id.
-%% @end
-%%--------------------------------------------------------------------
--spec find_linked_account(SubId :: binary(), [od_user:linked_account()]) ->
-    undefined | od_user:linked_account().
-find_linked_account(_, []) ->
-    undefined;
-find_linked_account(SubId, [Account = #linked_account{subject_id = SubId} | _]) ->
-    Account;
-find_linked_account(SubId, [_ | Rest]) ->
-    find_linked_account(SubId, Rest).

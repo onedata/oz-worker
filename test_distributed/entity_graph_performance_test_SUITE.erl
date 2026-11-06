@@ -13,12 +13,14 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("cluster_worker/test_distributed/performance_test_utils.hrl").
 
 %% API
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 
 -export([
@@ -45,7 +47,7 @@
 
 
 % Number of parallel processes making requests
--define(PARALLEL_PROCESSES, 300).
+-define(PARALLEL_PROCESSES, 100).
 
 % Performance tests parameters
 -define(USER_NUM(Value), ?PERF_PARAM(
@@ -116,17 +118,16 @@ create_group_performance(Config) ->
         {parameters, [?GROUP_NUM(100)]},
         ?PERF_CFG(small_rpc, [?GROUP_NUM(100), ?API_TYPE(rpc)]),
         ?PERF_CFG(small_rest, [?GROUP_NUM(100), ?API_TYPE(rest)]),
-        ?PERF_CFG(medium_rpc, [?GROUP_NUM(1500), ?API_TYPE(rpc)]),
-        ?PERF_CFG(medium_rest, [?GROUP_NUM(1500), ?API_TYPE(rest)]),
-        ?PERF_CFG(large_rpc, [?GROUP_NUM(3000), ?API_TYPE(rpc)]),
-        ?PERF_CFG(large_rest, [?GROUP_NUM(3000), ?API_TYPE(rest)])
+        ?PERF_CFG(medium_rpc, [?GROUP_NUM(500), ?API_TYPE(rpc)]),
+        ?PERF_CFG(medium_rest, [?GROUP_NUM(500), ?API_TYPE(rest)]),
+        ?PERF_CFG(large_rpc, [?GROUP_NUM(1200), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_rest, [?GROUP_NUM(1200), ?API_TYPE(rest)])
     ]).
 create_group_performance_base(Config) ->
     GroupNum = ?GROUP_NUM,
     ApiType = ?API_TYPE,
     UsersAndAuths = create_n_users(Config, GroupNum),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-
 
     ?begin_measurement(groups_creation_time),
     ok = parallel_foreach(fun(UserAndAuth) ->
@@ -165,22 +166,21 @@ create_space_performance(Config) ->
         {parameters, [?SPACE_NUM(100), ?API_TYPE(rpc), ?API_TYPE(rpc)]},
         ?PERF_CFG(small_rpc, [?SPACE_NUM(100), ?API_TYPE(rpc)]),
         ?PERF_CFG(small_rest, [?SPACE_NUM(100), ?API_TYPE(rest)]),
-        ?PERF_CFG(medium_rpc, [?SPACE_NUM(1500), ?API_TYPE(rpc)]),
-        ?PERF_CFG(medium_rest, [?SPACE_NUM(1500), ?API_TYPE(rest)]),
-        ?PERF_CFG(large_rpc, [?SPACE_NUM(3000), ?API_TYPE(rpc)]),
-        ?PERF_CFG(large_rest, [?SPACE_NUM(3000), ?API_TYPE(rest)])
+        ?PERF_CFG(medium_rpc, [?SPACE_NUM(500), ?API_TYPE(rpc)]),
+        ?PERF_CFG(medium_rest, [?SPACE_NUM(500), ?API_TYPE(rest)]),
+        ?PERF_CFG(large_rpc, [?SPACE_NUM(1200), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_rest, [?SPACE_NUM(1200), ?API_TYPE(rest)])
     ]).
 create_space_performance_base(Config) ->
     SpaceNum = ?SPACE_NUM,
     ApiType = ?API_TYPE,
-    GroupOwners = create_n_users(Config, SpaceNum),
+    SpaceOwners = create_n_users(Config, SpaceNum),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-
     ?begin_measurement(space_creation_time),
-    ok = parallel_foreach(fun(User) ->
-        create_space(Config, ApiType, ?USER(User), <<"space">>)
-    end, GroupOwners),
+    ok = parallel_foreach(fun(UserAndAuth) ->
+        create_space(Config, ApiType, UserAndAuth, <<"space">>)
+    end, SpaceOwners),
     ?end_measurement(space_creation_time),
 
     ?begin_measurement(reconciliation_time),
@@ -222,12 +222,12 @@ group_chain_performance(Config) ->
 group_chain_performance_base(Config) ->
     GroupChainLength = ?GROUP_CHAIN_LENGTH,
     ApiType = ?API_TYPE,
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
+    {ok, User} = oz_test_utils:create_user(Config),
+    {ok, Token} = oz_test_utils:create_client_token(Config, User),
 
 
     ?begin_measurement(groups_creation_time),
-    create_group_chain(Config, ApiType, {User, Macaroon}, GroupChainLength),
+    create_group_chain(Config, ApiType, {User, Token}, GroupChainLength),
     ?end_measurement(groups_creation_time),
 
     ?begin_measurement(reconciliation_time),
@@ -271,15 +271,15 @@ group_chain_append_performance_base(Config) ->
     EndingGroupNum = ?ENDING_GROUP_NUM,
     ApiType = ?API_TYPE,
     ToAppendGroupNum = EndingGroupNum - StartingGroupNum,
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
+    {ok, User} = oz_test_utils:create_user(Config),
+    {ok, Token} = oz_test_utils:create_client_token(Config, User),
 
-    {_BottomGroup, TopGroup} = create_group_chain(Config, ApiType, {User, Macaroon}, StartingGroupNum),
+    {_BottomGroup, TopGroup} = create_group_chain(Config, ApiType, {User, Token}, StartingGroupNum),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
 
     ?begin_measurement(group_appending_time),
-    create_group_chain(Config, ApiType, {User, Macaroon}, ToAppendGroupNum, TopGroup),
+    create_group_chain(Config, ApiType, {User, Token}, ToAppendGroupNum, TopGroup),
     ?end_measurement(group_appending_time),
 
     ?begin_measurement(reconciliation_time),
@@ -324,20 +324,20 @@ big_group_performance_base(Config) ->
     ApiType = ?API_TYPE,
     ToAddUserNum = EndingUserNum - StartingUserNum,
 
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, AdminMacaroon} = oz_test_utils:create_client_token(Config, Admin),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, set, privileges:oz_admin()),
+    {ok, Admin} = oz_test_utils:create_user(Config),
+    {ok, AdminToken} = oz_test_utils:create_client_token(Config, Admin),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, privileges:oz_admin(), []),
 
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(User), <<"group">>),
 
     lists:foreach(fun(_) ->
-        {ok, NewUser} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, NewUser} = oz_test_utils:create_user(Config),
         oz_test_utils:group_add_user(Config, Group, NewUser)
     end, lists:seq(2, StartingUserNum)),
 
     UsersToAdd = lists:map(fun(_) ->
-        {ok, NewUser} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, NewUser} = oz_test_utils:create_user(Config),
         NewUser
     end, lists:seq(1, ToAddUserNum)),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -345,7 +345,7 @@ big_group_performance_base(Config) ->
 
     ?begin_measurement(user_adding_time),
     ok = parallel_foreach(fun(UserToAdd) ->
-        group_add_user(Config, ApiType, {Admin, AdminMacaroon}, Group, UserToAdd)
+        group_add_user(Config, ApiType, {Admin, AdminToken}, Group, UserToAdd)
     end, UsersToAdd),
     ?end_measurement(user_adding_time),
 
@@ -380,25 +380,25 @@ update_privileges_performance(Config) ->
         {parameters, [?USER_NUM(100), ?API_TYPE(rpc)]},
         ?PERF_CFG(small_rpc, [?USER_NUM(100), ?API_TYPE(rpc)]),
         ?PERF_CFG(small_rest, [?USER_NUM(100), ?API_TYPE(rest)]),
-        ?PERF_CFG(medium_rpc, [?USER_NUM(750), ?API_TYPE(rpc)]),
-        ?PERF_CFG(medium_rest, [?USER_NUM(750), ?API_TYPE(rest)]),
-        ?PERF_CFG(large_rpc, [?USER_NUM(1500), ?API_TYPE(rpc)]),
-        ?PERF_CFG(large_rest, [?USER_NUM(1500), ?API_TYPE(rest)])
+        ?PERF_CFG(medium_rpc, [?USER_NUM(500), ?API_TYPE(rpc)]),
+        ?PERF_CFG(medium_rest, [?USER_NUM(500), ?API_TYPE(rest)]),
+        ?PERF_CFG(large_rpc, [?USER_NUM(1200), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_rest, [?USER_NUM(1200), ?API_TYPE(rest)])
     ]).
 update_privileges_performance_base(Config) ->
     UserNum = ?USER_NUM,
     ApiType = ?API_TYPE,
-    GroupPrivileges = oz_test_utils:all_group_privileges(Config),
+    GroupPrivileges = privileges:group_privileges(),
 
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, AdminMacaroon} = oz_test_utils:create_client_token(Config, Admin),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, set, privileges:oz_admin()),
+    {ok, Admin} = oz_test_utils:create_user(Config),
+    {ok, AdminToken} = oz_test_utils:create_client_token(Config, Admin),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, privileges:oz_admin(), []),
 
-    {ok, GroupCreator} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, GroupCreator} = oz_test_utils:create_user(Config),
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(GroupCreator), <<"group">>),
 
     Users = [GroupCreator] ++ lists:map(fun(_) ->
-        {ok, NewUser} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, NewUser} = oz_test_utils:create_user(Config),
         oz_test_utils:group_add_user(Config, Group, NewUser),
         NewUser
     end, lists:seq(2, UserNum)),
@@ -408,7 +408,9 @@ update_privileges_performance_base(Config) ->
     ?begin_measurement(privileges_updating_time),
     ok = parallel_foreach(fun(User) ->
         RandomPrivileges = lists:sublist(GroupPrivileges, rand:uniform(length(GroupPrivileges))),
-        group_set_user_privileges(Config, ApiType, {Admin, AdminMacaroon}, Group, User, set, RandomPrivileges)
+        group_set_user_privileges(
+            Config, ApiType, {Admin, AdminToken}, Group, User, RandomPrivileges, RandomPrivileges -- GroupPrivileges
+        )
     end, Users),
     ?end_measurement(privileges_updating_time),
 
@@ -453,13 +455,13 @@ reconcile_privileges_in_group_chain_performance(Config) ->
 reconcile_privileges_in_group_chain_performance_base(Config) ->
     GroupChainLength = ?GROUP_CHAIN_LENGTH,
     UserNum = ?USER_NUM,
-    GroupPrivileges = oz_test_utils:all_group_privileges(Config),
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
-    {BottomGroup, TopGroup} = create_group_chain(Config, rpc, {User, Macaroon}, GroupChainLength),
+    GroupPrivileges = privileges:group_privileges(),
+    {ok, User} = oz_test_utils:create_user(Config),
+    {ok, Token} = oz_test_utils:create_client_token(Config, User),
+    {BottomGroup, TopGroup} = create_group_chain(Config, rpc, {User, Token}, GroupChainLength),
 
     lists:foreach(fun(_) ->
-        {ok, NewUser} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, NewUser} = oz_test_utils:create_user(Config),
         oz_test_utils:group_add_user(Config, BottomGroup, NewUser)
     end, lists:seq(2, UserNum)),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -469,7 +471,9 @@ reconcile_privileges_in_group_chain_performance_base(Config) ->
 
 
     ?begin_measurement(privileges_update_time),
-    oz_test_utils:group_set_group_privileges(Config, TopGroup, SecondFromTopGroup, set, RandomPrivileges),
+    oz_test_utils:group_set_group_privileges(
+        Config, TopGroup, SecondFromTopGroup, RandomPrivileges, GroupPrivileges -- RandomPrivileges
+    ),
     ?end_measurement(privileges_update_time),
 
     ?begin_measurement(reconciliation_time),
@@ -514,9 +518,9 @@ create_group_chain(Config, ApiType, Client, NumberOfGroups, BottomGroup) ->
 
 create_n_users(Config, Number) ->
     lists:map(fun(_) ->
-        {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-        {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
-        {User, Macaroon}
+        {ok, User} = oz_test_utils:create_user(Config),
+        {ok, Token} = oz_test_utils:create_client_token(Config, User),
+        {User, Token}
     end, lists:seq(1, Number)).
 
 %%%===================================================================
@@ -526,19 +530,31 @@ create_n_users(Config, Number) ->
 
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
+    application:ensure_all_started(hackney),
     [{?LOAD_MODULES, [oz_test_utils, rest_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
     ssl:stop(),
-    hackney:stop(),
+    application:stop(hackney),
+    ok.
+
+
+init_per_testcase(_, Config) ->
+    % restart the listeners to kill any keep-alive connections
+    OzNodes = ?config(oz_worker_nodes, Config),
+    [rpc:call(N, https_listener, stop, []) || N <- OzNodes],
+    [rpc:call(N, https_listener, start, []) || N <- OzNodes],
+    Config.
+
+
+end_per_testcase(_, _Config) ->
     ok.
 
 
 parallel_foreach(Fun, List) ->
     ForeachSublist = fun(Sublist) -> lists:foreach(Fun, Sublist) end,
-    utils:pforeach(ForeachSublist, split_into_sublists(List)).
+    lists_utils:pforeach(ForeachSublist, split_into_sublists(List)).
 
 
 % Splits the list as evenly as possible, into (at most) ?PARALLEL_PROCESSES chunks
@@ -555,64 +571,79 @@ split_into_sublists(List) ->
     Sublists.
 
 
-create_group(Config, rpc, {User, _Macaroon}, Name) ->
+create_group(Config, rpc, {User, _Token}, Name) ->
     oz_test_utils:create_group(Config, ?USER(User), Name);
-create_group(Config, rest, {_User, Macaroon}, Name) ->
-    {ok, 201, #{<<"Location">> := Location}, _} = rest_req(
-        Config, Macaroon, post, <<"/user/groups/">>, #{<<"name">> => Name}
+create_group(Config, rest, {_User, Token}, Name) ->
+    {ok, 201, #{?HDR_LOCATION := Location}, _} = rest_req(
+        Config, Token, post, <<"/user/groups/">>, #{<<"name">> => Name}
     ),
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.
 
 
-group_add_user(Config, rpc, {User, _Macaroon}, Group, NewUser) ->
+group_add_user(Config, rpc, {User, _Token}, Group, NewUser) ->
     oz_test_utils:group_add_user(Config, ?USER(User), Group, NewUser);
-group_add_user(Config, rest, {_User, Macaroon}, Group, NewUser) ->
-    {ok, 201, #{<<"Location">> := Location}, _} = rest_req(
-        Config, Macaroon, put, [<<"/groups/">>, Group, <<"/users/">>, NewUser]
+group_add_user(Config, rest, {_User, Token}, Group, NewUser) ->
+    {ok, 201, #{?HDR_LOCATION := Location}, _} = rest_req(
+        Config, Token, put, [<<"/groups/">>, Group, <<"/users/">>, NewUser]
     ),
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.
 
 
-group_add_group(Config, rpc, {User, _Macaroon}, Group, ChildGroup) ->
+group_add_group(Config, rpc, {User, _Token}, Group, ChildGroup) ->
     oz_test_utils:group_add_group(Config, ?USER(User), Group, ChildGroup);
-group_add_group(Config, rest, {_User, Macaroon}, Group, ChildGroup) ->
-    {ok, 201, #{<<"Location">> := Location}, _} = rest_req(
-        Config, Macaroon, put, [<<"/groups/">>, Group, <<"/children/">>, ChildGroup]
+group_add_group(Config, rest, {_User, Token}, Group, ChildGroup) ->
+    {ok, 201, #{?HDR_LOCATION := Location}, _} = rest_req(
+        Config, Token, put, [<<"/groups/">>, Group, <<"/children/">>, ChildGroup]
     ),
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.
 
 
-group_set_user_privileges(Config, rpc, {User, _Macaroon}, Group, User, Operation, Privs) ->
-    oz_test_utils:group_set_user_privileges(Config, ?USER(User), Group, User, Operation, Privs);
-group_set_user_privileges(Config, rest, {_User, Macaroon}, Group, User, Operation, Privs) ->
+group_set_user_privileges(Config, rpc, {ClientUser, _Token}, Group, User, PrivsToGrant, PrivsToRevoke) ->
+    oz_test_utils:group_set_user_privileges(Config, ?USER(ClientUser), Group, User, PrivsToGrant, PrivsToRevoke);
+group_set_user_privileges(Config, rest, {_ClientUser, Token}, Group, User, PrivsToGrant, PrivsToRevoke) ->
     {ok, 204, _, _} = rest_req(
-        Config, Macaroon, put, [<<"/groups/">>, Group, <<"/users/">>, User, <<"/privileges">>], #{
-            <<"operation">> => Operation,
-            <<"privileges">> => [atom_to_binary(P, utf8) || P <- Privs]
+        Config, Token, patch, [<<"/groups/">>, Group, <<"/users/">>, User, <<"/privileges">>], #{
+            <<"grant">> => [atom_to_binary(P, utf8) || P <- PrivsToGrant],
+            <<"revoke">> => [atom_to_binary(P, utf8) || P <- PrivsToRevoke]
         }
     ),
     ok.
 
 
-create_space(Config, rpc, {User, _Macaroon}, Name) ->
+create_space(Config, rpc, {User, _Token}, Name) ->
     oz_test_utils:create_space(Config, ?USER(User), Name);
-create_space(Config, rest, {_User, Macaroon}, Name) ->
-    {ok, 201, #{<<"Location">> := Location}, _} = rest_req(
-        Config, Macaroon, post, <<"/user/spaces/">>, #{<<"name">> => Name}
+create_space(Config, rest, {_User, Token}, Name) ->
+    {ok, 201, #{?HDR_LOCATION := Location}, _} = rest_req(
+        Config, Token, post, <<"/user/spaces/">>, #{<<"name">> => Name}
     ),
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.
 
 
-rest_req(Config, Macaroon, Method, Path) ->
-    rest_req(Config, Macaroon, Method, Path, #{}).
+-define(MAX_HTTP_RETRIES, 3).
 
-rest_req(Config, Macaroon, Method, Path, Body) when is_binary(Path) ->
-    rest_req(Config, Macaroon, Method, [Path], Body);
-rest_req(Config, Macaroon, Method, Path, Body) ->
-    Opts = [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}],
-    URL = str_utils:join_binary([rest_test_utils:get_oz_url(Config) | Path], <<"">>),
+rest_req(Config, Token, Method, Path) ->
+    rest_req(Config, Token, Method, Path, #{}).
+
+rest_req(Config, Token, Method, Path, Body) ->
+    URL = oz_test_utils:oz_rest_url(Config, Path),
     Headers = #{
-        <<"content-type">> => <<"application/json">>,
-        <<"macaroon">> => Macaroon
+        ?HDR_CONTENT_TYPE => <<"application/json">>,
+        ?HDR_X_AUTH_TOKEN => Token
     },
-    http_client:request(Method, URL, Headers, json_utils:encode(Body), Opts).
+    Opts = [
+        {connect_timeout, 60000},
+        {recv_timeout, 60000},
+        {ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}
+    ],
+    rest_req_with_retries(Method, URL, Headers, json_utils:encode(Body), Opts, ?MAX_HTTP_RETRIES).
+
+rest_req_with_retries(Method, URL, Headers, Body, Opts, RetriesLeft) ->
+    case http_client:request(Method, URL, Headers, Body, Opts) of
+        {ok, _, _, _} = Response ->
+            Response;
+        {error, _} = Error ->
+            case RetriesLeft of
+                0 -> Error;
+                _ -> rest_req_with_retries(Method, URL, Headers, Body, Opts, RetriesLeft - 1)
+            end
+    end.

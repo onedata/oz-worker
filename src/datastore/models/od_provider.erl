@@ -13,11 +13,13 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, get_record/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
+-export([get_ctx/0]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -29,66 +31,51 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
--export_type([name/0]).
+-export_type([doc/0, name/0]).
 
 -define(CTX, #{
     model => od_provider,
-    fold_enabled => true,
-    sync_enabled => true
+    secure_fold_enabled => true,
+    sync_enabled => true,
+    memory_copies => all
 }).
+
+-compile({no_auto_import, [get/1]}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates provider.
-%% @end
-%%--------------------------------------------------------------------
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Saves provider.
-%% @end
-%%--------------------------------------------------------------------
--spec save(doc()) -> {ok, doc()} | {error, term()}.
-save(Doc) ->
-    datastore_model:save(?CTX, Doc).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns provider by ID.
-%% @end
-%%--------------------------------------------------------------------
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(ProviderId) ->
     datastore_model:get(?CTX, ProviderId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks whether provider given by ID exists.
-%% @end
-%%--------------------------------------------------------------------
+
+-spec get_record(id()) -> {ok, record()} | {error, term()}.
+get_record(ProviderId) ->
+    case get(ProviderId) of
+        {ok, #document{value = Record}} -> {ok, Record};
+        {error, _} = Error -> Error
+    end.
+
+
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(ProviderId) ->
     datastore_model:exists(?CTX, ProviderId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates provider by ID.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(ProviderId, Diff) ->
     datastore_model:update(?CTX, ProviderId, Diff).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes provider by ID.
+%% Deletes a provider by ID.
 %% WARNING: Must not be used directly, as deleting a provider that still has
 %% relations to other entities will cause serious inconsistencies in database.
 %% To safely delete a provider use provider_logic.
@@ -98,32 +85,25 @@ update(ProviderId, Diff) ->
 force_delete(ProviderId) ->
     datastore_model:delete(?CTX, ProviderId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all providers.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns readable string representing the provider with given id.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec to_string(ProviderId :: id()) -> binary().
 to_string(ProviderId) ->
     <<"provider:", ProviderId/binary>>.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns the entity logic plugin module that handles model logic.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     provider_logic_plugin.
+
+
+-spec get_ctx() -> datastore:ctx().
+get_ctx() ->
+    ?CTX.
 
 %%%===================================================================
 %%% datastore_model callbacks
@@ -136,7 +116,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    4.
+    8.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -190,7 +170,117 @@ get_record_struct(3) ->
 get_record_struct(4) ->
     % There are no changes, but all records must be marked dirty to recalculate
     % effective relations (as intermediaries computing logic has changed).
-    get_record_struct(3).
+    get_record_struct(3);
+get_record_struct(5) ->
+    % Changes:
+    %   * new field - creation_time
+    %   * new field - eff harvesters
+    {record, [
+        {name, string},
+        {admin_email, string},
+        {root_macaroon, string},
+
+        {subdomain_delegation, boolean},
+        {domain, string},
+        {subdomain, string},
+
+        {latitude, float},
+        {longitude, float},
+
+        {spaces, #{string => integer}},
+
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}}, % New field
+
+        {creation_time, integer}, % New field
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(6) ->
+    % Changes:
+    %   * new field - last_activity
+    {record, [
+        {name, string},
+        {admin_email, string},
+        {root_macaroon, string},
+
+        {subdomain_delegation, boolean},
+        {domain, string},
+        {subdomain, string},
+
+        {latitude, float},
+        {longitude, float},
+
+        {spaces, #{string => integer}},
+
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {last_activity, integer}, % new field
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(7) ->
+    % * root_macaroon renamed to root_token
+    % * renamed field - spaces -> legacy_spaces
+    % * new field - storages
+    % * new field - eff spaces
+    {record, [
+        {name, string},
+        {admin_email, string},
+        {root_token, string},
+
+        {subdomain_delegation, boolean},
+        {domain, string},
+        {subdomain, string},
+
+        {latitude, float},
+        {longitude, float},
+
+        {legacy_spaces, #{string => integer}}, % Renamed field
+        {storages, [string]}, % New field
+
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => {integer, [{atom, string}]}}}, % New field
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {last_activity, integer},
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(8) ->
+    {record, [
+        {name, string},
+        {admin_email, string},
+        {root_token, string},
+
+        {subdomain_delegation, boolean},
+        {domain, string},
+        {subdomain, string},
+        {op_worker_port, integer},  % new field
+        {ones3_port, integer},  % new field
+
+        {latitude, float},
+        {longitude, float},
+
+        {legacy_spaces, #{string => integer}},
+        {storages, [string]},
+
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => {integer, [{atom, string}]}}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {last_activity, integer},
+
+        {bottom_up_dirty, boolean}
+    ]}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -251,28 +341,246 @@ upgrade_record(2, Provider) ->
         BottomUpDirty
     } = Provider,
     #{host := Domain} = url_utils:parse(RedirectionPoint),
-    {3, #od_provider{
+    {3, {od_provider,
+        Name,
+        undefined,
+        undefined,
+        false,
+        Domain,
+        undefined,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+
+        BottomUpDirty
+    }};
+upgrade_record(3, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        _EffUsers,
+        _EffGroups,
+
+        _BottomUpDirty
+    } = Provider,
+
+    {4, {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        #{},
+        #{},
+
+        true
+    }};
+upgrade_record(4, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+
+        BottomUpDirty
+    } = Provider,
+    {5, {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+        #{},
+
+        global_clock:timestamp_seconds(),
+
+        BottomUpDirty
+    }};
+upgrade_record(5, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+        EffHarvesters,
+
+        CreationTime,
+
+        BottomUpDirty
+    } = Provider,
+    {6, {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+        EffHarvesters,
+
+        CreationTime,
+        0,
+
+        BottomUpDirty
+    }};
+upgrade_record(6, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        _EffUsers,
+        _EffGroups,
+        _EffHarvesters,
+
+        CreationTime,
+        LastActivity,
+
+        _BottomUpDirty
+    } = Provider,
+    %% Eff relations are recalculated during cluster upgrade procedure
+    {7, {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+        [],
+
+        #{},
+        #{},
+        #{},
+        #{},
+
+        CreationTime,
+        LastActivity,
+
+        true
+    }};
+upgrade_record(7, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        LegacySpaces,
+        Storages,
+
+        EffUsers,
+        EffGroups,
+        EffSpaces,
+        EffHarvesters,
+
+        CreationTime,
+        LastActivity,
+
+        BottomUpDirty
+    } = Provider,
+    %% Eff relations are recalculated during cluster upgrade procedure
+    {8, #od_provider{
         name = Name,
-        admin_email = undefined,
-        root_macaroon = undefined,
-        subdomain_delegation = false,
-        subdomain = undefined,
+        admin_email = AdminEmail,
+        root_token = RootMacaroon,
+
+        subdomain_delegation = SubdomainDelegation,
         domain = Domain,
+        subdomain = Subdomain,
+        op_worker_port = 443,
+        ones3_port = undefined,
 
         latitude = Latitude,
         longitude = Longitude,
 
-        spaces = Spaces,
+        legacy_spaces = LegacySpaces,
+        storages = Storages,
 
         eff_users = EffUsers,
         eff_groups = EffGroups,
+        eff_spaces = EffSpaces,
+        eff_harvesters = EffHarvesters,
+
+        creation_time = CreationTime,
+        last_activity = LastActivity,
 
         bottom_up_dirty = BottomUpDirty
-    }};
-upgrade_record(3, Provider) ->
-    {4, Provider#od_provider{
-        eff_users = #{},
-        eff_groups = #{},
-
-        bottom_up_dirty = true
     }}.

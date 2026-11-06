@@ -16,9 +16,9 @@
 
 -include_lib("ctool/include/logging.hrl").
 
--define(CURRENT_CONFIG_VERSION, 2).
+-define(CURRENT_CONFIG_VERSION, 3).
 
--define(XRDS_CACHE_TTL, oz_worker:get_env(openid_xrds_cache_ttl, timer:hours(1))).
+-define(XRDS_CACHE_TTL, oz_worker:get_env(openid_xrds_cache_ttl_seconds, 3600)). % 1 hour
 
 -define(bin(Term), auth_config:ensure_bin(Term)).
 -define(str(Term), auth_config:ensure_str(Term)).
@@ -27,21 +27,27 @@
 % Login macros to use during login process handling, if auth test mode is
 % enabled, the logs will be gathered and displayed on the login results page.
 -define(auth_debug(Format, Args), begin
-    auth_test_mode:gather_log(debug, Format, Args),
+    idp_auth_logger:log_error_to_file(Format, Args),
+    idp_auth_test_mode:gather_log(debug, Format, Args),
     ?debug(Format, Args)
 end).
--define(auth_debug_stacktrace(Format, Args), begin
-    auth_test_mode:gather_log(debug, Format, Args, erlang:get_stacktrace()),
-    ?debug_stacktrace(Format, Args)
+-define(auth_debug_exception(Format, Args, Class, Reason, Stacktrace), begin
+    FormatWithStacktrace = Format ++ "~n> Caught: ~ts:~tp~n> Stacktrace:~ts",
+    ArgsWithStacktrace = Args ++ [Class, Reason, onedata_logger:pr_stacktrace(Stacktrace)],
+    idp_auth_logger:log_error_to_file(FormatWithStacktrace, ArgsWithStacktrace),
+    idp_auth_test_mode:gather_log(debug, FormatWithStacktrace, ArgsWithStacktrace),
+    ?debug_exception(Format, Class, Reason, Args, Stacktrace)
 end).
 
 -define(auth_warning(Format, Args), begin
-    auth_test_mode:gather_log(warning, Format, Args),
+    idp_auth_logger:log_error_to_file(Format, Args),
+    idp_auth_test_mode:gather_log(warning, Format, Args),
     ?warning(Format, Args)
 end).
 
 -define(auth_error(Format, Args), begin
-    auth_test_mode:gather_log(error, Format, Args),
+    idp_auth_logger:log_error_to_file(Format, Args),
+    idp_auth_test_mode:gather_log(error, Format, Args),
     ?error(Format, Args)
 end).
 

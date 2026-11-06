@@ -59,9 +59,9 @@ handle(stream_healthcheck) ->
     try
         stream_healthcheck()
     catch
-        _:Reason ->
+        _:Reason:Stacktrace ->
             ?error_stacktrace(
-                "Failed to start Graph Sync server stream due to: ~p", [Reason]
+                "Failed to start Graph Sync server stream due to: ~tp", [Reason], Stacktrace
             )
     end,
     erlang:send_after(?STREAM_HEALTHCHECK_INTERVAL, self(),
@@ -100,7 +100,7 @@ supervisor_flags() ->
 -spec stream_healthcheck() -> ok.
 stream_healthcheck() ->
     Pid = global:whereis_name(?GS_SERVER_WORKER_GLOBAL_NAME),
-    Node = consistent_hasing:get_node(?GS_SERVER_WORKER_GLOBAL_NAME),
+    Node = consistent_hashing:get_assigned_node(?GS_SERVER_WORKER_GLOBAL_NAME),
     case {Pid, Node =:= node()} of
         {undefined, true} ->
             start_gs_server_worker(),

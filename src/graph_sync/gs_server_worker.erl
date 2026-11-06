@@ -102,9 +102,9 @@ handle_call(Request, _From, #state{} = State) ->
     {noreply, NewState :: state(), timeout() | hibernate} |
     {stop, Reason :: term(), NewState :: state()}.
 handle_cast({change, {ok, Docs}}, State) when is_list(Docs) ->
-    [handle_change(Doc) || Doc <- Docs],
+    [handle_change(Doc) || {change, Doc} <- Docs],
     {noreply, State};
-handle_cast({change, {ok, #document{} = Doc}}, State) ->
+handle_cast({change, {ok, {change, #document{} = Doc}}}, State) ->
     handle_change(Doc),
     {noreply, State};
 handle_cast({change, {ok, end_of_stream}}, State) ->
@@ -161,16 +161,57 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
--spec handle_change(Doc :: datastore:document()) -> ok.
-handle_change(Doc = #document{seq = Seq, value = Value}) ->
-    % Let the gen_server crash if anything goes wrong (no error is expected
-    % on this level).
-    Type = element(1, Value),
-    case Doc of
-        #document{key = EntityId, deleted = true} ->
-            gs_server:deleted(Type, EntityId);
-        #document{key = EntityId, value = Entity} ->
-            gs_server:updated(Type, EntityId, Entity)
+%% @private
+-spec handle_change(datastore:doc()) -> ok.
+handle_change(Doc = #document{key = Key, seq = Seq, value = Value}) ->
+    case change_to_entity_type_and_id(Key, Value) of
+        ignore ->
+            ok;
+        {Type, EntityId} ->
+            case Doc of
+                #document{deleted = true} ->
+                    gs_server:deleted(Type, EntityId);
+                #document{value = Entity, revs = [DbRev | _]} ->
+                    {Revision, _Hash} = datastore_rev:parse(DbRev),
+                    gs_server:updated(Type, EntityId, {Entity, Revision})
+            end
     end,
-    {ok, _} = gs_server_state:set_seq(Seq),
-    ok.
+    gs_server_state:set_seq(Seq).
+
+
+%% @private
+-spec change_to_entity_type_and_id(datastore_key:key(), tuple()) ->
+    ignore | {gri:entity_type(), gri:entity_id()}.
+change_to_entity_type_and_id(Key, #od_user{}) ->
+    {od_user, Key};
+change_to_entity_type_and_id(Key, #od_group{}) ->
+    {od_group, Key};
+change_to_entity_type_and_id(Key, #od_space{}) ->
+    {od_space, Key};
+change_to_entity_type_and_id(Key, #od_share{}) ->
+    {od_share, Key};
+change_to_entity_type_and_id(Key, #od_provider{}) ->
+    {od_provider, Key};
+change_to_entity_type_and_id(Key, #od_storage{}) ->
+    {od_storage, Key};
+change_to_entity_type_and_id(Key, #od_cluster{}) ->
+    {od_cluster, Key};
+change_to_entity_type_and_id(Key, #od_handle_service{}) ->
+    {od_handle_service, Key};
+change_to_entity_type_and_id(Key, #od_handle{}) ->
+    {od_handle, Key};
+change_to_entity_type_and_id(Key, #od_harvester{}) ->
+    {od_harvester, Key};
+change_to_entity_type_and_id(Key, #od_token{}) ->
+    {od_token, Key};
+change_to_entity_type_and_id(Key, #temporary_token_secret{}) ->
+    ?SUB(_, SubjectId) = temporary_token_secret:key_to_subject(Key),
+    {temporary_token_secret, SubjectId};
+change_to_entity_type_and_id(Key, #od_atm_inventory{}) ->
+    {od_atm_inventory, Key};
+change_to_entity_type_and_id(Key, #od_atm_lambda{}) ->
+    {od_atm_lambda, Key};
+change_to_entity_type_and_id(Key, #od_atm_workflow_schema{}) ->
+    {od_atm_workflow_schema, Key};
+change_to_entity_type_and_id(_, _) ->
+    ignore.

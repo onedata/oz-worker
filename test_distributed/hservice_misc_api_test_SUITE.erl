@@ -13,7 +13,7 @@
 -module(hservice_misc_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -22,7 +22,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -35,6 +35,7 @@
 -export([
     create_test/1,
     list_test/1,
+    list_privileges_test/1,
     get_test/1,
     update_test/1,
     delete_test/1,
@@ -47,6 +48,7 @@ all() ->
     ?ALL([
         create_test,
         list_test,
+        list_privileges_test,
         get_test,
         update_test,
         delete_test,
@@ -62,15 +64,15 @@ all() ->
 
 
 create_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U2, set, [
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U2, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U3, set, [
+    ], []),
+    {ok, U3} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U3, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
 
     VerifyFun = fun(HServiceId, ExpProperties) ->
         {ok, HService} = oz_test_utils:get_handle_service(Config, HServiceId),
@@ -98,8 +100,8 @@ create_test(Config) ->
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_Env, Data) ->
                 ExpProperties = maps:get(<<"serviceProperties">>, Data),
-                fun(#{<<"Location">> := Location} = _Headers) ->
-                    BaseURL = ?URL(Config, [<<"/user/handle_services/">>]),
+                fun(#{?HDR_LOCATION := Location} = _Headers) ->
+                    BaseURL = ?URL(Config, [<<"/handle_services/">>]),
                     [HServiceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(HServiceId, ExpProperties)
                 end
@@ -108,7 +110,7 @@ create_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = create,
-            args = [client, data],
+            args = [auth, data],
             expected_result = ?OK_ENV(fun(_Env, Data) ->
                 ExpProperties = maps:get(<<"serviceProperties">>, Data),
                 ?OK_TERM(fun(Result) -> VerifyFun(Result, ExpProperties) end)
@@ -127,12 +129,12 @@ create_test(Config) ->
             },
             bad_values = [
                 {<<"proxyEndpoint">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"proxyEndpoint">>)},
+                    ?ERR_BAD_VALUE_STRING(<<"proxyEndpoint">>)},
                 {<<"serviceProperties">>, 1234,
-                    ?ERROR_BAD_VALUE_JSON(<<"serviceProperties">>)},
+                    ?ERR_BAD_VALUE_JSON(<<"serviceProperties">>)},
                 {<<"serviceProperties">>, #{},
-                    ?ERROR_BAD_VALUE_EMPTY(<<"serviceProperties">>)}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                    ?ERR_BAD_VALUE_EMPTY(<<"serviceProperties">>)}
+                | ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
             ]
         }
     },
@@ -156,14 +158,12 @@ create_test(Config) ->
             operation = create,
             gri = #gri{type = od_handle_service, aspect = instance},
             auth_hint = ?AS_USER(U3),
-            expected_result = ?OK_ENV(fun(_Env, Data) ->
+            expected_result_op = ?OK_ENV(fun(_Env, Data) ->
                 ExpProperties = maps:get(<<"serviceProperties">>, Data),
                 ?OK_MAP_CONTAINS(#{
                     <<"name">> => ?HANDLE_SERVICE_NAME1,
                     <<"gri">> => fun(EncodedGri) ->
-                        #gri{id = Id} = oz_test_utils:decode_gri(
-                            Config, EncodedGri
-                        ),
+                        #gri{id = Id} = gri:deserialize(EncodedGri),
                         VerifyFun(Id, ExpProperties)
                     end
                 })
@@ -177,15 +177,11 @@ list_test(Config) ->
     % Make sure that handle services created in other tests are deleted.
     oz_test_utils:delete_all_entities(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [
-        ?OZ_HANDLE_SERVICES_LIST
-    ]),
+    ], []),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ExpHServices = lists:map(
         fun(ServiceDetails) ->
@@ -200,7 +196,7 @@ list_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_HANDLE_SERVICES_LIST]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -217,10 +213,10 @@ list_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = list,
-            args = [client],
+            args = [auth],
             expected_result = ?OK_LIST(ExpHServices)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -237,6 +233,25 @@ list_test(Config) ->
     ).
 
 
+list_privileges_test(Config) ->
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, nobody]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/handle_services/privileges">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{
+                <<"member">> => [atom_to_binary(P, utf8) || P <- privileges:handle_service_member()],
+                <<"admin">> => [atom_to_binary(P, utf8) || P <- privileges:handle_service_admin()]
+            }
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
 get_test(Config) ->
     % create handle service with 2 users:
     %   U2 gets the HANDLE_SERVICE_VIEW privilege
@@ -244,13 +259,9 @@ get_test(Config) ->
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_HANDLE_SERVICES_LIST
-    ]),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
+    AllPrivs = privileges:handle_service_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     % Get and check private data
@@ -262,7 +273,7 @@ get_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, Admin},
+                {admin, [?OZ_HANDLE_SERVICES_VIEW]},
                 {user, NonAdmin},
                 {user, U1}
             ]
@@ -270,12 +281,12 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get,
-            args = [client, HService],
+            args = [auth, HService],
             expected_result = ?OK_TERM(
                 fun(#od_handle_service{
                     name = Name, proxy_endpoint = ProxyEndpoint,
                     service_properties = ServiceProperties,
-                    users = Users, groups = #{}, handles = [],
+                    users = Users, groups = #{},
                     eff_users = EffUsers, eff_groups = #{},
                     bottom_up_dirty = false
                 }) ->
@@ -298,7 +309,7 @@ get_test(Config) ->
             gri = #gri{
                 type = od_handle_service, id = HService, aspect = instance
             },
-            expected_result = ?OK_MAP(#{
+            expected_result_op = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?HANDLE_SERVICE_NAME1,
                 <<"effectiveUsers">> => #{
                     U1 => AllPrivsBin -- [<<"handle_service_view">>],
@@ -306,9 +317,7 @@ get_test(Config) ->
                 },
                 <<"effectiveGroups">> => #{},
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(HService, Id)
                 end
             })
@@ -317,11 +326,11 @@ get_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
 
     % Get and check protected data
-    GetSharedDataApiTestSpec = #api_test_spec{
+    GetProtectedDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_HANDLE_SERVICES_VIEW]},
                 {user, U1},
                 {user, U2}
             ],
@@ -334,41 +343,88 @@ get_test(Config) ->
             method = get,
             path = [<<"/handle_services/">>, HService],
             expected_code = ?HTTP_200_OK,
-            expected_body = ?DOI_SERVICE#{
-                <<"handleServiceId">> => HService
-            }
+            expected_body = api_test_expect:protected_hservice(rest, HService, ?DOI_SERVICE, ?SUB(user, U1))
         },
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_protected_data,
-            args = [client, HService],
-            expected_result = ?OK_MAP(?DOI_SERVICE)
+            args = [auth, HService],
+            expected_result = api_test_expect:protected_hservice(logic, HService, ?DOI_SERVICE, ?SUB(user, U1))
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
-    ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
+
+    GetPublicDataApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                nobody,
+                root,
+                {user, U2},
+                {admin, [?OZ_HANDLE_SERVICES_VIEW]},
+                {user, NonAdmin},
+                {user, U1}
+            ],
+            unauthorized = [],
+            forbidden = []
+        },
+        logic_spec = #logic_spec{
+            module = handle_service_logic,
+            function = get_public_data,
+            args = [auth, HService],
+            expected_result = ?OK_TERM(
+                fun(#{<<"name">> := Name}) ->
+                    ?assertEqual(?HANDLE_SERVICE_NAME1, Name)
+                end
+            )
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/handle_services/">>, HService, <<"/public">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = fun(#{<<"name">> := Name, <<"handleServiceId">> := HandleServiceId}) ->
+                ?assertEqual(HService, HandleServiceId),
+                ?assertEqual(?HANDLE_SERVICE_NAME1, Name),
+                true
+            end
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{
+                type = od_handle_service, id = HService, aspect = instance, scope = public
+            },
+            expected_result_op = ?OK_MAP_CONTAINS(#{
+                <<"name">> => ?HANDLE_SERVICE_NAME1,
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
+                    ?assertEqual(HService, Id)
+                end
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec)).
 
 
 update_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ], []),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, HService} = oz_test_utils:create_handle_service(
             Config, ?USER(U1), ?DOI_SERVICE
         ),
         oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-            revoke, [?HANDLE_SERVICE_UPDATE]
+            [], [?HANDLE_SERVICE_UPDATE]
         ),
         {ok, U2} = oz_test_utils:handle_service_add_user(
             Config, HService, U2
         ),
         oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-            set, [?HANDLE_SERVICE_UPDATE]
+            [?HANDLE_SERVICE_UPDATE], []
         ),
         #{hserviceId => HService}
     end,
@@ -385,6 +441,7 @@ update_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_UPDATE]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -401,15 +458,15 @@ update_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = update,
-            args = [client, hserviceId, data],
-            expected_result = ?OK
+            args = [auth, hserviceId, data],
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{
                 type = od_handle_service, id = hserviceId, aspect = instance
             },
-            expected_result = ?OK
+            expected_result_op = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [
@@ -422,12 +479,12 @@ update_test(Config) ->
             },
             bad_values = [
                 {<<"proxyEndpoint">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"proxyEndpoint">>)},
+                    ?ERR_BAD_VALUE_STRING(<<"proxyEndpoint">>)},
                 {<<"serviceProperties">>, 1234,
-                    ?ERROR_BAD_VALUE_JSON(<<"serviceProperties">>)},
+                    ?ERR_BAD_VALUE_JSON(<<"serviceProperties">>)},
                 {<<"serviceProperties">>, #{},
-                    ?ERROR_BAD_VALUE_EMPTY(<<"serviceProperties">>)}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+                    ?ERR_BAD_VALUE_EMPTY(<<"serviceProperties">>)}
+                | ?BAD_VALUES_NAME(?ERR_BAD_VALUE_NAME(undefined))
             ]
         }
     },
@@ -437,40 +494,53 @@ update_test(Config) ->
 
 
 delete_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    delete_test(Config, true),
+    delete_test(Config, false).
+
+delete_test(Config, HasAnyHandles) ->
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ], []),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, HService} = oz_test_utils:create_handle_service(
+        {ok, HServiceId} = oz_test_utils:create_handle_service(
             Config, ?USER(U1), ?DOI_SERVICE
         ),
-        oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-            revoke, [?HANDLE_SERVICE_DELETE]
+        oz_test_utils:handle_service_set_user_privileges(Config, HServiceId, U1,
+            [], [?HANDLE_SERVICE_DELETE]
         ),
         {ok, U2} = oz_test_utils:handle_service_add_user(
-            Config, HService, U2
+            Config, HServiceId, U2
         ),
-        oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-            set, [?HANDLE_SERVICE_DELETE]
+        oz_test_utils:handle_service_set_user_privileges(Config, HServiceId, U2,
+            [?HANDLE_SERVICE_DELETE], []
         ),
-        #{hserviceId => HService}
+        Handles = case HasAnyHandles of
+            false -> [];
+            true -> lists_utils:generate(fun() -> ozt_handles:create(HServiceId) end, 10)
+        end,
+        #{
+            hserviceId => HServiceId,
+            handles => Handles
+        }
     end,
-    DeleteEntityFun = fun(#{hserviceId := HService} = _Env) ->
+    DeleteEntityFun = fun(#{hserviceId := HService, handles := Handles} = _Env) ->
+        [oz_test_utils:delete_handle(Config, H) || H <- Handles],
         oz_test_utils:delete_handle_service(Config, HService)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{hserviceId := HService} = _Env, _) ->
         {ok, HServices} = oz_test_utils:list_handle_services(Config),
-        ?assertEqual(lists:member(HService, HServices), not ShouldSucceed)
+        ?assertEqual(lists:member(HService, HServices), not ShouldSucceed or HasAnyHandles)
     end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_DELETE]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -482,20 +552,29 @@ delete_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/handle_services/">>, hserviceId],
-            expected_code = ?HTTP_204_NO_CONTENT
+            expected_code = case HasAnyHandles of
+                false -> ?HTTP_204_NO_CONTENT;
+                true -> ?HTTP_400_BAD_REQUEST
+            end
         },
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = delete,
-            args = [client, hserviceId],
-            expected_result = ?OK
+            args = [auth, hserviceId],
+            expected_result = case HasAnyHandles of
+                false -> ?OK_RES;
+                true -> ?ERROR_REASON(?ERR_CANNOT_DELETE_NON_EMPTY_HANDLE_SERVICE)
+            end
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{
                 type = od_handle_service, id = hserviceId, aspect = instance
             },
-            expected_result = ?OK
+            expected_result_op = case HasAnyHandles of
+                false -> ?OK_RES;
+                true -> ?ERROR_REASON(?ERR_CANNOT_DELETE_NON_EMPTY_HANDLE_SERVICE)
+            end
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -505,16 +584,16 @@ delete_test(Config) ->
 
 list_handles_test(Config) ->
     % create handle service with 2 users:
-    %   U2 gets the HANDLE_SERVICE_VIEW privilege
-    %   U1 gets all remaining privileges
-    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
-%%        TODO ?HANDLE_SERVICE_LIST_HANDLES
-        Config, ?HANDLE_SERVICE_VIEW
+    %   MemberWithPrivs gets the HANDLE_SERVICE_LIST_HANDLES privilege
+    %   MemberWithoutPrivs gets all remaining privileges
+    {HService, MemberWithoutPrivs, MemberWithPrivs} = api_test_scenarios:create_basic_doi_hservice_env(
+%%        TODO VFS-7381
+        Config, ?HANDLE_SERVICE_LIST_HANDLES
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, S2} = oz_test_utils:create_space(Config, ?USER(U2), ?SPACE_NAME2),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(MemberWithoutPrivs), ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(MemberWithPrivs), ?SPACE_NAME2),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -523,12 +602,9 @@ list_handles_test(Config) ->
         fun(SpaceId) ->
             ShareId = ?UNIQUE_STRING,
             {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, SpaceId
             ),
-            {ok, HandleId} = oz_test_utils:create_handle(
-                Config, ?ROOT, ?HANDLE(HService, ShareId)
-            ),
-            HandleId
+            ozt_handles:create(HService, ShareId)
         end, [S1, S1, S2]
     ),
 
@@ -536,12 +612,13 @@ list_handles_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {admin, [?OZ_HANDLE_SERVICES_LIST_RELATIONSHIPS]},
+                {user, MemberWithPrivs}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {user, U1}
+                {user, MemberWithoutPrivs}
             ]
         },
         rest_spec = #rest_spec{
@@ -553,10 +630,10 @@ list_handles_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_handles,
-            args = [client, HService],
+            args = [auth, HService],
             expected_result = ?OK_LIST(ExpHandles)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -568,20 +645,29 @@ get_handle_test(Config) ->
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, S1
     ),
 
-    HandleDetails = ?HANDLE(HService, ShareId),
-    {ok, HandleId} = oz_test_utils:create_handle(Config, ?ROOT, HandleDetails),
+    MetadataSchema = ?RAND_ELEMENT(ozt_handles:supported_metadata_schemas()),
+    RawMetadata = ozt_handles:example_input_metadata(MetadataSchema),
+    HandleData = #{
+        <<"handleServiceId">> => HService,
+        <<"resourceType">> => <<"Share">>,
+        <<"resourceId">> => ShareId,
+        <<"metadataSchema">> => MetadataSchema,
+        <<"metadata">> => RawMetadata
+    },
+    {ok, HandleId} = oz_test_utils:create_handle(Config, ?ROOT, HandleData),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLES_VIEW]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -592,19 +678,17 @@ get_handle_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [
-                <<"/handle_services/">>, HService, <<"/handles/">>, HandleId
-            ],
+            path = [<<"/handle_services/">>, HService, <<"/handles/">>, HandleId],
             expected_code = ?HTTP_200_OK,
-            expected_body = {contains, HandleDetails}
+            expected_body = api_test_expect:protected_handle(rest, HandleId, HandleData, ?SUB(nobody))
         },
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_handle,
-            args = [client, HService, HandleId],
-            expected_result = ?OK_MAP_CONTAINS(HandleDetails)
+            args = [auth, HService, HandleId],
+            expected_result = api_test_expect:protected_handle(logic, HandleId, HandleData, ?SUB(nobody))
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -613,35 +697,21 @@ get_handle_test(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    application:ensure_all_started(hackney),
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
 
-
-init_per_testcase(list_handles_test, Config) ->
-    init_per_testcase(handle_tests, Config);
-init_per_testcase(get_handle_test, Config) ->
-    init_per_testcase(handle_tests, Config);
-init_per_testcase(handle_tests, Config) ->
-    oz_test_utils:mock_handle_proxy(Config),
-    Config;
 init_per_testcase(_, Config) ->
+    ozt_mocks:freeze_time(),
+    ozt_mocks:mock_handle_proxy(),
     Config.
 
-
-end_per_testcase(list_handles_test, Config) ->
-    end_per_testcase(handle_tests, Config);
-end_per_testcase(get_handle_test, Config) ->
-    end_per_testcase(handle_tests, Config);
-end_per_testcase(handle_tests, Config) ->
-    oz_test_utils:delete_all_entities(Config),
-    oz_test_utils:unmock_handle_proxy(Config);
 end_per_testcase(_, _Config) ->
-    ok.
+    ozt:delete_all_entities(),
+    ozt_mocks:unmock_handle_proxy(),
+    ozt_mocks:unfreeze_time().

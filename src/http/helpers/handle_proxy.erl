@@ -14,11 +14,14 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
+-include("http/public_data/oai.hrl").
+-include_lib("ctool/include/http/headers.hrl").
+-include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -type public_url() :: binary().
 
--define(RANDOM_ID(), base64url:encode(crypto:strong_rand_bytes(5))).
--define(DOI_DC_IDENTIFIER(Hndl), <<"doi:", Hndl/binary>>).
+-define(RANDOM_ID(), base62:from_base64(base64url:encode(crypto:strong_rand_bytes(6)))).
 
 %% API
 -export([register_handle/4, unregister_handle/1, modify_handle/2]).
@@ -32,10 +35,16 @@
 %% Register handle in external handle service
 %% @end
 %%--------------------------------------------------------------------
--spec register_handle(od_handle_service:id(), od_handle:resource_type(),
-    od_handle:resource_id(), od_handle:metadata()) -> {ok, od_handle:public_handle()}.
+-spec register_handle(
+    od_handle_service:id(),
+    od_handle:resource_type(),
+    od_handle:resource_id(),
+    od_handle:raw_metadata()
+) ->
+    od_handle:public_handle().
 register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
     {ok, #document{value = #od_handle_service{
+        name = HandleServiceName,
         proxy_endpoint = ProxyEndpoint,
         service_properties = ServiceProperties}}
     } = od_handle_service:get(HandleServiceId),
@@ -45,25 +54,33 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
         <<"serviceProperties">> => ServiceProperties,
         <<"metadata">> => #{<<"onedata_dc">> => Metadata}
     }),
-    Headers = #{<<"content-type">> => <<"application/json">>, <<"accept">> => <<"application/json">>},
+    Headers = #{?HDR_CONTENT_TYPE => <<"application/json">>, ?HDR_ACCEPT => <<"application/json">>},
     Type = maps:get(<<"type">>, ServiceProperties),
     case Type of
         <<"DOI">> ->
             Prefix = maps:get(<<"prefix">>, ServiceProperties),
-            DoiId = ?RANDOM_ID(),
-            DoiHandle = <<Prefix/binary, "/", DoiId/binary>>,
+            DoiHandle = <<Prefix/binary, "/", (?RANDOM_ID())/binary>>,
             DoiHandleEncoded = http_utils:url_encode(DoiHandle),
-            {ok, 201, _, _} = handle_proxy_client:put(
-                ProxyEndpoint, <<"/handle?hndl=", DoiHandleEncoded/binary>>, Headers, Body
-            ),
-            {ok, ?DOI_DC_IDENTIFIER(DoiHandle)};
+            case handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", DoiHandleEncoded/binary>>, Headers, Body) of
+                {ok, 201, _, _} ->
+                    ?DOI_IDENTIFIER(DoiHandle);
+                HttpCallResult ->
+                    ?error(?autoformat_with_msg("Error registering a handle", [
+                        Type, HandleServiceName, ProxyEndpoint, HttpCallResult
+                    ])),
+                    throw(?ERR_EXTERNAL_SERVICE_OPERATION_FAILED(?err_ctx(), HandleServiceName))
+            end;
         _ -> % <<"PID">> and other types
-            DoiId = ?RANDOM_ID(),
-            {ok, 201, _, RespJSON} = handle_proxy_client:put(
-                ProxyEndpoint, <<"/handle?hndl=", DoiId/binary>>, Headers, Body
-            ),
-            PidHandle = maps:get(<<"handle">>, json_utils:decode(RespJSON)),
-            {ok, PidHandle}
+            PidHandle = ?RANDOM_ID(),
+            case handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", PidHandle/binary>>, Headers, Body) of
+                {ok, 201, _, RespJSON} ->
+                    maps:get(<<"handle">>, json_utils:decode(RespJSON));
+                HttpCallResult ->
+                    ?error(?autoformat_with_msg("Error registering a handle", [
+                        Type, HandleServiceName, ProxyEndpoint, HttpCallResult
+                    ])),
+                    throw(?ERR_EXTERNAL_SERVICE_OPERATION_FAILED(?err_ctx(), HandleServiceName))
+            end
     end.
 
 %%--------------------------------------------------------------------
@@ -73,35 +90,60 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
 %%--------------------------------------------------------------------
 -spec unregister_handle(od_handle:id()) -> ok.
 unregister_handle(HandleId) ->
-    {ok, #document{value = #od_handle{handle_service = HandleServiceId, public_handle = PublicHandle}}} =
-        od_handle:get(HandleId),
+    {ok, #document{value = #od_handle{
+        handle_service = HandleServiceId,
+        public_handle = PublicHandle
+    }}} = od_handle:get(HandleId),
     {ok, #document{value = #od_handle_service{
+        name = HandleServiceName,
         proxy_endpoint = ProxyEndpoint,
-        service_properties = ServiceProperties}}
-    } = od_handle_service:get(HandleServiceId),
-%%    Body = [
-%%        {<<"serviceProperties">>, ServiceProperties}
-%%    ],
-    Body = ServiceProperties, %todo use above Body after fixing proxy
-    Headers = #{<<"content-type">> => <<"application/json">>, <<"accept">> => <<"application/json">>},
+        service_properties = ServiceProperties
+    }}} = od_handle_service:get(HandleServiceId),
+    % NOTE: unlike during creation, the service properties are passed on the
+    % root level of the body object (rather than nested under the "serviceProperties" key)
+    Body = ServiceProperties,
+    Headers = #{?HDR_CONTENT_TYPE => <<"application/json">>, ?HDR_ACCEPT => <<"application/json">>},
     Type = maps:get(<<"type">>, ServiceProperties),
-    {ok, 200, _, _} =
-        case Type of
-            <<"DOI">> ->
-                PublicHandleEncoded = http_utils:url_encode(PublicHandle),
-                handle_proxy_client:delete(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body));
-            _ ->
-                handle_proxy_client:delete(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode(Body))
-        end,
-    ok.
+    % NOTE: the public handle is built differently for different types of identifiers;
+    % @see register_handle/4
+    Handle = case Type of
+        <<"DOI">> ->
+            % the public handle looks like this: "oai:21.T15999/abcd"
+            % the handle for the above is: "21.T15999/abcd"   (includes prefix!)
+            ?DOI_IDENTIFIER(DoiHandle) = PublicHandle,
+            DoiHandle;
+        _ -> % <<"PID">> and other types
+            Prefix = maps:get(<<"prefix">>, ServiceProperties),
+            case binary:split(PublicHandle, <<Prefix/binary, "/">>) of
+                [_ServiceUrl, PidHandle] ->
+                    % PID: the public handle looks like this: "http://hdl.handle.net/21.T15999/abcd"
+                    % the handle for the above is: "abcd"   (doesn't include prefix!)
+                    PidHandle;
+                [CustomHandle] ->
+                    % Others: it's possible to reuse external handles or just use the Share URL
+                    % as the public handle
+                    CustomHandle
+            end
+    end,
+    HandleEncoded = http_utils:url_encode(Handle),
+    case handle_proxy_client:delete(
+        ProxyEndpoint, <<"/handle?hndl=", HandleEncoded/binary>>, Headers, json_utils:encode(Body)
+    ) of
+        {ok, 200, _, _} ->
+            ok;
+        HttpCallResult ->
+            ?error(?autoformat_with_msg("Error unregistering a handle", [
+                Type, HandleServiceName, ProxyEndpoint, HttpCallResult
+            ])),
+            throw(?ERR_EXTERNAL_SERVICE_OPERATION_FAILED(?err_ctx(), HandleServiceName))
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Modify handle in external handle service
 %% @end
 %%--------------------------------------------------------------------
--spec modify_handle(od_handle:id(), od_handle:metadata()) ->
-    ok.
+-spec modify_handle(od_handle:id(), od_handle:raw_metadata()) -> ok.
 modify_handle(HandleId, NewMetadata) ->
     {ok, #document{value = #od_handle{
         handle_service = HandleServiceId, public_handle = PublicHandle,
@@ -117,28 +159,18 @@ modify_handle(HandleId, NewMetadata) ->
         <<"serviceProperties">> => ServiceProperties,
         <<"metadata">> => #{<<"onedata_dc">> => NewMetadata}
     },
-    Headers = #{<<"content-type">> => <<"application/json">>, <<"accept">> => <<"application/json">>},
-    Type = maps:get(<<"type">>, ServiceProperties),
-    {ok, 204, _, _} =
-        case Type of
-            <<"DOI">> ->
-                PublicHandleEncoded = http_utils:url_encode(PublicHandle),
-                handle_proxy_client:patch(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body));
-            _ ->
-                handle_proxy_client:patch(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode(Body))
-        end,
+    Headers = #{?HDR_CONTENT_TYPE => <<"application/json">>, ?HDR_ACCEPT => <<"application/json">>},
+    PublicHandleEncoded = http_utils:url_encode(PublicHandle),
+    {ok, 204, _, _} = handle_proxy_client:patch(
+        ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body)
+    ),
     ok.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Get public url for share.
-%% @end
-%%--------------------------------------------------------------------
+%% @private
 -spec get_redirect_url(od_handle:resource_type(), od_handle:resource_id()) -> public_url().
 get_redirect_url(<<"Share">>, ShareId) ->
-    {ok, #document{value = #od_share{public_url = PublicUrl}}} = od_share:get(ShareId),
-    PublicUrl.
+    od_share:build_public_url(ShareId).

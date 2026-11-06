@@ -13,8 +13,8 @@
 -behaviour(rest_translator_behaviour).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include("http/rest.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([create_response/4, get_response/2]).
 
@@ -29,18 +29,22 @@
 %%--------------------------------------------------------------------
 -spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
-    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
-create_response(#gri{aspect = authorize}, _, value, DischargeMacaroon) ->
-    rest_translator:ok_body_reply({binary, DischargeMacaroon});
+    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> rest_handler:rest_resp().
+create_response(#gri{aspect = instance}, _, resource, {#gri{id = UserId}, _}) ->
+    rest_translator:created_reply_with_location([<<"users">>, UserId]);
 
-create_response(#gri{aspect = client_tokens}, _, resource, {_, Token}) ->
+create_response(#gri{aspect = client_tokens}, _, resource, {_, {Token, _Rev}}) ->
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 
 create_response(#gri{aspect = {idp_access_token, _}}, _, value, {AccessToken, Expires}) ->
     rest_translator:ok_body_reply(#{
         <<"token">> => AccessToken,
         <<"ttl">> => Expires
-    }).
+    });
+
+create_response(#gri{aspect = provider_registration_token}, _, value, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    rest_translator:ok_body_reply(#{<<"token">> => Serialized}).
 
 
 %%--------------------------------------------------------------------
@@ -48,29 +52,56 @@ create_response(#gri{aspect = {idp_access_token, _}}, _, value, {AccessToken, Ex
 %% {@link rest_translator_behaviour} callback get_response/2.
 %% @end
 %%--------------------------------------------------------------------
--spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
+-spec get_response(entity_logic:gri(), Resource :: term()) -> rest_handler:rest_resp().
 get_response(#gri{id = undefined, aspect = list}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});
 
 get_response(#gri{id = UserId, aspect = instance, scope = protected}, UserData) ->
-    Alias = gs_protocol:undefined_to_null(maps:get(<<"alias">>, UserData)),
-    rest_translator:ok_body_reply(UserData#{
+    #{
+        <<"basicAuthEnabled">> := BasicAuthEnabled,
+        <<"blocked">> := Blocked,
+        <<"fullName">> := FullName, <<"username">> := Username,
+        <<"emails">> := Emails,
+        <<"linkedAccounts">> := LinkedAccounts,
+        <<"creationTime">> := CreationTime
+    } = UserData,
+    rest_translator:ok_body_reply(#{
+        <<"basicAuthEnabled">> => BasicAuthEnabled,
+        <<"blocked">> => Blocked,
         <<"userId">> => UserId,
-        <<"alias">> => Alias,
-        % TODO VFS-4506 deprecated fields, included for backward compatibility
-        <<"login">> => Alias,
-        <<"emailList">> => maps:get(<<"emails">>, UserData)
+        <<"fullName">> => FullName,
+        <<"username">> => utils:undefined_to_null(Username),
+        <<"emails">> => Emails,
+        <<"linkedAccounts">> => LinkedAccounts,
+        <<"creationTime">> => CreationTime,
+
+        %% @TODO VFS-4506 deprecated fields, included for backward compatibility
+        <<"name">> => FullName,
+        <<"login">> => utils:undefined_to_null(Username),
+        <<"alias">> => utils:undefined_to_null(Username),
+        <<"emailList">> => Emails
     });
 
 get_response(#gri{id = UserId, aspect = instance, scope = shared}, UserData) ->
-    % scope can be protected or shared
-    Alias = gs_protocol:undefined_to_null(maps:get(<<"alias">>, UserData)),
-    rest_translator:ok_body_reply(UserData#{
+    #{
+        <<"fullName">> := FullName,
+        <<"username">> := Username,
+        <<"creationTime">> := CreationTime
+    } = UserData,
+    rest_translator:ok_body_reply(#{
         <<"userId">> => UserId,
-        <<"alias">> => Alias,
-        % TODO VFS-4506 deprecated fields, included for backward compatibility
-        <<"login">> => Alias
+        <<"fullName">> => FullName,
+        <<"username">> => utils:undefined_to_null(Username),
+        <<"creationTime">> => CreationTime,
+
+        %% @TODO VFS-4506 deprecated fields, included for backward compatibility
+        <<"name">> => FullName,
+        <<"login">> => utils:undefined_to_null(Username),
+        <<"alias">> => utils:undefined_to_null(Username)
     });
+
+get_response(#gri{aspect = space_membership_requests}, SpaceMembershipRequests) ->
+    rest_translator:ok_body_reply(jsonable_record:to_json(SpaceMembershipRequests));
 
 get_response(#gri{aspect = oz_privileges}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
@@ -78,14 +109,8 @@ get_response(#gri{aspect = oz_privileges}, Privileges) ->
 get_response(#gri{aspect = eff_oz_privileges}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
-get_response(#gri{aspect = default_space}, DefaultSpace) ->
-    rest_translator:ok_body_reply(#{<<"spaceId">> => DefaultSpace});
-
 get_response(#gri{aspect = {space_alias, _}}, SpaceAlias) ->
     rest_translator:ok_body_reply(#{<<"alias">> => SpaceAlias});
-
-get_response(#gri{aspect = default_provider}, DefaultProvider) ->
-    rest_translator:ok_body_reply(#{<<"providerId">> => DefaultProvider});
 
 get_response(#gri{aspect = client_tokens}, Tokens) ->
     rest_translator:ok_body_reply(#{<<"tokens">> => Tokens});
@@ -119,4 +144,24 @@ get_response(#gri{aspect = handles}, Handles) ->
     rest_translator:ok_body_reply(#{<<"handles">> => Handles});
 
 get_response(#gri{aspect = eff_handles}, Handles) ->
-    rest_translator:ok_body_reply(#{<<"handles">> => Handles}).
+    rest_translator:ok_body_reply(#{<<"handles">> => Handles});
+
+get_response(#gri{aspect = harvesters}, Harvesters) ->
+    rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters});
+
+get_response(#gri{aspect = eff_harvesters}, Harvesters) ->
+    rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters});
+
+
+get_response(#gri{aspect = clusters}, Clusters) ->
+    rest_translator:ok_body_reply(#{<<"clusters">> => Clusters});
+
+get_response(#gri{aspect = eff_clusters}, Clusters) ->
+    rest_translator:ok_body_reply(#{<<"clusters">> => Clusters});
+
+
+get_response(#gri{aspect = atm_inventories}, AtmInventories) ->
+    rest_translator:ok_body_reply(#{<<"atm_inventories">> => AtmInventories});
+
+get_response(#gri{aspect = eff_atm_inventories}, AtmInventories) ->
+    rest_translator:ok_body_reply(#{<<"atm_inventories">> => AtmInventories}).

@@ -6,16 +6,16 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module encapsulates all share logic functionalities.
+%%% This module encapsulates all share logic functionality.
 %%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(share_logic).
 -author("Lukasz Opiola").
 
--include("http/gui_paths.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([
     create/5, create/2
@@ -23,6 +23,7 @@
 -export([
     get/2,
     get_public_data/2,
+    get_space/2,
     list/1
 ]).
 -export([
@@ -34,10 +35,7 @@
 -export([
     exists/1
 ]).
--export([
-    share_id_to_public_url/1,
-    share_id_to_redirect_url/1
-]).
+
 
 %%%===================================================================
 %%% API
@@ -49,11 +47,11 @@
 %% RootFileId and parent SpaceId.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(), ShareId :: od_share:id(),
+-spec create(Auth :: aai:auth(), ShareId :: od_share:id(),
     Name :: binary(), RootFileId :: binary(), SpaceId :: od_space:id()) ->
-    {ok, od_share:id()} | {error, term()}.
-create(Client, ShareId, Name, RootFileId, SpaceId) ->
-    create(Client, #{
+    {ok, od_share:id()} | errors:error().
+create(Auth, ShareId, Name, RootFileId, SpaceId) ->
+    create(Auth, #{
         <<"shareId">> => ShareId,
         <<"name">> => Name,
         <<"rootFileId">> => RootFileId,
@@ -67,12 +65,12 @@ create(Client, ShareId, Name, RootFileId, SpaceId) ->
 %% RootFileId and parent SpaceId are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(), Data :: #{}) ->
-    {ok, od_share:id()} | {error, term()}.
-create(Client, Data) ->
+-spec create(Auth :: aai:auth(), Data :: #{}) ->
+    {ok, od_share:id()} | errors:error().
+create(Auth, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_share, id = undefined, aspect = instance},
         data = Data
     })).
@@ -83,12 +81,12 @@ create(Client, Data) ->
 %% Retrieves a share record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
-    {ok, #od_share{}} | {error, term()}.
-get(Client, ShareId) ->
+-spec get(Auth :: aai:auth(), ShareId :: od_share:id()) ->
+    {ok, #od_share{}} | errors:error().
+get(Auth, ShareId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_share, id = ShareId, aspect = instance}
     }).
 
@@ -98,14 +96,27 @@ get(Client, ShareId) ->
 %% Retrieves public share data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_public_data(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
-    {ok, maps:map()} | {error, term()}.
-get_public_data(Client, ShareId) ->
+-spec get_public_data(Auth :: aai:auth(), ShareId :: od_share:id()) ->
+    {ok, map()} | errors:error().
+get_public_data(Auth, ShareId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_share, id = ShareId, aspect = instance, scope = public}
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the space in which given share was created.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_space(aai:auth(), od_share:id()) -> {ok, od_space:id()} | errors:error().
+get_space(Auth, ShareId) ->
+    case get(Auth, ShareId) of
+        {ok, #od_share{space = SpaceId}} -> {ok, SpaceId};
+        {error, _} = Error -> Error
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -113,12 +124,12 @@ get_public_data(Client, ShareId) ->
 %% Lists all shares (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
--spec list(Client :: entity_logic:client()) ->
-    {ok, [od_share:id()]} | {error, term()}.
-list(Client) ->
+-spec list(Auth :: aai:auth()) ->
+    {ok, [od_share:id()]} | errors:error().
+list(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_share, id = undefined, aspect = list}
     }).
 
@@ -131,14 +142,14 @@ list(Client) ->
 %% 2) Share name is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update(Client :: entity_logic:client(), ShareId :: od_share:id(),
-    Data :: #{}) -> ok | {error, term()}.
-update(Client, ShareId, NewName) when is_binary(NewName) ->
-    update(Client, ShareId, #{<<"name">> => NewName});
-update(Client, ShareId, Data) ->
+-spec update(Auth :: aai:auth(), ShareId :: od_share:id(),
+    Data :: #{}) -> ok | errors:error().
+update(Auth, ShareId, NewName) when is_binary(NewName) ->
+    update(Auth, ShareId, #{<<"name">> => NewName});
+update(Auth, ShareId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_share, id = ShareId, aspect = instance},
         data = Data
     }).
@@ -149,12 +160,12 @@ update(Client, ShareId, Data) ->
 %% Deletes given share from database.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
-    ok | {error, term()}.
-delete(Client, ShareId) ->
+-spec delete(Auth :: aai:auth(), ShareId :: od_share:id()) ->
+    ok | errors:error().
+delete(Auth, ShareId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_share, id = ShareId, aspect = instance}
     }).
 
@@ -164,46 +175,7 @@ delete(Client, ShareId) ->
 %% Returns whether a share exists.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(ShareId :: od_share:id()) -> boolean().
+-spec exists(od_share:id()) -> boolean().
 exists(ShareId) ->
     {ok, Exists} = od_share:exists(ShareId),
     Exists.
-
-
-%%--------------------------------------------------------------------
-%% @doc Returns public access URL for given share that points to onezone.
-%% OneZone will then redirect such clients to one of providers that support the
-%% parent space of the share.
-%%--------------------------------------------------------------------
--spec share_id_to_public_url(ShareId :: binary()) -> binary().
-share_id_to_public_url(ShareId) ->
-    oz_worker:get_uri(?PUBLIC_SHARE_PATH(ShareId)).
-
-
-%%--------------------------------------------------------------------
-%% @doc Returns public access URL for given share that points to one of
-%% providers that support the parent space of the share.
-%%--------------------------------------------------------------------
--spec share_id_to_redirect_url(ShareId :: binary()) -> binary().
-share_id_to_redirect_url(ShareId) ->
-    {ok, #document{
-        value = #od_share{space = ParentSpaceId}
-    }} = od_share:get(ShareId),
-    {ok, #document{
-        value = #od_space{providers = Providers}
-    }} = od_space:get(ParentSpaceId),
-    % Prefer online providers
-    {Online, Offline} = lists:partition(
-        fun(ProviderId) ->
-            provider_connection:is_online(ProviderId)
-        end, maps:keys(Providers)),
-    % But if there are none, choose one of inactive
-    Choice = case length(Online) of
-        0 -> Offline;
-        _ -> Online
-    end,
-    ChosenProvider = lists:nth(rand:uniform(length(Choice)), Choice),
-    {ok, ProviderURL} = provider_logic:get_url(ChosenProvider),
-    str_utils:format_bin("~s~s", [
-        ProviderURL, ?PROVIDER_PUBLIC_SHARE_PATH(ShareId)
-    ]).

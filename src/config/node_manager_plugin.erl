@@ -16,11 +16,19 @@
 -include_lib("cluster_worker/include/elements/node_manager/node_manager.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
+-include_lib("ctool/include/onedata.hrl").
 
 %% node_manager_plugin_default callbacks
--export([app_name/0, cm_nodes/0, db_nodes/0]).
--export([listeners/0, modules_with_args/0]).
--export([before_init/1, on_cluster_initialized/1, after_init/1]).
+-export([cluster_generations/0]).
+-export([oldest_upgradable_cluster_generation/0]).
+-export([app_name/0, release_version/0, build_version/0]).
+-export([cm_nodes/0, db_nodes/0]).
+-export([before_init/0]).
+-export([before_cluster_upgrade/0]).
+-export([upgrade_cluster/1]).
+-export([custom_workers/0]).
+-export([before_listeners_start/0]).
+-export([listeners/0]).
 -export([handle_call/3, handle_cast/2]).
 
 -export([reconcile_dns_config/0]).
@@ -28,6 +36,23 @@
 -type state() :: #state{}.
 
 -define(DNS_UPDATE_RETRY_INTERVAL, 5000).
+-define(GS_WORKER_POOL_SIZE, oz_worker:get_env(graph_sync_worker_pool_size, 20)).
+
+% List of all known cluster generations.
+% When cluster is not in newest generation it will be upgraded during initialization.
+% This can be used to e.g. move models between services.
+% Oldest upgradable generation is the lowest one that can be directly upgraded to newest.
+% Human readable version is included to for logging purposes. It's the last version
+% where this cluster generation was the current one.
+-define(CLUSTER_GENERATIONS, [
+    {1, <<"19.02.5">>},
+    {2, <<"20.02.20">>},
+    {3, <<"21.02.4">>},
+    {4, <<"21.02.7">>},
+    {5, <<"25.0">>},
+    {6, oz_worker:get_release_version()}
+]).
+-define(OLDEST_UPGRADABLE_CLUSTER_GENERATION, 2).
 
 %%%===================================================================
 %%% node_manager_plugin_default callbacks
@@ -35,30 +60,165 @@
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Overrides {@link node_manager_plugin_default:cluster_generations/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec cluster_generations() ->
+    [{node_manager:cluster_generation(), onedata:release_version()}].
+cluster_generations() ->
+    ?CLUSTER_GENERATIONS.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:oldest_upgradable_cluster_generation/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec oldest_upgradable_cluster_generation() ->
+    node_manager:cluster_generation().
+oldest_upgradable_cluster_generation() ->
+    ?OLDEST_UPGRADABLE_CLUSTER_GENERATION.
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Overrides {@link node_manager_plugin_default:app_name/0}.
 %% @end
 %%--------------------------------------------------------------------
--spec app_name() -> {ok, Name :: atom()}.
+-spec app_name() -> atom().
 app_name() ->
-    {ok, oz_worker}.
+    oz_worker.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:release_version/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec release_version() -> string() | binary().
+release_version() ->
+    oz_worker:get_release_version().
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:app_name/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec build_version() -> string() | binary().
+build_version() ->
+    oz_worker:get_build_version().
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Overrides {@link node_manager_plugin_default:cm_nodes/0}.
 %% @end
 %%--------------------------------------------------------------------
--spec cm_nodes() -> {ok, Nodes :: [atom()]} | undefined.
+-spec cm_nodes() -> {ok, Nodes :: [atom()]}.
 cm_nodes() ->
-    oz_worker:get_env(cm_nodes).
+    {ok, oz_worker:get_env(cm_nodes)}.
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Overrides {@link node_manager_plugin_default:db_nodes/0}.
 %% @end
 %%--------------------------------------------------------------------
--spec db_nodes() -> {ok, Nodes :: [atom()]} | undefined.
+-spec db_nodes() -> {ok, Nodes :: [atom()]}.
 db_nodes() ->
-    oz_worker:get_env(db_nodes).
+    {ok, oz_worker:get_env(db_nodes)}.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:before_init/0}.
+%% This callback is executed on all cluster nodes.
+%% @end
+%%--------------------------------------------------------------------
+-spec before_init() -> Result :: ok | {error, Reason :: term()}.
+before_init() ->
+    try
+        oz_worker_sup:start_link(),
+        ok
+    catch
+        Class:Reason:Stacktrace ->
+            ?error_exception(Class, Reason, Stacktrace),
+            {error, cannot_start_node_manager_plugin}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Callback executed before cluster upgrade so that any required preparation
+%% can be done.
+%% @end
+%%--------------------------------------------------------------------
+-spec before_cluster_upgrade() -> ok.
+before_cluster_upgrade() -> ok.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:upgrade_cluster/1}.
+%% This callback is executed only on one cluster node.
+%% @end
+%%--------------------------------------------------------------------
+-spec upgrade_cluster(node_manager:cluster_generation()) ->
+    {ok, node_manager:cluster_generation()}.
+upgrade_cluster(2) ->
+    % no model upgrades are required, but a new version must be
+    % forced along with new major release version
+    {ok, 3};
+upgrade_cluster(3) ->
+    onezone_plugins:init(),  % required for the handle migration
+    od_handle:migrate_legacy_handles_21_02_5(),
+    {ok, 4};
+upgrade_cluster(4) ->
+    od_share:migrate_legacy_shares_21_02_8(),
+    {ok, 5};
+upgrade_cluster(5) ->
+    od_share:reorganize_shares_to_inline_registries_25_1(),
+    {ok, 6}.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:custom_workers/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec custom_workers() -> Models :: [{atom(), [any()]}].
+custom_workers() ->
+    [{gs_worker, [
+        {supervisor_flags, gs_worker:supervisor_flags()}
+    ]}].
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:before_listeners_start/0}.
+%%
+%% NOTE: this callback blocks the application supervisor and must not be used to
+%% interact with the main supervision tree.
+%%
+%% NOTE: this callback is run on all cluster nodes and is awaited
+%% for before cluster setup proceeds.
+%% @end
+%%--------------------------------------------------------------------
+-spec before_listeners_start() -> ok | {error, Reason :: term()}.
+before_listeners_start() ->
+    try
+        gs_worker_pool:init(?GS_WORKER_POOL_SIZE),
+
+        % Logic that should be run on every node of the cluster
+        onezone_plugins:init(),
+
+        % Logic that should be run on a single node
+        case is_dedicated_node(cluster_setup) of
+            false ->
+                ok;
+            true ->
+                cluster_logic:set_up_oz_worker_service(),
+                harvester_logic:deploy_default_gui_package(),
+                entity_graph:init_state(),
+                broadcast_dns_config(),
+                group_logic:ensure_predefined_groups()
+        end
+    catch
+        Class:Reason:Stacktrace ->
+            ?error_exception(Class, Reason, Stacktrace),
+            {error, cannot_start_node_manager_plugin}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -67,78 +227,8 @@ db_nodes() ->
 %%--------------------------------------------------------------------
 -spec listeners() -> Listeners :: [atom()].
 listeners() -> [
-    http_listener,
     https_listener
 ].
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Overrides {@link node_manager_plugin_default:modules_with_args/0}.
-%% @end
-%%--------------------------------------------------------------------
--spec modules_with_args() -> Models :: [{atom(), [any()]}].
-modules_with_args() ->
-    [{gs_worker, [
-        {supervisor_flags, gs_worker:supervisor_flags()}
-    ]}].
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Overrides {@link node_manager_plugin_default:before_init/1}.
-%% @end
-%%--------------------------------------------------------------------
--spec before_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
-before_init([]) ->
-    try
-        oz_worker_sup:start_link(),
-        ok
-    catch
-        _:Error ->
-            ?error_stacktrace("Error in node_manager_plugin:before_init: ~p",
-                [Error]),
-            {error, cannot_start_node_manager_plugin}
-    end.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% This callback is executed when the cluster has been initialized, i.e. all
-%% nodes have connected to cluster manager.
-%% @end
-%%--------------------------------------------------------------------
--spec on_cluster_initialized(Nodes :: [node()]) -> Result :: ok | {error, Reason :: term()}.
-on_cluster_initialized(_Nodes) ->
-    ok.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Overrides {@link node_manager_plugin_default:after_init/1}.
-%% @end
-%%--------------------------------------------------------------------
--spec after_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
-after_init([]) ->
-    try
-        onezone_plugins:init(),
-
-        entity_graph:init_state(),
-
-        % build dns zone on one node and broadcast to others
-        case get_dns_dedicated_node() =:= node() of
-            true -> ok = broadcast_dns_config();
-            _ -> ok
-        end,
-
-        %% This code will be run on every node_manager, so we need a
-        %% transaction here that will prevent duplicates.
-        critical_section:run(create_predefined_groups, fun() ->
-            group_logic:create_predefined_groups()
-        end)
-    catch
-        _:Error ->
-            ?error_stacktrace("Error in node_manager_plugin:after_init: ~p",
-                [Error]),
-            {error, cannot_start_node_manager_plugin}
-    end.
-
 
 %%--------------------------------------------------------------------
 %% @private
@@ -187,19 +277,36 @@ handle_cast(Request, State) ->
 %%--------------------------------------------------------------------
 -spec reconcile_dns_config() -> ok.
 reconcile_dns_config() ->
-    DedicatedNode = get_dns_dedicated_node(),
-    gen_server2:cast({?NODE_MANAGER_NAME, DedicatedNode}, broadcast_dns_config).
+    gen_server2:cast({?NODE_MANAGER_NAME, dedicated_node(dns)}, broadcast_dns_config).
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns if the current node is dedicated to perform the operation symbolized
+%% by given (arbitrary) identifier. Used to prevent race conditions by choosing
+%% one cluster node for the operation.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_dedicated_node(Identifier :: atom()) -> boolean().
+is_dedicated_node(Identifier) ->
+    node() =:= dedicated_node(Identifier).
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Get node responsible for building dns zone to prevent race conditions.
+%% Returns the dedicated node to perform the operation symbolized by given
+%% (arbitrary) identifier.
 %% @end
 %%--------------------------------------------------------------------
--spec get_dns_dedicated_node() -> node().
-get_dns_dedicated_node() ->
-    consistent_hasing:get_node(build_dns_zone).
+-spec dedicated_node(Identifier :: atom()) -> node().
+dedicated_node(Identifier) ->
+    consistent_hashing:get_assigned_node(Identifier).
 
 
 %%--------------------------------------------------------------------
@@ -215,21 +322,22 @@ broadcast_dns_config() ->
     try
         DnsConfig = dns_config:build_config(),
 
-        {ok, Nodes} = node_manager:get_cluster_nodes(),
         lists:map(fun(Node) ->
             case Node == node() of
                 true -> ok = dns_config:insert_config(DnsConfig);
                 false -> ok = gen_server2:call({?NODE_MANAGER_NAME, Node},
-                                               {update_dns_config, DnsConfig},
-                                               timer:seconds(30))
+                    {update_dns_config, DnsConfig},
+                    timer:seconds(30))
             end
-        end, Nodes),
+        end, consistent_hashing:get_all_nodes()),
         ok
     catch
-        Type:Message ->
-            ?error_stacktrace(
-                "Error sending dns zone update, scheduling retry after ~p seconds: ~p:~p",
-                [?DNS_UPDATE_RETRY_INTERVAL div 1000, Type, Message]),
+        Class:Reason:Stacktrace ->
+            ?error_exception(
+                "Error sending dns zone update, scheduling retry after ~tp seconds",
+                [?DNS_UPDATE_RETRY_INTERVAL div 1000],
+                Class, Reason, Stacktrace
+            ),
             erlang:send_after(?DNS_UPDATE_RETRY_INTERVAL, self(), {timer, broadcast_dns_config}),
             error
     end.

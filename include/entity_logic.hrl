@@ -14,31 +14,23 @@
 -define(ENTITY_LOGIC_HRL, 1).
 
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
+-include_lib("ctool/include/aai/aai.hrl").
+-include_lib("ctool/include/validation.hrl").
 
-% Record expressing entity logic request client (REST and Graph Sync).
--record(client, {
-    % root is allowed to do anything, it must be used with caution
-    % (should not be used in any kind of external API!)
-    type = nobody :: user | provider | root | nobody,
-    id = <<"">> :: binary()
-}).
+-define(SELF_INTERMEDIARY, <<"self">>).
+
+-define(INFINITY, <<"infinity">>).
 
 % Record expressing entity logic request
 -record(el_req, {
-    client = #client{} :: entity_logic:client(),
+    auth = ?NOBODY :: aai:auth(),
     gri :: entity_logic:gri(),
     operation = create :: entity_logic:operation(),
     data = #{} :: entity_logic:data(),
-    auth_hint = undefined :: undefined | entity_logic:auth_hint()
+    auth_hint = undefined :: undefined | entity_logic:auth_hint(),
+    % applicable for create/get requests - returns the revision of resource
+    return_revision = false :: boolean()
 }).
-
-% Convenience macros for concise code
--define(USER, #client{type = user}).
--define(USER(__Id), #client{type = user, id = __Id}).
--define(PROVIDER, #client{type = provider}).
--define(PROVIDER(__Id), #client{type = provider, id = __Id}).
--define(NOBODY, #client{type = nobody}).
--define(ROOT, #client{type = root}).
 
 % Macros to strip results from entity_logic:create into simpler form.
 -define(CREATE_RETURN_ID(__Expr),
@@ -49,9 +41,9 @@
             throw(create_did_not_return_id);
         {ok, value, __Data} ->
             throw(create_did_not_return_id);
-        {ok, resource, {#gri{id = __Id}, __Data}} ->
+        {ok, resource, {#gri{id = __Id}, {__Data, __Rev}}} ->
             {ok, __Id};
-        {ok, resource, {#gri{id = __Id}, _AuthHint, __Data}} ->
+        {ok, resource, {#gri{id = __Id}, _AuthHint, {__Data, __Rev}}} ->
             {ok, __Id}
     end
 ).
@@ -64,9 +56,9 @@
             throw(create_did_not_return_data);
         {ok, value, __Data} ->
             {ok, __Data};
-        {ok, resource, {_GRI, __Data}} ->
+        {ok, resource, {_GRI, {__Data, __Rev}}} ->
             {ok, __Data};
-        {ok, resource, {_GRI, _AuthHint, __Data}} ->
+        {ok, resource, {_GRI, _AuthHint, {__Data, __Rev}}} ->
             {ok, __Data}
     end
 ).
@@ -82,40 +74,20 @@
     end
 ).
 
-% Regexp to validate domain (domain, subdomain or IP)
-% Domain consists of some number of parts delimited by single dot characters.
-% Each part must start and end with an lowercase alphanum
-% and may contain a hyphen '-'.
--define(DOMAIN_VALIDATION_REGEXP,
-    <<"^(([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])\\.)*([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$">>).
 
--define(MAX_DOMAIN_LENGTH, 253).
+% Used when enable_automatic_first_space is set to true
+-define(FIRST_SPACE_NAME, <<"Personal Space">>).
+% Name of the provider's first named token (root token)
+-define(PROVIDER_ROOT_TOKEN_NAME, <<"root token">>).
+% Name generator for the legacy clients tokens (after migration)
+-define(LEGACY_CLIENT_TOKEN_NAME(Number), <<"legacy token ", (integer_to_binary(Number))/binary>>).
 
--define(SUBDOMAIN_VALIDATION_REGEXP,
-    <<"^([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$">>).
 
-% Regexp to validate names. Name must be 2-50 characters long and composed of
-% UTF-8 letters, digits, brackets and underscores.
-% Dashes, spaces and dots are allowed (but not at the beginning or the end).
--define(NAME_FIRST_CHARS_ALLOWED, <<")(\\w_">>).
--define(NAME_MIDDLE_CHARS_ALLOWED, <<">>)(\\w_ .-">>).
--define(NAME_LAST_CHARS_ALLOWED, ?NAME_FIRST_CHARS_ALLOWED).
--define(NAME_MAXIMUM_LENGTH, 50).
+%% @TODO VFS-5856 This is needed for providers in previous version, for which virtual
+%% storage record supporting all their spaces will be created. This storage record
+%% does not represent actual storage, it is provider that keeps knowledge of storages.
+-define(STORAGE_DEFAULT_NAME, <<"default_storage">>).
 
-% Regexp to validate user names. User name must be 2-50 characters long and
-% composed of UTF-8 letters and digits. Dashes, spaces, dots, commas and
-% apostrophes are allowed (but not at the beginning or the end).
--define(USER_NAME_FIRST_CHARS_ALLOWED, <<"\\pL\\pNd">>).
--define(USER_NAME_MIDDLE_CHARS_ALLOWED, <<"\\pL\\pNd ',.-">>).
--define(USER_NAME_LAST_CHARS_ALLOWED, <<"\\pL\\pNd.">>).
--define(USER_NAME_MAXIMUM_LENGTH, 50).
-
-% Regexp to validate aliases. Alias must be 2-20 characters long and composed of
-% letters and digits.
-% Dashes and underscores are allowed (but not at the beginning or the end).
--define(ALIAS_FIRST_CHARS_ALLOWED, <<"a-z0-9A-Z">>).
--define(ALIAS_MIDDLE_CHARS_ALLOWED, <<"a-z0-9A-Z._-">>).
--define(ALIAS_LAST_CHARS_ALLOWED, ?ALIAS_FIRST_CHARS_ALLOWED).
--define(ALIAS_MAXIMUM_LENGTH, 20).
+-define(UNKNOWN_ENTITY_NAME, <<"Unnamed">>).
 
 -endif.

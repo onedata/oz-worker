@@ -13,7 +13,7 @@
 -module(hservice_users_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -22,14 +22,15 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
 
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     add_user_test/1,
@@ -73,10 +74,10 @@ add_user_test(Config) ->
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_UPDATE
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, U3} = oz_test_utils:create_user(Config),
 
-    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
+    AllPrivs = privileges:handle_service_privileges(),
 
     VerifyEndFun =
         fun
@@ -100,6 +101,7 @@ add_user_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -112,7 +114,7 @@ add_user_test(Config) ->
             method = put,
             path = [<<"/handle_services/">>, HService, <<"/users/">>, U3],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 ExpLocation = ?URL(Config,
                     [<<"/handle_services/">>, HService, <<"/users/">>, U3]
                 ),
@@ -123,10 +125,10 @@ add_user_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = add_user,
-            args = [client, HService, U3, data],
+            args = [auth, HService, U3, data],
             expected_result = ?OK_BINARY(U3)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"privileges">>],
             correct_values = #{
@@ -137,9 +139,9 @@ add_user_test(Config) ->
             },
             bad_values = [
                 {<<"privileges">>, <<"">>,
-                    ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
+                    ?ERR_BAD_VALUE_LIST_OF_STRINGS(<<"privileges">>)},
                 {<<"privileges">>, [?SPACE_VIEW, ?GROUP_VIEW],
-                    ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
+                    ?ERR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
             ]
         }
     },
@@ -155,10 +157,10 @@ remove_user_test(Config) ->
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_UPDATE
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, U3} = oz_test_utils:create_user(Config),
         {ok, U3} = oz_test_utils:handle_service_add_user(
             Config, HService, U3
         ),
@@ -176,6 +178,7 @@ remove_user_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_REMOVE_RELATIONSHIPS, ?OZ_USERS_REMOVE_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -192,10 +195,10 @@ remove_user_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = remove_user,
-            args = [client, HService, userId],
-            expected_result = ?OK
+            args = [auth, HService, userId],
+            expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
@@ -209,8 +212,9 @@ list_users_test(Config) ->
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:handle_service_add_user(Config, HService, U3),
 
     ExpUsers = [U1, U2, U3],
@@ -218,6 +222,7 @@ list_users_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_LIST_RELATIONSHIPS]},
                 {user, U2},
                 {user, U3}
             ],
@@ -236,85 +241,87 @@ list_users_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_users,
-            args = [client, HService],
+            args = [auth, HService],
             expected_result = ?OK_LIST(ExpUsers)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 get_user_test(Config) ->
-    % create handle service with 2 users:
-    %   U2 gets the HANDLE_SERVICE_VIEW privilege
-    %   U1 gets all remaining privileges
-    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
-        Config, ?HANDLE_SERVICE_VIEW
-    ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    CreatorData = #{<<"fullName">> => <<"creator">>, <<"username">> => <<"creator">>},
+    {ok, Creator} = oz_test_utils:create_user(Config, CreatorData),
+    {ok, MemberWithViewPrivs} = oz_test_utils:create_user(Config),
+    {ok, MemberWithoutViewPrivs} = oz_test_utils:create_user(Config),
+    MemberData = #{<<"fullName">> => <<"member">>, <<"username">> => <<"member">>},
+    {ok, Member} = oz_test_utils:create_user(Config, MemberData),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    ExpAlias = ExpName = ?USER_NAME1,
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{
-        name = ExpName,
-        alias = ExpAlias
-    }),
-    {ok, U3} = oz_test_utils:handle_service_add_user(Config, HService, U3),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U3,
-        revoke, [?HANDLE_SERVICE_VIEW]
+    oz_test_utils:user_set_oz_privileges(Config, Creator, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ], []),
+    {ok, HService} = oz_test_utils:create_handle_service(Config, ?USER(Creator), ?DOI_SERVICE),
+    {ok, _} = oz_test_utils:handle_service_add_user(Config, HService, MemberWithViewPrivs),
+    {ok, _} = oz_test_utils:handle_service_add_user(Config, HService, MemberWithoutViewPrivs),
+    {ok, _} = oz_test_utils:handle_service_add_user(Config, HService, Member),
+
+    oz_test_utils:handle_service_set_user_privileges(
+        Config, HService, MemberWithViewPrivs, [?HANDLE_SERVICE_VIEW], []
+    ),
+    oz_test_utils:handle_service_set_user_privileges(
+        Config, HService, MemberWithoutViewPrivs, [], [?HANDLE_SERVICE_VIEW]
     ),
 
-    ExpUserDetails = #{
-        <<"alias">> => ExpAlias,
-        <<"name">> => ExpName
-    },
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U2},
-                {user, U3}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin},
-                {user, U1}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/handle_services/">>, HService, <<"/users/">>, U3],
-            expected_code = ?HTTP_200_OK,
-            expected_body = ExpUserDetails#{
-                <<"userId">> => U3,
-                % TODO VFS-4506 deprecated, included for backward compatibility
-                <<"login">> => ExpAlias
+    % Shared data about creator should be available even if he is not longer in the handle_service
+    oz_test_utils:handle_service_remove_user(Config, HService, Creator),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    lists:foreach(fun({SubjectUser, UserData}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_USERS_VIEW]},
+                    {user, SubjectUser},
+                    {user, MemberWithViewPrivs}
+                ] ++ case SubjectUser of
+                    % Every member of the handle service should be able to see the creator details
+                    Creator -> [{user, MemberWithoutViewPrivs}];
+                    _ -> []
+                end,
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, NonAdmin}
+                ] ++ case SubjectUser of
+                    Creator -> [];
+                    _ -> [{user, MemberWithoutViewPrivs}]
+                end
+            },
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/handle_services/">>, HService, <<"/users/">>, SubjectUser],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:shared_user(rest, SubjectUser, UserData)
+            },
+            logic_spec = #logic_spec{
+                module = handle_service_logic,
+                function = get_user,
+                args = [auth, HService, SubjectUser],
+                expected_result = api_test_expect:shared_user(logic, SubjectUser, UserData)
+            },
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{
+                    type = od_user, id = SubjectUser, aspect = instance, scope = shared
+                },
+                auth_hint = ?THROUGH_HANDLE_SERVICE(HService),
+                expected_result_op = api_test_expect:shared_user(gs, SubjectUser, UserData)
             }
         },
-        logic_spec = #logic_spec{
-            module = handle_service_logic,
-            function = get_user,
-            args = [client, HService, U3],
-            expected_result = ?OK_MAP(ExpUserDetails)
-        },
-        gs_spec = #gs_spec{
-            operation = get,
-            gri = #gri{
-                type = od_user, id = U3, aspect = instance, scope = shared
-            },
-            auth_hint = ?THROUGH_HANDLE_SERVICE(HService),
-            expected_result = ?OK_MAP(ExpUserDetails#{
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = UserId} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    ?assertEqual(UserId, U3)
-                end,
-                % TODO VFS-4506 deprecated, included for backward compatibility
-                <<"login">> => ExpAlias
-            })
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end, [{Creator, CreatorData}, {Member, MemberData}]).
 
 
 get_user_privileges_test(Config) ->
@@ -324,20 +331,20 @@ get_user_privileges_test(Config) ->
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:handle_service_add_user(Config, HService, U3),
 
-    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
-    InitialPrivs = [?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
+    AllPrivs = privileges:handle_service_privileges(),
+    InitialPrivs = privileges:handle_service_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
-    SetPrivsFun = fun(Operation, Privs) ->
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:handle_service_set_user_privileges(
-            Config, HService, U3, Operation, Privs
+            Config, HService, U3, PrivsToGrant, PrivsToRevoke
         )
     end,
 
@@ -345,7 +352,10 @@ get_user_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {admin, [?OZ_HANDLE_SERVICES_VIEW_PRIVILEGES]},
+                {user, U2},
+                % user can always see his own privileges
+                {user, U3}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -365,15 +375,15 @@ get_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_user_privileges,
-            args = [client, HService, U3],
+            args = [auth, HService, U3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?HANDLE_SERVICE_VIEW
+        {user, U3}, ?HANDLE_SERVICE_VIEW, false, U3
     ])).
 
 
@@ -384,18 +394,18 @@ update_user_privileges_test(Config) ->
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_UPDATE
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:handle_service_add_user(Config, HService, U3),
 
-    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
+    AllPrivs = privileges:handle_service_privileges(),
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:handle_service_set_user_privileges(
-            Config, HService, U3, Operation, Privs
+            Config, HService, U3, PrivsToGrant, PrivsToRevoke
         )
     end,
     GetPrivsFun = fun() ->
@@ -409,6 +419,7 @@ update_user_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_SET_PRIVILEGES]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -428,10 +439,10 @@ update_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = update_user_privileges,
-            args = [client, HService, U3, data],
-            expected_result = ?OK
+            args = [auth, HService, U3, data],
+            expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(update_privileges, [
@@ -451,6 +462,7 @@ list_eff_users_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_LIST_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -468,10 +480,10 @@ list_eff_users_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_eff_users,
-            args = [client, HService],
+            args = [auth, HService],
             expected_result = ?OK_LIST(ExpUsers)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -495,67 +507,53 @@ get_eff_user_test(Config) ->
         HService, _Groups, EffUsers, {U1, U2, NonAdmin}
     } = api_test_scenarios:create_hservice_eff_users_env(Config),
 
-    lists:foreach(
-        fun({UserId, UserDetails}) ->
+    lists:foreach(fun({UserId, UserData}) ->
 
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {user, U2}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, NonAdmin},
-                        {user, U1}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [
-                        <<"/handle_services/">>, HService,
-                        <<"/effective_users/">>, UserId
-                    ],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = UserDetails#{
-                        <<"userId">> => UserId,
-                        % TODO VFS-4506 deprecated, included for backward compatibility
-                        <<"login">> => maps:get(<<"alias">>, UserDetails)
-                    }
-                },
-                logic_spec = #logic_spec{
-                    module = handle_service_logic,
-                    function = get_eff_user,
-                    args = [client, HService, UserId],
-                    expected_result = ?OK_MAP(UserDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_user, id = UserId,
-                        aspect = instance, scope = shared
-                    },
-                    auth_hint = ?THROUGH_HANDLE_SERVICE(HService),
-                    expected_result = ?OK_MAP(UserDetails#{
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
-                            ?assertEqual(Id, UserId)
-                        end,
-                        % TODO VFS-4506 deprecated, included for backward compatibility
-                        <<"login">> => maps:get(<<"alias">>, UserDetails)
-                    })
-                }
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_USERS_VIEW]},
+                    {user, U2}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, NonAdmin},
+                    {user, U1}
+                ]
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+            rest_spec = #rest_spec{
+                method = get,
+                path = [
+                    <<"/handle_services/">>, HService,
+                    <<"/effective_users/">>, UserId
+                ],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:shared_user(rest, UserId, UserData)
+            },
+            logic_spec = #logic_spec{
+                module = handle_service_logic,
+                function = get_eff_user,
+                args = [auth, HService, UserId],
+                expected_result = api_test_expect:shared_user(logic, UserId, UserData)
+            },
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{
+                    type = od_user, id = UserId,
+                    aspect = instance, scope = shared
+                },
+                auth_hint = ?THROUGH_HANDLE_SERVICE(HService),
+                expected_result_op = api_test_expect:shared_user(gs, UserId, UserData)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-        end, EffUsers
-    ).
+    end, EffUsers).
 
 
 get_eff_user_privileges_test(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%               HandleService
     %%              /     ||      \
@@ -581,12 +579,9 @@ get_eff_user_privileges_test(Config) ->
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    % User whose eff privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
-    % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, SubjectUser} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
@@ -595,40 +590,33 @@ get_eff_user_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
     {ok, G2} = oz_test_utils:handle_service_add_group(Config, HService, G2),
     {ok, G3} = oz_test_utils:group_add_group(Config, G1, G3),
-    {ok, U3} = oz_test_utils:group_add_user(Config, G3, U3),
-    {ok, U3} = oz_test_utils:group_add_user(Config, G2, U3),
+    {ok, SubjectUser} = oz_test_utils:group_add_user(Config, G3, SubjectUser),
+    {ok, SubjectUser} = oz_test_utils:group_add_user(Config, G2, SubjectUser),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
-    InitialPrivs = [?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
+    AllPrivs = privileges:handle_service_privileges(),
+    InitialPrivs = privileges:handle_service_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
-    SetPrivsFun = fun(Operation, Privs) ->
-        % In case of SET and GRANT, randomly split privileges into four
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        % In case of GRANT, randomly split privileges into four
         % parts and update groups with the privileges. G3 eff_privileges
         % should contain the sum of those. In case of revoke, the
         % privileges must be revoked for all 3 entities.
-        PartitionScheme =
-            case Operation of
-                revoke ->
-                    [{G1, Privs}, {G2, Privs}];
-                _ -> % Covers (set|grant)
-                    #{1 := Privs1, 2 := Privs2} = lists:foldl(
-                        fun(Privilege, AccMap) ->
-                            Index = rand:uniform(2),
-                            AccMap#{
-                                Index => [Privilege | maps:get(Index, AccMap)]
-                            }
-                        end, #{1 => [], 2 => []}, Privs),
-                    [{G1, Privs1}, {G2, Privs2}]
-            end,
-        lists:foreach(
-            fun({GroupId, Privileges}) ->
-                oz_test_utils:handle_service_set_group_privileges(
-                    Config, HService, GroupId, Operation, Privileges
-                )
-            end, PartitionScheme
+        #{1 := PrivsToGrant1, 2 := PrivsToGrant2} = lists:foldl(
+            fun(Privilege, AccMap) ->
+                Index = rand:uniform(2),
+                AccMap#{
+                    Index => [Privilege | maps:get(Index, AccMap)]
+                }
+            end, #{1 => [], 2 => []}, PrivsToGrant),
+
+        oz_test_utils:handle_service_set_group_privileges(
+            Config, HService, G1, PrivsToGrant1, PrivsToRevoke
+        ),
+        oz_test_utils:handle_service_set_group_privileges(
+            Config, HService, G2, PrivsToGrant2, PrivsToRevoke
         )
     end,
 
@@ -636,7 +624,10 @@ get_eff_user_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {admin, [?OZ_HANDLE_SERVICES_VIEW_PRIVILEGES]},
+                {user, U2},
+                % user can always see his own privileges
+                {user, SubjectUser}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -648,7 +639,7 @@ get_eff_user_privileges_test(Config) ->
             method = get,
             path = [
                 <<"/handle_services/">>, HService,
-                <<"/effective_users/">>, U3, <<"/privileges">>
+                <<"/effective_users/">>, SubjectUser, <<"/privileges">>
             ],
             expected_code = ?HTTP_200_OK,
             expected_body = #{<<"privileges">> => InitialPrivsBin}
@@ -656,15 +647,15 @@ get_eff_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_eff_user_privileges,
-            args = [client, HService, U3],
+            args = [auth, HService, SubjectUser],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?HANDLE_SERVICE_VIEW
+        {user, SubjectUser}, ?HANDLE_SERVICE_VIEW, false, SubjectUser
     ])).
 
 
@@ -672,13 +663,18 @@ get_eff_user_privileges_test(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    application:ensure_all_started(hackney),
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:freeze_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unfreeze_time().

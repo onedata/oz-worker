@@ -16,7 +16,7 @@
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([create/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 
@@ -29,15 +29,16 @@
 -type diff() :: datastore_doc:diff(record()).
 -type name() :: binary().
 -type proxy_endpoint() :: binary().
--type service_properties() :: maps:map().
+-type service_properties() :: map().
 
 -export_type([id/0, record/0]).
 -export_type([name/0, proxy_endpoint/0, service_properties/0]).
 
 -define(CTX, #{
     model => ?MODULE,
-    fold_enabled => true,
-    sync_enabled => true
+    secure_fold_enabled => true,
+    sync_enabled => true,
+    memory_copies => all
 }).
 
 %%%===================================================================
@@ -52,15 +53,6 @@
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
     datastore_model:create(?CTX, Doc).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Saves handle service.
-%% @end
-%%--------------------------------------------------------------------
--spec save(doc()) -> {ok, doc()} | {error, term()}.
-save(Doc) ->
-    datastore_model:save(?CTX, Doc).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -139,7 +131,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    3.
+    6.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -174,7 +166,74 @@ get_record_struct(2) ->
 get_record_struct(3) ->
     % There are no changes, but all records must be marked dirty to recalculate
     % effective relations (as intermediaries computing logic has changed).
-    get_record_struct(2).
+    get_record_struct(2);
+get_record_struct(4) ->
+    % * new field - creation_time
+    % * new field - creator
+    {record, [
+        {name, string},
+        {proxy_endpoint, string},
+        {service_properties, #{term => term}},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {handles, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+
+        {creation_time, integer}, % New field
+        {creator, {record, [ % New field
+            {type, atom},
+            {id, string}
+        ]}},
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(5) ->
+    % creator field - nested record changed from #client{} to #subject{}
+    {record, [
+        {name, string},
+        {proxy_endpoint, string},
+        {service_properties, #{term => term}},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {handles, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+
+        {creation_time, integer},
+        {creator, {record, [ % nested record changed from #client{} to #subject{}
+            {type, atom},
+            {id, string}
+        ]}},
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(6) ->
+    % creator field - nested #subject{} record and encoding changed
+    {record, [
+        {name, string},
+        {proxy_endpoint, string},
+        {service_properties, #{term => term}},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {handles, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+
+        {creation_time, integer},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
+
+        {bottom_up_dirty, boolean}
+    ]}.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -198,24 +257,152 @@ upgrade_record(1, HandleService) ->
 
         _BottomUpDirty
     } = HandleService,
-    {2, #od_handle_service{
-        name = Name,
-        proxy_endpoint = ProxyEndpoint,
-        service_properties = maps:from_list(ServiceProperties),
+    {2, {od_handle_service,
+        Name,
+        ProxyEndpoint,
+        maps:from_list(ServiceProperties),
 
-        users = maps:from_list(Users),
-        groups = maps:from_list(Groups),
-        handles = [],
+        maps:from_list(Users),
+        maps:from_list(Groups),
+        [],
 
-        eff_users = #{},
-        eff_groups = #{},
+        #{},
+        #{},
 
-        bottom_up_dirty = true
+        true
     }};
 upgrade_record(2, HandleService) ->
-    {3, HandleService#od_handle_service{
-        eff_users = #{},
-        eff_groups = #{},
+    {od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
 
-        bottom_up_dirty = true
+        Users,
+        Groups,
+        Handles,
+
+        _EffUsers,
+        _EffGroups,
+
+        _BottomUpDirty
+    } = HandleService,
+    {3, {od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
+
+        Users,
+        Groups,
+        Handles,
+
+        #{},
+        #{},
+
+        true
+    }};
+upgrade_record(3, HandleService) ->
+    {od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
+
+        Users,
+        Groups,
+        Handles,
+
+        EffUsers,
+        EffGroups,
+
+        BottomUpDirty
+    } = HandleService,
+    {4, {
+        od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
+
+        Users,
+        Groups,
+        Handles,
+
+        EffUsers,
+        EffGroups,
+
+        global_clock:timestamp_seconds(),
+        undefined,
+
+        BottomUpDirty
+    }};
+upgrade_record(4, HandleService) ->
+    {
+        od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
+
+        Users,
+        Groups,
+        Handles,
+
+        EffUsers,
+        EffGroups,
+
+        CreationTime,
+        Creator,
+
+        BottomUpDirty
+    } = HandleService,
+    {5, {
+        od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
+
+        Users,
+        Groups,
+        Handles,
+
+        EffUsers,
+        EffGroups,
+
+        CreationTime,
+        upgrade_common:client_to_subject(Creator),
+
+        BottomUpDirty
+    }};
+upgrade_record(5, HandleService) ->
+    {
+        od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
+
+        Users,
+        Groups,
+        Handles,
+
+        EffUsers,
+        EffGroups,
+
+        CreationTime,
+        Creator,
+
+        BottomUpDirty
+    } = HandleService,
+    {6, #od_handle_service{
+        name = Name,
+        proxy_endpoint = ProxyEndpoint,
+        service_properties = ServiceProperties,
+
+        users = Users,
+        groups = Groups,
+        handles = Handles,
+
+        eff_users = EffUsers,
+        eff_groups = EffGroups,
+
+        creation_time = CreationTime,
+        creator = upgrade_common:upgrade_subject_record(Creator),
+
+        bottom_up_dirty = BottomUpDirty
     }}.

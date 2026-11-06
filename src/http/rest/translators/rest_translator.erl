@@ -12,26 +12,35 @@
 -module(rest_translator).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("registered_names.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([response/2]).
 
 %% Convenience functions for rest translators
 -export([
-    created_reply/1,
-    ok_no_content_reply/0,
     ok_body_reply/1,
+    ok_no_content_reply/0,
+    created_reply_with_body/1,
+    created_reply_with_location/1,
+    created_reply_with_location_and_body/2,
     updated_reply/0,
-    deleted_reply/0
+    deleted_reply/0,
+    ok_encoded_intermediaries_reply/1
 ]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-response(_, {error, _} = Err) ->
-    error_rest_translator:response(Err);
+-spec response(undefined | entity_logic:req(), entity_logic:result()) ->
+    rest_handler:rest_resp().
+response(_, {error, _} = Error) ->
+    #rest_resp{
+        code = errors:to_http_code(Error),
+        body = #{<<"error">> => errors:to_json(Error)}
+    };
 response(#el_req{operation = create}, ok) ->
     % No need for translation, 'ok' means success with no response data
     rest_translator:ok_no_content_reply();
@@ -40,8 +49,8 @@ response(#el_req{operation = create} = ElReq, {ok, DataFormat, Result}) ->
     Translator = entity_type_to_translator(Model),
     Translator:create_response(GRI, AuthHint, DataFormat, Result);
 response(#el_req{operation = get} = ElReq, {ok, Data}) ->
-    #el_req{gri = GRI = #gri{type = Model}} = ElReq,
-    Translator = entity_type_to_translator(Model),
+    #el_req{gri = GRI = #gri{type = EntityType}} = ElReq,
+    Translator = entity_type_to_translator(EntityType),
     Translator:get_response(GRI, Data);
 response(#el_req{operation = update}, ok) ->
     updated_reply();
@@ -55,7 +64,7 @@ response(#el_req{operation = delete}, ok) ->
 %% a body in response.
 %% @end
 %%--------------------------------------------------------------------
--spec ok_body_reply(json_utils:json_term()) -> #rest_resp{}.
+-spec ok_body_reply(json_utils:json_term() | {binary, binary()}) -> rest_handler:rest_resp().
 ok_body_reply(Body) ->
     #rest_resp{code = ?HTTP_200_OK, body = Body}.
 
@@ -66,26 +75,42 @@ ok_body_reply(Body) ->
 %% send any body in response.
 %% @end
 %%--------------------------------------------------------------------
--spec ok_no_content_reply() -> #rest_resp{}.
+-spec ok_no_content_reply() -> rest_handler:rest_resp().
 ok_no_content_reply() ->
     #rest_resp{code = ?HTTP_204_NO_CONTENT}.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% REST reply that should be used for successful create REST calls.
+%% Returns 201 CREATED with a response body.
+%% @end
+%%--------------------------------------------------------------------
+-spec created_reply_with_body(json_utils:json_term()) -> rest_handler:rest_resp().
+created_reply_with_body(Body) ->
+    #rest_resp{code = ?HTTP_201_CREATED, body = Body}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Returns 201 CREATED with proper location headers.
 %% @end
 %%--------------------------------------------------------------------
--spec created_reply(PathTokens :: [binary()]) -> #rest_resp{}.
-% Make sure there is no leading slash (so filename can be used for joining path)
-created_reply([<<"/", Path/binary>> | Tail]) ->
-    created_reply([Path | Tail]);
-created_reply(PathTokens) ->
-    {ok, RestPrefix} = oz_worker:get_env(rest_api_prefix),
-    Path = filename:join([RestPrefix | PathTokens]),
-    LocationHeader = #{<<"Location">> => oz_worker:get_uri(Path)},
+-spec created_reply_with_location(PathTokens :: [binary()]) -> rest_handler:rest_resp().
+created_reply_with_location(PathTokens) ->
+    LocationHeader = #{?HDR_LOCATION => oz_worker:get_rest_uri(filename:join(["/" | PathTokens]))},
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns 201 CREATED with proper location headers and a response body.
+%% @end
+%%--------------------------------------------------------------------
+-spec created_reply_with_location_and_body(PathTokens :: [binary()], json_utils:json_term()) ->
+    rest_handler:rest_resp().
+created_reply_with_location_and_body(PathTokens, Body) ->
+    CreatedReply = created_reply_with_location(PathTokens),
+    CreatedReply#rest_resp{body = Body}.
 
 
 %%--------------------------------------------------------------------
@@ -93,7 +118,7 @@ created_reply(PathTokens) ->
 %% REST reply that should be used for successful REST updates.
 %% @end
 %%--------------------------------------------------------------------
--spec updated_reply() -> #rest_resp{}.
+-spec updated_reply() -> rest_handler:rest_resp().
 updated_reply() ->
     #rest_resp{code = ?HTTP_204_NO_CONTENT}.
 
@@ -103,9 +128,22 @@ updated_reply() ->
 %% REST reply that should be used for successful REST deletions.
 %% @end
 %%--------------------------------------------------------------------
--spec deleted_reply() -> #rest_resp{}.
+-spec deleted_reply() -> rest_handler:rest_resp().
 deleted_reply() ->
     #rest_resp{code = ?HTTP_204_NO_CONTENT}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% REST reply that should be used for successful REST operations returning
+%% membership intermediaries.
+%% @end
+%%--------------------------------------------------------------------
+-spec ok_encoded_intermediaries_reply(entity_graph:intermediaries()) -> rest_handler:rest_resp().
+ok_encoded_intermediaries_reply(Intermediaries) ->
+    ok_body_reply(#{<<"intermediaries">> => lists:map(fun({Type, Id}) ->
+        #{<<"type">> => gri:serialize_type(Type), <<"id">> => Id}
+    end, Intermediaries)}).
 
 %%%===================================================================
 %%% Internal functions
@@ -125,4 +163,11 @@ entity_type_to_translator(od_share) -> share_rest_translator;
 entity_type_to_translator(od_provider) -> provider_rest_translator;
 entity_type_to_translator(od_handle_service) -> handle_service_rest_translator;
 entity_type_to_translator(od_handle) -> handle_rest_translator;
+entity_type_to_translator(od_harvester) -> harvester_rest_translator;
+entity_type_to_translator(od_cluster) -> cluster_rest_translator;
+entity_type_to_translator(od_token) -> token_rest_translator;
+entity_type_to_translator(temporary_token_secret) -> token_rest_translator;
+entity_type_to_translator(od_atm_inventory) -> atm_inventory_rest_translator;
+entity_type_to_translator(od_atm_lambda) -> atm_lambda_rest_translator;
+entity_type_to_translator(od_atm_workflow_schema) -> atm_workflow_schema_rest_translator;
 entity_type_to_translator(oz_worker) -> zone_rest_translator.

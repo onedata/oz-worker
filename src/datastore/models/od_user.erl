@@ -13,12 +13,18 @@
 -author("Michal Zmuda").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/privileges.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
--export([get_by_criterion/1]).
+-export([create_unsafe/1, get/1, get_full_name/1, exists/1, update/2, update_unsafe/2, force_delete/1, list/0]).
+-export([get_by_username/1, get_by_linked_account/1]).
+-export([critical_section/2]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
+-export([get_ctx/0]).
+-export([add_session/2, remove_session/2, get_all_sessions/1]).
+-export([lock_and_update_space_membership_requests/2]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -27,71 +33,80 @@
 -type record() :: #od_user{}.
 -type doc() :: datastore_doc:doc(record()).
 -type diff() :: datastore_doc:diff(record()).
--export_type([id/0, record/0]).
+-export_type([id/0, record/0, doc/0, diff/0]).
 
--type name() :: binary().
--type alias() :: undefined | binary().
+-type full_name() :: binary().
+-type username() :: binary().
 -type email() :: binary().
--type linked_account() :: #linked_account{}.
--type criterion() :: {linked_account, {auth_config:idp(), SubjectId :: binary()}} |
-{email, email()} |
-{alias, alias()}.
--export_type([name/0, alias/0]).
+% A list of pairs; Onedata group id of an entitlement and set of privileges in
+% the group. The privileges are persisted to be able to detect later changes.
+-type entitlements() :: [{od_group:id(), entitlement_mapping:privileges()}].
+-export_type([full_name/0, username/0, email/0, entitlements/0]).
 
 -define(CTX, #{
     model => ?MODULE,
-    fold_enabled => true,
-    sync_enabled => true
+    secure_fold_enabled => true,
+    sync_enabled => true,
+    memory_copies => all
 }).
+
+-compile({no_auto_import, [get/1]}).
+
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates user.
-%% @end
-%%--------------------------------------------------------------------
--spec create(doc()) -> {ok, doc()} | {error, term()}.
-create(Doc) ->
-    datastore_model:create(?CTX, Doc).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Saves user.
+%% NOTE: MUST be called within @see critical_section/2
+%% NOTE: MUST NOT be called from other modules than the @see user_account.erl module!
 %% @end
 %%--------------------------------------------------------------------
--spec save(doc()) -> {ok, doc()} | {error, term()}.
-save(Doc) ->
-    datastore_model:save(?CTX, Doc).
+-spec create_unsafe(doc()) -> doc().
+create_unsafe(UserDoc) ->
+    ?check(datastore_model:create(?CTX, UserDoc)).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns user by ID.
-%% @end
-%%--------------------------------------------------------------------
--spec get(id()) -> {ok, doc()} | {error, term()}.
+
+-spec get(id()) -> {ok, doc()} | errors:error().
 get(UserId) ->
-    datastore_model:get(?CTX, UserId).
+    case datastore_model:get(?CTX, UserId) of
+        {ok, Doc} -> {ok, Doc};
+        {error, not_found} -> ?ERROR_NOT_FOUND;
+        {error, _} = Error -> ?ensure_od_error(Error)
+    end.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks whether user given by ID exists.
-%% @end
-%%--------------------------------------------------------------------
+
+-spec get_full_name(id()) -> {ok, full_name()} | errors:error().
+get_full_name(UserId) ->
+    case get(UserId) of
+        {ok, #document{value = #od_user{full_name = FullName}}} -> {ok, FullName};
+        ?ERROR_NOT_FOUND = Error -> Error
+    end.
+
+
 -spec exists(id()) -> {ok, boolean()} | {error, term()}.
 exists(UserId) ->
     datastore_model:exists(?CTX, UserId).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates user by ID.
-%% @end
-%%--------------------------------------------------------------------
--spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
+
+-spec update(id(), diff()) -> {ok, doc()} | errors:error().
 update(UserId, Diff) ->
-    datastore_model:update(?CTX, UserId, Diff).
+    critical_section(UserId, fun() ->
+        update_unsafe(UserId, Diff)
+    end).
+
+
+%% @doc NOTE: MUST be called within @see critical_section/2
+-spec update_unsafe(id(), diff()) -> {ok, doc()} | errors:error().
+update_unsafe(UserId, Diff) ->
+    case datastore_model:update(?CTX, UserId, Diff) of
+        {ok, Doc} -> {ok, Doc};
+        {error, not_found} -> ?ERROR_NOT_FOUND;
+        {error, _} = Error -> ?ensure_od_error(Error)
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -103,70 +118,60 @@ update(UserId, Diff) ->
 %%--------------------------------------------------------------------
 -spec force_delete(id()) -> ok | {error, term()}.
 force_delete(UserId) ->
-    datastore_model:delete(?CTX, UserId).
+    critical_section(UserId, fun() ->
+        datastore_model:delete(?CTX, UserId)
+    end).
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all users.
-%% @end
-%%--------------------------------------------------------------------
+
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
 
+
+%% @doc returns the first user matching given Username.
+-spec get_by_username(username()) -> {ok, doc()} | errors:error().
+get_by_username(undefined) ->
+    ?ERROR_NOT_FOUND;
+get_by_username(Username) ->
+    FoldFun = fun
+        (#document{value = #od_user{username = U}} = UserDoc, _) when U == Username ->
+            {stop, {ok, UserDoc}};
+        (_, Acc) ->
+            {ok, Acc}
+    end,
+    {ok, Result} = datastore_model:fold(?CTX, FoldFun, ?ERROR_NOT_FOUND),
+    Result.
+
+
+%% @doc returns the first user matching given linked account.
+-spec get_by_linked_account(linked_account:t()) -> {ok, doc()} | errors:error().
+get_by_linked_account(#linked_account{idp = IdP, subject_id = SubjectId}) ->
+    FoldFun = fun(#document{value = UserRecord} = UserDoc, Acc) ->
+        case linked_account:find(UserRecord#od_user.linked_accounts, IdP, SubjectId) of
+            {ok, _} -> {stop, {ok, UserDoc}};
+            error -> {ok, Acc}
+        end
+    end,
+    {ok, Result} = datastore_model:fold(?CTX, FoldFun, ?ERROR_NOT_FOUND),
+    Result.
+
+
 %%--------------------------------------------------------------------
 %% @doc
-%% Gets first user matching given criterion.
+%% NOTE: MUST be used whenever a user doc is created/modified/deleted.
+%% It's up to the calling process to decide if it should lock on the user id or username.
+%% In cases where the user id is not defined (creation of a new user without
+%% a predefined id) or username is not defined (users may have it unspecified),
+%% the critical section is omitted.
 %% @end
 %%--------------------------------------------------------------------
--spec get_by_criterion(criterion()) -> {ok, doc()} | {error, term()}.
-get_by_criterion({email, Value}) ->
-    Fun = fun(Doc = #document{value = #od_user{emails = EmailList}}, Acc) ->
-        case lists:member(Value, EmailList) of
-            true -> {stop, [Doc | Acc]};
-            false -> {ok, Acc}
-        end
-    end,
-    case datastore_model:fold(?CTX, Fun, []) of
-        {ok, []} ->
-            {error, not_found};
-        {ok, [Doc | _]} ->
-            {ok, Doc}
-    end;
-get_by_criterion({alias, Value}) ->
-    Fun = fun(Doc = #document{value = #od_user{alias = Alias}}, Acc) ->
-        case Alias of
-            Value -> {stop, [Doc | Acc]};
-            _ -> {ok, Acc}
-        end
-    end,
-    case datastore_model:fold(?CTX, Fun, []) of
-        {ok, []} ->
-            {error, not_found};
-        {ok, [Doc | _]} ->
-            {ok, Doc}
-    end;
-get_by_criterion({linked_account, {ProviderID, UserID}}) ->
-    Fun = fun(Doc = #document{value = #od_user{linked_accounts = Accounts}}, Acc) ->
-        Found = lists:any(fun
-            (#linked_account{idp = IDP, subject_id = UID}) ->
-                case {IDP, UID} of
-                    {ProviderID, UserID} -> true;
-                    _ -> false
-                end;
-            (_) -> false
-        end, Accounts),
-        case Found of
-            true -> {stop, [Doc | Acc]};
-            _ -> {ok, Acc}
-        end
-    end,
-    case datastore_model:fold(?CTX, Fun, []) of
-        {ok, []} ->
-            {error, not_found};
-        {ok, [Doc | _]} ->
-            {ok, Doc}
-    end.
+%% @doc
+-spec critical_section(undefined | id() | username(), fun(() -> Term)) -> Term.
+critical_section(undefined, Fun) ->
+    Fun();
+critical_section(UserIdrUsername, Fun) ->
+    critical_section:run({?MODULE, UserIdrUsername}, Fun).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -186,6 +191,90 @@ to_string(UserId) ->
 entity_logic_plugin() ->
     user_logic_plugin.
 
+-spec get_ctx() -> datastore:ctx().
+get_ctx() ->
+    ?CTX.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a new session for given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_session(id(), session:id()) -> ok | {error, term()}.
+add_session(UserId, SessionId) ->
+    Result = update(UserId, fun(User = #od_user{active_sessions = ActiveSessions}) ->
+        {ok, User#od_user{active_sessions = [SessionId | ActiveSessions]}}
+    end),
+    case Result of
+        {ok, _} -> ok;
+        {error, _} = Error -> Error
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes a session of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_session(id(), session:id()) -> ok | {error, term()}.
+remove_session(UserId, SessionId) ->
+    Result = update(UserId, fun(User = #od_user{active_sessions = ActiveSessions}) ->
+        {ok, User#od_user{active_sessions = ActiveSessions -- [SessionId]}}
+    end),
+    case Result of
+        {ok, _} -> ok;
+        {error, _} = Error -> Error
+    end.
+
+-spec get_all_sessions(id()) -> [session:id()].
+get_all_sessions(UserId) ->
+    case ?MODULE:get(UserId) of
+        {ok, #document{value = #od_user{active_sessions = ActiveSessions}}} ->
+            ActiveSessions;
+        {error, not_found} ->
+            []
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Must be used to apply any changes to space_membership_requests field.
+%% May be used for a long-lasting transactions as it does not block the tp process.
+%% If 'pruning_needed' is returned, pruning of pending membership requests will be
+%% called, the result will be saved and the procedure will be called again, with
+%% the same callback. The second time, {done, UpdatedRecord} must be returned.
+%% @end
+%%--------------------------------------------------------------------
+-spec lock_and_update_space_membership_requests(
+    id(),
+    fun((space_membership_requests:record()) -> pruning_needed | {done, space_membership_requests:record()})
+) ->
+    {ok, space_membership_requests:record()} | {error, term()}.
+lock_and_update_space_membership_requests(UserId, Diff) ->
+    SaveSpaceMembershipRequests = fun(NewValue) ->
+        case od_user:update(UserId, fun(User) -> {ok, User#od_user{space_membership_requests = NewValue}} end) of
+            {ok, _} -> {ok, NewValue};
+            {error, _} = Error -> Error
+        end
+    end,
+
+    ?catch_exceptions(critical_section:run({?FUNCTION_NAME, UserId}, fun() ->
+        case get(UserId) of
+            {error, _} = GetError ->
+                GetError;
+            {ok, #document{value = #od_user{space_membership_requests = SMR}}} ->
+                case Diff(SMR) of
+                    {done, FinalSMR} ->
+                        SaveSpaceMembershipRequests(FinalSMR);
+                    pruning_needed ->
+                        PrunedSMR = space_membership_requests:prune_pending_requests(UserId, SMR),
+                        {ok, _} = SaveSpaceMembershipRequests(PrunedSMR),
+                        {done, FinalSMR} = Diff(PrunedSMR),
+                        SaveSpaceMembershipRequests(FinalSMR)
+                end
+        end
+    end)).
+
+
 %%%===================================================================
 %%% datastore_model callbacks
 %%%===================================================================
@@ -197,7 +286,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    9.
+    16.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -332,7 +421,7 @@ get_record_struct(8) ->
             {alias, string},
             {emails, [string]},
             {entitlements, [string]},
-            {custom, {custom, {json_utils, encode, decode}}}
+            {custom, {custom, json, {json_utils, encode, decode}}}
         ]}]},
         {entitlements, [string]},
 
@@ -374,7 +463,7 @@ get_record_struct(9) ->
             {alias, string},
             {emails, [string]},
             {entitlements, [string]},
-            {custom, {custom, {json_utils, encode, decode}}},
+            {custom, {custom, json, {json_utils, encode, decode}}},
             {access_token, {string, integer}},
             {refresh_token, string}
         ]}]},
@@ -399,6 +488,390 @@ get_record_struct(9) ->
         {eff_providers, #{string => [{atom, string}]}},
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},
+
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(10) ->
+    % Changes:
+    %   * renamed alias -> username
+    %   * renamed name -> full_name
+    %   * linked_account: renamed alias -> username
+    %   * linked_account: renamed name -> full_name
+    %   * new field - password_hash
+    %   * new field - active sessions
+    %   * new field - creation_time
+    %   * new field - harvesters
+    %   * new field - eff_harvesters
+    %   * new field - clusters
+    %   * new field - eff_clusters
+    %   * the privileges are translated
+    {record, [
+        {full_name, string},
+        {username, string},
+        {basic_auth_enabled, boolean},
+        {password_hash, binary}, % New field
+        {emails, [string]},
+
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {full_name, string},
+            {username, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, json, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
+        ]}]},
+        {entitlements, [string]},
+
+        {active_sessions, [string]}, % New field
+
+        {default_space, string},
+        {default_provider, string},
+
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]}, % New field
+
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}}, % New field
+
+        {creation_time, integer}, % New field
+
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(11) ->
+    % Changes:
+    %   * format of entitlements field changed from [string] to [{string, atom}]
+    {record, [
+        {full_name, string},
+        {username, string},
+        {basic_auth_enabled, boolean},
+        {password_hash, binary},
+        {emails, [string]},
+
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {full_name, string},
+            {username, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, json, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
+        ]}]},
+        {entitlements, [{string, atom}]},
+
+        {active_sessions, [string]},
+
+        {default_space, string},
+        {default_provider, string},
+
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(12) ->
+    % Changes:
+    %   * default_space field removed
+    %   * default_provider field removed
+    {record, [
+        {full_name, string},
+        {username, string},
+        {basic_auth_enabled, boolean},
+        {password_hash, binary},
+        {emails, [string]},
+
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {full_name, string},
+            {username, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, json, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
+        ]}]},
+        {entitlements, [{string, atom}]},
+
+        {active_sessions, [string]},
+
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(13) ->
+    % Changes:
+    %   * new field - last_activity
+    {record, [
+        {full_name, string},
+        {username, string},
+        {basic_auth_enabled, boolean},
+        {password_hash, binary},
+        {emails, [string]},
+
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {full_name, string},
+            {username, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, json, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
+        ]}]},
+        {entitlements, [{string, atom}]},
+
+        {active_sessions, [string]},
+
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {last_activity, integer}, % new field
+
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(14) ->
+    % Changes:
+    %   * new field - blocked
+    {record, [
+        {full_name, string},
+        {username, string},
+        {basic_auth_enabled, boolean},
+        {password_hash, binary},
+        {emails, [string]},
+
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {full_name, string},
+            {username, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, json, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
+        ]}]},
+        {entitlements, [{string, atom}]},
+
+        {blocked, boolean},
+
+        {active_sessions, [string]},
+
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {last_activity, integer}, % new field
+
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(15) ->
+    % Changes:
+    %   * new field - atm_inventories
+    %   * new field - eff_atm_inventories
+    {record, [
+        {full_name, string},
+        {username, string},
+        {basic_auth_enabled, boolean},
+        {password_hash, binary},
+        {emails, [string]},
+
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {full_name, string},
+            {username, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, json, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
+        ]}]},
+        {entitlements, [{string, atom}]},
+
+        {blocked, boolean},
+
+        {active_sessions, [string]},
+
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+        {atm_inventories, [string]}, % new field
+
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+        {eff_atm_inventories, #{string => [{atom, string}]}}, % new field
+
+        {creation_time, integer},
+        {last_activity, integer},
+
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(16) ->
+    % Changes:
+    %   * new field - space_membership_requests
+    {record, [
+        {full_name, string},
+        {username, string},
+        {basic_auth_enabled, boolean},
+        {password_hash, binary},
+        {emails, [string]},
+
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {full_name, string},
+            {username, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, json, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
+        ]}]},
+        {entitlements, [{string, atom}]},
+
+        {blocked, boolean},
+
+        {active_sessions, [string]},
+
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+        {space_membership_requests, {custom, string, {persistent_record, to_string, from_string, space_membership_requests}}}, % new field
+
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+        {atm_inventories, [string]},
+
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+        {eff_atm_inventories, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {last_activity, integer},
 
         {top_down_dirty, boolean}
     ]}.
@@ -920,34 +1393,645 @@ upgrade_record(8, User) ->
     } = User,
 
     TransformedLinkedAccounts = lists:map(fun(LinkedAccount) ->
-        {linked_account, IdP, SubjectId, LAName, LAAlias, LAEmails, LAEntitlements, Custom} = LinkedAccount,
+        {linked_account,
+            IdP,
+            SubjectId,
+            LAName,
+            LAAlias,
+            LAEmails,
+            LAEntitlements,
+            Custom
+        } = LinkedAccount,
+
+        {linked_account,
+            IdP,
+            SubjectId,
+            LAName,
+            LAAlias,
+            LAEmails,
+            LAEntitlements,
+            Custom,
+            {undefined, 0},
+            undefined
+        }
+    end, LinkedAccounts),
+
+    {9, {od_user,
+        Name,
+        Alias,
+        Emails,
+        BasicAuthEnabled,
+        TransformedLinkedAccounts,
+        Entitlements,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    }};
+upgrade_record(9, User) ->
+    {od_user,
+        Name,
+        Alias,
+        Emails,
+        BasicAuthEnabled,
+
+        LinkedAccounts,
+        Entitlements,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    } = User,
+
+    TranslatePrivileges = fun(Privileges) ->
+        lists:usort(lists:flatten(lists:map(fun
+            (oz_users_list) -> [?OZ_USERS_LIST, ?OZ_USERS_VIEW];
+
+            (oz_groups_list) -> [?OZ_GROUPS_LIST, ?OZ_GROUPS_VIEW];
+            (oz_groups_list_users) -> ?OZ_GROUPS_LIST_RELATIONSHIPS;
+            (oz_groups_list_groups) -> ?OZ_GROUPS_LIST_RELATIONSHIPS;
+            (oz_groups_add_members) -> ?OZ_GROUPS_ADD_RELATIONSHIPS;
+            (oz_groups_remove_members) -> ?OZ_GROUPS_REMOVE_RELATIONSHIPS;
+
+            (oz_spaces_list) -> [?OZ_SPACES_LIST, ?OZ_SPACES_VIEW];
+            (oz_spaces_list_users) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_list_groups) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_list_providers) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_add_members) -> ?OZ_SPACES_ADD_RELATIONSHIPS;
+            (oz_spaces_remove_members) -> ?OZ_SPACES_REMOVE_RELATIONSHIPS;
+
+            (oz_providers_list) -> [?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_VIEW];
+            (oz_providers_list_users) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+            (oz_providers_list_groups) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+            (oz_providers_list_spaces) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+
+            (Other) -> Other
+        end, Privileges)))
+    end,
+
+    TransformedLinkedAccounts = lists:map(fun(LinkedAccount) ->
+        {linked_account,
+            IdP,
+            SubjectId,
+            LAName,
+            LAAlias,
+            LAEmails,
+            LAEntitlements,
+            Custom,
+            AccessToken,
+            RefreshToken
+        } = LinkedAccount,
 
         #linked_account{
             idp = IdP,
             subject_id = SubjectId,
-            name = LAName,
-            alias = LAAlias,
+            full_name = LAName,
+            username = LAAlias,
             emails = LAEmails,
             entitlements = LAEntitlements,
             custom = Custom,
-            access_token = {undefined, 0},
-            refresh_token = undefined
+            access_token = AccessToken,
+            refresh_token = RefreshToken
         }
     end, LinkedAccounts),
 
-    {9, #od_user{
-        name = Name,
-        alias = Alias,
-        emails = Emails,
+    {10, {od_user,
+        Name,
+        Alias,
+        BasicAuthEnabled,
+        undefined,
+        Emails,
+
+        TransformedLinkedAccounts,
+        Entitlements,
+
+        [],
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        TranslatePrivileges(OzPrivileges),
+        TranslatePrivileges(EffOzPrivileges),
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        [],
+        [],
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        #{},
+        #{},
+
+        global_clock:timestamp_seconds(),
+
+        TopDownDirty
+    }};
+upgrade_record(10, User) ->
+    {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        ActiveSessions,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+
+        TopDownDirty
+    } = User,
+
+    {11, {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        % Member is the lowest role, if the user had a higher role in the
+        % entitlement it will be automatically set to the correct value upon
+        % his next login.
+        [{Ent, member} || Ent <- Entitlements],
+
+        ActiveSessions,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+
+        TopDownDirty
+    }};
+upgrade_record(11, User) ->
+    {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        ActiveSessions,
+
+        _DefaultSpace,
+        _DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+
+        TopDownDirty
+    } = User,
+    {12, {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        ActiveSessions,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+
+        TopDownDirty
+    }};
+upgrade_record(12, User) ->
+    {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        ActiveSessions,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+
+        TopDownDirty
+    } = User,
+    {13, {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        ActiveSessions,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        0,
+
+        TopDownDirty
+    }};
+upgrade_record(13, User) ->
+    {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        ActiveSessions,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        LastActivity,
+
+        TopDownDirty
+    } = User,
+    {14, {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        false,
+
+        ActiveSessions,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        LastActivity,
+
+        TopDownDirty
+    }};
+upgrade_record(14, User) ->
+    {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        Blocked,
+
+        ActiveSessions,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        LastActivity,
+
+        TopDownDirty
+    } = User,
+    {15, {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        Blocked,
+
+        ActiveSessions,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+        [],
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+        #{},
+
+        CreationTime,
+        LastActivity,
+
+        TopDownDirty
+    }};
+upgrade_record(15, User) ->
+    {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        Blocked,
+
+        ActiveSessions,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+        AtmInventories,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+        EffAtmInventories,
+
+        CreationTime,
+        LastActivity,
+
+        TopDownDirty
+    } = User,
+    {16, #od_user{
+        full_name = FullName,
+        username = Username,
         basic_auth_enabled = BasicAuthEnabled,
-        linked_accounts = TransformedLinkedAccounts,
+        password_hash = PasswordHash,
+        emails = Emails,
+
+        linked_accounts = LinkedAccounts,
         entitlements = Entitlements,
 
-        default_space = DefaultSpace,
-        default_provider = DefaultProvider,
+        blocked = Blocked,
+
+        active_sessions = ActiveSessions,
 
         client_tokens = ClientTokens,
         space_aliases = SpaceAliases,
+        space_membership_requests = space_membership_requests:empty(),
 
         oz_privileges = OzPrivileges,
         eff_oz_privileges = EffOzPrivileges,
@@ -956,12 +2040,21 @@ upgrade_record(8, User) ->
         spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
+        harvesters = Harvesters,
+        clusters = Clusters,
+        atm_inventories = AtmInventories,
 
         eff_groups = EffGroups,
         eff_spaces = EffSpaces,
         eff_providers = EffProviders,
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles,
+        eff_harvesters = EffHarvesters,
+        eff_clusters = EffClusters,
+        eff_atm_inventories = EffAtmInventories,
+
+        creation_time = CreationTime,
+        last_activity = LastActivity,
 
         top_down_dirty = TopDownDirty
     }}.

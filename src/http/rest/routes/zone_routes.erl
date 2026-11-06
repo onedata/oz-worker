@@ -12,7 +12,7 @@
 %%%--------------------------------------------------------------------
 -module(zone_routes).
 
--include("rest.hrl").
+-include("http/rest.hrl").
 
 -export([routes/0]).
 
@@ -31,6 +31,28 @@ routes() -> [
     %% This operation requires one of the following privileges:
     {<<"/configuration">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = oz_worker, id = undefined, aspect = configuration}
+    }},
+    %% Get test image.
+    %% This operation requires one of the following privileges:
+    {<<"/test_image">>, #rest_req{
+        method = 'GET',
+        produces = [<<"image/png">>],
+        b_gri = #b_gri{type = oz_worker, id = undefined, aspect = test_image}
+    }},
+    %% Check cluster health
+    %% This operation requires one of the following privileges:
+    {<<"/health">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = oz_worker, id = undefined, aspect = health}
+    }},
+    %% List all admin privileges.
+    %% This operation requires one of the following privileges:
+    {<<"/privileges">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = oz_worker, id = undefined, aspect = privileges}
     }}
 ].

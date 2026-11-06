@@ -18,11 +18,16 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
+-include("http/public_data/oai.hrl").
 
--export([fetch_entity/1, operation_supported/3]).
+-export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
--export([exists/2, authorize/2, validate/1]).
+-export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
+
+-define(METADATA_SIZE_LIMIT, 100000).
+-define(SUPPORTED_METADATA_SCHEMAS, oai_metadata:supported_schemas()).
+-define(DEFAULT_METADATA_SCHEMA, ?OAI_DC_METADATA_PREFIX).
 
 %%%===================================================================
 %%% API
@@ -30,16 +35,23 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity from datastore based on its EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | entity_logic:error().
-fetch_entity(HandleId) ->
+-spec fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
+fetch_entity(#gri{id = HandleId}) ->
     case od_handle:get(HandleId) of
-        {ok, #document{value = Handle}} ->
-            {ok, Handle};
+        {ok, #document{value = Handle, revs = [DbRev | _]}} ->
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
+            {true, {Handle, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -58,6 +70,7 @@ operation_supported(create, {user, _}, private) -> true;
 operation_supported(create, {group, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
+operation_supported(get, privileges, _) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
@@ -86,81 +99,52 @@ operation_supported(_, _, _) -> false.
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Determines if given {Aspect, Scope} pair is subscribable, i.e. clients can
+%% subscribe to receive updates concerning the aspect of entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
+    boolean().
+is_subscribable(instance, _) -> true;
+is_subscribable(_, _) -> false.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
-    HandleServiceId = maps:get(<<"handleServiceId">>, Req#el_req.data),
-    ResourceType = maps:get(<<"resourceType">>, Req#el_req.data),
-    ResourceId = maps:get(<<"resourceId">>, Req#el_req.data),
-    Metadata = maps:get(<<"metadata">>, Req#el_req.data),
-    {ok, PublicHandle} = handle_proxy:register_handle(
-        HandleServiceId, ResourceType, ResourceId, Metadata
-    ),
-    Handle = #document{value = #od_handle{
-        handle_service = HandleServiceId,
-        resource_type = ResourceType,
-        resource_id = ResourceId,
-        public_handle = PublicHandle,
-        metadata = Metadata
-    }},
-    {ok, #document{key = HandleId}} = od_handle:create(Handle),
-    entity_graph:add_relation(
-        od_handle, HandleId,
-        od_handle_service, HandleServiceId
-    ),
-    case Req#el_req.auth_hint of
-        ?AS_USER(UserId) ->
-            entity_graph:add_relation(
-                od_user, UserId,
-                od_handle, HandleId,
-                privileges:handle_admin()
-            );
-        ?AS_GROUP(GroupId) ->
-            entity_graph:add_relation(
-                od_group, GroupId,
-                od_handle, HandleId,
-                privileges:handle_admin()
-            );
-        _ ->
-            ok
-    end,
-    case ResourceType of
-        <<"Share">> ->
-            entity_graph:add_relation(
-                od_handle, HandleId,
-                od_share, ResourceId
-            );
-        _ ->
-            ok
-    end,
-    {ok, FetchedHandle} = fetch_entity(HandleId),
-    {ok, resource, {GRI#gri{id = HandleId}, FetchedHandle}};
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance}}) ->
+    ShareId = maps:get(<<"resourceId">>, Req#el_req.data),
+    od_share:critical_section_for(ShareId, fun() ->
+        % ensure no race conditions when creating a handle for a share (only one may be created)
+        create_handle_unsafe(ShareId, Req)
+    end);
 
 create(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_member()),
     entity_graph:add_relation(
         od_user, UserId,
         od_handle, HandleId,
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, User} = user_logic_plugin:fetch_entity(UserId),
+    {true, {User, Rev}} = user_logic_plugin:fetch_entity(#gri{id = UserId}),
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
-    {ok, resource, {NewGRI, ?THROUGH_HANDLE(HandleId), UserData}};
+    {ok, resource, {NewGRI, ?THROUGH_HANDLE(HandleId), {UserData, Rev}}};
 
 create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_member()),
     entity_graph:add_relation(
         od_group, GroupId,
         od_handle, HandleId,
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
-    {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+    {true, {Group, Rev}} = group_logic_plugin:fetch_entity(#gri{id = GroupId}),
     {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
-    {ok, resource, {NewGRI, ?THROUGH_HANDLE(HandleId), GroupData}}.
+    {ok, resource, {NewGRI, ?THROUGH_HANDLE(HandleId), {GroupData, Rev}}}.
 
 
 %%--------------------------------------------------------------------
@@ -172,15 +156,25 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
-    {ok, HandleDocs} = od_handle:list(),
-    {ok, [HandleId || #document{key = HandleId} <- HandleDocs]};
+    % NOTE: od_handle:list() still uses the datastore's secure fold listing
+    % (which should be reworked at some point), but the handle registry provides
+    % a lighter way to list (nevertheless, at some point we should never list whole
+    % collections, but do this in batches).
+    {ok, [H#handle_listing_entry.handle_id || H <- handle_registry:gather_by_all_schemas()]};
+
+get(#el_req{gri = #gri{aspect = privileges}}, _) ->
+    {ok, #{
+        <<"member">> => privileges:handle_member(),
+        <<"admin">> => privileges:handle_admin()
+    }};
 
 get(#el_req{gri = #gri{aspect = instance, scope = private}}, Handle) ->
     {ok, Handle};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
     #od_handle{handle_service = HandleService, public_handle = PublicHandle,
         resource_type = ResourceType, resource_id = ResourceId,
-        metadata = Metadata, timestamp = Timestamp
+        metadata = Metadata, metadata_schema = MetadataSchema,
+        timestamp = Timestamp, creation_time = CreationTime, creator = Creator
     } = Handle,
     {ok, #{
         <<"handleServiceId">> => HandleService,
@@ -188,16 +182,27 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
-        <<"timestamp">> => Timestamp
+        <<"metadataSchema">> => MetadataSchema,
+        <<"timestamp">> => Timestamp,
+        <<"creationTime">> => CreationTime,
+        <<"creator">> => Creator
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = public}}, Handle) ->
     #od_handle{
-        public_handle = PublicHandle, metadata = Metadata, timestamp = Timestamp
+        handle_service = HandleServiceId, public_handle = PublicHandle,
+        resource_type = ResourceType, resource_id = ResourceId,
+        metadata = Metadata, metadata_schema = MetadataSchema,
+        timestamp = Timestamp, creation_time = CreationTime
     } = Handle,
     {ok, #{
+        <<"handleServiceId">> => HandleServiceId,
         <<"publicHandle">> => PublicHandle,
+        <<"resourceType">> => ResourceType,
+        <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
-        <<"timestamp">> => Timestamp
+        <<"metadataSchema">> => MetadataSchema,
+        <<"timestamp">> => Timestamp,
+        <<"creationTime">> => CreationTime
     }};
 
 get(#el_req{gri = #gri{aspect = users}}, Handle) ->
@@ -205,18 +210,18 @@ get(#el_req{gri = #gri{aspect = users}}, Handle) ->
 get(#el_req{gri = #gri{aspect = eff_users}}, Handle) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_user, Handle)};
 get(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, Handle) ->
-    {ok, entity_graph:get_privileges(direct, bottom_up, od_user, UserId, Handle)};
+    {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_user, UserId, Handle)};
 get(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, Handle) ->
-    {ok, entity_graph:get_privileges(effective, bottom_up, od_user, UserId, Handle)};
+    {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Handle)};
 
 get(#el_req{gri = #gri{aspect = groups}}, Handle) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_group, Handle)};
 get(#el_req{gri = #gri{aspect = eff_groups}}, Handle) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_group, Handle)};
 get(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, Handle) ->
-    {ok, entity_graph:get_privileges(direct, bottom_up, od_group, GroupId, Handle)};
+    {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_group, GroupId, Handle)};
 get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Handle) ->
-    {ok, entity_graph:get_privileges(effective, bottom_up, od_group, GroupId, Handle)}.
+    {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_group, GroupId, Handle)}.
 
 
 %%--------------------------------------------------------------------
@@ -226,32 +231,31 @@ get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Handle) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
-    NewMetadata = maps:get(<<"metadata">>, Data),
-    {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
-        {ok, Handle#od_handle{
-            metadata = NewMetadata,
-            timestamp = od_handle:actual_timestamp()
-        }}
-    end),
-    handle_proxy:modify_handle(HandleId, NewMetadata),
-    ok;
+    fun(#od_handle{resource_id = ShareId}) ->
+        od_share:critical_section_for(ShareId, fun() ->
+            od_handle:critical_section_for(HandleId, fun() ->
+                update_handle_unsafe(HandleId, ShareId, Data)
+            end)
+        end)
+    end;
+
 
 update(Req = #el_req{gri = #gri{id = HandleId, aspect = {user_privileges, UserId}}}) ->
-    Privileges = maps:get(<<"privileges">>, Req#el_req.data),
-    Operation = maps:get(<<"operation">>, Req#el_req.data, set),
+    PrivsToGrant = maps:get(<<"grant">>, Req#el_req.data, []),
+    PrivsToRevoke = maps:get(<<"revoke">>, Req#el_req.data, []),
     entity_graph:update_relation(
         od_user, UserId,
         od_handle, HandleId,
-        {Operation, Privileges}
+        {PrivsToGrant, PrivsToRevoke}
     );
 
 update(Req = #el_req{gri = #gri{id = HandleId, aspect = {group_privileges, GroupId}}}) ->
-    Privileges = maps:get(<<"privileges">>, Req#el_req.data),
-    Operation = maps:get(<<"operation">>, Req#el_req.data, set),
+    PrivsToGrant = maps:get(<<"grant">>, Req#el_req.data, []),
+    PrivsToRevoke = maps:get(<<"revoke">>, Req#el_req.data, []),
     entity_graph:update_relation(
         od_group, GroupId,
         od_handle, HandleId,
-        {Operation, Privileges}
+        {PrivsToGrant, PrivsToRevoke}
     ).
 
 
@@ -262,8 +266,13 @@ update(Req = #el_req{gri = #gri{id = HandleId, aspect = {group_privileges, Group
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
-    handle_proxy:unregister_handle(HandleId),
-    entity_graph:delete_with_relations(od_handle, HandleId);
+    fun(#od_handle{resource_id = ShareId}) ->
+        od_share:critical_section_for(ShareId, fun() ->
+            od_handle:critical_section_for(HandleId, fun() ->
+                delete_handle_unsafe(HandleId, ShareId)
+            end)
+        end)
+    end;
 
 delete(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}}) ->
     entity_graph:remove_relation(
@@ -285,7 +294,7 @@ delete(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
-exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
+exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Handle = #od_handle{}) ->
     case Req#el_req.auth_hint of
         ?THROUGH_USER(UserId) ->
             handle_logic:has_eff_user(Handle, UserId);
@@ -298,22 +307,22 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) 
     end;
 
 exists(#el_req{gri = #gri{aspect = {user, UserId}}}, Handle) ->
-    maps:is_key(UserId, Handle#od_handle.users);
+    entity_graph:has_relation(direct, bottom_up, od_user, UserId, Handle);
 
 exists(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, Handle) ->
-    maps:is_key(UserId, Handle#od_handle.users);
+    entity_graph:has_relation(direct, bottom_up, od_user, UserId, Handle);
 
 exists(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, Handle) ->
-    maps:is_key(UserId, Handle#od_handle.eff_users);
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, Handle);
 
 exists(#el_req{gri = #gri{aspect = {group, GroupId}}}, Handle) ->
-    maps:is_key(GroupId, Handle#od_handle.groups);
+    entity_graph:has_relation(direct, bottom_up, od_group, GroupId, Handle);
 
 exists(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, Handle) ->
-    maps:is_key(GroupId, Handle#od_handle.groups);
+    entity_graph:has_relation(direct, bottom_up, od_group, GroupId, Handle);
 
 exists(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Handle) ->
-    maps:is_key(GroupId, Handle#od_handle.eff_groups);
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Handle);
 
 % All other aspects exist if handle record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_handle{}) ->
@@ -327,24 +336,35 @@ exists(#el_req{gri = #gri{id = Id}}, #od_handle{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) ->
+authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = instance}}, _) ->
     HServiceId = maps:get(<<"handleServiceId">>, Req#el_req.data, <<"">>),
     ShareId = maps:get(<<"resourceId">>, Req#el_req.data, <<"">>),
-    SpaceId = case share_logic_plugin:fetch_entity(ShareId) of
-        {error, _} = Err ->
-            throw(Err);
-        {ok, #od_share{space = SpId}} ->
+    SpaceId = try share_logic_plugin:fetch_entity(#gri{id = ShareId}) of
+        {error, _} ->
+            throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"resourceId">>));
+        {true, {#od_share{space = SpId}, _}} ->
             SpId
+    catch _:_ ->
+        throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"resourceId">>))
     end,
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    HandleService = try handle_service_logic_plugin:fetch_entity(#gri{id = HServiceId}) of
+        {error, _} ->
+            throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"handleServiceId">>));
+        {true, {HService, _}} ->
+            HService
+    catch _:_ ->
+        throw(?ERR_BAD_VALUE_ID_NOT_FOUND(?err_ctx(), <<"handleServiceId">>))
+    end,
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES) andalso
-                handle_service_logic:has_eff_privilege(HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
+                handle_service_logic:has_eff_privilege(HandleService, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
 
         {?USER(UserId), ?AS_GROUP(GroupId)} ->
-            handle_service_logic:has_eff_group(HServiceId, GroupId) andalso
+            handle_service_logic:has_eff_group(HandleService, GroupId) andalso
                 space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES) andalso
-                handle_service_logic:has_eff_privilege(HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
+                group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_CREATE_HANDLE) andalso
+                handle_service_logic:has_eff_privilege(HandleService, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
 
         _ ->
             false
@@ -356,14 +376,14 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, _}}}, Han
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, _}}}, Handle) ->
     auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = list}}, _) ->
-    user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_HANDLES_LIST);
-
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Handle) ->
     auth_by_privilege(Req, Handle, ?HANDLE_VIEW);
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}, Handle) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
+    true;
+
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Handle) ->
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this handle_service is checked in 'exists'
             true;
@@ -382,23 +402,29 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             );
 
         {?USER(ClientUserId), _} ->
-            handle_logic:has_eff_user(Handle, ClientUserId) orelse
-                user_logic_plugin:auth_by_oz_privilege(ClientUserId, ?OZ_HANDLES_LIST);
+            handle_logic:has_eff_user(Handle, ClientUserId);
 
         _ ->
             % Access to private data also allows access to protected data
-            authorize(Req#el_req{gri = #gri{scope = private}}, Handle)
+            authorize(Req#el_req{gri = GRI#gri{scope = private}}, Handle)
     end;
+
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
+    true;
+
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
+    true;
 
 authorize(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}, _) ->
     true;
 
-authorize(Req = #el_req{operation = get, client = ?USER}, Handle) ->
+authorize(Req = #el_req{operation = get, auth = ?USER}, Handle) ->
     % All other resources can be accessed with view privileges
     auth_by_privilege(Req, Handle, ?HANDLE_VIEW);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, Handle) ->
-    auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
+    auth_by_privilege(Req, Handle, ?HANDLE_UPDATE) orelse
+        auth_by_hservice_privilege(Req, Handle, ?HANDLE_SERVICE_MANAGE_HANDLES);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}, Handle) ->
     auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
@@ -407,7 +433,8 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = {group_privilege
     auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Handle) ->
-    auth_by_privilege(Req, Handle, ?HANDLE_DELETE);
+    auth_by_privilege(Req, Handle, ?HANDLE_DELETE) orelse
+        auth_by_hservice_privilege(Req, Handle, ?HANDLE_SERVICE_MANAGE_HANDLES);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, _}}}, Handle) ->
     auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
@@ -418,6 +445,66 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {group, _}}}, Ha
 authorize(_, _) ->
     false.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns list of admin privileges needed to perform given operation.
+%% @end
+%%--------------------------------------------------------------------
+-spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
+required_admin_privileges(Req = #el_req{operation = create, gri = #gri{aspect = instance}}) ->
+    case Req#el_req.auth_hint of
+        ?AS_USER(_) -> [?OZ_HANDLES_CREATE, ?OZ_USERS_ADD_RELATIONSHIPS];
+        ?AS_GROUP(_) -> [?OZ_HANDLES_CREATE, ?OZ_GROUPS_ADD_RELATIONSHIPS];
+        _ -> [?OZ_HANDLES_CREATE]
+    end;
+
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {user, _}}}) ->
+    [?OZ_HANDLES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) ->
+    [?OZ_HANDLES_ADD_RELATIONSHIPS, ?OZ_GROUPS_ADD_RELATIONSHIPS];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
+    [?OZ_HANDLES_LIST];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}) ->
+    [?OZ_HANDLES_VIEW];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}) ->
+    [?OZ_HANDLES_VIEW];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = users}}) ->
+    [?OZ_HANDLES_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_users}}) ->
+    [?OZ_HANDLES_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}) ->
+    [?OZ_HANDLES_VIEW_PRIVILEGES];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}) ->
+    [?OZ_HANDLES_VIEW_PRIVILEGES];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = groups}}) ->
+    [?OZ_HANDLES_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_groups}}) ->
+    [?OZ_HANDLES_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {group_privileges, _}}}) ->
+    [?OZ_HANDLES_VIEW_PRIVILEGES];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {eff_group_privileges, _}}}) ->
+    [?OZ_HANDLES_VIEW_PRIVILEGES];
+
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
+    [?OZ_HANDLES_UPDATE];
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}) ->
+    [?OZ_HANDLES_SET_PRIVILEGES];
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = {group_privileges, _}}}) ->
+    [?OZ_HANDLES_SET_PRIVILEGES];
+
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance}}) ->
+    [?OZ_HANDLES_DELETE];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {user, _}}}) ->
+    [?OZ_HANDLES_REMOVE_RELATIONSHIPS, ?OZ_USERS_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {group, _}}}) ->
+    [?OZ_HANDLES_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS];
+
+required_admin_privileges(_) ->
+    forbidden.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -428,17 +515,25 @@ authorize(_, _) ->
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+-spec validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
-        <<"handleServiceId">> => {binary, {exists, fun(Value) ->
+        <<"handleServiceId">> => {any, {exists, fun(Value) ->
             handle_service_logic:exists(Value)
         end}},
         <<"resourceType">> => {binary, [<<"Share">>]},
-        <<"resourceId">> => {binary, {exists, fun(Value) ->
+        <<"resourceId">> => {any, {exists, fun(Value) ->
             share_logic:exists(Value) end
         }},
-        <<"metadata">> => {binary, any}
+        <<"metadata">> => {binary, {text_length_limit, ?METADATA_SIZE_LIMIT}}
+    },
+    at_least_one => #{
+        <<"metadataPrefix">> => {binary, ?SUPPORTED_METADATA_SCHEMAS},  % deprecated, to be removed in 23.02
+        <<"metadataSchema">> => {binary, ?SUPPORTED_METADATA_SCHEMAS}
+    },
+    optional => #{
+        <<"requestPublicHandle">> => {boolean, any},
+        <<"publicHandleToReuse">> => {binary, non_empty}
     }
 };
 
@@ -466,17 +561,15 @@ validate(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) -> #{
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     required => #{
-        <<"metadata">> => {binary, any}
+        <<"metadata">> => {binary, {text_length_limit, ?METADATA_SIZE_LIMIT}}
     }
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}) ->
     #{
-        required => #{
-            <<"privileges">> => {list_of_atoms, privileges:handle_privileges()}
-        },
-        optional => #{
-            <<"operation">> => {atom, [set, grant, revoke]}
+        at_least_one => #{
+            <<"grant">> => {list_of_atoms, privileges:handle_privileges()},
+            <<"revoke">> => {list_of_atoms, privileges:handle_privileges()}
         }
     };
 
@@ -488,20 +581,204 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %%% Internal functions
 %%%===================================================================
 
+%% @private
+%% @doc must be run in a critical section for ShareId
+-spec create_handle_unsafe(od_share:id(), entity_logic:req()) -> entity_logic:create_result().
+create_handle_unsafe(ShareId, Req = #el_req{gri = GRI, auth = Auth, data = Data}) ->
+    HandleServiceId = maps:get(<<"handleServiceId">>, Data),
+    ResourceType = <<"Share">> = maps:get(<<"resourceType">>, Data),
+    ShareId = maps:get(<<"resourceId">>, Data),
+    RawMetadata = maps:get(<<"metadata">>, Data),
+    MetadataSchema = case maps:find(<<"metadataSchema">>, Data) of
+        {ok, MS} ->
+            MS;
+        error ->
+            maps:get(<<"metadataPrefix">>, Data, ?DEFAULT_METADATA_SCHEMA)  % deprecated, to be removed in 23.02
+    end,
+    CreationTime = od_handle:current_timestamp(),
+
+    {ok, #document{value = InitialShareRecord}} = od_share:get(ShareId),
+
+    InitialShareRecord#od_share.handle =:= undefined orelse throw(?ERROR_ALREADY_EXISTS),
+
+    RevisedMetadata = raw_metadata_to_revised_for_publication(
+        MetadataSchema, RawMetadata, ShareId, InitialShareRecord
+    ),
+
+    % TODO VFS-12975 temporary solution; add swaggers when a final approach is worked out
+    PublicHandle = case maps:get(<<"requestPublicHandle">>, Data, true) of
+        true ->
+            handle_proxy:register_handle(
+                HandleServiceId, ResourceType, ShareId, oai_metadata:encode_xml(MetadataSchema, RevisedMetadata)
+            );
+        false ->
+            % TODO VFS-12975 temporary solution; if the client decides not to request a public handle,
+            % he can either provide a public handle to reuse explicitly, or not so that the share
+            % public URL will be reused implicitly
+            case maps:find(<<"publicHandleToReuse">>, Data) of
+                {ok, PreexistingPublicHandle} ->
+                    PreexistingPublicHandle;
+                error ->
+                    od_share:build_public_url(ShareId)
+            end
+    end,
+
+    FinalMetadata = oai_metadata:insert_public_handle(MetadataSchema, RevisedMetadata, PublicHandle),
+
+    {ok, #document{key = HandleId}} = od_handle:create(#document{value = #od_handle{
+        public_handle = PublicHandle,
+        resource_type = ResourceType,
+        metadata_schema = MetadataSchema,
+        metadata = oai_metadata:encode_xml(MetadataSchema, FinalMetadata),
+        timestamp = CreationTime,
+
+        resource_id = ShareId,
+        handle_service = HandleServiceId,
+
+        creator = aai:normalize_subject(Auth#auth.subject),
+        creation_time = CreationTime
+    }}),
+
+    case Req#el_req.auth_hint of
+        ?AS_USER(UserId) ->
+            entity_graph:add_relation(
+                od_user, UserId,
+                od_handle, HandleId,
+                privileges:handle_admin()
+            );
+        ?AS_GROUP(GroupId) ->
+            entity_graph:add_relation(
+                od_group, GroupId,
+                od_handle, HandleId,
+                privileges:handle_admin()
+            );
+        _ ->
+            ok
+    end,
+
+    {ok, _} = od_share:update(ShareId, fun(ShRec) ->
+        {ok, ShRec#od_share{handle = HandleId}}
+    end),
+
+    share_registry:report_handle_created_for(ShareId, InitialShareRecord, HandleId, PublicHandle),
+    handle_registry:report_created(MetadataSchema, HandleServiceId, HandleId, CreationTime),
+    {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
+    {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}}.
+
+
+%% @private
+%% @doc must be run in a critical section for ShareId x HandleId
+-spec update_handle_unsafe(od_handle:id(), od_share:id(), entity_logic:data()) -> ok | no_return().
+update_handle_unsafe(HandleId, ShareId, Data) ->
+    % race condition: in case of the share being already deleted, this will throw ?ERROR_NOT_FOUND
+    #document{value = ShareRecord} = ?check(od_share:get(ShareId)),
+    % race condition: in case of the handle being already deleted, this will throw ?ERROR_NOT_FOUND
+    #document{value = #od_handle{
+        handle_service = HandleService,
+        timestamp = PreviousTimestamp,
+        resource_id = ShareId,
+        metadata_schema = MetadataSchema,
+        public_handle = PublicHandle
+    }} = ?check(od_handle:get(HandleId)),
+
+    % only the metadata field can be updated
+    InputRawMetadata = maps:get(<<"metadata">>, Data),
+    RevisedMetadata = raw_metadata_to_revised_for_publication(MetadataSchema, InputRawMetadata, ShareId, ShareRecord),
+    FinalMetadata = oai_metadata:insert_public_handle(MetadataSchema, RevisedMetadata, PublicHandle),
+    FinalRawMetadata = oai_metadata:encode_xml(MetadataSchema, FinalMetadata),
+
+    CurrentTimestamp = od_handle:current_timestamp(),
+    {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
+        {ok, Handle#od_handle{
+            timestamp = CurrentTimestamp,
+            metadata = FinalRawMetadata
+        }}
+    end),
+    % every handle modification must be reflected in the handle registry
+    handle_registry:report_updated(MetadataSchema, HandleService, HandleId, PreviousTimestamp, CurrentTimestamp),
+    % TODO VFS-7454 currently not supported by the handle proxy implementation
+    % handle_proxy:modify_handle(HandleId, FinalRawMetadata).
+    ok.
+
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns if given user has specific effective privilege in the handle.
-%% UserId is either given explicitly or derived from entity logic request.
-%% Clients of type other than user are discarded.
+%% Must be run in a critical section for ShareId x HandleId.
+%% There are two ways handles are deleted:
+%%   1) The handle is deleted, but it's corresponding share is not.
+%%   2) The corresponding share is deleted, and in the process, the
+%%      handle is deleted first (@see share_logic_plugin:delete/1).
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_privilege(entity_logic:req() | od_user:id(),
-    od_handle:id() | od_handle:info(), privileges:handle_privilege()) ->
+-spec delete_handle_unsafe(od_handle:id(), od_share:id()) -> ok | no_return().
+delete_handle_unsafe(HandleId, ShareId) ->
+    % race condition: in case of the handle being already deleted, this will throw ?ERROR_NOT_FOUND
+    #document{value = #od_handle{
+        handle_service = HandleService,
+        resource_id = ShareId,
+        timestamp = PreviousTimestamp,
+        metadata_schema = MetadataSchema,
+        public_handle = PublicHandle
+    }} = ?check(od_handle:get(HandleId)),
+    try
+        handle_proxy:unregister_handle(HandleId)
+    catch Class:Reason:Stacktrace ->
+        ?warning_exception(?autoformat_with_msg(
+            "Handle was removed but it failed to be unregistered from its handle service",
+            [HandleId, PublicHandle, HandleService]
+        ), Class, Reason, Stacktrace)
+    end,
+    DeletionTimestamp = od_handle:current_timestamp(),
+    handle_registry:report_deleted(MetadataSchema, HandleService, HandleId, PreviousTimestamp, DeletionTimestamp),
+    entity_graph:delete_with_relations(od_handle, HandleId),
+
+    {ok, #document{value = UpdatedShareRecord}} = od_share:update(ShareId, fun(S) ->
+        {ok, S#od_share{handle = undefined}}
+    end),
+    PreviousShareRecord = UpdatedShareRecord#od_share{handle = HandleId},
+    share_registry:report_handle_deleted_for(ShareId, PreviousShareRecord).
+
+
+%% @private
+-spec raw_metadata_to_revised_for_publication(
+    od_handle:metadata_schema(), od_handle:raw_metadata(), od_share:id(), od_share:record()
+) ->
+    od_handle:parsed_metadata().
+raw_metadata_to_revised_for_publication(MetadataSchema, RawMetadata, ShareId, ShareRecord) ->
+    ParsedMetadata = case oai_xml:parse(RawMetadata) of
+        {ok, Parsed} -> Parsed;
+        error -> throw(?ERR_BAD_VALUE_XML(?err_ctx(), <<"metadata">>))
+    end,
+    case oai_metadata:revise_for_publication(MetadataSchema, ParsedMetadata, ShareId, ShareRecord) of
+        {ok, Revised} -> Revised;
+        error -> throw(?ERR_BAD_VALUE_XML(?err_ctx(), <<"metadata">>))
+    end.
+
+
+-spec auth_by_privilege(
+    entity_logic:req() | od_user:id(),
+    od_handle:id() | od_handle:record(),
+    privileges:handle_privilege()
+) ->
     boolean().
-auth_by_privilege(#el_req{client = ?USER(UserId)}, HandleOrId, Privilege) ->
+auth_by_privilege(#el_req{auth = ?USER(UserId)}, HandleOrId, Privilege) ->
     auth_by_privilege(UserId, HandleOrId, Privilege);
-auth_by_privilege(#el_req{client = _OtherClient}, _HandleOrId, _Privilege) ->
+auth_by_privilege(#el_req{auth = _OtherAuth}, _HandleOrId, _Privilege) ->
     false;
 auth_by_privilege(UserId, HandleOrId, Privilege) ->
     handle_logic:has_eff_privilege(HandleOrId, UserId, Privilege).
+
+
+-spec auth_by_hservice_privilege(
+    entity_logic:req() | od_user:id(),
+    od_handle:record(),
+    privileges:handle_service_privilege()
+) ->
+    boolean().
+auth_by_hservice_privilege(#el_req{auth = ?USER(UserId)}, Handle, Privilege) ->
+    auth_by_hservice_privilege(UserId, Handle, Privilege);
+auth_by_hservice_privilege(#el_req{auth = _OtherAuth}, _Handle, _Privilege) ->
+    false;
+auth_by_hservice_privilege(UserId, #od_handle{handle_service = HServiceId}, Privilege) ->
+    handle_service_logic:has_eff_privilege(HServiceId, UserId, Privilege).

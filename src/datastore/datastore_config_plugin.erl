@@ -33,14 +33,25 @@ get_models() -> [
     od_provider,
     od_handle_service,
     od_handle,
+    od_harvester,
+    od_cluster,
+    od_storage,
+    od_token,
+    od_atm_inventory,
+    od_atm_lambda,
+    od_atm_workflow_schema,
+
     gs_server_state,
-    onedata_auth,
-    macaroon_auth,
-    session,
-    token,
     entity_graph_state,
-    basic_auth_cache,
+    session,
+    state_token,
     dns_state,
-    provider_connection,
-    state_token
+    gui_message,
+    provider_connections,
+    user_connections,
+    temporary_token_secret,
+
+    %% @TODO VFS-5554 Deprecated models
+    onedata_auth,
+    macaroon_auth
 ].

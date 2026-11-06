@@ -17,17 +17,18 @@
 -include("http/gui_paths.hrl").
 -include("registered_names.hrl").
 -include_lib("esaml/include/esaml.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 
+-type version() :: pos_integer().
 -type config_v1() :: proplists:proplist().
 -type saml_config_v1() :: #{atom() => term()}.
--type config_v2() :: #{atom() => term()}.
+-type config_v2_or_later() :: #{atom() => term()}.
 -type config_section() :: #{atom() => term()}.
 -type idp() :: atom().
--type protocol() :: saml | openid | onepanelAuth | undefined.
+-type protocol() :: saml | openid | basicAuth | undefined.
 -type parser_config() :: #{atom() => term()}.
--export_type([config_v1/0, saml_config_v1/0, config_v2/0, config_section/0]).
+-export_type([config_v1/0, saml_config_v1/0, config_v2_or_later/0, config_section/0]).
 -export_type([idp/0, protocol/0, parser_config/0]).
 
 % Defines the behaviour when given config parameter is not found:
@@ -46,7 +47,7 @@
     get_supported_idps_in_gui_format/0,
     get_supported_idps_in_configuration_format/0,
     idp_exists/1,
-    is_onepanel_auth_enabled/0,
+    is_basic_auth_enabled/0,
     get_protocol/1, get_protocol/2,
     get_protocol_config/3, get_protocol_config/4,
     get_attribute_mapping/2,
@@ -71,21 +72,21 @@
     ensure_str/1
 ]).
 
--define(AUTH_CONFIG_FILE, begin {ok, __Path} = oz_worker:get_env(auth_config_file), __Path end).
--define(TEST_AUTH_CONFIG_FILE, begin {ok, __Path} = oz_worker:get_env(test_auth_config_file), __Path end).
--define(CONFIG_CACHE_TTL, oz_worker:get_env(auth_config_cache_ttl, timer:minutes(1))).
+-define(AUTH_CONFIG_FILE, oz_worker:get_env(auth_config_file)).
+-define(TEST_AUTH_CONFIG_FILE, oz_worker:get_env(test_auth_config_file)).
+-define(CONFIG_CACHE_TTL, oz_worker:get_env(auth_config_cache_ttl_seconds, 60)). % 1 minute
 
 -define(LEGACY_SAML_CONFIG_NAME, "saml.config").
--define(BACKUP_CFG_EXT, ".bak").
+-define(BACKUP_CFG_EXT(Version), str_utils:format(".v~B.bak", [Version])).
 
 -define(DEFAULT_ICON_PATH, "/assets/images/auth-providers/default.svg").
 -define(DEFAULT_ICON_BGCOLOR, "#333").
 
 
 % Macros for accessing config entries
-% Onepanel auth config
--define(CFG_ONEPANEL_AUTH_ENABLED, get_nested_cfg(
-    [onepanelAuthConfig, enabled], {default, false}
+% Basic auth config
+-define(CFG_BASIC_AUTH_ENABLED, get_nested_cfg(
+    [basicAuthConfig, enabled], {default, false}
 )).
 % OpenID config
 -define(CFG_OPENID_ENABLED, get_nested_cfg(
@@ -219,13 +220,13 @@ get_supported_idps_in_configuration_format() ->
 %%--------------------------------------------------------------------
 -spec get_supported_idps() -> [{idp(), config_section()}].
 get_supported_idps() ->
-    OnepanelAuthEnabled = ?CFG_ONEPANEL_AUTH_ENABLED,
+    BasicAuthEnabled = ?CFG_BASIC_AUTH_ENABLED,
     OpenIDEnabled = ?CFG_OPENID_ENABLED,
     SAMLEnabled = ?CFG_SAML_ENABLED,
 
     lists:filtermap(fun({IdP, IdPConfig}) ->
         Enabled = case get_protocol(IdP, IdPConfig) of
-            onepanelAuth -> OnepanelAuthEnabled;
+            basicAuth -> BasicAuthEnabled;
             openid -> OpenIDEnabled;
             saml -> SAMLEnabled;
             undefined -> false
@@ -247,9 +248,9 @@ idp_exists(IdP) ->
     proplists:is_defined(IdP, ?CFG_SUPPORTED_IDPS).
 
 
--spec is_onepanel_auth_enabled() -> boolean().
-is_onepanel_auth_enabled() ->
-    ?CFG_ONEPANEL_AUTH_ENABLED.
+-spec is_basic_auth_enabled() -> boolean().
+is_basic_auth_enabled() ->
+    ?CFG_BASIC_AUTH_ENABLED.
 
 
 %%--------------------------------------------------------------------
@@ -304,7 +305,7 @@ get_attribute_mapping(IdP, Attribute) ->
             ok;
         {subjectId, _} ->
             ?alert(
-                "Illegal subjectId attribute mapping for IdP '~p', must be "
+                "Illegal subjectId attribute mapping for IdP '~tp', must be "
                 "'{required, _}' or  '{plugin, _}'", [IdP]
             ),
             throw(?ERROR_BAD_AUTH_CONFIG);
@@ -345,7 +346,7 @@ get_authority_delegation_config(IdP, IdPConfig) ->
                 OtherProtocol ->
                     ?warning(
                         "Authority delegation can only be enabled for the openid protocol - "
-                        "please adjust the auth.config entry for ~p (~p protocol)",
+                        "please adjust the auth.config entry for ~tp (~tp protocol)",
                         [IdP, OtherProtocol]
                     ),
                     false
@@ -358,12 +359,13 @@ get_authority_delegation_config(IdP, IdPConfig) ->
 %% Tries to match access token's prefix to any IdP by its configured prefix.
 %% @end
 %%--------------------------------------------------------------------
--spec find_openid_idp_by_access_token(auth_logic:access_token()) -> false | {true, idp()}.
+-spec find_openid_idp_by_access_token(idp_auth:access_token()) ->
+    false | {true, {idp(), TokenPrefix :: binary()}}.
 find_openid_idp_by_access_token(AccessTokenWithPrefix) ->
     find_openid_idp_by_access_token(AccessTokenWithPrefix, ?CFG_SUPPORTED_IDPS).
 
--spec find_openid_idp_by_access_token(auth_logic:access_token(), [{idp(), config_section()}]) ->
-    false | {true, idp()}.
+-spec find_openid_idp_by_access_token(idp_auth:access_token(), [{idp(), config_section()}]) ->
+    false | {true, {idp(), TokenPrefix :: binary()}}.
 find_openid_idp_by_access_token(_, []) ->
     false;
 find_openid_idp_by_access_token(AccessTokenWithPrefix, [{IdP, IdPConfig} | Rest]) ->
@@ -422,7 +424,7 @@ has_offline_access_enabled(IdP, IdPConfig) ->
                 OtherProtocol ->
                     ?warning(
                         "Offline access can only be enabled for the openid protocol - "
-                        "please adjust the auth.config entry for ~p (~p protocol)",
+                        "please adjust the auth.config entry for ~tp (~tp protocol)",
                         [IdP, OtherProtocol]
                     ),
                     false
@@ -435,7 +437,7 @@ has_offline_access_enabled(IdP, IdPConfig) ->
 %% Returns the config of the SAML Service Provider represented by this Onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec get_saml_sp_config() -> #esaml_sp{} | {error, saml_disabled}.
+-spec get_saml_sp_config() -> {ok, #esaml_sp{}} | {error, saml_disabled}.
 get_saml_sp_config() ->
     case ?CFG_SAML_ENABLED of
         false ->
@@ -464,7 +466,7 @@ get_saml_sp_config() ->
             end,
 
 
-            #esaml_sp{
+            {ok, #esaml_sp{
                 entity_id = ?CFG_SAML_SP_ENTITY_ID,
                 certificate = Cert,
                 key = Key,
@@ -485,7 +487,7 @@ get_saml_sp_config() ->
                 sign_metadata = ?CFG_SAML_SP_SIGN_METADATA,
                 sign_requests = ?CFG_SAML_SP_SIGN_REQUESTS,
                 want_assertions_signed = ?CFG_SAML_SP_WANT_ASSERTIONS_SIGNED
-            }
+            }}
     end.
 
 
@@ -495,7 +497,7 @@ get_saml_sp_config() ->
 %% present, it is returned, otherwise the standard cert.
 %% @end
 %%--------------------------------------------------------------------
--spec get_saml_cert_pem() -> binary() | {error, saml_disabled}.
+-spec get_saml_cert_pem() -> {ok, binary()} | {error, saml_disabled}.
 get_saml_cert_pem() ->
     case ?CFG_SAML_ENABLED of
         false ->
@@ -506,8 +508,7 @@ get_saml_cert_pem() ->
                 Path -> Path
             end,
             ensure_file_exists(CertificatePath),
-            {ok, CertPem} = file:read_file(CertificatePath),
-            CertPem
+            {ok, _} = file:read_file(CertificatePath)
     end.
 
 
@@ -527,7 +528,7 @@ get_saml_idp_config(IdP) ->
 
 -spec force_auth_config_reload() -> ok.
 force_auth_config_reload() ->
-    simple_cache:clear(cached_auth_config),
+    node_cache:clear(cached_auth_config),
     get_auth_config(),
     ok.
 
@@ -560,7 +561,7 @@ format_for_gui(IdP, IdPConfig) ->
     #{
         <<"id">> => IdP,
         <<"displayName">> => ?CFG_IDP_DISPLAY_NAME(IdP, IdPConfig),
-        <<"iconPath">> => ?CFG_IDP_ICON_PATH(IdPConfig),
+        <<"iconPath">> => gui_static:oz_worker_gui_path(?CFG_IDP_ICON_PATH(IdPConfig)),
         <<"iconBackgroundColor">> => ?CFG_IDP_ICON_BACKGROUND(IdPConfig)
     }.
 
@@ -586,12 +587,12 @@ format_for_configuration(IdP, IdPConfig) ->
 %% The config is cached for configurable time.
 %% @end
 %%--------------------------------------------------------------------
--spec get_auth_config() -> config_v2().
+-spec get_auth_config() -> config_v2_or_later().
 get_auth_config() ->
-    case auth_test_mode:process_is_test_mode_enabled() of
+    case idp_auth_test_mode:is_test_mode_enabled_for_current_pid() of
         false ->
-            {ok, Cfg} = simple_cache:get(cached_auth_config, fun() ->
-                {true, fetch_auth_config(), ?CONFIG_CACHE_TTL}
+            {ok, Cfg} = node_cache:acquire(cached_auth_config, fun() ->
+                {ok, fetch_auth_config(), ?CONFIG_CACHE_TTL}
             end),
             Cfg;
         true ->
@@ -606,32 +607,37 @@ get_auth_config() ->
 %% detected, upgrade is attempted.
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_auth_config() -> config_v2().
+-spec fetch_auth_config() -> config_v2_or_later().
 fetch_auth_config() ->
-    AuthConfigFile = ?AUTH_CONFIG_FILE,
-    case file:consult(AuthConfigFile) of
+    case file:consult(?AUTH_CONFIG_FILE) of
         {ok, [Cfg = #{version := ?CURRENT_CONFIG_VERSION}]} ->
-            simple_cache:put(cached_auth_config, Cfg, ?CONFIG_CACHE_TTL),
+            node_cache:put(cached_auth_config, Cfg, ?CONFIG_CACHE_TTL),
             Cfg;
-        {ok, _} ->
+        {ok, [OlderConfig]} ->
+            FoundVersion = case OlderConfig of
+                #{version := V} -> V;
+                _ -> 1
+            end,
             try
-                UpgradedCfg = upgrade_auth_config(AuthConfigFile),
-                simple_cache:put(cached_auth_config, UpgradedCfg, ?CONFIG_CACHE_TTL),
+                UpgradedCfg = upgrade_auth_config(FoundVersion, ?CURRENT_CONFIG_VERSION),
+                node_cache:put(cached_auth_config, UpgradedCfg, ?CONFIG_CACHE_TTL),
                 UpgradedCfg
-            catch Type:Reason ->
-                ?alert_stacktrace("Failed to upgrade auth.config / saml.config, the "
-                "login page will not work. Please upgrade the config manually. "
-                "Reason - ~p:~p", [Type, Reason]),
+            catch Class:Reason:Stacktrace ->
+                ?alert_exception(
+                    "Failed to upgrade auth.config / saml.config, the login page "
+                    "will not work. Please upgrade the config manually.",
+                    Class, Reason, Stacktrace
+                ),
                 #{}
             end;
         {error, enoent} ->
-            ?alert("auth.config was not found in ~s, the login page will "
+            ?alert("auth.config was not found in ~ts, the login page will "
             "not work correctly.", [
-                AuthConfigFile
+                ?AUTH_CONFIG_FILE
             ]),
             #{};
         {error, _} = Error ->
-            ?alert("Cannot load auth.config due to ~p. The login page will "
+            ?alert("Cannot load auth.config due to ~tp. The login page will "
             "not work correctly.", [
                 Error
             ]),
@@ -648,22 +654,22 @@ fetch_auth_config() ->
 %% under /#/test/login).
 %% @end
 %%--------------------------------------------------------------------
--spec get_test_auth_config() -> config_v2().
+-spec get_test_auth_config() -> config_v2_or_later().
 get_test_auth_config() ->
     TestAuthConfigFile = ?TEST_AUTH_CONFIG_FILE,
     case file:consult(TestAuthConfigFile) of
         {ok, [Cfg = #{version := ?CURRENT_CONFIG_VERSION}]} ->
             Cfg;
         {ok, _} ->
-            ?alert("Badly formatted test.auth.config in ~s, the test "
+            ?alert("Badly formatted test.auth.config in ~ts, the test "
             "login page will not work.", [TestAuthConfigFile]),
             #{};
         {error, enoent} ->
-            ?debug("test.auth.config was not found in ~s, the test "
+            ?debug("test.auth.config was not found in ~ts, the test "
             "login page will not work.", [TestAuthConfigFile]),
             #{};
         {error, _} = Error ->
-            ?alert("Cannot load test.auth.config due to ~p. The login "
+            ?alert("Cannot load test.auth.config due to ~tp. The login "
             "page will not work.", [Error]),
             #{}
     end.
@@ -676,71 +682,86 @@ get_test_auth_config() ->
 %% to ensure no race condition.
 %% @end
 %%--------------------------------------------------------------------
--spec upgrade_auth_config(file:filename_all()) -> config_v2().
-upgrade_auth_config(AuthConfigFile) ->
+-spec upgrade_auth_config(FromVersion :: integer(), ToVersion :: integer()) ->
+    config_v2_or_later().
+upgrade_auth_config(FromVersion, ToVersion) ->
     critical_section:run(auth_config_upgrade, fun() ->
-        {ok, {LastSeen, LastUpgradeResult}} = simple_cache:get(
-            previous_auth_cfg_upgrade, fun() -> {false, {<<"">>, #{}}} end
-        ),
-        case file_md5(AuthConfigFile) of
+        {LastSeen, LastUpgradeResult} = node_cache:get(previous_auth_cfg_upgrade, {<<"">>, #{}}),
+        case file_md5(?AUTH_CONFIG_FILE) of
             LastSeen ->
                 % Do not attempt upgrade of the same file multiple times
                 LastUpgradeResult;
             _ ->
                 % Save empty upgrade result, which will be overwritten by actual
                 % result upon success, or will stay empty upon failure
-                simple_cache:put(
-                    previous_auth_cfg_upgrade, {file_md5(AuthConfigFile), #{}}
+                node_cache:put(
+                    previous_auth_cfg_upgrade, {file_md5(?AUTH_CONFIG_FILE), #{}}
                 ),
-                {ok, [OldAuthCfg]} = file:consult(AuthConfigFile),
-                UpgradedCfg = upgrade_auth_config(AuthConfigFile, OldAuthCfg),
+                {ok, [OldAuthCfg]} = file:consult(?AUTH_CONFIG_FILE),
+                UpgradedCfg = upgrade_auth_config(OldAuthCfg, FromVersion, ToVersion),
                 % Success - overwrite empty result
-                simple_cache:put(
-                    previous_auth_cfg_upgrade, {file_md5(AuthConfigFile), UpgradedCfg}
+                node_cache:put(
+                    previous_auth_cfg_upgrade, {file_md5(?AUTH_CONFIG_FILE), UpgradedCfg}
                 ),
                 UpgradedCfg
         end
     end).
 
 %% @private
--spec upgrade_auth_config(file:filename_all(), config_v1()) -> config_v2().
-upgrade_auth_config(AuthConfigFile, OldAuthCfg) ->
-    ?notice("Deprecated auth.config found in ~s - attempting "
-    "automatic upgrade to version ~B", [
-        AuthConfigFile, ?CURRENT_CONFIG_VERSION
-    ]),
+-spec upgrade_auth_config(config_v1() | config_v2_or_later(), From :: version(), To :: version()) ->
+    config_v2_or_later().
+upgrade_auth_config(OldAuthCfg, FromVersion, ToVersion) ->
+    ?notice(
+        "Deprecated auth.config found in ~ts - attempting automatic upgrade from version ~B to ~B",
+        [?AUTH_CONFIG_FILE, FromVersion, ToVersion]
+    ),
+    lists:foldl(fun(CurrentVersion, AccAuthCfg) ->
+        Result = upgrade_auth_config_to_next_version(AccAuthCfg, CurrentVersion),
+        ?notice("Upgrade from version ~B to ~B successful", [CurrentVersion, CurrentVersion + 1]),
+        AuthConfigBak = ?AUTH_CONFIG_FILE ++ ?BACKUP_CFG_EXT(CurrentVersion),
+        {ok, _} = file:copy(?AUTH_CONFIG_FILE, AuthConfigBak),
+        ?notice("Stored deprecated auth.config in '~ts'", [AuthConfigBak]),
+        ok = file:write_file(?AUTH_CONFIG_FILE, io_lib:format("~tp.~n", [Result])),
+        Result
+    end, OldAuthCfg, lists:seq(FromVersion, ToVersion - 1)).
 
+
+%% @private
+-spec upgrade_auth_config_to_next_version(config_v1() | config_v2_or_later(), version()) ->
+    config_v2_or_later().
+upgrade_auth_config_to_next_version(OldAuthCfg, 1) ->
     SamlCfgPath = filename:join(
-        filename:dirname(AuthConfigFile),
+        filename:dirname(?AUTH_CONFIG_FILE),
         ?LEGACY_SAML_CONFIG_NAME
     ),
     SamlCfg = case file:consult(SamlCfgPath) of
         {ok, [SCfg]} ->
-            ?notice("Deprecated saml.config found in ~s - attempting "
-            "automatic upgrade to version ~B", [
-                SamlCfgPath, ?CURRENT_CONFIG_VERSION
-            ]),
+            ?notice(
+                "Deprecated saml.config found in ~ts - attempting automatic upgrade to version 2",
+                [SamlCfgPath]
+            ),
             SCfg;
         _ ->
             #{}
     end,
-    UpgradedCfg = auth_config_upgrader:upgrade(
-        ?CURRENT_CONFIG_VERSION, OldAuthCfg, SamlCfg
-    ),
-    AuthConfigBak = AuthConfigFile ++ ?BACKUP_CFG_EXT,
-    SamlConfigBak = SamlCfgPath ++ ?BACKUP_CFG_EXT,
-    {ok, _} = file:copy(AuthConfigFile, AuthConfigBak),
-    case filelib:is_regular(SamlCfgPath) of
-        true -> ok = file:rename(SamlCfgPath, SamlConfigBak);
-        false -> ok
+
+    UpgradedCfg = auth_config_upgrader:v1_to_v2(OldAuthCfg, SamlCfg),
+
+    case maps:size(SamlCfg) of
+        0 ->
+            ok;
+        _ ->
+            SamlConfigBak = SamlCfgPath ++ ?BACKUP_CFG_EXT(1),
+            ok = file:rename(SamlCfgPath, SamlConfigBak),
+            ?notice("Stored deprecated saml.config in '~ts'", [SamlConfigBak])
     end,
-    ok = file:write_file(AuthConfigFile, io_lib:format("~tp.~n", [UpgradedCfg])),
-    ?notice("Upgrade completed, new config written to ~s. "
-    "Moving deprecated auth/saml.config to '~s'", [AuthConfigFile, ?BACKUP_CFG_EXT]),
+
     ?alert("Make sure to manually update admin groups (fka super groups) in the "
     "config, as their format has changed (their names are now 1:1 with "
     "entitlements in the IdP)"),
-    UpgradedCfg.
+    UpgradedCfg;
+upgrade_auth_config_to_next_version(OldAuthCfg, 2) ->
+    auth_config_upgrader:v2_to_v3(OldAuthCfg).
 
 
 %% @private
@@ -750,7 +771,7 @@ ensure_file_exists(Path) ->
         true ->
             Path;
         false ->
-            ?alert("File specified in auth.config does not exist: ~s", [
+            ?alert("File specified in auth.config does not exist: ~ts", [
                 Path
             ]),
             throw(?ERROR_BAD_AUTH_CONFIG)
@@ -764,7 +785,7 @@ get_default_protocol_config(Protocol, NestedParams, Policy, Trace) ->
     DefaultIdPConfig = case Protocol of
         openid -> ?CFG_OPENID_DEFAULT_PROTOCOL_CONFIG;
         saml -> ?CFG_SAML_DEFAULT_PROTOCOL_CONFIG;
-        onepanelAuth -> #{};
+        basicAuth -> #{};
         undefined -> #{}
     end,
     get_nested_cfg(NestedParams, Policy, DefaultIdPConfig, Trace).
@@ -812,12 +833,12 @@ get_param(Key, Policy, Config, Trace) ->
 param_not_found(_Key, {default, Default}, _Trace) ->
     Default;
 param_not_found(Key, required, Trace) ->
-    TraceBinaries = [str_utils:format_bin("~s", [T]) || T <- Trace ++ [Key]],
-    ConfigFile = case auth_test_mode:process_is_test_mode_enabled() of
+    TraceBinaries = [str_utils:format_bin("~ts", [T]) || T <- Trace ++ [Key]],
+    ConfigFile = case idp_auth_test_mode:is_test_mode_enabled_for_current_pid() of
         false -> "auth.config";
         true -> "test.auth.config"
     end,
-    ?alert("Missing required parameter in ~s: ~s", [
+    ?alert("Missing required parameter in ~ts: ~ts", [
         ConfigFile, str_utils:join_binary(TraceBinaries, <<" -> ">>)
     ]),
     throw(?ERROR_BAD_AUTH_CONFIG).

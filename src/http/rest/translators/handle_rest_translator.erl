@@ -13,7 +13,7 @@
 -behaviour(rest_translator_behaviour).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 
 -export([create_response/4, get_response/2]).
 
@@ -28,7 +28,7 @@
 %%--------------------------------------------------------------------
 -spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
-    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
+    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> rest_handler:rest_resp().
 create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#gri{id = HandleId}, _}) ->
     LocationTokens = case AuthHint of
         ?AS_USER(_UserId) ->
@@ -38,37 +38,78 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#g
         _ ->
             [<<"handles">>, HandleId]
     end,
-    rest_translator:created_reply(LocationTokens);
+    rest_translator:created_reply_with_location(LocationTokens);
 
 create_response(#gri{id = HandleId, aspect = {user, UserId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"handles">>, HandleId, <<"users">>, UserId]
     );
 
 create_response(#gri{id = HandleId, aspect = {group, GroupId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"handles">>, HandleId, <<"groups">>, GroupId]
     ).
-
 
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link rest_translator_behaviour} callback get_response/2.
 %% @end
 %%--------------------------------------------------------------------
--spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
+-spec get_response(entity_logic:gri(), Resource :: term()) -> rest_handler:rest_resp().
 get_response(#gri{id = undefined, aspect = list}, Handles) ->
     rest_translator:ok_body_reply(#{<<"handles">> => Handles});
 
+get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
+    rest_translator:ok_body_reply(Privileges);
+
 get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleData) ->
-    Timestamp = maps:get(<<"timestamp">>, HandleData),
-    % Replace "publicHandle" with "handle" key
-    PublicHandle = maps:get(<<"publicHandle">>, HandleData),
-    NewData = maps:remove(<<"publicHandle">>, HandleData),
-    rest_translator:ok_body_reply(NewData#{
+    #{
+        <<"handleServiceId">> := HandleServiceId,
+        <<"publicHandle">> := PublicHandle,
+        <<"resourceType">> := ResourceType,
+        <<"resourceId">> := ResourceId,
+        <<"metadataSchema">> := MetadataSchema,
+        <<"metadata">> := Metadata,
+        <<"timestamp">> := Timestamp,
+        <<"creator">> := Creator,
+        <<"creationTime">> := CreationTime
+    } = HandleData,
+    rest_translator:ok_body_reply(#{
         <<"handleId">> => HandleId,
-        <<"handle">> => PublicHandle,
-        <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp)
+        <<"handleServiceId">> => HandleServiceId,
+        <<"publicHandle">> => PublicHandle,
+        <<"resourceType">> => ResourceType,
+        <<"resourceId">> => ResourceId,
+        <<"metadataPrefix">> => MetadataSchema,  % deprecated, to be removed in 23.02
+        <<"metadataSchema">> => MetadataSchema,
+        <<"metadata">> => Metadata,
+        <<"timestamp">> => time:seconds_to_iso8601(Timestamp),
+        <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
+        <<"creationTime">> => CreationTime
+    });
+
+get_response(#gri{id = HandleId, aspect = instance, scope = public}, HandleData) ->
+    #{
+        <<"handleServiceId">> := HandleServiceId,
+        <<"publicHandle">> := PublicHandle,
+        <<"resourceType">> := ResourceType,
+        <<"resourceId">> := ResourceId,
+        <<"metadataSchema">> := MetadataSchema,
+        <<"metadata">> := Metadata,
+        <<"timestamp">> := Timestamp,
+        <<"creationTime">> := CreationTime
+    } = HandleData,
+    rest_translator:ok_body_reply(#{
+        <<"handleId">> => HandleId,
+        <<"handleServiceId">> => HandleServiceId,
+        <<"publicHandle">> => PublicHandle,
+        <<"resourceType">> => ResourceType,
+        <<"resourceId">> => ResourceId,
+        <<"metadataPrefix">> => MetadataSchema,  % deprecated, to be removed in 23.02
+        <<"metadataSchema">> => MetadataSchema,
+        <<"metadata">> => Metadata,
+        <<"timestamp">> => time:seconds_to_iso8601(Timestamp),
+        <<"creationTime">> => CreationTime
     });
 
 get_response(#gri{aspect = users}, Users) ->

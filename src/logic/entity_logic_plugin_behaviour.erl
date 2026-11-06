@@ -15,12 +15,18 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity from datastore based on its EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--callback fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | entity_logic:error().
+-callback fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
 
 
 %%--------------------------------------------------------------------
@@ -31,6 +37,16 @@
 %%--------------------------------------------------------------------
 -callback operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Determines if given {Aspect, Scope} pair is subscribable, i.e. clients can
+%% subscribe to receive updates concerning the aspect of entity.
+%% @end
+%%--------------------------------------------------------------------
+-callback is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
+    boolean().
 
 
 %%--------------------------------------------------------------------
@@ -87,6 +103,15 @@
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Returns list of admin privileges needed to perform given operation.
+%% @end
+%%--------------------------------------------------------------------
+-callback required_admin_privileges(entity_logic:req()) ->
+    [privileges:oz_privilege()] | forbidden | fun((entity_logic:entity()) -> [privileges:oz_privilege()] | forbidden).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Returns validity verificators for given request.
 %% Returns a map with 'required', 'optional' and 'at_least_one' keys.
 %% Under each of them, there is a map:
@@ -94,4 +119,4 @@
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--callback validate(entity_logic:req()) -> entity_logic:validity_verificator().
+-callback validate(entity_logic:req()) -> entity_logic_sanitizer:sanitizer_spec().

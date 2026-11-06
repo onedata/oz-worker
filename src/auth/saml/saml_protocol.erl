@@ -6,21 +6,21 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Plugin implementing auth_protocol_behaviour, used to handle authentication
+%%% Plugin implementing idp_auth_protocol_behaviour, used to handle authentication
 %%% over SAML protocol. These callbacks are called by auth_logic module.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(saml_protocol).
--behavior(auth_protocol_behaviour).
+-behavior(idp_auth_protocol_behaviour).
 -author("Lukasz Opiola").
 
 -include("auth/auth_common.hrl").
 -include("auth/auth_errors.hrl").
 -include_lib("esaml/include/esaml.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
-%% auth_protocol_behaviour callbacks
+%% idp_auth_protocol_behaviour callbacks
 -export([get_login_endpoint/2, validate_login/2]).
 
 %%%===================================================================
@@ -29,13 +29,13 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link auth_protocol_behaviour} callback get_login_endpoint/2.
+%% {@link idp_auth_protocol_behaviour} callback get_login_endpoint/2.
 %% @end
 %%--------------------------------------------------------------------
--spec get_login_endpoint(auth_config:idp(), state_token:id()) ->
+-spec get_login_endpoint(auth_config:idp(), state_token:state_token()) ->
     {ok, #{binary() => binary() | null}}.
 get_login_endpoint(IdP, State) ->
-    SPConfig = auth_config:get_saml_sp_config(),
+    {ok, SPConfig} = auth_config:get_saml_sp_config(),
     IdpConfig = auth_config:get_saml_idp_config(IdP),
     LoginLocation = case IdpConfig#esaml_idp.preferred_sso_binding of
         http_redirect ->
@@ -45,8 +45,8 @@ get_login_endpoint(IdP, State) ->
     end,
     case LoginLocation of
         undefined ->
-            ?alert("Cannot resolve login location for IdP '~p'", [IdP]),
-            throw(?ERROR_INTERNAL_SERVER_ERROR);
+            ?alert("Cannot resolve login location for IdP '~tp'", [IdP]),
+            throw(?ERR_INTERNAL_SERVER_ERROR(?err_ctx(), undefined));
         _ ->
             ok
     end,
@@ -71,13 +71,13 @@ get_login_endpoint(IdP, State) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link auth_protocol_behaviour} callback validate_login/2.
+%% {@link idp_auth_protocol_behaviour} callback validate_login/2.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login(auth_config:idp(), auth_logic:query_params()) ->
+-spec validate_login(auth_config:idp(), idp_auth:query_params()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 validate_login(IdP, QueryParams) ->
-    SPConfig = auth_config:get_saml_sp_config(),
+    {ok, SPConfig} = auth_config:get_saml_sp_config(),
     IdPConfig = auth_config:get_saml_idp_config(IdP),
 
     % Check url params for state parameter and validate it
@@ -90,9 +90,14 @@ validate_login(IdP, QueryParams) ->
         Xml ->
             case esaml_sp:validate_assertion(Xml, SPConfig, IdPConfig) of
                 {ok, #esaml_assertion{attributes = Attributes}} ->
+                    idp_auth_logger:log_user_info_collection_to_file(IdP, gui_login, fun() ->
+                        str_utils:unicode_list_to_binary(xmerl:export_simple([Xml], xmerl_xml, [
+                            {prolog, ["<?xml version=\"1.0\" encoding=\"utf-8\" ?>\n"]}
+                        ]))
+                    end),
                     {ok, normalize_attributes(Attributes)};
                 {error, Reason} ->
-                    ?auth_warning("Invalid login request via SAML. Reason:~p~nPOST params:~n~p",
+                    ?auth_warning("Invalid login request via SAML. Reason:~tp~nPOST params:~n~tp",
                         [Reason, QueryParams]),
                     throw(?ERROR_INVALID_AUTH_REQUEST)
             end

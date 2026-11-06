@@ -15,8 +15,8 @@
 
 -behaviour(dynamic_page_behaviour).
 
--include("registered_names.hrl").
--include("entity_logic.hrl").
+-include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([handle/2]).
 
@@ -29,11 +29,11 @@
 %% {@link dynamic_page_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
--spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
+-spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"GET">>, Req) ->
-    {ok, Config} = oz_worker:get_config(),
-    cowboy_req:reply(200,
-        #{<<"content-type">> => <<"application/json">>},
+    {ok, Config} = zone_logic:get_configuration(),
+    cowboy_req:reply(?HTTP_200_OK,
+        #{?HDR_CONTENT_TYPE => <<"application/json">>},
         json_utils:encode(Config),
         Req
     ).

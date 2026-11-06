@@ -15,7 +15,7 @@
 -define(OIDC_SERVER_MOCK_HRL, 1).
 
 -define(MOCK_ENDPOINT_FROM_XRDS(Key),
-    str_utils:format_bin("https://example.com/~s", [Key])
+    str_utils:format_bin("https://example.com/~ts", [Key])
 ).
 
 

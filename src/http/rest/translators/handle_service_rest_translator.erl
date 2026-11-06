@@ -13,7 +13,7 @@
 -behaviour(rest_translator_behaviour).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 
 -export([create_response/4, get_response/2]).
 
@@ -28,7 +28,7 @@
 %%--------------------------------------------------------------------
 -spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
-    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
+    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> rest_handler:rest_resp().
 create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#gri{id = HServiceId}, _}) ->
     LocationTokens = case AuthHint of
         ?AS_USER(_UserId) ->
@@ -38,15 +38,15 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#g
         _ ->
             [<<"handle_services">>, HServiceId]
     end,
-    rest_translator:created_reply(LocationTokens);
+    rest_translator:created_reply_with_location(LocationTokens);
 
 create_response(#gri{id = HServiceId, aspect = {user, UserId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"handle_services">>, HServiceId, <<"users">>, UserId]
     );
 
 create_response(#gri{id = HServiceId, aspect = {group, GrId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"handle_services">>, HServiceId, <<"groups">>, GrId]
     ).
 
@@ -56,12 +56,37 @@ create_response(#gri{id = HServiceId, aspect = {group, GrId}}, _, resource, _) -
 %% {@link rest_translator_behaviour} callback get_response/2.
 %% @end
 %%--------------------------------------------------------------------
--spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
+-spec get_response(entity_logic:gri(), Resource :: term()) -> rest_handler:rest_resp().
 get_response(#gri{id = undefined, aspect = list}, HServices) ->
     rest_translator:ok_body_reply(#{<<"handle_services">> => HServices});
 
+get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
+    rest_translator:ok_body_reply(Privileges);
+
 get_response(#gri{id = HServiceId, aspect = instance, scope = protected}, HServiceData) ->
-    rest_translator:ok_body_reply(HServiceData#{<<"handleServiceId">> => HServiceId});
+    #{
+        <<"name">> := Name,
+        <<"proxyEndpoint">> := Proxy,
+        <<"serviceProperties">> := ServiceProps,
+        <<"creator">> := Creator,
+        <<"creationTime">> := CreationTime
+    } = HServiceData,
+    rest_translator:ok_body_reply(#{
+        <<"handleServiceId">> => HServiceId,
+        <<"name">> => Name,
+        <<"proxyEndpoint">> => Proxy,
+        <<"serviceProperties">> => ServiceProps,
+        <<"creator">> => aai:subject_to_json(utils:ensure_defined(Creator, undefined, ?SUB(nobody))),
+        <<"creationTime">> => CreationTime
+    });
+get_response(#gri{id = HServiceId, aspect = instance, scope = public}, HServiceData) ->
+    #{
+        <<"name">> := Name
+    } = HServiceData,
+    rest_translator:ok_body_reply(#{
+        <<"handleServiceId">> => HServiceId,
+        <<"name">> => Name
+    });
 
 get_response(#gri{aspect = users}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});

@@ -11,7 +11,7 @@
 -module(list_records).
 -author("Jakub Kudzia").
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
@@ -51,6 +51,10 @@ exclusive_arguments() -> [<<"resumptionToken">>].
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% {@link oai_verb_behaviour} callback required_response_elements/0
+%%% NOTE: This operation does not fit the current framework for handling oai requests;
+%%% it returns two different types or elements (header/record + resumptionToken) in one
+%%% get_response call. We use only ElementName set to <<"header">> as w workaround -
+%%% we do not want to list the two elements not to cause two listings.
 %%% @end
 %%%-------------------------------------------------------------------
 -spec required_response_elements() -> [binary()].
@@ -71,13 +75,8 @@ optional_response_elements() -> [].
 %%%-------------------------------------------------------------------
 -spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"record">>, Args) ->
-    MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
-    From = proplists:get_value(<<"from">>, Args),
-    Until = proplists:get_value(<<"until">>, Args),
-    HarvestingFun = fun(HandleId, Handle) ->
-        OaiId = oai_utils:oai_identifier_encode(HandleId),
-        oai_utils:build_oai_record(MetadataPrefix, OaiId, Handle)
-    end,
-    oai_utils:harvest(MetadataPrefix, From, Until, HarvestingFun).
+    {MetadataPrefix, ListingOpts} = oai_utils:args_to_prefix_and_handle_listing_opts(list_records, Args),
+    oai_utils:harvest(MetadataPrefix, ListingOpts, fun(HandleListingEntry) ->
+        oai_utils:build_oai_record(MetadataPrefix, HandleListingEntry)
+    end).
 
-%%% TODO * support resumptionToken

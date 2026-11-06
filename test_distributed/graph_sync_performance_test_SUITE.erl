@@ -13,10 +13,12 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/aai/aai.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("gui/include/gui_session.hrl").
 -include_lib("cluster_worker/include/global_definitions.hrl").
 -include_lib("cluster_worker/test_distributed/performance_test_utils.hrl").
--include_lib("gui/include/new_gui.hrl").
 
 %% API
 -export([
@@ -216,7 +218,7 @@ privileges_in_a_big_space_performance_base(Config) ->
     UserNum = ?USER_NUM,
     UpdateNum = ?UPDATE_NUM,
     ProviderNum = ?PROVIDER_NUM,
-    SpacePrivileges = oz_test_utils:all_space_privileges(Config),
+    SpacePrivileges = privileges:space_privileges(),
     PrivsNum = length(SpacePrivileges),
     [Creator | Rest] = Users = create_n_users(Config, UserNum),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(Creator), <<"space">>),
@@ -265,7 +267,7 @@ privileges_in_a_big_space_performance_base(Config) ->
         )
     end,
 
-    {ok, SupervisorPid, _} = spawn_clients(Config, provider, ProvidersAndAuths, true, GatherUpdate, OnSuccessFun),
+    {ok, SupervisorPid, _} = spawn_clients(Config, oneprovider, ProvidersAndAuths, true, GatherUpdate, OnSuccessFun),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
 
@@ -276,8 +278,10 @@ privileges_in_a_big_space_performance_base(Config) ->
             % Granted privileges are always a long list to generate bigger update sizes.
             _ -> lists:sublist(SpacePrivileges, PrivsNum - 2 + (Seq rem 3))
         end,
-        utils:pforeach(fun(User) ->
-            oz_test_utils:space_set_user_privileges(Config, Space, User, set, NewPrivileges)
+        lists_utils:pforeach(fun(User) ->
+            oz_test_utils:space_set_user_privileges(
+                Config, Space, User, NewPrivileges, SpacePrivileges -- NewPrivileges
+            )
         end, Users)
     end, lists:seq(1, UpdateNum)),
     ?end_measurement(privileges_update_time),
@@ -320,10 +324,10 @@ concurrent_active_clients_spawning_performance(Config) ->
         {success_rate, 100},
         {description, "Checks the performance of spawning multiple, parallel GS "
         "clients that regularly make a request."},
-        {parameters, [?USER_NUM(100), ?REQUEST_INTERVAL_SECONDS(2)]},
-        ?PERF_CFG(small, [?USER_NUM(100), ?REQUEST_INTERVAL_SECONDS(2)]),
-        ?PERF_CFG(medium, [?USER_NUM(500), ?REQUEST_INTERVAL_SECONDS(2)]),
-        ?PERF_CFG(large, [?USER_NUM(1000), ?REQUEST_INTERVAL_SECONDS(2)])
+        {parameters, [?USER_NUM(25), ?REQUEST_INTERVAL_SECONDS(2)]},
+        ?PERF_CFG(small, [?USER_NUM(25), ?REQUEST_INTERVAL_SECONDS(2)]),
+        ?PERF_CFG(medium, [?USER_NUM(100), ?REQUEST_INTERVAL_SECONDS(3)]),
+        ?PERF_CFG(large, [?USER_NUM(250), ?REQUEST_INTERVAL_SECONDS(4)])
     ]).
 concurrent_active_clients_spawning_performance_base(Config) ->
     UserNum = ?USER_NUM,
@@ -340,11 +344,11 @@ concurrent_active_clients_spawning_performance_base(Config) ->
                             type = od_user, id = ?SELF, aspect = instance
                         }, get)
                     ),
-                    erlang:send_after(round(timer:seconds(RequestInterval)), self(), perform_request),
+                    erlang:send_after(timer:seconds(RequestInterval), self(), perform_request),
                     Loop()
             end
         end),
-        erlang:send_after(rand:uniform(round(timer:seconds(RequestInterval))), Pid, perform_request)
+        erlang:send_after(rand:uniform(timer:seconds(RequestInterval)), Pid, perform_request)
     end,
 
 
@@ -373,19 +377,20 @@ concurrent_active_clients_spawning_performance_base(Config) ->
 %%% Internal functions
 %%%===================================================================
 
-spawn_clients(Config, Type, Clients, RetryFlag, CallbackFunction, OnSuccessFun) ->
-    URL = oz_test_utils:get_gs_ws_url(Config),
+spawn_clients(Config, Endpoint, Clients, RetryFlag, CallbackFunction, OnSuccessFun) ->
+    URL = oz_test_utils:graph_sync_url(Config, Endpoint),
     AuthsAndIdentities = lists:map(fun(Client) ->
-        case Type of
+        case Endpoint of
             gui ->
-                {ok, SessionId} = oz_test_utils:create_session(Config, Client, []),
-                Auth = {cookie, {?SESSION_COOKIE_KEY, SessionId}},
-                Identity = {user, Client},
+                {ok, {_SessionId, SessionCookie}} = oz_test_utils:log_in(Config, Client),
+                {ok, GuiToken} = oz_test_utils:request_gui_token(Config, SessionCookie),
+                Auth = {with_http_cookies, {token, GuiToken}, [{?SESSION_COOKIE_KEY, SessionCookie}]},
+                Identity = ?SUB(user, Client),
                 {Auth, Identity};
-            provider ->
-                {ProviderId, Macaroon} = Client,
-                Auth = {macaroon, Macaroon},
-                Identity = {provider, ProviderId},
+            oneprovider ->
+                {ProviderId, ProviderToken} = Client,
+                Auth = {token, ProviderToken},
+                Identity = ?SUB(?ONEPROVIDER, ProviderId),
                 {Auth, Identity}
         end
     end, Clients),
@@ -404,19 +409,18 @@ terminate_clients(Config, SupervisorPid) ->
 
 create_n_users(Config, Number) ->
     lists:map(fun(_) ->
-        {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, User} = oz_test_utils:create_user(Config),
         User
     end, lists:seq(1, Number)).
 
 
 create_n_supporting_providers(Config, Number, SpaceId) ->
-    SupportSize = oz_test_utils:minimum_support_size(Config),
     lists:map(fun(_) ->
-        {ok, {Provider, ProviderMacaroon}} = oz_test_utils:create_provider(
+        {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(
             Config, <<"provider">>
         ),
-        oz_test_utils:support_space(Config, Provider, SpaceId, SupportSize),
-        {Provider, ProviderMacaroon}
+        oz_test_utils:support_space_by_provider(Config, Provider, SpaceId),
+        {Provider, ProviderToken}
     end, lists:seq(1, Number)).
 
 
@@ -449,12 +453,13 @@ ssl_opts(Config) ->
 %%% Setup / teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
+    application:ensure_all_started(hackney),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
+    application:stop(hackney),
     ssl:stop(),
     ok.

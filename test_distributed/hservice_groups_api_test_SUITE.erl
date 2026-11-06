@@ -13,7 +13,7 @@
 -module(hservice_groups_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -22,14 +22,15 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
 
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     add_group_test/1,
@@ -73,11 +74,11 @@ add_group_test(Config) ->
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_UPDATE
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
+    AllPrivs = privileges:handle_service_privileges(),
 
     VerifyEndFun =
         fun
@@ -101,6 +102,7 @@ add_group_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_ADD_RELATIONSHIPS, ?OZ_GROUPS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -113,7 +115,7 @@ add_group_test(Config) ->
             method = put,
             path = [<<"/handle_services/">>, HService, <<"/groups/">>, G1],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+            expected_headers = fun(#{?HDR_LOCATION := Location} = _Headers) ->
                 ExpLocation = ?URL(Config,
                     [<<"/handle_services/">>, HService, <<"/groups/">>, G1]
                 ),
@@ -124,23 +126,20 @@ add_group_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = add_group,
-            args = [client, HService, G1, data],
+            args = [auth, HService, G1, data],
             expected_result = ?OK_BINARY(G1)
         },
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
         data_spec = #data_spec{
             required = [<<"privileges">>],
             correct_values = #{
-                <<"privileges">> => [
-                    [handle_service_delete, handle_service_list_handles],
-                    [handle_service_register_handle, handle_service_update]
-                ]
+                <<"privileges">> => [?RAND_SUBLIST(privileges:handle_service_admin())]
             },
             bad_values = [
                 {<<"privileges">>, <<"">>,
-                    ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
+                    ?ERR_BAD_VALUE_LIST_OF_STRINGS(<<"privileges">>)},
                 {<<"privileges">>, [space_view, group_view],
-                    ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
+                    ?ERR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
             ]
         }
     },
@@ -156,7 +155,7 @@ remove_group_test(Config) ->
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_UPDATE
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
@@ -179,6 +178,7 @@ remove_group_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -195,10 +195,10 @@ remove_group_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = remove_group,
-            args = [client, HService, groupId],
-            expected_result = ?OK
+            args = [auth, HService, groupId],
+            expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
@@ -212,7 +212,7 @@ list_groups_test(Config) ->
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ExpGroups = lists:map(
         fun(_) ->
@@ -230,6 +230,7 @@ list_groups_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_LIST_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -247,75 +248,68 @@ list_groups_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_groups,
-            args = [client, HService],
+            args = [auth, HService],
             expected_result = ?OK_LIST(ExpGroups)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 get_group_test(Config) ->
-    % create handle service with 2 users:
-    %   U2 gets the HANDLE_SERVICE_VIEW privilege
-    %   U1 gets all remaining privileges
-    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+    % create handle service with 3 users:
+    %   UnprivilegedMember gets the HANDLE_SERVICE_VIEW privilege
+    %   PrivilegedMember gets all remaining privileges
+    %   UnprivilegedMemberFromTheGroup does not get the HANDLE_SERVICE_VIEW privilege, but belongs to the group
+    {HServiceId, UnprivilegedMember, PrivilegedMember} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, G1} = oz_test_utils:create_group(
-        Config, ?ROOT, #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
+    GroupData = #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1},
+    {ok, GroupId} = oz_test_utils:create_group(Config, ?ROOT, GroupData),
+    oz_test_utils:handle_service_add_group(Config, HServiceId, GroupId),
+
+    UnprivilegedMemberFromTheGroup = ozt_users:create(),
+    ozt_handle_services:add_user(
+        HServiceId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:handle_service_admin() -- [?HANDLE_SERVICE_VIEW])
     ),
-    oz_test_utils:handle_service_add_group(Config, HService, G1),
+    ozt_groups:add_user(GroupId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:group_admin())),
+    ozt:reconcile_entity_graph(),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {admin, [?OZ_GROUPS_VIEW]},
+                {user, PrivilegedMember},
+                {user, UnprivilegedMemberFromTheGroup}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {user, U1}
+                {user, UnprivilegedMember}
             ]
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/handle_services/">>, HService, <<"/groups/">>, G1],
+            path = [<<"/handle_services/">>, HServiceId, <<"/groups/">>, GroupId],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"groupId">> => G1,
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1_BIN
-            }
+            expected_body = api_test_expect:shared_group(rest, GroupId, GroupData)
         },
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_group,
-            args = [client, HService, G1],
-            expected_result = ?OK_MAP(#{
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1
-            })
+            args = [auth, HServiceId, GroupId],
+            expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
         },
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{
-                type = od_group, id = G1, aspect = instance, scope = shared
+                type = od_group, id = GroupId, aspect = instance, scope = shared
             },
-            auth_hint = ?THROUGH_HANDLE_SERVICE(HService),
-            expected_result = ?OK_MAP(#{
-                <<"name">> => ?GROUP_NAME1,
-                <<"type">> => ?GROUP_TYPE1_BIN,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    ?assertEqual(Id, G1)
-                end
-            })
+            auth_hint = ?THROUGH_HANDLE_SERVICE(HServiceId),
+            expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -328,22 +322,22 @@ get_group_privileges_test(Config) ->
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME1),
     {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
 
-    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
-    InitialPrivs = [?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
+    AllPrivs = privileges:handle_service_privileges(),
+    InitialPrivs = privileges:handle_service_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
-    SetPrivsFun = fun(Operation, Privs) ->
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:handle_service_set_group_privileges(
-            Config, HService, G1, Operation, Privs
+            Config, HService, G1, PrivsToGrant, PrivsToRevoke
         )
     end,
 
@@ -351,6 +345,7 @@ get_group_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_VIEW_PRIVILEGES]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -371,10 +366,10 @@ get_group_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_group_privileges,
-            args = [client, HService, G1],
+            args = [auth, HService, G1],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
@@ -389,20 +384,20 @@ update_group_privileges_test(Config) ->
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_UPDATE
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME1),
     {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
 
-    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
+    AllPrivs = privileges:handle_service_privileges(),
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:handle_service_set_group_privileges(
-            Config, HService, G1, Operation, Privs
+            Config, HService, G1, PrivsToGrant, PrivsToRevoke
         )
     end,
     GetPrivsFun = fun() ->
@@ -416,6 +411,7 @@ update_group_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_SET_PRIVILEGES]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -435,10 +431,10 @@ update_group_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = update_group_privileges,
-            args = [client, HService, G1, data],
-            expected_result = ?OK
+            args = [auth, HService, G1, data],
+            expected_result = ?OK_RES
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(update_privileges, [
@@ -458,6 +454,7 @@ list_eff_groups_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_LIST_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -475,10 +472,10 @@ list_eff_groups_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_eff_groups,
-            args = [client, HService],
+            args = [auth, HService],
             expected_result = ?OK_LIST(ExpGroups)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -501,70 +498,65 @@ list_eff_groups_test(Config) ->
 
 get_eff_group_test(Config) ->
     {
-        HService, EffGroups, _EffUsers, {U1, U2, NonAdmin}
+        HServiceId, EffGroups, _EffUsers, {UnprivilegedMember, PrivilegedMember, NonAdmin}
     } = api_test_scenarios:create_hservice_eff_users_env(Config),
 
-    lists:foreach(
-        fun({GroupId, GroupDetails}) ->
-            GroupDetailsBinary = GroupDetails#{
-                <<"type">> => atom_to_binary(
-                    maps:get(<<"type">>, GroupDetails), utf8
-                )
-            },
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {user, U2}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, U1},
-                        {user, NonAdmin}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [
-                        <<"/handle_services/">>, HService,
-                        <<"/effective_groups/">>, GroupId
-                    ],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = GroupDetailsBinary#{
-                        <<"groupId">> => GroupId
-                    }
-                },
-                logic_spec = #logic_spec{
-                    module = handle_service_logic,
-                    function = get_eff_group,
-                    args = [client, HService, GroupId],
-                    expected_result = ?OK_MAP(GroupDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_group, id = GroupId,
-                        aspect = instance, scope = shared
-                    },
-                    auth_hint = ?THROUGH_HANDLE_SERVICE(HService),
-                    expected_result = ?OK_MAP(GroupDetailsBinary#{
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
-                            ?assertEqual(Id, GroupId)
-                        end
-                    })
-                }
-            },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    UnprivilegedMemberFromTheGroup = ozt_users:create(),
+    ozt_handle_services:add_user(
+        HServiceId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:handle_service_admin() -- [?HANDLE_SERVICE_VIEW])
+    ),
+    lists:foreach(fun({GroupId, _}) ->
+        ozt_groups:add_user(GroupId, UnprivilegedMemberFromTheGroup, ?RAND_SUBLIST(privileges:group_admin()))
+    end, EffGroups),
+    ozt:reconcile_entity_graph(),
 
-        end, EffGroups
-    ).
+    lists:foreach(fun({GroupId, GroupData}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_GROUPS_VIEW]},
+                    {user, PrivilegedMember},
+                    {user, UnprivilegedMemberFromTheGroup}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, UnprivilegedMember},
+                    {user, NonAdmin}
+                ]
+            },
+            rest_spec = #rest_spec{
+                method = get,
+                path = [
+                    <<"/handle_services/">>, HServiceId,
+                    <<"/effective_groups/">>, GroupId
+                ],
+                expected_code = ?HTTP_200_OK,
+                expected_body = api_test_expect:shared_group(rest, GroupId, GroupData)
+            },
+            logic_spec = #logic_spec{
+                module = handle_service_logic,
+                function = get_eff_group,
+                args = [auth, HServiceId, GroupId],
+                expected_result = api_test_expect:shared_group(logic, GroupId, GroupData)
+            },
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{
+                    type = od_group, id = GroupId,
+                    aspect = instance, scope = shared
+                },
+                auth_hint = ?THROUGH_HANDLE_SERVICE(HServiceId),
+                expected_result_op = api_test_expect:shared_group(gs, GroupId, GroupData)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+
+    end, EffGroups).
 
 
 get_eff_group_privileges_test(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%               HandleService
     %%              /     ||      \
@@ -592,12 +584,12 @@ get_eff_group_privileges_test(Config) ->
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose eff privileges will be changing during test run and as such
-    % should not be listed in client spec (he will sometimes has privilege
+    % should not be listed in client spec (he will sometimes have privilege
     % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
@@ -613,35 +605,28 @@ get_eff_group_privileges_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
-    InitialPrivs = [?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
+    AllPrivs = privileges:handle_service_privileges(),
+    InitialPrivs = privileges:handle_service_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
-    SetPrivsFun = fun(Operation, Privs) ->
-        % In case of SET and GRANT, randomly split privileges into four
-        % parts and update groups with the privileges. G4 eff_privileges
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        % In case of GRANT, randomly split privileges into four
+        % parts and update groups with the privileges. G3 eff_privileges
         % should contain the sum of those. In case of revoke, the
-        % privileges must be revoked for all entities.
-        PartitionScheme =
-            case Operation of
-                revoke ->
-                    [{G1, Privs}, {G2, Privs}];
-                _ -> % Covers (set|grant)
-                    #{1 := Privs1, 2 := Privs2} = lists:foldl(
-                        fun(Privilege, AccMap) ->
-                            Index = rand:uniform(2),
-                            AccMap#{
-                                Index => [Privilege | maps:get(Index, AccMap)]
-                            }
-                        end, #{1 => [], 2 => []}, Privs),
-                    [{G1, Privs1}, {G2, Privs2}]
-            end,
-        lists:foreach(
-            fun({GroupId, Privileges}) ->
-                oz_test_utils:handle_service_set_group_privileges(
-                    Config, HService, GroupId, Operation, Privileges
-                )
-            end, PartitionScheme
+        % privileges must be revoked for all 3 entities.
+        #{1 := PrivsToGrant1, 2 := PrivsToGrant2} = lists:foldl(
+            fun(Privilege, AccMap) ->
+                Index = rand:uniform(2),
+                AccMap#{
+                    Index => [Privilege | maps:get(Index, AccMap)]
+                }
+            end, #{1 => [], 2 => []}, PrivsToGrant),
+
+        oz_test_utils:handle_service_set_group_privileges(
+            Config, HService, G1, PrivsToGrant1, PrivsToRevoke
+        ),
+        oz_test_utils:handle_service_set_group_privileges(
+            Config, HService, G2, PrivsToGrant2, PrivsToRevoke
         )
     end,
 
@@ -649,6 +634,7 @@ get_eff_group_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_VIEW_PRIVILEGES]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -669,10 +655,10 @@ get_eff_group_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_eff_group_privileges,
-            args = [client, HService, G4],
+            args = [auth, HService, G4],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+        % TODO VFS-4520 Tests for GraphSync API
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
@@ -685,13 +671,18 @@ get_eff_group_privileges_test(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
-    hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
-
+    application:ensure_all_started(hackney),
+    ozt:init_per_suite(Config).
 
 end_per_suite(_Config) ->
-    hackney:stop(),
+    application:stop(hackney),
     ssl:stop().
+
+init_per_testcase(_, Config) ->
+    ozt_mocks:freeze_time(),
+    Config.
+
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unfreeze_time().

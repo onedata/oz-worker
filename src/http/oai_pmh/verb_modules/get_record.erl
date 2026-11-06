@@ -11,7 +11,7 @@
 -module(get_record).
 -author("Jakub Kudzia").
 
--include("http/handlers/oai.hrl").
+-include("http/public_data/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
@@ -77,34 +77,41 @@ optional_response_elements() -> [].
 get_response(<<"record">>, Args) ->
     OaiId = proplists:get_value(<<"identifier">>, Args),
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
-    Handle = get_handle_safe(OaiId),
-    %% TODO check if metadataPrefix is available for given identifier
-    case lists:member(MetadataPrefix, metadata_formats:supported_formats()) of
-        true ->
-            oai_utils:build_oai_record(MetadataPrefix, OaiId, Handle);
-        false ->
-            throw({cannotDisseminateFormat, MetadataPrefix})
+    HandleId = oai_utils:oai_identifier_decode(OaiId),
+    lists:member(MetadataPrefix, oai_metadata:all_supported_oai_pmh_prefixes()) orelse
+        throw({cannotDisseminateFormat, MetadataPrefix}),
+    case od_handle:get(HandleId) of
+        {ok, #document{value = Handle}} ->
+            assert_can_disseminate_format(Handle#od_handle.metadata_schema, MetadataPrefix),
+            oai_utils:build_oai_record(
+                MetadataPrefix,
+                #handle_listing_entry{
+                    timestamp = Handle#od_handle.timestamp,
+                    handle_id = HandleId,
+                    service_id = Handle#od_handle.handle_service,
+                    status = present
+                },
+                Handle
+            );
+        {error, not_found} ->
+            case handle_registry:lookup_deleted(HandleId) of
+                {ok, {HandleMetadataSchema, HandleListingEntry}} ->
+                    assert_can_disseminate_format(HandleMetadataSchema, MetadataPrefix),
+                    oai_utils:build_oai_record(MetadataPrefix, HandleListingEntry);
+                error ->
+                    throw({idDoesNotExist, OaiId})
+            end
     end.
+
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
-%%%-------------------------------------------------------------------
-%%% @private
-%%% @doc
-%%% Returns given handle metadata.
-%%% If it fails, throws idDoesNotExist
-%%% @end
-%%%-------------------------------------------------------------------
--spec get_handle_safe(oai_id()) -> #od_handle{}.
-get_handle_safe(OAIId) ->
-    try
-        Id = oai_utils:oai_identifier_decode(OAIId),
-        oai_utils:get_handle(Id)
-    catch
-        throw:{illegalId, OAIId} ->
-            throw({illegalId, OAIId});
-        _:_ ->
-            throw({idDoesNotExist, OAIId})
-    end.
+
+%% @private
+-spec assert_can_disseminate_format(od_handle:metadata_schema(), oai_metadata:prefix()) -> ok | no_return().
+assert_can_disseminate_format(HandleMetadataSchema, MetadataPrefix) ->
+    SupportedPrefixesForHandle = oai_metadata:supported_oai_pmh_prefixes_by_schema(HandleMetadataSchema),
+    lists:member(MetadataPrefix, SupportedPrefixesForHandle) orelse throw({cannotDisseminateFormat, MetadataPrefix}),
+    ok.

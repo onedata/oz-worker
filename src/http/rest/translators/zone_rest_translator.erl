@@ -13,8 +13,8 @@
 -behaviour(rest_translator_behaviour).
 -author("Wojciech Geisler").
 
--include("rest.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include("http/rest.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([create_response/4, get_response/2]).
 
@@ -39,6 +39,15 @@ create_response(_GRI, _, _Format, _Result) ->
 %% {@link rest_translator_behaviour} callback get_response/2.
 %% @end
 %%--------------------------------------------------------------------
--spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
+-spec get_response(entity_logic:gri(), Resource :: term()) -> rest_handler:rest_resp().
 get_response(#gri{id = undefined, aspect = configuration}, Configuration) ->
-    rest_translator:ok_body_reply(Configuration).
+    rest_translator:ok_body_reply(Configuration);
+
+get_response(#gri{id = undefined, aspect = test_image}, TestImage) ->
+    rest_translator:ok_body_reply(TestImage);
+
+get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
+    rest_translator:ok_body_reply(Privileges);
+
+get_response(#gri{id = undefined, aspect = health}, HealthInfo) ->
+    rest_translator:ok_body_reply(HealthInfo).
